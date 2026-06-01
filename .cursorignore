@@ -1,0 +1,14 @@
+.git/
+node_modules/
+.pnpm-store/
+.next/
+dist/
+build/
+coverage/
+playwright-report/
+test-results/
+.env
+.env.*
+*.log
+docs/v2-new-build/optional/
+
