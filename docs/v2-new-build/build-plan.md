@@ -94,6 +94,7 @@ The files in this folder already use new-repo names. You can copy them as-is or 
 
 Before implementation starts, verify these high-signal v2 docs are present in the new repo:
 
+- `full-platform-blueprint.md` for the whole app/module/workflow/provider map
 - `diagrams.md` for render-safe full-platform diagrams
 - `product/dating-mode.md` for explicit Dating Mode rules
 - `product/events-ticketing.md` for event/ticketing rules

@@ -1,0 +1,380 @@
+# Veel V2 Full Platform Blueprint
+
+Status: proposed v2 architecture
+Scope: complete greenfield Veel platform blueprint
+Last updated: 2026-06-02
+Source of truth: yes for the complete v2 product/system map
+
+This is the single visual blueprint for building the full Veel v2 platform from scratch. The old repo is a reference for validated product lessons, provider edge cases, and tests only. Do not port old architecture wholesale.
+
+Use this document to understand how every major module relates before writing code.
+
+## Product Definition
+
+Veel v2 is an 18+ creator PWA/dApp for:
+
+- short video and mixed media feeds
+- live rooms and live-to-replay content
+- VOD/media upload and playback
+- paid unlocks and premium content
+- tips and direct support
+- paid messages
+- creator subscriptions
+- live passes
+- events and tickets
+- dating/matches as an explicit opt-in mode
+- messaging and quick chat
+- creator monetisation and payouts
+- referral commissions
+- user activity and wallet transaction history
+- admin/ops/business control
+- AI/MCP assistant tools with strict permissions
+- adult content compliance, age assurance, safety, moderation, reporting, and blocking
+
+## Stack Blueprint
+
+```text
+Runtime and tooling
+  Node.js LTS
+  pnpm workspace
+  TypeScript strict mode
+  OpenAPI + Zod/JSON schema contracts
+  Vitest + Playwright
+  ESLint + Prettier/Biome decision before implementation
+
+Frontend
+  Next.js PWA
+  Tailwind v4 tokens
+  TanStack Query for server state
+  Zustand/local state for UI state
+  GSAP for landing-page frame animation only
+  official wallet / provider clients where safe
+
+Backend
+  Fastify modular monolith
+  worker process for async/provider jobs
+  Supabase Auth + Postgres + Realtime
+  OpenTelemetry and structured logging
+
+Providers
+  Embedded noncustodial wallet provider
+  External Solana wallets
+  Solana RPC / Solana Pay
+  Helius for confirmed payment/access evidence
+  Bunny Stream/CDN/TUS for VOD
+  Livepeer for live/replay
+  Yoti/Sumsub/Persona age/KYC waterfall
+  onramp provider for wallet funding
+  email/push provider
+```
+
+## Complete System Diagram
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                               Next.js PWA                                   │
+│                                                                             │
+│  Landing/Enter   Age Gate   App Shell   Home/Bits   Media Viewer            │
+│  Create/Edit     Live Room  Messages    Profile     Activity/Wallet         │
+│  Dating Mode     Events     AI Helper   Admin Gate  Settings                │
+│                                                                             │
+│  TanStack Query = server cache                                               │
+│  Zustand/local state = sheets, panels, gestures, playback UI                 │
+│  Wallet layer = embedded wallet + external Solana wallets                    │
+└──────────────────────────────────────┬──────────────────────────────────────┘
+                                       │ OpenAPI client
+                                       ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         Fastify Modular Monolith API                         │
+│                                                                             │
+│  auth/profile  age/access  content/media  live  messages  engagement        │
+│  payments      referrals   subscriptions  events/tickets  dating            │
+│  safety/moderation/report/block  activity  notifications  admin/ops         │
+│  AI/MCP tool gateway  provider adapters  audit/idempotency                  │
+│                                                                             │
+│  Rules: controllers/routes are thin, services are scoped, providers are      │
+│  adapter-wrapped, money/access/safety/admin mutations are transactional.     │
+└───────────────┬───────────────────┬────────────────────┬───────────────────┘
+                │                   │                    │
+                ▼                   ▼                    ▼
+┌─────────────────────────┐ ┌─────────────────┐ ┌────────────────────────────┐
+│ Supabase                │ │ Worker Process  │ │ External Providers          │
+│                         │ │                 │ │                            │
+│ Auth/JWT                │ │ webhooks        │ │ Solana RPC / Solana Pay     │
+│ Postgres/RLS            │ │ reconciliation  │ │ Helius payment evidence     │
+│ Realtime Broadcast      │ │ media status    │ │ Embedded wallet/onramp      │
+│ Storage if needed       │ │ moderation      │ │ Bunny VOD/CDN/TUS           │
+│                         │ │ notifications   │ │ Livepeer live/replay        │
+└─────────────────────────┘ │ retries         │ │ Age/KYC providers           │
+                            └─────────────────┘ │ Email/push/observability    │
+                                                └────────────────────────────┘
+```
+
+## Source-Of-Truth Rules
+
+```text
+Frontend owns:
+  layout, gestures, motion, sheets, panels, optimistic UI where safe
+
+Fastify API owns:
+  payment truth, entitlement truth, referral truth, commission truth,
+  access policy, dating match truth, ticket truth, safety/admin decisions
+
+Supabase owns:
+  database, auth sessions, realtime transport, RLS enforcement
+
+Providers own:
+  wallet UX, chain evidence, media infrastructure, live infrastructure,
+  age/KYC verification, onramp funding, delivery infrastructure
+```
+
+Frontend never computes final access, final commission, final ticket state, final match state, final KYC state, or final provider status.
+
+## Module Coverage Matrix
+
+| Area | V2 docs | Backend module | Frontend surface | Providers |
+| --- | --- | --- | --- | --- |
+| Landing/onboarding | `landing-page-gsap.md`, `embedded-wallet-onboarding.md` | auth, age, wallet | landing, enter, onboarding | Supabase Auth, wallet provider, onramp |
+| App shell/navigation/gestures | `native-ui-ux-screens.md`, `frontend-architecture.md` | profile/session policy | app shell, nav, gesture layer | none |
+| Home/Bits/media viewer | `product-flows.md`, `native-ui-ux-screens.md`, `frontend/component-map.md` | content, engagement, access | Home, Bits, media viewer | Bunny/Livepeer playback |
+| Create/Edit media | `product-flows.md`, `media-live-providers.md`, `frontend/component-map.md` | content, media, moderation | Create/Edit | Bunny TUS, Livepeer, moderation |
+| VOD/media pipeline | `media-live-providers.md`, `providers/content-protection.md` | media, assets, provider callbacks | media cards/viewer | Bunny Stream/CDN/TUS |
+| Live rooms/replays | `media-live-providers.md`, `product-flows.md` | live, passes, chat, replay | live room, replay viewer | Livepeer |
+| Payments/unlocks | `payments-and-monetisation.md`, `business-monetisation.md` | payments, entitlements | payment sheet | Solana Pay/RPC, Helius |
+| Tips/support | `business-monetisation.md`, `payments-and-monetisation.md` | payments, creator balances, referrals | tip/support sheet | Solana Pay/RPC, Helius/RPC evidence |
+| Referrals/commissions | `business-monetisation.md`, `engagement-strategy.md` | referrals, commissions | share/invite, activity | Solana evidence |
+| Subscriptions | `business-monetisation.md`, `payments-and-monetisation.md` | subscriptions, renewals | subscribe sheet/profile | Solana/checkout provider ADR |
+| Paid messages | `business-monetisation.md`, `realtime-messages-activity.md` | messages, payments, access | messages/quick chat | Solana evidence |
+| Engagement | `engagement-strategy.md` | likes, comments, saves, shares, follows | cards, viewer, profile | none |
+| Messages/activity/realtime | `realtime-messages-activity.md`, `auth-supabase-realtime.md` | conversations, activity, notifications | messages, quick chat, activity | Supabase Realtime |
+| Profile/creator dashboard | `frontend/component-map.md`, `business-monetisation.md` | profile, creator settings, activity | profile, creator dashboard | KYC provider |
+| Dating/matches | `product/dating-mode.md`, `native-ui-ux-screens.md` | dating, matches, safety | dating mode, matches, match chat | age provider, realtime |
+| Events/tickets | `product/events-ticketing.md`, `business-monetisation.md` | events, tickets, payments | event sheet, tickets | Solana evidence, email/push |
+| AI/MCP | `safety-admin-ai.md` | AI sessions, tools, permissions, audit | AI assistant/admin AI | OpenAI/compatible provider ADR |
+| Admin/ops | `admin-operations-dashboard.md`, `deployment-topology.md` | admin, audit, ops diagnostics | admin app | all providers via sanitized diagnostics |
+| Adult compliance/age/KYC | `compliance/*`, `providers/identity-provider-wiring.md` | age, KYC/KYB, audit | age gate, creator payout setup | Yoti/Sumsub/Persona |
+| Security/content protection | `providers/content-protection.md`, `safety-admin-ai.md` | access policy, signed playback | safe media resources | Bunny, Livepeer |
+| Deployment/ops | `deployment-topology.md`, `slice-workflow.md` | API/worker/observability | health/admin views | Supabase, providers, telemetry |
+
+## Primary User Workflows
+
+### New Viewer
+
+```text
+Landing
+  -> sign up with social/email or external wallet
+  -> embedded noncustodial wallet created or wallet linked
+  -> age gate when protected areas require it
+  -> Home feed
+  -> watch teaser/free media
+  -> tip/support/unlock/pass/ticket when desired
+  -> wallet approval
+  -> backend verification
+  -> refreshed access/activity state
+```
+
+### Creator
+
+```text
+Sign up
+  -> age gate
+  -> create profile
+  -> optional creator monetisation setup
+  -> KYC/KYB for earning/payout where required
+  -> upload/capture media
+  -> choose thumbnail/teaser/access/monetisation
+  -> optional dating enablement
+  -> optional event attachment
+  -> publish
+  -> dashboard shows backend-derived revenue/activity/provider state
+```
+
+### Paid Unlock
+
+```text
+Locked media
+  -> payment sheet
+  -> API creates payment intent
+  -> wallet approves transaction
+  -> Helius/RPC confirms chain facts
+  -> API validates mandatory facts
+  -> entitlement grant
+  -> referral/commission if eligible
+  -> viewer receives full playback resource
+```
+
+### Live Pass
+
+```text
+Creator starts live
+  -> Livepeer stream created by API
+  -> creator gets host connection only
+  -> viewer sees playback-safe live room
+  -> viewer buys pass
+  -> backend verifies payment
+  -> pass grants playback/chat
+  -> replay becomes content item after live ends
+```
+
+### Event Ticket
+
+```text
+Media/event sheet
+  -> ticket selection
+  -> backend inventory/price check
+  -> wallet approval for paid ticket or approval path for free/requested ticket
+  -> backend grants ticket entitlement
+  -> QR/receipt
+  -> admin/check-in sees ticket state
+```
+
+### Dating Match
+
+```text
+User explicitly activates Dating Mode
+  -> age/consent check
+  -> dating feed
+  -> Yes / Not interested visible controls
+  -> backend records swipe
+  -> mutual interest creates match
+  -> match chat opens in Messages
+  -> report/block always available
+```
+
+### Admin/Ops
+
+```text
+Admin login
+  -> role/policy check
+  -> dashboard: revenue, provider health, queue health, reports, age/KYC, media
+  -> inspect user/content/payment/ticket/live/referral records
+  -> perform moderated actions with confirmation
+  -> every mutation writes audit event
+```
+
+## Provider-First Integration Map
+
+```text
+Do not build custom infrastructure when a provider already owns the job.
+
+Wallet UX:
+  embedded wallet provider + external wallets
+
+Chain settlement:
+  Solana Pay / Solana RPC
+
+Confirmed payment evidence:
+  Helius, scoped to money/access products
+
+VOD:
+  Bunny Stream/CDN/TUS
+
+Live:
+  Livepeer
+
+Age/KYC:
+  Yoti primary candidate
+  Sumsub/Persona fallback candidates
+
+Realtime:
+  Supabase Realtime for selected messages/notifications/live/activity events
+
+Identity/session:
+  Supabase Auth
+
+Database:
+  Supabase Postgres with RLS and API-side policy
+```
+
+## Data Relationship Overview
+
+```text
+users
+  ├─ profiles
+  ├─ wallets
+  ├─ age_verifications
+  ├─ creator_accounts
+  ├─ content_items
+  ├─ live_rooms
+  ├─ conversations/messages
+  ├─ follows/likes/saves/comments/shares
+  ├─ referral_attributions
+  ├─ dating_profiles/swipes/matches
+  ├─ ticket_entitlements
+  └─ activity_events
+
+content_items
+  ├─ media_assets
+  ├─ access_rules
+  ├─ payment_products
+  ├─ teaser_ranges
+  ├─ moderation_state
+  ├─ optional_event
+  └─ optional_dating_setting
+
+payment_intents
+  ├─ product_type
+  ├─ payer_user_id
+  ├─ creator_user_id
+  ├─ amount/currency
+  ├─ split recipients
+  ├─ solana_reference
+  ├─ transaction_signature
+  ├─ entitlement_id
+  ├─ commission_id
+  └─ audit_events
+```
+
+## Permission And Safety Layers
+
+```text
+Every request passes:
+  auth/session check
+  age/access gate where required
+  policy check
+  rate limit
+  validation/schema
+  idempotency where mutation is replay-sensitive
+  audit write for money/safety/admin/provider actions
+
+Every frontend response is:
+  resource-shaped
+  provider-sanitized
+  PII-minimized
+  permission-scoped
+```
+
+## Build Order
+
+```text
+1. Repo/tooling/contracts
+2. Supabase schema/RLS/auth
+3. Fastify API shell and generated client
+4. Age/auth/onboarding/wallet
+5. App shell/navigation/gestures
+6. Home/media/create MVP
+7. Bunny VOD provider slice
+8. Solana payment intent and verification slice
+9. Unlock/access/referral/commission slice
+10. Messages/activity/realtime slice
+11. Livepeer live/pass/replay slice
+12. Admin/ops baseline
+13. Creator monetisation/subscriptions
+14. Events/ticketing
+15. Dating mode
+16. AI/MCP assistant
+17. Compliance hardening, provider smoke, launch QA
+18. UI polish
+```
+
+## New Repo Rule
+
+Copy this pack into the new repo, then build by vertical slices. Do not start by copying old code. Only reference the old repo for:
+
+- screenshots and UX lessons
+- provider edge cases
+- test cases
+- validated payment/access/referral/security decisions
+- docs that are explicitly merged into this v2 pack
+
+If a topic is not present in this blueprint or the linked v2 docs, create an ADR before implementation.

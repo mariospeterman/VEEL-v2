@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 const required = [
   "docs/v2-new-build/INDEX.md",
   "docs/v2-new-build/build-plan.md",
+  "docs/v2-new-build/full-platform-blueprint.md",
   "docs/v2-new-build/diagrams.md",
   "docs/v2-new-build/app-architecture.md",
   "docs/v2-new-build/stack-decision.md",
