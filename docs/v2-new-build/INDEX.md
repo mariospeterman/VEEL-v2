@@ -28,43 +28,47 @@ This folder is the clean new-build pack. It is intentionally separated from the 
 2. [App architecture](app-architecture.md)
 3. [Stack decision](stack-decision.md)
 4. [ADR: Fastify and Supabase proposal](adr/0001-fastify-supabase-proposal.md)
+5. [Render-safe diagrams](diagrams.md)
 
 ## Product And UX
 
-5. [Product flows](product-flows.md)
-6. [Frontend architecture](frontend-architecture.md)
-7. [Native UI, screens, gestures, and motion](native-ui-ux-screens.md)
-8. [Landing page and GSAP blueprint](landing-page-gsap.md)
-9. [Engagement strategy](engagement-strategy.md)
-10. [Design system](frontend/design-system.md)
-11. [Component map](frontend/component-map.md)
-12. [Copy system](frontend/copy-system.md)
-13. [Motion system](frontend/motion-system.md)
+6. [Product flows](product-flows.md)
+7. [Dating Mode architecture](product/dating-mode.md)
+8. [Events and ticketing architecture](product/events-ticketing.md)
+9. [Frontend architecture](frontend-architecture.md)
+10. [Native UI, screens, gestures, and motion](native-ui-ux-screens.md)
+11. [Landing page and GSAP blueprint](landing-page-gsap.md)
+12. [Engagement strategy](engagement-strategy.md)
+13. [Design system](frontend/design-system.md)
+14. [Component map](frontend/component-map.md)
+15. [Copy system](frontend/copy-system.md)
+16. [Motion system](frontend/motion-system.md)
 
 ## Backend, Data, Auth, And Realtime
 
-14. [Fastify backend architecture](backend-fastify-architecture.md)
-15. [Supabase auth and realtime architecture](auth-supabase-realtime.md)
-16. [Embedded wallet onboarding](embedded-wallet-onboarding.md)
-17. [Data model](data-model.md)
-18. [Realtime, messages, and activity](realtime-messages-activity.md)
+17. [Fastify backend architecture](backend-fastify-architecture.md)
+18. [Supabase auth and realtime architecture](auth-supabase-realtime.md)
+19. [Embedded wallet onboarding](embedded-wallet-onboarding.md)
+20. [Data model](data-model.md)
+21. [Realtime, messages, and activity](realtime-messages-activity.md)
 
 ## Money, Providers, Safety, And Admin
 
-19. [Payments and monetisation](payments-and-monetisation.md)
-20. [Business monetisation](business-monetisation.md)
-21. [Media and live providers](media-live-providers.md)
-22. [Identity provider wiring](providers/identity-provider-wiring.md)
-23. [Content protection](providers/content-protection.md)
-24. [Safety, admin, and AI/MCP](safety-admin-ai.md)
-25. [Admin and operations dashboard](admin-operations-dashboard.md)
-26. [Adult content compliance](compliance/adult-content-compliance.md)
-27. [Age/KYC jurisdictions and provider waterfall](compliance/age-kyc-jurisdictions.md)
+22. [Payments and monetisation](payments-and-monetisation.md)
+23. [Business monetisation](business-monetisation.md)
+24. [Provider map](providers/provider-map.md)
+25. [Media and live providers](media-live-providers.md)
+26. [Identity provider wiring](providers/identity-provider-wiring.md)
+27. [Content protection](providers/content-protection.md)
+28. [Safety, admin, and AI/MCP](safety-admin-ai.md)
+29. [Admin and operations dashboard](admin-operations-dashboard.md)
+30. [Adult content compliance](compliance/adult-content-compliance.md)
+31. [Age/KYC jurisdictions and provider waterfall](compliance/age-kyc-jurisdictions.md)
 
 ## Infrastructure And Execution
 
-28. [Deployment topology](deployment-topology.md)
-29. [Slice workflow](slice-workflow.md)
+32. [Deployment topology](deployment-topology.md)
+33. [Slice workflow](slice-workflow.md)
 
 ## Optional Historical Alternatives
 
@@ -104,3 +108,7 @@ Docs/ADRs
 ```
 
 Every production slice must include contracts, migrations, tests, provider boundary checks, frontend smoke coverage, and admin/ops visibility where relevant.
+
+## Diagram Rendering
+
+Use [Render-safe diagrams](diagrams.md) when reviewing in Cursor, VS Code, terminals, or any Markdown renderer without Mermaid support. Detailed docs may include Mermaid source for Mermaid-enabled previews, but `diagrams.md` is the reliable visual map.

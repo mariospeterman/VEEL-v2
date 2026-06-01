@@ -92,6 +92,15 @@ Then rewrite the root `README.md` for v2 only. Do not keep stale v1 setup instru
 
 The files in this folder already use new-repo names. You can copy them as-is or rename `docs/v2-new-build/` to `docs/architecture/` in the new repo.
 
+Before implementation starts, verify these high-signal v2 docs are present in the new repo:
+
+- `diagrams.md` for render-safe full-platform diagrams
+- `product/dating-mode.md` for explicit Dating Mode rules
+- `product/events-ticketing.md` for event/ticketing rules
+- `providers/provider-map.md` for provider ownership and boundary rules
+- `business-monetisation.md` for the business model and split/revenue strategy
+- `compliance/adult-content-compliance.md` and `compliance/age-kyc-jurisdictions.md` for adult platform obligations
+
 ## GStack Setup
 
 Install GStack only after the v2 docs and `AGENTS.md` are in place.
