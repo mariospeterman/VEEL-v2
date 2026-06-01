@@ -8,6 +8,9 @@ const required = [
   "docs/v2-new-build/compliance/adult-content-compliance.md",
   "docs/v2-new-build/compliance/age-kyc-jurisdictions.md",
   "AGENTS.md",
+  "CLAUDE.md",
+  ".cursor/rules/veel-v2.mdc",
+  "docs/ai-tooling/agent-operating-rules.md",
   ".env.example"
 ];
 
@@ -22,4 +25,3 @@ if (missing.length > 0) {
 }
 
 console.log("Veel v2 scaffold docs are present.");
-

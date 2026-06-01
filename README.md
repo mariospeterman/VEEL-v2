@@ -9,10 +9,13 @@ This repo is the clean starting point for the Veel v2 rebuild. The old repo at `
 
 Read these first:
 
-1. [V2 new-build documentation index](docs/v2-new-build/INDEX.md)
-2. [Build plan](docs/v2-new-build/build-plan.md)
-3. [App architecture](docs/v2-new-build/app-architecture.md)
-4. [Stack decision](docs/v2-new-build/stack-decision.md)
+1. [Agent rules](AGENTS.md)
+2. [Claude-compatible rules](CLAUDE.md)
+3. [V2 new-build documentation index](docs/v2-new-build/INDEX.md)
+4. [Build plan](docs/v2-new-build/build-plan.md)
+5. [App architecture](docs/v2-new-build/app-architecture.md)
+6. [Stack decision](docs/v2-new-build/stack-decision.md)
+7. [AI tooling rules](docs/ai-tooling/agent-operating-rules.md)
 
 ## Intended Stack
 
@@ -60,6 +63,8 @@ cd ~/.codex/skills/gstack && ./setup --host codex
 
 Use GStack for planning, design review, QA review, security review, and release review. Do not let it override the docs, ADRs, contracts, migrations, provider docs, or tests.
 
+Cursor will automatically pick up `.cursor/rules/veel-v2.mdc`. Claude-style tools should read `CLAUDE.md`. Codex and other agents should read `AGENTS.md`.
+
 ## First Implementation Tickets
 
 Use the first 10 tickets in [build-plan.md](docs/v2-new-build/build-plan.md#first-10-implementation-tickets).
@@ -69,4 +74,3 @@ Do not start by coding random screens. Start with repo foundation, contracts, da
 ## Current Validation
 
 This scaffold intentionally contains docs and empty app/package folders only. Real validation starts after the first implementation ticket creates workspace tooling.
-
