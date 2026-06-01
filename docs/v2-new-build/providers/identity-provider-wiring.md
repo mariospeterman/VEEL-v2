@@ -1,0 +1,162 @@
+# Identity Provider Wiring
+
+Status: current
+Scope: documentation
+Last updated: 2026-05-29
+Source of truth: yes
+
+This repo now enforces server-owned verification for wallet sign-in and age-gate completion.
+Local mock flows remain useful for development, but real provider launches and real provider
+webhooks must be configured before production rollout.
+
+## Official references
+
+- Phantom Browser SDK: https://docs.phantom.com/sdks/browser-sdk/index
+- Phantom deeplinks: https://docs.phantom.com/phantom-deeplinks/handling-sessions
+- Solana Mobile Wallet Adapter: https://docs.solanamobile.com/developers/mobile-wallet-adapter
+- Sumsub API auth + webhooks: https://docs.sumsub.com/reference/get-started-with-api
+- Sumsub applicant review webhook: https://docs.sumsub.com/reference/applicantreviewed
+- Yoti age verification overview: https://developers.yoti.com/age-verification/age-verification-introduction
+- Yoti notifications: https://developers.yoti.com/age-verification/age-verification-quick-start-guide
+
+## Wallet signing
+
+### Desktop
+
+- Supported through injected Solana wallets exposed in the browser context.
+- SIWS challenges are still created by the API and verified by the API after the wallet signs.
+
+### Android
+
+- Supported through Solana Mobile Wallet Adapter.
+- The app registers MWA on the client through `@solana-mobile/wallet-standard-mobile`.
+
+### iOS
+
+- This repo now exposes a Phantom-specific deep-link path behind `NEXT_PUBLIC_PHANTOM_APP_ID`.
+- That path is intended for mobile Safari / browser-based entry where no injected provider exists.
+- It is wallet-specific. There is still no generic multi-wallet iOS standard in this repo.
+- It does not replace Android MWA and it does not provide Solflare parity yet.
+
+#### Public web env
+
+- `NEXT_PUBLIC_PHANTOM_APP_ID`
+- `NEXT_PUBLIC_APP_URL`
+
+#### Production rollout notes
+
+- Use a real Phantom App ID created for the production domain.
+- Keep `NEXT_PUBLIC_APP_URL` aligned with the public origin that Phantom should return to.
+- Validate the return path on the real iPhone browser/device matrix before rollout.
+- If Solflare parity is required, add a dedicated Solflare deep-link path instead of pretending the Phantom path is generic.
+
+#### Exact remaining iOS blocker
+
+- This repo currently implements a verified Phantom-specific browser deep-link path only.
+- It does not yet implement wallet-specific universal-link or deep-link flows for Solflare or other iOS wallets.
+- Until those paths exist, iPhone production support is:
+  - `Phantom in Safari via Browser SDK deeplink`: supported when `NEXT_PUBLIC_PHANTOM_APP_ID` is configured
+  - `Solflare on iPhone`: not implemented
+  - `generic multi-wallet iOS signing`: not implemented
+
+## Sumsub
+
+### Required API env
+
+- `AGE_VERIFICATION_DRIVER=sumsub`
+- `SUMSUB_APP_TOKEN`
+- `SUMSUB_SECRET_KEY`
+- `SUMSUB_WEBHOOK_SECRET`
+- `SUMSUB_LEVEL_NAME`
+- `SUMSUB_API_BASE_URL=https://api.sumsub.com`
+
+### Required dashboard setup
+
+1. Create or select a Sumsub verification level intended for over-18 gating.
+2. Set the level name into `SUMSUB_LEVEL_NAME`.
+3. Add the production webhook URL:
+   - `POST https://<api-domain>/api/v1/webhooks/age/sumsub`
+4. Configure the webhook signing secret to match `SUMSUB_WEBHOOK_SECRET`.
+5. Ensure the webhook includes applicant review events.
+6. Keep the API app token and secret key server-side only.
+
+### Sumsub webhook expectations in this repo
+
+- Route:
+  - `POST /api/v1/webhooks/age/sumsub`
+- Signature:
+  - header `x-payload-digest`
+  - validated as `HMAC-SHA1(raw-json-payload, SUMSUB_WEBHOOK_SECRET)`
+- Provider reference lookup:
+  - the repo resolves the challenge by the Sumsub provider reference stored on the age-verification challenge
+- Result ownership:
+  - the browser cannot complete or override the result
+  - only the verified webhook path applies the over-18 decision
+
+### Runtime behavior in this repo
+
+- The API starts the Sumsub session.
+- The provider launch URL is returned to the browser.
+- The browser cannot self-complete the age check.
+- The webhook result applies the over-18 decision server-side.
+
+## Yoti
+
+### Required API env
+
+- `AGE_VERIFICATION_DRIVER=yoti_digital_id`
+- `YOTI_SDK_ID`
+- `YOTI_API_TOKEN`
+- `YOTI_NOTIFICATION_KEY_PATH`
+- `YOTI_API_BASE_URL=https://age.yoti.com/api/v1`
+- `YOTI_LAUNCH_BASE_URL=https://age.yoti.com`
+
+### Required dashboard/setup work
+
+1. Create the Yoti age-verification application for the production domain.
+2. Configure the notification / webhook endpoint:
+   - `POST https://<api-domain>/api/v1/webhooks/age/yoti`
+3. Export the Yoti notification public key to the API host and set its path in `YOTI_NOTIFICATION_KEY_PATH`.
+4. Keep the API token server-side only.
+
+### Yoti webhook expectations in this repo
+
+- Route:
+  - `POST /api/v1/webhooks/age/yoti`
+- Signature field:
+  - JSON payload field `signature`
+- Verification:
+  - the repo verifies the signed notification with the public key at `YOTI_NOTIFICATION_KEY_PATH`
+- Provider reference lookup:
+  - the repo resolves the challenge by the Yoti provider session reference stored on the age-verification challenge
+- Result ownership:
+  - the browser cannot complete or override the result
+  - only the verified webhook path applies the over-18 decision
+
+### Runtime behavior in this repo
+
+- The API starts the Yoti session.
+- The launch URL is returned to the browser.
+- The browser cannot self-complete the check.
+- The webhook verifies the signed notification and then applies the decision server-side.
+
+## Production guardrails
+
+- Never enable `AGE_VERIFICATION_ALLOW_MOCK_PROVIDER=true` outside local/test.
+- If a real provider is selected but not configured, fail closed and block access.
+- Keep provider secrets server-side only.
+- Do not store unnecessary identity payloads; the app should keep only the minimum over-18 result fields.
+
+## Go-live checklist
+
+1. Pick one production driver:
+   - `AGE_VERIFICATION_DRIVER=sumsub`
+   - or `AGE_VERIFICATION_DRIVER=yoti_digital_id`
+2. Set the matching provider env in the API runtime.
+3. Keep `AGE_VERIFICATION_ALLOW_MOCK_PROVIDER=false` in production.
+4. Configure the provider dashboard webhook to call the correct `/api/v1/webhooks/age/<provider>` endpoint.
+5. Verify the webhook secret or notification key matches the API env.
+6. Complete one full provider session on a staging domain and confirm:
+   - the webhook is received
+   - the user age status flips server-side
+   - app access unlocks only after the server-owned result is stored
