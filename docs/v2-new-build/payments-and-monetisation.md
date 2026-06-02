@@ -2,7 +2,7 @@
 
 Status: proposed v2 architecture
 Scope: Solana Pay, monetisation, referrals
-Last updated: 2026-06-01
+Last updated: 2026-06-03
 Source of truth: proposal
 
 ## Payment Principles
@@ -95,6 +95,30 @@ Recommended:
 - run scoped RPC confirmation for exact signature
 - include tips in Helius/reconciliation if they create referral commission, creator balance, or payout state
 - if Helius cost becomes high, batch/reconcile tips with RPC/indexer polling, but do not mark financial totals final from client alone
+
+## Live Pass Product
+
+Live streams are monetised live rooms by default.
+
+Default viewer flow:
+
+1. User opens live room.
+2. First minute can be free teaser playback.
+3. After teaser, playback and chat require a creator live pass.
+4. Creator pass options default to 30 minutes, 1 hour, and 3 hours.
+5. Backend confirms payment before issuing active pass entitlement and Livepeer JWT playback.
+
+Config:
+
+- live teaser seconds
+- pass durations
+- default pass prices
+- whether chat requires active pass
+- grace period after pass expiry
+
+These values are environment defaults with admin-configurable overrides.
+
+Live replays are ordinary content items after the stream ends. They can use a free Bit/teaser segment and creator-selected replay/VOD monetisation.
 
 ## Referral Policy
 

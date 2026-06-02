@@ -2,7 +2,7 @@
 
 Status: proposed v2 architecture
 Scope: business model, monetisation, noncustodial money movement
-Last updated: 2026-06-01
+Last updated: 2026-06-03
 Source of truth: proposal
 
 This document defines the full Veel v2 monetisation and business model. It extends `payments-and-monetisation.md`, which owns payment verification mechanics. The rule is unchanged: the frontend can display and request actions, but the backend owns pricing, splits, settlement, entitlements, commissions, subscriptions, refunds, audit records, and operational reporting.
@@ -123,6 +123,17 @@ Platform subscription:
 - can grant platform-level benefits such as membership badge, lower platform fees, advanced discovery, or future app-level features
 - must not unlock creator premium content unless a bundled product explicitly says so
 - is managed by platform billing policy and admin operations
+
+Recommended platform tiers for first pricing tests:
+
+| Tier | Suggested price | Position |
+| --- | --- | --- |
+| Peek | Free | 18+ verified account, limited teaser/free-watch allowance, basic social/media participation. |
+| Veel Plus | 15 USDC/month equivalent | Heavy viewer tier: higher watch/bandwidth allowance, smoother media/message experience, better activity/profile tools. |
+| Veel Max | 29 USDC/month equivalent | Premium power-user tier: advanced dating/events/AI profile features, stronger discovery/profile tools, optional fee/limit benefits if business model allows. |
+| Studio/Enterprise | Custom | Creator/team/business/admin support tier, not the default viewer upsell. |
+
+Pricing, allowance limits, date/match limits, live pass defaults, and platform feature gates must live in backend/admin configuration. Environment variables provide safe defaults; admin configuration can override them without a deploy.
 
 Creator subscription:
 

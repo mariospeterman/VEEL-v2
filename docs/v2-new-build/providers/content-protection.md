@@ -2,15 +2,16 @@
 
 Status: current
 Scope: documentation
-Last updated: 2026-05-29
+Last updated: 2026-06-03
 Source of truth: yes
 
 ## Current controls
 
-- Laravel checks entitlement before issuing playback authorization.
-- Bunny Stream VOD playback uses short-lived server-signed URLs.
+- Fastify checks entitlement before issuing playback authorization.
+- Bunny Stream VOD full playback always uses short-lived server-signed/tokenized playback.
 - Bunny thumbnail URLs are signed by the API for Bunny Stream assets.
-- Live playback remains server-authorized through Laravel before provider playback starts.
+- Paid Livepeer streams and paid replay assets use JWT playback access from day one.
+- Live playback remains server-authorized through Fastify before provider playback starts.
 - Deleted, removed, and cleaned assets have local playback references revoked immediately.
 
 ## Required production settings
@@ -18,6 +19,7 @@ Source of truth: yes
 - enable Bunny Stream token authentication
 - enable Bunny Stream allowed-domain restrictions for the real web origins
 - enable Bunny CDN token authentication on the Stream pull zone if you use direct CDN paths
+- enable Livepeer JWT playback policy for paid/pass-gated live streams and paid replay assets
 - keep Bunny and Livepeer secrets server-side only
 - keep provider webhooks signed and verified
 

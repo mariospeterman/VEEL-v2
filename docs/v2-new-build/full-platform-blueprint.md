@@ -163,9 +163,9 @@ Frontend never computes final access, final commission, final ticket state, fina
 ```text
 Landing
   -> sign up with social/email or external wallet
-  -> embedded noncustodial wallet created or wallet linked
-  -> age verification required before protected app access
-  -> wallet path required before protected app access
+  -> embedded noncustodial wallet created or native wallet linked
+  -> age verification
+  -> protected app access
   -> Home feed
   -> watch teaser/free media
   -> tip/support/unlock/pass/ticket when desired

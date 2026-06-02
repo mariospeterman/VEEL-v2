@@ -87,11 +87,11 @@ KYC/KYB for earning:
 - Every provider callback is authenticated, idempotent, replay-safe, and audited.
 - Provider outage behavior must be visible in admin/ops and recoverable in user UI.
 
-## Required ADRs Before Coding
+## Required Provider Decisions Before Coding
 
-- embedded wallet provider choice
+- embedded wallet provider staging confirmation
 - onramp provider choice
 - age/KYC primary and fallback provider choice
-- Livepeer protected playback strategy
-- Bunny signed playback/token authentication strategy
+- Livepeer JWT key management and TTL configuration
+- Bunny signed/tokenized playback TTL configuration
 - Helius webhook scoping strategy

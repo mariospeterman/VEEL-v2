@@ -158,7 +158,9 @@ create table live_rooms (
   provider media_provider not null default 'livepeer',
   provider_stream_id text unique,
   state text not null default 'scheduled',
-  access_rule text not null default 'free',
+  access_rule text not null default 'pass_required',
+  teaser_seconds integer not null default 60,
+  pass_durations_minutes integer[] not null default array[30, 60, 180],
   starts_at timestamptz,
   ended_at timestamptz,
   created_at timestamptz not null default now()
@@ -303,6 +305,7 @@ create table events (
   description text,
   starts_at timestamptz not null,
   ends_at timestamptz,
+  event_type text not null default 'physical',
   location_type text not null,
   location_label text,
   location_lat numeric,

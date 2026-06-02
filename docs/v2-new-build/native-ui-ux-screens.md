@@ -178,7 +178,7 @@ Mobile:
 - text/GIF overlays are lightweight, not a complex timeline editor
 - music is only from licensed/provider-cleared catalog or creator-owned audio
 - labels include NSFW/adult/sensitive and optional event attachment only
-- event attachment captures date/time, ticket amount/capacity, public sale or private request-to-join, online/physical location, and map-assisted location search
+- event attachment captures date/time, ticket amount/capacity, public sale or private request-to-join, digital live stream or physical location, and map-assisted location search
 - Dating Mode is not configured in Create; it is enabled from profile/settings and appears as a dating-active affordance on eligible creator media
 - record/publish explicit
 - global gestures disabled

@@ -25,6 +25,7 @@ Protected app access rule:
 - The recommended launch default is embedded-wallet-first for mainstream users: email/social/passkey creates or loads a noncustodial embedded wallet.
 - External/native wallet connect remains first-class for web3-native users.
 - One wallet path is mandatory; the other path can be added, changed, or selected as primary later in profile/settings.
+- Wallet path must be ready before age verification starts: embedded wallet for identity-first users, native wallet link for wallet-first users.
 - No user enters the protected app shell until age verification is complete.
 - Wallet existence is required for wallet-native identity/payment readiness, but it is not payment proof.
 
@@ -44,12 +45,12 @@ External wallets remain first-class for crypto-native users.
 
 Use a wallet infrastructure provider instead of building key management.
 
-Provider options to evaluate:
+Provider decision:
 
-- Privy embedded wallets: supports self-custodial embedded wallets and Solana.
-- Dynamic embedded wallets: supports noncustodial embedded wallets and Solana/EdDSA.
-- Turnkey embedded wallets: supports noncustodial embedded wallet architectures with email/OAuth/passkey style authentication and programmable policies.
-- Coinbase Onramp or another onramp provider: fund the user-owned wallet, not a Veel custodial account.
+- Turnkey is the recommended launch provider for Veel if staging confirms the UX. It gives stronger policy controls, sub-organization isolation, Solana wallet support, external wallet support, and future room for admin/AI safety controls.
+- Privy is the fallback if consumer activation speed is materially better and it satisfies the same noncustodial, Solana, funding, export/recovery, and external-wallet requirements.
+- Dynamic remains an alternative to evaluate if Turnkey/Privy do not meet regional, cost, or UX needs.
+- Onramp/funding should be provided through the selected wallet/onramp provider and must fund the user-owned wallet, not a Veel custodial account.
 
 Selection criteria:
 
@@ -220,7 +221,7 @@ Non-wallet actions:
 
 ## Open Provider Decision
 
-Before coding v2, choose one primary embedded wallet provider and one onramp provider.
+Before coding v2, confirm Turnkey staging UX or explicitly switch the ADR to the fallback provider.
 
 Recommended decision record:
 

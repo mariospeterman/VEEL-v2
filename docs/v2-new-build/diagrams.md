@@ -202,7 +202,7 @@ User opts into Dating Mode
 
 ```text
 Creator attaches event to media
-  -> event config: title, date/time, location/online, ticket count, price/free
+  -> event config: digital live stream or physical, title, date/time, ticket count, price/free, public/private
   -> event appears from media/event surfaces
   -> user opens ticket sheet
   -> paid ticket creates payment intent

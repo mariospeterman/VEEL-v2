@@ -45,7 +45,12 @@ Rules:
 - Fastify maps identity to Veel profile, mandatory age gate, wallet, monetisation, and permissions.
 - Protected app access requires age verified and a wallet path: external wallet linked or embedded noncustodial wallet created/loaded.
 - KYC/KYB is separate from normal viewing age access.
-- External wallet is not mandatory at signup. Mainstream users can enter with email/social/passkey and receive a user-controlled embedded wallet during onboarding before protected app access.
+- Onboarding order is strict:
+  1. identity choice creates the user session
+  2. wallet path is created or linked immediately: embedded wallet for email/social/passkey, or native external wallet for wallet-first users
+  3. age verification completes the app gate
+  4. protected app access opens
+- External wallet is not mandatory at signup. Mainstream users can enter with email/social/passkey and receive a user-controlled embedded wallet before age verification and protected app access.
 
 ## Wallet Onboarding Flow
 
@@ -58,9 +63,9 @@ flowchart TD
   Profile --> Embedded["Create/load noncustodial embedded wallet"]
   Native --> Challenge["Wallet challenge/signature"]
   Challenge --> Link["Link external wallet"]
-  Embedded --> Session["Safe session payload"]
-  Link --> Session
-  Session --> Age["Third-party age verification"]
+  Embedded --> WalletReady["Wallet path ready"]
+  Link --> WalletReady
+  WalletReady --> Age["Third-party age verification"]
   Age --> AppAccess["Protected app access"]
   AppAccess --> Paywall["Paid action"]
   Paywall --> Topup["Top-up if needed"]
@@ -271,7 +276,7 @@ Events are content-attached conversion flows.
   - date/time
   - ticket amount/capacity
   - public ticket sale or private request-to-join/apply
-  - online/physical location
+  - digital live stream or physical location
   - location selected through map/autodetect/manual search
 - user opens ticket sheet
 - wallet confirms payment if paid

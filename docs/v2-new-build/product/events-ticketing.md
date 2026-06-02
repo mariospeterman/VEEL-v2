@@ -10,11 +10,12 @@ Events are content-attached conversion flows. They are not root navigation by de
 ## Product Position
 
 - Creator can attach an event to media.
-- Event can be online or location-based.
+- Event type is either `digital_live_stream` or `physical`.
 - Event can be public sale, free, paid, or private request-to-join/apply.
 - Paid tickets use noncustodial Solana-compatible payment intents.
 - Backend creates ticket entitlement and QR/receipt only after verified payment or approval.
-- Future NFT/token tickets are separate ADRs, not the launch default.
+- Launch does not need a separate Solana ticketing provider. Use backend QR/ticket entitlements plus Solana Pay settlement.
+- Future NFT/token tickets, collectible tickets, transferable tickets, or third-party Solana ticketing providers are separate ADRs, not the launch default.
 
 ## Routes
 
@@ -66,7 +67,8 @@ events
   ├─ content_item_id
   ├─ title, description
   ├─ starts_at, ends_at
-  ├─ location_type: online | physical
+  ├─ event_type: digital_live_stream | physical
+  ├─ location_type: digital_live_stream | physical
   ├─ location_label, location_lat, location_lng, place_provider_ref
   ├─ capacity
   ├─ price
@@ -105,6 +107,29 @@ ticket_entitlements
 10. Frontend refreshes My Tickets from backend state
 ```
 
+## Ticketing Provider Decision
+
+Launch default:
+
+- backend-owned event/ticket inventory
+- backend-owned ticket entitlement and QR/receipt
+- noncustodial Solana Pay payment settlement
+- backend check-in state and audit log
+
+This is the fastest secure path for Veel because it supports public tickets, private request-to-join events, refunds/revocation policy, admin check-in, and referral/split settlement without premature custom smart contracts.
+
+Do not build a custom Solana ticketing protocol for launch.
+
+Evaluate later only if the business needs:
+
+- transferable tickets
+- collectible NFT tickets
+- resale/secondary-market rules
+- token-gated external venue integrations
+- partner ticketing integrations
+
+Candidates for a later ADR include Crossmint/NFT APIs or a dedicated Solana ticketing provider, but only after proving QR entitlements are insufficient.
+
 ## Free Or Request-To-Join Flow
 
 ```text
@@ -120,17 +145,33 @@ Request-to-join:
   all decisions are audited
 ```
 
+## Configurable Limits
+
+Environment defaults and admin overrides must cover:
+
+- maximum event duration
+- minimum lead time before event start
+- maximum ticket capacity
+- ticket sale window
+- private request-to-join approval window
+- cancellation/refund cutoff
+- check-in grace period
+- per-user ticket limits
+
+Environment values provide safe defaults. Admin policy can override them for business operations without a deploy, and every override is audited.
+
 ## Location UX
 
 Launch location flow:
 
-1. Creator chooses `online` or `physical`.
-2. For physical events, UI offers:
+1. Creator chooses `digital_live_stream` or `physical`.
+2. Digital live stream events attach to a live-room/ticket flow and do not require a street location.
+3. For physical events, UI offers:
    - use current location after browser permission
    - search street/place manually
    - edit display label before publishing
-3. Backend stores normalized display label, coarse coordinates if needed for map display, and provider/place reference.
-4. Exact user/device location is never shared unless the creator explicitly publishes it as the event location.
+4. Backend stores normalized display label, coarse coordinates if needed for map display, and provider/place reference.
+5. Exact user/device location is never shared unless the creator explicitly publishes it as the event location.
 
 Provider rule:
 

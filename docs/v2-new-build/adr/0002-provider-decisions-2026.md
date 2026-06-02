@@ -12,20 +12,20 @@ This ADR turns the v2 blueprint into concrete provider defaults for the first im
 | Area | Launch recommendation | Reason |
 | --- | --- | --- |
 | Onboarding order | Identity + mandatory wallet path, then age verification, then protected app access | Keeps app fully 18+ while reducing wallet-install friction through embedded wallet. |
-| Embedded wallet | Privy first, Turnkey as deeper-control fallback | Best consumer UX and built-in wallet funding/onramp path; Turnkey is stronger when we need full policy/sub-org control. |
+| Embedded wallet | Turnkey first, Privy as faster consumer-UX fallback | Veel needs noncustodial Solana wallets, policy controls, external wallet support, auditability, and future AI/admin safety controls more than a lowest-code auth widget. |
 | Onramp/funding | Embedded-wallet provider funding UI first | Platform does not handle card processing or custody; user funds their own wallet. |
 | One-time payments | Solana Pay / Solana transaction requests | Noncustodial, wallet-approved, backend-verified. |
 | Payment evidence | Helius scoped to money/access evidence, with RPC fallback | Cost-aware, not a broad firehose. |
-| Platform subscriptions | Solana Subscriptions/Allowances once stable for product, otherwise provider checkout ADR | Native recurring/delegated payments are now a first-class Solana primitive, but need staging proof. |
+| Platform subscriptions | Use simple recurring provider checkout adapter until Solana recurring UX is staging-proven | Avoid blocking launch on delegated recurring-wallet UX; keep subscription state backend-owned. |
 | Creator subscriptions | Keep, but treat as creator fan-club access, not a replacement for discovery/unlocks | Supports creator recurring revenue without killing free discovery. |
 | VOD | Bunny Stream/CDN/TUS | Direct uploads and playback provider infrastructure. |
-| Live/replay | Livepeer with JWT playback access where protected | Provider-owned live infra and provider-enforced protected playback. |
+| Live/replay | Livepeer with JWT playback access from day one for paid streams/replays | Provider-owned live infra and provider-enforced protected playback. |
 | Age assurance | Yoti app/Digital ID first, Sumsub reusable/non-doc fallback, Persona documentary fallback | User choice, reusable/low-friction first, no raw identity data in core DB. |
 | Creator KYC/KYB | Disabled by default except high-risk/admin-required creators; Sumsub primary candidate | Avoid unnecessary friction while keeping an easy switch for legal/risk expansion. |
 | AI/MCP | Provider-agnostic LLM gateway with OpenAI-compatible adapter first | Avoid lock-in; all tools permission-scoped and audited. |
 | Create flow | Raw/simple create: record/upload, essential edits, caption/#/@/location, NSFW label, optional event, monetisation, preview, publish | Avoids overbuilt editor while preserving creator conversion controls. |
 | Dating | Profile/settings-owned explicit mode; not configured per Create draft | Dating appears on creator media only when profile mode is active and viewer also opted in. |
-| Event tickets | Internal backend ticket entitlement + Solana Pay settlement first; NFT ticket ADR later | Proven, simple, noncustodial split settlement without premature custom smart contracts. |
+| Event tickets | Internal backend QR/ticket entitlement + Solana Pay settlement first; NFT/Solana ticketing ADR later | Proven, simple, noncustodial split settlement without premature custom smart contracts. |
 | Event location | Browser geolocation with permission + manual OSM-backed place search | Free/low-cost launch UX without platform handling private location carelessly. |
 | Share | Internal Veel share/repost/message has no referral commission; external share tab uses backend referral URL | Keeps social sharing clean while preserving referral attribution for off-platform conversion. |
 
@@ -66,27 +66,27 @@ Human sets slice goal
 
 ### Recommendation
 
-Use Privy as the launch embedded-wallet provider if staging checks confirm:
+Use Turnkey as the launch embedded-wallet provider if staging checks confirm:
 
-- Solana embedded wallet support works cleanly with the app UX.
-- Funding/onramp flow supports SOL/USDC destination funding.
-- External wallet transfer/bridge flows work with Phantom/Solflare-style users.
-- Export/recovery/user-control posture is acceptable.
-- Pricing is acceptable at expected MAU.
+- fully user-controlled/noncustodial Solana wallet flow works cleanly
+- email/social/passkey onboarding can create or load the wallet before age verification
+- external wallets can be used alongside embedded wallets
+- onramp/funding sends funds to the user wallet, not a Veel custodial balance
+- policy controls can enforce explicit user approval for money actions
+- wallet export/recovery posture is acceptable
+- pricing is acceptable at expected MAU and transaction volume
 
-Use Turnkey as fallback or second ADR if we need:
+Use Privy as fallback or second ADR if:
 
-- deeper noncustodial policy controls
-- sub-organization-level wallet ownership
-- hardware enclave posture
-- custom transaction-policy enforcement
-- business/shared wallets
+- Turnkey integration speed is too slow for the first launch
+- Privy’s consumer UX materially improves activation/conversion in staging
+- Privy Solana wallet creation/funding/export and external wallet flow meet the same custody and security requirements
 
 ### Rationale
 
-Privy’s docs describe wallet funding with fiat onramps and wallet/bridge transfers, including funding Solana wallets with SOL. This aligns with user-friendly self-funding while keeping the platform out of fiat custody and card processing.
+Turnkey’s docs show embedded wallets built around sub-organizations, Solana wallet accounts, user-controlled custody options, policy controls, external wallets, and onramp integrations. That fits Veel’s adult-content, payment, referral, AI/admin safety, and audit needs better than a simpler login-first wallet abstraction.
 
-Turnkey’s docs show a stronger infrastructure-oriented model: embedded wallets, Solana accounts, user-controlled/noncustodial options, sub-organizations, policy controls, and a MoonPay onramp helper. It is excellent, but likely more custom work than needed for the first consumer launch.
+Privy remains a strong consumer-UX fallback because it supports embedded wallets, Solana, export, and automatic wallet creation. Use it only if it reaches launch faster without weakening the noncustodial and policy requirements.
 
 ### Rules
 
@@ -129,19 +129,26 @@ Recommended path:
 Platform subscription tiers:
 
 ```text
-Free
+Peek
+  free account
   limited teaser/free-watch allowance
   basic social/media participation
 
-Heavy viewer
+Veel Plus
+  recommended launch target: 15 USDC/month or local equivalent
   higher watch allowance / bandwidth fairness
   smoother media and message experience
   still pays creators separately unless product decides otherwise
 
-Premium
+Veel Max
+  recommended launch target: 29 USDC/month or local equivalent
   advanced dating/events/AI profile features
   enhanced discovery/profile tools
   possible lower platform fees or bonus limits if business model supports it
+
+Studio/Enterprise
+  custom pricing
+  creator/team/admin/business support tier, not ordinary viewer default
 ```
 
 Creator subscriptions:
@@ -174,16 +181,11 @@ This ADR does not replace the implementation-specific Bunny/Livepeer playback de
 
 Recommended default:
 
-- Bunny VOD: backend-issued signed/tokenized playback for full locked content; public or short-lived safe teaser playback.
-- Livepeer: JWT playback policy for protected streams/assets where live/replay is paid or pass-gated.
+- Bunny VOD: backend-issued signed/tokenized playback is mandatory for full locked content; public or short-lived safe teaser playback is allowed.
+- Livepeer: JWT playback policy is mandatory from day one for paid/pass-gated streams and paid replay assets.
 - Frontend should use official provider players/components where they fit the UX, then wrap them in Veel UI primitives. Do not build custom playback engines.
 
-Before implementation, confirm with the product owner:
-
-1. Should locked Bunny full playback always require signed/tokenized URLs?
-2. Should free teaser media be public CDN or signed short-lived CDN?
-3. Should paid Livepeer streams use JWT access control from day one?
-4. How long should playback tokens live before refresh?
+Token/lifetime defaults must be configurable by environment and admin policy. Admin can override env defaults for product policy without code deployment; environment remains the safe fallback when admin config is missing.
 
 ## Age Assurance And KYC/KYB
 
@@ -234,7 +236,8 @@ Create/Edit must include:
 - content warning category
 - paid/free/teaser access state
 - optional event attachment only, not per-media Dating Mode settings
-- event fields: date/time, ticket amount/capacity, public sale or private request-to-join, online/physical location
+- event fields: date/time, ticket amount/capacity, public sale or private request-to-join, digital live stream or physical location
+- event type is `digital_live_stream` or `physical`
 - map/location UX: browser geolocation with permission, manual place/street search, OSM-backed geocoding with production-safe caching/rate limits
 - AI moderation placeholder
 - manual admin review state
@@ -288,7 +291,7 @@ Event creation is a Create/Edit toggle:
 - title
 - description
 - date/time
-- location or online
+- digital live stream or physical location
 - ticket count/capacity
 - free/request-to-join/paid
 - ticket price
@@ -347,6 +350,7 @@ Every admin mutation requires:
 - Solana Pay: https://solana.com/docs/payments/accept-payments/solana-pay
 - Solana Subscriptions overview: https://solana.com/docs/payments/subscriptions/overview
 - Bunny TUS uploads: https://docs.bunny.net/reference/tus-resumable-uploads
+- Bunny Stream security/token authentication: https://docs.bunny.net/stream/security
 - Livepeer JWT access control: https://docs.livepeer.org/developers/guides/access-control-jwt
 - Yoti age verification: https://developers.yoti.com/age-verification/age-verification-introduction
 - Sumsub reusable KYC: https://docs.sumsub.com/docs/reusable-kyc
