@@ -184,7 +184,7 @@ Sign up
   -> optional creator monetisation setup
   -> KYC/KYB for earning/payout where required
   -> upload/capture media
-  -> choose thumbnail/teaser/access/monetisation
+  -> choose thumbnail/teaser/access/monetisation and creator prices within admin guardrails
   -> optional event attachment with date/time, ticket amount, public/private, and location
   -> publish
   -> dashboard shows backend-derived revenue/activity/provider state
@@ -222,7 +222,7 @@ Creator starts live
 ```text
 Media/event sheet
   -> ticket selection
-  -> backend inventory/price check
+  -> backend validates creator price, inventory, and policy
   -> wallet approval for paid ticket or approval path for free/requested ticket
   -> backend grants ticket entitlement
   -> QR/receipt

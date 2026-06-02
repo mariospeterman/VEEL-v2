@@ -105,18 +105,19 @@ Default viewer flow:
 1. User opens live room.
 2. First minute can be free teaser playback.
 3. After teaser, playback and chat require a creator live pass.
-4. Creator pass options default to 30 minutes, 1 hour, and 3 hours.
-5. Backend confirms payment before issuing active pass entitlement and Livepeer JWT playback.
+4. Allowed pass duration templates default to 30 minutes, 1 hour, and 3 hours.
+5. Creator chooses offered durations and pass prices within admin/env guardrails.
+6. Backend confirms payment before issuing active pass entitlement and Livepeer JWT playback.
 
 Config:
 
 - live teaser seconds
-- pass durations
-- default pass prices
+- allowed pass duration templates
+- minimum pass prices
 - whether chat requires active pass
 - grace period after pass expiry
 
-These values are environment defaults with admin-configurable overrides.
+These values are environment defaults with admin-configurable overrides. Creators own their live pass prices above policy minimums.
 
 Live replays are ordinary content items after the stream ends. They can use a free Bit/teaser segment and creator-selected replay/VOD monetisation.
 

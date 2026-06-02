@@ -17,6 +17,14 @@ Events are content-attached conversion flows. They are not root navigation by de
 - Launch does not need a separate Solana ticketing provider. Use backend QR/ticket entitlements plus Solana Pay settlement.
 - Future NFT/token tickets, collectible tickets, transferable tickets, or third-party Solana ticketing providers are separate ADRs, not the launch default.
 
+Noncustodial boundary:
+
+- Ticket payment is a wallet-approved transaction between buyer wallet and configured creator/event owner/platform/referral recipients.
+- Veel does not custody ticket purchase funds.
+- Veel backend creates the transaction request, verifies confirmed chain settlement, records the ticket entitlement, and issues QR/check-in state.
+- The QR/ticket record is an access entitlement and operational receipt, not a custodial balance.
+- Refunds/reversals require explicit noncustodial refund transaction or audited compensating policy; they are not hidden internal balance edits.
+
 ## Routes
 
 ```text
@@ -34,7 +42,7 @@ Fastify owns:
 
 - event creation/update validation
 - inventory and capacity
-- ticket pricing
+- creator-selected ticket pricing validated against admin/env guardrails
 - payment intent
 - payment verification
 - ticket entitlement
@@ -96,7 +104,7 @@ ticket_entitlements
 
 ```text
 1. User opens event ticket sheet
-2. API returns event availability and backend-owned price
+2. API returns event availability and creator-selected price validated by backend policy
 3. User confirms ticket intent
 4. API creates payment intent with ticket product type
 5. Wallet approves noncustodial split transaction
@@ -115,6 +123,7 @@ Launch default:
 - backend-owned ticket entitlement and QR/receipt
 - noncustodial Solana Pay payment settlement
 - backend check-in state and audit log
+- creator-owned ticket price within admin/env minimums and policy limits
 
 This is the fastest secure path for Veel because it supports public tickets, private request-to-join events, refunds/revocation policy, admin check-in, and referral/split settlement without premature custom smart contracts.
 

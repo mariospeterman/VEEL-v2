@@ -18,6 +18,7 @@ This ADR turns the v2 blueprint into concrete provider defaults for the first im
 | Payment evidence | Helius scoped to money/access evidence, with RPC fallback | Cost-aware, not a broad firehose. |
 | Platform subscriptions | Use simple recurring provider checkout adapter until Solana recurring UX is staging-proven | Avoid blocking launch on delegated recurring-wallet UX; keep subscription state backend-owned. |
 | Creator subscriptions | Keep, but treat as creator fan-club access, not a replacement for discovery/unlocks | Supports creator recurring revenue without killing free discovery. |
+| Creator pricing | Creator sets media unlock, paid message, live pass, ticket, and creator subscription prices within admin/env guardrails | Preserves creator ownership while preventing abuse, too-low pricing, and compliance issues. |
 | VOD | Bunny Stream/CDN/TUS | Direct uploads and playback provider infrastructure. |
 | Live/replay | Livepeer with JWT playback access from day one for paid streams/replays | Provider-owned live infra and provider-enforced protected playback. |
 | Age assurance | Yoti app/Digital ID first, Sumsub reusable/non-doc fallback, Persona documentary fallback | User choice, reusable/low-friction first, no raw identity data in core DB. |

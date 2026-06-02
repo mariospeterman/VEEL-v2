@@ -82,16 +82,17 @@ Viewer experience:
 1. User opens live room.
 2. First minute is a free teaser preview where the creator/product policy allows it.
 3. After the teaser, playback and chat require a creator live pass.
-4. Pass options default to:
+4. Pass duration templates default to:
    - 30 minutes
    - 1 hour
    - 3 hours
-5. Pass durations, prices, teaser seconds, and chat access policy are configurable by environment and admin settings.
-6. Admin policy can override environment defaults; environment remains the fallback.
+5. Creator chooses which allowed durations to offer and sets pass prices above admin/env minimums.
+6. Pass duration templates, minimum prices, teaser seconds, and chat access policy are configurable by environment and admin settings.
+7. Admin policy can override environment defaults; environment remains the fallback.
 
 Rules:
 
-- Backend owns pass price, duration, entitlement, expiry, and chat access.
+- Backend validates creator-selected pass price/duration against policy and owns entitlement, expiry, and chat access.
 - Wallet approval is not access proof; pass entitlement begins only after backend-confirmed payment.
 - Livepeer JWT is issued only for the active entitlement window.
 - Chat access follows live pass state unless a product-specific override is configured.

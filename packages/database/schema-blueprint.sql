@@ -313,6 +313,7 @@ create table events (
   location_provider text,
   location_provider_ref text,
   capacity integer not null,
+  ticket_price_minor integer,
   access_rule text not null default 'public_sale',
   state text not null default 'draft',
   created_at timestamptz not null default now()

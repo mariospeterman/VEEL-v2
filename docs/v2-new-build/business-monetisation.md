@@ -5,7 +5,7 @@ Scope: business model, monetisation, noncustodial money movement
 Last updated: 2026-06-03
 Source of truth: proposal
 
-This document defines the full Veel v2 monetisation and business model. It extends `payments-and-monetisation.md`, which owns payment verification mechanics. The rule is unchanged: the frontend can display and request actions, but the backend owns pricing, splits, settlement, entitlements, commissions, subscriptions, refunds, audit records, and operational reporting.
+This document defines the full Veel v2 monetisation and business model. It extends `payments-and-monetisation.md`, which owns payment verification mechanics. The rule is unchanged: the frontend can display and request actions, creators choose prices where product policy allows, and the backend enforces admin/env pricing guardrails, splits, settlement, entitlements, commissions, subscriptions, refunds, audit records, and operational reporting.
 
 ## Business Model Summary
 
@@ -45,7 +45,7 @@ flowchart LR
 
 Backend responsibilities:
 
-- select product type, price, asset, recipient wallets, split recipients, reference, memo, expiry, and entitlement target
+- select product type, validated creator price, asset, recipient wallets, split recipients, reference, memo, expiry, and entitlement target
 - compose or serve the Solana Pay transaction request
 - verify confirmed chain facts before final settlement
 - write immutable settlement, split, and audit records
@@ -62,6 +62,38 @@ Frontend responsibilities:
 The direct split model means creator/platform/referral balances are primarily accounting projections from confirmed chain settlement, not custodial wallet balances held by Veel.
 
 Embedded wallets do not change this model. They reduce onboarding friction by giving mainstream users a user-controlled wallet after social/email/passkey signup, but payment still happens through wallet-approved transactions and backend-verified settlement.
+
+## Creator Pricing With Admin Guardrails
+
+Creators own monetisation pricing for creator products:
+
+- media unlocks
+- paid messages
+- tips/support presets where creator offers presets
+- live pass prices and available durations from allowed duration templates
+- event tickets
+- creator subscriptions
+
+Admin/env owns guardrails:
+
+- minimum price per product type
+- maximum price per product type where required for abuse/compliance
+- allowed assets/currencies
+- platform fee bps
+- referral share bps and eligibility
+- allowed live pass duration templates
+- event capacity/date limits
+- refund/revocation policy
+
+Environment variables provide safe launch defaults. Admin configuration can override env defaults and every override is audited. The frontend never calculates final splits or final payable price.
+
+Examples:
+
+- Admin sets minimum paid message price to `0.01 SOL` or USDC equivalent.
+- Creator sets a paid message price above that minimum.
+- Admin sets live pass duration templates to `30`, `60`, and `180` minutes.
+- Creator chooses which durations to offer and sets prices above the minimum.
+- Admin sets minimum event ticket price; creator sets actual ticket price and capacity within policy.
 
 ## Money Movement Modes
 

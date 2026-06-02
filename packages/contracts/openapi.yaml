@@ -484,6 +484,9 @@ components:
         ticketCapacity:
           type: integer
           minimum: 1
+        ticketPriceMinor:
+          type: integer
+          nullable: true
         accessRule:
           type: string
           enum: [public_sale, private_apply]
