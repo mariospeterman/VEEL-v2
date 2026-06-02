@@ -367,6 +367,10 @@ Every frontend response is:
 18. UI polish
 ```
 
+## Required Provider ADR
+
+Provider defaults are defined in `adr/0002-provider-decisions-2026.md`. Use it before writing wallet, onramp, subscription, media playback, age/KYC, ticketing, moderation, or AI/MCP code.
+
 ## New Repo Rule
 
 Copy this pack into the new repo, then build by vertical slices. Do not start by copying old code. Only reference the old repo for:

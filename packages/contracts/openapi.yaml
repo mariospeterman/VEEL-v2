@@ -1,0 +1,569 @@
+openapi: 3.1.0
+info:
+  title: Veel V2 API
+  version: 0.1.0
+  description: >
+    Initial contract skeleton for the Veel v2 greenfield build. This file is the
+    API source of truth and must be expanded slice-by-slice before implementation.
+servers:
+  - url: https://api.veel.example
+    description: Production
+  - url: http://localhost:4000
+    description: Local
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+  - name: Me
+  - name: Age
+  - name: Wallets
+  - name: Content
+  - name: Media
+  - name: Live
+  - name: Engagement
+  - name: Messages
+  - name: Payments
+  - name: Referrals
+  - name: Subscriptions
+  - name: Events
+  - name: Dating
+  - name: Activity
+  - name: Admin
+  - name: Webhooks
+paths:
+  /v1/me:
+    get:
+      tags: [Me]
+      summary: Current viewer state
+      responses:
+        "200":
+          description: Current viewer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+  /v1/content/feed:
+    get:
+      tags: [Content]
+      summary: Mixed media Home feed
+      parameters:
+        - $ref: "#/components/parameters/FeedMode"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Feed page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedPage"
+  /v1/content/{contentId}:
+    get:
+      tags: [Content]
+      summary: Frontend-safe content detail
+      parameters:
+        - $ref: "#/components/parameters/ContentId"
+      responses:
+        "200":
+          description: Content detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentItem"
+  /v1/content:
+    post:
+      tags: [Content]
+      summary: Create content draft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateContentRequest"
+      responses:
+        "201":
+          description: Created draft
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentItem"
+  /v1/media/uploads:
+    post:
+      tags: [Media]
+      summary: Create provider-backed upload session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUploadRequest"
+      responses:
+        "201":
+          description: Safe upload session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadSession"
+  /v1/live/rooms/{roomId}:
+    get:
+      tags: [Live]
+      summary: Viewer-safe live room detail
+      parameters:
+        - $ref: "#/components/parameters/RoomId"
+      responses:
+        "200":
+          description: Live room
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiveRoom"
+  /v1/live/rooms/{roomId}/host-connection:
+    get:
+      tags: [Live]
+      summary: Creator-only masked host connection
+      parameters:
+        - $ref: "#/components/parameters/RoomId"
+      responses:
+        "200":
+          description: Masked host connection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HostConnection"
+  /v1/engagement/{contentId}/like:
+    post:
+      tags: [Engagement]
+      summary: Toggle content like
+      parameters:
+        - $ref: "#/components/parameters/ContentId"
+      responses:
+        "200":
+          description: Engagement state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngagementState"
+  /v1/messages/conversations:
+    get:
+      tags: [Messages]
+      summary: Conversation list
+      responses:
+        "200":
+          description: Conversations
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Conversation"
+  /v1/payments/intents:
+    post:
+      tags: [Payments]
+      summary: Create or reuse backend-owned payment intent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentIntentRequest"
+      responses:
+        "201":
+          description: Payment intent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentIntent"
+  /v1/payments/intents/{paymentIntentId}/transaction-request:
+    get:
+      tags: [Payments]
+      summary: Server-built wallet transaction request
+      parameters:
+        - $ref: "#/components/parameters/PaymentIntentId"
+      responses:
+        "200":
+          description: Transaction request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionRequest"
+  /v1/events/{eventId}/tickets/intents:
+    post:
+      tags: [Events]
+      summary: Create ticket payment or approval intent
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+      responses:
+        "201":
+          description: Ticket intent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketIntent"
+  /v1/dating/swipes:
+    post:
+      tags: [Dating]
+      summary: Record explicit Dating Mode swipe/action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DatingSwipeRequest"
+      responses:
+        "200":
+          description: Dating action result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatingSwipeResult"
+  /v1/webhooks/solana-indexer:
+    post:
+      tags: [Webhooks]
+      summary: Confirmed Solana payment evidence webhook
+      security: []
+      responses:
+        "202":
+          description: Accepted
+  /v1/webhooks/media/{provider}:
+    post:
+      tags: [Webhooks]
+      summary: Media provider webhook
+      security: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [bunny, livepeer]
+      responses:
+        "202":
+          description: Accepted
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    FeedMode:
+      name: mode
+      in: query
+      schema:
+        type: string
+        enum: [for_you, following, live, premium]
+    ContentId:
+      name: contentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    RoomId:
+      name: roomId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PaymentIntentId:
+      name: paymentIntentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    EventId:
+      name: eventId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    Me:
+      type: object
+      required: [user, ageState, walletState]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        ageState:
+          $ref: "#/components/schemas/AgeState"
+        walletState:
+          $ref: "#/components/schemas/WalletState"
+    User:
+      type: object
+      required: [id, handle, displayName]
+      properties:
+        id:
+          type: string
+          format: uuid
+        handle:
+          type: string
+        displayName:
+          type: string
+        avatarUrl:
+          type: string
+          format: uri
+          nullable: true
+    AgeState:
+      type: string
+      enum: [not_required, required, pending, verified, failed]
+    WalletState:
+      type: object
+      required: [connected, chain]
+      properties:
+        connected:
+          type: boolean
+        chain:
+          type: string
+          enum: [solana_devnet, solana_mainnet]
+        address:
+          type: string
+          nullable: true
+    FeedPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentItem"
+        nextCursor:
+          type: string
+          nullable: true
+    ContentItem:
+      type: object
+      required: [id, creator, mediaType, accessState, engagement]
+      properties:
+        id:
+          type: string
+          format: uuid
+        creator:
+          $ref: "#/components/schemas/User"
+        mediaType:
+          type: string
+          enum: [bit, clip, image, vod, live_replay]
+        caption:
+          type: string
+          nullable: true
+        posterUrl:
+          type: string
+          format: uri
+          nullable: true
+        playback:
+          $ref: "#/components/schemas/PlaybackResource"
+        accessState:
+          type: string
+          enum: [free, teaser, locked, unlocked, subscribed, pass_required]
+        nsfwLabel:
+          type: string
+          enum: [none, adult, explicit, sensitive]
+        engagement:
+          $ref: "#/components/schemas/EngagementState"
+    PlaybackResource:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [not_ready, teaser, full, blocked]
+        url:
+          type: string
+          format: uri
+          nullable: true
+        provider:
+          type: string
+          enum: [bunny, livepeer, none]
+    CreateContentRequest:
+      type: object
+      required: [mediaType, visibility, nsfwLabel]
+      properties:
+        mediaType:
+          type: string
+          enum: [bit, clip, image, vod, live_replay]
+        caption:
+          type: string
+        visibility:
+          type: string
+          enum: [public, followers, subscribers, private]
+        nsfwLabel:
+          type: string
+          enum: [none, adult, explicit, sensitive]
+        datingEnabled:
+          type: boolean
+        eventDraft:
+          $ref: "#/components/schemas/EventDraft"
+    EventDraft:
+      type: object
+      properties:
+        title:
+          type: string
+        startsAt:
+          type: string
+          format: date-time
+        locationType:
+          type: string
+          enum: [online, physical]
+        capacity:
+          type: integer
+          minimum: 1
+    CreateUploadRequest:
+      type: object
+      required: [contentId, fileName, mimeType]
+      properties:
+        contentId:
+          type: string
+          format: uuid
+        fileName:
+          type: string
+        mimeType:
+          type: string
+    UploadSession:
+      type: object
+      required: [uploadUrl, provider, expiresAt]
+      properties:
+        uploadUrl:
+          type: string
+          format: uri
+        provider:
+          type: string
+          enum: [bunny]
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        expiresAt:
+          type: string
+          format: date-time
+    LiveRoom:
+      type: object
+      required: [id, creator, state, accessState]
+      properties:
+        id:
+          type: string
+          format: uuid
+        creator:
+          $ref: "#/components/schemas/User"
+        state:
+          type: string
+          enum: [scheduled, waiting, live, ended, replay_ready]
+        accessState:
+          type: string
+          enum: [free, locked, pass_required, pass_active]
+        playback:
+          $ref: "#/components/schemas/PlaybackResource"
+    HostConnection:
+      type: object
+      required: [maskedIngestUrl, streamKeyHint]
+      properties:
+        maskedIngestUrl:
+          type: string
+        streamKeyHint:
+          type: string
+    EngagementState:
+      type: object
+      required: [liked, saved, likeCount, commentCount, shareCount]
+      properties:
+        liked:
+          type: boolean
+        saved:
+          type: boolean
+        likeCount:
+          type: integer
+        commentCount:
+          type: integer
+        shareCount:
+          type: integer
+    Conversation:
+      type: object
+      required: [id, type, title]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [direct, match, paid]
+        title:
+          type: string
+    CreatePaymentIntentRequest:
+      type: object
+      required: [productType, targetId]
+      properties:
+        productType:
+          type: string
+          enum: [tip, support, unlock, paid_message, live_pass, event_ticket, creator_subscription, platform_subscription]
+        targetId:
+          type: string
+          format: uuid
+        amountMinor:
+          type: integer
+          nullable: true
+    PaymentIntent:
+      type: object
+      required: [id, productType, amountMinor, currency, state]
+      properties:
+        id:
+          type: string
+          format: uuid
+        productType:
+          type: string
+        amountMinor:
+          type: integer
+        currency:
+          type: string
+          enum: [SOL, USDC]
+        state:
+          type: string
+          enum: [pending, transaction_requested, confirmed, failed, expired]
+    TransactionRequest:
+      type: object
+      required: [transactionRequestUrl, expiresAt]
+      properties:
+        transactionRequestUrl:
+          type: string
+          format: uri
+        expiresAt:
+          type: string
+          format: date-time
+    TicketIntent:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [free_granted, approval_required, payment_required]
+        paymentIntent:
+          $ref: "#/components/schemas/PaymentIntent"
+    DatingSwipeRequest:
+      type: object
+      required: [targetUserId, contentId, action]
+      properties:
+        targetUserId:
+          type: string
+          format: uuid
+        contentId:
+          type: string
+          format: uuid
+        action:
+          type: string
+          enum: [yes, not_interested]
+    DatingSwipeResult:
+      type: object
+      required: [matchCreated]
+      properties:
+        matchCreated:
+          type: boolean
+        matchId:
+          type: string
+          format: uuid
+          nullable: true

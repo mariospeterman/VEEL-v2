@@ -29,47 +29,49 @@ This folder is the clean new-build pack. It is intentionally separated from the 
 3. [App architecture](app-architecture.md)
 4. [Stack decision](stack-decision.md)
 5. [ADR: Fastify and Supabase proposal](adr/0001-fastify-supabase-proposal.md)
-6. [Render-safe diagrams](diagrams.md)
+6. [ADR: 2026 provider decisions](adr/0002-provider-decisions-2026.md)
+7. [Initial contracts and schema](contracts-and-schema.md)
+8. [Render-safe diagrams](diagrams.md)
 
 ## Product And UX
 
-7. [Product flows](product-flows.md)
-8. [Dating Mode architecture](product/dating-mode.md)
-9. [Events and ticketing architecture](product/events-ticketing.md)
-10. [Frontend architecture](frontend-architecture.md)
-11. [Native UI, screens, gestures, and motion](native-ui-ux-screens.md)
-12. [Landing page and GSAP blueprint](landing-page-gsap.md)
-13. [Engagement strategy](engagement-strategy.md)
-14. [Design system](frontend/design-system.md)
-15. [Component map](frontend/component-map.md)
-16. [Copy system](frontend/copy-system.md)
-17. [Motion system](frontend/motion-system.md)
+9. [Product flows](product-flows.md)
+10. [Dating Mode architecture](product/dating-mode.md)
+11. [Events and ticketing architecture](product/events-ticketing.md)
+12. [Frontend architecture](frontend-architecture.md)
+13. [Native UI, screens, gestures, and motion](native-ui-ux-screens.md)
+14. [Landing page and GSAP blueprint](landing-page-gsap.md)
+15. [Engagement strategy](engagement-strategy.md)
+16. [Design system](frontend/design-system.md)
+17. [Component map](frontend/component-map.md)
+18. [Copy system](frontend/copy-system.md)
+19. [Motion system](frontend/motion-system.md)
 
 ## Backend, Data, Auth, And Realtime
 
-18. [Fastify backend architecture](backend-fastify-architecture.md)
-19. [Supabase auth and realtime architecture](auth-supabase-realtime.md)
-20. [Embedded wallet onboarding](embedded-wallet-onboarding.md)
-21. [Data model](data-model.md)
-22. [Realtime, messages, and activity](realtime-messages-activity.md)
+20. [Fastify backend architecture](backend-fastify-architecture.md)
+21. [Supabase auth and realtime architecture](auth-supabase-realtime.md)
+22. [Embedded wallet onboarding](embedded-wallet-onboarding.md)
+23. [Data model](data-model.md)
+24. [Realtime, messages, and activity](realtime-messages-activity.md)
 
 ## Money, Providers, Safety, And Admin
 
-23. [Payments and monetisation](payments-and-monetisation.md)
-24. [Business monetisation](business-monetisation.md)
-25. [Provider map](providers/provider-map.md)
-26. [Media and live providers](media-live-providers.md)
-27. [Identity provider wiring](providers/identity-provider-wiring.md)
-28. [Content protection](providers/content-protection.md)
-29. [Safety, admin, and AI/MCP](safety-admin-ai.md)
-30. [Admin and operations dashboard](admin-operations-dashboard.md)
-31. [Adult content compliance](compliance/adult-content-compliance.md)
-32. [Age/KYC jurisdictions and provider waterfall](compliance/age-kyc-jurisdictions.md)
+25. [Payments and monetisation](payments-and-monetisation.md)
+26. [Business monetisation](business-monetisation.md)
+27. [Provider map](providers/provider-map.md)
+28. [Media and live providers](media-live-providers.md)
+29. [Identity provider wiring](providers/identity-provider-wiring.md)
+30. [Content protection](providers/content-protection.md)
+31. [Safety, admin, and AI/MCP](safety-admin-ai.md)
+32. [Admin and operations dashboard](admin-operations-dashboard.md)
+33. [Adult content compliance](compliance/adult-content-compliance.md)
+34. [Age/KYC jurisdictions and provider waterfall](compliance/age-kyc-jurisdictions.md)
 
 ## Infrastructure And Execution
 
-33. [Deployment topology](deployment-topology.md)
-34. [Slice workflow](slice-workflow.md)
+35. [Deployment topology](deployment-topology.md)
+36. [Slice workflow](slice-workflow.md)
 
 ## Optional Historical Alternatives
 

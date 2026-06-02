@@ -7,6 +7,8 @@ const required = [
   "docs/v2-new-build/diagrams.md",
   "docs/v2-new-build/app-architecture.md",
   "docs/v2-new-build/stack-decision.md",
+  "docs/v2-new-build/adr/0002-provider-decisions-2026.md",
+  "docs/v2-new-build/contracts-and-schema.md",
   "docs/v2-new-build/product/dating-mode.md",
   "docs/v2-new-build/product/events-ticketing.md",
   "docs/v2-new-build/compliance/adult-content-compliance.md",
@@ -22,7 +24,9 @@ const required = [
   "CLAUDE.md",
   ".cursor/rules/veel-v2.mdc",
   "docs/ai-tooling/agent-operating-rules.md",
-  ".env.example"
+  ".env.example",
+  "packages/contracts/openapi.yaml",
+  "packages/database/schema-blueprint.sql"
 ];
 
 const missing = required.filter((path) => !existsSync(path));
