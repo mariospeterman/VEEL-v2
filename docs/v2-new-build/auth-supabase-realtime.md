@@ -53,9 +53,11 @@ erDiagram
 
 Signup paths:
 
-- Email/social/passkey: creates a Veel profile and can create a noncustodial embedded wallet immediately or lazily before the first wallet-required action.
+- Email/social/passkey: creates a Veel profile and creates or loads a noncustodial embedded wallet during onboarding before protected app access.
 - External wallet: uses signed wallet challenge and can attach to an existing Supabase-authenticated user.
 - Returning user: Fastify resolves profile, primary wallet, linked wallets, age/access, restrictions, and monetisation state.
+
+Protected app access requires both age verification and a wallet path. Supabase Auth alone is not enough to enter the app shell.
 
 ## Wallet Linking
 

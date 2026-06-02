@@ -147,7 +147,7 @@ Frontend never computes final access, final commission, final ticket state, fina
 | Paid messages | `business-monetisation.md`, `realtime-messages-activity.md` | messages, payments, access | messages/quick chat | Solana evidence |
 | Engagement | `engagement-strategy.md` | likes, comments, saves, shares, follows | cards, viewer, profile | none |
 | Messages/activity/realtime | `realtime-messages-activity.md`, `auth-supabase-realtime.md` | conversations, activity, notifications | messages, quick chat, activity | Supabase Realtime |
-| Profile/creator dashboard | `frontend/component-map.md`, `business-monetisation.md` | profile, creator settings, activity | profile, creator dashboard | KYC provider |
+| Profile/creator dashboard | `frontend/component-map.md`, `business-monetisation.md`, `profile-activity-ranking.md` | profile, badges, rankings, creator settings, activity | profile, activity, creator dashboard | KYC provider |
 | Dating/matches | `product/dating-mode.md`, `native-ui-ux-screens.md` | dating, matches, safety | dating mode, matches, match chat | age provider, realtime |
 | Events/tickets | `product/events-ticketing.md`, `business-monetisation.md` | events, tickets, payments | event sheet, tickets | Solana evidence, email/push |
 | AI/MCP | `safety-admin-ai.md`, `ai-mcp-use-cases.md` | AI sessions, tools, permissions, audit | AI assistant/admin AI | OpenAI-compatible adapter first |
@@ -164,7 +164,8 @@ Frontend never computes final access, final commission, final ticket state, fina
 Landing
   -> sign up with social/email or external wallet
   -> embedded noncustodial wallet created or wallet linked
-  -> age gate when protected areas require it
+  -> age verification required before protected app access
+  -> wallet path required before protected app access
   -> Home feed
   -> watch teaser/free media
   -> tip/support/unlock/pass/ticket when desired

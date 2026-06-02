@@ -71,6 +71,36 @@ create table creator_accounts (
   created_at timestamptz not null default now()
 );
 
+create table user_badges (
+  id uuid primary key,
+  user_id uuid not null references users(id),
+  badge_key text not null,
+  badge_group text not null,
+  visibility text not null default 'public',
+  granted_by_user_id uuid references users(id),
+  revoked_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (user_id, badge_key)
+);
+
+create table ranking_snapshots (
+  id uuid primary key,
+  scope text not null,
+  subject_user_id uuid not null references users(id),
+  rank integer not null,
+  score numeric not null,
+  reason text,
+  visible boolean not null default true,
+  calculated_at timestamptz not null default now()
+);
+
+create table viewer_feed_preferences (
+  user_id uuid primary key references users(id),
+  default_feed_mode text not null default 'recommended',
+  nsfw_preference text not null default 'recommended',
+  updated_at timestamptz not null default now()
+);
+
 create table content_items (
   id uuid primary key,
   creator_user_id uuid not null references users(id),

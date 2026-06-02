@@ -169,8 +169,11 @@ Desktop:
 
 Mobile:
 
-- capture/upload first
-- controls bottom-aligned
+- record/upload first
+- bottom-aligned steps: media, edit, caption, labels, monetise, preview, publish
+- thumbnail and Bit/teaser selection are simple native controls
+- text/GIF overlays are lightweight, not a complex timeline editor
+- music is only from licensed/provider-cleared catalog or creator-owned audio
 - record/publish explicit
 - global gestures disabled
 - safe-area aware

@@ -69,8 +69,25 @@ Activity is backend-derived:
 - commissions
 - wallet transactions
 - reports/safety actions if user-visible
+- badges and verification status changes
+- ranking changes if user-visible
 
 No fake counters.
+
+## Profile And Ranking Activity
+
+Own activity may show:
+
+- age verified
+- wallet linked
+- badge earned
+- badge revoked
+- creator rank changed
+- event hosted/attended
+- subscriber milestone
+- support/tip milestone
+
+Public ranking projections must be sanitized and opt-out aware where product policy allows.
 
 ## RLS Requirements
 
@@ -96,4 +113,3 @@ Activity:
 - report/block visible everywhere
 - media attachments virus/moderation scan
 - paid message refund/reversal policy documented before scale
-

@@ -42,38 +42,39 @@ This folder is the clean new-build pack. It is intentionally separated from the 
 13. [Native UI, screens, gestures, and motion](native-ui-ux-screens.md)
 14. [Landing page and GSAP blueprint](landing-page-gsap.md)
 15. [Recommendation and discovery](recommendation-discovery.md)
-16. [Engagement strategy](engagement-strategy.md)
-17. [Design system](frontend/design-system.md)
-18. [Component map](frontend/component-map.md)
-19. [Copy system](frontend/copy-system.md)
-20. [Motion system](frontend/motion-system.md)
+16. [Profile, activity, badges, and ranking](profile-activity-ranking.md)
+17. [Engagement strategy](engagement-strategy.md)
+18. [Design system](frontend/design-system.md)
+19. [Component map](frontend/component-map.md)
+20. [Copy system](frontend/copy-system.md)
+21. [Motion system](frontend/motion-system.md)
 
 ## Backend, Data, Auth, And Realtime
 
-21. [Fastify backend architecture](backend-fastify-architecture.md)
-22. [Supabase auth and realtime architecture](auth-supabase-realtime.md)
-23. [Embedded wallet onboarding](embedded-wallet-onboarding.md)
-24. [Data model](data-model.md)
-25. [Realtime, messages, and activity](realtime-messages-activity.md)
+22. [Fastify backend architecture](backend-fastify-architecture.md)
+23. [Supabase auth and realtime architecture](auth-supabase-realtime.md)
+24. [Embedded wallet onboarding](embedded-wallet-onboarding.md)
+25. [Data model](data-model.md)
+26. [Realtime, messages, and activity](realtime-messages-activity.md)
 
 ## Money, Providers, Safety, And Admin
 
-26. [Payments and monetisation](payments-and-monetisation.md)
-27. [Business monetisation](business-monetisation.md)
-28. [Provider map](providers/provider-map.md)
-29. [Media and live providers](media-live-providers.md)
-30. [Identity provider wiring](providers/identity-provider-wiring.md)
-31. [Content protection](providers/content-protection.md)
-32. [Safety, admin, and AI/MCP](safety-admin-ai.md)
-33. [AI/MCP practical use cases](ai-mcp-use-cases.md)
-34. [Admin and operations dashboard](admin-operations-dashboard.md)
-35. [Adult content compliance](compliance/adult-content-compliance.md)
-36. [Age/KYC jurisdictions and provider waterfall](compliance/age-kyc-jurisdictions.md)
+27. [Payments and monetisation](payments-and-monetisation.md)
+28. [Business monetisation](business-monetisation.md)
+29. [Provider map](providers/provider-map.md)
+30. [Media and live providers](media-live-providers.md)
+31. [Identity provider wiring](providers/identity-provider-wiring.md)
+32. [Content protection](providers/content-protection.md)
+33. [Safety, admin, and AI/MCP](safety-admin-ai.md)
+34. [AI/MCP practical use cases](ai-mcp-use-cases.md)
+35. [Admin and operations dashboard](admin-operations-dashboard.md)
+36. [Adult content compliance](compliance/adult-content-compliance.md)
+37. [Age/KYC jurisdictions and provider waterfall](compliance/age-kyc-jurisdictions.md)
 
 ## Infrastructure And Execution
 
-37. [Deployment topology](deployment-topology.md)
-38. [Slice workflow](slice-workflow.md)
+38. [Deployment topology](deployment-topology.md)
+39. [Slice workflow](slice-workflow.md)
 
 ## Optional Historical Alternatives
 

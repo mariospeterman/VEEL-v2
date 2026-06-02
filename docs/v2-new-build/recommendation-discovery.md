@@ -12,7 +12,7 @@ Veel should feel like a premium social video app, but recommendation quality mus
 ```text
 Home
   mixed feed: live/moments/replays rail + media cards
-  modes: For you, Following, NSFW, No NSFW
+  modes: Recommended, Following, NSFW, SFW
 
 Bits
   immersive short-video feed
@@ -33,10 +33,10 @@ Dating Mode
 
 Home should expose simple controls, not too many categories:
 
-- `For you`: recommended mixed media, default.
+- `Recommended`: recommended mixed media, default.
 - `Following`: creators the viewer follows.
-- `NSFW`: adult/protected media only, available only after age verification.
-- `No NSFW`: hides adult/protected media, useful for safer browsing.
+- `NSFW`: adult/protected media preference.
+- `SFW`: hides adult/explicit/sensitive media.
 
 Do not make dozens of top-level categories at launch. Use hashtags, search, and Discover for finer navigation.
 
@@ -119,16 +119,16 @@ Launch category examples:
 
 Creator-facing UI should prefer hashtags first. Categories can be optional metadata or admin-derived.
 
-## NSFW Controls
+## NSFW/SFW Viewing Controls
 
-NSFW/adult content should not be always open by default.
+Veel is 18+ only, so NSFW/SFW is not an under-18 gate inside the app. It is a viewer preference filter for verified adults.
 
 Recommended launch behavior:
 
-- before age verification: no adult/protected NSFW media
-- after age verification: viewer can choose feed preference
-- default for new verified users: `For you` with adult media mixed only if user enables adult discovery or follows adult creators
-- quick Home toggle: `For you`, `Following`, `NSFW`, `No NSFW`
+- before age verification: no protected app access
+- after age verification and wallet setup: viewer can choose feed preference
+- default for new verified users: `Recommended`
+- quick Home toggle: `Recommended`, `Following`, `NSFW`, `SFW`
 - saved preference under Settings
 - clear content warnings and report/block controls
 
@@ -167,7 +167,7 @@ Backend ranking may use:
 - paid/unlocked state
 - creator quality/safety signals
 - diversity/fairness constraints
-- user feed preference: NSFW / No NSFW / Following
+- user feed preference: Recommended / Following / NSFW / SFW
 
 Do not use:
 
@@ -227,10 +227,10 @@ Only add ML/vector personalization after enough data exists.
 ## Feed API
 
 ```text
-GET /v1/content/feed?mode=for_you
+GET /v1/content/feed?mode=recommended
 GET /v1/content/feed?mode=following
 GET /v1/content/feed?mode=nsfw
-GET /v1/content/feed?mode=no_nsfw
+GET /v1/content/feed?mode=sfw
 GET /v1/discover/hashtags/:slug
 GET /v1/discover/search?q=...
 ```
@@ -266,9 +266,9 @@ Admin cannot:
 
 ## Tests
 
-- unverified viewer never receives adult NSFW content
-- `No NSFW` mode excludes adult/sensitive media
-- `NSFW` mode requires age verification
+- unverified user cannot enter protected app/feed
+- `SFW` mode excludes adult/explicit/sensitive media
+- `NSFW` mode is available only after required 18+ verification and wallet setup
 - following mode returns followed creators only or primarily, depending fallback policy
 - blocked creators/content do not appear
 - hashtags parse and normalize

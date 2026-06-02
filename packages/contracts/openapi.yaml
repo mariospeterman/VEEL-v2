@@ -288,7 +288,7 @@ components:
       in: query
       schema:
         type: string
-        enum: [for_you, following, nsfw, no_nsfw, live, premium]
+        enum: [recommended, following, nsfw, sfw, live, premium]
     ContentId:
       name: contentId
       in: path
@@ -320,7 +320,7 @@ components:
   schemas:
     Me:
       type: object
-      required: [user, ageState, walletState]
+      required: [user, ageState, walletState, appAccessState, feedPreferences]
       properties:
         user:
           $ref: "#/components/schemas/User"
@@ -328,9 +328,13 @@ components:
           $ref: "#/components/schemas/AgeState"
         walletState:
           $ref: "#/components/schemas/WalletState"
+        appAccessState:
+          $ref: "#/components/schemas/AppAccessState"
+        feedPreferences:
+          $ref: "#/components/schemas/FeedPreferences"
     User:
       type: object
-      required: [id, handle, displayName]
+      required: [id, handle, displayName, badges]
       properties:
         id:
           type: string
@@ -343,9 +347,43 @@ components:
           type: string
           format: uri
           nullable: true
+        badges:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserBadge"
     AgeState:
       type: string
       enum: [not_required, required, pending, verified, failed]
+    AppAccessState:
+      type: object
+      required: [allowed, reason]
+      properties:
+        allowed:
+          type: boolean
+        reason:
+          type: string
+          enum: [ready, age_required, age_pending, wallet_required, blocked]
+    UserBadge:
+      type: object
+      required: [key, label, group]
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        group:
+          type: string
+          enum: [trust, creator, community, subscription]
+    FeedPreferences:
+      type: object
+      required: [defaultMode, nsfwPreference]
+      properties:
+        defaultMode:
+          type: string
+          enum: [recommended, following, nsfw, sfw]
+        nsfwPreference:
+          type: string
+          enum: [recommended, nsfw, sfw]
     WalletState:
       type: object
       required: [connected, chain]

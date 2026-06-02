@@ -16,6 +16,14 @@ V2 should support two wallet paths:
 
 Wallet ownership remains user-controlled. Veel never holds private keys, never signs payment transactions without explicit user authorization, and never grants access from client-side wallet state.
 
+Protected app access rule:
+
+- Veel is an 18+ platform.
+- No user enters the protected app shell until age verification is complete.
+- Every protected app user must have a wallet path: external wallet linked or embedded noncustodial wallet created/loaded.
+- If a user signs up with email/social/passkey and has no wallet, onboarding creates or loads the embedded wallet before app access.
+- Wallet existence is required for wallet-native identity/payment readiness, but it is not payment proof.
+
 ## Why This Changes The Product Funnel
 
 Wallet-mandatory onboarding creates a conversion cliff for mainstream users. A creator/fan platform should let users:
@@ -163,7 +171,7 @@ Rules:
 Recommended launch behavior:
 
 - create on signup if provider cost is acceptable and it improves UX
-- otherwise create lazily before first wallet-required action
+- otherwise create before protected app entry after age verification, not after the user is already inside the app
 - always allow user to link an external wallet and set primary wallet
 
 Wallet-required actions:

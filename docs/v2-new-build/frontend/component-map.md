@@ -44,10 +44,12 @@ This document describes the current route ownership.
 ### `app/app/profile/page.tsx`
 
 - managed profile
+- own badges, verification status, activity, wallet/payment stats
 
 ### `app/app/profile/[handle]/page.tsx`
 
 - contextual creator route
+- public creator badges, creator media, follow/support/subscribe actions
 
 ### `app/app/discover/page.tsx`
 

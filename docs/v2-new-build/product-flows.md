@@ -42,9 +42,10 @@ sequenceDiagram
 Rules:
 
 - Supabase Auth identifies the user.
-- Fastify maps identity to Veel profile, age gate, wallet, monetisation, and permissions.
+- Fastify maps identity to Veel profile, mandatory age gate, wallet, monetisation, and permissions.
+- Protected app access requires age verified and a wallet path: external wallet linked or embedded noncustodial wallet created/loaded.
 - KYC/KYB is separate from normal viewing age access.
-- External wallet is not mandatory at signup. Mainstream users can enter with email/social/passkey and receive a user-controlled embedded wallet before the first wallet-required action.
+- External wallet is not mandatory at signup. Mainstream users can enter with email/social/passkey and receive a user-controlled embedded wallet during onboarding before protected app access.
 
 ## Wallet Onboarding Flow
 
@@ -59,14 +60,15 @@ flowchart TD
   Challenge --> Link["Link external wallet"]
   Embedded --> Session["Safe session payload"]
   Link --> Session
-  Session --> Paywall["First paid action"]
+  Session --> AppAccess["Protected app access"]
+  AppAccess --> Paywall["Paid action"]
   Paywall --> Topup["Top-up if needed"]
   Topup --> Intent["Backend payment intent"]
 ```
 
 Rules:
 
-- wallet can be created lazily before the first wallet-required action if provider cost requires it
+- wallet path must exist before protected app access
 - onramp funds the user wallet, not a Veel custodial balance
 - payment/access still goes through backend-created intent and verified settlement
 - user can choose embedded wallet or linked external wallet as primary
@@ -108,27 +110,40 @@ flowchart TD
   Review --> Publish["Publish"]
 ```
 
-Create MVP:
+Create MVP is intentionally raw and simple:
 
-- upload/capture
-- caption
-- hashtags/mentions
-- sound/music metadata if available
-- crop/trim
-- text overlay
-- thumbnail/frame
-- teaser range
-- visibility/access
-- monetisation toggle
-- optional dating enable
-- optional event attach
-- publish/review
+1. Record or upload media.
+2. Edit essentials:
+   - trim/crop where provider/browser support is simple
+   - choose thumbnail/frame
+   - if video is longer than Bit length, choose the free Bit/teaser segment
+   - add text overlay
+   - add GIF/sticker overlay only from safe/licensed source
+   - add music only from licensed/provider-cleared catalog or creator-owned audio
+3. Add caption:
+   - caption text
+   - hashtags `#`
+   - mentions `@`
+   - optional location
+4. Label and attach:
+   - required NSFW/adult/sensitive label
+   - optional event toggle
+   - optional dating enable
+5. Monetisation:
+   - free
+   - teaser + unlock
+   - subscriber/pass where relevant
+   - tip/support enabled
+6. Preview.
+7. Publish or submit for review if moderation requires it.
 
 Not MVP:
 
 - CapCut-level timeline editor
 - client-owned video processing
 - direct provider object creation from frontend
+- unlicensed music uploads as a platform-provided feature
+- complex multi-track editing
 
 ## Paid Unlock Flow
 

@@ -101,6 +101,7 @@ Before implementation starts, verify these high-signal v2 docs are present in th
 - `product/dating-mode.md` for explicit Dating Mode rules
 - `product/events-ticketing.md` for event/ticketing rules
 - `recommendation-discovery.md` for feed, hashtag, mention, and NSFW delivery rules
+- `profile-activity-ranking.md` for badges, verification status, own stats, activity, and safe rankings
 - `providers/provider-map.md` for provider ownership and boundary rules
 - `business-monetisation.md` for the business model and split/revenue strategy
 - `compliance/adult-content-compliance.md` and `compliance/age-kyc-jurisdictions.md` for adult platform obligations

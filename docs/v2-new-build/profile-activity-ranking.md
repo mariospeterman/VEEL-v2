@@ -1,0 +1,170 @@
+# Veel V2 Profile, Activity, Badges, And Ranking
+
+Status: proposed v2 architecture
+Scope: profile, badges, verification status, activity, creator/user rankings
+Last updated: 2026-06-03
+Source of truth: yes for profile/activity/gamification rules
+
+Profiles should show identity, trust, creator status, and user progress without turning Veel into a manipulative leaderboard. Ranking and badges should reward useful platform behavior: verified safety, creator quality, completed purchases, events, replies, and low report rates.
+
+## Profile Must Show
+
+Own profile:
+
+- avatar/header
+- handle/display name
+- bio/location where user chooses
+- age-verified status
+- wallet linked/embedded wallet status
+- creator status
+- KYC/KYB status only if required or completed
+- subscription tier if active
+- badges
+- activity shortcut
+- wallet/transactions shortcut
+- creator dashboard shortcut where applicable
+
+Public creator profile:
+
+- avatar/header
+- handle/display name
+- creator badge/status
+- age-verified/trust badge where product allows
+- follow/message/support/subscribe actions
+- media grid/tabs
+- premium/live/event indicators
+- public badges only
+
+Do not expose private KYC provider details, raw wallet metadata, private activity, raw payment state, or admin notes.
+
+## Badge Types
+
+```text
+trust badges
+  age verified
+  wallet linked
+  creator verified
+  payout/KYC verified if public policy allows
+
+creator badges
+  rising creator
+  top creator
+  live host
+  event host
+  responsive creator
+
+community badges
+  early member
+  supporter
+  event attendee
+  subscriber
+
+safety badges
+  none by default
+  do not publicly shame users with negative badges
+```
+
+Rules:
+
+- badges are backend-derived
+- badge grants/revocations are audited
+- admin can manually grant/revoke selected badges with reason
+- badges should not reveal sensitive provider data
+- do not create paid-only status that makes free users feel second-class
+
+## Activity Dashboard
+
+Activity is the user’s own backend-derived record.
+
+Categories:
+
+- liked
+- saved
+- commented
+- shared
+- unlocked/purchased
+- tips/support sent
+- creator revenue received
+- subscriptions
+- live passes
+- event tickets
+- referral shares
+- commissions
+- wallet transactions
+- dating matches/actions where user-visible
+- reports/safety actions where user-visible
+
+Activity must link to safe records:
+
+- payment intent
+- transaction signature where safe
+- entitlement
+- ticket/QR
+- referral attribution
+- commission state
+
+No fake counters. No frontend-calculated revenue.
+
+## Ranking And Leaderboards
+
+Use rankings carefully. The goal is motivation and discovery, not pressure.
+
+Recommended launch rankings:
+
+- trending creators
+- rising creators
+- top live hosts
+- event hosts
+- most supported creators
+- creator response quality
+- safe/high-quality creators
+
+Avoid:
+
+- ranking users by explicit content consumption
+- exposing private spending rankings
+- shaming low-ranked creators
+- ranking dating desirability
+- rewarding only infinite watch time
+
+Ranking inputs:
+
+- follow growth
+- repeat support/unlocks
+- content freshness
+- low report/block rate
+- creator response rate
+- completed events/live sessions
+- subscriber retention
+- user satisfaction/safety metrics
+
+## Gamification Rules
+
+- use progress and badges to make platform state clear
+- avoid dark patterns, streak pressure, or shame loops
+- no gambling-style randomness for money or dating
+- no “you are falling behind” notifications
+- clear opt-out for ranking visibility where reasonable
+
+## Admin Controls
+
+Admin can inspect:
+
+- badge grants/revocations
+- ranking inputs
+- creator quality signals
+- payout/KYC status
+- report/block impact
+- ranking abuse attempts
+
+Admin can tune ranking weights, but every change should be versioned and auditable.
+
+## Tests
+
+- public profile does not expose private activity
+- own profile shows wallet/age/subscription status
+- KYC status hidden unless allowed by policy
+- badges are backend-derived
+- badge grant/revoke writes audit event
+- rankings exclude blocked/reported unsafe creators
+- activity records link to backend payment/entitlement/ticket/referral state
