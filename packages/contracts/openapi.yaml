@@ -288,7 +288,7 @@ components:
       in: query
       schema:
         type: string
-        enum: [for_you, following, live, premium]
+        enum: [for_you, following, nsfw, no_nsfw, live, premium]
     ContentId:
       name: contentId
       in: path

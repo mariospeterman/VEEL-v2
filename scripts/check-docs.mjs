@@ -11,6 +11,7 @@ const required = [
   "docs/v2-new-build/contracts-and-schema.md",
   "docs/v2-new-build/product/dating-mode.md",
   "docs/v2-new-build/product/events-ticketing.md",
+  "docs/v2-new-build/recommendation-discovery.md",
   "docs/v2-new-build/compliance/adult-content-compliance.md",
   "docs/v2-new-build/compliance/age-kyc-jurisdictions.md",
   "docs/v2-new-build/frontend/design-system.md",

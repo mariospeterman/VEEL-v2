@@ -136,7 +136,7 @@ Frontend never computes final access, final commission, final ticket state, fina
 | --- | --- | --- | --- | --- |
 | Landing/onboarding | `landing-page-gsap.md`, `embedded-wallet-onboarding.md` | auth, age, wallet | landing, enter, onboarding | Supabase Auth, wallet provider, onramp |
 | App shell/navigation/gestures | `native-ui-ux-screens.md`, `frontend-architecture.md` | profile/session policy | app shell, nav, gesture layer | none |
-| Home/Bits/media viewer | `product-flows.md`, `native-ui-ux-screens.md`, `frontend/component-map.md` | content, engagement, access | Home, Bits, media viewer | Bunny/Livepeer playback |
+| Home/Bits/media viewer | `product-flows.md`, `native-ui-ux-screens.md`, `recommendation-discovery.md`, `frontend/component-map.md` | content, recommendation, engagement, access | Home, Bits, media viewer | Bunny/Livepeer playback |
 | Create/Edit media | `product-flows.md`, `media-live-providers.md`, `frontend/component-map.md` | content, media, moderation | Create/Edit | Bunny TUS, Livepeer, moderation |
 | VOD/media pipeline | `media-live-providers.md`, `providers/content-protection.md` | media, assets, provider callbacks | media cards/viewer | Bunny Stream/CDN/TUS |
 | Live rooms/replays | `media-live-providers.md`, `product-flows.md` | live, passes, chat, replay | live room, replay viewer | Livepeer |

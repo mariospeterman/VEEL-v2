@@ -85,6 +85,29 @@ create table content_items (
   updated_at timestamptz not null default now()
 );
 
+create table hashtags (
+  id uuid primary key,
+  slug text unique not null,
+  display_name text not null,
+  state text not null default 'active',
+  created_at timestamptz not null default now()
+);
+
+create table content_hashtags (
+  content_item_id uuid not null references content_items(id),
+  hashtag_id uuid not null references hashtags(id),
+  primary key (content_item_id, hashtag_id)
+);
+
+create table content_mentions (
+  id uuid primary key,
+  content_item_id uuid not null references content_items(id),
+  mentioned_user_id uuid not null references users(id),
+  source text not null,
+  state text not null default 'pending',
+  created_at timestamptz not null default now()
+);
+
 create table media_assets (
   id uuid primary key,
   content_item_id uuid not null references content_items(id),
