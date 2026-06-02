@@ -101,11 +101,43 @@ Visible buttons must exist for Yes and Not interested, because gestures are shor
 - Age verified before activation.
 - Explicit opt-in before Dating Mode feed.
 - Clear Dating Mode badge.
+- Consent checklist before first use:
+  - be respectful
+  - do not harass or pressure
+  - do not send explicit content without consent
+  - report unsafe behavior
+  - matches can expire or pause when ignored
 - Report/block visible on every profile/media/match surface.
 - Blocking removes match/chat visibility where required.
 - Reports create safety/moderation audit records.
 - Consent version is stored and updateable.
 - No accidental dating actions in normal media mode.
+
+## Anti-Ghosting And Overwhelm Rules
+
+Dating should avoid becoming another infinite-swipe loop.
+
+Launch defaults:
+
+- maximum 10 active matches
+- daily Yes action limit
+- one gentle first-message nudge per match
+- stale match state after no first reply in configured window
+- Dating Mode pauses when active match cap is reached
+- user must reply, close, or archive matches to continue
+- repeated reports, low reply rate, or abuse signals reduce daily limits
+- no aggressive push notifications
+
+This protects both sides: fewer low-intent matches, less overwhelm, clearer accountability, and less ghosting.
+
+## Notification Rules
+
+- Notify on mutual match.
+- Notify once if a match is waiting for first reply.
+- Notify before a match becomes stale.
+- Do not spam repeated nudges.
+- Safety/report notifications have priority.
+- Dating notifications are muted by default if user disables Dating Mode.
 
 ## Provider Dependencies
 

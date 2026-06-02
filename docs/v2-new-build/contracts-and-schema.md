@@ -42,6 +42,8 @@ They are intentionally broad enough to cover the full platform, but not final mi
 /webhooks
 ```
 
+The first contract skeleton is in `packages/contracts/openapi.yaml`. It intentionally includes dating, events, payments, live, media, engagement, and webhook paths so the first implementation is contract-led.
+
 ## Schema Principles
 
 - money/access/provider callbacks are idempotent

@@ -196,6 +196,18 @@ create table referrals (
   created_at timestamptz not null default now()
 );
 
+create table partner_referral_campaigns (
+  id uuid primary key,
+  created_by_admin_user_id uuid not null references users(id),
+  code text unique not null,
+  label text not null,
+  commission_rule jsonb not null default '{}'::jsonb,
+  cap_amount_minor bigint,
+  expires_at timestamptz,
+  state text not null default 'active',
+  created_at timestamptz not null default now()
+);
+
 create table commissions (
   id uuid primary key,
   referral_id uuid not null references referrals(id),
@@ -292,6 +304,32 @@ create table provider_events (
   received_at timestamptz not null default now(),
   processed_at timestamptz,
   unique (provider, provider_event_id)
+);
+
+create table moderation_reviews (
+  id uuid primary key,
+  subject_type text not null,
+  subject_id uuid not null,
+  reason text not null,
+  state text not null default 'queued',
+  assigned_admin_user_id uuid references users(id),
+  decision text,
+  decided_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create table ai_tool_calls (
+  id uuid primary key,
+  actor_user_id uuid references users(id),
+  role_scope text not null,
+  tool_name text not null,
+  subject_type text,
+  subject_id uuid,
+  input_redacted jsonb not null default '{}'::jsonb,
+  output_redacted jsonb not null default '{}'::jsonb,
+  confirmation_required boolean not null default false,
+  confirmed_at timestamptz,
+  created_at timestamptz not null default now()
 );
 
 create table audit_events (

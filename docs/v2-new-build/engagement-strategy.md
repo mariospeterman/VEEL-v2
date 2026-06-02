@@ -14,6 +14,23 @@ This document defines how Veel v2 handles social engagement without turning fron
 - Every action has a clear owner, state, idempotency rule, and abuse/rate-limit rule.
 - Monetised engagement is separate from lightweight engagement.
 - Internal sharing and external referral sharing are different products.
+- Product metrics must not optimize only for addictive time-on-feed. Track creator earnings, successful purchases, healthy replies, completed tickets/events, safety reports resolved, and user satisfaction alongside watch time.
+
+## Humane Engagement And Legal-Risk Guard
+
+Veel should feel media-native without copying dark patterns that create regulatory or trust risk.
+
+Rules:
+
+- show break states in long vertical feeds
+- avoid infinite autoplay loops without user control
+- keep report/block/access controls visible
+- do not hide payment or subscription terms behind engagement UI
+- do not use misleading scarcity or manipulative countdowns
+- keep dating notifications low-pressure
+- give users control over push notifications and dating mode
+- track safety and wellbeing metrics, not only watch time
+- age-gate before adult/protected/dating/payment areas
 
 ## Engagement Map
 
@@ -23,7 +40,8 @@ This document defines how Veel v2 handles social engagement without turning fron
 | Save | `content_saves` | Yes | No | None | Private user library. |
 | Comment | `comments` | After server write | Yes | None by default | Moderation and block graph apply. |
 | Share in Veel | `share_events`, optional message row | After server write | Yes for recipient | No referral by default | Internal DM share does not create commission. |
-| External share | `referral_tokens`, `share_events` | After token create | Optional | Can create attribution | Generates invite/referral link. |
+| External referral share | `referral_tokens`, `share_events` | After server token/link creation | Optional | Can create attribution and commission | External links can earn commission from platform share after eligible paid settlement. |
+| Admin partner referral | `partner_referral_campaigns`, `referrals` | After admin-created campaign | No | Yes if configured | Used for ambassadors, creator acquisition, or event promotion. |
 | Repost/Mirror | `content_reposts` | Yes | Optional | None unless product changes | Product-facing name should stay consistent. |
 | Follow | `profile_follows` | Yes | Optional | Feed ranking, creator audience | Creator-isolated follow/unfollow. |
 | Block | `user_blocks` | No fake optimistic if destructive | Immediate local hide then reconcile | Safety | Blocks search/messages/feed visibility. |
@@ -187,4 +205,3 @@ GET    /v2/activity
 - self-referral blocked
 - duplicate paid event does not duplicate commission
 - activity projection is backend-derived
-

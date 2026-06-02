@@ -58,6 +58,30 @@ Rules:
 - AI/MCP is not root nav.
 - Activity lives under Profile/Settings/Wallet.
 
+## Home And Bits Product Meaning
+
+Home is the mixed social feed:
+
+- top rail: live, moments, and live replays
+- below: media grid/feed with Bits, clips, images, VOD teasers, premium teasers, followed creators, and recommendations
+- desktop: adaptive 3-column or centered grid depending viewport
+- mobile: one media card per row
+
+Bits is the reels-like short-video feed:
+
+- vertical swipe between Bits
+- video-first, full-screen on mobile
+- free by default for discoverability
+- if a long clip/VOD exists, its selected teaser segment can appear as a Bit
+
+Terminology:
+
+- Bit: video up to roughly 60 seconds, always free/discoverable
+- Clip: longer video; can include a free Bit/teaser segment
+- VOD/live replay: long-form media; may be free, teaser-only, subscriber, pass, or unlock-gated
+
+This prevents the platform from becoming too locked and keeps discovery healthy.
+
 ## Screen Inventory
 
 | Screen | Mobile behavior | Desktop behavior |
@@ -205,6 +229,16 @@ Desktop:
 
 Do not start custom horizontal gestures from the extreme screen edge. OS/browser edge-back owns that area.
 
+## Native PWA Rules
+
+- Mobile must feel like a native app, not a desktop page squeezed down.
+- Desktop must feel like a desktop-native media app, not a mobile clone.
+- Media viewer is full-screen/viewport-locked.
+- Bottom sheets on mobile; side panels or compact modals on desktop.
+- Wallet linking/signing should stay same-screen where provider allows it.
+- No unnecessary redirects for payment, unlock, tip, support, ticket, or dating actions.
+- Gestures are shortcuts only; buttons remain visible.
+
 ## Motion Rules
 
 - 140-180ms for small UI transitions.
@@ -240,4 +274,3 @@ Required:
 - sourceContext active nav
 - reduced motion smoke
 - no horizontal overflow
-

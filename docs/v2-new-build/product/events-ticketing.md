@@ -136,6 +136,24 @@ Event mode:
 - Email/push provider for optional receipt reminders.
 - No provider grants ticket access directly.
 
+## Ticketing Provider Decision
+
+Launch with backend ticket entitlements plus Solana Pay settlement:
+
+- fastest path
+- lowest provider dependency
+- QR/check-in works without custom smart contracts
+- platform commission works through split transaction
+- supports free, paid, and approval/precheck events
+
+Evaluate later:
+
+- Crossmint compressed NFT/SFT minting for collectible or transferable event tickets
+- Unlock Protocol for membership-like event access if EVM/membership strategy becomes relevant
+- dedicated Solana ticketing vendors only after production API/security/vendor due diligence
+
+Do not make NFT ticketing launch-critical. QR ticket entitlement plus noncustodial Solana settlement is enough for the first production version.
+
 ## Admin/Ops Requirements
 
 Admin can inspect:

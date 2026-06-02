@@ -16,7 +16,7 @@ This ADR turns the v2 blueprint into concrete provider defaults for the first im
 | One-time payments | Solana Pay / Solana transaction requests | Noncustodial, wallet-approved, backend-verified. |
 | Payment evidence | Helius scoped to money/access evidence, with RPC fallback | Cost-aware, not a broad firehose. |
 | Platform subscriptions | Solana Subscriptions/Allowances once stable for product, otherwise provider checkout ADR | Native recurring/delegated payments are now a first-class Solana primitive, but need staging proof. |
-| Creator subscriptions | Same subscription primitive as platform subscriptions where possible | Avoid duplicate billing system. |
+| Creator subscriptions | Keep, but treat as creator fan-club access, not a replacement for discovery/unlocks | Supports creator recurring revenue without killing free discovery. |
 | VOD | Bunny Stream/CDN/TUS | Direct uploads and playback provider infrastructure. |
 | Live/replay | Livepeer with JWT playback access where protected | Provider-owned live infra and provider-enforced protected playback. |
 | Age assurance | Yoti app/Digital ID first, Sumsub reusable/non-doc fallback, Persona documentary fallback | User choice, reusable/low-friction first, no raw identity data in core DB. |
@@ -143,8 +143,18 @@ Creator subscriptions:
 
 - Viewer pays monthly to a creator profile.
 - Backend owns entitlement scope.
-- Creator subscription should not replace paid unlocks; it complements them.
+- Creator subscription should not replace paid unlocks or free Bits; it complements them.
 - The same subscription engine should power platform and creator subscriptions.
+
+Subscriber benefits should be simple and conversion-friendly:
+
+- subscriber badge on creator profile/comments
+- subscriber-only posts or full clips where creator chooses
+- discounted unlocks or included monthly unlock allowance if creator config allows it
+- live pass discount or subscriber live chat access where creator enables it
+- priority paid-message response lane if creator enables it
+
+Do not hide all good creator content behind subscriptions. The product needs free Bits/teasers and public profile content for discovery. Subscriptions should reward recurring fans, not make the platform feel locked by default.
 
 ## Media Playback Strategy
 
@@ -161,6 +171,7 @@ Recommended default:
 
 - Bunny VOD: backend-issued signed/tokenized playback for full locked content; public or short-lived safe teaser playback.
 - Livepeer: JWT playback policy for protected streams/assets where live/replay is paid or pass-gated.
+- Frontend should use official provider players/components where they fit the UX, then wrap them in Veel UI primitives. Do not build custom playback engines.
 
 Before implementation, confirm with the product owner:
 
@@ -248,6 +259,10 @@ Dating should stay raw/simple at launch:
 - match chat lives in Messages
 - limit active matches/conversations to reduce ghosting and overwhelm
 - gentle notifications, not spammy push pressure
+- if a match has no first reply within a configurable window, mark it as stale and nudge once
+- if repeated matches go stale, pause Dating Mode until the user clears or responds to active matches
+- max active matches defaults to 10 for launch; admin can tune it
+- require explicit dating conduct consent before activation
 
 Anti-misuse limits:
 
@@ -276,6 +291,8 @@ Ticketing launch strategy:
 - Solana payment settlement for paid tickets
 - QR/receipt generated from backend ticket record
 - platform commission comes from split transaction
+- Crossmint compressed NFT/SFT ticketing can be evaluated later for collectible or transferable event tickets
+- do not use an unproven Solana-only ticketing provider as launch-critical infrastructure without vendor due diligence
 - NFT/token ticketing is future ADR after provider/protocol proof
 
 Reason: Solana-native NFT ticket platforms exist, but a proven API/provider path for Veel needs vendor validation. Internal entitlement + Solana Pay settlement is faster, safer, lower-cost, and still noncustodial.

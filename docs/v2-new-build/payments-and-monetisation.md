@@ -27,6 +27,14 @@ Source of truth: proposal
 
 ## Solana Pay Architecture
 
+Veel stays noncustodial:
+
+- backend configures the transaction request
+- user wallet signs/approves the payment
+- funds move directly to creator/platform/referral recipients where the product supports split transfers
+- backend verifies chain facts before granting access or recording final revenue
+- frontend wallet success is not final payment proof
+
 ```mermaid
 sequenceDiagram
   participant Web
@@ -97,6 +105,12 @@ Recommended:
 - Commission state is tied to payment intent and settlement.
 - Frontend never sends payout amount.
 
+Referral types:
+
+- User-generated external referral: user shares content/profile/event outside Veel; backend creates token/link; click/signup/payment attribution is server-owned; eligible paid actions can create commission from platform share.
+- Internal Veel share: share to another Veel user/chat; creates share/activity record; no commission by default.
+- Admin/partner referral: admin creates partner campaign/code with commission rules, cap, expiry, and audit trail.
+
 ## Payment API
 
 ```text
@@ -127,4 +141,3 @@ GET  /v2/viewer/activity/payments
 - already unlocked
 - referral commission
 - self-referral blocked
-

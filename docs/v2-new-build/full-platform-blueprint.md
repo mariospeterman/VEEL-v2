@@ -150,7 +150,7 @@ Frontend never computes final access, final commission, final ticket state, fina
 | Profile/creator dashboard | `frontend/component-map.md`, `business-monetisation.md` | profile, creator settings, activity | profile, creator dashboard | KYC provider |
 | Dating/matches | `product/dating-mode.md`, `native-ui-ux-screens.md` | dating, matches, safety | dating mode, matches, match chat | age provider, realtime |
 | Events/tickets | `product/events-ticketing.md`, `business-monetisation.md` | events, tickets, payments | event sheet, tickets | Solana evidence, email/push |
-| AI/MCP | `safety-admin-ai.md` | AI sessions, tools, permissions, audit | AI assistant/admin AI | OpenAI/compatible provider ADR |
+| AI/MCP | `safety-admin-ai.md`, `ai-mcp-use-cases.md` | AI sessions, tools, permissions, audit | AI assistant/admin AI | OpenAI-compatible adapter first |
 | Admin/ops | `admin-operations-dashboard.md`, `deployment-topology.md` | admin, audit, ops diagnostics | admin app | all providers via sanitized diagnostics |
 | Adult compliance/age/KYC | `compliance/*`, `providers/identity-provider-wiring.md` | age, KYC/KYB, audit | age gate, creator payout setup | Yoti/Sumsub/Persona |
 | Security/content protection | `providers/content-protection.md`, `safety-admin-ai.md` | access policy, signed playback | safe media resources | Bunny, Livepeer |

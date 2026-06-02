@@ -20,6 +20,7 @@ const required = [
   "docs/v2-new-build/providers/identity-provider-wiring.md",
   "docs/v2-new-build/providers/content-protection.md",
   "docs/v2-new-build/providers/provider-map.md",
+  "docs/v2-new-build/ai-mcp-use-cases.md",
   "AGENTS.md",
   "CLAUDE.md",
   ".cursor/rules/veel-v2.mdc",

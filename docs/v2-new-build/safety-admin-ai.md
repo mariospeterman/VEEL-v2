@@ -92,6 +92,8 @@ Rules:
 
 AI/MCP is permissioned and audited.
 
+The practical launch scope is defined in `ai-mcp-use-cases.md`. AI should start with creator productivity, user self-service, and admin operations summaries. Do not build a generic chatbot or unrestricted MCP gateway.
+
 Allowed user tools:
 
 - app help

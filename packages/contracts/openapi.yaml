@@ -28,6 +28,7 @@ tags:
   - name: Events
   - name: Dating
   - name: Activity
+  - name: AI
   - name: Admin
   - name: Webhooks
 paths:
@@ -219,6 +220,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DatingSwipeResult"
+  /v1/ai/sessions:
+    post:
+      tags: [AI]
+      summary: Start a permission-scoped AI session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAiSessionRequest"
+      responses:
+        "201":
+          description: AI session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiSession"
+  /v1/admin/ops/summary:
+    get:
+      tags: [Admin]
+      summary: Admin operations summary
+      responses:
+        "200":
+          description: Admin ops summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminOpsSummary"
   /v1/webhooks/solana-indexer:
     post:
       tags: [Webhooks]
@@ -567,3 +596,35 @@ components:
           type: string
           format: uuid
           nullable: true
+    CreateAiSessionRequest:
+      type: object
+      required: [scope]
+      properties:
+        scope:
+          type: string
+          enum: [user_self_service, creator_helper, admin_ops]
+    AiSession:
+      type: object
+      required: [id, scope, allowedTools]
+      properties:
+        id:
+          type: string
+          format: uuid
+        scope:
+          type: string
+        allowedTools:
+          type: array
+          items:
+            type: string
+    AdminOpsSummary:
+      type: object
+      required: [providerHealth, paymentHealth, moderationQueue]
+      properties:
+        providerHealth:
+          type: string
+          enum: [healthy, degraded, incident]
+        paymentHealth:
+          type: string
+          enum: [healthy, lagging, incident]
+        moderationQueue:
+          type: integer

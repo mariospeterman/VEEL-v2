@@ -10,6 +10,7 @@ Source of truth: proposal
 - Bunny Stream: VOD upload, transcoding, thumbnails, CDN playback.
 - Livepeer: live room creation, stream key/ingest, live playback, replay handoff where useful.
 - Veel backend: content state, access, moderation, provider mapping, frontend-safe resources.
+- Frontend: official provider player/component integration wrapped in Veel layout primitives.
 
 ## Bunny VOD Flow
 
@@ -67,6 +68,8 @@ Rules:
 - Viewer never receives stream key or ingest URL.
 - Replay state is separate from live state.
 - Playback access can use Livepeer JWT/webhook if protected playback needs provider-enforced access.
+- Use Livepeer React/player primitives where they fit the UX, especially for live/replay playback.
+- Use provider-supported JWT access for paid/pass-gated streams where staging proves the flow.
 
 ## Media Access Resource
 
@@ -88,6 +91,16 @@ Frontend does not receive:
 - ingest URL for viewers
 - signed full playback when locked
 
+## Playback And Player Strategy
+
+- Use official provider players/components before custom playback code.
+- Use Bunny player or provider-supported Stream playback URLs where they reduce custom player work.
+- Use Bunny Stream token authentication / signed or tokenized playback where provider/account supports it.
+- Use Livepeer JWT access control for protected streams/assets where paid/pass-gated.
+- Teaser playback can be public or short-lived signed, depending content risk and cost.
+- Full locked playback requires backend entitlement before issuing safe playback resource.
+- Veel UI wraps provider players for layout, gestures, action rails, sheets, and accessibility.
+
 ## Moderation Pipeline
 
 ```text
@@ -107,10 +120,11 @@ Moderation can block:
 - Bunny TUS credentials safe
 - Bunny duplicate webhook idempotent
 - Bunny provider payload sanitized
+- Bunny player/playback resource contains no management secrets
 - locked full media not exposed
 - unlocked viewer receives full playback
 - Livepeer viewer no host credentials
 - Livepeer creator host connection authorized
+- Livepeer JWT/protected playback path works for paid streams if enabled
 - replay resource safe
 - live pass access controls playback/chat
-

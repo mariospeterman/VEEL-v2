@@ -64,14 +64,15 @@ This folder is the clean new-build pack. It is intentionally separated from the 
 29. [Identity provider wiring](providers/identity-provider-wiring.md)
 30. [Content protection](providers/content-protection.md)
 31. [Safety, admin, and AI/MCP](safety-admin-ai.md)
-32. [Admin and operations dashboard](admin-operations-dashboard.md)
-33. [Adult content compliance](compliance/adult-content-compliance.md)
-34. [Age/KYC jurisdictions and provider waterfall](compliance/age-kyc-jurisdictions.md)
+32. [AI/MCP practical use cases](ai-mcp-use-cases.md)
+33. [Admin and operations dashboard](admin-operations-dashboard.md)
+34. [Adult content compliance](compliance/adult-content-compliance.md)
+35. [Age/KYC jurisdictions and provider waterfall](compliance/age-kyc-jurisdictions.md)
 
 ## Infrastructure And Execution
 
-35. [Deployment topology](deployment-topology.md)
-36. [Slice workflow](slice-workflow.md)
+36. [Deployment topology](deployment-topology.md)
+37. [Slice workflow](slice-workflow.md)
 
 ## Optional Historical Alternatives
 
