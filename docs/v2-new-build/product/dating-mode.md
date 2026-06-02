@@ -2,7 +2,7 @@
 
 Status: proposed v2 architecture
 Scope: dating, matching, safety, messages
-Last updated: 2026-06-02
+Last updated: 2026-06-03
 Source of truth: yes for v2 Dating Mode
 
 Dating is an explicit opt-in mode layered on creator media. It is not the root product and it must not pollute normal Home/Bits gestures.
@@ -10,7 +10,9 @@ Dating is an explicit opt-in mode layered on creator media. It is not the root p
 ## Product Position
 
 - Dating is a conversion and engagement mode for adults who explicitly opt in.
-- Dating-enabled media can appear in Dating Mode.
+- A creator enables Dating Mode in profile/settings, not per Create draft.
+- Creator media can show a dating-active icon/badge when the creator has Dating Mode enabled.
+- A viewer sees dating actions only if the viewer also enabled Dating Mode and accepted dating conduct rules.
 - Match chat lives in Messages.
 - Normal media gestures never become dating gestures unless the user is inside Dating Mode.
 - Money, matching, reporting, and blocking always have visible controls, not gesture-only controls.
@@ -34,7 +36,8 @@ Fastify owns:
 - age gate requirement
 - consent version
 - dating profile visibility
-- media eligibility for dating
+- creator dating visibility on media surfaces
+- viewer eligibility for dating gestures/actions
 - swipes/interests
 - match creation
 - match conversation permissions
@@ -61,12 +64,6 @@ users
        ├─ preferences_minimum
        └─ safety_state
 
-content_items
-  └─ dating_media_settings
-       ├─ enabled_by_creator
-       ├─ moderation_state
-       └─ visibility_scope
-
 dating_swipes
   ├─ actor_user_id
   ├─ target_user_id
@@ -91,7 +88,7 @@ Dating feed:
   Back/Esc = exit mode or close sheet
 
 Normal media:
-  no dating swipe semantics
+  no dating swipe semantics unless both creator and viewer have Dating Mode active and the UI is explicitly in Dating Mode
 ```
 
 Visible buttons must exist for Yes and Not interested, because gestures are shortcuts only.
@@ -101,6 +98,10 @@ Visible buttons must exist for Yes and Not interested, because gestures are shor
 - Age verified before activation.
 - Explicit opt-in before Dating Mode feed.
 - Clear Dating Mode badge.
+- Create/Edit does not configure dating per post.
+- Dating can be toggled from profile/settings and can be changed later.
+- If the creator disables Dating Mode, creator media stops showing dating-active affordances.
+- If the viewer disables Dating Mode, dating gestures/actions disappear from media.
 - Consent checklist before first use:
   - be respectful
   - do not harass or pressure

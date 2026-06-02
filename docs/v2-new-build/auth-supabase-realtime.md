@@ -2,14 +2,14 @@
 
 Status: proposed v2 architecture
 Scope: auth, DB, realtime
-Last updated: 2026-06-01
+Last updated: 2026-06-03
 Source of truth: proposal
 
 ## Decision
 
 Use Supabase Auth for identity/session and Supabase Postgres for data. Use Supabase Realtime selectively. The Fastify backend remains the business policy layer.
 
-V2 should not require an external wallet before signup. Use Supabase Auth for mainstream email/social/passkey entry, then create or link a user-controlled wallet through the wallet architecture in `embedded-wallet-onboarding.md`.
+V2 should not require an external wallet before signup. Use Supabase Auth for mainstream email/social/passkey entry, create or link a user-controlled wallet through the wallet architecture in `embedded-wallet-onboarding.md`, then complete the single age-verification gate before protected app access.
 
 ## Identity Model
 
@@ -51,10 +51,13 @@ erDiagram
 4. Fastify verifies JWT and loads Veel profile, wallet, age, restrictions, monetisation, and app permissions.
 5. Fastify returns frontend-safe session payload.
 
-Signup paths:
+Signup paths and onboarding order:
 
-- Email/social/passkey: creates a Veel profile and creates or loads a noncustodial embedded wallet during onboarding before protected app access.
-- External wallet: uses signed wallet challenge and can attach to an existing Supabase-authenticated user.
+- Step 1: user chooses email/social/passkey with embedded wallet, or external/native wallet sign-in.
+- Step 2: backend links/creates the mandatory wallet path and audits it.
+- Step 3: third-party age verification completes the app age gate.
+- Email/social/passkey: creates a Veel profile and creates or loads a noncustodial embedded wallet by default.
+- External wallet: uses signed wallet challenge and can attach to an existing Supabase-authenticated user or become the primary wallet path.
 - Returning user: Fastify resolves profile, primary wallet, linked wallets, age/access, restrictions, and monetisation state.
 
 Protected app access requires both age verification and a wallet path. Supabase Auth alone is not enough to enter the app shell.

@@ -2,7 +2,7 @@
 
 Status: proposed v2 architecture
 Scope: product workflows
-Last updated: 2026-06-01
+Last updated: 2026-06-03
 Source of truth: proposal
 
 ## Flow Principles
@@ -60,7 +60,8 @@ flowchart TD
   Challenge --> Link["Link external wallet"]
   Embedded --> Session["Safe session payload"]
   Link --> Session
-  Session --> AppAccess["Protected app access"]
+  Session --> Age["Third-party age verification"]
+  Age --> AppAccess["Protected app access"]
   AppAccess --> Paywall["Paid action"]
   Paywall --> Topup["Top-up if needed"]
   Topup --> Intent["Backend payment intent"]
@@ -128,7 +129,7 @@ Create MVP is intentionally raw and simple:
 4. Label and attach:
    - required NSFW/adult/sensitive label
    - optional event toggle
-   - optional dating enable
+   - no dating toggle; Dating Mode is enabled from profile/settings and appears on eligible creator media automatically
 5. Monetisation:
    - free
    - teaser + unlock
@@ -143,6 +144,15 @@ Not MVP:
 - client-owned video processing
 - direct provider object creation from frontend
 - unlicensed music uploads as a platform-provided feature
+- dating controls inside Create
+
+Location UX:
+
+- use browser geolocation only after explicit user permission
+- allow manual street/place search for users who do not want location detection
+- use OpenStreetMap-backed geocoding for launch, with public Nominatim limited to light dev/test and a hosted or self-hosted geocoder for production scale
+- store normalized place label, coarse coordinates when needed, and provider/place reference; do not expose precise private location without explicit user intent
+- cache geocode results and rate-limit autocomplete/reverse geocoding
 - complex multi-track editing
 
 ## Paid Unlock Flow
@@ -255,7 +265,14 @@ Realtime:
 
 Events are content-attached conversion flows.
 
-- creator attaches event config
+- creator attaches event config from Create/Edit:
+  - title
+  - description
+  - date/time
+  - ticket amount/capacity
+  - public ticket sale or private request-to-join/apply
+  - online/physical location
+  - location selected through map/autodetect/manual search
 - user opens ticket sheet
 - wallet confirms payment if paid
 - backend verifies payment
@@ -264,10 +281,12 @@ Events are content-attached conversion flows.
 
 ## Dating Flow
 
-Dating is explicit mode.
+Dating is profile/settings-owned explicit mode.
 
-- content-level dating enable
+- creator enables Dating Mode in profile/settings
+- creator media shows a dating-active icon/badge when the creator is visible in Dating Mode
+- viewers only see/use dating actions if they also enabled Dating Mode and accepted dating conduct rules
 - dating feed only after opt-in
-- left/right gestures only inside dating mode
+- left/right gestures or visible Yes/Not interested buttons are active on eligible creator media only inside Dating Mode
 - match chat lives in Messages
 - report/block/age gate required

@@ -2,7 +2,7 @@
 
 Status: proposed v2 architecture
 Scope: full-platform diagrams
-Last updated: 2026-06-02
+Last updated: 2026-06-03
 Source of truth: yes for render-safe architecture diagrams
 
 These diagrams use plain text so they render in Cursor, GitHub, terminals, and any Markdown preview without a Mermaid extension. Mermaid diagrams may still exist in detailed docs, but this file is the canonical render-safe diagram set.
@@ -96,8 +96,9 @@ Creator/User
   │   ├─ media asset
   │   ├─ teaser/full access rules
   │   ├─ monetisation config
-  │   ├─ optional dating enablement
   │   └─ optional event attachment
+  ├─ dating profile/settings
+  │   └─ media shows dating-active affordance when profile mode is enabled
   ├─ live rooms
   ├─ subscriptions
   ├─ referrals
@@ -188,8 +189,9 @@ Creator earning / payout KYC:
 User opts into Dating Mode
   -> age gate required
   -> explicit consent and safety copy
-  -> optional content-level dating enablement
-  -> dating feed shows eligible dating-enabled media
+  -> profile/settings Dating Mode enabled
+  -> creator media shows dating-active affordance to eligible viewers
+  -> dating feed shows eligible creator media
   -> Yes / Not interested actions create backend swipe events
   -> mutual interest creates match
   -> match opens conversation in Messages

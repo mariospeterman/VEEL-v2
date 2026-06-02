@@ -2,7 +2,7 @@
 
 Status: proposed v2 architecture
 Scope: complete greenfield Veel platform blueprint
-Last updated: 2026-06-02
+Last updated: 2026-06-03
 Source of truth: yes for the complete v2 product/system map
 
 This is the single visual blueprint for building the full Veel v2 platform from scratch. The old repo is a reference for validated product lessons, provider edge cases, and tests only. Do not port old architecture wholesale.
@@ -178,14 +178,14 @@ Landing
 
 ```text
 Sign up
+  -> embedded wallet or native wallet path
   -> age gate
   -> create profile
   -> optional creator monetisation setup
   -> KYC/KYB for earning/payout where required
   -> upload/capture media
   -> choose thumbnail/teaser/access/monetisation
-  -> optional dating enablement
-  -> optional event attachment
+  -> optional event attachment with date/time, ticket amount, public/private, and location
   -> publish
   -> dashboard shows backend-derived revenue/activity/provider state
 ```
@@ -234,6 +234,8 @@ Media/event sheet
 ```text
 User explicitly activates Dating Mode
   -> age/consent check
+  -> profile/settings Dating Mode enabled
+  -> eligible creator media displays dating-active icon
   -> dating feed
   -> Yes / Not interested visible controls
   -> backend records swipe

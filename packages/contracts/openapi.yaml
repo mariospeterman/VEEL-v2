@@ -465,24 +465,50 @@ components:
         nsfwLabel:
           type: string
           enum: [none, adult, explicit, sensitive]
-        datingEnabled:
-          type: boolean
         eventDraft:
           $ref: "#/components/schemas/EventDraft"
     EventDraft:
       type: object
+      required: [title, startsAt, accessRule, location]
       properties:
         title:
+          type: string
+        description:
           type: string
         startsAt:
           type: string
           format: date-time
-        locationType:
+        endsAt:
           type: string
-          enum: [online, physical]
-        capacity:
+          format: date-time
+        ticketCapacity:
           type: integer
           minimum: 1
+        accessRule:
+          type: string
+          enum: [public_sale, private_apply]
+        location:
+          $ref: "#/components/schemas/EventLocationDraft"
+    EventLocationDraft:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [online, physical]
+        label:
+          type: string
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        provider:
+          type: string
+          enum: [openstreetmap, manual, none]
+        providerPlaceId:
+          type: string
     CreateUploadRequest:
       type: object
       required: [contentId, fileName, mimeType]

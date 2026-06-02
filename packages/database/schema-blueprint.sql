@@ -110,7 +110,6 @@ create table content_items (
   visibility text not null default 'public',
   nsfw_label text not null default 'none',
   moderation_state text not null default 'pending',
-  dating_enabled boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -303,9 +302,15 @@ create table events (
   title text not null,
   description text,
   starts_at timestamptz not null,
+  ends_at timestamptz,
   location_type text not null,
   location_label text,
+  location_lat numeric,
+  location_lng numeric,
+  location_provider text,
+  location_provider_ref text,
   capacity integer not null,
+  access_rule text not null default 'public_sale',
   state text not null default 'draft',
   created_at timestamptz not null default now()
 );
@@ -326,6 +331,7 @@ create table dating_profiles (
   enabled boolean not null default false,
   consent_version text,
   active_match_limit integer not null default 20,
+  visible_on_media boolean not null default true,
   created_at timestamptz not null default now()
 );
 

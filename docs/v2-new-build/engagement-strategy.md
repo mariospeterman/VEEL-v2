@@ -2,7 +2,7 @@
 
 Status: proposed v2 architecture
 Scope: engagement, social graph, activity
-Last updated: 2026-06-01
+Last updated: 2026-06-03
 Source of truth: proposal
 
 This document defines how Veel v2 handles social engagement without turning frontend counters into business truth.
@@ -107,6 +107,7 @@ Comment:
 Internal Veel share:
 
 - sends to a user/thread inside Messages
+- can also repost/mirror inside Veel if that product action is enabled
 - creates share activity
 - does not create referral commission by default
 
@@ -115,6 +116,15 @@ External share:
 - creates a referral/share token
 - can survive signup/login/wallet/payment
 - can become commission-eligible only after backend payment settlement
+- opens a professional share tab/sheet with Copy link, WhatsApp, Telegram, Instagram, TikTok, X, LinkedIn, and system share where supported
+- each external channel uses the same backend-created referral URL; the frontend never creates commission state locally
+
+Share UI rule:
+
+- tab 1: `Send in Veel` for messages/repost/internal share, no referral commission by default
+- tab 2: `Share link` for external/referral-capable links
+- copy always uses a backend-created URL so attribution and abuse limits are server-owned
+- unavailable networks are hidden or shown as disabled with clear copy; do not fake unsupported platform APIs
 
 ```mermaid
 flowchart LR

@@ -2,7 +2,7 @@
 
 Status: proposed v2 architecture
 Scope: events, tickets, Solana payment, QR/check-in, admin ops
-Last updated: 2026-06-02
+Last updated: 2026-06-03
 Source of truth: yes for v2 Events and Ticketing
 
 Events are content-attached conversion flows. They are not root navigation by default, and ticket purchase/join always requires explicit confirmation.
@@ -11,7 +11,7 @@ Events are content-attached conversion flows. They are not root navigation by de
 
 - Creator can attach an event to media.
 - Event can be online or location-based.
-- Event can be free, request-to-join, or paid.
+- Event can be public sale, free, paid, or private request-to-join/apply.
 - Paid tickets use noncustodial Solana-compatible payment intents.
 - Backend creates ticket entitlement and QR/receipt only after verified payment or approval.
 - Future NFT/token tickets are separate ADRs, not the launch default.
@@ -67,10 +67,11 @@ events
   ├─ title, description
   ├─ starts_at, ends_at
   ├─ location_type: online | physical
+  ├─ location_label, location_lat, location_lng, place_provider_ref
   ├─ capacity
   ├─ price
   ├─ currency
-  ├─ access_rule
+  ├─ access_rule: public_sale | private_apply
   └─ state: draft | published | sold_out | cancelled | completed
 
 ticket_types
@@ -118,6 +119,27 @@ Request-to-join:
   API grants or denies entitlement
   all decisions are audited
 ```
+
+## Location UX
+
+Launch location flow:
+
+1. Creator chooses `online` or `physical`.
+2. For physical events, UI offers:
+   - use current location after browser permission
+   - search street/place manually
+   - edit display label before publishing
+3. Backend stores normalized display label, coarse coordinates if needed for map display, and provider/place reference.
+4. Exact user/device location is never shared unless the creator explicitly publishes it as the event location.
+
+Provider rule:
+
+- Use OpenStreetMap-based geocoding for cost-efficient launch UX.
+- The public Nominatim service is acceptable only for light development/testing and must follow its published usage policy: low request rate, identifying app/referrer, and attribution.
+- Production should use a hosted OSM geocoder, self-hosted Nominatim/Photon, or another low-cost geocoder with caching and clear attribution.
+- Autocomplete/reverse geocoding must be rate-limited and cached server-side.
+
+Reference: OSMF Nominatim usage policy, https://operations.osmfoundation.org/policies/nominatim/
 
 ## Gesture Model
 

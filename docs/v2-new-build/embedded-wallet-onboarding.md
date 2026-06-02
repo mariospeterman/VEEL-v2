@@ -2,7 +2,7 @@
 
 Status: proposed v2 architecture
 Scope: auth, wallets, onboarding, onramp, conversion
-Last updated: 2026-06-01
+Last updated: 2026-06-03
 Source of truth: proposal
 
 This document defines the recommended v2 wallet onboarding model. The goal is to reduce signup and payment churn without making Veel custodial or moving payment truth to the frontend.
@@ -19,9 +19,13 @@ Wallet ownership remains user-controlled. Veel never holds private keys, never s
 Protected app access rule:
 
 - Veel is an 18+ platform.
+- Onboarding has two required stages before protected app access:
+  1. identity + wallet path
+  2. age verification
+- The recommended launch default is embedded-wallet-first for mainstream users: email/social/passkey creates or loads a noncustodial embedded wallet.
+- External/native wallet connect remains first-class for web3-native users.
+- One wallet path is mandatory; the other path can be added, changed, or selected as primary later in profile/settings.
 - No user enters the protected app shell until age verification is complete.
-- Every protected app user must have a wallet path: external wallet linked or embedded noncustodial wallet created/loaded.
-- If a user signs up with email/social/passkey and has no wallet, onboarding creates or loads the embedded wallet before app access.
 - Wallet existence is required for wallet-native identity/payment readiness, but it is not payment proof.
 
 ## Why This Changes The Product Funnel
@@ -98,7 +102,11 @@ sequenceDiagram
   Web->>API: Link wallet address with JWT
   API->>API: Verify provider/user proof
   API->>DB: Store wallet link + audit
-  API-->>Web: Safe session with wallet state
+  API-->>Web: Wallet-ready onboarding state
+  Web->>API: Start age verification
+  API-->>Web: Age provider session
+  Web->>API: Refresh session after provider result
+  API-->>Web: Protected app access state
 ```
 
 External wallet flow remains available:
@@ -171,7 +179,7 @@ Rules:
 Recommended launch behavior:
 
 - create on signup if provider cost is acceptable and it improves UX
-- otherwise create before protected app entry after age verification, not after the user is already inside the app
+- otherwise create before age verification and protected app entry, not after the user is already inside the app
 - always allow user to link an external wallet and set primary wallet
 
 Wallet-required actions:

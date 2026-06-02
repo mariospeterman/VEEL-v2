@@ -2,7 +2,7 @@
 
 Status: proposed v2 architecture
 Scope: Home feed, Bits feed, Discover, hashtags, mentions, NSFW controls, ranking safety
-Last updated: 2026-06-02
+Last updated: 2026-06-03
 Source of truth: yes for v2 content delivery and discovery
 
 Veel should feel like a premium social video app, but recommendation quality must not depend on addictive dark patterns or frontend-only state. Ranking is a backend-owned read model with user controls, safety filters, and measurable business outcomes.
@@ -26,7 +26,7 @@ Profile
   creator-owned grid/tabs
 
 Dating Mode
-  explicit opt-in dating-enabled media only
+  explicit opt-in creator media only when both creator and viewer have Dating Mode enabled
 ```
 
 ## Feed Modes
@@ -138,6 +138,7 @@ Creator Create/Edit:
 - optional content warning category
 - moderation can correct or override labels
 - repeated mislabeling can restrict monetisation/discovery
+- Dating Mode is not a Create/Edit field; creator profile/settings controls dating-active visibility on media
 
 NSFW states:
 

@@ -2,7 +2,7 @@
 
 Status: proposed
 Scope: wallet, onramp, payments, subscriptions, media, live, age/KYC, AI, events
-Last updated: 2026-06-02
+Last updated: 2026-06-03
 Source of truth: proposal pending vendor/account checks
 
 This ADR turns the v2 blueprint into concrete provider defaults for the first implementation pass. The goal is provider-first architecture with minimal custom infrastructure, low platform custody/regulatory exposure, and strong user conversion.
@@ -11,6 +11,7 @@ This ADR turns the v2 blueprint into concrete provider defaults for the first im
 
 | Area | Launch recommendation | Reason |
 | --- | --- | --- |
+| Onboarding order | Identity + mandatory wallet path, then age verification, then protected app access | Keeps app fully 18+ while reducing wallet-install friction through embedded wallet. |
 | Embedded wallet | Privy first, Turnkey as deeper-control fallback | Best consumer UX and built-in wallet funding/onramp path; Turnkey is stronger when we need full policy/sub-org control. |
 | Onramp/funding | Embedded-wallet provider funding UI first | Platform does not handle card processing or custody; user funds their own wallet. |
 | One-time payments | Solana Pay / Solana transaction requests | Noncustodial, wallet-approved, backend-verified. |
@@ -22,7 +23,11 @@ This ADR turns the v2 blueprint into concrete provider defaults for the first im
 | Age assurance | Yoti app/Digital ID first, Sumsub reusable/non-doc fallback, Persona documentary fallback | User choice, reusable/low-friction first, no raw identity data in core DB. |
 | Creator KYC/KYB | Disabled by default except high-risk/admin-required creators; Sumsub primary candidate | Avoid unnecessary friction while keeping an easy switch for legal/risk expansion. |
 | AI/MCP | Provider-agnostic LLM gateway with OpenAI-compatible adapter first | Avoid lock-in; all tools permission-scoped and audited. |
+| Create flow | Raw/simple create: record/upload, essential edits, caption/#/@/location, NSFW label, optional event, monetisation, preview, publish | Avoids overbuilt editor while preserving creator conversion controls. |
+| Dating | Profile/settings-owned explicit mode; not configured per Create draft | Dating appears on creator media only when profile mode is active and viewer also opted in. |
 | Event tickets | Internal backend ticket entitlement + Solana Pay settlement first; NFT ticket ADR later | Proven, simple, noncustodial split settlement without premature custom smart contracts. |
+| Event location | Browser geolocation with permission + manual OSM-backed place search | Free/low-cost launch UX without platform handling private location carelessly. |
+| Share | Internal Veel share/repost/message has no referral commission; external share tab uses backend referral URL | Keeps social sharing clean while preserving referral attribution for off-platform conversion. |
 
 ## GStack Autonomy Decision
 
@@ -228,6 +233,9 @@ Create/Edit must include:
 - creator-selected NSFW/adult label
 - content warning category
 - paid/free/teaser access state
+- optional event attachment only, not per-media Dating Mode settings
+- event fields: date/time, ticket amount/capacity, public sale or private request-to-join, online/physical location
+- map/location UX: browser geolocation with permission, manual place/street search, OSM-backed geocoding with production-safe caching/rate limits
 - AI moderation placeholder
 - manual admin review state
 
@@ -252,7 +260,8 @@ Live moderation:
 Dating should stay raw/simple at launch:
 
 - user activates Dating Mode from profile/settings
-- dating-enabled media shows a dating-active affordance to eligible viewers
+- creator media shows a dating-active affordance when the creator has Dating Mode enabled
+- viewers see dating actions only if they also enabled Dating Mode
 - eligible viewers swipe or press Yes / Not interested
 - no advanced filters at launch
 - match only after backend-confirmed mutual interest

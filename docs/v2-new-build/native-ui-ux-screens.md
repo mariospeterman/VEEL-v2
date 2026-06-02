@@ -2,7 +2,7 @@
 
 Status: proposed v2 architecture
 Scope: desktop/mobile PWA UX
-Last updated: 2026-06-01
+Last updated: 2026-06-03
 Source of truth: proposal
 
 This document defines how every main v2 screen should behave so Veel feels like a native desktop/mobile social video app rather than a stretched web dashboard.
@@ -133,6 +133,7 @@ Desktop:
 - centered media stage
 - right action rail fixed
 - comments/share/details side panels scroll internally
+- share panel separates internal Veel send/repost from external referral-capable links
 - creator metadata stays inside viewport
 - keyboard next/previous and Esc supported
 
@@ -142,6 +143,8 @@ Mobile:
 - right action rail overlays media
 - metadata bottom-left
 - comments/share/details/payment as bottom sheets
+- share sheet has actions for Copy link, internal Veel send/repost, WhatsApp, Telegram, Instagram, TikTok, X, LinkedIn, and system share where available
+- external share links include referral attribution when policy allows; internal Veel send/repost does not create referral commission by default
 - swipe up/down next/previous
 - no desktop quick chat dock
 - bottom nav hidden or safely integrated depending mode
@@ -174,6 +177,9 @@ Mobile:
 - thumbnail and Bit/teaser selection are simple native controls
 - text/GIF overlays are lightweight, not a complex timeline editor
 - music is only from licensed/provider-cleared catalog or creator-owned audio
+- labels include NSFW/adult/sensitive and optional event attachment only
+- event attachment captures date/time, ticket amount/capacity, public sale or private request-to-join, online/physical location, and map-assisted location search
+- Dating Mode is not configured in Create; it is enabled from profile/settings and appears as a dating-active affordance on eligible creator media
 - record/publish explicit
 - global gestures disabled
 - safe-area aware
