@@ -2,7 +2,7 @@
 
 Status: proposed v2 architecture
 Scope: backend
-Last updated: 2026-06-01
+Last updated: 2026-06-03
 Source of truth: proposal
 
 ## Backend Role
@@ -124,7 +124,7 @@ Workers process:
 - delayed entitlement expiry
 - stale upload cleanup
 
-Use BullMQ/Redis if Redis is already required for rate limits and queues. Use pg-boss if reducing infrastructure is more important and Postgres is enough.
+Use `pg-boss` as the launch default to keep infrastructure smaller and queue state close to Postgres. Move selected queues to BullMQ/Redis only after measured queue lag, throughput, or rate-limit requirements justify Redis.
 
 ## Provider Adapter Pattern
 
@@ -160,16 +160,17 @@ Adapters expose internal DTOs. They do not leak raw provider payloads to fronten
 ## API Examples
 
 ```text
-POST /v2/payment-intents
-GET  /v2/payment-intents/:id/transaction-request
-POST /v2/payment-intents/:id/submissions
-POST /v2/webhooks/helius
-POST /v2/media/upload-intents
-POST /v2/webhooks/bunny
-POST /v2/live/rooms
-GET  /v2/live/rooms/:id/viewer
-GET  /v2/live/rooms/:id/host-connection
-POST /v2/messages/threads/:id/messages
+GET  /v1/session
+POST /v1/payments/intents
+GET  /v1/payments/intents/:id/transaction-request
+POST /v1/webhooks/solana-indexer
+POST /v1/media/uploads
+POST /v1/webhooks/media/bunny
+POST /v1/live/rooms
+GET  /v1/live/rooms/:id
+GET  /v1/live/rooms/:id/host-connection
+POST /v1/engagement/:contentId/like
+POST /v1/events/:eventId/tickets/intents
 ```
 
 ## Backend Acceptance Criteria

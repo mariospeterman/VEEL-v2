@@ -2,7 +2,7 @@
 
 Status: proposed v2 architecture
 Scope: server topology, cost, environments, scaling
-Last updated: 2026-06-01
+Last updated: 2026-06-03
 Source of truth: proposal
 
 This document defines a cost-effective and scalable v2 deployment model. The recommendation is a headless modular monolith backend at launch, with managed provider infrastructure for database, auth, realtime, media, and payment evidence. Do not start with microservices or full serverless unless a measured bottleneck requires it.
@@ -15,8 +15,8 @@ flowchart TB
   API --> Worker["Worker process\njobs/webhooks/retries"]
   API --> Supabase["Supabase\nPostgres/Auth/Realtime"]
   Worker --> Supabase
-  API --> Redis["Redis or pg-boss\nqueues/rate limit"]
-  Worker --> Redis
+  API --> Jobs["pg-boss/Postgres jobs\nRedis later if measured"]
+  Worker --> Jobs
   API --> Providers["Providers\nSolana/Helius/Bunny/Livepeer/Age"]
   Providers --> Webhooks["Webhook ingress"]
   Webhooks --> API

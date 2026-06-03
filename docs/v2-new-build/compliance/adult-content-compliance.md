@@ -1,13 +1,13 @@
 # Adult Content Compliance
 
-Status: current
+Status: proposed v2 architecture
 Scope: documentation
-Last updated: 2026-05-29
+Last updated: 2026-06-03
 Source of truth: yes
 
 ## Core rule
 
-Provider choice does not remove platform obligations. Laravel remains the policy layer for legality, consent, age checks, monetization restrictions, moderation, takedowns, and playback authorization.
+Provider choice does not remove platform obligations. The Fastify API remains the policy layer for legality, consent, age checks, monetization restrictions, moderation, takedowns, and playback authorization.
 
 ## Minimum launch requirements
 

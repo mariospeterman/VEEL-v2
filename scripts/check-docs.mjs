@@ -5,6 +5,8 @@ const required = [
   "docs/v2-new-build/build-plan.md",
   "docs/v2-new-build/full-platform-blueprint.md",
   "docs/v2-new-build/diagrams.md",
+  "docs/v2-new-build/route-map.md",
+  "docs/v2-new-build/infra-decisions.md",
   "docs/v2-new-build/app-architecture.md",
   "docs/v2-new-build/stack-decision.md",
   "docs/v2-new-build/adr/0002-provider-decisions-2026.md",

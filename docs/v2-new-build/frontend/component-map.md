@@ -1,11 +1,11 @@
 # Frontend Component Map
 
-Status: current
+Status: proposed v2 architecture
 Scope: documentation
-Last updated: 2026-05-29
+Last updated: 2026-06-03
 Source of truth: yes
 
-This document describes the current route ownership.
+This document describes target v2 route ownership.
 
 ## Routes
 
@@ -53,7 +53,9 @@ This document describes the current route ownership.
 
 ### `app/app/discover/page.tsx`
 
-- redirect alias to `Bits`
+- search and discovery surface
+- creator, hashtag, event, live, and safe category discovery
+- never a redirect alias to Bits
 
 ## Feature slices
 

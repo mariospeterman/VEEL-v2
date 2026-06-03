@@ -2,7 +2,7 @@
 
 Status: proposed new-repo source pack
 Scope: complete greenfield Veel v2 build instructions
-Last updated: 2026-06-02
+Last updated: 2026-06-03
 Source of truth: yes for the proposed `veel-v2` repo
 
 This folder is the clean new-build pack. It is intentionally separated from the current app architecture docs so a developer can copy this folder into a new `veel-v2` repo and build from it without reading stale rebuild notes.
@@ -30,51 +30,54 @@ This folder is the clean new-build pack. It is intentionally separated from the 
 4. [Stack decision](stack-decision.md)
 5. [ADR: Fastify and Supabase proposal](adr/0001-fastify-supabase-proposal.md)
 6. [ADR: 2026 provider decisions](adr/0002-provider-decisions-2026.md)
-7. [Initial contracts and schema](contracts-and-schema.md)
-8. [Render-safe diagrams](diagrams.md)
+7. [Route map](route-map.md)
+8. [Initial contracts and schema](contracts-and-schema.md)
+9. [Infrastructure and research decisions](infra-decisions.md)
+10. [Render-safe diagrams](diagrams.md)
 
 ## Product And UX
 
-9. [Product flows](product-flows.md)
-10. [Dating Mode architecture](product/dating-mode.md)
-11. [Events and ticketing architecture](product/events-ticketing.md)
-12. [Frontend architecture](frontend-architecture.md)
-13. [Native UI, screens, gestures, and motion](native-ui-ux-screens.md)
-14. [Landing page and GSAP blueprint](landing-page-gsap.md)
-15. [Recommendation and discovery](recommendation-discovery.md)
-16. [Profile, activity, badges, and ranking](profile-activity-ranking.md)
-17. [Engagement strategy](engagement-strategy.md)
-18. [Design system](frontend/design-system.md)
-19. [Component map](frontend/component-map.md)
-20. [Copy system](frontend/copy-system.md)
-21. [Motion system](frontend/motion-system.md)
+11. [Product flows](product-flows.md)
+12. [Dating Mode architecture](product/dating-mode.md)
+13. [Events and ticketing architecture](product/events-ticketing.md)
+14. [Frontend architecture](frontend-architecture.md)
+15. [Native UI, screens, gestures, and motion](native-ui-ux-screens.md)
+16. [Landing page and GSAP blueprint](landing-page-gsap.md)
+17. [Recommendation and discovery](recommendation-discovery.md)
+18. [Profile, activity, badges, and ranking](profile-activity-ranking.md)
+19. [Engagement strategy](engagement-strategy.md)
+20. [Design system](frontend/design-system.md)
+21. [Component map](frontend/component-map.md)
+22. [Copy system](frontend/copy-system.md)
+23. [Motion system](frontend/motion-system.md)
 
 ## Backend, Data, Auth, And Realtime
 
-22. [Fastify backend architecture](backend-fastify-architecture.md)
-23. [Supabase auth and realtime architecture](auth-supabase-realtime.md)
-24. [Embedded wallet onboarding](embedded-wallet-onboarding.md)
-25. [Data model](data-model.md)
-26. [Realtime, messages, and activity](realtime-messages-activity.md)
+24. [Fastify backend architecture](backend-fastify-architecture.md)
+25. [Supabase auth and realtime architecture](auth-supabase-realtime.md)
+26. [Embedded wallet onboarding](embedded-wallet-onboarding.md)
+27. [Data model](data-model.md)
+28. [Realtime, messages, and activity](realtime-messages-activity.md)
 
 ## Money, Providers, Safety, And Admin
 
-27. [Payments and monetisation](payments-and-monetisation.md)
-28. [Business monetisation](business-monetisation.md)
-29. [Provider map](providers/provider-map.md)
-30. [Media and live providers](media-live-providers.md)
-31. [Identity provider wiring](providers/identity-provider-wiring.md)
-32. [Content protection](providers/content-protection.md)
-33. [Safety, admin, and AI/MCP](safety-admin-ai.md)
-34. [AI/MCP practical use cases](ai-mcp-use-cases.md)
-35. [Admin and operations dashboard](admin-operations-dashboard.md)
-36. [Adult content compliance](compliance/adult-content-compliance.md)
-37. [Age/KYC jurisdictions and provider waterfall](compliance/age-kyc-jurisdictions.md)
+29. [Payments and monetisation](payments-and-monetisation.md)
+30. [Business monetisation](business-monetisation.md)
+31. [Provider map](providers/provider-map.md)
+32. [Media and live providers](media-live-providers.md)
+33. [Identity provider wiring](providers/identity-provider-wiring.md)
+34. [Content protection](providers/content-protection.md)
+35. [Safety, admin, and AI/MCP](safety-admin-ai.md)
+36. [AI/MCP practical use cases](ai-mcp-use-cases.md)
+37. [Admin and operations dashboard](admin-operations-dashboard.md)
+38. [Adult content compliance](compliance/adult-content-compliance.md)
+39. [Age/KYC jurisdictions and provider waterfall](compliance/age-kyc-jurisdictions.md)
 
 ## Infrastructure And Execution
 
-38. [Deployment topology](deployment-topology.md)
-39. [Slice workflow](slice-workflow.md)
+40. [Infrastructure and research decisions](infra-decisions.md)
+41. [Deployment topology](deployment-topology.md)
+42. [Slice workflow](slice-workflow.md)
 
 ## Optional Historical Alternatives
 

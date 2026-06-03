@@ -1,8 +1,8 @@
 # Identity Provider Wiring
 
-Status: current
+Status: proposed v2 architecture
 Scope: documentation
-Last updated: 2026-05-29
+Last updated: 2026-06-03
 Source of truth: yes
 
 This repo now enforces server-owned verification for wallet sign-in and age-gate completion.
@@ -75,7 +75,7 @@ webhooks must be configured before production rollout.
 1. Create or select a Sumsub verification level intended for over-18 gating.
 2. Set the level name into `SUMSUB_LEVEL_NAME`.
 3. Add the production webhook URL:
-   - `POST https://<api-domain>/api/v1/webhooks/age/sumsub`
+   - `POST https://<api-domain>/v1/webhooks/age/sumsub`
 4. Configure the webhook signing secret to match `SUMSUB_WEBHOOK_SECRET`.
 5. Ensure the webhook includes applicant review events.
 6. Keep the API app token and secret key server-side only.
@@ -83,7 +83,7 @@ webhooks must be configured before production rollout.
 ### Sumsub webhook expectations in this repo
 
 - Route:
-  - `POST /api/v1/webhooks/age/sumsub`
+  - `POST /v1/webhooks/age/sumsub`
 - Signature:
   - header `x-payload-digest`
   - validated as `HMAC-SHA1(raw-json-payload, SUMSUB_WEBHOOK_SECRET)`
@@ -115,14 +115,14 @@ webhooks must be configured before production rollout.
 
 1. Create the Yoti age-verification application for the production domain.
 2. Configure the notification / webhook endpoint:
-   - `POST https://<api-domain>/api/v1/webhooks/age/yoti`
+   - `POST https://<api-domain>/v1/webhooks/age/yoti`
 3. Export the Yoti notification public key to the API host and set its path in `YOTI_NOTIFICATION_KEY_PATH`.
 4. Keep the API token server-side only.
 
 ### Yoti webhook expectations in this repo
 
 - Route:
-  - `POST /api/v1/webhooks/age/yoti`
+  - `POST /v1/webhooks/age/yoti`
 - Signature field:
   - JSON payload field `signature`
 - Verification:
@@ -154,7 +154,7 @@ webhooks must be configured before production rollout.
    - or `AGE_VERIFICATION_DRIVER=yoti_digital_id`
 2. Set the matching provider env in the API runtime.
 3. Keep `AGE_VERIFICATION_ALLOW_MOCK_PROVIDER=false` in production.
-4. Configure the provider dashboard webhook to call the correct `/api/v1/webhooks/age/<provider>` endpoint.
+4. Configure the provider dashboard webhook to call the correct `/v1/webhooks/age/<provider>` endpoint.
 5. Verify the webhook secret or notification key matches the API env.
 6. Complete one full provider session on a staging domain and confirm:
    - the webhook is received

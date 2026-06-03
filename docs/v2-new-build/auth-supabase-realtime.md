@@ -47,7 +47,7 @@ erDiagram
 
 1. User signs in through Supabase Auth.
 2. Frontend receives session/JWT.
-3. Frontend calls Fastify `/v2/session`.
+3. Frontend calls Fastify `/v1/session`.
 4. Fastify verifies JWT and loads Veel profile, wallet, age, restrictions, monetisation, and app permissions.
 5. Fastify returns frontend-safe session payload.
 

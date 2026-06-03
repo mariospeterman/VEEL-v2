@@ -32,6 +32,17 @@ tags:
   - name: Admin
   - name: Webhooks
 paths:
+  /v1/session:
+    get:
+      tags: [Auth]
+      summary: Current session and protected-app gate state
+      responses:
+        "200":
+          description: Session state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionState"
   /v1/me:
     get:
       tags: [Me]
@@ -43,6 +54,113 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Me"
+  /v1/age/sessions:
+    post:
+      tags: [Age]
+      summary: Start third-party age assurance session
+      responses:
+        "201":
+          description: Age assurance session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgeSession"
+  /v1/age/status:
+    get:
+      tags: [Age]
+      summary: Current safe age-gate status
+      responses:
+        "200":
+          description: Age state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgeStatus"
+  /v1/wallets:
+    get:
+      tags: [Wallets]
+      summary: Linked wallets
+      responses:
+        "200":
+          description: Wallets
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Wallet"
+  /v1/wallets/link:
+    post:
+      tags: [Wallets]
+      summary: Link embedded or external wallet after backend challenge verification
+      responses:
+        "201":
+          description: Wallet linked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Wallet"
+  /v1/wallets/{walletId}/primary:
+    patch:
+      tags: [Wallets]
+      summary: Set primary wallet
+      parameters:
+        - name: walletId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Wallet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Wallet"
+  /v1/wallets/onramp-sessions:
+    post:
+      tags: [Wallets]
+      summary: Create provider funding session for a user-controlled wallet
+      responses:
+        "201":
+          description: Onramp session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OnrampSession"
+  /v1/profiles/me:
+    patch:
+      tags: [Me]
+      summary: Update current public profile
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+  /v1/profiles/{handle}:
+    get:
+      tags: [Me]
+      summary: Public profile by handle
+      parameters:
+        - name: handle
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Public profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
   /v1/content/feed:
     get:
       tags: [Content]
@@ -63,6 +181,24 @@ paths:
       summary: Frontend-safe content detail
       parameters:
         - $ref: "#/components/parameters/ContentId"
+      responses:
+        "200":
+          description: Content detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentItem"
+    patch:
+      tags: [Content]
+      summary: Update content metadata, visibility, thumbnail, teaser, or event draft
+      parameters:
+        - $ref: "#/components/parameters/ContentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateContentRequest"
       responses:
         "200":
           description: Content detail
@@ -143,6 +279,99 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EngagementState"
+  /v1/engagement/{contentId}/save:
+    post:
+      tags: [Engagement]
+      summary: Toggle content save
+      parameters:
+        - $ref: "#/components/parameters/ContentId"
+      responses:
+        "200":
+          description: Engagement state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngagementState"
+  /v1/engagement/{contentId}/comments:
+    get:
+      tags: [Engagement]
+      summary: List content comments
+      parameters:
+        - $ref: "#/components/parameters/ContentId"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Comments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommentPage"
+    post:
+      tags: [Engagement]
+      summary: Create comment
+      parameters:
+        - $ref: "#/components/parameters/ContentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCommentRequest"
+      responses:
+        "201":
+          description: Comment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+  /v1/shares:
+    post:
+      tags: [Engagement]
+      summary: Create internal share or external referral-aware share link
+      responses:
+        "201":
+          description: Share result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShareResult"
+  /v1/follows/{userId}:
+    post:
+      tags: [Engagement]
+      summary: Follow or unfollow a creator/profile
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: Follow state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FollowState"
+  /v1/reports:
+    post:
+      tags: [Engagement]
+      summary: Submit report for moderation
+      responses:
+        "201":
+          description: Report accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModerationIntake"
+  /v1/blocks/{userId}:
+    post:
+      tags: [Engagement]
+      summary: Block a user
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: Block state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlockState"
   /v1/messages/conversations:
     get:
       tags: [Messages]
@@ -190,6 +419,50 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TransactionRequest"
+  /v1/payments/intents/{paymentIntentId}:
+    get:
+      tags: [Payments]
+      summary: Payment intent status
+      parameters:
+        - $ref: "#/components/parameters/PaymentIntentId"
+      responses:
+        "200":
+          description: Payment intent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentIntent"
+  /v1/payments/intents/{paymentIntentId}/submissions:
+    post:
+      tags: [Payments]
+      summary: Record wallet-submitted signature before confirmed evidence
+      parameters:
+        - $ref: "#/components/parameters/PaymentIntentId"
+      responses:
+        "202":
+          description: Submission accepted
+  /v1/referrals/tokens:
+    post:
+      tags: [Referrals]
+      summary: Create external referral or content-share token
+      responses:
+        "201":
+          description: Referral token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReferralToken"
+  /v1/subscriptions/plans:
+    get:
+      tags: [Subscriptions]
+      summary: Platform and creator subscription plans
+      responses:
+        "200":
+          description: Subscription plans
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionPlanPage"
   /v1/events/{eventId}/tickets/intents:
     post:
       tags: [Events]
@@ -220,6 +493,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DatingSwipeResult"
+  /v1/activity:
+    get:
+      tags: [Activity]
+      summary: Backend-derived user activity
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Activity page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityPage"
   /v1/ai/sessions:
     post:
       tags: [AI]
@@ -271,6 +557,21 @@ paths:
       responses:
         "202":
           description: Accepted
+  /v1/webhooks/age/{provider}:
+    post:
+      tags: [Webhooks]
+      summary: Age/KYC provider webhook
+      security: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [yoti, sumsub, persona]
+      responses:
+        "202":
+          description: Accepted
 components:
   securitySchemes:
     bearerAuth:
@@ -317,7 +618,75 @@ components:
       schema:
         type: string
         format: uuid
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
   schemas:
+    SessionState:
+      type: object
+      required: [authenticated, appAccessState]
+      properties:
+        authenticated:
+          type: boolean
+        appAccessState:
+          $ref: "#/components/schemas/AppAccessState"
+        user:
+          $ref: "#/components/schemas/User"
+    AgeSession:
+      type: object
+      required: [id, provider, launchUrl, expiresAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        provider:
+          type: string
+        launchUrl:
+          type: string
+          format: uri
+        expiresAt:
+          type: string
+          format: date-time
+    AgeStatus:
+      type: object
+      required: [state]
+      properties:
+        state:
+          $ref: "#/components/schemas/AgeState"
+        provider:
+          type: string
+          nullable: true
+    Wallet:
+      type: object
+      required: [id, chain, address, provider, isPrimary]
+      properties:
+        id:
+          type: string
+          format: uuid
+        chain:
+          type: string
+        address:
+          type: string
+        provider:
+          type: string
+          enum: [embedded, phantom, solflare, wallet_adapter]
+        isPrimary:
+          type: boolean
+    OnrampSession:
+      type: object
+      required: [provider, launchUrl, walletAddress]
+      properties:
+        provider:
+          type: string
+        launchUrl:
+          type: string
+          format: uri
+        walletAddress:
+          type: string
     Me:
       type: object
       required: [user, ageState, walletState, appAccessState, feedPreferences]
@@ -467,6 +836,28 @@ components:
           enum: [none, adult, explicit, sensitive]
         eventDraft:
           $ref: "#/components/schemas/EventDraft"
+    UpdateContentRequest:
+      type: object
+      properties:
+        caption:
+          type: string
+        visibility:
+          type: string
+          enum: [public, followers, subscribers, private]
+        nsfwLabel:
+          type: string
+          enum: [none, adult, explicit, sensitive]
+        teaserStartMs:
+          type: integer
+          nullable: true
+        teaserEndMs:
+          type: integer
+          nullable: true
+        thumbnailFrameMs:
+          type: integer
+          nullable: true
+        eventDraft:
+          $ref: "#/components/schemas/EventDraft"
     EventDraft:
       type: object
       required: [title, startsAt, accessRule, location]
@@ -598,6 +989,77 @@ components:
           type: integer
         shareCount:
           type: integer
+    CommentPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Comment"
+        nextCursor:
+          type: string
+          nullable: true
+    Comment:
+      type: object
+      required: [id, author, body, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        author:
+          $ref: "#/components/schemas/User"
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    CreateCommentRequest:
+      type: object
+      required: [body]
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 2000
+    ShareResult:
+      type: object
+      required: [id, mode]
+      properties:
+        id:
+          type: string
+          format: uuid
+        mode:
+          type: string
+          enum: [internal_message, external_referral_link, copy_link]
+        url:
+          type: string
+          format: uri
+          nullable: true
+    FollowState:
+      type: object
+      required: [following, followerCount]
+      properties:
+        following:
+          type: boolean
+        followerCount:
+          type: integer
+    ModerationIntake:
+      type: object
+      required: [id, state]
+      properties:
+        id:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum: [submitted, queued]
+    BlockState:
+      type: object
+      required: [blocked]
+      properties:
+        blocked:
+          type: boolean
     Conversation:
       type: object
       required: [id, type, title]
@@ -644,6 +1106,42 @@ components:
         state:
           type: string
           enum: [pending, transaction_requested, confirmed, failed, expired]
+    ReferralToken:
+      type: object
+      required: [token, url, eligibility]
+      properties:
+        token:
+          type: string
+        url:
+          type: string
+          format: uri
+        eligibility:
+          type: string
+          enum: [external_share, partner_campaign, not_commissionable]
+    SubscriptionPlanPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubscriptionPlan"
+    SubscriptionPlan:
+      type: object
+      required: [id, scope, label, amountMinor, currency]
+      properties:
+        id:
+          type: string
+        scope:
+          type: string
+          enum: [platform, creator]
+        label:
+          type: string
+        amountMinor:
+          type: integer
+        currency:
+          type: string
+          enum: [SOL, USDC]
     TransactionRequest:
       type: object
       required: [transactionRequestUrl, expiresAt]
@@ -686,6 +1184,29 @@ components:
           type: string
           format: uuid
           nullable: true
+    ActivityPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityItem"
+        nextCursor:
+          type: string
+          nullable: true
+    ActivityItem:
+      type: object
+      required: [id, kind, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
     CreateAiSessionRequest:
       type: object
       required: [scope]

@@ -2,7 +2,7 @@
 
 Status: proposed v2 architecture
 Scope: full product architecture
-Last updated: 2026-06-01
+Last updated: 2026-06-03
 Source of truth: proposal
 
 This document defines the target architecture for a clean provider-first Veel v2 repository. It does not describe the current Laravel implementation. Use it as the app architecture source for the new repo after the v2 decision is approved.
@@ -128,7 +128,7 @@ flowchart TB
 | Wallet onboarding | Embedded wallet provider + external wallet adapter | Reduces conversion friction while preserving noncustodial user approval and backend settlement verification. |
 | DB | Supabase Postgres | Relational money/access/media truth needs Postgres, transactions, constraints, and auditability. |
 | Realtime | Supabase Realtime Broadcast/Presence + selective Postgres Changes | Avoids custom websocket infrastructure for messages/live/activity while keeping backend policy. |
-| Queue/workers | Fastify-compatible worker process with BullMQ/Redis or pg-boss | Webhooks, provider reconciliation, moderation, media status, and retries need controlled background jobs. |
+| Queue/workers | Fastify-compatible worker process with pg-boss launch default | Webhooks, provider reconciliation, moderation, media status, and retries need controlled background jobs; BullMQ/Redis is a measured scale option. |
 | Contracts | OpenAPI generated from Fastify schemas or shared Zod schema source | API contracts must remain source of truth for frontend client types. |
 | Package manager | pnpm workspaces | Current repo already uses pnpm; lowest migration risk for monorepo and CI. |
 | Runtime | Node.js LTS | Best provider SDK and ops compatibility for launch. |

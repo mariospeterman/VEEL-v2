@@ -110,7 +110,6 @@ Use Solana transaction-request architecture for:
 - paid messages
 - live passes
 - event tickets
-- creator drops
 
 Tips do not unlock content, but they still affect creator balance, platform revenue, optional referral commission, and audit/accounting. They should still be backend-verified. If Helius webhook cost becomes high, tips can use batched reconciliation or RPC fallback, but frontend wallet success is not final financial truth.
 

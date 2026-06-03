@@ -22,7 +22,6 @@ Source of truth: proposal
 - premium live room
 - live pass
 - event ticket
-- creator drop
 - external referral commission
 
 ## Solana Pay Architecture
@@ -139,12 +138,12 @@ Referral types:
 ## Payment API
 
 ```text
-POST /v2/payment-intents
-GET  /v2/payment-intents/:id
-GET  /v2/payment-intents/:id/transaction-request
-POST /v2/payment-intents/:id/submissions
-POST /v2/webhooks/helius
-GET  /v2/viewer/activity/payments
+POST /v1/payments/intents
+GET  /v1/payments/intents/:id
+GET  /v1/payments/intents/:id/transaction-request
+POST /v1/payments/intents/:id/submissions
+POST /v1/webhooks/solana-indexer
+GET  /v1/activity?kind=payments
 ```
 
 ## Test Matrix

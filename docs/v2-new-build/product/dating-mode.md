@@ -98,6 +98,9 @@ Visible buttons must exist for Yes and Not interested, because gestures are shor
 - Age verified before activation.
 - Explicit opt-in before Dating Mode feed.
 - Clear Dating Mode badge.
+- Dating visibility is separate from public creator profile visibility.
+- A creator can disable dating requests from fans without hiding their creator profile.
+- A viewer can disable dating actions without changing normal content recommendations.
 - Create/Edit does not configure dating per post.
 - Dating can be toggled from profile/settings and can be changed later.
 - If the creator disables Dating Mode, creator media stops showing dating-active affordances.
@@ -113,6 +116,9 @@ Visible buttons must exist for Yes and Not interested, because gestures are shor
 - Reports create safety/moderation audit records.
 - Consent version is stored and updateable.
 - No accidental dating actions in normal media mode.
+- Location is optional, coarse, and never exposed as exact user location by default.
+- Paid content access, tipping, support, or subscriptions never imply romantic consent or dating interest.
+- Explicit media in dating chat requires consent controls and report/block tooling.
 
 ## Anti-Ghosting And Overwhelm Rules
 
@@ -128,6 +134,7 @@ Launch defaults:
 - user must reply, close, or archive matches to continue
 - repeated reports, low reply rate, or abuse signals reduce daily limits
 - no aggressive push notifications
+- admin-configurable limits override env defaults and every override is audited
 
 This protects both sides: fewer low-intent matches, less overwhelm, clearer accountability, and less ghosting.
 
@@ -159,6 +166,7 @@ Admin can inspect:
 - match report/block history
 - moderation decisions
 - abuse rate per user
+- configured dating limits and safety thresholds
 
 Admin cannot see private message content by default unless a documented legal/moderation workflow authorizes access.
 

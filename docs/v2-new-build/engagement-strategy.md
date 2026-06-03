@@ -85,20 +85,19 @@ Rules:
 
 Like:
 
-- toggle endpoint: `PUT /v2/content/:id/reaction`
-- delete endpoint: `DELETE /v2/content/:id/reaction`
+- toggle endpoint: `POST /v1/engagement/:contentId/like`
 - unique key: `(viewer_id, content_id, reaction_type)`
 
 Save:
 
-- toggle endpoint: `PUT /v2/content/:id/save`
+- toggle endpoint: `POST /v1/engagement/:contentId/save`
 - private to viewer
 - appears in Activity/Saved surfaces
 
 Comment:
 
-- create endpoint: `POST /v2/content/:id/comments`
-- list endpoint: `GET /v2/content/:id/comments`
+- create endpoint: `POST /v1/engagement/:contentId/comments`
+- list endpoint: `GET /v1/engagement/:contentId/comments`
 - supports deletion/moderation
 - never bypasses block/report/safety rules
 
@@ -188,20 +187,16 @@ Do not rank from:
 ## API Surface
 
 ```text
-PUT    /v2/profiles/:id/follow
-DELETE /v2/profiles/:id/follow
-PUT    /v2/content/:id/reaction
-DELETE /v2/content/:id/reaction
-PUT    /v2/content/:id/save
-DELETE /v2/content/:id/save
-POST   /v2/content/:id/comments
-GET    /v2/content/:id/comments
-POST   /v2/content/:id/share
-POST   /v2/referrals/tokens
-POST   /v2/reports
-PUT    /v2/users/:id/block
-DELETE /v2/users/:id/block
-GET    /v2/activity
+POST   /v1/follows/:userId
+POST   /v1/engagement/:contentId/like
+POST   /v1/engagement/:contentId/save
+POST   /v1/engagement/:contentId/comments
+GET    /v1/engagement/:contentId/comments
+POST   /v1/shares
+POST   /v1/referrals/tokens
+POST   /v1/reports
+POST   /v1/blocks/:userId
+GET    /v1/activity
 ```
 
 ## Tests

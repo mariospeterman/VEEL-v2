@@ -2,7 +2,7 @@
 
 Status: proposed v2 architecture
 Scope: greenfield implementation plan
-Last updated: 2026-06-02
+Last updated: 2026-06-03
 Source of truth: proposal
 
 This is the detailed build plan for a clean `veel-v2` repository. It is not a migration checklist and not a code-porting plan. The current repo is only a reference for product behavior, provider lessons, validated tests, and known pitfalls.
@@ -342,7 +342,7 @@ Each slice must include:
 1. Create repo, workspace, CI, docs, env examples.
 2. Add contracts package and API error model.
 3. Add Supabase project/local setup and first migrations.
-4. Add Fastify API skeleton with auth plugin and `/v2/session`.
+4. Add Fastify API skeleton with auth plugin and `/v1/session`.
 5. Add Next app shell with generated client wiring.
 6. Add embedded-wallet provider ADR and adapter interface.
 7. Add external wallet challenge/link flow.

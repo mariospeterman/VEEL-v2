@@ -11,7 +11,7 @@ This document defines the full Veel v2 monetisation and business model. It exten
 
 Veel earns through:
 
-- platform fee on paid unlocks, paid messages, live passes, premium live rooms, event tickets, drops, tips, and support
+- platform fee on paid unlocks, paid messages, live passes, premium live rooms, event tickets, tips, and support
 - creator subscription platform fee
 - optional platform membership/subscription for user-facing platform features
 - optional external referral commission sourced from the platform share unless explicitly configured otherwise
@@ -24,7 +24,7 @@ Creators earn through:
 - paid messages
 - creator subscriptions
 - premium live rooms and live passes
-- event tickets and creator drops
+- event tickets
 - referral earnings where product rules allow creator-as-referrer flows
 
 ## Noncustodial Split Transfer Model

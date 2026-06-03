@@ -2,7 +2,7 @@
 
 Status: proposed v2 architecture
 Scope: platform stack
-Last updated: 2026-06-01
+Last updated: 2026-06-03
 Source of truth: proposal
 
 ## Recommended Stack
@@ -12,7 +12,7 @@ Web:        Next.js PWA, TypeScript, Tailwind v4, TanStack Query, Zustand
 API:        Fastify TypeScript
 DB/Auth:    Supabase Postgres + Supabase Auth
 Realtime:   Supabase Realtime, selectively
-Workers:    TypeScript worker runtime with Redis/BullMQ or pg-boss
+Workers:    TypeScript worker runtime with pg-boss launch default; BullMQ/Redis only when measured scale requires it
 Contracts:  OpenAPI generated from schemas
 Payments:   Solana JS + Solana Pay
 Wallets:    Embedded wallet provider + Solana wallet adapter

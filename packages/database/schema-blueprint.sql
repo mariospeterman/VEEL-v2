@@ -1,7 +1,7 @@
 -- Veel V2 schema blueprint.
 -- Convert this into proper migrations slice-by-slice.
 
-create type user_role as enum ('user', 'creator', 'moderator', 'admin', 'owner');
+create type staff_role as enum ('moderator', 'admin', 'owner', 'finance', 'support', 'trust_safety', 'ops');
 create type age_state as enum ('not_required', 'required', 'pending', 'verified', 'failed');
 create type content_state as enum ('draft', 'processing', 'ready', 'blocked', 'deleted');
 create type media_provider as enum ('bunny', 'livepeer');
@@ -29,12 +29,31 @@ create type dating_action as enum ('yes', 'not_interested');
 create table users (
   id uuid primary key,
   supabase_user_id uuid unique not null,
+  state text not null default 'active',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table profiles (
+  user_id uuid primary key references users(id),
   handle text unique not null,
   display_name text not null,
   avatar_url text,
-  role user_role not null default 'user',
+  bio text,
+  location_label text,
+  visibility text not null default 'public',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
+);
+
+create table staff_memberships (
+  id uuid primary key,
+  user_id uuid not null references users(id),
+  role staff_role not null,
+  state text not null default 'active',
+  granted_by_user_id uuid references users(id),
+  created_at timestamptz not null default now(),
+  unique (user_id, role)
 );
 
 create table wallets (
@@ -176,6 +195,43 @@ create table engagement_events (
   unique (user_id, content_item_id, kind)
 );
 
+create table follows (
+  follower_user_id uuid not null references users(id),
+  followed_user_id uuid not null references users(id),
+  state text not null default 'active',
+  created_at timestamptz not null default now(),
+  primary key (follower_user_id, followed_user_id)
+);
+
+create table comments (
+  id uuid primary key,
+  content_item_id uuid not null references content_items(id),
+  user_id uuid not null references users(id),
+  parent_comment_id uuid references comments(id),
+  body text not null,
+  moderation_state text not null default 'visible',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table reports (
+  id uuid primary key,
+  reporter_user_id uuid not null references users(id),
+  subject_type text not null,
+  subject_id uuid not null,
+  reason text not null,
+  state text not null default 'submitted',
+  created_at timestamptz not null default now()
+);
+
+create table blocks (
+  blocker_user_id uuid not null references users(id),
+  blocked_user_id uuid not null references users(id),
+  reason text,
+  created_at timestamptz not null default now(),
+  primary key (blocker_user_id, blocked_user_id)
+);
+
 create table conversations (
   id uuid primary key,
   type text not null,
@@ -226,6 +282,19 @@ create table payment_transactions (
   signature text unique not null,
   payer_wallet_address text not null,
   raw_confirmed_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+
+create table settlement_ledger (
+  id uuid primary key,
+  payment_intent_id uuid not null references payment_intents(id),
+  payment_transaction_id uuid references payment_transactions(id),
+  account_kind text not null,
+  account_user_id uuid references users(id),
+  amount_minor bigint not null,
+  currency text not null,
+  direction text not null,
+  state text not null default 'posted',
   created_at timestamptz not null default now()
 );
 
@@ -319,9 +388,23 @@ create table events (
   created_at timestamptz not null default now()
 );
 
+create table ticket_types (
+  id uuid primary key,
+  event_id uuid not null references events(id),
+  label text not null,
+  price_minor integer,
+  currency text not null,
+  capacity integer not null,
+  sale_starts_at timestamptz,
+  sale_ends_at timestamptz,
+  state text not null default 'active',
+  created_at timestamptz not null default now()
+);
+
 create table ticket_entitlements (
   id uuid primary key,
   event_id uuid not null references events(id),
+  ticket_type_id uuid references ticket_types(id),
   holder_user_id uuid not null references users(id),
   payment_intent_id uuid references payment_intents(id),
   qr_token_hash text unique not null,
@@ -334,7 +417,7 @@ create table dating_profiles (
   user_id uuid primary key references users(id),
   enabled boolean not null default false,
   consent_version text,
-  active_match_limit integer not null default 20,
+  active_match_limit integer not null default 10,
   visible_on_media boolean not null default true,
   created_at timestamptz not null default now()
 );
@@ -345,18 +428,31 @@ create table dating_swipes (
   target_user_id uuid not null references users(id),
   content_item_id uuid references content_items(id),
   action dating_action not null,
-  created_at timestamptz not null default now(),
-  unique (actor_user_id, target_user_id, content_item_id)
+  created_at timestamptz not null default now()
 );
+
+create unique index dating_swipes_content_unique
+  on dating_swipes (actor_user_id, target_user_id, content_item_id)
+  where content_item_id is not null;
+
+create unique index dating_swipes_profile_unique
+  on dating_swipes (actor_user_id, target_user_id)
+  where content_item_id is null;
 
 create table dating_matches (
   id uuid primary key,
   user_a_id uuid not null references users(id),
   user_b_id uuid not null references users(id),
+  source_content_item_id uuid references content_items(id),
   conversation_id uuid references conversations(id),
   state text not null default 'active',
+  stale_at timestamptz,
+  expires_at timestamptz,
   created_at timestamptz not null default now()
 );
+
+create unique index dating_matches_pair_unique
+  on dating_matches (least(user_a_id, user_b_id), greatest(user_a_id, user_b_id));
 
 create table provider_events (
   id uuid primary key,
@@ -367,6 +463,27 @@ create table provider_events (
   received_at timestamptz not null default now(),
   processed_at timestamptz,
   unique (provider, provider_event_id)
+);
+
+create table idempotency_keys (
+  key text primary key,
+  actor_user_id uuid references users(id),
+  scope text not null,
+  request_hash text not null,
+  response_status integer,
+  response_body jsonb,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+
+create table notification_preferences (
+  user_id uuid primary key references users(id),
+  messages_enabled boolean not null default true,
+  live_enabled boolean not null default true,
+  payments_enabled boolean not null default true,
+  dating_enabled boolean not null default true,
+  safety_enabled boolean not null default true,
+  updated_at timestamptz not null default now()
 );
 
 create table moderation_reviews (

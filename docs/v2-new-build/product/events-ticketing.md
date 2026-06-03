@@ -139,6 +139,29 @@ Evaluate later only if the business needs:
 
 Candidates for a later ADR include Crossmint/NFT APIs or a dedicated Solana ticketing provider, but only after proving QR entitlements are insufficient.
 
+## Production Ticketing Details
+
+Launch ticketing must support:
+
+- ticket types with label, price, currency, capacity, and sale window
+- all-in price display before wallet confirmation
+- inventory reservation with short expiry during payment intent
+- per-user ticket limits
+- cancellation and refund policy shown before purchase
+- request-to-join approval/rejection state for private events
+- QR token rotation or reissue after support/admin action
+- check-in staff role and admin audit log
+- offline-friendly check-in fallback where venue connectivity is weak
+- duplicate/replay-safe payment and check-in handling
+- digital event access mapping to live-room entitlement
+- physical event check-in separate from payment settlement
+
+Anti-scalping launch rule:
+
+- no transferable/resale tickets at launch
+- no NFT ticket transfer at launch
+- every transfer/resale feature requires a dedicated ADR, legal review, fraud controls, and user support plan
+
 ## Free Or Request-To-Join Flow
 
 ```text
@@ -207,16 +230,6 @@ Event mode:
 - Embedded wallet/onramp providers for conversion support.
 - Email/push provider for optional receipt reminders.
 - No provider grants ticket access directly.
-
-## Ticketing Provider Decision
-
-Launch with backend ticket entitlements plus Solana Pay settlement:
-
-- fastest path
-- lowest provider dependency
-- QR/check-in works without custom smart contracts
-- platform commission works through split transaction
-- supports free, paid, and approval/precheck events
 
 Evaluate later:
 

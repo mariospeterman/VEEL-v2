@@ -1,11 +1,11 @@
 # Age Assurance, KYC, And Audience Geoblocking
 
-Status: current
+Status: proposed v2 architecture
 Scope: documentation
-Last updated: 2026-05-29
+Last updated: 2026-06-03
 Source of truth: yes
 
-This document aligns the current codebase with the recommended 2026 operating model.
+This document defines the recommended 2026 operating model for the greenfield v2 repo.
 
 ## Core separation
 
@@ -126,7 +126,7 @@ Operator-side emergency blocks can still exist for legal or abuse escalations, b
 
 ## Config model
 
-The repo now carries the config shape in `apps/api/config/compliance.php`:
+The v2 API should carry this config shape in the Fastify config module and generated typed config package:
 
 - `policy_version`
 - `age_gate.all_protected_surfaces_require_third_party_age_assurance`
@@ -143,8 +143,8 @@ The repo now carries the config shape in `apps/api/config/compliance.php`:
 - `creator_audience_controls.country_blocks_enabled`
 - `creator_audience_controls.default_audience_mode`
 
-Current implementation note:
+Implementation rule:
 
-- operator-only user restrictions now exist for targeted `creator_monetization_hold` and `viewer_payment_hold` cases
-- operator-triggered KYC requests now exist for specific accounts and reasons
-- these are meant to stay targeted and auditable, not to become a universal onboarding requirement
+- operator-only user restrictions must support targeted `creator_monetization_hold` and `viewer_payment_hold` cases
+- operator-triggered KYC requests must support specific accounts and reasons
+- these are targeted and auditable controls, not universal onboarding requirements

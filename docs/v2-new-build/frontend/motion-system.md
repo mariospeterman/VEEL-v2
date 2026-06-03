@@ -1,8 +1,8 @@
 # Frontend Motion System
 
-Status: current
+Status: proposed v2 architecture
 Scope: documentation
-Last updated: 2026-05-29
+Last updated: 2026-06-03
 Source of truth: yes
 
 This file defines the current motion language.

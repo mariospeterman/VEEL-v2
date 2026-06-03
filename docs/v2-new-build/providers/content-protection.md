@@ -1,6 +1,6 @@
 # Security And Content Protection
 
-Status: current
+Status: proposed v2 architecture
 Scope: documentation
 Last updated: 2026-06-03
 Source of truth: yes

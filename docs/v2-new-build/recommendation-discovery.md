@@ -177,6 +177,8 @@ Do not use:
 - raw wallet balances
 - sensitive identity data
 - AI-inferred sensitive traits
+- hidden paid ranking boost
+- referral commission eligibility as a ranking shortcut
 
 ## Ranking Goals
 
@@ -224,6 +226,27 @@ Initial implementation can be simple:
 7. return paginated feed
 
 Only add ML/vector personalization after enough data exists.
+
+## Transparency And User Controls
+
+Feed ranking must be explainable enough for users, admins, and compliance review.
+
+Required launch controls:
+
+- `Why am I seeing this?` summary on media detail/menu
+- hide creator
+- hide hashtag/topic
+- block/report creator
+- reset recommendations
+- Following feed that does not rely on behavioral profiling
+- NSFW/SFW preference stored under Settings
+- moderation and safety filters applied before ranking
+
+Paid distribution rule:
+
+- do not silently sell ranking boost in For You
+- any paid promotion product must be labeled, user-control aware, policy-reviewed, and covered by a separate ADR
+- creator monetisation potential can be a business metric, but it cannot override safety, reports, blocks, age gates, or user feed preferences
 
 ## Feed API
 
