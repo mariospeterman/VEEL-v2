@@ -19,7 +19,28 @@ export const serverEnvSchema = z.object({
   SUPABASE_PUBLISHABLE_KEY: z.string().optional(),
   SUPABASE_SECRET_KEY: z.string().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
-  DATABASE_URL: z.string().optional()
+  DATABASE_URL: z.string().optional(),
+  AGE_VERIFICATION_DRIVER: z
+    .enum(["yoti_digital_id", "yoti", "sumsub", "veriff", "persona"])
+    .optional(),
+  AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: z.coerce.boolean().default(false),
+  SUMSUB_APP_TOKEN: z.string().optional(),
+  SUMSUB_SECRET_KEY: z.string().optional(),
+  SUMSUB_WEBHOOK_SECRET: z.string().optional(),
+  SUMSUB_LEVEL_NAME: z.string().optional(),
+  SUMSUB_API_BASE_URL: z.string().url().default("https://api.sumsub.com"),
+  YOTI_SDK_ID: z.string().optional(),
+  YOTI_API_TOKEN: z.string().optional(),
+  YOTI_NOTIFICATION_KEY_PATH: z.string().optional(),
+  YOTI_API_BASE_URL: z.string().url().default("https://age.yoti.com/api/v1"),
+  YOTI_LAUNCH_BASE_URL: z.string().url().default("https://age.yoti.com"),
+  VERIFF_API_KEY: z.string().optional(),
+  VERIFF_SHARED_SECRET: z.string().optional(),
+  VERIFF_API_BASE_URL: z.string().url().default("https://stationapi.veriff.com"),
+  PERSONA_API_KEY: z.string().optional(),
+  PERSONA_WEBHOOK_SECRET: z.string().optional(),
+  PERSONA_TEMPLATE_ID: z.string().optional(),
+  PERSONA_API_BASE_URL: z.string().url().default("https://api.withpersona.com")
 });
 
 export type PublicWebEnv = z.infer<typeof publicWebEnvSchema>;

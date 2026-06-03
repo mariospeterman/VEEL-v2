@@ -24,6 +24,13 @@ This repo now enforces server-owned verification for wallet sign-in and age-gate
 Local mock flows remain useful for development, but real provider launches and real provider
 webhooks must be configured before production rollout.
 
+Current implementation state:
+
+- `POST /v1/age/sessions` is wired to an injectable backend provider waterfall.
+- The default runtime waterfall fails closed with `503` until a real provider adapter is launch-approved and configured.
+- Successful provider session starts are stored as pending `age_verifications` rows with provider reference, state, rule/jurisdiction metadata, and timestamps only.
+- Raw provider payloads, identity images, document data, and browser-completed age state are not accepted by this route.
+
 ## Official references
 
 - Phantom Browser SDK: https://docs.phantom.com/sdks/browser-sdk/index

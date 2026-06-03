@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 import type { AgeRepository, AgeStatus, AgeState } from "./types.js";
 
@@ -22,6 +23,9 @@ export function createPostgresAgeRepository(databaseUrl?: string): AgeRepository
   if (!databaseUrl) {
     return {
       async findLatestAgeStatusBySupabaseUserId() {
+        throw new AgeRepositoryConfigurationError();
+      },
+      async createPendingAgeVerification() {
         throw new AgeRepositoryConfigurationError();
       }
     };
@@ -61,6 +65,36 @@ export function createPostgresAgeRepository(databaseUrl?: string): AgeRepository
         state: row.state,
         provider: row.provider
       };
+    },
+    async createPendingAgeVerification(input): Promise<void> {
+      await sql`
+        with target_user as (
+          select id
+          from users
+          where supabase_user_id = ${input.supabaseUserId}
+          limit 1
+        )
+        insert into age_verifications (
+          id,
+          user_id,
+          provider,
+          provider_reference,
+          state,
+          jurisdiction,
+          rule,
+          expires_at
+        )
+        select
+          ${randomUUID()},
+          id,
+          ${input.provider},
+          ${input.providerReference},
+          'pending',
+          ${input.jurisdiction ?? null},
+          ${input.rule ?? null},
+          ${input.expiresAt}
+        from target_user
+      `;
     },
     async close() {
       await sql.end({ timeout: 5 });

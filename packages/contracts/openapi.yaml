@@ -63,8 +63,10 @@ paths:
         $ref: "#/components/requestBodies/CreateAgeSession"
       responses:
         "201": { $ref: "#/components/responses/AgeSession" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/age/status:
     get:
       operationId: getAgeStatus
@@ -1084,6 +1086,7 @@ components:
     NotFound: { description: Not found, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     ValidationFailed: { description: Validation failed, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     Conflict: { description: Conflict, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+    ServiceUnavailable: { description: Service unavailable, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     RateLimited: { description: Rate limited, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     SessionState: { description: Session state, content: { application/json: { schema: { $ref: "#/components/schemas/SessionState" } } } }
     Me: { description: Current viewer, content: { application/json: { schema: { $ref: "#/components/schemas/Me" } } } }

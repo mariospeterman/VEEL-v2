@@ -2196,6 +2196,15 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
+        /** @description Service unavailable */
+        ServiceUnavailable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
         /** @description Rate limited */
         RateLimited: {
             headers: {
@@ -3090,8 +3099,10 @@ export interface operations {
         requestBody: components["requestBodies"]["CreateAgeSession"];
         responses: {
             201: components["responses"]["AgeSession"];
+            400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     getAgeStatus: {

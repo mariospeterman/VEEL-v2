@@ -69,4 +69,12 @@ describe("database migrations", () => {
     expect(sql).toContain("wallet_link_challenges_nonce_hash_unique");
     expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|signature text|raw_payload/i);
   });
+
+  it("adds age provider waterfall lookup support without identity payload storage", () => {
+    const sql = readMigration("0005_age_provider_waterfall.sql");
+
+    expect(sql).toContain("age_verifications_provider_state_idx");
+    expect(sql).toContain("on age_verifications (provider, state, created_at desc)");
+    expect(sql).not.toMatch(/raw_payload|document|selfie|face_image|identity_image/i);
+  });
 });

@@ -2,9 +2,10 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import sensible from "@fastify/sensible";
 import Fastify, { type FastifyInstance } from "fastify";
+import { createAgeProviderWaterfall } from "./modules/age/age-provider-waterfall.js";
 import { createPostgresAgeRepository } from "./modules/age/age-repository.js";
 import { registerAgeRoutes } from "./modules/age/age-routes.js";
-import type { AgeRepository } from "./modules/age/types.js";
+import type { AgeProviderWaterfall, AgeRepository } from "./modules/age/types.js";
 import { createPostgresProfileRepository } from "./modules/profile/profile-repository.js";
 import { registerProfileRoutes } from "./modules/profile/profile-routes.js";
 import type { ProfileRepository } from "./modules/profile/types.js";
@@ -23,6 +24,7 @@ export interface BuildApiOptions {
   authVerifier?: SupabaseAuthVerifier;
   sessionRepository?: SessionRepository;
   ageRepository?: AgeRepository;
+  ageProviderWaterfall?: AgeProviderWaterfall;
   profileRepository?: ProfileRepository;
   walletRepository?: WalletRepository;
 }
@@ -55,6 +57,8 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   const sessionRepository =
     options.sessionRepository ?? createPostgresSessionRepository(app.config.DATABASE_URL);
   const ageRepository = options.ageRepository ?? createPostgresAgeRepository(app.config.DATABASE_URL);
+  const ageProviderWaterfall =
+    options.ageProviderWaterfall ?? createAgeProviderWaterfall(app.config);
   const profileRepository =
     options.profileRepository ?? createPostgresProfileRepository(app.config.DATABASE_URL);
   const walletRepository =
@@ -89,6 +93,8 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   });
   await registerAgeRoutes(app, {
     authVerifier,
+    sessionRepository,
+    ageProviderWaterfall,
     ageRepository
   });
   await registerProfileRoutes(app, {

@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
 import { buildApi } from "../src/app";
-import type { AgeRepository } from "../src/modules/age/types";
+import type {
+  AgeProviderWaterfall,
+  AgeRepository,
+  CreatePendingAgeVerificationInput
+} from "../src/modules/age/types";
 import type { ProfileRepository } from "../src/modules/profile/types";
 import type {
   SessionRepository,
@@ -226,6 +230,95 @@ describe("buildApi", () => {
     expect(response.json()).toEqual({
       state: "verified",
       provider: "test"
+    });
+
+    await app.close();
+  });
+
+  it("starts an age provider session through the backend waterfall", async () => {
+    const createdPendingVerifications: CreatePendingAgeVerificationInput[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return null;
+        }
+      }),
+      ageRepository: {
+        async findLatestAgeStatusBySupabaseUserId() {
+          return {
+            state: "required",
+            provider: null
+          };
+        },
+        async createPendingAgeVerification(input) {
+          createdPendingVerifications.push(input);
+        }
+      },
+      ageProviderWaterfall: fakeAgeProviderWaterfall
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/age/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "age-session-1"
+      },
+      payload: {
+        providerPreference: "reusable_first"
+      }
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toEqual({
+      id: "age-session-provider-ref-1",
+      provider: "yoti",
+      launchUrl: "https://age.example.test/session/age-session-provider-ref-1",
+      expiresAt: "2026-06-03T22:15:00.000Z"
+    });
+    expect(createdPendingVerifications).toEqual([
+      {
+        supabaseUserId: "00000000-0000-4000-8000-000000000001",
+        provider: "yoti",
+        providerReference: "age-session-provider-ref-1",
+        jurisdiction: "US",
+        rule: "over_18",
+        expiresAt: new Date("2026-06-03T22:15:00.000Z")
+      }
+    ]);
+
+    await app.close();
+  });
+
+  it("fails closed when no age provider is configured", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return null;
+        }
+      }),
+      ageRepository: requiredAgeRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/age/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "age-session-2"
+      },
+      payload: {
+        providerPreference: "reusable_first"
+      }
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({
+      code: "service_unavailable"
     });
 
     await app.close();
@@ -462,6 +555,9 @@ const verifiedAgeRepository: AgeRepository = {
       state: "verified",
       provider: "test"
     };
+  },
+  async createPendingAgeVerification() {
+    throw new Error("not implemented");
   }
 };
 
@@ -470,6 +566,27 @@ const requiredAgeRepository: AgeRepository = {
     return {
       state: "required",
       provider: null
+    };
+  },
+  async createPendingAgeVerification() {
+    throw new Error("not implemented");
+  }
+};
+
+const fakeAgeProviderWaterfall: AgeProviderWaterfall = {
+  async createSession(input) {
+    expect(input.providerPreference).toBe("reusable_first");
+    expect(input.idempotencyKey).toBe("age-session-1");
+    expect(input.callbackUrl).toBe("http://localhost:3000/age/callback");
+    expect(input.webhookBaseUrl).toBe("http://localhost:4000/v1/webhooks/age");
+
+    return {
+      provider: "yoti",
+      providerReference: "age-session-provider-ref-1",
+      launchUrl: "https://age.example.test/session/age-session-provider-ref-1",
+      expiresAt: new Date("2026-06-03T22:15:00.000Z"),
+      jurisdiction: "US",
+      rule: "over_18"
     };
   }
 };

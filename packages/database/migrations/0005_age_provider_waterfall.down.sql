@@ -1,0 +1,1 @@
+drop index if exists age_verifications_provider_state_idx;
