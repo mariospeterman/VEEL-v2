@@ -14,7 +14,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Migration test placeholder
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Enable Corepack
         run: |
-          echo "Migration/RLS tests become mandatory when packages/database/migrations is created."
-          echo "The schema blueprint is not a runnable migration."
+          corepack enable
+          corepack prepare pnpm@10.0.0 --activate
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Check database migrations
+        run: pnpm database:check
+      - name: Run database tests
+        run: pnpm --filter @veel/database test

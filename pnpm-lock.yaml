@@ -129,6 +129,8 @@ importers:
         specifier: ^7.10.1
         version: 7.13.0(typescript@5.9.3)
 
+  packages/database: {}
+
   packages/test-factories: {}
 
   packages/ui:
