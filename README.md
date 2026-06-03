@@ -3,7 +3,7 @@
 Status: new v2 repo scaffold
 Scope: greenfield Veel rebuild
 
-This repo is the clean starting point for the Veel v2 rebuild. The old repo at `/Users/maki/Downloads/veel` is reference only. Do not bulk-copy old app code into this repo.
+This repo is the clean starting point for the Veel v2 greenfield build. The previous prototype is reference only for validated lessons and tests. Do not bulk-copy prototype app code into this repo.
 
 ## Start Here
 

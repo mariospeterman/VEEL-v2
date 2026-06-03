@@ -5,7 +5,7 @@ Scope: documentation
 Last updated: 2026-06-03
 Source of truth: yes
 
-## Current controls
+## Required Controls
 
 - Fastify checks entitlement before issuing playback authorization.
 - Bunny Stream VOD full playback always uses short-lived server-signed/tokenized playback.
@@ -35,7 +35,7 @@ Source of truth: yes
 
 No practical web video stack can guarantee that premium media cannot be copied. The goal is controlled access, shorter leak windows, and traceability, not a false promise of perfect prevention.
 
-## TODOs that are still real
+## Deferred Hardening Items
 
 - playback anomaly dashboards
 - advanced geo/IP token policies where business rules require them

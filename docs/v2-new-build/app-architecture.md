@@ -5,21 +5,21 @@ Scope: full product architecture
 Last updated: 2026-06-03
 Source of truth: proposal
 
-This document defines the target architecture for a clean provider-first Veel v2 repository. It does not describe the current Laravel implementation. Use it as the app architecture source for the new repo after the v2 decision is approved.
+This document defines the target architecture for a clean provider-first Veel v2 repository. Use it as the app architecture source for the new repo after the v2 decision is approved.
 
 ## Decision Summary
 
 Recommended v2 direction:
 
 - Keep a Next.js PWA, but rebuild the app shell and product surfaces around a smaller design/component system.
-- Replace Laravel/Sanctum with a TypeScript backend built on Fastify.
+- Use a TypeScript backend built on Fastify.
 - Use Supabase Postgres as the primary database, Supabase Auth as identity/session issuer, and Supabase Realtime selectively for messages, notifications, live room state, and activity events.
 - Keep all money/access/media/provider truth behind the backend. Supabase RLS protects direct realtime reads, but Fastify remains the business policy layer.
 - Add a mainstream onboarding path with email/social/passkey signup and a noncustodial embedded Solana wallet, while keeping Phantom/Solflare/external wallet connect first-class for web3-native users.
 - Use Hono only for small edge/public endpoints if a real edge deployment need appears. Do not mix Hono into the core API.
 - Keep pnpm as the monorepo package manager and Node.js LTS as the production runtime for v2 launch. Bun can be evaluated later for isolated tooling/services, but should not be added as another moving part during the backend/auth/realtime rebuild.
 - Use official provider SDKs/APIs where they reduce custom code: Solana JS/Pay, Bunny Stream TUS/API, Livepeer APIs, age/KYC provider APIs.
-- Rebuild through contract-first vertical slices, not by porting old code wholesale.
+- Build through contract-first vertical slices, not by porting prototype code wholesale.
 
 ## Architecture Diagram
 
@@ -124,7 +124,7 @@ flowchart TB
 | Web | Next.js App Router, TypeScript, Tailwind v4, TanStack Query, Zustand | Current frontend stack is viable; clean up architecture instead of switching frameworks. |
 | API | Fastify TypeScript | Lower overhead, schema-first validation/serialization, direct provider SDK use, less boilerplate than Nest. |
 | Edge | Hono only for tiny public/edge endpoints | Hono is excellent at edge, but mixing it into core business API adds unnecessary architecture surface. |
-| Auth | Supabase Auth with backend-verified JWTs | Replaces Laravel Sanctum while giving browser/mobile sessions, JWTs, identity providers, and RLS integration. |
+| Auth | Supabase Auth with backend-verified JWTs | Gives browser/mobile sessions, JWTs, identity providers, and RLS integration while Fastify remains the business policy layer. |
 | Wallet onboarding | Embedded wallet provider + external wallet adapter | Reduces conversion friction while preserving noncustodial user approval and backend settlement verification. |
 | DB | Supabase Postgres | Relational money/access/media truth needs Postgres, transactions, constraints, and auditability. |
 | Realtime | Supabase Realtime Broadcast/Presence + selective Postgres Changes | Avoids custom websocket infrastructure for messages/live/activity while keeping backend policy. |
@@ -278,13 +278,10 @@ Read these in order:
 
 ## Immediate Non-Code Next Step
 
-Before rebuilding, approve or reject these decisions:
+Before implementation starts, approve these greenfield decisions:
 
-- Fastify vs NestJS.
+- Fastify TypeScript API.
 - Supabase Auth/Realtime/Postgres as platform foundation.
 - Embedded wallet provider and onramp provider.
-- Full frontend rebuild vs targeted frontend rebuild.
 - Provider-first payment/media architecture.
-- New repo strategy: clean `veel-v2` repo with this repo kept as read-only reference.
-
-If the decision is a full reset rather than incremental parity, prefer a new `veel-v2` repo with this repo kept as the reference implementation. Copy docs, ADRs, contracts, and test lessons first; do not bulk-port old application code.
+- Contract-first vertical slice order in `build-plan.md`.

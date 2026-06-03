@@ -22,7 +22,7 @@ Use this repo for:
 - screenshots and UX findings
 - current docs and ADRs
 
-Do not bulk-copy current application code. Port behavior through contracts, tests, and vertical slices.
+Do not bulk-copy prototype application code. Port behavior through contracts, tests, and vertical slices.
 
 ## New Repo Shape
 
@@ -74,7 +74,7 @@ Recommended use:
 - install after the v2 repo has docs and repo rules
 - keep gstack optional at first
 - use it for office-hours/planning, design review, QA, security review, release review
-- do not let it auto-port old code wholesale
+- do not let it auto-port prototype code wholesale
 - do not let gstack memory override source-of-truth docs, OpenAPI, migrations, or tests
 - keep telemetry/privacy choices explicit
 

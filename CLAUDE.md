@@ -14,7 +14,7 @@ This file mirrors the core agent rules from `AGENTS.md` for Claude-style tooling
 
 ## Operating Mode
 
-Build Veel v2 as a clean greenfield platform. The old repo is reference only. Do not bulk-copy old code.
+Build Veel v2 as a clean greenfield platform. The previous prototype is reference only for validated lessons. Do not bulk-copy prototype code.
 
 Use this order for every meaningful change:
 
@@ -55,4 +55,3 @@ When completing work, report:
 - tests added/updated
 - risks or blockers
 - next exact action
-

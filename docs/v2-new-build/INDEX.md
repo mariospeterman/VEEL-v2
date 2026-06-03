@@ -5,7 +5,7 @@ Scope: complete greenfield Veel v2 build instructions
 Last updated: 2026-06-03
 Source of truth: yes for the proposed `veel-v2` repo
 
-This folder is the clean new-build pack. It is intentionally separated from the current app architecture docs so a developer can copy this folder into a new `veel-v2` repo and build from it without reading stale rebuild notes.
+This folder is the clean new-build pack. It is intentionally self-contained so a developer can build Veel v2 from it without reading stale prototype notes.
 
 ## What This Pack Is
 
@@ -17,9 +17,9 @@ This folder is the clean new-build pack. It is intentionally separated from the 
 
 ## What This Pack Is Not
 
-- Not the current Laravel/Next implementation.
+- Not a description of the previous prototype implementation.
 - Not a porting checklist.
-- Not an instruction to bulk-copy old code.
+- Not an instruction to bulk-copy prototype code.
 - Not a migration-in-place plan.
 
 ## Start Here
@@ -78,13 +78,6 @@ This folder is the clean new-build pack. It is intentionally separated from the 
 40. [Infrastructure and research decisions](infra-decisions.md)
 41. [Deployment topology](deployment-topology.md)
 42. [Slice workflow](slice-workflow.md)
-
-## Optional Historical Alternatives
-
-These are not the primary plan:
-
-- [Optional in-repo migration plan](optional/in-repo-migration-plan.md)
-- [Optional parallel rebuild strategy ADR](optional/parallel-rebuild-strategy.md)
 
 ## How To Use In A New Repo
 

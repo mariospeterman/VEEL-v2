@@ -7,7 +7,7 @@ Source of truth: proposal
 
 This is the detailed build plan for a clean `veel-v2` repository. It is not a migration checklist and not a code-porting plan. The current repo is only a reference for product behavior, provider lessons, validated tests, and known pitfalls.
 
-Use this as the primary v2 starting document. `slice-workflow.md` is only the operational slice workflow. `optional/in-repo-migration-plan.md` is only for the alternative where v2 is built inside this existing monorepo.
+Use this as the primary v2 starting document. `slice-workflow.md` is the operational slice workflow. There is no migration-in-place plan in this scaffold.
 
 ## Build Strategy
 
@@ -21,7 +21,7 @@ Build v2 as a greenfield provider-first platform:
 - tests before polish
 - admin/ops visibility before production cutover
 
-Do not bulk-copy v1 code. Reuse only:
+Do not bulk-copy prototype code. Reuse only:
 
 - product rules
 - screenshots/UX lessons
@@ -182,7 +182,7 @@ Definition of done:
 
 - `pnpm lint`, `pnpm typecheck`, and `pnpm test` run even if apps are empty
 - `.env.example` documents public vs server-only values
-- `.cursorignore` excludes build artifacts, secrets, generated output, vendor caches, and old repo imports
+- `.cursorignore` excludes build artifacts, secrets, generated output, vendor caches, and prototype imports
 
 ## Contracts Milestone
 

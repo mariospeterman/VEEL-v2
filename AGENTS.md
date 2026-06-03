@@ -4,7 +4,7 @@
 
 Build Veel v2 as a clean, provider-first, production-grade 18+ creator PWA/dApp for media, live/VOD, premium unlocks, messages, events, dating/matches, creator monetisation, and admin operations.
 
-This is a greenfield rebuild. The old repo is reference only.
+This is a greenfield build. The previous prototype is reference only for validated lessons.
 
 ## Source Of Truth
 
@@ -20,7 +20,7 @@ Do not invent provider APIs, routes, DB columns, env vars, events, SDK calls, pe
 
 ## Hard Rules
 
-- No bulk-copying old app code.
+- No bulk-copying prototype app code.
 - No duplicate routes, app shells, media viewers, payment systems, provider adapters, realtime systems, or CSS systems.
 - No frontend business truth for payments, access, referrals, commissions, tickets, subscriptions, age/KYC, moderation, or admin state.
 - No provider secrets, private keys, stream keys, signed media URLs, webhook secrets, raw PII, or service-role keys in browser bundles.
@@ -28,7 +28,7 @@ Do not invent provider APIs, routes, DB columns, env vars, events, SDK calls, pe
 - No custom key custody. Embedded wallet provider must be noncustodial/user-controlled.
 - No wallet approval treated as payment proof. Backend settlement verification is required.
 - No raw provider payloads in frontend resources.
-- No old docs or stale rebuild plans copied outside `docs/v2-new-build/optional`.
+- No stale rebuild, migration-in-place, or prototype-porting plans.
 
 ## Architecture Defaults
 
@@ -58,9 +58,9 @@ Every production slice must include:
 - admin/ops visibility when relevant
 - docs update
 
-## Reference Repo Rule
+## Prototype Reference Rule
 
-The old repo may be used to inspect:
+The previous prototype may be used to inspect:
 
 - validated behavior
 - tests and fixtures
@@ -68,7 +68,7 @@ The old repo may be used to inspect:
 - screenshots and UX findings
 - launch blockers
 
-Port lessons, not code shape.
+Port lessons and tests, not code shape.
 
 ## Security Baseline
 
@@ -91,4 +91,3 @@ Port lessons, not code shape.
 - Tests added
 - No secrets committed
 - No duplicate systems introduced
-

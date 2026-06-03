@@ -5,7 +5,7 @@ Scope: complete greenfield Veel platform blueprint
 Last updated: 2026-06-03
 Source of truth: yes for the complete v2 product/system map
 
-This is the single visual blueprint for building the full Veel v2 platform from scratch. The old repo is a reference for validated product lessons, provider edge cases, and tests only. Do not port old architecture wholesale.
+This is the single visual blueprint for building the full Veel v2 platform from scratch. The previous prototype is a reference for validated product lessons, provider edge cases, and tests only. Do not port prototype architecture wholesale.
 
 Use this document to understand how every major module relates before writing code.
 
@@ -376,7 +376,7 @@ Provider defaults are defined in `adr/0002-provider-decisions-2026.md`. Use it b
 
 ## New Repo Rule
 
-Copy this pack into the new repo, then build by vertical slices. Do not start by copying old code. Only reference the old repo for:
+Build by vertical slices from this pack. Do not start by copying prototype code. Only reference the previous prototype for:
 
 - screenshots and UX lessons
 - provider edge cases

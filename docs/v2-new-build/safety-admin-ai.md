@@ -22,7 +22,7 @@ Required:
 - audit logs
 - admin review queues
 
-The v2 rebuild must carry forward `docs/compliance-adult-content.md` and `docs/compliance-age-kyc-jurisdictions.md`. Those documents are not optional marketing/legal notes; they define launch-blocking safety and compliance requirements.
+The v2 build must carry forward `docs/v2-new-build/compliance/adult-content-compliance.md` and `docs/v2-new-build/compliance/age-kyc-jurisdictions.md`. Those documents are safety and compliance requirements, not marketing notes.
 
 ## Age/KYC
 

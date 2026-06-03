@@ -27,7 +27,7 @@ Use it for:
 
 Do not use it to:
 
-- auto-port old code
+- auto-port prototype code
 - replace contracts
 - replace migrations
 - replace tests
@@ -42,4 +42,3 @@ Do not use it to:
 - Add tests before risky behavior changes.
 - Update docs when contracts, routes, schemas, envs, or provider behavior changes.
 - Run relevant checks before reporting done.
-

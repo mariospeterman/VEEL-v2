@@ -15,24 +15,35 @@ V2 should not require an external wallet before signup. Use Supabase Auth for ma
 
 ```mermaid
 erDiagram
-  auth_users ||--|| user_profiles : maps_to
-  user_profiles ||--o{ wallets : owns
-  user_profiles ||--o{ age_checks : has
-  user_profiles ||--o{ sessions_audit : creates
+  auth_users ||--|| users : maps_to
+  users ||--|| profiles : has
+  users ||--o{ wallets : owns
+  users ||--o{ age_checks : has
+  users ||--o{ staff_memberships : may_have
+  users ||--o{ sessions_audit : creates
 
   auth_users {
     uuid id
     string email
     jsonb app_metadata
   }
-  user_profiles {
+  users {
     uuid id
-    uuid auth_user_id
+    uuid supabase_user_id
+    string state
+    timestamptz created_at
+  }
+  profiles {
+    uuid user_id
     string handle
     string display_name
     string avatar_url
-    string role
     timestamptz created_at
+  }
+  staff_memberships {
+    uuid user_id
+    string role
+    string state
   }
   wallets {
     uuid id
@@ -146,15 +157,13 @@ Avoid:
 - Normal viewer access should not require KYC unless product/legal policy says so.
 - Frontend receives only state/action, never raw provider payload.
 
-## Migration Concern
+## Implementation Decisions Required Before Coding
 
-Moving from Laravel/Sanctum to Supabase Auth is a full auth architecture change. Before implementation:
-
-- define account migration
-- define wallet link migration
+- define account creation and identity-linking flow
+- define wallet link challenge and primary-wallet flow
 - choose embedded wallet provider and onramp provider
 - define wallet creation timing: signup vs first paid action
-- define session cutover
-- define user ID mapping
+- define session refresh and JWT verification behavior
+- define user ID mapping between Supabase Auth and app `users`
 - define passwordless/passkey support requirements
 - define deletion/anonymization behavior

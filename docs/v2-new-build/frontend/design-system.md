@@ -5,21 +5,21 @@ Scope: documentation
 Last updated: 2026-06-03
 Source of truth: yes
 
-This document defines the current locked web design direction.
+This document defines the locked v2 web design direction.
 
 ## Stack truth
 
 - Next.js 16, React 19, TypeScript
-- Tailwind CSS v4 is active through `apps/web/app/globals.css` and `apps/web/postcss.config.mjs`
-- selected shadcn-style primitives live in `apps/web/components/ui`
-- TanStack Query and Zustand are active for API cache and shared shell state
-- Livepeer React is available for custom live/VOD playback where the hosted provider player is not enough
-- custom CSS tokens in `apps/web/app/globals.css` remain the product design source of truth
-- route-owned React surfaces in `apps/web/features/*`
+- Tailwind CSS v4 with product-owned tokens
+- selected shadcn-style primitives under `apps/web/components/ui`
+- TanStack Query for server state and Zustand/local state for UI state
+- Livepeer React/player primitives where they reduce custom live/VOD code
+- custom CSS tokens under the v2 app styles are the product design source of truth
+- route-owned React surfaces under `apps/web/features/*`
 
-## Current Primitive Boundary
+## Primitive Boundary
 
-The frontend migration stack is active. Repeated controls should use:
+Repeated controls should use:
 
 - `Button` / `buttonVariants`
 - `Sheet`

@@ -188,7 +188,7 @@ Preserve:
 
 ## Final Recommendation
 
-Build v2 in a clean `veel-v2` repo:
+Build v2 in this clean repo shape:
 
 ```text
 apps/api
@@ -197,4 +197,4 @@ apps/worker
 packages/contracts
 ```
 
-Keep the current repository available as a reference until parity is proven. Do not bulk-copy current `apps/api` or `apps/web` implementation code into v2.
+Keep the previous prototype available only as a reference for validated behavior, screenshots, provider lessons, and tests. Do not bulk-copy prototype `apps/api` or `apps/web` implementation code into v2.
