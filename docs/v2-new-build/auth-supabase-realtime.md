@@ -166,11 +166,33 @@ Avoid:
 
 ## Session Security
 
-- Frontend uses Supabase anon key and user JWT.
-- Backend uses service role key only server-side.
+- Frontend uses Supabase URL plus publishable key and user JWT. Legacy anon keys may be used for compatibility only.
+- Backend never exposes secret or service-role keys to browser bundles.
+- Backend verifies Supabase-issued access tokens with Supabase Auth `getClaims()` where possible, falling back to Auth-server verification behavior for shared-secret signing projects.
 - JWT verification keys/config must be cached and rotated safely.
 - Admin role comes from backend profile/role tables, not client-editable metadata.
 - High-risk actions re-check backend profile, age, restrictions, wallet, and role.
+- Server-side profile/session state is loaded from Veel tables (`users`, `profiles`, and later wallet/age/access tables), not from client-editable Supabase user metadata.
+
+## Local Supabase Setup
+
+The root `.env.example` is the full monorepo checklist. Local API scripts load the root `.env` with Node's built-in env-file support. `apps/web/.env.example` contains only browser-safe values for the Next app's `.env.local`. `apps/api/.env.example` contains server-only runtime and local tooling values.
+
+Use these key classes:
+
+- `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in the web app.
+- `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and `DATABASE_URL` in the API.
+- `SUPABASE_SECRET_KEY` only for backend-only provider/admin work that explicitly needs it.
+- `SUPABASE_SERVICE_ROLE_KEY` only for legacy compatibility or narrowly reviewed backend work.
+- `SUPABASE_ACCESS_TOKEN` and `SUPABASE_PROJECT_REF` only for local Supabase CLI/MCP tooling.
+
+Direct database migration work requires one of:
+
+- Supabase MCP authenticated and project-scoped for development data.
+- Supabase CLI authenticated and linked to a development project.
+- A server-only `DATABASE_URL` for a development database.
+
+Do not connect AI tooling directly to production data. Use a development project, read-only MCP mode when inspecting real-like data, and manual approval for write tools.
 
 ## Age/KYC Separation
 
