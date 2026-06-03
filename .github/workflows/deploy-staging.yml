@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: staging
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Staging deployment placeholder
         run: |
           echo "Staging deploy becomes active after infra/deploy defines the target platform."

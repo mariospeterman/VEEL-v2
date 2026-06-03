@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Production deployment placeholder
         run: |
           echo "Production deploy requires an approved release, pinned artifact digest, migration plan, smoke tests, and rollback path."
