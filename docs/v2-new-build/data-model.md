@@ -42,7 +42,7 @@ erDiagram
   users ||--o{ live_rooms : hosts
   live_rooms ||--o{ live_sessions : has
   live_rooms ||--o{ live_passes : sells
-  users ||--o{ age_checks : has
+  users ||--o{ age_verifications : has
   users ||--o{ audit_events : actor
 ```
 
@@ -136,4 +136,3 @@ Store raw provider payload only when needed for reconciliation/debugging, and ke
 - retention-limited where sensitive
 
 For frontend resources, use normalized fields only.
-

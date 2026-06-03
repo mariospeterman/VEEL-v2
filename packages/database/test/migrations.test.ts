@@ -39,4 +39,14 @@ describe("database migrations", () => {
     expect(sql).toContain("create index provider_webhook_receipts_provider_received_at_idx");
     expect(sql).toContain("create index audit_events_subject_idx");
   });
+
+  it("adds age verification state without provider payload storage", () => {
+    const sql = readMigration("0002_age_verifications.sql");
+
+    expect(sql).toContain("create type age_state as enum");
+    expect(sql).toContain("create table age_verifications");
+    expect(sql).toContain("provider_reference text not null");
+    expect(sql).toContain("create index age_verifications_user_created_at_idx");
+    expect(sql).not.toMatch(/raw_payload/i);
+  });
 });

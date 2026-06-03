@@ -72,6 +72,7 @@ paths:
       summary: Current safe age-gate status
       responses:
         "200": { $ref: "#/components/responses/AgeStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /v1/wallets:
     get:
       operationId: listWallets

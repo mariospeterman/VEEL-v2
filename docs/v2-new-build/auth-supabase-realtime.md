@@ -33,7 +33,7 @@ erDiagram
   auth_users ||--|| users : maps_to
   users ||--|| profiles : has
   users ||--o{ wallets : owns
-  users ||--o{ age_checks : has
+  users ||--o{ age_verifications : has
   users ||--o{ staff_memberships : may_have
   users ||--o{ sessions_audit : creates
 

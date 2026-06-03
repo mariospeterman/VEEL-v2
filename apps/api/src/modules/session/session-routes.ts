@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import {
-  SessionRepositoryConfigurationError
-} from "./session-repository.js";
-import { SupabaseAuthConfigurationError } from "./supabase-auth.js";
+import { AgeRepositoryConfigurationError } from "../age/age-repository.js";
+import type { AgeRepository, AgeStatus } from "../age/types.js";
+import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
+import { SessionRepositoryConfigurationError } from "./session-repository.js";
 import type {
   AppAccessState,
   SessionProfile,
@@ -15,6 +15,7 @@ import type {
 interface RegisterSessionRoutesOptions {
   authVerifier: SupabaseAuthVerifier;
   sessionRepository: SessionRepository;
+  ageRepository: AgeRepository;
 }
 
 export async function registerSessionRoutes(
@@ -22,29 +23,33 @@ export async function registerSessionRoutes(
   options: RegisterSessionRoutesOptions
 ): Promise<void> {
   app.get("/v1/session", async (request, reply) => {
-    const token = extractBearerToken(request.headers.authorization);
+    const verifiedSession = await verifyRequestSession(request, options.authVerifier);
 
-    if (!token) {
-      return reply.code(401).send(unauthorizedResponse("Missing bearer token"));
+    if (!verifiedSession) {
+      return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
     }
 
     try {
-      const verifiedSession = await options.authVerifier.verifyBearerToken(token);
+      const [profile, ageStatus] = await Promise.all([
+        options.sessionRepository.findProfileBySupabaseUserId(
+          verifiedSession.supabaseUserId
+        ),
+        options.ageRepository.findLatestAgeStatusBySupabaseUserId(
+          verifiedSession.supabaseUserId
+        )
+      ]);
 
-      if (!verifiedSession) {
-        return reply.code(401).send(unauthorizedResponse("Invalid bearer token"));
+      return reply.code(200).send(toSessionState(profile, ageStatus));
+    } catch (error) {
+      if (error instanceof AgeRepositoryConfigurationError) {
+        const profile = await options.sessionRepository.findProfileBySupabaseUserId(
+          verifiedSession.supabaseUserId
+        );
+
+        return reply.code(200).send(toSessionState(profile, requiredAgeStatus()));
       }
 
-      const profile = await options.sessionRepository.findProfileBySupabaseUserId(
-        verifiedSession.supabaseUserId
-      );
-
-      return reply.code(200).send(toSessionState(profile));
-    } catch (error) {
-      if (
-        error instanceof SupabaseAuthConfigurationError ||
-        error instanceof SessionRepositoryConfigurationError
-      ) {
+      if (error instanceof SessionRepositoryConfigurationError) {
         request.log.warn({ error }, "Session dependency is not configured");
         return reply.code(401).send(unauthorizedResponse("Session verification is not configured"));
       }
@@ -54,21 +59,7 @@ export async function registerSessionRoutes(
   });
 }
 
-function extractBearerToken(authorization: string | undefined): string | null {
-  if (!authorization) {
-    return null;
-  }
-
-  const [scheme, token, ...rest] = authorization.trim().split(/\s+/);
-
-  if (scheme !== "Bearer" || !token || rest.length > 0) {
-    return null;
-  }
-
-  return token;
-}
-
-function toSessionState(profile: SessionProfile | null): SessionState {
+function toSessionState(profile: SessionProfile | null, ageStatus: AgeStatus): SessionState {
   if (!profile) {
     return {
       authenticated: true,
@@ -79,7 +70,7 @@ function toSessionState(profile: SessionProfile | null): SessionState {
   const appAccessState: AppAccessState =
     profile.state === "active"
       ? profile.handle && profile.displayName
-        ? { allowed: true, reason: "ready" }
+        ? toAppAccessState(ageStatus)
         : identityRequired()
       : { allowed: false, reason: "blocked" };
 
@@ -109,9 +100,21 @@ function identityRequired(): AppAccessState {
   return { allowed: false, reason: "identity_required" };
 }
 
-function unauthorizedResponse(message: string) {
+function requiredAgeStatus(): AgeStatus {
   return {
-    code: "unauthorized",
-    message
+    state: "required",
+    provider: null
   };
+}
+
+function toAppAccessState(ageStatus: AgeStatus): AppAccessState {
+  if (ageStatus.state === "verified" || ageStatus.state === "not_required") {
+    return { allowed: true, reason: "ready" };
+  }
+
+  if (ageStatus.state === "pending") {
+    return { allowed: false, reason: "age_pending" };
+  }
+
+  return { allowed: false, reason: "age_required" };
 }
