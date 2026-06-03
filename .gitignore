@@ -30,4 +30,4 @@ pnpm-debug.log*
 # generated
 packages/contracts/generated/
 packages/database/generated/
-
+*.tsbuildinfo

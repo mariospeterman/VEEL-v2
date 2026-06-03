@@ -1,4 +1,4 @@
-# Veel Shoot Own Shine
+# VEEL v2
 
 Status: accepted
 Scope: standalone Veel v2 build scaffold
@@ -73,12 +73,13 @@ Do not start by coding random screens. Start with repo foundation, contracts, da
 
 ## Current Validation
 
-This scaffold intentionally contains docs and empty app/package folders only.
+This scaffold now contains the first foundation slice: workspace packages, contract generation, a Next.js PWA shell, a Fastify API skeleton, a worker entrypoint, and real lint/type/test checks.
 
 Current executable validation:
 
 ```sh
 pnpm docs:check
+pnpm lint
+pnpm typecheck
+pnpm test
 ```
-
-`pnpm lint`, `pnpm typecheck`, and `pnpm test` intentionally fail until the foundation slice creates real app/package tooling. Do not treat docs-only checks as app validation.

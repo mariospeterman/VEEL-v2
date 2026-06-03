@@ -6,11 +6,27 @@
   "scripts": {
     "docs:check": "node scripts/check-docs.mjs",
     "scaffold:check": "pnpm docs:check",
-    "lint": "node scripts/not-implemented-yet.mjs lint",
-    "typecheck": "node scripts/not-implemented-yet.mjs typecheck",
-    "test": "node scripts/not-implemented-yet.mjs test"
+    "contracts:generate": "pnpm --filter @veel/contracts generate",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run"
   },
   "engines": {
     "node": ">=22"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp"
+    ]
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^24.10.1",
+    "eslint": "^9.39.1",
+    "globals": "^16.5.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.4",
+    "vitest": "^4.0.8"
   }
 }

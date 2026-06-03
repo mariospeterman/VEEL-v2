@@ -1,0 +1,17 @@
+{
+  "name": "@veel/contracts",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./generated": "./src/generated/openapi.ts"
+  },
+  "scripts": {
+    "generate": "openapi-typescript openapi.yaml -o src/generated/openapi.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.10.1"
+  }
+}

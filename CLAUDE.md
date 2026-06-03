@@ -11,6 +11,7 @@ This file mirrors the core agent rules from `AGENTS.md` for Claude-style tooling
 3. `docs/v2-new-build/build-plan.md`
 4. `docs/v2-new-build/app-architecture.md`
 5. `docs/v2-new-build/stack-decision.md`
+6. `docs/ai-tooling/gstack.md`
 
 ## Operating Mode
 

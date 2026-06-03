@@ -35,8 +35,20 @@ jobs:
       - name: Check docs, route map, OpenAPI, and schema alignment
         run: pnpm docs:check
 
-      - name: Parse OpenAPI YAML
-        run: ruby -e 'require "yaml"; YAML.load_file("packages/contracts/openapi.yaml")'
+      - name: Generate contract types
+        run: pnpm contracts:generate
+
+      - name: Verify generated contract types are committed
+        run: git diff --exit-code packages/contracts/src/generated/openapi.ts
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
 
       - name: Whitespace check
         run: git diff --check

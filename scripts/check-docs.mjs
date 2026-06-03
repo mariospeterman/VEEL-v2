@@ -226,7 +226,7 @@ if (paymentStateMatch) {
 const criticalMethodsMissingRequiredIdempotency = [];
 const pathBlocks = [...openapi.matchAll(/^  (\/v1\/[^\n:]+):\n([\s\S]*?)(?=^  \/v1\/|\ncomponents:)/gm)];
 for (const [, path, block] of pathBlocks) {
-  for (const methodMatch of block.matchAll(/^    (post|patch|put|delete):\n([\s\S]*?)(?=^    (?:get|post|patch|put|delete):|\Z)/gm)) {
+  for (const methodMatch of block.matchAll(/^    (post|patch|put|delete):\n([\s\S]*?)(?=^    (?:get|post|patch|put|delete):|(?![\s\S]))/gm)) {
     const methodBlock = methodMatch[2];
     if (!methodBlock.includes("#/components/parameters/RequiredIdempotencyKey") && !path.includes("/webhooks/")) {
       criticalMethodsMissingRequiredIdempotency.push(`${methodMatch[1].toUpperCase()} ${path}`);
