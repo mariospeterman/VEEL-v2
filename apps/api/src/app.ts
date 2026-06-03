@@ -5,6 +5,9 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { createPostgresAgeRepository } from "./modules/age/age-repository.js";
 import { registerAgeRoutes } from "./modules/age/age-routes.js";
 import type { AgeRepository } from "./modules/age/types.js";
+import { createPostgresProfileRepository } from "./modules/profile/profile-repository.js";
+import { registerProfileRoutes } from "./modules/profile/profile-routes.js";
+import type { ProfileRepository } from "./modules/profile/types.js";
 import { createPostgresSessionRepository } from "./modules/session/session-repository.js";
 import { registerSessionRoutes } from "./modules/session/session-routes.js";
 import { createSupabaseAuthVerifier } from "./modules/session/supabase-auth.js";
@@ -17,6 +20,7 @@ export interface BuildApiOptions {
   authVerifier?: SupabaseAuthVerifier;
   sessionRepository?: SessionRepository;
   ageRepository?: AgeRepository;
+  profileRepository?: ProfileRepository;
 }
 
 export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyInstance> {
@@ -47,6 +51,8 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   const sessionRepository =
     options.sessionRepository ?? createPostgresSessionRepository(app.config.DATABASE_URL);
   const ageRepository = options.ageRepository ?? createPostgresAgeRepository(app.config.DATABASE_URL);
+  const profileRepository =
+    options.profileRepository ?? createPostgresProfileRepository(app.config.DATABASE_URL);
 
   if (sessionRepository.close) {
     app.addHook("onClose", async () => {
@@ -58,6 +64,11 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
       await ageRepository.close?.();
     });
   }
+  if (profileRepository.close) {
+    app.addHook("onClose", async () => {
+      await profileRepository.close?.();
+    });
+  }
 
   await registerSessionRoutes(app, {
     authVerifier,
@@ -67,6 +78,11 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   await registerAgeRoutes(app, {
     authVerifier,
     ageRepository
+  });
+  await registerProfileRoutes(app, {
+    authVerifier,
+    sessionRepository,
+    profileRepository
   });
   await app.register(openApiPlugin);
 

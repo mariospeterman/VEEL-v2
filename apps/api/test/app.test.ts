@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { buildApi } from "../src/app";
 import type { AgeRepository } from "../src/modules/age/types";
+import type { ProfileRepository } from "../src/modules/profile/types";
 import type {
+  SessionRepository,
   SupabaseAuthVerifier,
   VerifiedSupabaseSession
 } from "../src/modules/session/types";
@@ -43,8 +45,8 @@ describe("buildApi", () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       ageRepository: verifiedAgeRepository,
-      sessionRepository: {
-        async findProfileBySupabaseUserId(supabaseUserId) {
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind(supabaseUserId) {
           expect(supabaseUserId).toBe("00000000-0000-4000-8000-000000000001");
 
           return {
@@ -55,7 +57,7 @@ describe("buildApi", () => {
             avatarUrl: null
           };
         }
-      }
+      })
     });
     await app.ready();
 
@@ -90,8 +92,8 @@ describe("buildApi", () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       ageRepository: requiredAgeRepository,
-      sessionRepository: {
-        async findProfileBySupabaseUserId() {
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
           return {
             id: "00000000-0000-4000-8000-000000000010",
             state: "active",
@@ -100,7 +102,7 @@ describe("buildApi", () => {
             avatarUrl: null
           };
         }
-      }
+      })
     });
     await app.ready();
 
@@ -128,11 +130,11 @@ describe("buildApi", () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       ageRepository: requiredAgeRepository,
-      sessionRepository: {
-        async findProfileBySupabaseUserId() {
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
           return null;
         }
-      }
+      })
     });
     await app.ready();
 
@@ -179,6 +181,81 @@ describe("buildApi", () => {
 
     await app.close();
   });
+
+  it("updates the current profile after bootstrapping the Veel user row", async () => {
+    const ensuredSupabaseUserIds: string[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onEnsure(supabaseUserId) {
+          ensuredSupabaseUserIds.push(supabaseUserId);
+        },
+        async onFind() {
+          return null;
+        }
+      }),
+      profileRepository: fakeProfileRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/profiles/me",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "profile-setup-1"
+      },
+      payload: {
+        handle: "maki",
+        displayName: "Maki",
+        bio: "Building Veel v2"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(ensuredSupabaseUserIds).toEqual(["00000000-0000-4000-8000-000000000001"]);
+    expect(response.json()).toEqual({
+      id: "00000000-0000-4000-8000-000000000010",
+      handle: "maki",
+      displayName: "Maki",
+      avatarUrl: null,
+      badges: []
+    });
+
+    await app.close();
+  });
+
+  it("rejects profile updates without an idempotency key", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return null;
+        }
+      }),
+      profileRepository: fakeProfileRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/profiles/me",
+      headers: {
+        authorization: "Bearer valid-token"
+      },
+      payload: {
+        handle: "maki",
+        displayName: "Maki"
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: "validation_failed"
+    });
+
+    await app.close();
+  });
 });
 
 const fakeAuthVerifier: SupabaseAuthVerifier = {
@@ -209,6 +286,37 @@ const requiredAgeRepository: AgeRepository = {
     return {
       state: "required",
       provider: null
+    };
+  }
+};
+
+function sessionRepositoryWithProfile(options: {
+  onEnsure?: (supabaseUserId: string) => Promise<void> | void;
+  onFind: SessionRepository["findProfileBySupabaseUserId"];
+}): SessionRepository {
+  return {
+    async ensureUserForSupabaseId(supabaseUserId) {
+      await options.onEnsure?.(supabaseUserId);
+    },
+    findProfileBySupabaseUserId: options.onFind
+  };
+}
+
+const fakeProfileRepository: ProfileRepository = {
+  async upsertMyProfile(supabaseUserId, input) {
+    expect(supabaseUserId).toBe("00000000-0000-4000-8000-000000000001");
+    expect(input).toMatchObject({
+      handle: "maki",
+      displayName: "Maki",
+      bio: "Building Veel v2"
+    });
+
+    return {
+      id: "00000000-0000-4000-8000-000000000010",
+      handle: input.handle,
+      displayName: input.displayName,
+      avatarUrl: null,
+      badges: []
     };
   }
 };

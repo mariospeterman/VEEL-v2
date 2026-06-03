@@ -1537,7 +1537,8 @@ export interface components {
             badges: components["schemas"]["UserBadge"][];
         };
         UpdateProfileRequest: {
-            displayName?: string;
+            handle: string;
+            displayName: string;
             bio?: string;
             locationLabel?: string;
         };
@@ -2126,6 +2127,15 @@ export interface components {
         };
         /** @description Not found */
         NotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+        /** @description Validation failed */
+        ValidationFailed: {
             headers: {
                 [name: string]: unknown;
             };
@@ -3111,6 +3121,9 @@ export interface operations {
         requestBody: components["requestBodies"]["UpdateProfile"];
         responses: {
             200: components["responses"]["User"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
         };
     };
     getProfileByHandle: {

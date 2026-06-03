@@ -23,6 +23,7 @@ export interface SessionProfile {
 }
 
 export interface SessionRepository {
+  ensureUserForSupabaseId(supabaseUserId: string): Promise<void>;
   findProfileBySupabaseUserId(supabaseUserId: string): Promise<SessionProfile | null>;
   close?(): Promise<void>;
 }

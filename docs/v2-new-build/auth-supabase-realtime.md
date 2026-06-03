@@ -80,13 +80,23 @@ erDiagram
 Signup paths and onboarding order:
 
 - Step 1: user chooses email/social/passkey with embedded wallet, or external/native wallet sign-in.
-- Step 2: backend links/creates the mandatory wallet path and audits it.
-- Step 3: third-party age verification completes the app age gate.
+- Step 2: Fastify bootstraps the Veel `users` row for the verified Supabase identity.
+- Step 3: user sets the Veel profile handle/display name through `PATCH /v1/profiles/me`.
+- Step 4: backend links/creates the mandatory wallet path and audits it.
+- Step 5: third-party age verification completes the app age gate.
 - Email/social/passkey: creates a Veel profile and creates or loads a noncustodial embedded wallet by default.
 - External wallet: uses signed wallet challenge and can attach to an existing Supabase-authenticated user or become the primary wallet path.
 - Returning user: Fastify resolves profile, primary wallet, linked wallets, age/access, restrictions, and monetisation state.
 
 Protected app access requires both age verification and a wallet path. Supabase Auth alone is not enough to enter the app shell.
+
+## Profile Bootstrap
+
+`GET /v1/session` is allowed to create the backend `users` row for a verified Supabase Auth user. It does not create a public profile without the user's handle/display-name input.
+
+`PATCH /v1/profiles/me` creates or updates the public profile row for the authenticated user. The request must include `handle`, `displayName`, and an `Idempotency-Key` header. The backend owns uniqueness, validation, and profile state; frontend code treats the response as cached UX state only.
+
+Supabase `user_metadata` is not a Veel profile source. Do not use editable metadata for handle, display name, role, age, wallet, admin, or access decisions.
 
 ## Wallet Linking
 

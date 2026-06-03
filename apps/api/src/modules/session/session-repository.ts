@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 import type { SessionProfile, SessionRepository } from "./types.js";
 
@@ -19,6 +20,9 @@ interface SessionProfileRow {
 export function createPostgresSessionRepository(databaseUrl?: string): SessionRepository {
   if (!databaseUrl) {
     return {
+      async ensureUserForSupabaseId() {
+        throw new SessionRepositoryConfigurationError();
+      },
       async findProfileBySupabaseUserId() {
         throw new SessionRepositoryConfigurationError();
       }
@@ -32,6 +36,13 @@ export function createPostgresSessionRepository(databaseUrl?: string): SessionRe
   });
 
   return {
+    async ensureUserForSupabaseId(supabaseUserId: string): Promise<void> {
+      await sql`
+        insert into users (id, supabase_user_id)
+        values (${randomUUID()}, ${supabaseUserId})
+        on conflict (supabase_user_id) do nothing
+      `;
+    },
     async findProfileBySupabaseUserId(supabaseUserId: string): Promise<SessionProfile | null> {
       const rows = await sql<SessionProfileRow[]>`
         select

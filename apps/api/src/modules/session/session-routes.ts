@@ -30,6 +30,7 @@ export async function registerSessionRoutes(
     }
 
     try {
+      await options.sessionRepository.ensureUserForSupabaseId(verifiedSession.supabaseUserId);
       const [profile, ageStatus] = await Promise.all([
         options.sessionRepository.findProfileBySupabaseUserId(
           verifiedSession.supabaseUserId

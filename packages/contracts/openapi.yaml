@@ -123,6 +123,9 @@ paths:
         $ref: "#/components/requestBodies/UpdateProfile"
       responses:
         "200": { $ref: "#/components/responses/User" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /v1/profiles/{handle}:
     get:
       operationId: getProfileByHandle
@@ -1061,6 +1064,7 @@ components:
     Unauthorized: { description: Unauthorized, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     Forbidden: { description: Forbidden, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     NotFound: { description: Not found, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+    ValidationFailed: { description: Validation failed, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     Conflict: { description: Conflict, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     RateLimited: { description: Rate limited, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     SessionState: { description: Session state, content: { application/json: { schema: { $ref: "#/components/schemas/SessionState" } } } }
@@ -1217,7 +1221,9 @@ components:
         badges: { type: array, items: { $ref: "#/components/schemas/UserBadge" } }
     UpdateProfileRequest:
       type: object
+      required: [handle, displayName]
       properties:
+        handle: { type: string, pattern: "^[a-zA-Z0-9_]{2,32}$" }
         displayName: { type: string, minLength: 1, maxLength: 80 }
         bio: { type: string, maxLength: 500 }
         locationLabel: { type: string, maxLength: 120 }
