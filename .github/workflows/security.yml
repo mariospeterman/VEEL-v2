@@ -10,11 +10,12 @@ on:
 permissions:
   actions: read
   contents: read
+  pull-requests: read
   security-events: write
 
 jobs:
   dependency-review:
-    if: github.event_name == 'pull_request'
+    if: ${{ github.event_name == 'pull_request' && (github.event.repository.private == false || vars.DEPENDENCY_REVIEW_ENABLED == 'true') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
