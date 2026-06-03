@@ -70,7 +70,7 @@ All routes use `/v1`.
 | --- | --- | --- | --- |
 | Session | `GET /v1/session`, `GET /v1/me` | MVP | Frontend-safe app access, wallet, age, badges, prefs. |
 | Age | `POST /v1/age/sessions`, `GET /v1/age/status`, `POST /v1/webhooks/age/:provider` | MVP | Provider sessions/webhooks; minimal stored result. |
-| Wallets | `GET /v1/wallets`, `POST /v1/wallets/link`, `PATCH /v1/wallets/:id/primary`, `POST /v1/wallets/onramp-sessions` | MVP | Embedded/native wallet path; onramp is not payment proof. |
+| Wallets | `GET /v1/wallets`, `POST /v1/wallets/link-challenges`, `POST /v1/wallets/link`, `PATCH /v1/wallets/:id/primary`, `POST /v1/wallets/onramp-sessions` | MVP | Embedded/native wallet path; onramp is not payment proof. |
 | Profiles | `GET /v1/profiles/:handle`, `PATCH /v1/profiles/me`, `POST /v1/follows/:userId` | MVP | Creator/user profile capability model. |
 | Content | `GET /v1/content/feed`, `GET /v1/content/{contentId}`, `POST /v1/content`, `PATCH /v1/content/{contentId}`, `POST /v1/media/uploads` | MVP | Bunny-backed upload/create; media-safe resources. |
 | Discover | `GET /v1/discover/search`, `GET /v1/discover/hashtags`, `GET /v1/discover/hashtags/{slug}`, `GET /v1/discover/creators`, `GET /v1/discover/events`, `GET /v1/discover/live` | MVP | Search/discovery read models for content, creators, hashtags, events, and live. |

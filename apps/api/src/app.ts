@@ -98,6 +98,7 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   });
   await registerWalletRoutes(app, {
     authVerifier,
+    sessionRepository,
     walletRepository
   });
   await app.register(openApiPlugin);

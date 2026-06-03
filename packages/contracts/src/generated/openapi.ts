@@ -89,6 +89,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/wallets/link-challenges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a server-owned wallet-link signing challenge */
+        post: operations["createWalletLinkChallenge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/wallets/link": {
         parameters: {
             query?: never;
@@ -1501,12 +1518,39 @@ export interface components {
             provider: "embedded_privy" | "embedded_turnkey" | "phantom" | "solflare" | "wallet_adapter";
             isPrimary: boolean;
         };
-        LinkWalletRequest: {
-            provider: string;
+        /** @enum {string} */
+        ExternalWalletProvider: "phantom" | "solflare" | "wallet_adapter";
+        CreateWalletLinkChallengeRequest: {
+            /** @enum {string} */
+            chain: "solana_devnet" | "solana_mainnet";
             address: string;
-            proof: {
-                [key: string]: unknown;
-            };
+            provider: components["schemas"]["ExternalWalletProvider"];
+        };
+        WalletLinkChallenge: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            chain: "solana_devnet" | "solana_mainnet";
+            address: string;
+            provider: components["schemas"]["ExternalWalletProvider"];
+            message: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        WalletLinkProof: {
+            /** Format: uuid */
+            challengeId: string;
+            message: string;
+            signature: string;
+            /** @enum {string} */
+            signatureEncoding: "base58" | "base64";
+        };
+        LinkWalletRequest: {
+            provider: components["schemas"]["ExternalWalletProvider"];
+            address: string;
+            /** @enum {string} */
+            chain: "solana_devnet" | "solana_mainnet";
+            proof: components["schemas"]["WalletLinkProof"];
         };
         CreateOnrampSessionRequest: {
             /** Format: uuid */
@@ -2197,6 +2241,15 @@ export interface components {
                 "application/json": components["schemas"]["AgeStatus"];
             };
         };
+        /** @description Wallet link challenge */
+        WalletLinkChallenge: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["WalletLinkChallenge"];
+            };
+        };
         /** @description Wallets */
         WalletList: {
             headers: {
@@ -2805,6 +2858,11 @@ export interface components {
                 "application/json": components["schemas"]["CreateAgeSessionRequest"];
             };
         };
+        CreateWalletLinkChallenge: {
+            content: {
+                "application/json": components["schemas"]["CreateWalletLinkChallengeRequest"];
+            };
+        };
         LinkWallet: {
             content: {
                 "application/json": components["schemas"]["LinkWalletRequest"];
@@ -3062,6 +3120,23 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
         };
     };
+    createWalletLinkChallenge: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["CreateWalletLinkChallenge"];
+        responses: {
+            201: components["responses"]["WalletLinkChallenge"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
     linkWallet: {
         parameters: {
             query?: never;
@@ -3075,6 +3150,9 @@ export interface operations {
         requestBody: components["requestBodies"]["LinkWallet"];
         responses: {
             201: components["responses"]["Wallet"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
         };
     };
     setPrimaryWallet: {

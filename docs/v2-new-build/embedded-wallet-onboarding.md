@@ -150,6 +150,16 @@ sequenceDiagram
   API->>DB: Link wallet + audit
 ```
 
+Implementation contract:
+
+- `POST /v1/wallets/link-challenges` creates a short-lived server-owned challenge for one authenticated user, wallet address, provider, and chain.
+- The challenge message must be signed exactly as returned by the API.
+- `POST /v1/wallets/link` verifies the Ed25519 Solana message signature server-side before inserting the wallet.
+- A verified link challenge is consumed and cannot be replayed.
+- The first linked wallet becomes primary by default.
+- Wallet link completion is an audit event, not payment proof.
+- Current supported external provider values are `phantom`, `solflare`, and `wallet_adapter`.
+
 ## Payment Flow With Embedded Wallet
 
 Embedded wallet payments use the same backend-owned payment architecture as external wallets.

@@ -59,4 +59,14 @@ describe("database migrations", () => {
     expect(sql).toContain("create unique index wallets_one_primary_per_user_idx");
     expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|payment_proof/i);
   });
+
+  it("adds replay-safe wallet link challenges without signatures or raw keys", () => {
+    const sql = readMigration("0004_wallet_link_challenges.sql");
+
+    expect(sql).toContain("create table wallet_link_challenges");
+    expect(sql).toContain("nonce_hash text not null");
+    expect(sql).toContain("consumed_at timestamptz");
+    expect(sql).toContain("wallet_link_challenges_nonce_hash_unique");
+    expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|signature text|raw_payload/i);
+  });
 });

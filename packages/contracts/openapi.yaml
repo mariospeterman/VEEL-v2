@@ -81,6 +81,19 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/WalletList" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+  /v1/wallets/link-challenges:
+    post:
+      operationId: createWalletLinkChallenge
+      tags: [Wallets]
+      summary: Create a server-owned wallet-link signing challenge
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateWalletLinkChallenge"
+      responses:
+        "201": { $ref: "#/components/responses/WalletLinkChallenge" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /v1/wallets/link:
     post:
       operationId: linkWallet
@@ -92,6 +105,9 @@ paths:
         $ref: "#/components/requestBodies/LinkWallet"
       responses:
         "201": { $ref: "#/components/responses/Wallet" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /v1/wallets/{walletId}/primary:
     patch:
       operationId: setPrimaryWallet
@@ -1024,6 +1040,7 @@ components:
       schema: { type: string, enum: [yoti, sumsub, veriff, persona] }
   requestBodies:
     CreateAgeSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateAgeSessionRequest" } } } }
+    CreateWalletLinkChallenge: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateWalletLinkChallengeRequest" } } } }
     LinkWallet: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/LinkWalletRequest" } } } }
     CreateOnrampSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateOnrampSessionRequest" } } } }
     UpdateProfile: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateProfileRequest" } } } }
@@ -1072,6 +1089,7 @@ components:
     Me: { description: Current viewer, content: { application/json: { schema: { $ref: "#/components/schemas/Me" } } } }
     AgeSession: { description: Age assurance session, content: { application/json: { schema: { $ref: "#/components/schemas/AgeSession" } } } }
     AgeStatus: { description: Age state, content: { application/json: { schema: { $ref: "#/components/schemas/AgeStatus" } } } }
+    WalletLinkChallenge: { description: Wallet link challenge, content: { application/json: { schema: { $ref: "#/components/schemas/WalletLinkChallenge" } } } }
     WalletList: { description: Wallets, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Wallet" } } } } } } }
     Wallet: { description: Wallet, content: { application/json: { schema: { $ref: "#/components/schemas/Wallet" } } } }
     OnrampSession: { description: Onramp session, content: { application/json: { schema: { $ref: "#/components/schemas/OnrampSession" } } } }
@@ -1182,13 +1200,42 @@ components:
         address: { type: string }
         provider: { type: string, enum: [embedded_privy, embedded_turnkey, phantom, solflare, wallet_adapter] }
         isPrimary: { type: boolean }
+    ExternalWalletProvider:
+      type: string
+      enum: [phantom, solflare, wallet_adapter]
+    CreateWalletLinkChallengeRequest:
+      type: object
+      required: [chain, address, provider]
+      properties:
+        chain: { type: string, enum: [solana_devnet, solana_mainnet] }
+        address: { type: string, minLength: 32, maxLength: 64 }
+        provider: { $ref: "#/components/schemas/ExternalWalletProvider" }
+    WalletLinkChallenge:
+      type: object
+      required: [id, chain, address, provider, message, expiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        chain: { type: string, enum: [solana_devnet, solana_mainnet] }
+        address: { type: string }
+        provider: { $ref: "#/components/schemas/ExternalWalletProvider" }
+        message: { type: string }
+        expiresAt: { type: string, format: date-time }
+    WalletLinkProof:
+      type: object
+      required: [challengeId, message, signature, signatureEncoding]
+      properties:
+        challengeId: { type: string, format: uuid }
+        message: { type: string }
+        signature: { type: string }
+        signatureEncoding: { type: string, enum: [base58, base64] }
     LinkWalletRequest:
       type: object
-      required: [provider, address, proof]
+      required: [provider, address, chain, proof]
       properties:
-        provider: { type: string }
+        provider: { $ref: "#/components/schemas/ExternalWalletProvider" }
         address: { type: string }
-        proof: { type: object, additionalProperties: true }
+        chain: { type: string, enum: [solana_devnet, solana_mainnet] }
+        proof: { $ref: "#/components/schemas/WalletLinkProof" }
     CreateOnrampSessionRequest:
       type: object
       required: [walletId]

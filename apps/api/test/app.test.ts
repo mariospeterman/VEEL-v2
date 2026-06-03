@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import bs58 from "bs58";
+import nacl from "tweetnacl";
 import { buildApi } from "../src/app";
 import type { AgeRepository } from "../src/modules/age/types";
 import type { ProfileRepository } from "../src/modules/profile/types";
@@ -7,7 +9,11 @@ import type {
   SupabaseAuthVerifier,
   VerifiedSupabaseSession
 } from "../src/modules/session/types";
-import type { WalletRepository } from "../src/modules/wallet/types";
+import type {
+  StoredWalletLinkChallenge,
+  WalletRepository,
+  WalletResource
+} from "../src/modules/wallet/types";
 
 describe("buildApi", () => {
   it("boots the Fastify skeleton and loads the OpenAPI document", async () => {
@@ -330,6 +336,110 @@ describe("buildApi", () => {
 
     await app.close();
   });
+
+  it("creates and verifies an external wallet link challenge", async () => {
+    const walletKeypair = nacl.sign.keyPair();
+    const address = bs58.encode(walletKeypair.publicKey);
+    let storedChallenge: StoredWalletLinkChallenge | null = null;
+    const linkedWallet: WalletResource = {
+      id: "00000000-0000-4000-8000-000000000021",
+      chain: "solana_devnet",
+      address,
+      provider: "phantom",
+      isPrimary: true
+    };
+    const walletRepository: WalletRepository = {
+      async hasWalletBySupabaseUserId() {
+        return false;
+      },
+      async listWalletsBySupabaseUserId() {
+        return [];
+      },
+      async createLinkChallenge(input) {
+        storedChallenge = {
+          id: "00000000-0000-4000-8000-000000000030",
+          userId: "00000000-0000-4000-8000-000000000010",
+          chain: input.chain,
+          provider: input.provider,
+          address: input.address,
+          message: input.message,
+          expiresAt: input.expiresAt,
+          consumedAt: null
+        };
+
+        return {
+          id: storedChallenge.id,
+          chain: storedChallenge.chain,
+          provider: storedChallenge.provider,
+          address: storedChallenge.address,
+          message: storedChallenge.message,
+          expiresAt: storedChallenge.expiresAt.toISOString()
+        };
+      },
+      async findLinkChallenge() {
+        return storedChallenge;
+      },
+      async consumeVerifiedExternalWalletLink() {
+        return linkedWallet;
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return null;
+        }
+      }),
+      walletRepository
+    });
+    await app.ready();
+
+    const challengeResponse = await app.inject({
+      method: "POST",
+      url: "/v1/wallets/link-challenges",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "wallet-challenge-1"
+      },
+      payload: {
+        chain: "solana_devnet",
+        provider: "phantom",
+        address
+      }
+    });
+
+    expect(challengeResponse.statusCode).toBe(201);
+    const challenge = challengeResponse.json() as {
+      id: string;
+      message: string;
+    };
+    const signature = nacl.sign.detached(new TextEncoder().encode(challenge.message), walletKeypair.secretKey);
+
+    const linkResponse = await app.inject({
+      method: "POST",
+      url: "/v1/wallets/link",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "wallet-link-1"
+      },
+      payload: {
+        chain: "solana_devnet",
+        provider: "phantom",
+        address,
+        proof: {
+          challengeId: challenge.id,
+          message: challenge.message,
+          signature: bs58.encode(signature),
+          signatureEncoding: "base58"
+        }
+      }
+    });
+
+    expect(linkResponse.statusCode).toBe(201);
+    expect(linkResponse.json()).toEqual(linkedWallet);
+
+    await app.close();
+  });
 });
 
 const fakeAuthVerifier: SupabaseAuthVerifier = {
@@ -378,6 +488,15 @@ const walletRepositoryWithWallet: WalletRepository = {
         isPrimary: true
       }
     ];
+  },
+  async createLinkChallenge() {
+    throw new Error("not implemented");
+  },
+  async findLinkChallenge() {
+    throw new Error("not implemented");
+  },
+  async consumeVerifiedExternalWalletLink() {
+    throw new Error("not implemented");
   }
 };
 
@@ -387,6 +506,15 @@ const walletRepositoryWithoutWallet: WalletRepository = {
   },
   async listWalletsBySupabaseUserId() {
     return [];
+  },
+  async createLinkChallenge() {
+    throw new Error("not implemented");
+  },
+  async findLinkChallenge() {
+    throw new Error("not implemented");
+  },
+  async consumeVerifiedExternalWalletLink() {
+    throw new Error("not implemented");
   }
 };
 
