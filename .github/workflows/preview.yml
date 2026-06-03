@@ -11,7 +11,7 @@ jobs:
   preview-plan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Preview deployment placeholder
         run: |
           echo "Preview deployment is enabled after the foundation slice creates apps/web, apps/api, and infra/deploy."
