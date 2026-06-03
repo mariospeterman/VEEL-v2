@@ -6,6 +6,9 @@ import { createAgeProviderWaterfall } from "./modules/age/age-provider-waterfall
 import { createPostgresAgeRepository } from "./modules/age/age-repository.js";
 import { registerAgeRoutes } from "./modules/age/age-routes.js";
 import type { AgeProviderWaterfall, AgeRepository } from "./modules/age/types.js";
+import { createPostgresContentRepository } from "./modules/content/content-repository.js";
+import { registerContentRoutes } from "./modules/content/content-routes.js";
+import type { ContentRepository } from "./modules/content/types.js";
 import { createPostgresProfileRepository } from "./modules/profile/profile-repository.js";
 import { registerProfileRoutes } from "./modules/profile/profile-routes.js";
 import type { ProfileRepository } from "./modules/profile/types.js";
@@ -25,6 +28,7 @@ export interface BuildApiOptions {
   sessionRepository?: SessionRepository;
   ageRepository?: AgeRepository;
   ageProviderWaterfall?: AgeProviderWaterfall;
+  contentRepository?: ContentRepository;
   profileRepository?: ProfileRepository;
   walletRepository?: WalletRepository;
 }
@@ -61,6 +65,8 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     options.ageProviderWaterfall ?? createAgeProviderWaterfall(app.config);
   const profileRepository =
     options.profileRepository ?? createPostgresProfileRepository(app.config.DATABASE_URL);
+  const contentRepository =
+    options.contentRepository ?? createPostgresContentRepository(app.config.DATABASE_URL);
   const walletRepository =
     options.walletRepository ?? createPostgresWalletRepository(app.config.DATABASE_URL);
 
@@ -84,6 +90,11 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
       await walletRepository.close?.();
     });
   }
+  if (contentRepository.close) {
+    app.addHook("onClose", async () => {
+      await contentRepository.close?.();
+    });
+  }
 
   await registerSessionRoutes(app, {
     authVerifier,
@@ -101,6 +112,13 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     authVerifier,
     sessionRepository,
     profileRepository
+  });
+  await registerContentRoutes(app, {
+    authVerifier,
+    sessionRepository,
+    ageRepository,
+    walletRepository,
+    contentRepository
   });
   await registerWalletRoutes(app, {
     authVerifier,

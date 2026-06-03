@@ -3261,6 +3261,8 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["FeedPage"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     searchDiscover: {

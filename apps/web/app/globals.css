@@ -8,6 +8,9 @@
   --panel: #18181b;
   --line: #27272a;
   --accent: #14b8a6;
+  --accent-strong: #042f2e;
+  --accent-soft: #99f6e4;
+  --signal: #f97316;
 }
 
 * {

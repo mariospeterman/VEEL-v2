@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
 import { buildApi } from "../src/app";
+import type { ContentItem, ContentRepository } from "../src/modules/content/types";
 import type {
   AgeProviderWaterfall,
   AgeRepository,
@@ -533,6 +534,89 @@ describe("buildApi", () => {
 
     await app.close();
   });
+
+  it("returns the protected Home feed for an app-ready user", async () => {
+    const contentRepository: ContentRepository = {
+      async listHomeFeed(input) {
+        expect(input).toEqual({
+          mode: "recommended",
+          cursor: undefined,
+          limit: 20
+        });
+
+        return {
+          items: [homeFeedItem],
+          nextCursor: null
+        };
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/content/feed",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      items: [homeFeedItem],
+      nextCursor: null
+    });
+
+    await app.close();
+  });
+
+  it("blocks Home feed access before age verification", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: requiredAgeRepository,
+      walletRepository: walletRepositoryWithWallet
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/content/feed",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(403);
+
+    await app.close();
+  });
 });
 
 const fakeAuthVerifier: SupabaseAuthVerifier = {
@@ -588,6 +672,34 @@ const fakeAgeProviderWaterfall: AgeProviderWaterfall = {
       jurisdiction: "US",
       rule: "over_18"
     };
+  }
+};
+
+const homeFeedItem: ContentItem = {
+  id: "00000000-0000-4000-8000-000000000040",
+  creator: {
+    id: "00000000-0000-4000-8000-000000000010",
+    handle: "maki",
+    displayName: "Maki",
+    avatarUrl: null,
+    badges: []
+  },
+  mediaType: "image",
+  caption: "First Veel v2 feed card",
+  posterUrl: "https://media.example.test/poster.jpg",
+  playback: {
+    state: "not_ready",
+    url: null,
+    provider: "none"
+  },
+  accessState: "free",
+  nsfwLabel: "none",
+  engagement: {
+    liked: false,
+    saved: false,
+    likeCount: 0,
+    commentCount: 0,
+    shareCount: 0
   }
 };
 

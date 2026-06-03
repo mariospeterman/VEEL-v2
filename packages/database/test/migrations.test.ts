@@ -77,4 +77,14 @@ describe("database migrations", () => {
     expect(sql).toContain("on age_verifications (provider, state, created_at desc)");
     expect(sql).not.toMatch(/raw_payload|document|selfie|face_image|identity_image/i);
   });
+
+  it("adds content feed foundation without playback secrets or entitlement shortcuts", () => {
+    const sql = readMigration("0006_content_feed_foundation.sql");
+
+    expect(sql).toContain("create table content_items");
+    expect(sql).toContain("create table media_assets");
+    expect(sql).toContain("content_items_home_feed_idx");
+    expect(sql).toContain("media_assets_content_item_idx");
+    expect(sql).not.toMatch(/signed_url|playback_token|entitled|payment_proof|private_key/i);
+  });
 });

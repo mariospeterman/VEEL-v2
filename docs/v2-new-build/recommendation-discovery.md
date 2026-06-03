@@ -22,6 +22,14 @@ Non-goals:
 
 Veel should feel like a premium social video app, but recommendation quality must not depend on addictive dark patterns or frontend-only state. Ranking is a backend-owned read model with user controls, safety filters, and measurable business outcomes.
 
+Current implementation state:
+
+- `GET /v1/content/feed` is implemented as the first protected Home read model.
+- The route requires authenticated app readiness server-side: profile, verified age state, and wallet readiness.
+- The first read query returns approved public `content_items` joined to creator profiles and the first media poster only.
+- Playback URLs, paid entitlement state, provider media tokens, personalized ranking, and hidden/blocked creator filters are deferred to their owning slices.
+- The web Home surface renders one contract-shaped media card and keeps playback in `not_ready` state until the media/provider slice owns it.
+
 ## Feed Surfaces
 
 ```text
