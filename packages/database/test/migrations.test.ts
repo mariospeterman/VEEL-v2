@@ -49,4 +49,14 @@ describe("database migrations", () => {
     expect(sql).toContain("create index age_verifications_user_created_at_idx");
     expect(sql).not.toMatch(/raw_payload/i);
   });
+
+  it("adds wallet foundation without payment proof or key custody", () => {
+    const sql = readMigration("0003_wallets.sql");
+
+    expect(sql).toContain("create type wallet_chain as enum");
+    expect(sql).toContain("create type wallet_provider as enum");
+    expect(sql).toContain("create table wallets");
+    expect(sql).toContain("create unique index wallets_one_primary_per_user_idx");
+    expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|payment_proof/i);
+  });
 });

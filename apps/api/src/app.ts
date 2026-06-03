@@ -12,6 +12,9 @@ import { createPostgresSessionRepository } from "./modules/session/session-repos
 import { registerSessionRoutes } from "./modules/session/session-routes.js";
 import { createSupabaseAuthVerifier } from "./modules/session/supabase-auth.js";
 import type { SessionRepository, SupabaseAuthVerifier } from "./modules/session/types.js";
+import { createPostgresWalletRepository } from "./modules/wallet/wallet-repository.js";
+import { registerWalletRoutes } from "./modules/wallet/wallet-routes.js";
+import type { WalletRepository } from "./modules/wallet/types.js";
 import { envPlugin } from "./plugins/env.js";
 import { openApiPlugin } from "./plugins/openapi.js";
 import { supabaseBoundaryPlugin } from "./plugins/supabase-boundary.js";
@@ -21,6 +24,7 @@ export interface BuildApiOptions {
   sessionRepository?: SessionRepository;
   ageRepository?: AgeRepository;
   profileRepository?: ProfileRepository;
+  walletRepository?: WalletRepository;
 }
 
 export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyInstance> {
@@ -53,6 +57,8 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   const ageRepository = options.ageRepository ?? createPostgresAgeRepository(app.config.DATABASE_URL);
   const profileRepository =
     options.profileRepository ?? createPostgresProfileRepository(app.config.DATABASE_URL);
+  const walletRepository =
+    options.walletRepository ?? createPostgresWalletRepository(app.config.DATABASE_URL);
 
   if (sessionRepository.close) {
     app.addHook("onClose", async () => {
@@ -69,11 +75,17 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
       await profileRepository.close?.();
     });
   }
+  if (walletRepository.close) {
+    app.addHook("onClose", async () => {
+      await walletRepository.close?.();
+    });
+  }
 
   await registerSessionRoutes(app, {
     authVerifier,
     sessionRepository,
-    ageRepository
+    ageRepository,
+    walletRepository
   });
   await registerAgeRoutes(app, {
     authVerifier,
@@ -83,6 +95,10 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     authVerifier,
     sessionRepository,
     profileRepository
+  });
+  await registerWalletRoutes(app, {
+    authVerifier,
+    walletRepository
   });
   await app.register(openApiPlugin);
 

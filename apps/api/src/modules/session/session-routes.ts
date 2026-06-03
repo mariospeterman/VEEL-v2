@@ -2,6 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { AgeRepositoryConfigurationError } from "../age/age-repository.js";
 import type { AgeRepository, AgeStatus } from "../age/types.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
+import { WalletRepositoryConfigurationError } from "../wallet/wallet-repository.js";
+import type { WalletRepository } from "../wallet/types.js";
 import { SessionRepositoryConfigurationError } from "./session-repository.js";
 import type {
   AppAccessState,
@@ -16,6 +18,7 @@ interface RegisterSessionRoutesOptions {
   authVerifier: SupabaseAuthVerifier;
   sessionRepository: SessionRepository;
   ageRepository: AgeRepository;
+  walletRepository: WalletRepository;
 }
 
 export async function registerSessionRoutes(
@@ -31,23 +34,39 @@ export async function registerSessionRoutes(
 
     try {
       await options.sessionRepository.ensureUserForSupabaseId(verifiedSession.supabaseUserId);
-      const [profile, ageStatus] = await Promise.all([
+      const [profile, ageStatus, hasWallet] = await Promise.all([
         options.sessionRepository.findProfileBySupabaseUserId(
           verifiedSession.supabaseUserId
         ),
         options.ageRepository.findLatestAgeStatusBySupabaseUserId(
           verifiedSession.supabaseUserId
+        ),
+        options.walletRepository.hasWalletBySupabaseUserId(
+          verifiedSession.supabaseUserId
         )
       ]);
 
-      return reply.code(200).send(toSessionState(profile, ageStatus));
+      return reply.code(200).send(toSessionState(profile, ageStatus, hasWallet));
     } catch (error) {
       if (error instanceof AgeRepositoryConfigurationError) {
         const profile = await options.sessionRepository.findProfileBySupabaseUserId(
           verifiedSession.supabaseUserId
         );
 
-        return reply.code(200).send(toSessionState(profile, requiredAgeStatus()));
+        return reply.code(200).send(toSessionState(profile, requiredAgeStatus(), false));
+      }
+
+      if (error instanceof WalletRepositoryConfigurationError) {
+        const [profile, ageStatus] = await Promise.all([
+          options.sessionRepository.findProfileBySupabaseUserId(
+            verifiedSession.supabaseUserId
+          ),
+          options.ageRepository.findLatestAgeStatusBySupabaseUserId(
+            verifiedSession.supabaseUserId
+          )
+        ]);
+
+        return reply.code(200).send(toSessionState(profile, ageStatus, false));
       }
 
       if (error instanceof SessionRepositoryConfigurationError) {
@@ -60,7 +79,11 @@ export async function registerSessionRoutes(
   });
 }
 
-function toSessionState(profile: SessionProfile | null, ageStatus: AgeStatus): SessionState {
+function toSessionState(
+  profile: SessionProfile | null,
+  ageStatus: AgeStatus,
+  hasWallet: boolean
+): SessionState {
   if (!profile) {
     return {
       authenticated: true,
@@ -71,7 +94,7 @@ function toSessionState(profile: SessionProfile | null, ageStatus: AgeStatus): S
   const appAccessState: AppAccessState =
     profile.state === "active"
       ? profile.handle && profile.displayName
-        ? toAppAccessState(ageStatus)
+        ? toAppAccessState(ageStatus, hasWallet)
         : identityRequired()
       : { allowed: false, reason: "blocked" };
 
@@ -108,14 +131,18 @@ function requiredAgeStatus(): AgeStatus {
   };
 }
 
-function toAppAccessState(ageStatus: AgeStatus): AppAccessState {
-  if (ageStatus.state === "verified" || ageStatus.state === "not_required") {
-    return { allowed: true, reason: "ready" };
-  }
-
+function toAppAccessState(ageStatus: AgeStatus, hasWallet: boolean): AppAccessState {
   if (ageStatus.state === "pending") {
     return { allowed: false, reason: "age_pending" };
   }
 
-  return { allowed: false, reason: "age_required" };
+  if (ageStatus.state !== "verified" && ageStatus.state !== "not_required") {
+    return { allowed: false, reason: "age_required" };
+  }
+
+  if (!hasWallet) {
+    return { allowed: false, reason: "wallet_required" };
+  }
+
+  return { allowed: true, reason: "ready" };
 }

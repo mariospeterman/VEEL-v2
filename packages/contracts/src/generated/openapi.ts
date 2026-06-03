@@ -3059,6 +3059,7 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["WalletList"];
+            401: components["responses"]["Unauthorized"];
         };
     };
     linkWallet: {

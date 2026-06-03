@@ -80,6 +80,7 @@ paths:
       summary: Linked wallets
       responses:
         "200": { $ref: "#/components/responses/WalletList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /v1/wallets/link:
     post:
       operationId: linkWallet

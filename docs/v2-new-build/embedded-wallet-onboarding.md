@@ -60,6 +60,12 @@ External wallets remain first-class for crypto-native users.
 
 Use a wallet infrastructure provider instead of building key management.
 
+Provider docs checked for this implementation slice on 2026-06-03:
+
+- Privy docs: embedded Solana wallet creation and funding support remain the launch-default path to verify in staging.
+- Turnkey docs: embedded wallets support noncustodial user-controlled mode, Solana account creation, import/export, and stronger policy/sub-organization controls.
+- Dynamic docs: embedded wallets support noncustodial MPC, Solana via EdDSA/FROST, and can remain an evaluated fallback.
+
 Provider decision:
 
 - Privy is the recommended launch provider for Veel if staging confirms Solana wallet creation, funding, export/recovery, external-wallet linking, and noncustodial user approval. It is the fastest default for mainstream email/social/passkey conversion.
@@ -229,6 +235,7 @@ Non-wallet actions:
 - Embedded wallet provider keys are server-only where applicable.
 - Browser receives only provider publishable keys and safe config.
 - Backend stores wallet address and provider wallet reference, not raw keys.
+- Backend stores wallet readiness separately from payment proof.
 - Wallet link events are audited.
 - High-risk wallet changes require re-authentication.
 - Payment transactions require explicit user approval.
@@ -237,6 +244,12 @@ Non-wallet actions:
 ## Open Provider Decision
 
 Before coding v2, confirm Privy staging UX or explicitly switch the ADR to Turnkey.
+
+Current implementation state:
+
+- Wallet table and backend wallet-readiness gate exist.
+- `GET /v1/wallets` returns normalized wallet resources for the authenticated user.
+- Embedded wallet provider code is an adapter interface only. No Privy, Turnkey, or Dynamic SDK calls are implemented until staging credentials, provider account acceptance, and exact SDK behavior are confirmed.
 
 Recommended decision record:
 

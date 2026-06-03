@@ -7,6 +7,7 @@ import type {
   SupabaseAuthVerifier,
   VerifiedSupabaseSession
 } from "../src/modules/session/types";
+import type { WalletRepository } from "../src/modules/wallet/types";
 
 describe("buildApi", () => {
   it("boots the Fastify skeleton and loads the OpenAPI document", async () => {
@@ -45,6 +46,7 @@ describe("buildApi", () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
       sessionRepository: sessionRepositoryWithProfile({
         async onFind(supabaseUserId) {
           expect(supabaseUserId).toBe("00000000-0000-4000-8000-000000000001");
@@ -92,6 +94,7 @@ describe("buildApi", () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       ageRepository: requiredAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
       sessionRepository: sessionRepositoryWithProfile({
         async onFind() {
           return {
@@ -126,10 +129,50 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("keeps verified users gated until a wallet path exists", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithoutWallet,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/session",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      authenticated: true,
+      appAccessState: {
+        allowed: false,
+        reason: "wallet_required"
+      }
+    });
+
+    await app.close();
+  });
+
   it("keeps authenticated users gated until the Veel profile exists", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       ageRepository: requiredAgeRepository,
+      walletRepository: walletRepositoryWithoutWallet,
       sessionRepository: sessionRepositoryWithProfile({
         async onFind() {
           return null;
@@ -256,6 +299,37 @@ describe("buildApi", () => {
 
     await app.close();
   });
+
+  it("lists authenticated user wallets", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      walletRepository: walletRepositoryWithWallet
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/wallets",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      items: [
+        {
+          id: "00000000-0000-4000-8000-000000000020",
+          chain: "solana_devnet",
+          address: "VeelWallet111111111111111111111111111111111",
+          provider: "embedded_privy",
+          isPrimary: true
+        }
+      ]
+    });
+
+    await app.close();
+  });
 });
 
 const fakeAuthVerifier: SupabaseAuthVerifier = {
@@ -287,6 +361,32 @@ const requiredAgeRepository: AgeRepository = {
       state: "required",
       provider: null
     };
+  }
+};
+
+const walletRepositoryWithWallet: WalletRepository = {
+  async hasWalletBySupabaseUserId() {
+    return true;
+  },
+  async listWalletsBySupabaseUserId() {
+    return [
+      {
+        id: "00000000-0000-4000-8000-000000000020",
+        chain: "solana_devnet",
+        address: "VeelWallet111111111111111111111111111111111",
+        provider: "embedded_privy",
+        isPrimary: true
+      }
+    ];
+  }
+};
+
+const walletRepositoryWithoutWallet: WalletRepository = {
+  async hasWalletBySupabaseUserId() {
+    return false;
+  },
+  async listWalletsBySupabaseUserId() {
+    return [];
   }
 };
 
