@@ -1,9 +1,24 @@
 # Veel V2 Stack Decision
 
-Status: proposed v2 architecture
+Status: accepted
 Scope: platform stack
 Last updated: 2026-06-03
-Source of truth: proposal
+Source of truth: yes
+
+Owns:
+- stack decision decisions for its named domain
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 ## Recommended Stack
 
@@ -26,7 +41,7 @@ Wallet onboarding uses a provider-first embedded wallet integration for mainstre
 
 ## Official Documentation Checked
 
-- Fastify validation and serialization: `https://fastify.dev/docs/v5.7.x/Reference/Validation-and-Serialization/`
+- Fastify validation and serialization: `https://fastify.dev/docs/latest/Reference/Validation-and-Serialization/`
 - NestJS Fastify adapter/performance: `https://docs.nestjs.com/techniques/performance`
 - Hono runtimes and Cloudflare Workers guide: `https://hono.dev/docs/`, `https://developers.cloudflare.com/workers/framework-guides/web-apps/more-web-frameworks/hono/`
 - Supabase architecture, RLS, Realtime authorization: `https://supabase.com/docs/architecture`, `https://supabase.com/docs/guides/database/postgres/row-level-security`, `https://supabase.com/docs/guides/realtime/authorization`
@@ -34,7 +49,7 @@ Wallet onboarding uses a provider-first embedded wallet integration for mainstre
 - Embedded wallet providers to evaluate: `https://docs.privy.io/`, `https://www.dynamic.xyz/docs/wallets/mpc/overview`, `https://docs.turnkey.com/embedded-wallets`
 - Onramp providers to evaluate: `https://docs.cdp.coinbase.com/onramp/docs/welcome`, MoonPay/Helio docs if selected
 - Bunny Stream TUS: `https://docs.bunny.net/stream/tus-resumable-uploads`
-- Livepeer stream creation/playback policy: `https://docs.livepeer.org/v1/api-reference/stream/create`
+- Livepeer stream creation/playback policy: `Livepeer stream create API reference at docs.livepeer.org`
 - Next.js App Router and env docs: `https://nextjs.org/docs/app`, `https://nextjs.org/docs/pages/guides/environment-variables`
 - Bun package manager/workspaces/Node compatibility: `https://bun.com/docs`, `https://bun.sh/docs/install/workspaces`, `https://bun.sh/docs/runtime/nodejs-compat`
 - pnpm workspaces: `https://pnpm.io/workspaces`
@@ -132,6 +147,25 @@ Use Dockerized Fastify first because Veel needs:
 
 Use edge/serverless later only for isolated stateless endpoints. A full serverless conversion is not a launch requirement.
 
+## Node 22 / pnpm 10 Decision
+
+Decision: **pin CI and the launch build to Node.js 22 LTS and pnpm 10.**
+
+Why Node 22 instead of the newest current runtime:
+
+- Node.js production guidance favors Active LTS or Maintenance LTS lines for production systems.
+- Provider SDK compatibility matters more than runtime novelty for payments, wallets, media, realtime, workers, and observability.
+- Node 22 gives a stable LTS baseline while still supporting modern TypeScript, Web Crypto, fetch, and current framework tooling.
+- Newer Node majors can be evaluated after provider SDKs, Docker images, OpenTelemetry, Playwright, and CI are proven green.
+
+Why pnpm 10:
+
+- pnpm 10 gives a current stable workspace tool with deterministic lockfiles and strong monorepo support.
+- It avoids changing package-manager strategy while the backend, auth, realtime, and provider architecture are also changing.
+- Upgrading pnpm later is a small controlled ADR/checklist, unlike changing runtime and provider SDK assumptions mid-build.
+
+Use `corepack enable` and `corepack prepare pnpm@10.0.0 --activate` in local/CI setup so agents do not accidentally use host-global pnpm versions.
+
 ## Bun vs pnpm Decision
 
 Decision: **keep pnpm as the package manager/workspace tool for v2 launch; use Node.js LTS as the production runtime; evaluate Bun later.**
@@ -139,8 +173,8 @@ Decision: **keep pnpm as the package manager/workspace tool for v2 launch; use N
 Why not switch to Bun now:
 
 - pnpm is already the current workspace tool and is widely supported by monorepo tooling, CI, package managers, lockfile review, and Node-focused provider SDK docs.
-- The v2 rebuild already changes backend framework, auth, realtime, and database. Changing package manager and runtime at the same time increases migration risk.
-- Bun is promising and officially supports workspaces and broad Node compatibility, but payment/media/provider SDK stability matters more than install speed during the rebuild.
+- The v2 build already changes backend framework, auth, realtime, and database. Changing package manager and runtime at the same time increases migration risk.
+- Bun is promising and officially supports workspaces and broad Node compatibility, but payment/media/provider SDK stability matters more than install speed during the build.
 - Enterprise launch value comes from contracts, tests, provider boundaries, observability, and deployment discipline, not from package manager novelty.
 
 Where Bun can help:
@@ -167,7 +201,7 @@ dev optional:    Bun experiments only in isolated scripts/services
 
 ## Frontend Decision
 
-Keep Next.js PWA. Rebuild or heavily refactor:
+Keep Next.js PWA. Build clean v2 implementations for:
 
 - app shell
 - Home media cards
@@ -197,4 +231,4 @@ apps/worker
 packages/contracts
 ```
 
-Keep the previous prototype available only as a reference for validated behavior, screenshots, provider lessons, and tests. Do not bulk-copy prototype `apps/api` or `apps/web` implementation code into v2.
+Historical implementations are context only for lessons already captured in v2 docs, contracts, schema, and tests. Do not bulk-copy external `apps/api` or `apps/web` implementation code into v2.

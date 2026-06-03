@@ -1,9 +1,24 @@
 # Veel V2 Business And Monetisation Architecture
 
-Status: proposed v2 architecture
+Status: accepted
 Scope: business model, monetisation, noncustodial money movement
 Last updated: 2026-06-03
-Source of truth: proposal
+Source of truth: yes
+
+Owns:
+- business monetisation decisions for its named domain
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 This document defines the full Veel v2 monetisation and business model. It extends `payments-and-monetisation.md`, which owns payment verification mechanics. The rule is unchanged: the frontend can display and request actions, creators choose prices where product policy allows, and the backend enforces admin/env pricing guardrails, splits, settlement, entitlements, commissions, subscriptions, refunds, audit records, and operational reporting.
 
@@ -11,7 +26,7 @@ This document defines the full Veel v2 monetisation and business model. It exten
 
 Veel earns through:
 
-- platform fee on paid unlocks, paid messages, live passes, premium live rooms, event tickets, tips, and support
+- platform fee on content unlocks, paid messages, live passes, event tickets, tips, and support
 - creator subscription platform fee
 - optional platform membership/subscription for user-facing platform features
 - optional external referral commission sourced from the platform share unless explicitly configured otherwise
@@ -19,11 +34,11 @@ Veel earns through:
 
 Creators earn through:
 
-- paid clips, premium posts, VOD, and replay unlocks
+- paid clips, premium posts, VOD, and replay content unlocks
 - tips and support
 - paid messages
 - creator subscriptions
-- premium live rooms and live passes
+- live passes
 - event tickets
 - referral earnings where product rules allow creator-as-referrer flows
 
@@ -67,7 +82,7 @@ Embedded wallets do not change this model. They reduce onboarding friction by gi
 
 Creators own monetisation pricing for creator products:
 
-- media unlocks
+- content unlocks
 - paid messages
 - tips/support presets where creator offers presets
 - live pass prices and available durations from allowed duration templates
@@ -112,17 +127,30 @@ Native SOL and SPL token modes must share a common intent/split/settlement model
 
 | Product | Buyer pays | Creator earns | Platform earns | Entitlement |
 | --- | --- | --- | --- | --- |
-| Paid clip/post/VOD/replay unlock | One-time price | Creator share | Platform fee | Content access grant |
+| Content unlock | One-time price | Creator share | Platform fee | Content access grant |
 | Tip | Preset/custom amount | Creator share | Platform fee if configured | No access grant |
 | Support | Preset/custom amount or campaign amount | Creator share | Platform fee | No access grant unless explicitly attached |
 | Paid message | Message price | Creator share | Platform fee | Message delivery/open entitlement |
 | Creator subscription | Recurring plan price | Creator share | Platform fee | Creator-specific access plan |
 | Platform subscription | Recurring platform price | No creator share unless bundled | Platform revenue | Platform feature/member entitlement |
 | Live pass | Duration/pass price | Creator share | Platform fee | Live playback/chat access |
-| Premium live room | Room access price | Creator share | Platform fee | Room access |
 | Event ticket | Ticket price | Creator/event owner share | Platform fee | Ticket entitlement/QR |
-| Drop | Drop price | Creator share | Platform fee | Drop entitlement/fulfilment state |
 | External referral commission | From configured share | Referrer earns | Usually platform share reduced | Attribution/commission record |
+
+Launch product type enum:
+
+```text
+tip
+support
+content_unlock
+paid_message
+live_pass
+event_ticket
+creator_subscription
+platform_subscription
+```
+
+Future products such as drops, resale, NFT ticketing, bundles, gifts, or premium-room variants require a separate ADR and must not appear in launch contracts or schema until approved.
 
 ## Default Split Policy
 
@@ -135,7 +163,7 @@ Default launch recommendation:
 - self-referral is always rejected
 - duplicate commission is always rejected
 
-Example for a 1.00 SOL unlock with 10% platform fee and 20% referral share of platform fee:
+Example for a 1.00 SOL content unlock with 10% platform fee and 20% referral share of platform fee:
 
 ```text
 Gross:             1.000 SOL
@@ -160,10 +188,18 @@ Recommended platform tiers for first pricing tests:
 
 | Tier | Suggested price | Position |
 | --- | --- | --- |
-| Peek | Free | 18+ verified account, limited teaser/free-watch allowance, basic social/media participation. |
-| Veel Plus | 15 USDC/month equivalent | Heavy viewer tier: higher watch/bandwidth allowance, smoother media/message experience, better activity/profile tools. |
-| Veel Max | 29 USDC/month equivalent | Premium power-user tier: advanced dating/events/AI profile features, stronger discovery/profile tools, optional fee/limit benefits if business model allows. |
-| Studio/Enterprise | Custom | Creator/team/business/admin support tier, not the default viewer upsell. |
+| Free Verified | Free | 18+ verified account, wallet, free Bits/teasers, basic social/media participation, reporting/blocking, and safe discovery controls. |
+| Veel Plus | 15 USDC/month equivalent | Heavy viewer tier: higher fair-use watch allowance, better collections/activity tools, better notification/feed controls, profile polish, and priority support. |
+| Veel Studio | 29 USDC/month equivalent | Creator/productivity tier: creator dashboard upgrades, scheduling, advanced analytics, pricing presets, event tools, and AI setup assistant where enabled. |
+| Enterprise/Partner | Custom | Agency, venue, partner, and operations support tier with manual account review and business support. |
+
+Tier rules:
+
+- platform subscriptions must not hide core safety, basic publishing, normal dating access, or creator discovery behind a paywall
+- platform subscriptions must not secretly boost paid content ranking in a way users cannot understand
+- creator content purchases still happen separately unless a specific bundle is implemented and documented
+- creator-facing productivity value should live in Veel Studio, not in a viewer-only upsell
+- dating/event/AI limits can be configured by admin, but the free tier must remain usable enough for real network effects
 
 Pricing, allowance limits, date/match limits, live pass defaults, and platform feature gates must live in backend/admin configuration. Environment variables provide safe defaults; admin configuration can override them without a deploy.
 
@@ -271,7 +307,7 @@ The admin dashboard must expose safe, role-gated views for:
 - creator earnings
 - referral commission
 - subscription MRR/ARR/churn
-- unlock conversion rate
+- content unlock conversion rate
 - payment failure reasons
 - webhook lag/failure rate
 - top creators/products
@@ -314,7 +350,7 @@ audit_required
 - wrong payer/amount/recipient/mint/program rejection
 - duplicate signature rejection
 - tip settlement without access grant
-- unlock settlement with access grant
+- content unlock settlement with access grant
 - paid message settlement with message entitlement
 - live pass settlement with room access
 - event ticket settlement with ticket entitlement

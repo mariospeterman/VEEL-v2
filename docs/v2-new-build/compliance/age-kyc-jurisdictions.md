@@ -1,9 +1,24 @@
 # Age Assurance, KYC, And Audience Geoblocking
 
-Status: proposed v2 architecture
+Status: accepted
 Scope: documentation
 Last updated: 2026-06-03
 Source of truth: yes
+
+Owns:
+- age kyc jurisdictions decisions for its named domain
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 This document defines the recommended 2026 operating model for the greenfield v2 repo.
 
@@ -64,14 +79,14 @@ Support provider families, not one-off hard-coded vendors:
 Launch-default recommendation:
 
 - primary commercial provider: `Yoti`
-- fallback providers: `Sumsub` and `Persona`
+- fallback providers: `Sumsub`, `Veriff`, and `Persona` only after privacy/security/procurement review
 - product rule: let the user choose a supported reusable provider when possible, then fall back within the same third-party flow when needed
 
 Expanded provider recommendation:
 
 - `Scytales`: good reusable-wallet verifier lane to support alongside `EUDI Wallet` and `Yoti` where wallet-based selective-disclosure credentials are available
 - `Didit`: reasonable optional fallback provider in the non-doc / documentary ladder, but not a reusable-first credential
-- `Veriff`: reasonable optional fallback provider for age-estimation or documentary fallback, but not a reusable-first credential
+- `Veriff`: serious fallback provider for risk-based age assurance and documentary fallback, but not a reusable-first credential
 - `ID.me`: do not make it part of the core default age-gate list right now; treat it as a possible future US-specific trusted-identity lane only if product scope and churn tradeoffs justify it
 
 ## Unified assurance result

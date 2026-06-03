@@ -1,9 +1,24 @@
 # ADR 0002: 2026 Provider Decisions For V2 Launch
 
-Status: proposed
+Status: draft
 Scope: wallet, onramp, payments, subscriptions, media, live, age/KYC, AI, events
 Last updated: 2026-06-03
-Source of truth: proposal pending vendor/account checks
+Source of truth: draft pending vendor/account checks
+
+Owns:
+- 0002 provider decisions 2026 decisions for its named domain
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 This ADR turns the v2 blueprint into concrete provider defaults for the first implementation pass. The goal is provider-first architecture with minimal custom infrastructure, low platform custody/regulatory exposure, and strong user conversion.
 
@@ -12,16 +27,16 @@ This ADR turns the v2 blueprint into concrete provider defaults for the first im
 | Area | Launch recommendation | Reason |
 | --- | --- | --- |
 | Onboarding order | Identity + mandatory wallet path, then age verification, then protected app access | Keeps app fully 18+ while reducing wallet-install friction through embedded wallet. |
-| Embedded wallet | Turnkey first, Privy as faster consumer-UX fallback | Veel needs noncustodial Solana wallets, policy controls, external wallet support, auditability, and future AI/admin safety controls more than a lowest-code auth widget. |
+| Embedded wallet | Privy first, Turnkey as advanced policy fallback | Veel needs noncustodial Solana wallets, policy controls, external wallet support, auditability, and future AI/admin safety controls more than a lowest-code auth widget. |
 | Onramp/funding | Embedded-wallet provider funding UI first | Platform does not handle card processing or custody; user funds their own wallet. |
 | One-time payments | Solana Pay / Solana transaction requests | Noncustodial, wallet-approved, backend-verified. |
 | Payment evidence | Helius scoped to money/access evidence, with RPC fallback | Cost-aware, not a broad firehose. |
 | Platform subscriptions | Use simple recurring provider checkout adapter until Solana recurring UX is staging-proven | Avoid blocking launch on delegated recurring-wallet UX; keep subscription state backend-owned. |
 | Creator subscriptions | Keep, but treat as creator fan-club access, not a replacement for discovery/unlocks | Supports creator recurring revenue without killing free discovery. |
-| Creator pricing | Creator sets media unlock, paid message, live pass, ticket, and creator subscription prices within admin/env guardrails | Preserves creator ownership while preventing abuse, too-low pricing, and compliance issues. |
+| Creator pricing | Creator sets content unlock, paid message, live pass, ticket, and creator subscription prices within admin/env guardrails | Preserves creator ownership while preventing abuse, too-low pricing, and compliance issues. |
 | VOD | Bunny Stream/CDN/TUS | Direct uploads and playback provider infrastructure. |
 | Live/replay | Livepeer with JWT playback access from day one for paid streams/replays | Provider-owned live infra and provider-enforced protected playback. |
-| Age assurance | Yoti app/Digital ID first, Sumsub reusable/non-doc fallback, Persona documentary fallback | User choice, reusable/low-friction first, no raw identity data in core DB. |
+| Age assurance | Yoti app/Digital ID first, Sumsub reusable/KYC fallback, Veriff age-assurance fallback, Persona documentary fallback only after privacy/procurement review | User choice, reusable/low-friction first, no raw identity data in core DB. |
 | Creator KYC/KYB | Disabled by default except high-risk/admin-required creators; Sumsub primary candidate | Avoid unnecessary friction while keeping an easy switch for legal/risk expansion. |
 | AI/MCP | Provider-agnostic LLM gateway with OpenAI-compatible adapter first | Avoid lock-in; all tools permission-scoped and audited. |
 | Create flow | Raw/simple create: record/upload, essential edits, caption/#/@/location, NSFW label, optional event, monetisation, preview, publish | Avoids overbuilt editor while preserving creator conversion controls. |
@@ -29,6 +44,62 @@ This ADR turns the v2 blueprint into concrete provider defaults for the first im
 | Event tickets | Internal backend QR/ticket entitlement + Solana Pay settlement first; NFT/Solana ticketing ADR later | Proven, simple, noncustodial split settlement without premature custom smart contracts. |
 | Event location | Browser geolocation with permission + manual OSM-backed place search | Free/low-cost launch UX without platform handling private location carelessly. |
 | Share | Internal Veel share/repost/message has no referral commission; external share tab uses backend referral URL | Keeps social sharing clean while preserving referral attribution for off-platform conversion. |
+
+## Provider Acceptance States
+
+Provider-dependent code cannot ship from a vague draft. Each provider must move through these states:
+
+```text
+candidate -> staging-approved -> launch-approved
+candidate -> rejected
+candidate -> replaced
+```
+
+Definitions:
+
+- `candidate`: architecture preference documented, official docs reviewed, account/terms not fully proven.
+- `staging-approved`: staging account exists, keys/webhooks work, required UX and security tests pass, adult-platform/account acceptance risk is understood.
+- `launch-approved`: production account approved, limits/pricing/support reviewed, security/compliance accepted, rollback/fallback documented.
+- `rejected`: provider failed technical, UX, pricing, compliance, account, or support criteria.
+- `replaced`: provider was superseded by a better accepted provider.
+
+Current provider gate:
+
+| Domain | Provider/path | State | Must pass before implementation depends on it |
+| --- | --- | --- | --- |
+| Embedded wallet | Privy | candidate | Solana embedded wallet creation, signing, export/recovery, external wallet link, mobile PWA, funding UI, noncustodial terms, adult-platform account acceptance. |
+| Embedded wallet fallback | Turnkey | candidate | Solana policy/MPC controls, signer UX, export/recovery, transaction policy, adult-platform account acceptance. |
+| Wallet backup | Dynamic | candidate | Solana support, embedded + external wallet UX, funding path, mobile PWA, adult-platform account acceptance. |
+| Age assurance | Yoti | candidate | 18+ flow, reusable Digital ID path, webhook verification, regional support, minimal-data storage. |
+| Age/KYC fallback | Sumsub | candidate | Age/KYC/KYB levels, reusable verification support, webhook verification, creator KYC/KYB path. |
+| Age fallback | Veriff | candidate | Global age assurance, risk-based checks, webhook verification, privacy/security review. |
+| Documentary fallback | Persona | candidate | Procurement, privacy/security, data minimization, explicit legal basis for documentary fallback. |
+| VOD | Bunny Stream/CDN/TUS | candidate | TUS upload, signed/tokenized playback, webhook idempotency, provider outage state. |
+| Live/replay | Livepeer JWT | candidate | Stream creation, JWT playback, replay handoff, no viewer stream-key exposure. |
+| Payment evidence | Helius | candidate | Devnet/staging webhook, scoped watched addresses/references, signature/replay validation, confirmed payment fixture. |
+| Onramp/funding | Embedded-wallet funding UI | candidate | User-controlled wallet funding, provider KYC handled by provider, no entitlement on funding completion. |
+
+No provider can be treated as launch-approved until its staging smoke, security review, account/terms review, and fallback/rollback notes are documented.
+
+## Official Docs Anchors
+
+Before implementation, verify the latest official docs for each provider/API. The current June 2026 anchors are:
+
+| Area | Official docs to verify |
+| --- | --- |
+| Fastify API schemas | `https://fastify.dev/docs/latest/Reference/Validation-and-Serialization` |
+| Supabase Auth | `https://supabase.com/docs/guides/auth` |
+| Supabase RLS | `https://supabase.com/docs/guides/database/postgres/row-level-security` |
+| Supabase Realtime | `https://supabase.com/docs/guides/realtime` |
+| Solana Pay | `https://docs.solanapay.com/` |
+| Helius webhooks | `https://www.helius.dev/docs/webhooks` |
+| Bunny Stream auth/security | `https://docs.bunny.net/stream/authentication`, `https://docs.bunny.net/stream/security` |
+| Bunny TUS uploads | `https://docs.bunny.net/stream/tus-resumable-uploads` |
+| Bunny edge/API protection | `https://docs.bunny.net/shield/overview` |
+| Livepeer JWT access | `https://docs.livepeer.org/developers/guides/access-control-jwt` |
+| Livepeer React Player | `https://docs.livepeer.org/sdks/react/migration/3.x/Player` |
+
+Provider docs override assumptions in this ADR if an API has changed. Any changed provider behavior needs an ADR update before coding.
 
 ## GStack Autonomy Decision
 
@@ -67,27 +138,27 @@ Human sets slice goal
 
 ### Recommendation
 
-Use Turnkey as the launch embedded-wallet provider if staging checks confirm:
+Use Privy as the launch embedded-wallet provider if staging checks confirm:
 
 - fully user-controlled/noncustodial Solana wallet flow works cleanly
 - email/social/passkey onboarding can create or load the wallet before age verification
 - external wallets can be used alongside embedded wallets
 - onramp/funding sends funds to the user wallet, not a Veel custodial balance
-- policy controls can enforce explicit user approval for money actions
+- explicit user approval is enforced for money actions
 - wallet export/recovery posture is acceptable
 - pricing is acceptable at expected MAU and transaction volume
 
-Use Privy as fallback or second ADR if:
+Use Turnkey as fallback or second ADR if:
 
-- Turnkey integration speed is too slow for the first launch
-- Privy’s consumer UX materially improves activation/conversion in staging
-- Privy Solana wallet creation/funding/export and external wallet flow meet the same custody and security requirements
+- Privy cannot meet Solana, export/recovery, onramp, audit, or regional requirements
+- deeper policy controls and sub-organization isolation are required earlier than expected
+- Turnkey staging UX remains acceptable for mainstream email/social/passkey users
 
 ### Rationale
 
-Turnkey’s docs show embedded wallets built around sub-organizations, Solana wallet accounts, user-controlled custody options, policy controls, external wallets, and onramp integrations. That fits Veel’s adult-content, payment, referral, AI/admin safety, and audit needs better than a simpler login-first wallet abstraction.
+Privy is the launch default because consumer onboarding speed is a primary conversion risk: email/social/passkey users should get a user-controlled Solana wallet without installing a browser extension. Staging must verify Solana support, funding/onramp UX, export/recovery posture, external-wallet linking, pricing, and noncustodial user approval.
 
-Privy remains a strong consumer-UX fallback because it supports embedded wallets, Solana, export, and automatic wallet creation. Use it only if it reaches launch faster without weakening the noncustodial and policy requirements.
+Turnkey remains the advanced fallback when stronger policy controls, sub-organization isolation, or deeper wallet governance is more important than the fastest consumer activation path.
 
 ### Rules
 
@@ -106,7 +177,7 @@ Use Solana transaction-request architecture for:
 
 - tips
 - support
-- paid unlocks
+- content unlocks
 - paid messages
 - live passes
 - event tickets
@@ -129,24 +200,24 @@ Recommended path:
 Platform subscription tiers:
 
 ```text
-Peek
-  free account
-  limited teaser/free-watch allowance
-  basic social/media participation
+Free Verified
+  free 18+ verified account
+  wallet, free Bits/teasers, basic social/media participation
+  reporting/blocking and safe discovery controls
 
 Veel Plus
   recommended launch target: 15 USDC/month or local equivalent
-  higher watch allowance / bandwidth fairness
-  smoother media and message experience
-  still pays creators separately unless product decides otherwise
+  higher fair-use watch allowance / bandwidth fairness
+  better collections, activity, notifications, feed controls, and priority support
+  still pays creators separately unless a documented bundle exists
 
-Veel Max
+Veel Studio
   recommended launch target: 29 USDC/month or local equivalent
-  advanced dating/events/AI profile features
-  enhanced discovery/profile tools
-  possible lower platform fees or bonus limits if business model supports it
+  creator dashboard upgrades, scheduling, advanced analytics, pricing presets, event tools
+  AI setup assistant where enabled
+  not a hidden ranking boost and not a substitute for creator subscriptions
 
-Studio/Enterprise
+Enterprise/Partner
   custom pricing
   creator/team/admin/business support tier, not ordinary viewer default
 ```

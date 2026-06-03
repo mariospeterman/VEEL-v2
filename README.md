@@ -1,9 +1,9 @@
 # Veel Shoot Own Shine
 
-Status: new v2 repo scaffold
-Scope: greenfield Veel rebuild
+Status: accepted
+Scope: standalone Veel v2 build scaffold
 
-This repo is the clean starting point for the Veel v2 greenfield build. The previous prototype is reference only for validated lessons and tests. Do not bulk-copy prototype app code into this repo.
+This repo is the clean starting point for the Veel v2 standalone build. The historical context is context only for validated lessons and tests. Do not bulk-copy historical context app code into this repo.
 
 ## Start Here
 
@@ -73,4 +73,12 @@ Do not start by coding random screens. Start with repo foundation, contracts, da
 
 ## Current Validation
 
-This scaffold intentionally contains docs and empty app/package folders only. Real validation starts after the first implementation ticket creates workspace tooling.
+This scaffold intentionally contains docs and empty app/package folders only.
+
+Current executable validation:
+
+```sh
+pnpm docs:check
+```
+
+`pnpm lint`, `pnpm typecheck`, and `pnpm test` intentionally fail until the foundation slice creates real app/package tooling. Do not treat docs-only checks as app validation.

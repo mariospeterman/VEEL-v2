@@ -1,9 +1,24 @@
 # Veel V2 Embedded Wallet Onboarding
 
-Status: proposed v2 architecture
+Status: accepted
 Scope: auth, wallets, onboarding, onramp, conversion
 Last updated: 2026-06-03
-Source of truth: proposal
+Source of truth: yes
+
+Owns:
+- embedded wallet onboarding decisions for its named domain
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 This document defines the recommended v2 wallet onboarding model. The goal is to reduce signup and payment churn without making Veel custodial or moving payment truth to the frontend.
 
@@ -47,8 +62,8 @@ Use a wallet infrastructure provider instead of building key management.
 
 Provider decision:
 
-- Turnkey is the recommended launch provider for Veel if staging confirms the UX. It gives stronger policy controls, sub-organization isolation, Solana wallet support, external wallet support, and future room for admin/AI safety controls.
-- Privy is the fallback if consumer activation speed is materially better and it satisfies the same noncustodial, Solana, funding, export/recovery, and external-wallet requirements.
+- Privy is the recommended launch provider for Veel if staging confirms Solana wallet creation, funding, export/recovery, external-wallet linking, and noncustodial user approval. It is the fastest default for mainstream email/social/passkey conversion.
+- Turnkey is the advanced policy fallback if Privy cannot satisfy required Solana, audit, key-recovery/export, cost, or policy-control needs. It remains the preferred option for deeper sub-organization controls or future admin/AI guarded-wallet policies.
 - Dynamic remains an alternative to evaluate if Turnkey/Privy do not meet regional, cost, or UX needs.
 - Onramp/funding should be provided through the selected wallet/onramp provider and must fund the user-owned wallet, not a Veel custodial account.
 
@@ -221,7 +236,7 @@ Non-wallet actions:
 
 ## Open Provider Decision
 
-Before coding v2, confirm Turnkey staging UX or explicitly switch the ADR to the fallback provider.
+Before coding v2, confirm Privy staging UX or explicitly switch the ADR to Turnkey.
 
 Recommended decision record:
 

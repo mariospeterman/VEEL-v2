@@ -1,9 +1,24 @@
 # Veel V2 Auth, Supabase, And Realtime Architecture
 
-Status: proposed v2 architecture
+Status: accepted
 Scope: auth, DB, realtime
 Last updated: 2026-06-03
-Source of truth: proposal
+Source of truth: yes
+
+Owns:
+- auth supabase realtime decisions for its named domain
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 ## Decision
 
@@ -85,9 +100,16 @@ Wallet linking is not Supabase Auth by itself.
 
 Embedded wallets are also linked to the Veel profile, but they are not a backend custody account. The selected wallet provider must support a noncustodial/user-controlled model where Veel cannot move funds without user approval.
 
-Wallet is required only for wallet actions:
+Wallet path is mandatory before protected app access because Veel is wallet-native and every user must be able to receive or approve noncustodial Solana actions.
 
-- paid unlock
+Wallet readiness means one of:
+
+- embedded noncustodial wallet created or loaded for identity-first users
+- native/external Solana wallet linked and set as primary for wallet-first users
+
+Wallet approval is required for wallet actions:
+
+- content unlock
 - tip/support
 - paid message
 - creator subscription
@@ -95,7 +117,7 @@ Wallet is required only for wallet actions:
 - event ticket
 - creator payout/earning setup
 
-Wallet is not required just to create an account, browse allowed content, or complete age access.
+Wallet is not required for public landing pages, public teaser/deep-link capture, or reading public marketing content. It is required before the protected 18+ app shell opens. Supabase Auth alone is not enough.
 
 ## RLS Strategy
 
@@ -156,6 +178,23 @@ Avoid:
 - KYC/KYB: required for earning/payout/compliance flows.
 - Normal viewer access should not require KYC unless product/legal policy says so.
 - Frontend receives only state/action, never raw provider payload.
+
+## Locked Onboarding Decision
+
+```text
+Public teaser / landing / referral capture
+  -> identity: email, social, passkey, or external wallet
+  -> wallet path: embedded wallet created/loaded or native wallet linked
+  -> age verification
+  -> protected 18+ app shell
+```
+
+Rules:
+
+- No protected app entry without age verification.
+- No protected app entry without a wallet path.
+- No double age verification per media item after the app-level age gate, unless a future jurisdiction/product rule explicitly requires it.
+- KYC/KYB remains separate from age verification and is only required for creator earning/payout/risk workflows by default.
 
 ## Implementation Decisions Required Before Coding
 

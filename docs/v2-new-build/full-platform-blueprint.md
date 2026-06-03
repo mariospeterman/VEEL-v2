@@ -1,11 +1,26 @@
 # Veel V2 Full Platform Blueprint
 
-Status: proposed v2 architecture
-Scope: complete greenfield Veel platform blueprint
+Status: accepted
+Scope: complete standalone Veel platform blueprint
 Last updated: 2026-06-03
-Source of truth: yes for the complete v2 product/system map
+Source of truth: yes
 
-This is the single visual blueprint for building the full Veel v2 platform from scratch. The previous prototype is a reference for validated product lessons, provider edge cases, and tests only. Do not port prototype architecture wholesale.
+Owns:
+- complete Veel product, workflow, provider, and business map
+
+Defers to:
+- OpenAPI/schema/route-map for exact build contracts
+
+Does not own:
+- migration implementation details
+
+Launch scope:
+- full platform mental model and phased build boundaries
+
+Non-goals:
+- implementation code or vendor secrets
+
+This is the single visual blueprint for building the full Veel v2 platform from scratch. The historical context is a reference for validated product lessons, provider edge cases, and tests only. Do not port historical architecture wholesale.
 
 Use this document to understand how every major module relates before writing code.
 
@@ -63,7 +78,7 @@ Providers
   Helius for confirmed payment/access evidence
   Bunny Stream/CDN/TUS for VOD
   Livepeer for live/replay
-  Yoti/Sumsub/Persona age/KYC waterfall
+  Yoti/Sumsub/Veriff/Persona age/KYC waterfall
   onramp provider for wallet funding
   email/push provider
 ```
@@ -152,7 +167,7 @@ Frontend never computes final access, final commission, final ticket state, fina
 | Events/tickets | `product/events-ticketing.md`, `business-monetisation.md` | events, tickets, payments | event sheet, tickets | Solana evidence, email/push |
 | AI/MCP | `safety-admin-ai.md`, `ai-mcp-use-cases.md` | AI sessions, tools, permissions, audit | AI assistant/admin AI | OpenAI-compatible adapter first |
 | Admin/ops | `admin-operations-dashboard.md`, `deployment-topology.md` | admin, audit, ops diagnostics | admin app | all providers via sanitized diagnostics |
-| Adult compliance/age/KYC | `compliance/*`, `providers/identity-provider-wiring.md` | age, KYC/KYB, audit | age gate, creator payout setup | Yoti/Sumsub/Persona |
+| Adult compliance/age/KYC | `compliance/*`, `providers/identity-provider-wiring.md` | age, KYC/KYB, audit | age gate, creator payout setup | Yoti/Sumsub/Veriff/Persona |
 | Security/content protection | `providers/content-protection.md`, `safety-admin-ai.md` | access policy, signed playback | safe media resources | Bunny, Livepeer |
 | Deployment/ops | `deployment-topology.md`, `slice-workflow.md` | API/worker/observability | health/admin views | Supabase, providers, telemetry |
 
@@ -168,7 +183,7 @@ Landing
   -> protected app access
   -> Home feed
   -> watch teaser/free media
-  -> tip/support/unlock/pass/ticket when desired
+  -> tip/support/content-unlock/pass/ticket when desired
   -> wallet approval
   -> backend verification
   -> refreshed access/activity state
@@ -277,7 +292,7 @@ Live:
 
 Age/KYC:
   Yoti primary candidate
-  Sumsub/Persona fallback candidates
+  Sumsub/Veriff/Persona fallback candidates
 
 Realtime:
   Supabase Realtime for selected messages/notifications/live/activity events
@@ -376,7 +391,7 @@ Provider defaults are defined in `adr/0002-provider-decisions-2026.md`. Use it b
 
 ## New Repo Rule
 
-Build by vertical slices from this pack. Do not start by copying prototype code. Only reference the previous prototype for:
+Build by vertical slices from this pack. Do not start by copying historical context code. Only reference the historical context for:
 
 - screenshots and UX lessons
 - provider edge cases

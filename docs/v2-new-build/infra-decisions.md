@@ -1,9 +1,24 @@
 # Veel V2 Infrastructure And Research Decisions
 
-Status: proposed v2 architecture
+Status: accepted
 Scope: queues, search, analytics, observability, notifications, feature flags, compliance research constraints
 Last updated: 2026-06-03
 Source of truth: yes for v2 infrastructure defaults
+
+Owns:
+- infra decisions decisions for its named domain
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 This document freezes the default infrastructure choices for the greenfield repo so implementation does not drift into ad hoc services.
 
@@ -29,6 +44,34 @@ This document freezes the default infrastructure choices for the greenfield repo
 - Feature flags cannot bypass payment validation, age requirements, provider signatures, admin audit logging, or content safety policy.
 - Paid promotion cannot silently rank content higher in For You. Any paid distribution product must be explicit, labeled, opt-out aware, and reviewed by a separate ADR.
 - Provider webhooks must be idempotent, signed, rate-limited, replay-resistant, audited, and observable.
+
+## CI/CD Gates
+
+Launch repository must keep these workflows:
+
+```text
+.github/workflows/ci.yml
+.github/workflows/security.yml
+.github/workflows/preview.yml
+.github/workflows/deploy-staging.yml
+.github/workflows/deploy-production.yml
+.github/workflows/db-migrations.yml
+```
+
+Current scaffold workflows run docs/contract/schema checks and security scaffolding. They become full production gates when the foundation slice creates real app, API, worker, migration, and E2E tooling.
+
+Required branch protection for `main`:
+
+- pull request required
+- required reviews
+- CODEOWNERS review for contracts, database, payments, providers, compliance, and workflows
+- CI and security checks required
+- secret scanning enabled
+- Dependabot enabled
+- production deploy through GitHub environment approval
+- OIDC for cloud deploy credentials; no long-lived deploy secrets
+
+No production deploy workflow may become active until it has artifact digest pinning, migration backup/snapshot step, health checks, smoke tests, and rollback instructions.
 
 ## Queue Strategy
 
@@ -59,7 +102,7 @@ PostHog tracks product events only:
 - wallet path chosen
 - age verification conversion
 - Home/Bits feed engagement
-- unlock/support/tip/live-pass/ticket intent and completion
+- content-unlock/support/tip/live-pass/ticket intent and completion
 - share/referral click and conversion
 - creator dashboard usage
 - report/block/safety actions

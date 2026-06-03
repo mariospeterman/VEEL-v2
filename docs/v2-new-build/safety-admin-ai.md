@@ -1,9 +1,24 @@
 # Veel V2 Safety, Admin, And AI/MCP
 
-Status: proposed v2 architecture
+Status: accepted
 Scope: safety, admin, AI/MCP
 Last updated: 2026-06-01
-Source of truth: proposal
+Source of truth: yes
+
+Owns:
+- safety admin ai decisions for its named domain
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 ## Safety Architecture
 
@@ -48,8 +63,8 @@ Recommended provider waterfall:
 Launch provider strategy:
 
 - primary commercial provider: Yoti, pending legal/vendor review
-- fallback providers: Sumsub and Persona, pending legal/vendor review
-- optional future lanes: EUDI wallet, Scytales, Veriff, Didit, region-specific trusted ID
+- fallback providers: Sumsub, Veriff, and Persona, pending legal/vendor review
+- optional future lanes: EUDI wallet, Scytales, Didit, region-specific trusted ID
 - do not force KYC/KYB for ordinary viewers unless product/legal policy requires it
 
 Do not store raw identity images/docs unless provider/legal workflow explicitly requires it. Store:

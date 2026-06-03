@@ -1,9 +1,24 @@
 # Veel V2 Deployment Topology
 
-Status: proposed v2 architecture
+Status: accepted
 Scope: server topology, cost, environments, scaling
 Last updated: 2026-06-03
-Source of truth: proposal
+Source of truth: yes
+
+Owns:
+- deployment topology decisions for its named domain
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 This document defines a cost-effective and scalable v2 deployment model. The recommendation is a headless modular monolith backend at launch, with managed provider infrastructure for database, auth, realtime, media, and payment evidence. Do not start with microservices or full serverless unless a measured bottleneck requires it.
 

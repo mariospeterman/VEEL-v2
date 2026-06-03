@@ -1,9 +1,24 @@
 # Veel V2 Media And Live Provider Architecture
 
-Status: proposed v2 architecture
+Status: accepted
 Scope: Bunny, Livepeer, media, live
 Last updated: 2026-06-03
-Source of truth: proposal
+Source of truth: yes
+
+Owns:
+- media live providers decisions for its named domain
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 ## Provider Split
 
@@ -125,6 +140,7 @@ Frontend does not receive:
 - Use Bunny player or provider-supported Stream playback URLs where they reduce custom player work.
 - Use Bunny Stream token authentication / signed or tokenized playback for all full locked playback.
 - Use Livepeer JWT access control for paid streams/assets.
+- Use Bunny Storage/CDN only for ancillary static assets when Stream does not own the asset class; do not build a custom VOD storage/transcoding stack beside Bunny Stream.
 - Teaser playback can be public or short-lived signed, depending content risk and cost.
 - Full locked playback requires backend entitlement before issuing safe playback resource.
 - Veel UI wraps provider players for layout, gestures, action rails, sheets, and accessibility.

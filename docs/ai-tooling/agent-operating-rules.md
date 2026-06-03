@@ -27,7 +27,7 @@ Use it for:
 
 Do not use it to:
 
-- auto-port prototype code
+- auto-port reference implementation code
 - replace contracts
 - replace migrations
 - replace tests

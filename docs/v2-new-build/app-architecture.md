@@ -1,9 +1,24 @@
 # Veel V2 Enterprise Blueprint
 
-Status: proposed v2 architecture
+Status: accepted
 Scope: full product architecture
 Last updated: 2026-06-03
-Source of truth: proposal
+Source of truth: yes
+
+Owns:
+- whole-platform module boundaries and runtime responsibilities
+
+Defers to:
+- route map, OpenAPI, schema, provider ADRs for exact contracts
+
+Does not own:
+- screen-level visual design or provider account setup
+
+Launch scope:
+- provider-first modular monolith architecture
+
+Non-goals:
+- custom infrastructure where provider features solve the problem
 
 This document defines the target architecture for a clean provider-first Veel v2 repository. Use it as the app architecture source for the new repo after the v2 decision is approved.
 
@@ -11,15 +26,15 @@ This document defines the target architecture for a clean provider-first Veel v2
 
 Recommended v2 direction:
 
-- Keep a Next.js PWA, but rebuild the app shell and product surfaces around a smaller design/component system.
+- Keep a Next.js PWA, but build the app shell and product surfaces around a smaller design/component system.
 - Use a TypeScript backend built on Fastify.
 - Use Supabase Postgres as the primary database, Supabase Auth as identity/session issuer, and Supabase Realtime selectively for messages, notifications, live room state, and activity events.
 - Keep all money/access/media/provider truth behind the backend. Supabase RLS protects direct realtime reads, but Fastify remains the business policy layer.
 - Add a mainstream onboarding path with email/social/passkey signup and a noncustodial embedded Solana wallet, while keeping Phantom/Solflare/external wallet connect first-class for web3-native users.
 - Use Hono only for small edge/public endpoints if a real edge deployment need appears. Do not mix Hono into the core API.
-- Keep pnpm as the monorepo package manager and Node.js LTS as the production runtime for v2 launch. Bun can be evaluated later for isolated tooling/services, but should not be added as another moving part during the backend/auth/realtime rebuild.
+- Keep pnpm as the monorepo package manager and Node.js LTS as the production runtime for v2 launch. Bun can be evaluated later for isolated tooling/services, but should not be added as another moving part during the backend/auth/realtime build.
 - Use official provider SDKs/APIs where they reduce custom code: Solana JS/Pay, Bunny Stream TUS/API, Livepeer APIs, age/KYC provider APIs.
-- Build through contract-first vertical slices, not by porting prototype code wholesale.
+- Build through contract-first vertical slices; do not copy historical context code wholesale.
 
 ## Architecture Diagram
 

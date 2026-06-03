@@ -1,9 +1,24 @@
 # Veel V2 Payments And Monetisation
 
-Status: proposed v2 architecture
+Status: accepted
 Scope: Solana Pay, monetisation, referrals
 Last updated: 2026-06-03
-Source of truth: proposal
+Source of truth: yes
+
+Owns:
+- payments and monetisation decisions for its named domain
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 ## Payment Principles
 
@@ -15,11 +30,10 @@ Source of truth: proposal
 
 ## Product Types
 
-- paid clip/post/VOD/replay unlock
+- content unlock for paid clip/post/VOD/replay
 - tip/support
 - paid message
 - creator subscription
-- premium live room
 - live pass
 - event ticket
 - external referral commission
@@ -75,7 +89,7 @@ Do not hardcode SOL-only architecture.
 
 Helius is used only for payment/access evidence:
 
-- unlocks
+- content unlocks
 - subscriptions
 - live passes
 - support/tips if chosen for reconciliation
@@ -143,7 +157,7 @@ GET  /v1/payments/intents/:id
 GET  /v1/payments/intents/:id/transaction-request
 POST /v1/payments/intents/:id/submissions
 POST /v1/webhooks/solana-indexer
-GET  /v1/activity?kind=payments
+GET  /v1/activity/payments
 ```
 
 ## Test Matrix

@@ -1,9 +1,24 @@
 # Frontend Design System
 
-Status: proposed v2 architecture
+Status: accepted
 Scope: documentation
 Last updated: 2026-06-03
 Source of truth: yes
+
+Owns:
+- design system decisions for its named domain
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 This document defines the locked v2 web design direction.
 
@@ -121,10 +136,12 @@ Do not use:
 
 ### Onboarding
 
-- Login → Age → Wallet
-- no extra privacy step
-- no final enter step
-- wallet step enters the app immediately after complete or skip
+- public teaser or referral capture first
+- identity with email/social/passkey or external wallet
+- embedded wallet created/loaded or native wallet linked
+- age verification
+- protected app entry only after wallet path and age verification are complete
+- no skip-wallet path into the protected app shell
 
 ### Home and Bits
 

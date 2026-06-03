@@ -1,15 +1,17 @@
 -- Veel V2 schema blueprint.
--- Convert this into proper migrations slice-by-slice.
+-- Convert this into proper Supabase/Postgres migrations slice-by-slice.
+-- This is not a generated migration file. Each slice must add RLS policies,
+-- indexes, updated_at triggers, audit writes, and rollback strategy.
 
-create type staff_role as enum ('moderator', 'admin', 'owner', 'finance', 'support', 'trust_safety', 'ops');
+create type staff_role as enum ('owner', 'admin', 'trust_safety', 'support', 'finance', 'ops', 'creator_success', 'event_ops', 'ai_ops', 'readonly_auditor');
 create type age_state as enum ('not_required', 'required', 'pending', 'verified', 'failed');
 create type content_state as enum ('draft', 'processing', 'ready', 'blocked', 'deleted');
 create type media_provider as enum ('bunny', 'livepeer');
-create type payment_state as enum ('pending', 'transaction_requested', 'confirmed', 'failed', 'expired');
+create type payment_state as enum ('pending', 'transaction_requested', 'submitted', 'confirmed', 'failed', 'expired');
 create type payment_product_type as enum (
   'tip',
   'support',
-  'unlock',
+  'content_unlock',
   'paid_message',
   'live_pass',
   'event_ticket',
@@ -54,6 +56,17 @@ create table staff_memberships (
   granted_by_user_id uuid references users(id),
   created_at timestamptz not null default now(),
   unique (user_id, role)
+);
+
+create table staff_permissions (
+  id uuid primary key,
+  user_id uuid not null references users(id),
+  permission_key text not null,
+  scope text not null default 'global',
+  granted_by_user_id uuid references users(id),
+  revoked_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (user_id, permission_key, scope)
 );
 
 create table wallets (
@@ -133,6 +146,19 @@ create table content_items (
   updated_at timestamptz not null default now()
 );
 
+create table content_access_rules (
+  id uuid primary key,
+  content_item_id uuid not null references content_items(id),
+  access_type text not null,
+  product_type payment_product_type,
+  price_minor bigint,
+  currency text,
+  starts_at timestamptz,
+  ends_at timestamptz,
+  state text not null default 'active',
+  created_at timestamptz not null default now()
+);
+
 create table hashtags (
   id uuid primary key,
   slug text unique not null,
@@ -193,6 +219,35 @@ create table engagement_events (
   state text not null default 'active',
   created_at timestamptz not null default now(),
   unique (user_id, content_item_id, kind)
+);
+
+create table content_reactions (
+  user_id uuid not null references users(id),
+  content_item_id uuid not null references content_items(id),
+  reaction_key text not null default 'like',
+  state text not null default 'active',
+  created_at timestamptz not null default now(),
+  primary key (user_id, content_item_id, reaction_key)
+);
+
+create table content_saves (
+  user_id uuid not null references users(id),
+  content_item_id uuid not null references content_items(id),
+  state text not null default 'active',
+  created_at timestamptz not null default now(),
+  primary key (user_id, content_item_id)
+);
+
+create table share_records (
+  id uuid primary key,
+  actor_user_id uuid not null references users(id),
+  target_type text not null,
+  target_id uuid not null,
+  mode text not null,
+  referral_id uuid,
+  destination text,
+  state text not null default 'created',
+  created_at timestamptz not null default now()
 );
 
 create table follows (
@@ -381,8 +436,6 @@ create table events (
   location_lng numeric,
   location_provider text,
   location_provider_ref text,
-  capacity integer not null,
-  ticket_price_minor integer,
   access_rule text not null default 'public_sale',
   state text not null default 'draft',
   created_at timestamptz not null default now()
@@ -397,6 +450,7 @@ create table ticket_types (
   capacity integer not null,
   sale_starts_at timestamptz,
   sale_ends_at timestamptz,
+  per_user_limit integer,
   state text not null default 'active',
   created_at timestamptz not null default now()
 );
@@ -410,6 +464,29 @@ create table ticket_entitlements (
   qr_token_hash text unique not null,
   state text not null default 'active',
   checked_in_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create table ticket_reservations (
+  id uuid primary key,
+  event_id uuid not null references events(id),
+  ticket_type_id uuid references ticket_types(id),
+  user_id uuid not null references users(id),
+  payment_intent_id uuid references payment_intents(id),
+  expires_at timestamptz not null,
+  state text not null default 'held',
+  created_at timestamptz not null default now()
+);
+
+create table ticket_requests (
+  id uuid primary key,
+  event_id uuid not null references events(id),
+  ticket_type_id uuid references ticket_types(id),
+  requester_user_id uuid not null references users(id),
+  note text,
+  state text not null default 'requested',
+  reviewed_by_user_id uuid references users(id),
+  reviewed_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -465,6 +542,28 @@ create table provider_events (
   unique (provider, provider_event_id)
 );
 
+create table provider_webhook_receipts (
+  id uuid primary key,
+  provider text not null,
+  webhook_type text not null,
+  signature_hash text,
+  idempotency_key text,
+  received_at timestamptz not null default now(),
+  processed_at timestamptz,
+  state text not null default 'received',
+  unique (provider, webhook_type, idempotency_key)
+);
+
+create table provider_reconciliation_events (
+  id uuid primary key,
+  provider text not null,
+  subject_type text not null,
+  subject_id uuid,
+  normalized_state text not null,
+  raw_payload_redacted jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
 create table idempotency_keys (
   key text primary key,
   actor_user_id uuid references users(id),
@@ -486,6 +585,18 @@ create table notification_preferences (
   updated_at timestamptz not null default now()
 );
 
+create table notification_devices (
+  id uuid primary key,
+  user_id uuid not null references users(id),
+  provider text not null,
+  token_hash text not null,
+  platform text not null,
+  state text not null default 'active',
+  last_seen_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (provider, token_hash)
+);
+
 create table moderation_reviews (
   id uuid primary key,
   subject_type text not null,
@@ -495,6 +606,72 @@ create table moderation_reviews (
   assigned_admin_user_id uuid references users(id),
   decision text,
   decided_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create table performer_consents (
+  id uuid primary key,
+  content_item_id uuid references content_items(id),
+  performer_user_id uuid references users(id),
+  legal_name_hash text,
+  consent_reference text,
+  age_verification_id uuid references age_verifications(id),
+  state text not null default 'pending',
+  created_at timestamptz not null default now()
+);
+
+create table moderation_appeals (
+  id uuid primary key,
+  moderation_review_id uuid not null references moderation_reviews(id),
+  appellant_user_id uuid not null references users(id),
+  body text not null,
+  state text not null default 'submitted',
+  decided_by_user_id uuid references users(id),
+  decided_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create table refunds_and_disputes (
+  id uuid primary key,
+  payment_intent_id uuid references payment_intents(id),
+  reporter_user_id uuid references users(id),
+  kind text not null,
+  reason text not null,
+  state text not null default 'opened',
+  resolution text,
+  created_at timestamptz not null default now(),
+  resolved_at timestamptz
+);
+
+create table data_subject_requests (
+  id uuid primary key,
+  user_id uuid not null references users(id),
+  request_type text not null,
+  state text not null default 'submitted',
+  requested_at timestamptz not null default now(),
+  completed_at timestamptz
+);
+
+create table support_cases (
+  id uuid primary key,
+  requester_user_id uuid references users(id),
+  assigned_staff_user_id uuid references users(id),
+  subject_type text,
+  subject_id uuid,
+  category text not null,
+  state text not null default 'open',
+  created_at timestamptz not null default now(),
+  closed_at timestamptz
+);
+
+create table admin_action_records (
+  id uuid primary key,
+  admin_user_id uuid not null references users(id),
+  subject_type text not null,
+  subject_id uuid,
+  action text not null,
+  reason text,
+  confirmation_hash text,
   created_at timestamptz not null default now()
 );
 
@@ -521,3 +698,12 @@ create table audit_events (
   metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
+
+-- Required migration checklist for each implemented slice:
+-- 1. Enable RLS on user-visible tables before exposing direct Supabase access.
+-- 2. Add policy tests for every RLS policy.
+-- 3. Add indexes for foreign keys, feed queries, moderation queues, provider lookups, and audit lookups.
+-- 4. Add updated_at triggers for mutable tables.
+-- 5. Store provider raw payloads only in redacted/restricted reconciliation tables.
+-- 6. Use idempotency keys for money, access, ticket, age, wallet, moderation, admin, and webhook mutations.
+-- 7. Verify OpenAPI product_type enums match payment_product_type exactly.

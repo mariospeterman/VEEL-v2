@@ -1,17 +1,32 @@
 # Veel V2 New Repo Build Plan
 
-Status: proposed v2 architecture
-Scope: greenfield implementation plan
+Status: accepted
+Scope: standalone implementation plan
 Last updated: 2026-06-03
-Source of truth: proposal
+Source of truth: yes
 
-This is the detailed build plan for a clean `veel-v2` repository. It is not a migration checklist and not a code-porting plan. The current repo is only a reference for product behavior, provider lessons, validated tests, and known pitfalls.
+Owns:
+- implementation order, foundation gates, vertical-slice sequencing
 
-Use this as the primary v2 starting document. `slice-workflow.md` is the operational slice workflow. There is no migration-in-place plan in this scaffold.
+Defers to:
+- route map, contracts, schema, provider ADRs for domain detail
+
+Does not own:
+- product UX microcopy or provider SDK behavior
+
+Launch scope:
+- repo foundation through first production slices
+
+Non-goals:
+- bulk-copying historical context code
+
+This is the detailed build plan for a clean `veel-v2` repository. It is not an in-place upgrade checklist and not a code-copy plan. Build decisions come from this docs pack, OpenAPI, schema blueprint, ADRs, tests, and official provider docs.
+
+Use this as the primary v2 starting document. `slice-workflow.md` is the operational slice workflow. There is no in-place upgrade plan in this scaffold.
 
 ## Build Strategy
 
-Build v2 as a greenfield provider-first platform:
+Build v2 as a standalone provider-first platform:
 
 - docs and ADRs first
 - contracts before UI/backend implementation
@@ -21,14 +36,7 @@ Build v2 as a greenfield provider-first platform:
 - tests before polish
 - admin/ops visibility before production cutover
 
-Do not bulk-copy prototype code. Reuse only:
-
-- product rules
-- screenshots/UX lessons
-- validated test cases
-- provider edge cases
-- fixture shape lessons
-- compliance requirements
+Do not bulk-copy external implementation code. Any outside repository is historical reference only and cannot define v2 behavior.
 
 ## New Repo Bootstrap
 
@@ -77,34 +85,21 @@ pnpm init
 mkdir -p apps/{web,api,worker} packages/{contracts,database,config,ui,test-factories} docs/{architecture,adr,product,providers,security,getting-started} infra/{docker,deploy,observability} scripts
 ```
 
-Use pnpm and Node.js LTS for launch. Do not switch production runtime to Bun during the auth/backend/realtime rebuild.
+Use pnpm and Node.js LTS for launch. Do not switch production runtime to Bun during the auth/backend/realtime build.
 
-## Copy From Current Repo
+## Build Source Boundary
 
-Copy only documentation and lessons first:
-
-```text
-docs/v2-new-build/
-AGENTS.md
-```
-
-Then rewrite the root `README.md` for v2 only. Do not keep stale v1 setup instructions active in the new repo.
-
-The files in this folder already use new-repo names. You can copy them as-is or rename `docs/v2-new-build/` to `docs/architecture/` in the new repo.
-
-Before implementation starts, verify these high-signal v2 docs are present in the new repo:
+Before implementation starts, verify these source-of-truth files are present in this scaffold:
 
 - `full-platform-blueprint.md` for the whole app/module/workflow/provider map
 - `adr/0002-provider-decisions-2026.md` for launch provider defaults
 - `contracts-and-schema.md`, `packages/contracts/openapi.yaml`, and `packages/database/schema-blueprint.sql` for the first contract/schema draft
 - `diagrams.md` for render-safe full-platform diagrams
-- `product/dating-mode.md` for explicit Dating Mode rules
-- `product/events-ticketing.md` for event/ticketing rules
-- `recommendation-discovery.md` for feed, hashtag, mention, and NSFW delivery rules
-- `profile-activity-ranking.md` for badges, verification status, own stats, activity, and safe rankings
-- `providers/provider-map.md` for provider ownership and boundary rules
-- `business-monetisation.md` for the business model and split/revenue strategy
-- `compliance/adult-content-compliance.md` and `compliance/age-kyc-jurisdictions.md` for adult platform obligations
+- `product/dating-mode.md` and `product/events-ticketing.md` for dating and events
+- `recommendation-discovery.md`, `profile-activity-ranking.md`, and `engagement-strategy.md` for growth and social mechanics
+- `providers/provider-map.md`, `business-monetisation.md`, and compliance docs for provider and business boundaries
+
+Do not copy external implementation files. Recreate behavior through contracts, schema, tests, and vertical slices.
 
 ## GStack Setup
 
@@ -169,20 +164,24 @@ Supabase             Providers
 Deliverables:
 
 - pnpm workspace
+- `pnpm-lock.yaml`
 - TypeScript base config
-- lint/format/test config
+- real lint/format/test config for apps and packages
 - Docker Compose for local development
 - env examples with no secrets
-- secret scanning
-- CI skeleton
+- secret scanning and dependency review
+- CI/CD skeleton: `ci`, `security`, `preview`, `deploy-staging`, `deploy-production`, `db-migrations`
+- CODEOWNERS and Dependabot
 - docs index
 - ADR folder
 
 Definition of done:
 
-- `pnpm lint`, `pnpm typecheck`, and `pnpm test` run even if apps are empty
+- `pnpm docs:check` validates the current scaffold
+- `pnpm lint`, `pnpm typecheck`, and `pnpm test` must not pretend to validate app code before real app tooling exists
+- after apps are created, `pnpm lint`, `pnpm typecheck`, and `pnpm test` must run real app/package checks
 - `.env.example` documents public vs server-only values
-- `.cursorignore` excludes build artifacts, secrets, generated output, vendor caches, and prototype imports
+- `.cursorignore` excludes build artifacts, secrets, generated output, vendor caches, and historical context imports
 
 ## Contracts Milestone
 
@@ -314,7 +313,7 @@ Build each slice end-to-end before starting the next:
 3. Home feed read model with real cards.
 4. Media viewer with access-state projection.
 5. Native SOL devnet payment intent and settlement.
-6. Paid unlock entitlement.
+6. Content unlock entitlement.
 7. Tip/support settlement without access grant.
 8. Referral attribution and commission.
 9. Bunny VOD upload/status/playback.
@@ -350,16 +349,14 @@ Each slice must include:
 9. Add Home read model API and one production-quality media card.
 10. Add Playwright desktop/mobile smoke for app shell and Home.
 
-## Reference Repo Usage Protocol
+## Historical Reference Protocol
 
-For each slice:
+If a developer reviews any historical material for context, the process is:
 
-1. Read v1 docs and tests.
-2. Inspect v1 code only to understand behavior or edge cases.
-3. Write v2 contract and tests.
-4. Implement clean v2 code.
-5. Compare v2 behavior against v1 E2E expectations.
-6. Do not copy large files, CSS, controllers, services, or old abstractions.
+1. Extract the lesson into the relevant v2 doc, OpenAPI contract, schema blueprint, or test plan.
+2. Treat the v2 artifact as the only implementation source.
+3. Do not copy files, CSS, controllers, services, provider adapters, or abstractions.
+4. Do not infer missing behavior from historical code.
 
 ## Production Gate
 

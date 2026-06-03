@@ -1,5 +1,5 @@
 ---
-description: Veel v2 greenfield build rules
+description: Veel v2 standalone build rules
 globs:
   - "**/*"
 alwaysApply: true
@@ -7,7 +7,7 @@ alwaysApply: true
 
 # Veel V2 Cursor Rules
 
-This repo is a clean greenfield rebuild. The old Veel repo is reference only.
+This repo is a clean standalone build. The historical context is reference only.
 
 ## Source Of Truth
 
@@ -20,12 +20,13 @@ This repo is a clean greenfield rebuild. The old Veel repo is reference only.
 
 ## Hard Rules
 
-- Do not bulk-copy old app code.
+- Do not bulk-copy historical context code.
 - Do not create duplicate routes, app shells, media viewers, payment systems, provider adapters, realtime systems, CSS systems, or API clients.
 - Do not move payment/access/referral/subscription/ticket/age/KYC/admin truth to the frontend.
 - Do not expose provider secrets, service-role keys, stream keys, signed playback URLs, webhook secrets, raw PII, or private keys.
 - Do not invent provider payloads or SDK methods. Check official provider docs before integration.
 - Do not add dependencies without a clear reason and maintenance/security check.
+- Do not ship a provider-dependent production path while the provider ADR state is only `candidate`.
 
 ## Build Discipline
 
@@ -39,6 +40,8 @@ Each vertical slice must include:
 - frontend generated-client usage
 - tests
 - docs update
+
+Run `pnpm docs:check` before and after docs, route, contract, schema, ADR, or provider-decision changes.
 
 ## Frontend Rules
 
@@ -59,4 +62,3 @@ Each vertical slice must include:
 - Policies own authorization.
 - Provider adapters own third-party API calls.
 - Workers own async provider/reconciliation jobs.
-

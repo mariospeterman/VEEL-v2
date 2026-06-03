@@ -1,0 +1,18 @@
+name: preview
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  preview-plan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preview deployment placeholder
+        run: |
+          echo "Preview deployment is enabled after the foundation slice creates apps/web, apps/api, and infra/deploy."
+          echo "Until then, ci.yml is the executable gate."

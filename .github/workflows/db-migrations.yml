@@ -1,0 +1,20 @@
+name: db-migrations
+
+on:
+  pull_request:
+    paths:
+      - "packages/database/**"
+      - ".github/workflows/db-migrations.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  migration-plan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Migration test placeholder
+        run: |
+          echo "Migration/RLS tests become mandatory when packages/database/migrations is created."
+          echo "The schema blueprint is not a runnable migration."

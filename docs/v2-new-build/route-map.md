@@ -1,11 +1,26 @@
 # Veel V2 Route Map
 
-Status: source-of-truth draft
+Status: accepted
 Scope: API routes, frontend routes, permissions, tests
 Last updated: 2026-06-03
-Source of truth: yes for v2 route planning
+Source of truth: yes
 
-This document freezes the v2 route family before implementation.
+Owns:
+- frontend route names and API route families
+
+Defers to:
+- OpenAPI for operation schemas and response bodies
+
+Does not own:
+- database tables, provider internals, screen styling
+
+Launch scope:
+- launch and phased route coverage
+
+Non-goals:
+- uncontracted route examples
+
+This document freezes the v2 route family before implementation. It must match `packages/contracts/openapi.yaml`.
 
 ## API Version Decision
 
@@ -58,6 +73,8 @@ All routes use `/v1`.
 | Wallets | `GET /v1/wallets`, `POST /v1/wallets/link`, `PATCH /v1/wallets/:id/primary`, `POST /v1/wallets/onramp-sessions` | MVP | Embedded/native wallet path; onramp is not payment proof. |
 | Profiles | `GET /v1/profiles/:handle`, `PATCH /v1/profiles/me`, `POST /v1/follows/:userId` | MVP | Creator/user profile capability model. |
 | Content | `GET /v1/content/feed`, `GET /v1/content/{contentId}`, `POST /v1/content`, `PATCH /v1/content/{contentId}`, `POST /v1/media/uploads` | MVP | Bunny-backed upload/create; media-safe resources. |
+| Discover | `GET /v1/discover/search`, `GET /v1/discover/hashtags`, `GET /v1/discover/hashtags/{slug}`, `GET /v1/discover/creators`, `GET /v1/discover/events`, `GET /v1/discover/live` | MVP | Search/discovery read models for content, creators, hashtags, events, and live. |
+| Feed Controls | `PATCH /v1/feed/preferences`, `POST /v1/feed/reset`, `POST /v1/feed/hide-creator`, `POST /v1/feed/hide-topic` | MVP | Backend-owned recommendation preferences and safety controls. |
 | Engagement | `POST /v1/engagement/:contentId/like`, `POST /v1/engagement/:contentId/save`, `POST /v1/engagement/:contentId/comments`, `GET /v1/engagement/:contentId/comments`, `POST /v1/shares` | MVP/Phase 2 | Backend-owned engagement records. |
 | Reports/Blocks | `POST /v1/reports`, `POST /v1/blocks/:userId` | MVP | Safety actions audited. |
 | Payments | `POST /v1/payments/intents`, `GET /v1/payments/intents/:id`, `GET /v1/payments/intents/:id/transaction-request`, `POST /v1/payments/intents/:id/submissions`, `POST /v1/webhooks/solana-indexer` | MVP | Noncustodial payment intent and evidence. |
@@ -68,8 +85,9 @@ All routes use `/v1`.
 | Events | `POST /v1/events`, `PATCH /v1/events/:id`, `GET /v1/events/:id`, `POST /v1/events/:id/tickets/intents`, `POST /v1/events/:id/tickets/requests`, `POST /v1/tickets/:id/check-in` | Phase 3 | Ticket price creator-owned, backend-validated. |
 | Dating | `POST /v1/dating/activate`, `PATCH /v1/dating/preferences`, `POST /v1/dating/swipes`, `GET /v1/dating/matches`, `PATCH /v1/dating/matches/:id/archive` | Phase 4 | Explicit opt-in, safety, active-match cap. |
 | Activity | `GET /v1/activity`, `GET /v1/activity/payments`, `GET /v1/activity/tickets`, `GET /v1/activity/referrals` | Phase 2 | Trust/accountability surface. |
-| Admin | `GET /v1/admin/ops/summary`, `GET /v1/admin/audit`, product-specific admin routes | phased | Role-gated, audited, no provider secrets. |
+| Admin | `GET /v1/admin/ops/summary`, `GET /v1/admin/audit`, `GET /v1/admin/users`, `GET /v1/admin/users/{userId}`, `GET /v1/admin/content`, `PATCH /v1/admin/content/{contentId}/moderation`, `GET /v1/admin/reports`, `PATCH /v1/admin/reports/{reportId}`, `GET /v1/admin/payments/intents`, `GET /v1/admin/provider-events`, `POST /v1/admin/provider-events/{providerEventId}/replay`, `GET /v1/admin/support/cases`, `PATCH /v1/admin/support/cases/{supportCaseId}`, `GET /v1/admin/data-requests`, `PATCH /v1/admin/data-requests/{dataRequestId}`, `GET /v1/admin/events`, `GET /v1/admin/tickets`, `GET /v1/admin/dating/safety`, `GET /v1/admin/feature-flags`, `PATCH /v1/admin/feature-flags/{featureFlagKey}` | MVP/phased | Role-gated, audited, no provider secrets; every admin mutation writes admin action/audit. |
 | AI/MCP | `POST /v1/ai/sessions`, `POST /v1/ai/sessions/:id/tool-calls` | Phase 5 | Permission-scoped, confirmation-gated tools. |
+| Provider Webhooks | `POST /v1/webhooks/media/:provider`, `POST /v1/webhooks/age/:provider`, `POST /v1/webhooks/solana-indexer` | phased | Signature-verified, idempotent, audited provider callbacks. |
 
 ## Required Response States
 
@@ -90,4 +108,6 @@ Every screen route and API route must define:
 
 - No `/v2` API route examples remain.
 - OpenAPI and this route map agree before implementation.
+- Every OpenAPI operation has an `operationId`.
+- Every mutation that changes money, access, tickets, wallet, age, dating, messages, moderation, admin, or provider state has idempotency coverage.
 - Generated frontend client uses OpenAPI only.

@@ -1,9 +1,24 @@
 # Veel V2 Events And Ticketing Architecture
 
-Status: proposed v2 architecture
+Status: accepted
 Scope: events, tickets, Solana payment, QR/check-in, admin ops
 Last updated: 2026-06-03
 Source of truth: yes for v2 Events and Ticketing
+
+Owns:
+- events ticketing decisions for its named domain
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 Events are content-attached conversion flows. They are not root navigation by default, and ticket purchase/join always requires explicit confirmation.
 
@@ -97,7 +112,13 @@ ticket_entitlements
   ├─ holder_user_id
   ├─ payment_intent_id
   ├─ qr_token_hash
-  └─ state: active | checked_in | refunded | revoked | expired
+  └─ state: active | checked_in | revoked | expired
+
+refunds_and_disputes
+  ├─ ticket_entitlement_id
+  ├─ payment_intent_id
+  ├─ state: requested | approved | rejected | processed | failed
+  └─ reason/audit metadata
 ```
 
 ## Paid Ticket Flow
@@ -262,6 +283,7 @@ Admin mutations require role policy, confirmation, and audit event.
 - paid ticket grants entitlement only after backend verification
 - duplicate payment event does not duplicate ticket
 - sold-out inventory blocks new tickets
-- refunded/revoked ticket cannot check in
+- tickets with processed refund/dispute records normally revoke the ticket entitlement
+- revoked ticket cannot check in
 - QR check-in is idempotent
 - frontend never sees raw payment/provider secrets

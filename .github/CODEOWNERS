@@ -1,0 +1,10 @@
+* @maki
+
+packages/contracts/** @maki
+packages/database/** @maki
+docs/v2-new-build/payments-and-monetisation.md @maki
+docs/v2-new-build/business-monetisation.md @maki
+docs/v2-new-build/compliance/** @maki
+docs/v2-new-build/providers/** @maki
+docs/v2-new-build/adr/** @maki
+.github/workflows/** @maki

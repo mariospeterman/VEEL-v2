@@ -1,9 +1,24 @@
 # Veel V2 Render-Safe Diagrams
 
-Status: proposed v2 architecture
+Status: accepted
 Scope: full-platform diagrams
 Last updated: 2026-06-03
 Source of truth: yes for render-safe architecture diagrams
+
+Owns:
+- diagrams decisions for its named domain
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 These diagrams use plain text so they render in Cursor, GitHub, terminals, and any Markdown preview without a Mermaid extension. Mermaid diagrams may still exist in detailed docs, but this file is the canonical render-safe diagram set.
 
@@ -39,7 +54,7 @@ Supabase Platform                 Workers                      Providers
   └─ Storage only if needed         ├─ moderation                ├─ onramp provider
                                     ├─ notifications             ├─ Bunny Stream/CDN/TUS
                                     └─ retry queues              ├─ Livepeer live/replay
-                                                                 ├─ Yoti/Sumsub/Persona
+                                                                 ├─ Yoti/Sumsub/Veriff/Persona
                                                                  └─ email/push/observability
 ```
 
@@ -159,7 +174,7 @@ Creator opens live room
   -> API creates Livepeer stream
   -> creator receives masked host connection only in creator endpoint
   -> viewer endpoint receives playback-safe state only
-  -> pass/unlock payment grants live entitlement
+  -> pass/content-unlock payment grants live entitlement
   -> chat uses backend/Supabase policy checks
   -> Livepeer webhook marks stream status
   -> replay asset becomes content/replay item after end

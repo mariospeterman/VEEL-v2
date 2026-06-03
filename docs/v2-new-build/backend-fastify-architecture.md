@@ -1,9 +1,24 @@
 # Veel V2 Fastify Backend Architecture
 
-Status: proposed v2 architecture
+Status: accepted
 Scope: backend
 Last updated: 2026-06-03
-Source of truth: proposal
+Source of truth: yes
+
+Owns:
+- backend fastify architecture decisions for its named domain
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 ## Backend Role
 
@@ -165,7 +180,7 @@ POST /v1/payments/intents
 GET  /v1/payments/intents/:id/transaction-request
 POST /v1/webhooks/solana-indexer
 POST /v1/media/uploads
-POST /v1/webhooks/media/bunny
+POST /v1/webhooks/media/{provider}
 POST /v1/live/rooms
 GET  /v1/live/rooms/:id
 GET  /v1/live/rooms/:id/host-connection

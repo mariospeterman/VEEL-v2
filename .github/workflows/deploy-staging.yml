@@ -1,0 +1,19 @@
+name: deploy-staging
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  staging-plan:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Staging deployment placeholder
+        run: |
+          echo "Staging deploy becomes active after infra/deploy defines the target platform."
+          echo "Use OIDC and environment-scoped secrets only; do not add long-lived deploy keys."

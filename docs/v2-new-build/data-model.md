@@ -1,9 +1,24 @@
 # Veel V2 Data Model
 
-Status: proposed v2 architecture
+Status: accepted
 Scope: database
 Last updated: 2026-06-01
-Source of truth: proposal
+Source of truth: yes
+
+Owns:
+- data model decisions for its named domain
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 This is the conceptual Postgres model for v2. It is not a migration file.
 

@@ -14,17 +14,18 @@ This file mirrors the core agent rules from `AGENTS.md` for Claude-style tooling
 
 ## Operating Mode
 
-Build Veel v2 as a clean greenfield platform. The previous prototype is reference only for validated lessons. Do not bulk-copy prototype code.
+Build Veel v2 as a clean greenfield platform. The historical context is context only for validated lessons. Do not bulk-copy historical context code.
 
 Use this order for every meaningful change:
 
 1. Identify the owning domain and source-of-truth doc.
-2. Update or confirm the contract/schema.
-3. Update or add migrations if data shape changes.
-4. Implement the smallest vertical slice.
-5. Add tests.
-6. Update docs.
-7. Run relevant checks.
+2. Re-check official provider docs if the slice touches a provider/API boundary.
+3. Update or confirm the contract/schema.
+4. Update or add migrations if data shape changes.
+5. Implement the smallest vertical slice.
+6. Add tests.
+7. Update docs.
+8. Run relevant checks.
 
 ## Non-Negotiables
 
@@ -35,6 +36,7 @@ Use this order for every meaningful change:
 - No custom provider infrastructure when official provider APIs solve the job.
 - No hidden obsolete UI. Delete, dev-gate, or implement real collapsed state.
 - No broad refactors without a slice goal and tests.
+- No provider-dependent production path ships from a `candidate` ADR state; prove it in staging first.
 
 ## Provider-First Rules
 
@@ -55,3 +57,5 @@ When completing work, report:
 - tests added/updated
 - risks or blockers
 - next exact action
+
+For docs, route, contract, schema, ADR, or provider-decision changes, run `pnpm docs:check` before and after the edit.

@@ -1,9 +1,24 @@
 # Veel V2 Realtime, Messages, And Activity
 
-Status: proposed v2 architecture
+Status: accepted
 Scope: realtime, messages, notifications, activity
 Last updated: 2026-06-01
-Source of truth: proposal
+Source of truth: yes
+
+Owns:
+- realtime messages activity decisions for its named domain
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 ## Realtime Decision
 

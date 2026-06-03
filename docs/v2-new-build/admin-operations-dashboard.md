@@ -1,9 +1,24 @@
 # Veel V2 Admin And Operations Dashboard
 
-Status: proposed v2 architecture
+Status: accepted
 Scope: admin, business operations, support, devops visibility
 Last updated: 2026-06-01
-Source of truth: proposal
+Source of truth: yes
+
+Owns:
+- admin operations dashboard decisions for its named domain
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 This document defines the admin and operations surface required to run Veel as a business. It complements `safety-admin-ai.md`, which covers safety and AI boundaries. The admin dashboard is a separate protected product surface, not part of the normal user app shell.
 
@@ -62,7 +77,7 @@ The admin landing dashboard should show:
 
 - GMV, platform revenue, creator earnings, referral commissions
 - active users, creators, subscribers, paying users
-- unlock conversion and failed payment rate
+- content unlock conversion and failed payment rate
 - live rooms active, waiting, replay processing
 - media upload/processing health
 - reports/moderation queue counts
@@ -206,7 +221,7 @@ Business:
 - net platform revenue after referral commissions
 - creator earnings
 - paying conversion rate
-- unlock conversion rate
+- content unlock conversion rate
 - subscription MRR/ARR/churn
 - event ticket sales
 - creator retention

@@ -4,7 +4,7 @@
 
 Build Veel v2 as a clean, provider-first, production-grade 18+ creator PWA/dApp for media, live/VOD, premium unlocks, messages, events, dating/matches, creator monetisation, and admin operations.
 
-This is a greenfield build. The previous prototype is reference only for validated lessons.
+This is a standalone build. The historical context is context only for validated lessons.
 
 ## Source Of Truth
 
@@ -17,10 +17,11 @@ This is a greenfield build. The previous prototype is reference only for validat
 - Provider behavior: official provider docs and provider adapters
 
 Do not invent provider APIs, routes, DB columns, env vars, events, SDK calls, permissions, or payload shapes.
+Before implementing or changing provider code, re-check the latest official provider docs and update the relevant ADR/doc when behavior, payloads, limits, or security settings differ from this scaffold.
 
 ## Hard Rules
 
-- No bulk-copying prototype app code.
+- No bulk-copying historical context code.
 - No duplicate routes, app shells, media viewers, payment systems, provider adapters, realtime systems, or CSS systems.
 - No frontend business truth for payments, access, referrals, commissions, tickets, subscriptions, age/KYC, moderation, or admin state.
 - No provider secrets, private keys, stream keys, signed media URLs, webhook secrets, raw PII, or service-role keys in browser bundles.
@@ -28,7 +29,8 @@ Do not invent provider APIs, routes, DB columns, env vars, events, SDK calls, pe
 - No custom key custody. Embedded wallet provider must be noncustodial/user-controlled.
 - No wallet approval treated as payment proof. Backend settlement verification is required.
 - No raw provider payloads in frontend resources.
-- No stale rebuild, migration-in-place, or prototype-porting plans.
+- No stale copy, in-place upgrade, or reference-code import plans.
+- No provider-dependent production path can ship while its ADR state is only `candidate`; it must be `staging-approved` or `launch-approved` for the exact use case.
 
 ## Architecture Defaults
 
@@ -58,17 +60,9 @@ Every production slice must include:
 - admin/ops visibility when relevant
 - docs update
 
-## Prototype Reference Rule
+## Historical Context Rule
 
-The previous prototype may be used to inspect:
-
-- validated behavior
-- tests and fixtures
-- provider lessons
-- screenshots and UX findings
-- launch blockers
-
-Port lessons and tests, not code shape.
+Historical repositories and notes are context only. If a useful lesson appears there, capture it in the v2 docs, OpenAPI contract, schema blueprint, migration test, provider fixture, or E2E test before implementing. Never copy historical code shape, CSS, provider adapters, routes, or business logic.
 
 ## Security Baseline
 
@@ -91,3 +85,4 @@ Port lessons and tests, not code shape.
 - Tests added
 - No secrets committed
 - No duplicate systems introduced
+- `pnpm docs:check` run before and after docs, route, contract, schema, ADR, or provider-decision changes

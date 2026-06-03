@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable Corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.0.0 --activate
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Check docs, route map, OpenAPI, and schema alignment
+        run: pnpm docs:check
+
+      - name: Parse OpenAPI YAML
+        run: ruby -e 'require "yaml"; YAML.load_file("packages/contracts/openapi.yaml")'
+
+      - name: Whitespace check
+        run: git diff --check

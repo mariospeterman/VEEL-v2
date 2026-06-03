@@ -1,0 +1,19 @@
+name: deploy-production
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  production-plan:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Production deployment placeholder
+        run: |
+          echo "Production deploy requires an approved release, pinned artifact digest, migration plan, smoke tests, and rollback path."
+          echo "This placeholder intentionally does not deploy until infra/deploy is implemented."

@@ -1,13 +1,28 @@
 # Veel V2 Frontend Architecture
 
-Status: proposed v2 architecture
+Status: accepted
 Scope: frontend
 Last updated: 2026-06-01
-Source of truth: proposal
+Source of truth: yes
+
+Owns:
+- frontend architecture decisions for its named domain
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 ## Recommendation
 
-Keep Next.js PWA and rebuild the frontend architecture cleanly around:
+Keep Next.js PWA and build the frontend architecture cleanly around:
 
 - route-owned surfaces
 - small product components
@@ -164,7 +179,7 @@ Required v2 tests:
 - Home desktop/mobile visual
 - media viewer desktop/mobile visual
 - Create viewport
-- payment/unlock browser flow
+- payment/content-unlock browser flow
 - live host/viewer boundary
 - messages realtime
 - sourceContext navigation

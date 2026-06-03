@@ -3,8 +3,8 @@ info:
   title: Veel V2 API
   version: 0.1.0
   description: >
-    Initial contract skeleton for the Veel v2 greenfield build. This file is the
-    API source of truth and must be expanded slice-by-slice before implementation.
+    Contract-first API source of truth for the Veel v2 standalone build. Fastify routes,
+    generated clients, tests, and docs must stay aligned with this file.
 servers:
   - url: https://api.veel.example
     description: Production
@@ -17,7 +17,10 @@ tags:
   - name: Me
   - name: Age
   - name: Wallets
+  - name: Profiles
   - name: Content
+  - name: Discover
+  - name: Feed
   - name: Media
   - name: Live
   - name: Engagement
@@ -26,6 +29,7 @@ tags:
   - name: Referrals
   - name: Subscriptions
   - name: Events
+  - name: Tickets
   - name: Dating
   - name: Activity
   - name: AI
@@ -34,544 +38,918 @@ tags:
 paths:
   /v1/session:
     get:
+      operationId: getSession
       tags: [Auth]
       summary: Current session and protected-app gate state
       responses:
-        "200":
-          description: Session state
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SessionState"
+        "200": { $ref: "#/components/responses/SessionState" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /v1/me:
     get:
+      operationId: getMe
       tags: [Me]
       summary: Current viewer state
       responses:
-        "200":
-          description: Current viewer
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Me"
+        "200": { $ref: "#/components/responses/Me" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /v1/age/sessions:
     post:
+      operationId: createAgeSession
       tags: [Age]
       summary: Start third-party age assurance session
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateAgeSession"
       responses:
-        "201":
-          description: Age assurance session
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AgeSession"
+        "201": { $ref: "#/components/responses/AgeSession" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /v1/age/status:
     get:
+      operationId: getAgeStatus
       tags: [Age]
       summary: Current safe age-gate status
       responses:
-        "200":
-          description: Age state
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AgeStatus"
+        "200": { $ref: "#/components/responses/AgeStatus" }
   /v1/wallets:
     get:
+      operationId: listWallets
       tags: [Wallets]
       summary: Linked wallets
       responses:
-        "200":
-          description: Wallets
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [items]
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Wallet"
+        "200": { $ref: "#/components/responses/WalletList" }
   /v1/wallets/link:
     post:
+      operationId: linkWallet
       tags: [Wallets]
       summary: Link embedded or external wallet after backend challenge verification
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/LinkWallet"
       responses:
-        "201":
-          description: Wallet linked
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Wallet"
+        "201": { $ref: "#/components/responses/Wallet" }
   /v1/wallets/{walletId}/primary:
     patch:
+      operationId: setPrimaryWallet
       tags: [Wallets]
       summary: Set primary wallet
       parameters:
-        - name: walletId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - $ref: "#/components/parameters/WalletId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
       responses:
-        "200":
-          description: Wallet
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Wallet"
+        "200": { $ref: "#/components/responses/Wallet" }
   /v1/wallets/onramp-sessions:
     post:
+      operationId: createOnrampSession
       tags: [Wallets]
       summary: Create provider funding session for a user-controlled wallet
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateOnrampSession"
       responses:
-        "201":
-          description: Onramp session
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/OnrampSession"
+        "201": { $ref: "#/components/responses/OnrampSession" }
   /v1/profiles/me:
     patch:
-      tags: [Me]
+      operationId: updateMyProfile
+      tags: [Profiles]
       summary: Update current public profile
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/UpdateProfile"
       responses:
-        "200":
-          description: Profile
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/User"
+        "200": { $ref: "#/components/responses/User" }
   /v1/profiles/{handle}:
     get:
-      tags: [Me]
+      operationId: getProfileByHandle
+      tags: [Profiles]
       summary: Public profile by handle
       parameters:
-        - name: handle
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: "#/components/parameters/Handle"
       responses:
-        "200":
-          description: Public profile
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/User"
+        "200": { $ref: "#/components/responses/User" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /v1/follows/{userId}:
+    post:
+      operationId: toggleFollow
+      tags: [Engagement]
+      summary: Follow or unfollow a creator/profile
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "200": { $ref: "#/components/responses/FollowState" }
   /v1/content/feed:
     get:
+      operationId: getContentFeed
       tags: [Content]
       summary: Mixed media Home feed
       parameters:
         - $ref: "#/components/parameters/FeedMode"
         - $ref: "#/components/parameters/Cursor"
       responses:
-        "200":
-          description: Feed page
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/FeedPage"
+        "200": { $ref: "#/components/responses/FeedPage" }
+  /v1/discover/search:
+    get:
+      operationId: searchDiscover
+      tags: [Discover]
+      summary: Search content, creators, hashtags, events, and live rooms
+      parameters:
+        - $ref: "#/components/parameters/SearchQuery"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/DiscoverPage" }
+  /v1/discover/hashtags:
+    get:
+      operationId: listDiscoverHashtags
+      tags: [Discover]
+      summary: Discover active hashtags
+      parameters:
+        - $ref: "#/components/parameters/SearchQuery"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/HashtagPage" }
+  /v1/discover/hashtags/{slug}:
+    get:
+      operationId: getDiscoverHashtag
+      tags: [Discover]
+      summary: Hashtag landing page and associated media
+      parameters:
+        - $ref: "#/components/parameters/Slug"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/DiscoverPage" }
+  /v1/discover/creators:
+    get:
+      operationId: listDiscoverCreators
+      tags: [Discover]
+      summary: Discover creator profiles
+      parameters:
+        - $ref: "#/components/parameters/SearchQuery"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/CreatorPage" }
+  /v1/discover/events:
+    get:
+      operationId: listDiscoverEvents
+      tags: [Discover]
+      summary: Discover events
+      parameters:
+        - $ref: "#/components/parameters/SearchQuery"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/EventPage" }
+  /v1/discover/live:
+    get:
+      operationId: listDiscoverLive
+      tags: [Discover]
+      summary: Discover live rooms and replay previews
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/LiveRoomPage" }
+  /v1/feed/preferences:
+    patch:
+      operationId: updateFeedPreferences
+      tags: [Feed]
+      summary: Update viewer feed preferences
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/UpdateFeedPreferences"
+      responses:
+        "200": { $ref: "#/components/responses/FeedPreferences" }
+  /v1/feed/reset:
+    post:
+      operationId: resetFeedRecommendations
+      tags: [Feed]
+      summary: Reset recommendation profile
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "202": { $ref: "#/components/responses/Accepted" }
+  /v1/feed/hide-creator:
+    post:
+      operationId: hideFeedCreator
+      tags: [Feed]
+      summary: Hide creator from recommendations
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/HideFeedCreator"
+      responses:
+        "200": { $ref: "#/components/responses/FeedPreferences" }
+  /v1/feed/hide-topic:
+    post:
+      operationId: hideFeedTopic
+      tags: [Feed]
+      summary: Hide hashtag/topic from recommendations
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/HideFeedTopic"
+      responses:
+        "200": { $ref: "#/components/responses/FeedPreferences" }
+  /v1/content:
+    post:
+      operationId: createContent
+      tags: [Content]
+      summary: Create content draft
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateContent"
+      responses:
+        "201": { $ref: "#/components/responses/ContentItem" }
   /v1/content/{contentId}:
     get:
+      operationId: getContent
       tags: [Content]
       summary: Frontend-safe content detail
       parameters:
         - $ref: "#/components/parameters/ContentId"
       responses:
-        "200":
-          description: Content detail
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ContentItem"
+        "200": { $ref: "#/components/responses/ContentItem" }
     patch:
+      operationId: updateContent
       tags: [Content]
       summary: Update content metadata, visibility, thumbnail, teaser, or event draft
       parameters:
         - $ref: "#/components/parameters/ContentId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
       requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateContentRequest"
+        $ref: "#/components/requestBodies/UpdateContent"
       responses:
-        "200":
-          description: Content detail
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ContentItem"
-  /v1/content:
-    post:
-      tags: [Content]
-      summary: Create content draft
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateContentRequest"
-      responses:
-        "201":
-          description: Created draft
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ContentItem"
+        "200": { $ref: "#/components/responses/ContentItem" }
   /v1/media/uploads:
     post:
+      operationId: createMediaUpload
       tags: [Media]
       summary: Create provider-backed upload session
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
       requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateUploadRequest"
+        $ref: "#/components/requestBodies/CreateUpload"
       responses:
-        "201":
-          description: Safe upload session
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/UploadSession"
+        "201": { $ref: "#/components/responses/UploadSession" }
+  /v1/live/rooms:
+    post:
+      operationId: createLiveRoom
+      tags: [Live]
+      summary: Create creator live room
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateLiveRoom"
+      responses:
+        "201": { $ref: "#/components/responses/LiveRoom" }
   /v1/live/rooms/{roomId}:
     get:
+      operationId: getLiveRoom
       tags: [Live]
       summary: Viewer-safe live room detail
       parameters:
         - $ref: "#/components/parameters/RoomId"
       responses:
-        "200":
-          description: Live room
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LiveRoom"
+        "200": { $ref: "#/components/responses/LiveRoom" }
   /v1/live/rooms/{roomId}/host-connection:
     get:
+      operationId: getLiveHostConnection
       tags: [Live]
       summary: Creator-only masked host connection
       parameters:
         - $ref: "#/components/parameters/RoomId"
       responses:
-        "200":
-          description: Masked host connection
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HostConnection"
+        "200": { $ref: "#/components/responses/HostConnection" }
+  /v1/live/rooms/{roomId}/pass-intents:
+    post:
+      operationId: createLivePassIntent
+      tags: [Live]
+      summary: Create live-pass payment intent for a room
+      parameters:
+        - $ref: "#/components/parameters/RoomId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateLivePassIntent"
+      responses:
+        "201": { $ref: "#/components/responses/PaymentIntent" }
   /v1/engagement/{contentId}/like:
     post:
+      operationId: toggleContentLike
       tags: [Engagement]
       summary: Toggle content like
       parameters:
         - $ref: "#/components/parameters/ContentId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
       responses:
-        "200":
-          description: Engagement state
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/EngagementState"
+        "200": { $ref: "#/components/responses/EngagementState" }
   /v1/engagement/{contentId}/save:
     post:
+      operationId: toggleContentSave
       tags: [Engagement]
       summary: Toggle content save
       parameters:
         - $ref: "#/components/parameters/ContentId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
       responses:
-        "200":
-          description: Engagement state
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/EngagementState"
+        "200": { $ref: "#/components/responses/EngagementState" }
   /v1/engagement/{contentId}/comments:
     get:
+      operationId: listContentComments
       tags: [Engagement]
       summary: List content comments
       parameters:
         - $ref: "#/components/parameters/ContentId"
         - $ref: "#/components/parameters/Cursor"
       responses:
-        "200":
-          description: Comments
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CommentPage"
+        "200": { $ref: "#/components/responses/CommentPage" }
     post:
+      operationId: createContentComment
       tags: [Engagement]
       summary: Create comment
       parameters:
         - $ref: "#/components/parameters/ContentId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
       requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateCommentRequest"
+        $ref: "#/components/requestBodies/CreateComment"
       responses:
-        "201":
-          description: Comment
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Comment"
+        "201": { $ref: "#/components/responses/Comment" }
   /v1/shares:
     post:
+      operationId: createShare
       tags: [Engagement]
       summary: Create internal share or external referral-aware share link
-      responses:
-        "201":
-          description: Share result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ShareResult"
-  /v1/follows/{userId}:
-    post:
-      tags: [Engagement]
-      summary: Follow or unfollow a creator/profile
       parameters:
-        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateShare"
       responses:
-        "200":
-          description: Follow state
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/FollowState"
+        "201": { $ref: "#/components/responses/ShareResult" }
   /v1/reports:
     post:
+      operationId: createReport
       tags: [Engagement]
       summary: Submit report for moderation
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateReport"
       responses:
-        "201":
-          description: Report accepted
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ModerationIntake"
+        "201": { $ref: "#/components/responses/ModerationIntake" }
   /v1/blocks/{userId}:
     post:
+      operationId: blockUser
       tags: [Engagement]
       summary: Block a user
       parameters:
         - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
       responses:
-        "200":
-          description: Block state
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BlockState"
+        "200": { $ref: "#/components/responses/BlockState" }
   /v1/messages/conversations:
     get:
+      operationId: listConversations
       tags: [Messages]
       summary: Conversation list
       responses:
-        "200":
-          description: Conversations
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [items]
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Conversation"
+        "200": { $ref: "#/components/responses/ConversationList" }
+  /v1/messages/conversations/{conversationId}/messages:
+    post:
+      operationId: createConversationMessage
+      tags: [Messages]
+      summary: Send a conversation message or paid-message delivery
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateMessage"
+      responses:
+        "201": { $ref: "#/components/responses/Message" }
   /v1/payments/intents:
     post:
+      operationId: createPaymentIntent
       tags: [Payments]
       summary: Create or reuse backend-owned payment intent
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreatePaymentIntentRequest"
-      responses:
-        "201":
-          description: Payment intent
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PaymentIntent"
-  /v1/payments/intents/{paymentIntentId}/transaction-request:
-    get:
-      tags: [Payments]
-      summary: Server-built wallet transaction request
       parameters:
-        - $ref: "#/components/parameters/PaymentIntentId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreatePaymentIntent"
       responses:
-        "200":
-          description: Transaction request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TransactionRequest"
+        "201": { $ref: "#/components/responses/PaymentIntent" }
   /v1/payments/intents/{paymentIntentId}:
     get:
+      operationId: getPaymentIntent
       tags: [Payments]
       summary: Payment intent status
       parameters:
         - $ref: "#/components/parameters/PaymentIntentId"
       responses:
-        "200":
-          description: Payment intent
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PaymentIntent"
+        "200": { $ref: "#/components/responses/PaymentIntent" }
+  /v1/payments/intents/{paymentIntentId}/transaction-request:
+    get:
+      operationId: getPaymentTransactionRequest
+      tags: [Payments]
+      summary: Server-built wallet transaction request
+      parameters:
+        - $ref: "#/components/parameters/PaymentIntentId"
+      responses:
+        "200": { $ref: "#/components/responses/TransactionRequest" }
   /v1/payments/intents/{paymentIntentId}/submissions:
     post:
+      operationId: submitPaymentSignature
       tags: [Payments]
       summary: Record wallet-submitted signature before confirmed evidence
       parameters:
         - $ref: "#/components/parameters/PaymentIntentId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/SubmitPaymentSignature"
       responses:
-        "202":
-          description: Submission accepted
+        "202": { $ref: "#/components/responses/Accepted" }
   /v1/referrals/tokens:
     post:
+      operationId: createReferralToken
       tags: [Referrals]
       summary: Create external referral or content-share token
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateReferralToken"
       responses:
-        "201":
-          description: Referral token
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ReferralToken"
+        "201": { $ref: "#/components/responses/ReferralToken" }
+  /v1/referrals/activity:
+    get:
+      operationId: getReferralActivity
+      tags: [Referrals]
+      summary: Referral attribution and commission activity
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/ActivityPage" }
   /v1/subscriptions/plans:
     get:
+      operationId: listSubscriptionPlans
       tags: [Subscriptions]
       summary: Platform and creator subscription plans
       responses:
-        "200":
-          description: Subscription plans
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SubscriptionPlanPage"
+        "200": { $ref: "#/components/responses/SubscriptionPlanPage" }
+  /v1/subscriptions/intents:
+    post:
+      operationId: createSubscriptionIntent
+      tags: [Subscriptions]
+      summary: Create platform or creator subscription payment intent
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateSubscriptionIntent"
+      responses:
+        "201": { $ref: "#/components/responses/PaymentIntent" }
+  /v1/subscriptions/{subscriptionId}/cancel:
+    patch:
+      operationId: cancelSubscription
+      tags: [Subscriptions]
+      summary: Cancel platform or creator subscription
+      parameters:
+        - $ref: "#/components/parameters/SubscriptionId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "200": { $ref: "#/components/responses/Subscription" }
+  /v1/events:
+    post:
+      operationId: createEvent
+      tags: [Events]
+      summary: Create event attached to creator/media
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateEvent"
+      responses:
+        "201": { $ref: "#/components/responses/Event" }
+  /v1/events/{eventId}:
+    get:
+      operationId: getEvent
+      tags: [Events]
+      summary: Event detail
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+      responses:
+        "200": { $ref: "#/components/responses/Event" }
+    patch:
+      operationId: updateEvent
+      tags: [Events]
+      summary: Update event metadata, inventory, or sale state
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/UpdateEvent"
+      responses:
+        "200": { $ref: "#/components/responses/Event" }
   /v1/events/{eventId}/tickets/intents:
     post:
+      operationId: createTicketIntent
       tags: [Events]
       summary: Create ticket payment or approval intent
       parameters:
         - $ref: "#/components/parameters/EventId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateTicketIntent"
       responses:
-        "201":
-          description: Ticket intent
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TicketIntent"
+        "201": { $ref: "#/components/responses/TicketIntent" }
+  /v1/events/{eventId}/tickets/requests:
+    post:
+      operationId: requestPrivateEventTicket
+      tags: [Events]
+      summary: Request creator approval for a private event ticket
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateTicketRequest"
+      responses:
+        "201": { $ref: "#/components/responses/TicketRequest" }
+  /v1/tickets/{ticketId}/check-in:
+    post:
+      operationId: checkInTicket
+      tags: [Tickets]
+      summary: Check in an event ticket by QR/token
+      parameters:
+        - $ref: "#/components/parameters/TicketId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CheckInTicket"
+      responses:
+        "200": { $ref: "#/components/responses/Ticket" }
+  /v1/dating/activate:
+    post:
+      operationId: activateDatingMode
+      tags: [Dating]
+      summary: Activate explicit Dating Mode after consent and safety checks
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/ActivateDating"
+      responses:
+        "200": { $ref: "#/components/responses/DatingProfile" }
+  /v1/dating/preferences:
+    patch:
+      operationId: updateDatingPreferences
+      tags: [Dating]
+      summary: Update Dating Mode preferences and safety limits
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/UpdateDatingPreferences"
+      responses:
+        "200": { $ref: "#/components/responses/DatingProfile" }
   /v1/dating/swipes:
     post:
+      operationId: createDatingSwipe
       tags: [Dating]
       summary: Record explicit Dating Mode swipe/action
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
       requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/DatingSwipeRequest"
+        $ref: "#/components/requestBodies/DatingSwipe"
       responses:
-        "200":
-          description: Dating action result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DatingSwipeResult"
+        "200": { $ref: "#/components/responses/DatingSwipeResult" }
+  /v1/dating/matches:
+    get:
+      operationId: listDatingMatches
+      tags: [Dating]
+      summary: List active/stale Dating Mode matches
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/DatingMatchPage" }
+  /v1/dating/matches/{matchId}/archive:
+    patch:
+      operationId: archiveDatingMatch
+      tags: [Dating]
+      summary: Archive a dating match to free active-match capacity
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "200": { $ref: "#/components/responses/DatingMatch" }
   /v1/activity:
     get:
+      operationId: getActivity
       tags: [Activity]
       summary: Backend-derived user activity
       parameters:
         - $ref: "#/components/parameters/Cursor"
       responses:
-        "200":
-          description: Activity page
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ActivityPage"
+        "200": { $ref: "#/components/responses/ActivityPage" }
+  /v1/activity/payments:
+    get:
+      operationId: getPaymentActivity
+      tags: [Activity]
+      summary: Payment, settlement, and entitlement activity
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/ActivityPage" }
+  /v1/activity/tickets:
+    get:
+      operationId: getTicketActivity
+      tags: [Activity]
+      summary: Ticket ownership and event activity
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/ActivityPage" }
+  /v1/activity/referrals:
+    get:
+      operationId: getActivityReferrals
+      tags: [Activity]
+      summary: Referral shares, attribution, and commission activity
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/ActivityPage" }
   /v1/ai/sessions:
     post:
+      operationId: createAiSession
       tags: [AI]
       summary: Start a permission-scoped AI session
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
       requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateAiSessionRequest"
+        $ref: "#/components/requestBodies/CreateAiSession"
       responses:
-        "201":
-          description: AI session
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AiSession"
+        "201": { $ref: "#/components/responses/AiSession" }
+  /v1/ai/sessions/{aiSessionId}/tool-calls:
+    post:
+      operationId: createAiToolCall
+      tags: [AI]
+      summary: Execute or stage a permission-scoped AI/MCP tool call
+      parameters:
+        - $ref: "#/components/parameters/AiSessionId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateAiToolCall"
+      responses:
+        "201": { $ref: "#/components/responses/AiToolCall" }
   /v1/admin/ops/summary:
     get:
+      operationId: getAdminOpsSummary
       tags: [Admin]
       summary: Admin operations summary
       responses:
-        "200":
-          description: Admin ops summary
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AdminOpsSummary"
+        "200": { $ref: "#/components/responses/AdminOpsSummary" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/audit:
+    get:
+      operationId: listAdminAuditEvents
+      tags: [Admin]
+      summary: List admin-visible audit events
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AuditEventPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [Admin]
+      summary: Admin user search and list
+      parameters:
+        - $ref: "#/components/parameters/SearchQuery"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminUserPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/users/{userId}:
+    get:
+      operationId: getAdminUser
+      tags: [Admin]
+      summary: Admin-safe user detail
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200": { $ref: "#/components/responses/AdminUser" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/content:
+    get:
+      operationId: listAdminContent
+      tags: [Admin]
+      summary: Admin content moderation queue
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminContentPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/content/{contentId}/moderation:
+    patch:
+      operationId: updateAdminContentModeration
+      tags: [Admin]
+      summary: Moderate content with audited reason
+      parameters:
+        - $ref: "#/components/parameters/ContentId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/AdminModerationAction"
+      responses:
+        "200": { $ref: "#/components/responses/AdminContentItem" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/reports:
+    get:
+      operationId: listAdminReports
+      tags: [Admin]
+      summary: Admin report queue
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminReportPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/reports/{reportId}:
+    patch:
+      operationId: updateAdminReport
+      tags: [Admin]
+      summary: Resolve or escalate a report
+      parameters:
+        - $ref: "#/components/parameters/ReportId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/AdminReportAction"
+      responses:
+        "200": { $ref: "#/components/responses/AdminReport" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/payments/intents:
+    get:
+      operationId: listAdminPaymentIntents
+      tags: [Admin]
+      summary: Admin payment-intent search and reconciliation list
+      parameters:
+        - $ref: "#/components/parameters/SearchQuery"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminPaymentIntentPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/provider-events:
+    get:
+      operationId: listAdminProviderEvents
+      tags: [Admin]
+      summary: Sanitized provider webhook and reconciliation events
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminProviderEventPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/provider-events/{providerEventId}/replay:
+    post:
+      operationId: replayAdminProviderEvent
+      tags: [Admin]
+      summary: Replay an idempotent provider event through the adapter
+      parameters:
+        - $ref: "#/components/parameters/ProviderEventId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/AdminReason"
+      responses:
+        "202": { $ref: "#/components/responses/Accepted" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/support/cases:
+    get:
+      operationId: listAdminSupportCases
+      tags: [Admin]
+      summary: Support case queue
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminSupportCasePage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/support/cases/{supportCaseId}:
+    patch:
+      operationId: updateAdminSupportCase
+      tags: [Admin]
+      summary: Update support case state
+      parameters:
+        - $ref: "#/components/parameters/SupportCaseId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/AdminSupportCaseAction"
+      responses:
+        "200": { $ref: "#/components/responses/AdminSupportCase" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/data-requests:
+    get:
+      operationId: listAdminDataRequests
+      tags: [Admin]
+      summary: Data export/delete request queue
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminDataRequestPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/data-requests/{dataRequestId}:
+    patch:
+      operationId: updateAdminDataRequest
+      tags: [Admin]
+      summary: Update data request lifecycle
+      parameters:
+        - $ref: "#/components/parameters/DataRequestId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/AdminDataRequestAction"
+      responses:
+        "200": { $ref: "#/components/responses/AdminDataRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/events:
+    get:
+      operationId: listAdminEvents
+      tags: [Admin]
+      summary: Admin event queue and health
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/EventPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/tickets:
+    get:
+      operationId: listAdminTickets
+      tags: [Admin]
+      summary: Admin ticket entitlement and check-in list
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/TicketPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/dating/safety:
+    get:
+      operationId: getAdminDatingSafety
+      tags: [Admin]
+      summary: Dating safety queue and metrics
+      responses:
+        "200": { $ref: "#/components/responses/AdminDatingSafety" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/feature-flags:
+    get:
+      operationId: listAdminFeatureFlags
+      tags: [Admin]
+      summary: Feature flag and policy override list
+      responses:
+        "200": { $ref: "#/components/responses/AdminFeatureFlagPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/feature-flags/{featureFlagKey}:
+    patch:
+      operationId: updateAdminFeatureFlag
+      tags: [Admin]
+      summary: Update a feature flag or admin-overridable policy
+      parameters:
+        - $ref: "#/components/parameters/FeatureFlagKey"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/AdminFeatureFlagPatch"
+      responses:
+        "200": { $ref: "#/components/responses/AdminFeatureFlag" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /v1/webhooks/solana-indexer:
     post:
+      operationId: receiveSolanaIndexerWebhook
       tags: [Webhooks]
       summary: Confirmed Solana payment evidence webhook
       security: []
+      parameters:
+        - $ref: "#/components/parameters/WebhookSignature"
+      requestBody:
+        $ref: "#/components/requestBodies/WebhookPayload"
       responses:
-        "202":
-          description: Accepted
+        "202": { $ref: "#/components/responses/Accepted" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /v1/webhooks/media/{provider}:
     post:
+      operationId: receiveMediaWebhook
       tags: [Webhooks]
       summary: Media provider webhook
       security: []
       parameters:
-        - name: provider
-          in: path
-          required: true
-          schema:
-            type: string
-            enum: [bunny, livepeer]
+        - $ref: "#/components/parameters/MediaProvider"
+        - $ref: "#/components/parameters/WebhookSignature"
+      requestBody:
+        $ref: "#/components/requestBodies/WebhookPayload"
       responses:
-        "202":
-          description: Accepted
+        "202": { $ref: "#/components/responses/Accepted" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /v1/webhooks/age/{provider}:
     post:
+      operationId: receiveAgeWebhook
       tags: [Webhooks]
       summary: Age/KYC provider webhook
       security: []
       parameters:
-        - name: provider
-          in: path
-          required: true
-          schema:
-            type: string
-            enum: [yoti, sumsub, persona]
+        - $ref: "#/components/parameters/AgeProvider"
+        - $ref: "#/components/parameters/WebhookSignature"
+      requestBody:
+        $ref: "#/components/requestBodies/WebhookPayload"
       responses:
-        "202":
-          description: Accepted
+        "202": { $ref: "#/components/responses/Accepted" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 components:
   securitySchemes:
     bearerAuth:
@@ -579,663 +957,860 @@ components:
       scheme: bearer
       bearerFormat: JWT
   parameters:
+    RequiredIdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 12, maxLength: 128 }
+      description: Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations.
+    OptionalIdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, minLength: 12, maxLength: 128 }
+      description: Optional idempotency key for non-critical replay-safe requests.
+    WebhookSignature:
+      name: X-Veel-Webhook-Signature
+      in: header
+      required: true
+      schema: { type: string }
+      description: Provider-specific signature or shared-secret header normalized by the adapter.
     Cursor:
       name: cursor
       in: query
-      schema:
-        type: string
+      schema: { type: string }
+    SearchQuery:
+      name: q
+      in: query
+      schema: { type: string, minLength: 1, maxLength: 120 }
     FeedMode:
       name: mode
       in: query
       schema:
         type: string
         enum: [recommended, following, nsfw, sfw, live, premium]
-    ContentId:
-      name: contentId
+    ContentId: { name: contentId, in: path, required: true, schema: { type: string, format: uuid } }
+    RoomId: { name: roomId, in: path, required: true, schema: { type: string, format: uuid } }
+    PaymentIntentId: { name: paymentIntentId, in: path, required: true, schema: { type: string, format: uuid } }
+    EventId: { name: eventId, in: path, required: true, schema: { type: string, format: uuid } }
+    TicketId: { name: ticketId, in: path, required: true, schema: { type: string, format: uuid } }
+    UserId: { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
+    WalletId: { name: walletId, in: path, required: true, schema: { type: string, format: uuid } }
+    ConversationId: { name: conversationId, in: path, required: true, schema: { type: string, format: uuid } }
+    SubscriptionId: { name: subscriptionId, in: path, required: true, schema: { type: string, format: uuid } }
+    AiSessionId: { name: aiSessionId, in: path, required: true, schema: { type: string, format: uuid } }
+    MatchId: { name: matchId, in: path, required: true, schema: { type: string, format: uuid } }
+    ReportId: { name: reportId, in: path, required: true, schema: { type: string, format: uuid } }
+    ProviderEventId: { name: providerEventId, in: path, required: true, schema: { type: string, format: uuid } }
+    SupportCaseId: { name: supportCaseId, in: path, required: true, schema: { type: string, format: uuid } }
+    DataRequestId: { name: dataRequestId, in: path, required: true, schema: { type: string, format: uuid } }
+    FeatureFlagKey: { name: featureFlagKey, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9_.:-]{2,120}$" } }
+    Slug: { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9-]{1,80}$" } }
+    Handle: { name: handle, in: path, required: true, schema: { type: string, pattern: "^[a-zA-Z0-9_]{2,32}$" } }
+    MediaProvider:
+      name: provider
       in: path
       required: true
-      schema:
-        type: string
-        format: uuid
-    RoomId:
-      name: roomId
+      schema: { type: string, enum: [bunny, livepeer] }
+    AgeProvider:
+      name: provider
       in: path
       required: true
-      schema:
-        type: string
-        format: uuid
-    PaymentIntentId:
-      name: paymentIntentId
-      in: path
-      required: true
-      schema:
-        type: string
-        format: uuid
-    EventId:
-      name: eventId
-      in: path
-      required: true
-      schema:
-        type: string
-        format: uuid
-    UserId:
-      name: userId
-      in: path
-      required: true
-      schema:
-        type: string
-        format: uuid
+      schema: { type: string, enum: [yoti, sumsub, veriff, persona] }
+  requestBodies:
+    CreateAgeSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateAgeSessionRequest" } } } }
+    LinkWallet: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/LinkWalletRequest" } } } }
+    CreateOnrampSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateOnrampSessionRequest" } } } }
+    UpdateProfile: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateProfileRequest" } } } }
+    CreateContent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateContentRequest" } } } }
+    UpdateContent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateContentRequest" } } } }
+    UpdateFeedPreferences: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateFeedPreferencesRequest" } } } }
+    HideFeedCreator: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/HideFeedCreatorRequest" } } } }
+    HideFeedTopic: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/HideFeedTopicRequest" } } } }
+    CreateUpload: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateUploadRequest" } } } }
+    CreateLiveRoom: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateLiveRoomRequest" } } } }
+    CreateLivePassIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateLivePassIntentRequest" } } } }
+    CreateComment: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateCommentRequest" } } } }
+    CreateShare: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateShareRequest" } } } }
+    CreateReport: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateReportRequest" } } } }
+    CreateMessage: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateMessageRequest" } } } }
+    CreatePaymentIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreatePaymentIntentRequest" }, examples: { tip: { value: { productType: tip, targetId: "00000000-0000-4000-8000-000000000001", amountMinor: 50000000 } }, contentUnlock: { value: { productType: content_unlock, targetId: "00000000-0000-4000-8000-000000000002" } } } } } }
+    SubmitPaymentSignature: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SubmitPaymentSignatureRequest" } } } }
+    CreateReferralToken: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateReferralTokenRequest" } } } }
+    CreateSubscriptionIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateSubscriptionIntentRequest" } } } }
+    CreateEvent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateEventRequest" } } } }
+    UpdateEvent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateEventRequest" } } } }
+    CreateTicketIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateTicketIntentRequest" } } } }
+    CreateTicketRequest: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateTicketRequestRequest" } } } }
+    CheckInTicket: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CheckInTicketRequest" } } } }
+    ActivateDating: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ActivateDatingRequest" } } } }
+    UpdateDatingPreferences: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateDatingPreferencesRequest" } } } }
+    DatingSwipe: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/DatingSwipeRequest" } } } }
+    CreateAiSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateAiSessionRequest" } } } }
+    CreateAiToolCall: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateAiToolCallRequest" } } } }
+    AdminReason: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminReasonRequest" } } } }
+    AdminModerationAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminModerationActionRequest" } } } }
+    AdminReportAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminReportActionRequest" } } } }
+    AdminSupportCaseAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminSupportCaseActionRequest" } } } }
+    AdminDataRequestAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminDataRequestActionRequest" } } } }
+    AdminFeatureFlagPatch: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminFeatureFlagPatchRequest" } } } }
+    WebhookPayload: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+  responses:
+    Accepted: { description: Accepted }
+    Unauthorized: { description: Unauthorized, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+    Forbidden: { description: Forbidden, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+    NotFound: { description: Not found, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+    Conflict: { description: Conflict, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+    RateLimited: { description: Rate limited, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+    SessionState: { description: Session state, content: { application/json: { schema: { $ref: "#/components/schemas/SessionState" } } } }
+    Me: { description: Current viewer, content: { application/json: { schema: { $ref: "#/components/schemas/Me" } } } }
+    AgeSession: { description: Age assurance session, content: { application/json: { schema: { $ref: "#/components/schemas/AgeSession" } } } }
+    AgeStatus: { description: Age state, content: { application/json: { schema: { $ref: "#/components/schemas/AgeStatus" } } } }
+    WalletList: { description: Wallets, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Wallet" } } } } } } }
+    Wallet: { description: Wallet, content: { application/json: { schema: { $ref: "#/components/schemas/Wallet" } } } }
+    OnrampSession: { description: Onramp session, content: { application/json: { schema: { $ref: "#/components/schemas/OnrampSession" } } } }
+    User: { description: User/profile, content: { application/json: { schema: { $ref: "#/components/schemas/User" } } } }
+    FeedPage: { description: Feed page, content: { application/json: { schema: { $ref: "#/components/schemas/FeedPage" } } } }
+    DiscoverPage: { description: Discover results, content: { application/json: { schema: { $ref: "#/components/schemas/DiscoverPage" } } } }
+    HashtagPage: { description: Hashtag results, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Hashtag" } }, nextCursor: { type: string, nullable: true } } } } } }
+    CreatorPage: { description: Creator results, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/User" } }, nextCursor: { type: string, nullable: true } } } } } }
+    FeedPreferences: { description: Feed preferences, content: { application/json: { schema: { $ref: "#/components/schemas/FeedPreferences" } } } }
+    ContentItem: { description: Content item, content: { application/json: { schema: { $ref: "#/components/schemas/ContentItem" } } } }
+    UploadSession: { description: Safe upload session, content: { application/json: { schema: { $ref: "#/components/schemas/UploadSession" } } } }
+    LiveRoom: { description: Live room, content: { application/json: { schema: { $ref: "#/components/schemas/LiveRoom" } } } }
+    LiveRoomPage: { description: Live rooms, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/LiveRoom" } }, nextCursor: { type: string, nullable: true } } } } } }
+    HostConnection: { description: Masked host connection, content: { application/json: { schema: { $ref: "#/components/schemas/HostConnection" } } } }
+    EngagementState: { description: Engagement state, content: { application/json: { schema: { $ref: "#/components/schemas/EngagementState" } } } }
+    CommentPage: { description: Comments, content: { application/json: { schema: { $ref: "#/components/schemas/CommentPage" } } } }
+    Comment: { description: Comment, content: { application/json: { schema: { $ref: "#/components/schemas/Comment" } } } }
+    ShareResult: { description: Share result, content: { application/json: { schema: { $ref: "#/components/schemas/ShareResult" } } } }
+    FollowState: { description: Follow state, content: { application/json: { schema: { $ref: "#/components/schemas/FollowState" } } } }
+    ModerationIntake: { description: Moderation intake, content: { application/json: { schema: { $ref: "#/components/schemas/ModerationIntake" } } } }
+    BlockState: { description: Block state, content: { application/json: { schema: { $ref: "#/components/schemas/BlockState" } } } }
+    ConversationList: { description: Conversations, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Conversation" } } } } } } }
+    Message: { description: Message, content: { application/json: { schema: { $ref: "#/components/schemas/Message" } } } }
+    PaymentIntent: { description: Payment intent, content: { application/json: { schema: { $ref: "#/components/schemas/PaymentIntent" } } } }
+    TransactionRequest: { description: Transaction request, content: { application/json: { schema: { $ref: "#/components/schemas/TransactionRequest" } } } }
+    ReferralToken: { description: Referral token, content: { application/json: { schema: { $ref: "#/components/schemas/ReferralToken" } } } }
+    SubscriptionPlanPage: { description: Subscription plans, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionPlanPage" } } } }
+    Subscription: { description: Subscription, content: { application/json: { schema: { $ref: "#/components/schemas/Subscription" } } } }
+    Event: { description: Event, content: { application/json: { schema: { $ref: "#/components/schemas/Event" } } } }
+    EventPage: { description: Events, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Event" } }, nextCursor: { type: string, nullable: true } } } } } }
+    TicketIntent: { description: Ticket intent, content: { application/json: { schema: { $ref: "#/components/schemas/TicketIntent" } } } }
+    TicketRequest: { description: Ticket request, content: { application/json: { schema: { $ref: "#/components/schemas/TicketRequest" } } } }
+    Ticket: { description: Ticket, content: { application/json: { schema: { $ref: "#/components/schemas/Ticket" } } } }
+    TicketPage: { description: Tickets, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Ticket" } }, nextCursor: { type: string, nullable: true } } } } } }
+    DatingProfile: { description: Dating profile, content: { application/json: { schema: { $ref: "#/components/schemas/DatingProfile" } } } }
+    DatingSwipeResult: { description: Dating action result, content: { application/json: { schema: { $ref: "#/components/schemas/DatingSwipeResult" } } } }
+    DatingMatchPage: { description: Dating matches, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/DatingMatch" } }, nextCursor: { type: string, nullable: true } } } } } }
+    DatingMatch: { description: Dating match, content: { application/json: { schema: { $ref: "#/components/schemas/DatingMatch" } } } }
+    ActivityPage: { description: Activity page, content: { application/json: { schema: { $ref: "#/components/schemas/ActivityPage" } } } }
+    AiSession: { description: AI session, content: { application/json: { schema: { $ref: "#/components/schemas/AiSession" } } } }
+    AiToolCall: { description: AI tool call, content: { application/json: { schema: { $ref: "#/components/schemas/AiToolCall" } } } }
+    AdminOpsSummary: { description: Admin ops summary, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOpsSummary" } } } }
+    AdminUser: { description: Admin user, content: { application/json: { schema: { $ref: "#/components/schemas/AdminUser" } } } }
+    AdminUserPage: { description: Admin users, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminUser" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminContentItem: { description: Admin content item, content: { application/json: { schema: { $ref: "#/components/schemas/AdminContentItem" } } } }
+    AdminContentPage: { description: Admin content queue, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminContentItem" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminReport: { description: Admin report, content: { application/json: { schema: { $ref: "#/components/schemas/AdminReport" } } } }
+    AdminReportPage: { description: Admin reports, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminReport" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminPaymentIntentPage: { description: Admin payment intents, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/PaymentIntent" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminProviderEventPage: { description: Admin provider events, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminProviderEvent" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminSupportCase: { description: Admin support case, content: { application/json: { schema: { $ref: "#/components/schemas/AdminSupportCase" } } } }
+    AdminSupportCasePage: { description: Admin support cases, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminSupportCase" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminDataRequest: { description: Admin data request, content: { application/json: { schema: { $ref: "#/components/schemas/AdminDataRequest" } } } }
+    AdminDataRequestPage: { description: Admin data requests, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminDataRequest" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminDatingSafety: { description: Admin dating safety, content: { application/json: { schema: { $ref: "#/components/schemas/AdminDatingSafety" } } } }
+    AdminFeatureFlag: { description: Admin feature flag, content: { application/json: { schema: { $ref: "#/components/schemas/AdminFeatureFlag" } } } }
+    AdminFeatureFlagPage: { description: Admin feature flags, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminFeatureFlag" } } } } } } }
+    AuditEventPage: { description: Audit events, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AuditEvent" } }, nextCursor: { type: string, nullable: true } } } } } }
   schemas:
+    ErrorCode:
+      type: string
+      enum: [unauthorized, forbidden, not_found, validation_failed, rate_limited, conflict, idempotency_conflict, provider_unavailable, payment_not_confirmed, webhook_signature_invalid]
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code: { $ref: "#/components/schemas/ErrorCode" }
+        message: { type: string }
+        details: { type: object, additionalProperties: true }
+    ProductType:
+      type: string
+      enum: [tip, support, content_unlock, paid_message, live_pass, event_ticket, creator_subscription, platform_subscription]
+    Currency:
+      type: string
+      enum: [SOL, USDC]
     SessionState:
       type: object
       required: [authenticated, appAccessState]
       properties:
-        authenticated:
-          type: boolean
-        appAccessState:
-          $ref: "#/components/schemas/AppAccessState"
-        user:
-          $ref: "#/components/schemas/User"
+        authenticated: { type: boolean }
+        appAccessState: { $ref: "#/components/schemas/AppAccessState" }
+        user: { $ref: "#/components/schemas/User" }
+    CreateAgeSessionRequest:
+      type: object
+      required: [providerPreference]
+      properties:
+        providerPreference: { type: string, enum: [reusable_first, yoti, sumsub, veriff, persona] }
     AgeSession:
       type: object
       required: [id, provider, launchUrl, expiresAt]
       properties:
-        id:
-          type: string
-          format: uuid
-        provider:
-          type: string
-        launchUrl:
-          type: string
-          format: uri
-        expiresAt:
-          type: string
-          format: date-time
+        id: { type: string, format: uuid }
+        provider: { type: string }
+        launchUrl: { type: string, format: uri }
+        expiresAt: { type: string, format: date-time }
     AgeStatus:
       type: object
       required: [state]
       properties:
-        state:
-          $ref: "#/components/schemas/AgeState"
-        provider:
-          type: string
-          nullable: true
+        state: { $ref: "#/components/schemas/AgeState" }
+        provider: { type: string, nullable: true }
     Wallet:
       type: object
       required: [id, chain, address, provider, isPrimary]
       properties:
-        id:
-          type: string
-          format: uuid
-        chain:
-          type: string
-        address:
-          type: string
-        provider:
-          type: string
-          enum: [embedded, phantom, solflare, wallet_adapter]
-        isPrimary:
-          type: boolean
+        id: { type: string, format: uuid }
+        chain: { type: string, enum: [solana_devnet, solana_mainnet] }
+        address: { type: string }
+        provider: { type: string, enum: [embedded_privy, embedded_turnkey, phantom, solflare, wallet_adapter] }
+        isPrimary: { type: boolean }
+    LinkWalletRequest:
+      type: object
+      required: [provider, address, proof]
+      properties:
+        provider: { type: string }
+        address: { type: string }
+        proof: { type: object, additionalProperties: true }
+    CreateOnrampSessionRequest:
+      type: object
+      required: [walletId]
+      properties:
+        walletId: { type: string, format: uuid }
+        returnUrl: { type: string, format: uri }
     OnrampSession:
       type: object
       required: [provider, launchUrl, walletAddress]
       properties:
-        provider:
-          type: string
-        launchUrl:
-          type: string
-          format: uri
-        walletAddress:
-          type: string
+        provider: { type: string }
+        launchUrl: { type: string, format: uri }
+        walletAddress: { type: string }
     Me:
       type: object
       required: [user, ageState, walletState, appAccessState, feedPreferences]
       properties:
-        user:
-          $ref: "#/components/schemas/User"
-        ageState:
-          $ref: "#/components/schemas/AgeState"
-        walletState:
-          $ref: "#/components/schemas/WalletState"
-        appAccessState:
-          $ref: "#/components/schemas/AppAccessState"
-        feedPreferences:
-          $ref: "#/components/schemas/FeedPreferences"
+        user: { $ref: "#/components/schemas/User" }
+        ageState: { $ref: "#/components/schemas/AgeState" }
+        walletState: { $ref: "#/components/schemas/WalletState" }
+        appAccessState: { $ref: "#/components/schemas/AppAccessState" }
+        feedPreferences: { $ref: "#/components/schemas/FeedPreferences" }
     User:
       type: object
       required: [id, handle, displayName, badges]
       properties:
-        id:
-          type: string
-          format: uuid
-        handle:
-          type: string
-        displayName:
-          type: string
-        avatarUrl:
-          type: string
-          format: uri
-          nullable: true
-        badges:
-          type: array
-          items:
-            $ref: "#/components/schemas/UserBadge"
-    AgeState:
-      type: string
-      enum: [not_required, required, pending, verified, failed]
+        id: { type: string, format: uuid }
+        handle: { type: string }
+        displayName: { type: string }
+        avatarUrl: { type: string, format: uri, nullable: true }
+        badges: { type: array, items: { $ref: "#/components/schemas/UserBadge" } }
+    UpdateProfileRequest:
+      type: object
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 80 }
+        bio: { type: string, maxLength: 500 }
+        locationLabel: { type: string, maxLength: 120 }
+    AgeState: { type: string, enum: [not_required, required, pending, verified, failed] }
     AppAccessState:
       type: object
       required: [allowed, reason]
       properties:
-        allowed:
-          type: boolean
-        reason:
-          type: string
-          enum: [ready, age_required, age_pending, wallet_required, blocked]
+        allowed: { type: boolean }
+        reason: { type: string, enum: [ready, identity_required, wallet_required, age_required, age_pending, blocked] }
     UserBadge:
       type: object
       required: [key, label, group]
       properties:
-        key:
-          type: string
-        label:
-          type: string
-        group:
-          type: string
-          enum: [trust, creator, community, subscription]
+        key: { type: string }
+        label: { type: string }
+        group: { type: string, enum: [trust, creator, community, subscription] }
     FeedPreferences:
       type: object
       required: [defaultMode, nsfwPreference]
       properties:
-        defaultMode:
-          type: string
-          enum: [recommended, following, nsfw, sfw]
-        nsfwPreference:
-          type: string
-          enum: [recommended, nsfw, sfw]
+        defaultMode: { type: string, enum: [recommended, following, nsfw, sfw] }
+        nsfwPreference: { type: string, enum: [recommended, nsfw, sfw] }
+    UpdateFeedPreferencesRequest:
+      type: object
+      properties:
+        defaultMode: { type: string, enum: [recommended, following, nsfw, sfw] }
+        nsfwPreference: { type: string, enum: [recommended, nsfw, sfw] }
+    HideFeedCreatorRequest:
+      type: object
+      required: [creatorUserId]
+      properties:
+        creatorUserId: { type: string, format: uuid }
+    HideFeedTopicRequest:
+      type: object
+      required: [topic]
+      properties:
+        topic: { type: string, minLength: 1, maxLength: 80 }
     WalletState:
       type: object
       required: [connected, chain]
       properties:
-        connected:
-          type: boolean
-        chain:
-          type: string
-          enum: [solana_devnet, solana_mainnet]
-        address:
-          type: string
-          nullable: true
+        connected: { type: boolean }
+        chain: { type: string, enum: [solana_devnet, solana_mainnet] }
+        address: { type: string, nullable: true }
     FeedPage:
       type: object
       required: [items]
       properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/ContentItem"
-        nextCursor:
-          type: string
-          nullable: true
+        items: { type: array, items: { $ref: "#/components/schemas/ContentItem" } }
+        nextCursor: { type: string, nullable: true }
+    DiscoverPage:
+      type: object
+      required: [content, creators, hashtags, events, liveRooms]
+      properties:
+        content: { type: array, items: { $ref: "#/components/schemas/ContentItem" } }
+        creators: { type: array, items: { $ref: "#/components/schemas/User" } }
+        hashtags: { type: array, items: { $ref: "#/components/schemas/Hashtag" } }
+        events: { type: array, items: { $ref: "#/components/schemas/Event" } }
+        liveRooms: { type: array, items: { $ref: "#/components/schemas/LiveRoom" } }
+        nextCursor: { type: string, nullable: true }
+    Hashtag:
+      type: object
+      required: [slug, displayName, state]
+      properties:
+        slug: { type: string }
+        displayName: { type: string }
+        state: { type: string, enum: [active, restricted, blocked] }
     ContentItem:
       type: object
       required: [id, creator, mediaType, accessState, engagement]
       properties:
-        id:
-          type: string
-          format: uuid
-        creator:
-          $ref: "#/components/schemas/User"
-        mediaType:
-          type: string
-          enum: [bit, clip, image, vod, live_replay]
-        caption:
-          type: string
-          nullable: true
-        posterUrl:
-          type: string
-          format: uri
-          nullable: true
-        playback:
-          $ref: "#/components/schemas/PlaybackResource"
-        accessState:
-          type: string
-          enum: [free, teaser, locked, unlocked, subscribed, pass_required]
-        nsfwLabel:
-          type: string
-          enum: [none, adult, explicit, sensitive]
-        engagement:
-          $ref: "#/components/schemas/EngagementState"
+        id: { type: string, format: uuid }
+        creator: { $ref: "#/components/schemas/User" }
+        mediaType: { type: string, enum: [bit, clip, image, vod, live_replay] }
+        caption: { type: string, nullable: true }
+        posterUrl: { type: string, format: uri, nullable: true }
+        playback: { $ref: "#/components/schemas/PlaybackResource" }
+        accessState: { type: string, enum: [free, teaser, locked, unlocked, subscribed, pass_required] }
+        nsfwLabel: { type: string, enum: [none, adult, explicit, sensitive] }
+        engagement: { $ref: "#/components/schemas/EngagementState" }
     PlaybackResource:
       type: object
       required: [state]
       properties:
-        state:
-          type: string
-          enum: [not_ready, teaser, full, blocked]
-        url:
-          type: string
-          format: uri
-          nullable: true
-        provider:
-          type: string
-          enum: [bunny, livepeer, none]
+        state: { type: string, enum: [not_ready, teaser, full, blocked] }
+        url: { type: string, format: uri, nullable: true }
+        provider: { type: string, enum: [bunny, livepeer, none] }
     CreateContentRequest:
       type: object
       required: [mediaType, visibility, nsfwLabel]
       properties:
-        mediaType:
-          type: string
-          enum: [bit, clip, image, vod, live_replay]
-        caption:
-          type: string
-        visibility:
-          type: string
-          enum: [public, followers, subscribers, private]
-        nsfwLabel:
-          type: string
-          enum: [none, adult, explicit, sensitive]
-        eventDraft:
-          $ref: "#/components/schemas/EventDraft"
+        mediaType: { type: string, enum: [bit, clip, image, vod, live_replay] }
+        caption: { type: string }
+        visibility: { type: string, enum: [public, followers, subscribers, private] }
+        nsfwLabel: { type: string, enum: [none, adult, explicit, sensitive] }
+        eventDraft: { $ref: "#/components/schemas/EventDraft" }
     UpdateContentRequest:
       type: object
       properties:
-        caption:
-          type: string
-        visibility:
-          type: string
-          enum: [public, followers, subscribers, private]
-        nsfwLabel:
-          type: string
-          enum: [none, adult, explicit, sensitive]
-        teaserStartMs:
-          type: integer
-          nullable: true
-        teaserEndMs:
-          type: integer
-          nullable: true
-        thumbnailFrameMs:
-          type: integer
-          nullable: true
-        eventDraft:
-          $ref: "#/components/schemas/EventDraft"
+        caption: { type: string }
+        visibility: { type: string, enum: [public, followers, subscribers, private] }
+        nsfwLabel: { type: string, enum: [none, adult, explicit, sensitive] }
+        teaserStartMs: { type: integer, nullable: true }
+        teaserEndMs: { type: integer, nullable: true }
+        thumbnailFrameMs: { type: integer, nullable: true }
+        eventDraft: { $ref: "#/components/schemas/EventDraft" }
     EventDraft:
       type: object
-      required: [title, startsAt, accessRule, location]
+      required: [title, startsAt, accessRule, location, ticketTypes]
       properties:
-        title:
-          type: string
-        description:
-          type: string
-        startsAt:
-          type: string
-          format: date-time
-        endsAt:
-          type: string
-          format: date-time
-        ticketCapacity:
-          type: integer
-          minimum: 1
-        ticketPriceMinor:
-          type: integer
-          nullable: true
-        accessRule:
-          type: string
-          enum: [public_sale, private_apply]
-        location:
-          $ref: "#/components/schemas/EventLocationDraft"
+        title: { type: string }
+        description: { type: string }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        accessRule: { type: string, enum: [public_sale, private_apply] }
+        location: { $ref: "#/components/schemas/EventLocationDraft" }
+        ticketTypes:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/EventTicketTypeDraft" }
+    EventPatch:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: string }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        accessRule: { type: string, enum: [public_sale, private_apply] }
+        location: { $ref: "#/components/schemas/EventLocationDraft" }
+        ticketTypes:
+          type: array
+          items: { $ref: "#/components/schemas/EventTicketTypeDraft" }
+        state: { type: string, enum: [draft, published, sold_out, cancelled, completed] }
+    EventTicketTypeDraft:
+      type: object
+      required: [label, currency, capacity]
+      properties:
+        label: { type: string, minLength: 1, maxLength: 80 }
+        priceMinor: { type: integer, nullable: true }
+        currency: { $ref: "#/components/schemas/Currency" }
+        capacity: { type: integer, minimum: 1 }
+        saleStartsAt: { type: string, format: date-time, nullable: true }
+        saleEndsAt: { type: string, format: date-time, nullable: true }
+        perUserLimit: { type: integer, minimum: 1, maximum: 20, nullable: true }
     EventLocationDraft:
       type: object
       required: [type]
       properties:
-        type:
-          type: string
-          enum: [digital_live_stream, physical]
-        label:
-          type: string
-        latitude:
-          type: number
-          format: double
-        longitude:
-          type: number
-          format: double
-        provider:
-          type: string
-          enum: [openstreetmap, manual, none]
-        providerPlaceId:
-          type: string
+        type: { type: string, enum: [digital_live_stream, physical] }
+        label: { type: string }
+        latitude: { type: number, format: double }
+        longitude: { type: number, format: double }
+        provider: { type: string, enum: [openstreetmap, manual, none] }
+        providerPlaceId: { type: string }
     CreateUploadRequest:
       type: object
       required: [contentId, fileName, mimeType]
       properties:
-        contentId:
-          type: string
-          format: uuid
-        fileName:
-          type: string
-        mimeType:
-          type: string
+        contentId: { type: string, format: uuid }
+        fileName: { type: string }
+        mimeType: { type: string }
     UploadSession:
       type: object
       required: [uploadUrl, provider, expiresAt]
       properties:
-        uploadUrl:
-          type: string
-          format: uri
-        provider:
-          type: string
-          enum: [bunny]
-        headers:
-          type: object
-          additionalProperties:
-            type: string
-        expiresAt:
-          type: string
-          format: date-time
+        uploadUrl: { type: string, format: uri }
+        provider: { type: string, enum: [bunny] }
+        headers: { type: object, additionalProperties: { type: string } }
+        expiresAt: { type: string, format: date-time }
+    CreateLiveRoomRequest:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        teaserSeconds: { type: integer, default: 60 }
     LiveRoom:
       type: object
       required: [id, creator, state, accessState, passOptions]
       properties:
-        id:
-          type: string
-          format: uuid
-        creator:
-          $ref: "#/components/schemas/User"
-        state:
-          type: string
-          enum: [scheduled, waiting, live, ended, replay_ready]
-        accessState:
-          type: string
-          enum: [free, locked, pass_required, pass_active]
-        playback:
-          $ref: "#/components/schemas/PlaybackResource"
-        teaserSecondsRemaining:
-          type: integer
-          nullable: true
-        passOptions:
-          type: array
-          items:
-            $ref: "#/components/schemas/LivePassOption"
+        id: { type: string, format: uuid }
+        creator: { $ref: "#/components/schemas/User" }
+        state: { type: string, enum: [scheduled, waiting, live, ended, replay_ready] }
+        accessState: { type: string, enum: [free, locked, pass_required, pass_active] }
+        playback: { $ref: "#/components/schemas/PlaybackResource" }
+        teaserSecondsRemaining: { type: integer, nullable: true }
+        passOptions: { type: array, items: { $ref: "#/components/schemas/LivePassOption" } }
+    CreateLivePassIntentRequest:
+      type: object
+      required: [durationMinutes]
+      properties:
+        durationMinutes: { type: integer, enum: [30, 60, 180] }
     LivePassOption:
       type: object
       required: [durationMinutes, amountMinor, currency]
       properties:
-        durationMinutes:
-          type: integer
-          enum: [30, 60, 180]
-        amountMinor:
-          type: integer
-        currency:
-          type: string
-          enum: [SOL, USDC]
+        durationMinutes: { type: integer, enum: [30, 60, 180] }
+        amountMinor: { type: integer }
+        currency: { $ref: "#/components/schemas/Currency" }
     HostConnection:
       type: object
       required: [maskedIngestUrl, streamKeyHint]
       properties:
-        maskedIngestUrl:
-          type: string
-        streamKeyHint:
-          type: string
+        maskedIngestUrl: { type: string }
+        streamKeyHint: { type: string }
     EngagementState:
       type: object
       required: [liked, saved, likeCount, commentCount, shareCount]
       properties:
-        liked:
-          type: boolean
-        saved:
-          type: boolean
-        likeCount:
-          type: integer
-        commentCount:
-          type: integer
-        shareCount:
-          type: integer
+        liked: { type: boolean }
+        saved: { type: boolean }
+        likeCount: { type: integer }
+        commentCount: { type: integer }
+        shareCount: { type: integer }
     CommentPage:
       type: object
       required: [items]
       properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/Comment"
-        nextCursor:
-          type: string
-          nullable: true
+        items: { type: array, items: { $ref: "#/components/schemas/Comment" } }
+        nextCursor: { type: string, nullable: true }
     Comment:
       type: object
       required: [id, author, body, createdAt]
       properties:
-        id:
-          type: string
-          format: uuid
-        author:
-          $ref: "#/components/schemas/User"
-        body:
-          type: string
-        createdAt:
-          type: string
-          format: date-time
+        id: { type: string, format: uuid }
+        author: { $ref: "#/components/schemas/User" }
+        body: { type: string }
+        createdAt: { type: string, format: date-time }
     CreateCommentRequest:
       type: object
       required: [body]
       properties:
-        body:
-          type: string
-          minLength: 1
-          maxLength: 2000
+        body: { type: string, minLength: 1, maxLength: 2000 }
+    CreateShareRequest:
+      type: object
+      required: [targetType, targetId, mode]
+      properties:
+        targetType: { type: string, enum: [content, profile, event] }
+        targetId: { type: string, format: uuid }
+        mode: { type: string, enum: [internal_message, external_referral_link, copy_link] }
     ShareResult:
       type: object
       required: [id, mode]
       properties:
-        id:
-          type: string
-          format: uuid
-        mode:
-          type: string
-          enum: [internal_message, external_referral_link, copy_link]
-        url:
-          type: string
-          format: uri
-          nullable: true
+        id: { type: string, format: uuid }
+        mode: { type: string, enum: [internal_message, external_referral_link, copy_link] }
+        url: { type: string, format: uri, nullable: true }
     FollowState:
       type: object
       required: [following, followerCount]
       properties:
-        following:
-          type: boolean
-        followerCount:
-          type: integer
+        following: { type: boolean }
+        followerCount: { type: integer }
+    CreateReportRequest:
+      type: object
+      required: [subjectType, subjectId, reason]
+      properties:
+        subjectType: { type: string, enum: [content, user, message, live_room, event] }
+        subjectId: { type: string, format: uuid }
+        reason: { type: string }
     ModerationIntake:
       type: object
       required: [id, state]
       properties:
-        id:
-          type: string
-          format: uuid
-        state:
-          type: string
-          enum: [submitted, queued]
+        id: { type: string, format: uuid }
+        state: { type: string, enum: [submitted, queued] }
     BlockState:
       type: object
       required: [blocked]
       properties:
-        blocked:
-          type: boolean
+        blocked: { type: boolean }
     Conversation:
       type: object
       required: [id, type, title]
       properties:
-        id:
-          type: string
-          format: uuid
-        type:
-          type: string
-          enum: [direct, match, paid]
-        title:
-          type: string
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [direct, match, paid] }
+        title: { type: string }
+    CreateMessageRequest:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 4000 }
+        paidMessageIntentId: { type: string, format: uuid, nullable: true }
+    Message:
+      type: object
+      required: [id, conversationId, sender, body, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        conversationId: { type: string, format: uuid }
+        sender: { $ref: "#/components/schemas/User" }
+        body: { type: string }
+        createdAt: { type: string, format: date-time }
     CreatePaymentIntentRequest:
       type: object
       required: [productType, targetId]
       properties:
-        productType:
-          type: string
-          enum: [tip, support, unlock, paid_message, live_pass, event_ticket, creator_subscription, platform_subscription]
-        targetId:
-          type: string
-          format: uuid
-        amountMinor:
-          type: integer
-          nullable: true
-        livePassDurationMinutes:
-          type: integer
-          enum: [30, 60, 180]
-          nullable: true
+        productType: { $ref: "#/components/schemas/ProductType" }
+        targetId: { type: string, format: uuid }
+        amountMinor: { type: integer, nullable: true }
+        livePassDurationMinutes: { type: integer, enum: [30, 60, 180], nullable: true }
     PaymentIntent:
       type: object
       required: [id, productType, amountMinor, currency, state]
       properties:
-        id:
-          type: string
-          format: uuid
-        productType:
-          type: string
-        amountMinor:
-          type: integer
-        currency:
-          type: string
-          enum: [SOL, USDC]
-        state:
-          type: string
-          enum: [pending, transaction_requested, confirmed, failed, expired]
-    ReferralToken:
+        id: { type: string, format: uuid }
+        productType: { $ref: "#/components/schemas/ProductType" }
+        amountMinor: { type: integer }
+        currency: { $ref: "#/components/schemas/Currency" }
+        state: { type: string, enum: [pending, transaction_requested, submitted, confirmed, failed, expired] }
+    SubmitPaymentSignatureRequest:
       type: object
-      required: [token, url, eligibility]
+      required: [signature]
       properties:
-        token:
-          type: string
-        url:
-          type: string
-          format: uri
-        eligibility:
-          type: string
-          enum: [external_share, partner_campaign, not_commissionable]
-    SubscriptionPlanPage:
-      type: object
-      required: [items]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/SubscriptionPlan"
-    SubscriptionPlan:
-      type: object
-      required: [id, scope, label, amountMinor, currency]
-      properties:
-        id:
-          type: string
-        scope:
-          type: string
-          enum: [platform, creator]
-        label:
-          type: string
-        amountMinor:
-          type: integer
-        currency:
-          type: string
-          enum: [SOL, USDC]
+        signature: { type: string }
     TransactionRequest:
       type: object
       required: [transactionRequestUrl, expiresAt]
       properties:
-        transactionRequestUrl:
-          type: string
-          format: uri
-        expiresAt:
-          type: string
-          format: date-time
+        transactionRequestUrl: { type: string, format: uri }
+        expiresAt: { type: string, format: date-time }
+    CreateReferralTokenRequest:
+      type: object
+      required: [targetType, targetId, channel]
+      properties:
+        targetType: { type: string, enum: [content, profile, event] }
+        targetId: { type: string, format: uuid }
+        channel: { type: string, enum: [external, partner, internal] }
+    ReferralToken:
+      type: object
+      required: [token, url, eligibility]
+      properties:
+        token: { type: string }
+        url: { type: string, format: uri }
+        eligibility: { type: string, enum: [external_share, partner_campaign, not_commissionable] }
+    SubscriptionPlanPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/SubscriptionPlan" } }
+    SubscriptionPlan:
+      type: object
+      required: [id, scope, label, amountMinor, currency]
+      properties:
+        id: { type: string }
+        scope: { type: string, enum: [platform, creator] }
+        label: { type: string }
+        amountMinor: { type: integer }
+        currency: { $ref: "#/components/schemas/Currency" }
+    CreateSubscriptionIntentRequest:
+      type: object
+      required: [planId]
+      properties:
+        planId: { type: string }
+    Subscription:
+      type: object
+      required: [id, scope, state]
+      properties:
+        id: { type: string, format: uuid }
+        scope: { type: string, enum: [platform, creator] }
+        state: { type: string, enum: [active, renewal_pending, grace_period, cancelled, suspended, expired] }
+    CreateEventRequest: { $ref: "#/components/schemas/EventDraft" }
+    UpdateEventRequest: { $ref: "#/components/schemas/EventPatch" }
+    Event:
+      type: object
+      required: [id, title, startsAt, location, state]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        startsAt: { type: string, format: date-time }
+        location: { $ref: "#/components/schemas/EventLocationDraft" }
+        state: { type: string, enum: [draft, published, sold_out, cancelled, completed] }
+        ticketTypes:
+          type: array
+          items: { $ref: "#/components/schemas/EventTicketTypeDraft" }
+    CreateTicketIntentRequest:
+      type: object
+      required: [ticketTypeId]
+      properties:
+        ticketTypeId: { type: string, format: uuid }
     TicketIntent:
       type: object
       required: [state]
       properties:
-        state:
-          type: string
-          enum: [free_granted, approval_required, payment_required]
-        paymentIntent:
-          $ref: "#/components/schemas/PaymentIntent"
+        state: { type: string, enum: [free_granted, approval_required, payment_required] }
+        paymentIntent: { $ref: "#/components/schemas/PaymentIntent" }
+    CreateTicketRequestRequest:
+      type: object
+      required: [ticketTypeId]
+      properties:
+        ticketTypeId: { type: string, format: uuid }
+        note: { type: string, maxLength: 500 }
+    TicketRequest:
+      type: object
+      required: [id, state]
+      properties:
+        id: { type: string, format: uuid }
+        state: { type: string, enum: [requested, approved, rejected, expired] }
+    CheckInTicketRequest:
+      type: object
+      required: [qrToken]
+      properties:
+        qrToken: { type: string }
+    Ticket:
+      type: object
+      required: [id, state]
+      properties:
+        id: { type: string, format: uuid }
+        state: { type: string, enum: [active, checked_in, revoked, expired] }
+    ActivateDatingRequest:
+      type: object
+      required: [consentVersion]
+      properties:
+        consentVersion: { type: string }
+    UpdateDatingPreferencesRequest:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        activeMatchLimit: { type: integer, minimum: 1, maximum: 50 }
+    DatingProfile:
+      type: object
+      required: [enabled, activeMatchLimit]
+      properties:
+        enabled: { type: boolean }
+        activeMatchLimit: { type: integer }
     DatingSwipeRequest:
       type: object
       required: [targetUserId, contentId, action]
       properties:
-        targetUserId:
-          type: string
-          format: uuid
-        contentId:
-          type: string
-          format: uuid
-        action:
-          type: string
-          enum: [yes, not_interested]
+        targetUserId: { type: string, format: uuid }
+        contentId: { type: string, format: uuid }
+        action: { type: string, enum: [yes, not_interested] }
     DatingSwipeResult:
       type: object
       required: [matchCreated]
       properties:
-        matchCreated:
-          type: boolean
-        matchId:
-          type: string
-          format: uuid
-          nullable: true
+        matchCreated: { type: boolean }
+        matchId: { type: string, format: uuid, nullable: true }
+    DatingMatch:
+      type: object
+      required: [id, users, state]
+      properties:
+        id: { type: string, format: uuid }
+        users: { type: array, items: { $ref: "#/components/schemas/User" } }
+        state: { type: string, enum: [active, stale, archived, blocked] }
     ActivityPage:
       type: object
       required: [items]
       properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/ActivityItem"
-        nextCursor:
-          type: string
-          nullable: true
+        items: { type: array, items: { $ref: "#/components/schemas/ActivityItem" } }
+        nextCursor: { type: string, nullable: true }
     ActivityItem:
       type: object
       required: [id, kind, createdAt]
       properties:
-        id:
-          type: string
-          format: uuid
-        kind:
-          type: string
-        createdAt:
-          type: string
-          format: date-time
+        id: { type: string, format: uuid }
+        kind: { type: string }
+        createdAt: { type: string, format: date-time }
     CreateAiSessionRequest:
       type: object
       required: [scope]
       properties:
-        scope:
-          type: string
-          enum: [user_self_service, creator_helper, admin_ops]
+        scope: { type: string, enum: [user_self_service, creator_helper, admin_ops] }
     AiSession:
       type: object
       required: [id, scope, allowedTools]
       properties:
-        id:
-          type: string
-          format: uuid
-        scope:
-          type: string
-        allowedTools:
-          type: array
-          items:
-            type: string
+        id: { type: string, format: uuid }
+        scope: { type: string }
+        allowedTools: { type: array, items: { type: string } }
+    CreateAiToolCallRequest:
+      type: object
+      required: [toolName, input]
+      properties:
+        toolName: { type: string }
+        input: { type: object, additionalProperties: true }
+        confirmationToken: { type: string, nullable: true }
+    AiToolCall:
+      type: object
+      required: [id, state, confirmationRequired]
+      properties:
+        id: { type: string, format: uuid }
+        state: { type: string, enum: [staged, executed, rejected] }
+        confirmationRequired: { type: boolean }
     AdminOpsSummary:
       type: object
-      required: [providerHealth, paymentHealth, moderationQueue]
+      required: [providerHealth, queueHealth, openReports]
       properties:
-        providerHealth:
-          type: string
-          enum: [healthy, degraded, incident]
-        paymentHealth:
-          type: string
-          enum: [healthy, lagging, incident]
-        moderationQueue:
-          type: integer
+        providerHealth: { type: string, enum: [ok, degraded, down] }
+        queueHealth: { type: string, enum: [ok, degraded, down] }
+        openReports: { type: integer }
+    AdminUser:
+      type: object
+      required: [id, handle, state, ageState, walletState]
+      properties:
+        id: { type: string, format: uuid }
+        handle: { type: string }
+        state: { type: string }
+        ageState: { $ref: "#/components/schemas/AgeState" }
+        walletState: { $ref: "#/components/schemas/WalletState" }
+    AdminContentItem:
+      type: object
+      required: [id, creator, moderationState, state]
+      properties:
+        id: { type: string, format: uuid }
+        creator: { $ref: "#/components/schemas/User" }
+        moderationState: { type: string }
+        state: { type: string }
+    AdminReport:
+      type: object
+      required: [id, subjectType, state, reason]
+      properties:
+        id: { type: string, format: uuid }
+        subjectType: { type: string }
+        subjectId: { type: string, format: uuid }
+        state: { type: string, enum: [submitted, reviewing, resolved, escalated, rejected] }
+        reason: { type: string }
+    AdminProviderEvent:
+      type: object
+      required: [id, provider, eventType, state, receivedAt]
+      properties:
+        id: { type: string, format: uuid }
+        provider: { type: string }
+        eventType: { type: string }
+        state: { type: string, enum: [received, processed, failed, replayed, ignored] }
+        receivedAt: { type: string, format: date-time }
+    AdminSupportCase:
+      type: object
+      required: [id, state, subjectType]
+      properties:
+        id: { type: string, format: uuid }
+        state: { type: string, enum: [open, pending_user, pending_internal, resolved, closed] }
+        subjectType: { type: string }
+    AdminDataRequest:
+      type: object
+      required: [id, type, state]
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [export, delete] }
+        state: { type: string, enum: [requested, verifying, processing, completed, rejected] }
+    AdminDatingSafety:
+      type: object
+      required: [openReports, activeMatches, staleMatches]
+      properties:
+        openReports: { type: integer }
+        activeMatches: { type: integer }
+        staleMatches: { type: integer }
+    AdminFeatureFlag:
+      type: object
+      required: [key, value, updatedAt]
+      properties:
+        key: { type: string }
+        value: { type: object, additionalProperties: true }
+        updatedAt: { type: string, format: date-time }
+    AdminReasonRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 500 }
+    AdminModerationActionRequest:
+      type: object
+      required: [action, reason]
+      properties:
+        action: { type: string, enum: [approve, restrict, block, delete, reinstate] }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+    AdminReportActionRequest:
+      type: object
+      required: [state, reason]
+      properties:
+        state: { type: string, enum: [reviewing, resolved, escalated, rejected] }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+    AdminSupportCaseActionRequest:
+      type: object
+      required: [state, reason]
+      properties:
+        state: { type: string, enum: [open, pending_user, pending_internal, resolved, closed] }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+    AdminDataRequestActionRequest:
+      type: object
+      required: [state, reason]
+      properties:
+        state: { type: string, enum: [verifying, processing, completed, rejected] }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+    AdminFeatureFlagPatchRequest:
+      type: object
+      required: [value, reason]
+      properties:
+        value: { type: object, additionalProperties: true }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+    AuditEvent:
+      type: object
+      required: [id, subjectType, action, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        subjectType: { type: string }
+        action: { type: string }
+        createdAt: { type: string, format: date-time }

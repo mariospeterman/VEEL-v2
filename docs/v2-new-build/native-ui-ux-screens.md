@@ -1,9 +1,24 @@
 # Veel V2 Native UI, Screens, Gestures, And Motion
 
-Status: proposed v2 architecture
+Status: accepted
 Scope: desktop/mobile PWA UX
 Last updated: 2026-06-03
-Source of truth: proposal
+Source of truth: yes
+
+Owns:
+- native ui ux screens decisions for its named domain
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 This document defines how every main v2 screen should behave so Veel feels like a native desktop/mobile social video app rather than a stretched web dashboard.
 
@@ -78,7 +93,7 @@ Terminology:
 
 - Bit: video up to roughly 60 seconds, always free/discoverable
 - Clip: longer video; can include a free Bit/teaser segment
-- VOD/live replay: long-form media; may be free, teaser-only, subscriber, pass, or unlock-gated
+- VOD/live replay: long-form media; may be free, teaser-only, subscriber, pass, or content-unlock-gated
 
 This prevents the platform from becoming too locked and keeps discovery healthy.
 
@@ -173,10 +188,8 @@ Desktop:
 Mobile:
 
 - record/upload first
-- bottom-aligned steps: media, edit, caption, labels, monetise, preview, publish
+- bottom-aligned steps: media, thumbnail/teaser, caption, labels, monetise, optional event, preview, publish
 - thumbnail and Bit/teaser selection are simple native controls
-- text/GIF overlays are lightweight, not a complex timeline editor
-- music is only from licensed/provider-cleared catalog or creator-owned audio
 - labels include NSFW/adult/sensitive and optional event attachment only
 - event attachment captures date/time, ticket amount/capacity, public sale or private request-to-join, digital live stream or physical location, and map-assisted location search
 - Dating Mode is not configured in Create; it is enabled from profile/settings and appears as a dating-active affordance on eligible creator media
@@ -190,6 +203,15 @@ Desktop:
 - media preview dominant
 - steps/panels around preview
 - no complex timeline editor in MVP
+
+MVP non-goals:
+
+- stickers
+- GIF overlays
+- music catalogue
+- AI media editing
+- beauty filters
+- advanced timeline editing
 
 ## Profile
 

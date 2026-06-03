@@ -1,9 +1,24 @@
 # Veel V2 Product Flows
 
-Status: proposed v2 architecture
+Status: accepted
 Scope: product workflows
 Last updated: 2026-06-03
-Source of truth: proposal
+Source of truth: yes
+
+Owns:
+- product flows decisions for its named domain
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 ## Flow Principles
 
@@ -123,9 +138,6 @@ Create MVP is intentionally raw and simple:
    - trim/crop where provider/browser support is simple
    - choose thumbnail/frame
    - if video is longer than Bit length, choose the free Bit/teaser segment
-   - add text overlay
-   - add GIF/sticker overlay only from safe/licensed source
-   - add music only from licensed/provider-cleared catalog or creator-owned audio
 3. Add caption:
    - caption text
    - hashtags `#`
@@ -137,7 +149,7 @@ Create MVP is intentionally raw and simple:
    - no dating toggle; Dating Mode is enabled from profile/settings and appears on eligible creator media automatically
 5. Monetisation:
    - free
-   - teaser + unlock
+   - teaser + content unlock
    - subscriber/pass where relevant
    - tip/support enabled
 6. Preview.
@@ -256,7 +268,6 @@ Messages support:
 - paid messages
 - tips
 - attachments
-- GIFs if provider configured
 - block/report
 - match/event contexts later
 

@@ -1,15 +1,30 @@
 # Veel V2 New-Build Documentation Pack
 
-Status: proposed new-repo source pack
-Scope: complete greenfield Veel v2 build instructions
+Status: accepted
+Scope: complete standalone Veel v2 build instructions
 Last updated: 2026-06-03
-Source of truth: yes for the proposed `veel-v2` repo
+Source of truth: yes
 
-This folder is the clean new-build pack. It is intentionally self-contained so a developer can build Veel v2 from it without reading stale prototype notes.
+Owns:
+- canonical v2 docs navigation and source-of-truth matrix
+
+Defers to:
+- OpenAPI, schema blueprint, ADRs, provider docs where narrower
+
+Does not own:
+- implementation details, provider payload shapes, migrations
+
+Launch scope:
+- developer orientation and canonical build-source hierarchy
+
+Non-goals:
+- parallel doc families or historical lessons
+
+This folder is the canonical new-build pack. It is intentionally self-contained so a developer can build Veel v2 from these docs without reading any older repository.
 
 ## What This Pack Is
 
-- A complete greenfield plan for a new `veel-v2` repo.
+- A complete standalone plan for a new `veel-v2` repo.
 - Provider-first architecture.
 - Backend business truth with minimal custom infrastructure.
 - Frontend native PWA UX plan.
@@ -17,10 +32,27 @@ This folder is the clean new-build pack. It is intentionally self-contained so a
 
 ## What This Pack Is Not
 
-- Not a description of the previous prototype implementation.
-- Not a porting checklist.
-- Not an instruction to bulk-copy prototype code.
-- Not a migration-in-place plan.
+- Not a description of the historical context.
+- Not a copy checklist.
+- Not an instruction to bulk-copy historical code.
+- Not an in-place upgrade plan.
+- Not a second source of truth beside OpenAPI, schema, ADRs, and this docs pack.
+
+## Source-Of-Truth Matrix
+
+| Decision area | Source of truth | Implementation dependency |
+| --- | --- | --- |
+| Product/platform behavior | `full-platform-blueprint.md`, `product-flows.md`, product docs | Tests and route screens must match these docs. |
+| API shape | `packages/contracts/openapi.yaml` | Generated client and Fastify schemas must match exactly. |
+| Frontend routes/screens/gestures | `route-map.md`, `native-ui-ux-screens.md`, frontend docs | Next routes encode route state only. |
+| Database shape | `packages/database/schema-blueprint.sql` until migrations exist | Migrations must be derived slice-by-slice from the blueprint. |
+| Money/access/referral truth | `payments-and-monetisation.md`, `business-monetisation.md`, OpenAPI | Backend owns final state; frontend is UX/cache only. |
+| Provider boundaries | `providers/provider-map.md`, provider-specific docs, ADRs | Use official provider docs/SDKs first; adapters hide secrets. |
+| Security/compliance | compliance docs, `safety-admin-ai.md`, ADRs | Age, moderation, audit, and privacy rules block launch if incomplete. |
+| Admin/ops | `admin-operations-dashboard.md` | Every launch slice needs admin visibility where relevant. |
+| AI/MCP | `ai-mcp-use-cases.md`, `safety-admin-ai.md` | Permissioned tools only; no spending/publishing/messaging without confirmation. |
+
+The older Veel repository is reference-only. It can inform lessons and test ideas, but it must not override this matrix, contracts, schema, ADRs, or official provider docs.
 
 ## Start Here
 
@@ -28,7 +60,7 @@ This folder is the clean new-build pack. It is intentionally self-contained so a
 2. [Full platform blueprint](full-platform-blueprint.md)
 3. [App architecture](app-architecture.md)
 4. [Stack decision](stack-decision.md)
-5. [ADR: Fastify and Supabase proposal](adr/0001-fastify-supabase-proposal.md)
+5. [ADR: Fastify and Supabase decision](adr/0001-fastify-supabase-decision.md)
 6. [ADR: 2026 provider decisions](adr/0002-provider-decisions-2026.md)
 7. [Route map](route-map.md)
 8. [Initial contracts and schema](contracts-and-schema.md)
@@ -81,13 +113,12 @@ This folder is the clean new-build pack. It is intentionally self-contained so a
 
 ## How To Use In A New Repo
 
-1. Create `veel-v2`.
-2. Copy this entire `docs/v2-new-build/` folder into `docs/`.
-3. Rename it to `docs/architecture/` or keep it as `docs/v2-new-build/`.
-4. Copy `AGENTS.md` and rewrite it for the new stack.
-5. Create clean `.gitignore`, `.cursorignore`, `.env.example`, and workspace files.
-6. Install GStack only after this folder and repo rules are present.
-7. Start with [Build plan](build-plan.md), then implement the first 10 tickets listed there.
+1. Open this repository as the new build scaffold.
+2. Keep `docs/v2-new-build/` as the canonical architecture pack until implementation moves docs into final folders.
+3. Keep `AGENTS.md`, `CLAUDE.md`, and `.cursor/rules/veel-v2.mdc` aligned with this index.
+4. Create clean workspace tooling, `.gitignore`, `.cursorignore`, `.env.example`, and CI files from these docs.
+5. Install GStack only after this folder and repo rules are present.
+6. Start with [Build plan](build-plan.md), then implement the first 10 tickets listed there.
 
 ## Build From These Docs
 

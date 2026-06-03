@@ -1,17 +1,32 @@
-# Veel V2 Rebuild Workflow
+# Veel V2 Build Workflow
 
-Status: proposed v2 architecture
-Scope: rebuild process, repo strategy, gstack usage
+Status: accepted
+Scope: build process, repo strategy, gstack usage
 Last updated: 2026-06-01
-Source of truth: proposal
+Source of truth: yes
 
-This document defines how to start a clean Veel v2 rebuild without dragging current repo debt into the new platform. The current repo remains the implementation reference and production fallback until v2 reaches tested parity.
+Owns:
+- slice workflow decisions for its named domain
 
-For the detailed greenfield repo plan, use `build-plan.md`. This document is the operational workflow and slice order; the build-plan document is the step-by-step new repo implementation plan.
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
+
+This document defines how to start the clean Veel v2 build without importing historical implementation debt. Historical repositories are context only after their lessons are captured in v2 docs, contracts, schema, and tests.
+
+For the detailed standalone repo plan, use `build-plan.md`. This document is the operational workflow and slice order; the build-plan document is the step-by-step new repo implementation plan.
 
 ## Recommendation
 
-If the decision is a full rebuild, create a clean `veel-v2` repository and keep this repo as read-only reference.
+Use this scaffold as the clean `veel-v2` starting point and keep the older repository as read-only reference.
 
 Use this repo for:
 
@@ -22,7 +37,7 @@ Use this repo for:
 - screenshots and UX findings
 - current docs and ADRs
 
-Do not bulk-copy prototype application code. Port behavior through contracts, tests, and vertical slices.
+Do not bulk-copy historical context application code. recreate behavior through contracts, tests, and vertical slices.
 
 ## New Repo Shape
 
@@ -74,7 +89,7 @@ Recommended use:
 - install after the v2 repo has docs and repo rules
 - keep gstack optional at first
 - use it for office-hours/planning, design review, QA, security review, release review
-- do not let it auto-port prototype code wholesale
+- do not let it copy historical context code wholesale
 - do not let gstack memory override source-of-truth docs, OpenAPI, migrations, or tests
 - keep telemetry/privacy choices explicit
 
@@ -107,7 +122,7 @@ Then code.
 3. Home feed read model with real media cards.
 4. Media viewer and access-state projection.
 5. Native SOL devnet payment intent, transaction request, confirmation, settlement.
-6. Paid unlock entitlement.
+6. Content unlock entitlement.
 7. Tip/support settlement without access grant.
 8. Referral attribution and commission.
 9. Bunny VOD upload/status/playback.
@@ -141,7 +156,7 @@ V2 can replace v1 only after:
 
 ## Kill Criteria
 
-Stop or pause the rebuild if:
+Stop or pause the build if:
 
 - v2 starts duplicating the same provider/payment systems as v1
 - backend business truth leaks to frontend

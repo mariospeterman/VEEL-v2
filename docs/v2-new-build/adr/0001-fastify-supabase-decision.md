@@ -1,13 +1,28 @@
 # ADR 0001: Fastify and Supabase Architecture
 
-Status: accepted v2 direction
+Status: accepted
 Scope: v2 backend/platform
 Last updated: 2026-06-01
-Source of truth: proposal
+Source of truth: yes
+
+Owns:
+- Fastify/Supabase runtime decision and its consequences
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 ## Context
 
-Veel v2 depends heavily on TypeScript-first provider ecosystems: Solana Pay, embedded wallet tooling, Livepeer examples/SDKs, Supabase Realtime client integration, OpenAPI generation, and provider-first frontend components. The greenfield build should use one TypeScript runtime boundary for API, workers, contracts, and provider adapters.
+Veel v2 depends heavily on TypeScript-first provider ecosystems: Solana Pay, embedded wallet tooling, Livepeer examples/SDKs, Supabase Realtime client integration, OpenAPI generation, and provider-first frontend components. The standalone build should use one TypeScript runtime boundary for API, workers, contracts, and provider adapters.
 
 ## Decision
 
@@ -19,7 +34,7 @@ For v2:
 - Hono is reserved for isolated edge endpoints only.
 - pnpm remains the package manager and Node.js LTS remains the production runtime for v2 launch.
 - Bun is evaluated later only after provider SDK and infrastructure compatibility is proven.
-- The previous prototype remains reference-only until v2 reaches feature parity.
+- Historical implementations remain context only and cannot override v2 contracts, schema, ADRs, tests, or official provider docs.
 
 ## Consequences
 
@@ -34,7 +49,7 @@ Positive:
 Negative:
 
 - Auth/session architecture must be designed before app implementation.
-- Rebuild risk is high if contracts are not frozen.
+- Greenfield implementation risk is high if contracts are not frozen.
 - Supabase RLS complexity must be designed and tested.
 - Admin tooling must be rebuilt or separately selected.
 - Bun performance gains are deferred until the v2 dependency graph and provider SDK paths are stable.

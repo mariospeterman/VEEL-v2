@@ -1,9 +1,24 @@
 # Veel V2 Profile, Activity, Badges, And Ranking
 
-Status: proposed v2 architecture
+Status: accepted
 Scope: profile, badges, verification status, activity, creator/user rankings
 Last updated: 2026-06-03
 Source of truth: yes for profile/activity/gamification rules
+
+Owns:
+- profile activity ranking decisions for its named domain
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 Profiles should show identity, trust, creator status, and user progress without turning Veel into a manipulative leaderboard. Ranking and badges should reward useful platform behavior: verified safety, creator quality, completed purchases, events, replies, and low report rates.
 

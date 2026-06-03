@@ -1,9 +1,24 @@
 # Veel V2 AI/MCP Practical Use Cases
 
-Status: proposed v2 architecture
+Status: accepted
 Scope: AI assistant, MCP tools, admin ops, creator/user utility
 Last updated: 2026-06-02
 Source of truth: yes for v2 AI/MCP scope
+
+Owns:
+- ai mcp use cases decisions for its named domain
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 AI/MCP must solve real operational or user pain. It must not become a chatbot gimmick, unsafe automation layer, or expensive feature with no measurable benefit.
 

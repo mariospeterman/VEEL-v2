@@ -5,12 +5,12 @@
   "packageManager": "pnpm@10.0.0",
   "scripts": {
     "docs:check": "node scripts/check-docs.mjs",
-    "lint": "pnpm docs:check",
-    "typecheck": "pnpm docs:check",
-    "test": "pnpm docs:check"
+    "scaffold:check": "pnpm docs:check",
+    "lint": "node scripts/not-implemented-yet.mjs lint",
+    "typecheck": "node scripts/not-implemented-yet.mjs typecheck",
+    "test": "node scripts/not-implemented-yet.mjs test"
   },
   "engines": {
     "node": ">=22"
   }
 }
-

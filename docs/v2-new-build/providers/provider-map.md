@@ -1,9 +1,24 @@
 # Veel V2 Provider Map
 
-Status: proposed v2 architecture
+Status: accepted
 Scope: provider ownership, boundaries, integrations
 Last updated: 2026-06-02
 Source of truth: yes for v2 provider relations
+
+Owns:
+- provider map decisions for its named domain
+
+Defers to:
+- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+
+Does not own:
+- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+
+Launch scope:
+- accepted v2 launch or phased behavior stated in this document
+
+Non-goals:
+- historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 This map defines which provider does which job and what Veel owns. It exists to avoid custom infrastructure, duplicate adapters, and frontend-owned business truth.
 
