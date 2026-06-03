@@ -185,3 +185,9 @@ Required v2 tests:
 - sourceContext navigation
 - no horizontal overflow
 - architecture guard
+
+Current implementation state:
+
+- `pnpm smoke` runs Playwright against the Next.js app shell and Home media card.
+- The smoke suite runs desktop Chromium and mobile Chromium projects from `tests/smoke`.
+- CI installs Chromium and runs the smoke suite after lint, typecheck, and unit tests.
