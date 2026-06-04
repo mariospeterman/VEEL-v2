@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 import type { ContentItem, ContentRepository } from "./types.js";
 
@@ -21,9 +22,29 @@ interface FeedRow {
   poster_url: string | null;
 }
 
+interface ContentRow {
+  id: string;
+  media_type: ContentItem["mediaType"];
+  caption: string | null;
+  nsfw_label: NonNullable<ContentItem["nsfwLabel"]>;
+  creator_id: string;
+  handle: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+}
+
 export function createPostgresContentRepository(databaseUrl?: string): ContentRepository {
   if (!databaseUrl) {
     return {
+      async createDraft() {
+        throw new ContentRepositoryConfigurationError();
+      },
+      async createMediaAsset() {
+        throw new ContentRepositoryConfigurationError();
+      },
+      async findOwnedContentForUpload() {
+        throw new ContentRepositoryConfigurationError();
+      },
       async listHomeFeed() {
         throw new ContentRepositoryConfigurationError();
       }
@@ -37,6 +58,99 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
   });
 
   return {
+    async createDraft(input) {
+      const rows = await sql<ContentRow[]>`
+        with target_user as (
+          select id
+          from users
+          where supabase_user_id = ${input.supabaseUserId}
+          limit 1
+        ),
+        inserted_content as (
+          insert into content_items (
+            id,
+            creator_user_id,
+            media_type,
+            caption,
+            visibility,
+            nsfw_label
+          )
+          select
+            ${randomUUID()},
+            id,
+            ${input.mediaType},
+            ${input.caption ?? null},
+            ${input.visibility},
+            ${input.nsfwLabel}
+          from target_user
+          returning id, creator_user_id, media_type, caption, nsfw_label
+        )
+        select
+          ci.id,
+          ci.media_type,
+          ci.caption,
+          ci.nsfw_label,
+          u.id as creator_id,
+          p.handle,
+          p.display_name,
+          p.avatar_url
+        from inserted_content ci
+        join users u on u.id = ci.creator_user_id
+        left join profiles p on p.user_id = u.id
+        limit 1
+      `;
+
+      const row = rows[0];
+
+      if (!row) {
+        throw new ContentRepositoryConfigurationError();
+      }
+
+      return toContentItem(row, null);
+    },
+    async createMediaAsset(input) {
+      await sql`
+        insert into media_assets (
+          id,
+          content_item_id,
+          provider,
+          provider_asset_id,
+          provider_state
+        )
+        values (
+          ${randomUUID()},
+          ${input.contentId},
+          ${input.provider},
+          ${input.providerAssetId},
+          ${input.providerState}
+        )
+        on conflict (provider, provider_asset_id) do nothing
+      `;
+    },
+    async findOwnedContentForUpload(input) {
+      const rows = await sql<{ id: string; media_type: ContentItem["mediaType"]; caption: string | null }[]>`
+        select
+          ci.id,
+          ci.media_type,
+          ci.caption
+        from content_items ci
+        join users u on u.id = ci.creator_user_id
+        where ci.id = ${input.contentId}
+          and u.supabase_user_id = ${input.supabaseUserId}
+          and ci.state in ('draft', 'processing')
+        limit 1
+      `;
+
+      const row = rows[0];
+
+      return row
+        ? {
+            id: row.id,
+            mediaType: row.media_type,
+            caption: row.caption
+          }
+        : null;
+    },
     async listHomeFeed(input) {
       const rows = await sql<FeedRow[]>`
         select
@@ -74,7 +188,7 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
       const nextRow = rows[input.limit];
 
       return {
-        items: pageRows.map(toContentItem),
+        items: pageRows.map((row) => toContentItem(row, row.poster_url)),
         nextCursor: nextRow ? nextRow.created_at.toISOString() : null
       };
     },
@@ -84,7 +198,7 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
   };
 }
 
-function toContentItem(row: FeedRow): ContentItem {
+function toContentItem(row: ContentRow, posterUrl: string | null): ContentItem {
   return {
     id: row.id,
     creator: {
@@ -96,7 +210,7 @@ function toContentItem(row: FeedRow): ContentItem {
     },
     mediaType: row.media_type,
     caption: row.caption,
-    posterUrl: row.poster_url,
+    posterUrl,
     playback: {
       state: "not_ready",
       url: null,

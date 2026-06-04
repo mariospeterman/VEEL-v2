@@ -8,7 +8,8 @@ import { registerAgeRoutes } from "./modules/age/age-routes.js";
 import type { AgeProviderWaterfall, AgeRepository } from "./modules/age/types.js";
 import { createPostgresContentRepository } from "./modules/content/content-repository.js";
 import { registerContentRoutes } from "./modules/content/content-routes.js";
-import type { ContentRepository } from "./modules/content/types.js";
+import { createBunnyStreamUploadAdapter } from "./modules/content/media-upload-adapter.js";
+import type { ContentRepository, MediaUploadProviderAdapter } from "./modules/content/types.js";
 import { createPostgresProfileRepository } from "./modules/profile/profile-repository.js";
 import { registerProfileRoutes } from "./modules/profile/profile-routes.js";
 import type { ProfileRepository } from "./modules/profile/types.js";
@@ -29,6 +30,7 @@ export interface BuildApiOptions {
   ageRepository?: AgeRepository;
   ageProviderWaterfall?: AgeProviderWaterfall;
   contentRepository?: ContentRepository;
+  mediaUploadProvider?: MediaUploadProviderAdapter;
   profileRepository?: ProfileRepository;
   walletRepository?: WalletRepository;
 }
@@ -67,6 +69,8 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     options.profileRepository ?? createPostgresProfileRepository(app.config.DATABASE_URL);
   const contentRepository =
     options.contentRepository ?? createPostgresContentRepository(app.config.DATABASE_URL);
+  const mediaUploadProvider =
+    options.mediaUploadProvider ?? createBunnyStreamUploadAdapter(app.config);
   const walletRepository =
     options.walletRepository ?? createPostgresWalletRepository(app.config.DATABASE_URL);
 
@@ -118,7 +122,8 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     sessionRepository,
     ageRepository,
     walletRepository,
-    contentRepository
+    contentRepository,
+    mediaUploadProvider
   });
   await registerWalletRoutes(app, {
     authVerifier,

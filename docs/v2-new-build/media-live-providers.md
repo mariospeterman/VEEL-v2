@@ -20,6 +20,21 @@ Launch scope:
 Non-goals:
 - historical-context inference, duplicate systems, and unapproved provider/product expansion
 
+Current implementation state:
+
+- `POST /v1/content` creates a server-owned content draft for app-ready users.
+- `POST /v1/media/uploads` creates a Bunny Stream upload session for an owned content draft.
+- The Bunny adapter follows the current Bunny Stream TUS flow: create video object, generate server-side SHA256 upload signature, return `https://video.bunnycdn.com/tusupload` plus safe upload headers.
+- `BUNNY_STREAM_API_KEY` and `BUNNY_STREAM_LIBRARY_ID` are server-only config values; the Stream API key is never returned to the browser.
+- Upload state is stored in `media_assets` as normalized provider/provider asset/provider state only.
+- Bunny webhooks, playback token issuing, moderation state transitions, and locked playback are deferred to their owning media/access slices.
+
+Official references checked:
+
+- Bunny Stream API reference: https://docs.bunny.net/api-reference/stream
+- Bunny TUS resumable uploads: https://docs.bunny.net/stream/tus-resumable-uploads
+- Livepeer asset upload reference: https://docs.livepeer.org/api-reference/asset/upload
+
 ## Provider Split
 
 - Bunny Stream: VOD upload, transcoding, thumbnails, CDN playback.

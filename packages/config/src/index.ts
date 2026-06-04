@@ -20,6 +20,9 @@ export const serverEnvSchema = z.object({
   SUPABASE_SECRET_KEY: z.string().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
   DATABASE_URL: z.string().optional(),
+  BUNNY_STREAM_API_KEY: z.string().optional(),
+  BUNNY_STREAM_LIBRARY_ID: z.string().optional(),
+  LIVEPEER_API_KEY: z.string().optional(),
   AGE_VERIFICATION_DRIVER: z
     .enum(["yoti_digital_id", "yoti", "sumsub", "veriff", "persona"])
     .optional(),

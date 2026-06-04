@@ -87,4 +87,12 @@ describe("database migrations", () => {
     expect(sql).toContain("media_assets_content_item_idx");
     expect(sql).not.toMatch(/signed_url|playback_token|entitled|payment_proof|private_key/i);
   });
+
+  it("adds media upload provider lookup support without provider payload storage", () => {
+    const sql = readMigration("0007_media_upload_boundary.sql");
+
+    expect(sql).toContain("media_assets_provider_state_idx");
+    expect(sql).toContain("on media_assets (provider, provider_state, created_at desc)");
+    expect(sql).not.toMatch(/raw_payload|signed_url|stream_key|api_key|private_key/i);
+  });
 });

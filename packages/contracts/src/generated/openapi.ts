@@ -3428,6 +3428,10 @@ export interface operations {
         requestBody: components["requestBodies"]["CreateContent"];
         responses: {
             201: components["responses"]["ContentItem"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     getContent: {
@@ -3474,6 +3478,11 @@ export interface operations {
         requestBody: components["requestBodies"]["CreateUpload"];
         responses: {
             201: components["responses"]["UploadSession"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     createLiveRoom: {

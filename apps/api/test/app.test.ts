@@ -1,8 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
 import { buildApi } from "../src/app";
-import type { ContentItem, ContentRepository } from "../src/modules/content/types";
+import { createBunnyStreamUploadAdapter } from "../src/modules/content/media-upload-adapter";
+import type {
+  ContentItem,
+  ContentRepository,
+  CreateMediaAssetInput,
+  MediaUploadProviderAdapter
+} from "../src/modules/content/types";
 import type {
   AgeProviderWaterfall,
   AgeRepository,
@@ -537,10 +543,18 @@ describe("buildApi", () => {
 
   it("returns the protected Home feed for an app-ready user", async () => {
     const contentRepository: ContentRepository = {
+      async createDraft() {
+        throw new Error("not implemented");
+      },
+      async createMediaAsset() {
+        throw new Error("not implemented");
+      },
+      async findOwnedContentForUpload() {
+        throw new Error("not implemented");
+      },
       async listHomeFeed(input) {
         expect(input).toEqual({
           mode: "recommended",
-          cursor: undefined,
           limit: 20
         });
 
@@ -616,6 +630,299 @@ describe("buildApi", () => {
     expect(response.statusCode).toBe(403);
 
     await app.close();
+  });
+
+  it("creates a content draft for an app-ready user", async () => {
+    const contentRepository: ContentRepository = {
+      async createDraft(input) {
+        expect(input).toEqual({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          mediaType: "vod",
+          caption: "studio cut",
+          visibility: "private",
+          nsfwLabel: "none"
+        });
+
+        return homeFeedItem;
+      },
+      async createMediaAsset() {
+        throw new Error("not implemented");
+      },
+      async findOwnedContentForUpload() {
+        throw new Error("not implemented");
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/content",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "content-draft-1"
+      },
+      payload: {
+        mediaType: "vod",
+        caption: "studio cut",
+        visibility: "private",
+        nsfwLabel: "none"
+      }
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toEqual(homeFeedItem);
+
+    await app.close();
+  });
+
+  it("creates a Bunny upload session for an owned content draft", async () => {
+    const createdAssets: CreateMediaAssetInput[] = [];
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        throw new Error("not implemented");
+      },
+      async createMediaAsset(input) {
+        createdAssets.push(input);
+      },
+      async findOwnedContentForUpload(input) {
+        expect(input).toEqual({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          contentId: "00000000-0000-4000-8000-000000000040"
+        });
+
+        return {
+          id: "00000000-0000-4000-8000-000000000040",
+          mediaType: "vod",
+          caption: "studio cut"
+        };
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      }
+    };
+    const mediaUploadProvider: MediaUploadProviderAdapter = {
+      provider: "bunny",
+      isConfigured() {
+        return true;
+      },
+      async createUploadSession(input) {
+        expect(input).toEqual({
+          contentId: "00000000-0000-4000-8000-000000000040",
+          title: "studio cut",
+          mimeType: "video/mp4"
+        });
+
+        return {
+          provider: "bunny",
+          providerAssetId: "bunny-video-guid",
+          uploadUrl: "https://video.bunnycdn.com/tusupload",
+          headers: {
+            AuthorizationSignature: "signed",
+            AuthorizationExpire: "upload-expires-at",
+            LibraryId: "library-id",
+            VideoId: "bunny-video-guid"
+          },
+          expiresAt: new Date("2026-06-04T23:00:00.000Z")
+        };
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository,
+      mediaUploadProvider
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/media/uploads",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "media-upload-1"
+      },
+      payload: {
+        contentId: "00000000-0000-4000-8000-000000000040",
+        fileName: "studio.mp4",
+        mimeType: "video/mp4"
+      }
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toEqual({
+      uploadUrl: "https://video.bunnycdn.com/tusupload",
+      provider: "bunny",
+      headers: {
+        AuthorizationSignature: "signed",
+        AuthorizationExpire: "upload-expires-at",
+        LibraryId: "library-id",
+        VideoId: "bunny-video-guid"
+      },
+      expiresAt: "2026-06-04T23:00:00.000Z"
+    });
+    expect(createdAssets).toEqual([
+      {
+        contentId: "00000000-0000-4000-8000-000000000040",
+        provider: "bunny",
+        providerAssetId: "bunny-video-guid",
+        providerState: "created"
+      }
+    ]);
+
+    await app.close();
+  });
+
+  it("fails media uploads closed when Bunny is not configured", async () => {
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        throw new Error("not implemented");
+      },
+      async createMediaAsset() {
+        throw new Error("not implemented");
+      },
+      async findOwnedContentForUpload() {
+        return {
+          id: "00000000-0000-4000-8000-000000000040",
+          mediaType: "vod",
+          caption: "studio cut"
+        };
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/media/uploads",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "media-upload-2"
+      },
+      payload: {
+        contentId: "00000000-0000-4000-8000-000000000040",
+        fileName: "studio.mp4",
+        mimeType: "video/mp4"
+      }
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({
+      code: "service_unavailable"
+    });
+
+    await app.close();
+  });
+
+  it("creates Bunny TUS credentials without exposing the Stream API key", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-04T00:00:00.000Z"));
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(JSON.stringify({ guid: "bunny-video-guid" }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json"
+        }
+      });
+    });
+    const adapter = createBunnyStreamUploadAdapter(
+      {
+        NODE_ENV: "test",
+        API_URL: "http://localhost:4000",
+        WEB_URL: "http://localhost:3000",
+        AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: false,
+        SUMSUB_API_BASE_URL: "https://api.sumsub.com",
+        YOTI_API_BASE_URL: "https://age.yoti.com/api/v1",
+        YOTI_LAUNCH_BASE_URL: "https://age.yoti.com",
+        VERIFF_API_BASE_URL: "https://stationapi.veriff.com",
+        PERSONA_API_BASE_URL: "https://api.withpersona.com",
+        BUNNY_STREAM_API_KEY: "bunny-secret",
+        BUNNY_STREAM_LIBRARY_ID: "library-id"
+      },
+      fetchMock
+    );
+
+    const session = await adapter.createUploadSession({
+      contentId: "00000000-0000-4000-8000-000000000040",
+      title: "studio cut",
+      mimeType: "video/mp4"
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://video.bunnycdn.com/library/library-id/videos",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          AccessKey: "bunny-secret"
+        }),
+        body: JSON.stringify({ title: "studio cut" })
+      })
+    );
+    expect(session).toMatchObject({
+      provider: "bunny",
+      providerAssetId: "bunny-video-guid",
+      uploadUrl: "https://video.bunnycdn.com/tusupload",
+      headers: {
+        LibraryId: "library-id",
+        VideoId: "bunny-video-guid"
+      }
+    });
+    expect(session.headers.AuthorizationExpire).toMatch(/^\d+$/);
+    expect(session.headers.AuthorizationSignature).toMatch(/^[a-f0-9]{64}$/);
+    expect(Object.values(session.headers)).not.toContain("bunny-secret");
+
+    vi.useRealTimers();
   });
 });
 
