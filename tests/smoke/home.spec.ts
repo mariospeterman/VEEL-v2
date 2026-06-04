@@ -85,3 +85,23 @@ test("renders the admin payment unlock and provider ops projection", async ({ pa
   await expect(page.getByText("payment.settlement")).toBeVisible();
   await expect(page.locator("span").getByText("processed", { exact: true })).toBeVisible();
 });
+
+test("renders the event ticket sheet projection", async ({ page }) => {
+  await page.goto("/events/00000000-0000-4000-8000-0000000000e1");
+
+  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Studio meetup" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ticket sheet" })).toBeVisible();
+  await expect(page.getByText("General admission")).toBeVisible();
+  await expect(page.getByText("public_sale")).toBeVisible();
+});
+
+test("renders the user ticket QR projection", async ({ page }) => {
+  await page.goto("/tickets");
+
+  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "My tickets" })).toBeVisible();
+  await expect(page.getByText("QR token")).toBeVisible();
+  await expect(page.getByText("veel_ticket_fixture")).toBeVisible();
+  await expect(page.locator("span").getByText("active", { exact: true })).toBeVisible();
+});

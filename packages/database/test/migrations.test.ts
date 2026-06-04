@@ -254,4 +254,32 @@ describe("database migrations", () => {
     expect(sql).toContain("provider_events_received_at_idx");
     expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role/i);
   });
+
+  it("adds event ticketing tables with RLS and backend-issued tickets", () => {
+    const sql = readMigration("0021_events_ticketing.sql");
+
+    expect(sql).toContain("create table events");
+    expect(sql).toContain("create table ticket_types");
+    expect(sql).toContain("create table ticket_purchase_requests");
+    expect(sql).toContain("create table ticket_entitlements");
+    expect(sql).toContain("create table ticket_requests");
+    expect(sql).toContain("alter table events enable row level security");
+    expect(sql).toContain("alter table ticket_entitlements enable row level security");
+    expect(sql).toContain("events_select_public_owner_or_staff");
+    expect(sql).toContain("ticket_entitlements_select_self_creator_or_staff");
+    expect(sql).toContain("payment_intent_id uuid unique references payment_intents(id)");
+    expect(sql).toContain("qr_token_hash text unique not null");
+    expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role/i);
+  });
+
+  it("covers event ticketing foreign keys reported by the Supabase performance advisor", () => {
+    const sql = readMigration("0022_event_ticketing_fk_indexes.sql");
+
+    expect(sql).toContain("ticket_entitlements_ticket_type_id_idx");
+    expect(sql).toContain("ticket_purchase_requests_event_id_idx");
+    expect(sql).toContain("ticket_purchase_requests_ticket_type_id_idx");
+    expect(sql).toContain("ticket_requests_ticket_type_id_idx");
+    expect(sql).toContain("ticket_requests_reviewed_by_user_id_idx");
+    expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role/i);
+  });
 });

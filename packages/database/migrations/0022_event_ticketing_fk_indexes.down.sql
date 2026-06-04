@@ -1,0 +1,5 @@
+drop index if exists ticket_requests_reviewed_by_user_id_idx;
+drop index if exists ticket_requests_ticket_type_id_idx;
+drop index if exists ticket_purchase_requests_ticket_type_id_idx;
+drop index if exists ticket_purchase_requests_event_id_idx;
+drop index if exists ticket_entitlements_ticket_type_id_idx;

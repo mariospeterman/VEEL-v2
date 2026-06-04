@@ -96,6 +96,33 @@ export async function registerActivityRoutes(
       throw error;
     }
   });
+
+  app.get("/v1/activity/tickets", async (request, reply) => {
+    const access = await verifyActivityAccess(request, options);
+
+    if (!access.ok) {
+      return reply.code(access.statusCode).send(access.body);
+    }
+
+    const query = request.query as { cursor?: string };
+
+    try {
+      const tickets = await options.activityRepository.listTickets({
+        supabaseUserId: access.supabaseUserId,
+        limit: 20,
+        ...(query.cursor ? { cursor: query.cursor } : {})
+      });
+
+      return reply.code(200).send(tickets);
+    } catch (error) {
+      if (error instanceof ActivityRepositoryConfigurationError) {
+        request.log.warn({ error }, "Activity repository is not configured");
+        return reply.code(200).send({ items: [], nextCursor: null });
+      }
+
+      throw error;
+    }
+  });
 }
 
 type ActivityAccessResult =

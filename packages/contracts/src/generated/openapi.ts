@@ -1906,6 +1906,22 @@ export interface components {
             /** @enum {string} */
             state?: "draft" | "published" | "sold_out" | "cancelled" | "completed";
         };
+        EventTicketType: {
+            /** Format: uuid */
+            id: string;
+            label: string;
+            priceMinor: number | null;
+            currency: components["schemas"]["Currency"];
+            capacity: number;
+            remaining: number;
+            /** @enum {string} */
+            state: "active" | "paused" | "sold_out";
+            /** Format: date-time */
+            saleStartsAt?: string | null;
+            /** Format: date-time */
+            saleEndsAt?: string | null;
+            perUserLimit?: number | null;
+        };
         EventTicketTypeDraft: {
             label: string;
             priceMinor?: number | null;
@@ -2222,12 +2238,17 @@ export interface components {
             /** Format: uuid */
             id: string;
             title: string;
+            description?: string | null;
             /** Format: date-time */
             startsAt: string;
+            /** Format: date-time */
+            endsAt?: string | null;
+            /** @enum {string} */
+            accessRule: "public_sale" | "private_apply";
             location: components["schemas"]["EventLocationDraft"];
             /** @enum {string} */
             state: "draft" | "published" | "sold_out" | "cancelled" | "completed";
-            ticketTypes?: components["schemas"]["EventTicketTypeDraft"][];
+            ticketTypes: components["schemas"]["EventTicketType"][];
         };
         CreateTicketIntentRequest: {
             /** Format: uuid */
@@ -2237,6 +2258,7 @@ export interface components {
             /** @enum {string} */
             state: "free_granted" | "approval_required" | "payment_required";
             paymentIntent?: components["schemas"]["PaymentIntent"];
+            ticket?: components["schemas"]["Ticket"];
         };
         CreateTicketRequestRequest: {
             /** Format: uuid */
@@ -2246,8 +2268,14 @@ export interface components {
         TicketRequest: {
             /** Format: uuid */
             id: string;
+            /** Format: uuid */
+            eventId: string;
+            /** Format: uuid */
+            ticketTypeId: string;
             /** @enum {string} */
             state: "requested" | "approved" | "rejected" | "expired";
+            /** Format: date-time */
+            createdAt: string;
         };
         CheckInTicketRequest: {
             qrToken: string;
@@ -2255,8 +2283,25 @@ export interface components {
         Ticket: {
             /** Format: uuid */
             id: string;
+            /** Format: uuid */
+            eventId: string;
+            /** Format: uuid */
+            ticketTypeId: string;
+            /** Format: uuid */
+            holderUserId: string;
+            /** Format: uuid */
+            paymentIntentId?: string | null;
             /** @enum {string} */
             state: "active" | "checked_in" | "revoked" | "expired";
+            qrToken: string;
+            /** Format: date-time */
+            checkedInAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        TicketPage: {
+            items: components["schemas"]["Ticket"][];
+            nextCursor?: string | null;
         };
         ActivateDatingRequest: {
             consentVersion: string;
@@ -3028,10 +3073,7 @@ export interface components {
                 [name: string]: unknown;
             };
             content: {
-                "application/json": {
-                    items: components["schemas"]["Ticket"][];
-                    nextCursor?: string | null;
-                };
+                "application/json": components["schemas"]["TicketPage"];
             };
         };
         /** @description Dating profile */
@@ -4732,7 +4774,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["ActivityPage"];
+            200: components["responses"]["TicketPage"];
         };
     };
     getActivityReferrals: {

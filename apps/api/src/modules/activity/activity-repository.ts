@@ -2,6 +2,7 @@ import postgres from "postgres";
 import type {
   ActivityItem,
   ActivityRepository,
+  TicketPage,
   WalletTransaction
 } from "./types.js";
 
@@ -45,6 +46,18 @@ interface WalletTransactionRow {
   confirmed_at: Date | null;
 }
 
+interface TicketRow {
+  id: string;
+  event_id: string;
+  ticket_type_id: string;
+  holder_user_id: string;
+  payment_intent_id: string | null;
+  qr_token: string;
+  state: TicketPage["items"][number]["state"];
+  checked_in_at: Date | null;
+  created_at: Date;
+}
+
 export function createPostgresActivityRepository(databaseUrl?: string): ActivityRepository {
   if (!databaseUrl) {
     return {
@@ -55,6 +68,9 @@ export function createPostgresActivityRepository(databaseUrl?: string): Activity
         throw new ActivityRepositoryConfigurationError();
       },
       async listWalletTransactions() {
+        throw new ActivityRepositoryConfigurationError();
+      },
+      async listTickets() {
         throw new ActivityRepositoryConfigurationError();
       }
     };
@@ -199,6 +215,38 @@ export function createPostgresActivityRepository(databaseUrl?: string): Activity
         nextCursor: extraRow ? extraRow.created_at.toISOString() : null
       };
     },
+    async listTickets(input) {
+      const rows = await sql<TicketRow[]>`
+        with target_user as (
+          select id
+          from users
+          where supabase_user_id = ${input.supabaseUserId}
+          limit 1
+        )
+        select
+          te.id,
+          te.event_id,
+          te.ticket_type_id,
+          te.holder_user_id,
+          te.payment_intent_id,
+          te.qr_token,
+          te.state,
+          te.checked_in_at,
+          te.created_at
+        from ticket_entitlements te
+        join target_user tu on tu.id = te.holder_user_id
+        where (${input.cursor ?? null}::timestamptz is null or te.created_at < ${input.cursor ?? null}::timestamptz)
+        order by te.created_at desc
+        limit ${input.limit + 1}
+      `;
+      const pageRows = rows.slice(0, input.limit);
+      const extraRow = rows[input.limit];
+
+      return {
+        items: pageRows.map(toTicket),
+        nextCursor: extraRow ? extraRow.created_at.toISOString() : null
+      };
+    },
     async close() {
       await sql.end({ timeout: 5 });
     }
@@ -249,5 +297,19 @@ function toWalletTransaction(row: WalletTransactionRow): WalletTransaction {
     createdAt: row.created_at.toISOString(),
     submittedAt: row.submitted_at ? row.submitted_at.toISOString() : null,
     confirmedAt: row.confirmed_at ? row.confirmed_at.toISOString() : null
+  };
+}
+
+function toTicket(row: TicketRow): TicketPage["items"][number] {
+  return {
+    id: row.id,
+    eventId: row.event_id,
+    ticketTypeId: row.ticket_type_id,
+    holderUserId: row.holder_user_id,
+    paymentIntentId: row.payment_intent_id,
+    state: row.state,
+    qrToken: row.qr_token,
+    checkedInAt: row.checked_in_at ? row.checked_in_at.toISOString() : null,
+    createdAt: row.created_at.toISOString()
   };
 }

@@ -544,8 +544,16 @@ create table events (
   location_provider_ref text,
   access_rule text not null default 'public_sale',
   state text not null default 'draft',
+  idempotency_key text not null,
+  request_hash text not null,
   created_at timestamptz not null default now()
 );
+
+create index events_creator_created_at_idx
+  on events (creator_user_id, created_at desc);
+
+create index events_state_starts_at_idx
+  on events (state, starts_at);
 
 create table ticket_types (
   id uuid primary key,
@@ -561,17 +569,30 @@ create table ticket_types (
   created_at timestamptz not null default now()
 );
 
+create index ticket_types_event_state_idx
+  on ticket_types (event_id, state);
+
 create table ticket_entitlements (
   id uuid primary key,
   event_id uuid not null references events(id),
   ticket_type_id uuid references ticket_types(id),
   holder_user_id uuid not null references users(id),
   payment_intent_id uuid references payment_intents(id),
+  qr_token text unique not null,
   qr_token_hash text unique not null,
   state text not null default 'active',
   checked_in_at timestamptz,
   created_at timestamptz not null default now()
 );
+
+create index ticket_entitlements_holder_idx
+  on ticket_entitlements (holder_user_id, created_at desc);
+
+create index ticket_entitlements_event_idx
+  on ticket_entitlements (event_id, state, created_at desc);
+
+create index ticket_entitlements_ticket_type_id_idx
+  on ticket_entitlements (ticket_type_id);
 
 create table ticket_reservations (
   id uuid primary key,
@@ -584,6 +605,26 @@ create table ticket_reservations (
   created_at timestamptz not null default now()
 );
 
+create table ticket_purchase_requests (
+  payment_intent_id uuid primary key references payment_intents(id),
+  event_id uuid not null references events(id),
+  ticket_type_id uuid not null references ticket_types(id),
+  buyer_user_id uuid not null references users(id),
+  amount_minor bigint not null,
+  currency text not null default 'SOL',
+  state text not null default 'pending_payment',
+  created_at timestamptz not null default now()
+);
+
+create index ticket_purchase_requests_buyer_idx
+  on ticket_purchase_requests (buyer_user_id, created_at desc);
+
+create index ticket_purchase_requests_event_id_idx
+  on ticket_purchase_requests (event_id);
+
+create index ticket_purchase_requests_ticket_type_id_idx
+  on ticket_purchase_requests (ticket_type_id);
+
 create table ticket_requests (
   id uuid primary key,
   event_id uuid not null references events(id),
@@ -595,6 +636,16 @@ create table ticket_requests (
   reviewed_at timestamptz,
   created_at timestamptz not null default now()
 );
+
+create index ticket_requests_requester_idx
+  on ticket_requests (requester_user_id, created_at desc);
+
+create index ticket_requests_ticket_type_id_idx
+  on ticket_requests (ticket_type_id);
+
+create index ticket_requests_reviewed_by_user_id_idx
+  on ticket_requests (reviewed_by_user_id)
+  where reviewed_by_user_id is not null;
 
 create table dating_profiles (
   user_id uuid primary key references users(id),

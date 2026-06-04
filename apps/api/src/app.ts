@@ -16,6 +16,9 @@ import { createPostgresContentRepository } from "./modules/content/content-repos
 import { registerContentRoutes } from "./modules/content/content-routes.js";
 import { createBunnyStreamUploadAdapter } from "./modules/content/media-upload-adapter.js";
 import type { ContentRepository, MediaUploadProviderAdapter } from "./modules/content/types.js";
+import { createPostgresEventRepository } from "./modules/event/event-repository.js";
+import { registerEventRoutes } from "./modules/event/event-routes.js";
+import type { EventRepository } from "./modules/event/types.js";
 import { createPostgresLiveRepository } from "./modules/live/live-repository.js";
 import { createLivepeerProviderAdapter } from "./modules/live/livepeer-adapter.js";
 import { registerLiveRoutes } from "./modules/live/live-routes.js";
@@ -50,6 +53,7 @@ export interface BuildApiOptions {
   ageRepository?: AgeRepository;
   ageProviderWaterfall?: AgeProviderWaterfall;
   contentRepository?: ContentRepository;
+  eventRepository?: EventRepository;
   mediaUploadProvider?: MediaUploadProviderAdapter;
   liveRepository?: LiveRepository;
   liveProvider?: LiveProviderAdapter;
@@ -97,6 +101,8 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     options.profileRepository ?? createPostgresProfileRepository(app.config.DATABASE_URL);
   const contentRepository =
     options.contentRepository ?? createPostgresContentRepository(app.config.DATABASE_URL);
+  const eventRepository =
+    options.eventRepository ?? createPostgresEventRepository(app.config.DATABASE_URL);
   const mediaUploadProvider =
     options.mediaUploadProvider ?? createBunnyStreamUploadAdapter(app.config);
   const liveRepository =
@@ -140,6 +146,11 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   if (contentRepository.close) {
     app.addHook("onClose", async () => {
       await contentRepository.close?.();
+    });
+  }
+  if (eventRepository.close) {
+    app.addHook("onClose", async () => {
+      await eventRepository.close?.();
     });
   }
   if (liveRepository.close) {
@@ -198,6 +209,14 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     walletRepository,
     contentRepository,
     mediaUploadProvider
+  });
+  await registerEventRoutes(app, {
+    authVerifier,
+    sessionRepository,
+    ageRepository,
+    walletRepository,
+    paymentRepository,
+    eventRepository
   });
   await registerPaymentRoutes(app, {
     authVerifier,

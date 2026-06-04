@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: events, tickets, Solana payment, QR/check-in, admin ops
-Last updated: 2026-06-03
+Last updated: 2026-06-04
 Source of truth: yes for v2 Events and Ticketing
 
 Owns:
@@ -21,6 +21,15 @@ Non-goals:
 - historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 Events are content-attached conversion flows. They are not root navigation by default, and ticket purchase/join always requires explicit confirmation.
+
+Current implementation state:
+
+- `POST /v1/events`, `GET /v1/events/{eventId}`, and `PATCH /v1/events/{eventId}` provide profile/age-gated event creation and owner updates.
+- `POST /v1/events/{eventId}/tickets/intents` creates backend-priced `event_ticket` payment intents for paid public tickets, grants free public tickets directly, and returns `approval_required` for private-apply events.
+- Confirmed `event_ticket` payment settlement grants a ticket entitlement and QR record in the backend settlement transaction. Wallet approval or frontend redirect never grants a ticket.
+- `GET /v1/activity/tickets` returns the current user ticket records from backend ticket entitlements.
+- `POST /v1/tickets/{ticketId}/check-in` validates the backend-issued QR token server-side and idempotently moves an active ticket to `checked_in`.
+- `/app/events/:id` and `/app/tickets` have smoke-covered frontend projections for ticket sheet and QR display.
 
 ## Product Position
 

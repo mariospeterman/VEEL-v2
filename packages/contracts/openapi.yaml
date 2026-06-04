@@ -860,7 +860,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Cursor"
       responses:
-        "200": { $ref: "#/components/responses/ActivityPage" }
+        "200": { $ref: "#/components/responses/TicketPage" }
   /v1/activity/referrals:
     get:
       operationId: getActivityReferrals
@@ -1322,7 +1322,7 @@ components:
     TicketIntent: { description: Ticket intent, content: { application/json: { schema: { $ref: "#/components/schemas/TicketIntent" } } } }
     TicketRequest: { description: Ticket request, content: { application/json: { schema: { $ref: "#/components/schemas/TicketRequest" } } } }
     Ticket: { description: Ticket, content: { application/json: { schema: { $ref: "#/components/schemas/Ticket" } } } }
-    TicketPage: { description: Tickets, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Ticket" } }, nextCursor: { type: string, nullable: true } } } } } }
+    TicketPage: { description: Tickets, content: { application/json: { schema: { $ref: "#/components/schemas/TicketPage" } } } }
     DatingProfile: { description: Dating profile, content: { application/json: { schema: { $ref: "#/components/schemas/DatingProfile" } } } }
     DatingSwipeResult: { description: Dating action result, content: { application/json: { schema: { $ref: "#/components/schemas/DatingSwipeResult" } } } }
     DatingMatchPage: { description: Dating matches, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/DatingMatch" } }, nextCursor: { type: string, nullable: true } } } } } }
@@ -1671,6 +1671,20 @@ components:
           type: array
           items: { $ref: "#/components/schemas/EventTicketTypeDraft" }
         state: { type: string, enum: [draft, published, sold_out, cancelled, completed] }
+    EventTicketType:
+      type: object
+      required: [id, label, priceMinor, currency, capacity, remaining, state]
+      properties:
+        id: { type: string, format: uuid }
+        label: { type: string, minLength: 1, maxLength: 80 }
+        priceMinor: { type: integer, nullable: true }
+        currency: { $ref: "#/components/schemas/Currency" }
+        capacity: { type: integer, minimum: 1 }
+        remaining: { type: integer, minimum: 0 }
+        state: { type: string, enum: [active, paused, sold_out] }
+        saleStartsAt: { type: string, format: date-time, nullable: true }
+        saleEndsAt: { type: string, format: date-time, nullable: true }
+        perUserLimit: { type: integer, minimum: 1, maximum: 20, nullable: true }
     EventTicketTypeDraft:
       type: object
       required: [label, currency, capacity]
@@ -1996,16 +2010,19 @@ components:
     UpdateEventRequest: { $ref: "#/components/schemas/EventPatch" }
     Event:
       type: object
-      required: [id, title, startsAt, location, state]
+      required: [id, title, startsAt, accessRule, location, state, ticketTypes]
       properties:
         id: { type: string, format: uuid }
         title: { type: string }
+        description: { type: string, nullable: true }
         startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time, nullable: true }
+        accessRule: { type: string, enum: [public_sale, private_apply] }
         location: { $ref: "#/components/schemas/EventLocationDraft" }
         state: { type: string, enum: [draft, published, sold_out, cancelled, completed] }
         ticketTypes:
           type: array
-          items: { $ref: "#/components/schemas/EventTicketTypeDraft" }
+          items: { $ref: "#/components/schemas/EventTicketType" }
     CreateTicketIntentRequest:
       type: object
       required: [ticketTypeId]
@@ -2017,6 +2034,7 @@ components:
       properties:
         state: { type: string, enum: [free_granted, approval_required, payment_required] }
         paymentIntent: { $ref: "#/components/schemas/PaymentIntent" }
+        ticket: { $ref: "#/components/schemas/Ticket" }
     CreateTicketRequestRequest:
       type: object
       required: [ticketTypeId]
@@ -2025,10 +2043,13 @@ components:
         note: { type: string, maxLength: 500 }
     TicketRequest:
       type: object
-      required: [id, state]
+      required: [id, eventId, ticketTypeId, state, createdAt]
       properties:
         id: { type: string, format: uuid }
+        eventId: { type: string, format: uuid }
+        ticketTypeId: { type: string, format: uuid }
         state: { type: string, enum: [requested, approved, rejected, expired] }
+        createdAt: { type: string, format: date-time }
     CheckInTicketRequest:
       type: object
       required: [qrToken]
@@ -2036,10 +2057,23 @@ components:
         qrToken: { type: string }
     Ticket:
       type: object
-      required: [id, state]
+      required: [id, eventId, ticketTypeId, holderUserId, state, qrToken, createdAt]
       properties:
         id: { type: string, format: uuid }
+        eventId: { type: string, format: uuid }
+        ticketTypeId: { type: string, format: uuid }
+        holderUserId: { type: string, format: uuid }
+        paymentIntentId: { type: string, format: uuid, nullable: true }
         state: { type: string, enum: [active, checked_in, revoked, expired] }
+        qrToken: { type: string }
+        checkedInAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    TicketPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Ticket" } }
+        nextCursor: { type: string, nullable: true }
     ActivateDatingRequest:
       type: object
       required: [consentVersion]

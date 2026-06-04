@@ -43,6 +43,7 @@ import type {
   StoredLiveRoom
 } from "../src/modules/live/types";
 import type { Message, MessageRepository } from "../src/modules/message/types";
+import type { EventRepository } from "../src/modules/event/types";
 
 describe("buildApi", () => {
   it("boots the Fastify skeleton and loads the OpenAPI document", async () => {
@@ -296,7 +297,7 @@ describe("buildApi", () => {
       }
     });
 
-    expect(response.statusCode).toBe(201);
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(201);
     expect(response.json()).toEqual({
       id: "age-session-provider-ref-1",
       provider: "yoti",
@@ -924,7 +925,7 @@ describe("buildApi", () => {
       }
     });
 
-    expect(response.statusCode).toBe(201);
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(201);
     expect(response.json()).toEqual(homeFeedItem);
 
     await app.close();
@@ -1309,6 +1310,7 @@ describe("buildApi", () => {
         throw new Error("not implemented");
       }
     };
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       sessionRepository: appReadySessionRepository,
@@ -1493,6 +1495,9 @@ describe("buildApi", () => {
       },
       async listWalletTransactions() {
         throw new Error("not implemented");
+      },
+      async listTickets() {
+        throw new Error("not implemented");
       }
     };
     const app = await buildApi({
@@ -1564,6 +1569,9 @@ describe("buildApi", () => {
           ],
           nextCursor: null
         };
+      },
+      async listTickets() {
+        throw new Error("not implemented");
       }
     };
     const app = await buildApi({
@@ -1597,6 +1605,290 @@ describe("buildApi", () => {
       nextCursor: null
     });
     expect(JSON.stringify(response.json())).not.toMatch(/raw|providerPayload|private/i);
+
+    await app.close();
+  });
+
+  it("creates an event with backend-owned ticket inventory", async () => {
+    const eventRepository: EventRepository = {
+      async createEvent(input) {
+        expect(input).toMatchObject({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          idempotencyKey: "event-key"
+        });
+        expect(input.body.ticketTypes[0]).toMatchObject({
+          label: "General admission",
+          priceMinor: 10000000,
+          currency: "SOL",
+          capacity: 25
+        });
+
+        return eventFixture({ state: "draft" });
+      },
+      async findEvent() {
+        throw new Error("not implemented");
+      },
+      async updateEvent() {
+        throw new Error("not implemented");
+      },
+      async findTicketOffer() {
+        throw new Error("not implemented");
+      },
+      async recordTicketPurchaseRequest() {
+        throw new Error("not implemented");
+      },
+      async grantFreeTicket() {
+        throw new Error("not implemented");
+      },
+      async createTicketRequest() {
+        throw new Error("not implemented");
+      },
+      async checkInTicket() {
+        throw new Error("not implemented");
+      },
+      async listTickets() {
+        throw new Error("not implemented");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      eventRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/events",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "event-key"
+      },
+      payload: {
+        title: "Studio meetup",
+        startsAt: "2026-07-01T20:00:00.000Z",
+        accessRule: "public_sale",
+        location: { type: "physical", label: "Belgrade studio" },
+        ticketTypes: [
+          {
+            label: "General admission",
+            priceMinor: 10000000,
+            currency: "SOL",
+            capacity: 25
+          }
+        ]
+      }
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      title: "Studio meetup",
+      state: "draft",
+      ticketTypes: [{ label: "General admission", remaining: 25 }]
+    });
+
+    await app.close();
+  });
+
+  it("creates a server-priced paid ticket intent", async () => {
+    const eventId = "00000000-0000-4000-8000-0000000000e1";
+    const ticketTypeId = "00000000-0000-4000-8000-0000000000e2";
+    const eventRepository: EventRepository = {
+      async createEvent() {
+        throw new Error("not implemented");
+      },
+      async findEvent() {
+        throw new Error("not implemented");
+      },
+      async updateEvent() {
+        throw new Error("not implemented");
+      },
+      async findTicketOffer(input) {
+        expect(input).toMatchObject({ eventId, ticketTypeId });
+        return {
+          event: eventFixture({ id: eventId, state: "published", ticketTypeId }),
+          ticketType: ticketTypeFixture({ id: ticketTypeId, priceMinor: 10000000 }),
+          alreadyIssuedTicket: null
+        };
+      },
+      async recordTicketPurchaseRequest(input) {
+        expect(input).toMatchObject({
+          eventId,
+          ticketTypeId,
+          paymentIntentId: "00000000-0000-4000-8000-000000000050",
+          amountMinor: 10000000,
+          currency: "SOL"
+        });
+      },
+      async grantFreeTicket() {
+        throw new Error("not implemented");
+      },
+      async createTicketRequest() {
+        throw new Error("not implemented");
+      },
+      async checkInTicket() {
+        throw new Error("not implemented");
+      },
+      async listTickets() {
+        throw new Error("not implemented");
+      }
+    };
+    const paymentRepository: PaymentRepository = {
+      async createOrReuseIntent(input) {
+        expect(input).toMatchObject({
+          productType: "event_ticket",
+          targetId: eventId,
+          amountMinor: 10000000,
+          currency: "SOL"
+        });
+
+        return {
+          ...storedPaymentIntent,
+          productType: "event_ticket",
+          targetId: eventId,
+          amountMinor: 10000000
+        };
+      },
+      async findIntent() {
+        throw new Error("not implemented");
+      },
+      async recordTransactionRequest() {
+        throw new Error("not implemented");
+      },
+      async recordSubmission() {
+        throw new Error("not implemented");
+      }
+    };
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      eventRepository,
+      paymentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/events/${eventId}/tickets/intents`,
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "ticket-key"
+      },
+      payload: { ticketTypeId }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(201);
+    expect(response.json()).toMatchObject({
+      state: "payment_required",
+      paymentIntent: {
+        productType: "event_ticket",
+        amountMinor: 10000000,
+        currency: "SOL"
+      }
+    });
+
+    await app.close();
+  });
+
+  it("grants a free ticket and supports ticket activity/check-in projections", async () => {
+    const eventId = "00000000-0000-4000-8000-0000000000e1";
+    const ticketTypeId = "00000000-0000-4000-8000-0000000000e2";
+    const ticket = ticketFixture({ eventId, ticketTypeId });
+    const eventRepository: EventRepository = {
+      async createEvent() {
+        throw new Error("not implemented");
+      },
+      async findEvent() {
+        throw new Error("not implemented");
+      },
+      async updateEvent() {
+        throw new Error("not implemented");
+      },
+      async findTicketOffer() {
+        return {
+          event: eventFixture({ id: eventId, state: "published", ticketTypeId, priceMinor: null }),
+          ticketType: ticketTypeFixture({ id: ticketTypeId, priceMinor: null }),
+          alreadyIssuedTicket: null
+        };
+      },
+      async recordTicketPurchaseRequest() {
+        throw new Error("not implemented");
+      },
+      async grantFreeTicket() {
+        return ticket;
+      },
+      async createTicketRequest() {
+        throw new Error("not implemented");
+      },
+      async checkInTicket(input) {
+        expect(input).toMatchObject({ ticketId: ticket.id, qrToken: ticket.qrToken });
+        return { ...ticket, state: "checked_in", checkedInAt: "2026-07-01T20:10:00.000Z" };
+      },
+      async listTickets() {
+        throw new Error("not implemented");
+      }
+    };
+    const activityRepository: ActivityRepository = {
+      async listActivity() {
+        throw new Error("not implemented");
+      },
+      async listPaymentActivity() {
+        throw new Error("not implemented");
+      },
+      async listWalletTransactions() {
+        throw new Error("not implemented");
+      },
+      async listTickets(input) {
+        expect(input).toMatchObject({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          limit: 20
+        });
+        return { items: [ticket], nextCursor: null };
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      eventRepository,
+      activityRepository
+    });
+    await app.ready();
+
+    const grantResponse = await app.inject({
+      method: "POST",
+      url: `/v1/events/${eventId}/tickets/intents`,
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "free-ticket-key"
+      },
+      payload: { ticketTypeId }
+    });
+    const activityResponse = await app.inject({
+      method: "GET",
+      url: "/v1/activity/tickets",
+      headers: { authorization: "Bearer valid-token" }
+    });
+    const checkInResponse = await app.inject({
+      method: "POST",
+      url: `/v1/tickets/${ticket.id}/check-in`,
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "check-in-key"
+      },
+      payload: { qrToken: ticket.qrToken }
+    });
+
+    expect(grantResponse.statusCode).toBe(201);
+    expect(grantResponse.json()).toMatchObject({ state: "free_granted", ticket });
+    expect(activityResponse.statusCode).toBe(200);
+    expect(activityResponse.json()).toMatchObject({ items: [ticket], nextCursor: null });
+    expect(checkInResponse.statusCode).toBe(200);
+    expect(checkInResponse.json()).toMatchObject({ state: "checked_in" });
 
     await app.close();
   });
@@ -2912,6 +3204,71 @@ const fakeAdminRepository: AdminRepository = {
     };
   }
 };
+
+function eventFixture(
+  overrides: Partial<{
+    id: string;
+    state: "draft" | "published" | "sold_out" | "cancelled" | "completed";
+    ticketTypeId: string;
+    priceMinor: number | null;
+  }> = {}
+) {
+  const ticketTypeId = overrides.ticketTypeId ?? "00000000-0000-4000-8000-0000000000e2";
+  const priceMinor: number | null = overrides.priceMinor === undefined ? 10000000 : overrides.priceMinor;
+
+  return {
+    id: overrides.id ?? "00000000-0000-4000-8000-0000000000e1",
+    title: "Studio meetup",
+    description: null,
+    startsAt: "2026-07-01T20:00:00.000Z",
+    endsAt: null,
+    accessRule: "public_sale" as const,
+    location: { type: "physical" as const, label: "Belgrade studio" },
+    state: overrides.state ?? "published",
+    ticketTypes: [ticketTypeFixture({ id: ticketTypeId, priceMinor })]
+  };
+}
+
+function ticketTypeFixture(
+  overrides: Partial<{
+    id: string;
+    priceMinor: number | null;
+  }> = {}
+) {
+  const priceMinor: number | null = overrides.priceMinor === undefined ? 10000000 : overrides.priceMinor;
+
+  return {
+    id: overrides.id ?? "00000000-0000-4000-8000-0000000000e2",
+    label: "General admission",
+    priceMinor,
+    currency: "SOL" as const,
+    capacity: 25,
+    remaining: 25,
+    state: "active" as const,
+    saleStartsAt: null,
+    saleEndsAt: null,
+    perUserLimit: 1
+  };
+}
+
+function ticketFixture(
+  overrides: Partial<{
+    eventId: string;
+    ticketTypeId: string;
+  }> = {}
+) {
+  return {
+    id: "00000000-0000-4000-8000-0000000000f1",
+    eventId: overrides.eventId ?? "00000000-0000-4000-8000-0000000000e1",
+    ticketTypeId: overrides.ticketTypeId ?? "00000000-0000-4000-8000-0000000000e2",
+    holderUserId: "00000000-0000-4000-8000-000000000001",
+    paymentIntentId: null,
+    state: "active" as const,
+    qrToken: "veel_ticket_fixture",
+    checkedInAt: null,
+    createdAt: "2026-07-01T20:00:00.000Z"
+  };
+}
 
 function sessionRepositoryWithProfile(options: {
   onEnsure?: (supabaseUserId: string) => Promise<void> | void;
