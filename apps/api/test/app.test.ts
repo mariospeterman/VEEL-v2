@@ -44,6 +44,7 @@ import type {
 } from "../src/modules/live/types";
 import type { Message, MessageRepository } from "../src/modules/message/types";
 import type { EventRepository } from "../src/modules/event/types";
+import type { DatingRepository } from "../src/modules/dating/types";
 
 describe("buildApi", () => {
   it("boots the Fastify skeleton and loads the OpenAPI document", async () => {
@@ -1893,6 +1894,172 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("activates dating mode and returns the explicit dating feed", async () => {
+    const datingRepository: DatingRepository = {
+      async activate(input) {
+        expect(input).toMatchObject({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          consentVersion: "dating-consent-2026-06-04"
+        });
+        return datingProfileFixture({ enabled: true });
+      },
+      async updatePreferences() {
+        throw new Error("not implemented");
+      },
+      async listFeed(input) {
+        expect(input).toMatchObject({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          limit: 20
+        });
+        return {
+          items: [datingFeedItemFixture()],
+          nextCursor: null
+        };
+      },
+      async createSwipe() {
+        throw new Error("not implemented");
+      },
+      async listMatches() {
+        throw new Error("not implemented");
+      },
+      async archiveMatch() {
+        throw new Error("not implemented");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      datingRepository
+    });
+    await app.ready();
+
+    const activateResponse = await app.inject({
+      method: "POST",
+      url: "/v1/dating/activate",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "dating-activate-key"
+      },
+      payload: { consentVersion: "dating-consent-2026-06-04" }
+    });
+    const feedResponse = await app.inject({
+      method: "GET",
+      url: "/v1/dating/feed",
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(activateResponse.statusCode).toBe(200);
+    expect(activateResponse.json()).toMatchObject({
+      enabled: true,
+      consentVersion: "dating-consent-2026-06-04",
+      activeMatchLimit: 10
+    });
+    expect(feedResponse.statusCode).toBe(200);
+    expect(feedResponse.json()).toMatchObject({
+      items: [
+        {
+          handle: "maki",
+          title: "Dating mode profile card",
+          mediaKind: "image"
+        }
+      ],
+      nextCursor: null
+    });
+
+    await app.close();
+  });
+
+  it("creates a mutual dating match from backend-owned swipe state", async () => {
+    const match = datingMatchFixture();
+    const datingRepository: DatingRepository = {
+      async activate() {
+        throw new Error("not implemented");
+      },
+      async updatePreferences() {
+        throw new Error("not implemented");
+      },
+      async listFeed() {
+        throw new Error("not implemented");
+      },
+      async createSwipe(input) {
+        expect(input).toMatchObject({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          idempotencyKey: "dating-swipe-key",
+          body: {
+            targetUserId: "00000000-0000-4000-8000-000000000011",
+            contentId: "00000000-0000-4000-8000-000000000040",
+            action: "yes"
+          }
+        });
+        return {
+          swipeId: "00000000-0000-4000-8000-0000000000d1",
+          matchCreated: true,
+          matchId: match.id,
+          match
+        };
+      },
+      async listMatches(input) {
+        expect(input).toMatchObject({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          limit: 20
+        });
+        return { items: [match], nextCursor: null };
+      },
+      async archiveMatch(input) {
+        expect(input).toMatchObject({ matchId: match.id });
+        return { ...match, state: "archived" };
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      datingRepository
+    });
+    await app.ready();
+
+    const swipeResponse = await app.inject({
+      method: "POST",
+      url: "/v1/dating/swipes",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "dating-swipe-key"
+      },
+      payload: {
+        targetUserId: "00000000-0000-4000-8000-000000000011",
+        contentId: "00000000-0000-4000-8000-000000000040",
+        action: "yes"
+      }
+    });
+    const matchesResponse = await app.inject({
+      method: "GET",
+      url: "/v1/dating/matches",
+      headers: { authorization: "Bearer valid-token" }
+    });
+    const archiveResponse = await app.inject({
+      method: "PATCH",
+      url: `/v1/dating/matches/${match.id}/archive`,
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "dating-archive-key"
+      }
+    });
+
+    expect(swipeResponse.statusCode).toBe(200);
+    expect(swipeResponse.json()).toMatchObject({
+      matchCreated: true,
+      matchId: match.id,
+      match: { conversationId: match.conversationId }
+    });
+    expect(matchesResponse.statusCode).toBe(200);
+    expect(matchesResponse.json()).toMatchObject({ items: [match], nextCursor: null });
+    expect(archiveResponse.statusCode).toBe(200);
+    expect(archiveResponse.json()).toMatchObject({ state: "archived" });
+
+    await app.close();
+  });
+
   it("rejects admin reads for non-staff users", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -1910,6 +2077,9 @@ describe("buildApi", () => {
           throw new Error("not implemented");
         },
         async listProviderEvents() {
+          throw new Error("not implemented");
+        },
+        async getDatingSafety() {
           throw new Error("not implemented");
         }
       }
@@ -3202,8 +3372,55 @@ const fakeAdminRepository: AdminRepository = {
       ],
       nextCursor: null
     };
+  },
+  async getDatingSafety() {
+    return {
+      openReports: 0,
+      activeMatches: 1,
+      staleMatches: 0
+    };
   }
 };
+
+function datingProfileFixture(overrides: Partial<Awaited<ReturnType<DatingRepository["activate"]>>> = {}) {
+  return {
+    enabled: overrides.enabled ?? true,
+    consentVersion: overrides.consentVersion ?? "dating-consent-2026-06-04",
+    activeMatchLimit: overrides.activeMatchLimit ?? 10,
+    visibleOnMedia: overrides.visibleOnMedia ?? true,
+    safetyState: overrides.safetyState ?? ("clear" as const),
+    createdAt: overrides.createdAt ?? "2026-06-04T22:30:00.000Z",
+    updatedAt: overrides.updatedAt ?? "2026-06-04T22:30:00.000Z"
+  };
+}
+
+function datingFeedItemFixture() {
+  return {
+    contentId: "00000000-0000-4000-8000-000000000040",
+    creatorUserId: "00000000-0000-4000-8000-000000000011",
+    handle: "maki",
+    displayName: "Maki",
+    avatarUrl: null,
+    title: "Dating mode profile card",
+    mediaKind: "image" as const,
+    posterUrl: "https://media.example.test/dating.jpg",
+    createdAt: "2026-06-04T22:31:00.000Z"
+  };
+}
+
+function datingMatchFixture() {
+  return {
+    id: "00000000-0000-4000-8000-0000000000d2",
+    userAId: "00000000-0000-4000-8000-000000000001",
+    userBId: "00000000-0000-4000-8000-000000000011",
+    sourceContentId: "00000000-0000-4000-8000-000000000040",
+    conversationId: "00000000-0000-4000-8000-0000000000d3",
+    state: "active" as const,
+    staleAt: "2026-06-11T22:31:00.000Z",
+    expiresAt: "2026-07-04T22:31:00.000Z",
+    createdAt: "2026-06-04T22:31:00.000Z"
+  };
+}
 
 function eventFixture(
   overrides: Partial<{

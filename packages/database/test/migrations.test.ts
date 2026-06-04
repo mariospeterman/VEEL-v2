@@ -282,4 +282,26 @@ describe("database migrations", () => {
     expect(sql).toContain("ticket_requests_reviewed_by_user_id_idx");
     expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role/i);
   });
+
+  it("adds dating opt-in, swipe, and match tables with RLS", () => {
+    const sql = readMigration("0023_dating_mode.sql");
+
+    expect(sql).toContain("create table dating_profiles");
+    expect(sql).toContain("create table dating_swipes");
+    expect(sql).toContain("create table dating_matches");
+    expect(sql).toContain("unique (actor_user_id, idempotency_key)");
+    expect(sql).toContain("dating_swipes_content_unique");
+    expect(sql).toContain("dating_matches_pair_unique");
+    expect(sql).toContain("alter table dating_profiles enable row level security");
+    expect(sql).toContain("dating_matches_select_member_or_staff");
+    expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role|payment_proof/i);
+  });
+
+  it("covers dating foreign keys reported by the Supabase performance advisor", () => {
+    const sql = readMigration("0024_dating_fk_indexes.sql");
+
+    expect(sql).toContain("dating_swipes_content_item_id_idx");
+    expect(sql).toContain("dating_matches_archived_by_user_id_idx");
+    expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role|payment_proof/i);
+  });
 });

@@ -1,5 +1,6 @@
 import postgres from "postgres";
 import type {
+  AdminDatingSafety,
   AdminOpsSummary,
   AdminPaymentIntent,
   AdminProviderEvent,
@@ -78,6 +79,9 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
         throw new AdminRepositoryConfigurationError();
       },
       async listProviderEvents() {
+        throw new AdminRepositoryConfigurationError();
+      },
+      async getDatingSafety() {
         throw new AdminRepositoryConfigurationError();
       }
     };
@@ -210,6 +214,26 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
       `;
 
       return page(rows, toProviderEvent);
+    },
+    async getDatingSafety() {
+      const rows = await sql<{
+        open_reports: string | number;
+        active_matches: string | number;
+        stale_matches: string | number;
+      }[]>`
+        select
+          0 as open_reports,
+          count(*) filter (where state = 'active') as active_matches,
+          count(*) filter (where state = 'stale') as stale_matches
+        from dating_matches
+      `;
+      const row = rows[0];
+
+      return {
+        openReports: Number(row?.open_reports ?? 0),
+        activeMatches: Number(row?.active_matches ?? 0),
+        staleMatches: Number(row?.stale_matches ?? 0)
+      } satisfies AdminDatingSafety;
     },
     async close() {
       await sql.end({ timeout: 5 });

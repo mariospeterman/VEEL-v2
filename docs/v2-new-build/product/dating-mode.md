@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: dating, matching, safety, messages
-Last updated: 2026-06-03
+Last updated: 2026-06-04
 Source of truth: yes for v2 Dating Mode
 
 Owns:
@@ -35,13 +35,24 @@ Dating is an explicit opt-in mode layered on creator media. It is not the root p
 ## Routes
 
 ```text
-/app/dating/activate          planned
+/app/dating                   implemented projection
 /app/dating/preferences       planned
-/app/dating/feed              planned
-/app/dating/matches           planned
+/app/dating/feed              implemented as /app/dating projection
+/app/dating/matches           implemented projection
 /app/dating/matches/:id       planned
 /app/messages?filter=matches  planned
 ```
+
+## Current Implementation State
+
+- Fastify exposes `POST /v1/dating/activate`, `PATCH /v1/dating/preferences`, `GET /v1/dating/feed`, `POST /v1/dating/swipes`, `GET /v1/dating/matches`, and `PATCH /v1/dating/matches/:matchId/archive`.
+- Activation requires a complete profile and verified age status, stores consent version, and keeps Dating Mode separate from normal media gestures.
+- The dating feed is backend-filtered to explicit Dating Mode participants only; normal Home/Bits surfaces do not create dating actions.
+- Swipe creation is idempotent, does not mutate duplicate target/content swipes, and mutual `yes` creates one backend match plus a `match` conversation with both members.
+- Match archive is backend-owned and frees active-match capacity for later policy work.
+- Supabase migration `0023_dating_mode` enables RLS on dating profile, swipe, and match tables.
+- Frontend `/dating` and `/dating/matches` are current static projections for smoke coverage; they do not own match truth.
+- Admin can inspect aggregate dating safety state through `GET /v1/admin/dating/safety`.
 
 ## Backend Ownership
 

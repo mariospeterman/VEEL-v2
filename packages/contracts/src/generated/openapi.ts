@@ -1046,6 +1046,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/dating/feed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List explicit Dating Mode eligible creator media */
+        get: operations["getDatingFeed"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/dating/matches": {
         parameters: {
             query?: never;
@@ -2312,7 +2329,34 @@ export interface components {
         };
         DatingProfile: {
             enabled: boolean;
+            consentVersion: string | null;
             activeMatchLimit: number;
+            visibleOnMedia: boolean;
+            /** @enum {string} */
+            safetyState: "clear" | "limited" | "blocked";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        DatingFeedItem: {
+            /** Format: uuid */
+            contentId: string;
+            /** Format: uuid */
+            creatorUserId: string;
+            handle: string;
+            displayName: string;
+            avatarUrl?: string | null;
+            title: string;
+            /** @enum {string} */
+            mediaKind: "image" | "video" | "live" | "replay";
+            posterUrl?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        DatingFeedPage: {
+            items: components["schemas"]["DatingFeedItem"][];
+            nextCursor?: string | null;
         };
         DatingSwipeRequest: {
             /** Format: uuid */
@@ -2323,16 +2367,36 @@ export interface components {
             action: "yes" | "not_interested";
         };
         DatingSwipeResult: {
+            /** Format: uuid */
+            swipeId: string;
             matchCreated: boolean;
             /** Format: uuid */
             matchId?: string | null;
+            match?: components["schemas"]["DatingMatch"];
         };
         DatingMatch: {
             /** Format: uuid */
             id: string;
-            users: components["schemas"]["User"][];
+            /** Format: uuid */
+            userAId: string;
+            /** Format: uuid */
+            userBId: string;
+            /** Format: uuid */
+            sourceContentId?: string | null;
+            /** Format: uuid */
+            conversationId?: string | null;
             /** @enum {string} */
-            state: "active" | "stale" | "archived" | "blocked";
+            state: "active" | "stale" | "archived" | "blocked" | "reported" | "expired";
+            /** Format: date-time */
+            staleAt?: string | null;
+            /** Format: date-time */
+            expiresAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        DatingMatchPage: {
+            items: components["schemas"]["DatingMatch"][];
+            nextCursor?: string | null;
         };
         ActivityPage: {
             items: components["schemas"]["ActivityItem"][];
@@ -3085,6 +3149,15 @@ export interface components {
                 "application/json": components["schemas"]["DatingProfile"];
             };
         };
+        /** @description Dating feed */
+        DatingFeedPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["DatingFeedPage"];
+            };
+        };
         /** @description Dating action result */
         DatingSwipeResult: {
             headers: {
@@ -3100,10 +3173,7 @@ export interface components {
                 [name: string]: unknown;
             };
             content: {
-                "application/json": {
-                    items: components["schemas"]["DatingMatch"][];
-                    nextCursor?: string | null;
-                };
+                "application/json": components["schemas"]["DatingMatchPage"];
             };
         };
         /** @description Dating match */
@@ -4688,6 +4758,20 @@ export interface operations {
         requestBody: components["requestBodies"]["DatingSwipe"];
         responses: {
             200: components["responses"]["DatingSwipeResult"];
+        };
+    };
+    getDatingFeed: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["DatingFeedPage"];
         };
     };
     listDatingMatches: {

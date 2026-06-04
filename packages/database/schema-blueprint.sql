@@ -653,7 +653,9 @@ create table dating_profiles (
   consent_version text,
   active_match_limit integer not null default 10,
   visible_on_media boolean not null default true,
-  created_at timestamptz not null default now()
+  safety_state text not null default 'clear',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create table dating_swipes (
@@ -661,7 +663,9 @@ create table dating_swipes (
   actor_user_id uuid not null references users(id),
   target_user_id uuid not null references users(id),
   content_item_id uuid references content_items(id),
-  action dating_action not null,
+  action text not null,
+  idempotency_key text not null,
+  request_hash text not null,
   created_at timestamptz not null default now()
 );
 
@@ -673,6 +677,13 @@ create unique index dating_swipes_profile_unique
   on dating_swipes (actor_user_id, target_user_id)
   where content_item_id is null;
 
+create index dating_swipes_target_action_idx
+  on dating_swipes (target_user_id, actor_user_id, action, created_at desc);
+
+create index dating_swipes_content_item_id_idx
+  on dating_swipes (content_item_id)
+  where content_item_id is not null;
+
 create table dating_matches (
   id uuid primary key,
   user_a_id uuid not null references users(id),
@@ -680,13 +691,29 @@ create table dating_matches (
   source_content_item_id uuid references content_items(id),
   conversation_id uuid references conversations(id),
   state text not null default 'active',
+  archived_by_user_id uuid references users(id),
   stale_at timestamptz,
   expires_at timestamptz,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create unique index dating_matches_pair_unique
-  on dating_matches (least(user_a_id, user_b_id), greatest(user_a_id, user_b_id));
+  on dating_matches (user_a_id, user_b_id);
+
+create index dating_matches_user_a_state_idx
+  on dating_matches (user_a_id, state, created_at desc);
+
+create index dating_matches_user_b_state_idx
+  on dating_matches (user_b_id, state, created_at desc);
+
+create index dating_matches_source_content_idx
+  on dating_matches (source_content_item_id)
+  where source_content_item_id is not null;
+
+create index dating_matches_archived_by_user_id_idx
+  on dating_matches (archived_by_user_id)
+  where archived_by_user_id is not null;
 
 create table provider_events (
   id uuid primary key,

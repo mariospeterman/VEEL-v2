@@ -297,3 +297,8 @@ Every admin mutation must include:
 - support role cannot access raw private message content by default
 - finance role can inspect settlement and split records
 - ops role can view provider health but not mutate money state
+
+Current dating ops implementation:
+
+- `GET /v1/admin/dating/safety` returns aggregate open dating reports, active matches, and stale matches.
+- Admin dating visibility is aggregate-only for this slice; private match message content remains outside default admin visibility.

@@ -43,6 +43,13 @@ export async function registerAdminRoutes(
     const query = request.query as { cursor?: string };
     return reply.code(200).send(await options.adminRepository.listProviderEvents(adminListInput(query)));
   });
+
+  app.get("/v1/admin/dating/safety", async (request, reply) => {
+    const allowed = await requireAdminAccess(request, reply, options);
+    if (!allowed) return reply;
+
+    return reply.code(200).send(await options.adminRepository.getDatingSafety());
+  });
 }
 
 function adminListInput(query: { q?: string; cursor?: string }): { query?: string; cursor?: string } {

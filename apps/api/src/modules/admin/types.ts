@@ -4,6 +4,7 @@ export type AdminOpsSummary = components["schemas"]["AdminOpsSummary"];
 export type AdminPaymentIntent = components["schemas"]["AdminPaymentIntent"];
 export type AdminUnlock = components["schemas"]["AdminUnlock"];
 export type AdminProviderEvent = components["schemas"]["AdminProviderEvent"];
+export type AdminDatingSafety = components["schemas"]["AdminDatingSafety"];
 
 export interface AdminRepository {
   hasAdminAccess(supabaseUserId: string): Promise<boolean>;
@@ -20,5 +21,6 @@ export interface AdminRepository {
     items: AdminProviderEvent[];
     nextCursor: string | null;
   }>;
+  getDatingSafety(): Promise<AdminDatingSafety>;
   close?(): Promise<void>;
 }

@@ -105,3 +105,23 @@ test("renders the user ticket QR projection", async ({ page }) => {
   await expect(page.getByText("veel_ticket_fixture")).toBeVisible();
   await expect(page.locator("span").getByText("active", { exact: true })).toBeVisible();
 });
+
+test("renders the dating mode feed projection", async ({ page }) => {
+  await page.goto("/dating");
+
+  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Explicit dating feed" })).toBeVisible();
+  await expect(page.getByText("Dating safety")).toBeVisible();
+  await expect(page.getByText("Dating mode profile card")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Not interested" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Yes" })).toBeVisible();
+});
+
+test("renders the dating matches projection", async ({ page }) => {
+  await page.goto("/dating/matches");
+
+  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Matches" })).toBeVisible();
+  await expect(page.getByText("Mutual match")).toBeVisible();
+  await expect(page.locator("span").getByText("active", { exact: true })).toBeVisible();
+});

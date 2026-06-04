@@ -806,6 +806,15 @@ paths:
         $ref: "#/components/requestBodies/DatingSwipe"
       responses:
         "200": { $ref: "#/components/responses/DatingSwipeResult" }
+  /v1/dating/feed:
+    get:
+      operationId: getDatingFeed
+      tags: [Dating]
+      summary: List explicit Dating Mode eligible creator media
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/DatingFeedPage" }
   /v1/dating/matches:
     get:
       operationId: listDatingMatches
@@ -1324,8 +1333,9 @@ components:
     Ticket: { description: Ticket, content: { application/json: { schema: { $ref: "#/components/schemas/Ticket" } } } }
     TicketPage: { description: Tickets, content: { application/json: { schema: { $ref: "#/components/schemas/TicketPage" } } } }
     DatingProfile: { description: Dating profile, content: { application/json: { schema: { $ref: "#/components/schemas/DatingProfile" } } } }
+    DatingFeedPage: { description: Dating feed, content: { application/json: { schema: { $ref: "#/components/schemas/DatingFeedPage" } } } }
     DatingSwipeResult: { description: Dating action result, content: { application/json: { schema: { $ref: "#/components/schemas/DatingSwipeResult" } } } }
-    DatingMatchPage: { description: Dating matches, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/DatingMatch" } }, nextCursor: { type: string, nullable: true } } } } } }
+    DatingMatchPage: { description: Dating matches, content: { application/json: { schema: { $ref: "#/components/schemas/DatingMatchPage" } } } }
     DatingMatch: { description: Dating match, content: { application/json: { schema: { $ref: "#/components/schemas/DatingMatch" } } } }
     ActivityPage: { description: Activity page, content: { application/json: { schema: { $ref: "#/components/schemas/ActivityPage" } } } }
     WalletTransactionPage: { description: Wallet transactions, content: { application/json: { schema: { $ref: "#/components/schemas/WalletTransactionPage" } } } }
@@ -2086,10 +2096,34 @@ components:
         activeMatchLimit: { type: integer, minimum: 1, maximum: 50 }
     DatingProfile:
       type: object
-      required: [enabled, activeMatchLimit]
+      required: [enabled, consentVersion, activeMatchLimit, visibleOnMedia, safetyState, createdAt, updatedAt]
       properties:
         enabled: { type: boolean }
+        consentVersion: { type: string, nullable: true }
         activeMatchLimit: { type: integer }
+        visibleOnMedia: { type: boolean }
+        safetyState: { type: string, enum: [clear, limited, blocked] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    DatingFeedItem:
+      type: object
+      required: [contentId, creatorUserId, handle, displayName, title, mediaKind, createdAt]
+      properties:
+        contentId: { type: string, format: uuid }
+        creatorUserId: { type: string, format: uuid }
+        handle: { type: string }
+        displayName: { type: string }
+        avatarUrl: { type: string, nullable: true }
+        title: { type: string }
+        mediaKind: { type: string, enum: [image, video, live, replay] }
+        posterUrl: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    DatingFeedPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/DatingFeedItem" } }
+        nextCursor: { type: string, nullable: true }
     DatingSwipeRequest:
       type: object
       required: [targetUserId, contentId, action]
@@ -2099,17 +2133,31 @@ components:
         action: { type: string, enum: [yes, not_interested] }
     DatingSwipeResult:
       type: object
-      required: [matchCreated]
+      required: [matchCreated, swipeId]
       properties:
+        swipeId: { type: string, format: uuid }
         matchCreated: { type: boolean }
         matchId: { type: string, format: uuid, nullable: true }
+        match: { $ref: "#/components/schemas/DatingMatch" }
     DatingMatch:
       type: object
-      required: [id, users, state]
+      required: [id, userAId, userBId, state, createdAt]
       properties:
         id: { type: string, format: uuid }
-        users: { type: array, items: { $ref: "#/components/schemas/User" } }
-        state: { type: string, enum: [active, stale, archived, blocked] }
+        userAId: { type: string, format: uuid }
+        userBId: { type: string, format: uuid }
+        sourceContentId: { type: string, format: uuid, nullable: true }
+        conversationId: { type: string, format: uuid, nullable: true }
+        state: { type: string, enum: [active, stale, archived, blocked, reported, expired] }
+        staleAt: { type: string, format: date-time, nullable: true }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    DatingMatchPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/DatingMatch" } }
+        nextCursor: { type: string, nullable: true }
     ActivityPage:
       type: object
       required: [items]
