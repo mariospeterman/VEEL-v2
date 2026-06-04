@@ -1627,6 +1627,7 @@ components:
         targetId: { type: string, format: uuid }
         amountMinor: { type: integer, nullable: true }
         livePassDurationMinutes: { type: integer, enum: [30, 60, 180], nullable: true }
+        referralToken: { type: string, nullable: true }
     PaymentIntent:
       type: object
       required: [id, productType, amountMinor, currency, state]
@@ -1680,6 +1681,19 @@ components:
         token: { type: string }
         url: { type: string, format: uri }
         eligibility: { type: string, enum: [external_share, partner_campaign, not_commissionable] }
+    ReferralActivity:
+      type: object
+      required: [id, token, targetType, targetId, eligibility, state, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        token: { type: string }
+        targetType: { type: string, enum: [content, profile, event] }
+        targetId: { type: string, format: uuid }
+        eligibility: { type: string, enum: [external_share, partner_campaign, not_commissionable] }
+        state: { type: string }
+        createdAt: { type: string, format: date-time }
+        commissionAmountMinor: { type: integer, nullable: true }
+        currency: { $ref: "#/components/schemas/Currency" }
     SubscriptionPlanPage:
       type: object
       required: [items]

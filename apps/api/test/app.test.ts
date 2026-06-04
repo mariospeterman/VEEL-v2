@@ -15,6 +15,7 @@ import type {
   CreatePendingAgeVerificationInput
 } from "../src/modules/age/types";
 import type { ProfileRepository } from "../src/modules/profile/types";
+import type { ReferralRepository } from "../src/modules/referral/types";
 import type {
   SessionRepository,
   SupabaseAuthVerifier,
@@ -1151,6 +1152,174 @@ describe("buildApi", () => {
       currency: "SOL",
       state: "pending"
     });
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("creates an external referral token for an app-ready user", async () => {
+    const referralRepository: ReferralRepository = {
+      async createOrReuseToken(input) {
+        expect(input).toMatchObject({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          idempotencyKey: "referral-token-1",
+          targetType: "content",
+          targetId: "00000000-0000-4000-8000-000000000040",
+          channel: "external"
+        });
+        expect(input.token).toMatch(/^veel_/);
+        expect(input.url).toContain(`ref=${input.token}`);
+
+        return {
+          token: input.token,
+          url: input.url,
+          eligibility: "external_share"
+        };
+      },
+      async listActivity() {
+        throw new Error("not implemented");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      referralRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/referrals/tokens",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "referral-token-1"
+      },
+      payload: {
+        targetType: "content",
+        targetId: "00000000-0000-4000-8000-000000000040",
+        channel: "external"
+      }
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      eligibility: "external_share"
+    });
+
+    await app.close();
+  });
+
+  it("returns referral activity for the current user", async () => {
+    const referralRepository: ReferralRepository = {
+      async createOrReuseToken() {
+        throw new Error("not implemented");
+      },
+      async listActivity(input) {
+        expect(input).toEqual({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          limit: 20
+        });
+
+        return {
+          items: [
+            {
+              id: "referral-activity-test-id",
+              kind: "referral",
+              createdAt: "2026-06-04T20:00:00.000Z"
+            }
+          ],
+          nextCursor: null
+        };
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      referralRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/referrals/activity",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      items: [
+        {
+          id: "referral-activity-test-id",
+          kind: "referral",
+          createdAt: "2026-06-04T20:00:00.000Z"
+        }
+      ],
+      nextCursor: null
+    });
+
+    await app.close();
+  });
+
+  it("passes referral tokens to backend-owned payment intent creation", async () => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const paymentRepository: PaymentRepository = {
+      async createOrReuseIntent(input) {
+        expect(input).toMatchObject({
+          productType: "tip",
+          targetId: "00000000-0000-4000-8000-000000000010",
+          amountMinor: 10000000,
+          referralToken: "veel_referral_token"
+        });
+
+        return {
+          ...storedPaymentIntent,
+          referenceAddress: input.referenceAddress,
+          requestHash: input.requestHash,
+          expiresAt: input.expiresAt
+        };
+      },
+      async findIntent() {
+        throw new Error("not implemented");
+      },
+      async recordTransactionRequest() {
+        throw new Error("not implemented");
+      },
+      async recordSubmission() {
+        throw new Error("not implemented");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      paymentRepository,
+      settlementVerifier: fakeUnconfirmedSettlementVerifier
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/payments/intents",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "payment-intent-referral-1"
+      },
+      payload: {
+        productType: "tip",
+        targetId: "00000000-0000-4000-8000-000000000010",
+        amountMinor: 10000000,
+        referralToken: "veel_referral_token"
+      }
+    });
+
+    expect(response.statusCode).toBe(201);
 
     await app.close();
     vi.unstubAllEnvs();

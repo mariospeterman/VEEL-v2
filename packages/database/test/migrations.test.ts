@@ -136,4 +136,16 @@ describe("database migrations", () => {
     expect(sql).toContain("alter table payment_ledger_entries enable row level security");
     expect(sql).not.toMatch(/entitlement|access_grant|payment_proof|private_key|raw_payload/i);
   });
+
+  it("adds referral attribution and commission tables without client payout truth", () => {
+    const sql = readMigration("0012_referral_attribution_commissions.sql");
+
+    expect(sql).toContain("create table referral_tokens");
+    expect(sql).toContain("create table referral_attributions");
+    expect(sql).toContain("create table referral_commissions");
+    expect(sql).toContain("add column referral_token_id uuid references referral_tokens(id)");
+    expect(sql).toContain("alter table referral_tokens enable row level security");
+    expect(sql).toContain("unique (payment_intent_id, referral_token_id)");
+    expect(sql).not.toMatch(/payout_payload|client_amount|payment_proof|private_key|raw_payload/i);
+  });
 });

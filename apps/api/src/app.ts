@@ -17,6 +17,9 @@ import type { PaymentRepository, PaymentSettlementVerifier } from "./modules/pay
 import { createPostgresProfileRepository } from "./modules/profile/profile-repository.js";
 import { registerProfileRoutes } from "./modules/profile/profile-routes.js";
 import type { ProfileRepository } from "./modules/profile/types.js";
+import { createPostgresReferralRepository } from "./modules/referral/referral-repository.js";
+import { registerReferralRoutes } from "./modules/referral/referral-routes.js";
+import type { ReferralRepository } from "./modules/referral/types.js";
 import { createPostgresSessionRepository } from "./modules/session/session-repository.js";
 import { registerSessionRoutes } from "./modules/session/session-routes.js";
 import { createSupabaseAuthVerifier } from "./modules/session/supabase-auth.js";
@@ -38,6 +41,7 @@ export interface BuildApiOptions {
   paymentRepository?: PaymentRepository;
   settlementVerifier?: PaymentSettlementVerifier;
   profileRepository?: ProfileRepository;
+  referralRepository?: ReferralRepository;
   walletRepository?: WalletRepository;
 }
 
@@ -81,6 +85,8 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     options.paymentRepository ?? createPostgresPaymentRepository(app.config.DATABASE_URL);
   const settlementVerifier =
     options.settlementVerifier ?? createSolanaRpcSettlementVerifier(app.config.SOLANA_RPC_URL);
+  const referralRepository =
+    options.referralRepository ?? createPostgresReferralRepository(app.config.DATABASE_URL);
   const walletRepository =
     options.walletRepository ?? createPostgresWalletRepository(app.config.DATABASE_URL);
 
@@ -112,6 +118,11 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   if (paymentRepository.close) {
     app.addHook("onClose", async () => {
       await paymentRepository.close?.();
+    });
+  }
+  if (referralRepository.close) {
+    app.addHook("onClose", async () => {
+      await referralRepository.close?.();
     });
   }
 
@@ -148,6 +159,13 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     contentRepository,
     paymentRepository,
     settlementVerifier
+  });
+  await registerReferralRoutes(app, {
+    authVerifier,
+    sessionRepository,
+    ageRepository,
+    walletRepository,
+    referralRepository
   });
   await registerWalletRoutes(app, {
     authVerifier,

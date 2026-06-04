@@ -18,6 +18,7 @@ export interface CreatePaymentIntentInput {
   treasuryWallet: string;
   referenceAddress: string;
   expiresAt: Date;
+  referralToken?: string | null;
 }
 
 export interface CreateServerPricedPaymentIntentInput extends Omit<CreatePaymentIntentInput, "amountMinor"> {

@@ -1888,6 +1888,7 @@ export interface components {
             amountMinor?: number | null;
             /** @enum {integer|null} */
             livePassDurationMinutes?: 30 | 60 | 180 | null;
+            referralToken?: string | null;
         };
         PaymentIntent: {
             /** Format: uuid */
@@ -1944,6 +1945,22 @@ export interface components {
             url: string;
             /** @enum {string} */
             eligibility: "external_share" | "partner_campaign" | "not_commissionable";
+        };
+        ReferralActivity: {
+            /** Format: uuid */
+            id: string;
+            token: string;
+            /** @enum {string} */
+            targetType: "content" | "profile" | "event";
+            /** Format: uuid */
+            targetId: string;
+            /** @enum {string} */
+            eligibility: "external_share" | "partner_campaign" | "not_commissionable";
+            state: string;
+            /** Format: date-time */
+            createdAt: string;
+            commissionAmountMinor?: number | null;
+            currency?: components["schemas"]["Currency"];
         };
         SubscriptionPlanPage: {
             items: components["schemas"]["SubscriptionPlan"][];

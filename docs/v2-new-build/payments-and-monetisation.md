@@ -30,7 +30,8 @@ Current implementation state:
 - `POST /v1/content/{contentId}/unlock-intents` creates or reuses a backend-priced `content_unlock` intent from active content access rules. The generic payment-intent endpoint does not accept client-priced content unlocks.
 - Confirmed `content_unlock` settlement grants an active content entitlement in the same backend transaction, and media/feed access projection returns `unlocked` only from backend entitlement state.
 - Confirmed `tip` and `support` settlement posts creator earning and platform fee ledger entries using the documented launch platform fee, but never writes an access grant.
-- Referrals/commission, subscriptions, and admin reconciliation are deferred to their owning slices.
+- `POST /v1/referrals/tokens` creates backend-owned external/internal referral tokens. Optional payment-intent `referralToken` values are resolved server-side, self-referrals are not attributed, and confirmed eligible tip/support settlement creates at most one commission from the platform fee.
+- Subscriptions and admin reconciliation are deferred to their owning slices.
 
 Official references checked:
 

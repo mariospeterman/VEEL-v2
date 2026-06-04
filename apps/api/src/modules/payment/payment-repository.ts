@@ -67,6 +67,21 @@ export function createPostgresPaymentRepository(databaseUrl?: string): PaymentRe
           where supabase_user_id = ${input.supabaseUserId}
           limit 1
         ),
+        referral_candidate as (
+          select rt.id, rt.creator_user_id
+          from referral_tokens rt
+          where rt.token = ${input.referralToken ?? null}
+            and rt.state = 'active'
+            and rt.eligibility in ('external_share', 'partner_campaign')
+            and (rt.expires_at is null or rt.expires_at > now())
+          limit 1
+        ),
+        valid_referral as (
+          select rc.id, rc.creator_user_id
+          from referral_candidate rc
+          join target_user tu on true
+          where rc.creator_user_id <> tu.id
+        ),
         existing_intent as (
           select pi.*
           from payment_intents pi
@@ -87,6 +102,7 @@ export function createPostgresPaymentRepository(databaseUrl?: string): PaymentRe
             solana_cluster,
             treasury_wallet,
             reference_address,
+            referral_token_id,
             expires_at
           )
           select
@@ -101,10 +117,31 @@ export function createPostgresPaymentRepository(databaseUrl?: string): PaymentRe
             ${input.solanaCluster},
             ${input.treasuryWallet},
             ${input.referenceAddress},
+            (select id from valid_referral),
             ${input.expiresAt}
           from target_user
           where not exists (select 1 from existing_intent)
           returning *
+        ),
+        inserted_attribution as (
+          insert into referral_attributions (
+            id,
+            referral_token_id,
+            referrer_user_id,
+            referred_user_id,
+            payment_intent_id
+          )
+          select
+            ${randomUUID()},
+            vr.id,
+            vr.creator_user_id,
+            tu.id,
+            ii.id
+          from inserted_intent ii
+          join valid_referral vr on true
+          join target_user tu on true
+          on conflict (payment_intent_id) do nothing
+          returning id
         )
         select
           id,
@@ -251,13 +288,19 @@ export function createPostgresPaymentRepository(databaseUrl?: string): PaymentRe
           input.settlement.confirmed &&
           (updatedIntent?.product_type === "tip" || updatedIntent?.product_type === "support")
         ) {
-          await recordTipSupportSettlementLedger(transaction, {
+          const ledger = await recordTipSupportSettlementLedger(transaction, {
             paymentIntentId: updatedIntent.payment_intent_id,
             actorUserId: updatedIntent.user_id,
             creatorUserId: updatedIntent.target_id,
             amountMinor: Number(updatedIntent.amount_minor),
             currency: updatedIntent.currency,
             productType: updatedIntent.product_type
+          });
+          await recordReferralCommission(transaction, {
+            paymentIntentId: updatedIntent.payment_intent_id,
+            actorUserId: updatedIntent.user_id,
+            currency: updatedIntent.currency,
+            platformFeeMinor: ledger.platformFeeMinor
           });
         }
 
@@ -298,7 +341,7 @@ async function recordTipSupportSettlementLedger(
     currency: StoredPaymentIntent["currency"];
     productType: "tip" | "support";
   }
-): Promise<void> {
+): Promise<{ creatorAmountMinor: number; platformFeeMinor: number }> {
   const platformFeeMinor = Math.floor((input.amountMinor * defaultPlatformFeeBps) / 10_000);
   const creatorAmountMinor = input.amountMinor - platformFeeMinor;
 
@@ -357,6 +400,128 @@ async function recordTipSupportSettlementLedger(
         creatorUserId: input.creatorUserId,
         creatorAmountMinor,
         platformFeeMinor
+      })}
+    )
+  `;
+
+  return {
+    creatorAmountMinor,
+    platformFeeMinor
+  };
+}
+
+const defaultReferralShareOfPlatformFeeBps = 2000;
+
+async function recordReferralCommission(
+  transaction: postgres.TransactionSql,
+  input: {
+    paymentIntentId: string;
+    actorUserId: string;
+    platformFeeMinor: number;
+    currency: StoredPaymentIntent["currency"];
+  }
+): Promise<void> {
+  if (input.platformFeeMinor <= 0) {
+    return;
+  }
+
+  const rows = await transaction<{
+    attribution_id: string;
+    referral_token_id: string;
+    referrer_user_id: string;
+    referred_user_id: string;
+  }[]>`
+    select
+      ra.id as attribution_id,
+      ra.referral_token_id,
+      ra.referrer_user_id,
+      ra.referred_user_id
+    from referral_attributions ra
+    where ra.payment_intent_id = ${input.paymentIntentId}
+      and ra.state = 'attributed'
+    limit 1
+  `;
+  const attribution = rows[0];
+
+  if (!attribution) {
+    return;
+  }
+
+  const commissionAmountMinor = Math.floor(
+    (input.platformFeeMinor * defaultReferralShareOfPlatformFeeBps) / 10_000
+  );
+
+  if (commissionAmountMinor <= 0) {
+    return;
+  }
+
+  await transaction`
+    insert into referral_commissions (
+      id,
+      referral_attribution_id,
+      referral_token_id,
+      payment_intent_id,
+      referrer_user_id,
+      referred_user_id,
+      amount_minor,
+      currency
+    )
+    values (
+      ${randomUUID()},
+      ${attribution.attribution_id},
+      ${attribution.referral_token_id},
+      ${input.paymentIntentId},
+      ${attribution.referrer_user_id},
+      ${attribution.referred_user_id},
+      ${commissionAmountMinor},
+      ${input.currency}
+    )
+    on conflict (payment_intent_id, referral_token_id) do nothing
+  `;
+
+  await transaction`
+    insert into payment_ledger_entries (
+      id,
+      payment_intent_id,
+      account_kind,
+      account_key,
+      account_user_id,
+      amount_minor,
+      currency,
+      direction
+    )
+    values (
+      ${randomUUID()},
+      ${input.paymentIntentId},
+      'referral_commission',
+      ${`referrer:${attribution.referrer_user_id}`},
+      ${attribution.referrer_user_id},
+      ${commissionAmountMinor},
+      ${input.currency},
+      'credit'
+    )
+    on conflict (payment_intent_id, account_kind, account_key) do nothing
+  `;
+
+  await transaction`
+    insert into audit_events (
+      id,
+      actor_user_id,
+      subject_type,
+      subject_id,
+      action,
+      metadata
+    )
+    values (
+      ${randomUUID()},
+      ${input.actorUserId},
+      'payment_intent',
+      ${input.paymentIntentId},
+      'referral_commission_created',
+      ${transaction.json({
+        referralTokenId: attribution.referral_token_id,
+        referrerUserId: attribution.referrer_user_id,
+        commissionAmountMinor
       })}
     )
   `;

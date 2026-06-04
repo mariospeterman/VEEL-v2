@@ -99,7 +99,8 @@ export async function registerPaymentRoutes(
         solanaCluster: app.config.SOLANA_CLUSTER,
         treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET,
         referenceAddress: createSolanaReferenceAddress(),
-        expiresAt: new Date(Date.now() + paymentIntentTtlMs)
+        expiresAt: new Date(Date.now() + paymentIntentTtlMs),
+        referralToken: intentBody.referralToken ?? null
       });
 
       return reply.code(201).send(toPaymentIntentResponse(intent));
@@ -331,7 +332,8 @@ export async function registerPaymentRoutes(
         solanaCluster: app.config.SOLANA_CLUSTER,
         treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET,
         referenceAddress: createSolanaReferenceAddress(),
-        expiresAt: new Date(Date.now() + paymentIntentTtlMs)
+        expiresAt: new Date(Date.now() + paymentIntentTtlMs),
+        referralToken: null
       });
 
       return reply.code(201).send({
@@ -436,6 +438,14 @@ function validateCreatePaymentIntentRequest(
     return "amountMinor is required for native SOL payment intents";
   }
 
+  if (
+    body.referralToken !== undefined &&
+    body.referralToken !== null &&
+    (typeof body.referralToken !== "string" || body.referralToken.length === 0)
+  ) {
+    return "referralToken must be a non-empty string when provided";
+  }
+
   return null;
 }
 
@@ -446,7 +456,8 @@ function hashPaymentIntentRequest(body: CreatePaymentIntentRequest): string {
         productType: body.productType,
         targetId: body.targetId,
         amountMinor: body.amountMinor ?? null,
-        livePassDurationMinutes: body.livePassDurationMinutes ?? null
+        livePassDurationMinutes: body.livePassDurationMinutes ?? null,
+        referralToken: body.referralToken ?? null
       })
     )
     .digest("hex");
