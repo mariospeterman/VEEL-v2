@@ -1727,8 +1727,8 @@ describe("buildApi", () => {
             providerStreamId: "livepeer-stream-1",
             providerPlaybackId: "livepeer-playback-1",
             providerState: "created",
-            hostIngestUrl: "rtmp://rtmp.livepeer.com/live/secret-stream-key",
-            hostStreamKey: "secret-stream-key",
+            hostIngestUrl: "rtmp://rtmp.livepeer.com/live/test",
+            hostStreamKey: "test",
             playbackUrl: "https://livepeercdn.studio/hls/livepeer-playback-1/index.m3u8"
           };
         },
@@ -1767,7 +1767,7 @@ describe("buildApi", () => {
         provider: "livepeer"
       }
     });
-    expect(JSON.stringify(response.json())).not.toContain("secret-stream-key");
+    expect(JSON.stringify(response.json())).not.toContain("test");
     expect(providerCreates).toEqual([{ roomId: "pending", title: "Friday live room" }]);
     expect(repositoryCreates).toEqual(["Friday live room"]);
 
@@ -1784,8 +1784,8 @@ describe("buildApi", () => {
         async onFindOwnedRoom() {
           return liveRoomFixture({
             id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa11",
-            hostIngestUrl: "rtmp://rtmp.livepeer.com/live/live-secret-abc123",
-            hostStreamKey: "live-secret-abc123"
+            hostIngestUrl: "rtmp://rtmp.livepeer.com/live/test",
+            hostStreamKey: "test"
           });
         }
       })
@@ -1802,9 +1802,9 @@ describe("buildApi", () => {
     expect(response.json()).toEqual({
       provider: "livepeer",
       maskedIngestUrl: "rtmp://rtmp.livepeer.com/live/****",
-      streamKeyHint: "liv...123"
+      streamKeyHint: "****"
     });
-    expect(JSON.stringify(response.json())).not.toContain("live-secret-abc123");
+    expect(JSON.stringify(response.json())).not.toContain("/test");
 
     await app.close();
   });
@@ -2171,8 +2171,8 @@ function liveRoomFixture(
     replayContentId: overrides.replayContentId ?? null,
     providerStreamId: overrides.providerStreamId ?? "livepeer-stream",
     providerPlaybackId: overrides.providerPlaybackId ?? "livepeer-playback",
-    hostIngestUrl: overrides.hostIngestUrl ?? "rtmp://rtmp.livepeer.com/live/secret-stream-key",
-    hostStreamKey: overrides.hostStreamKey ?? "secret-stream-key",
+    hostIngestUrl: overrides.hostIngestUrl ?? "rtmp://rtmp.livepeer.com/live/test",
+    hostStreamKey: overrides.hostStreamKey ?? "test",
     ...(overrides.requestHash ? { requestHash: overrides.requestHash } : {})
   };
 }
