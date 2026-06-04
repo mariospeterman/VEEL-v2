@@ -125,3 +125,14 @@ test("renders the dating matches projection", async ({ page }) => {
   await expect(page.getByText("Mutual match")).toBeVisible();
   await expect(page.locator("span").getByText("active", { exact: true })).toBeVisible();
 });
+
+test("renders the scoped assistant projection", async ({ page }) => {
+  await page.goto("/assistant");
+
+  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Scoped assistant" })).toBeVisible();
+  await expect(page.getByText("creator_helper")).toBeVisible();
+  await expect(page.getByText("draft_caption").first()).toBeVisible();
+  await expect(page.getByText("prepare_refund_decision", { exact: true })).toBeVisible();
+  await expect(page.getByText("required for admin actions")).toBeVisible();
+});

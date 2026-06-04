@@ -862,17 +862,31 @@ create table admin_action_records (
   created_at timestamptz not null default now()
 );
 
+create table ai_sessions (
+  id uuid primary key,
+  actor_user_id uuid not null references users(id),
+  scope text not null,
+  state text not null default 'active',
+  allowed_tools text[] not null,
+  idempotency_key text not null,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null
+);
+
 create table ai_tool_calls (
   id uuid primary key,
-  actor_user_id uuid references users(id),
-  role_scope text not null,
+  session_id uuid not null references ai_sessions(id),
+  actor_user_id uuid not null references users(id),
+  scope text not null,
   tool_name text not null,
+  state text not null default 'prepared',
+  confirmation_state text not null default 'not_required',
   subject_type text,
-  subject_id uuid,
+  subject_id text,
+  input_summary text not null,
+  output_summary text not null,
   input_redacted jsonb not null default '{}'::jsonb,
   output_redacted jsonb not null default '{}'::jsonb,
-  confirmation_required boolean not null default false,
-  confirmed_at timestamptz,
   created_at timestamptz not null default now()
 );
 

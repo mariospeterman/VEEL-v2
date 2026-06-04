@@ -1,0 +1,1 @@
+drop index if exists ai_tool_calls_session_actor_scope_idx;

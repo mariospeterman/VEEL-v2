@@ -2454,29 +2454,56 @@ export interface components {
             confirmedAt?: string | null;
         };
         CreateAiSessionRequest: {
-            /** @enum {string} */
-            scope: "user_self_service" | "creator_helper" | "admin_ops";
+            scope: components["schemas"]["AiSessionScope"];
+            requestedTools?: components["schemas"]["AiToolName"][];
         };
         AiSession: {
             /** Format: uuid */
             id: string;
-            scope: string;
-            allowedTools: string[];
+            scope: components["schemas"]["AiSessionScope"];
+            /** @enum {string} */
+            state: "active" | "expired" | "revoked";
+            allowedTools: components["schemas"]["AiToolName"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            expiresAt: string;
         };
         CreateAiToolCallRequest: {
-            toolName: string;
+            toolName: components["schemas"]["AiToolName"];
             input: {
                 [key: string]: unknown;
             };
-            confirmationToken?: string | null;
+            /** @default false */
+            confirmed: boolean;
         };
         AiToolCall: {
             /** Format: uuid */
             id: string;
+            /** Format: uuid */
+            sessionId: string;
+            toolName: components["schemas"]["AiToolName"];
             /** @enum {string} */
-            state: "staged" | "executed" | "rejected";
-            confirmationRequired: boolean;
+            state: "prepared" | "executed" | "blocked" | "failed";
+            /** @enum {string} */
+            confirmationState: "not_required" | "required" | "confirmed" | "rejected";
+            inputSummary: string;
+            outputSummary: string;
+            result: {
+                [key: string]: unknown;
+            };
+            affectedResource?: {
+                /** @enum {string} */
+                type: "content" | "event" | "payment" | "provider" | "support_case" | "report" | "user" | "none";
+                id: string | null;
+            } | null;
+            /** Format: date-time */
+            createdAt: string;
         };
+        /** @enum {string} */
+        AiSessionScope: "user_self_service" | "creator_helper" | "admin_ops";
+        /** @enum {string} */
+        AiToolName: "explain_app_state" | "summarize_own_activity" | "find_own_purchases" | "draft_caption" | "suggest_hashtags" | "prepare_event_copy" | "summarize_creator_metrics" | "payment_lookup" | "provider_health_summary" | "moderation_queue_summary" | "draft_support_reply" | "prepare_refund_decision" | "prepare_ban_or_restriction";
         AdminOpsSummary: {
             /** @enum {string} */
             providerHealth: "ok" | "degraded" | "down";

@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: AI assistant, MCP tools, admin ops, creator/user utility
-Last updated: 2026-06-02
+Last updated: 2026-06-04
 Source of truth: yes for v2 AI/MCP scope
 
 Owns:
@@ -31,6 +31,8 @@ Launch AI/MCP as a permissioned tool layer for three narrow jobs:
 3. Admin/platform operations.
 
 Do not let AI spend money, unlock content, issue tickets, publish content, message users, change safety/admin decisions, access private content/messages, or call provider APIs unless the user/admin explicitly confirms and backend policy allows the tool call.
+
+The first production slice is the backend gateway, session scope, tool allowlist, confirmation state, and audit trail. It uses deterministic internal tools only. LLM provider calls and externally reachable MCP transports remain disabled until the provider ADR and eval fixtures are launch-approved.
 
 ## Real Pain Solvers
 
@@ -125,6 +127,15 @@ Tool calls require:
 - audit event
 - human confirmation for irreversible actions
 
+Launch implementation rules:
+
+- `POST /v1/ai/sessions` creates an expiring scoped session with backend-derived allowed tools.
+- `POST /v1/ai/sessions/:id/tool-calls` accepts only enumed tool names from OpenAPI.
+- Admin tools require an active staff membership check before execution.
+- Confirmation-required tools can only prepare a decision or draft in this slice; they cannot send, refund, ban, revoke, publish, or mutate safety state.
+- Stored input and output are redacted summaries plus safe JSON results, never raw prompts, provider payloads, secrets, or private messages.
+- External MCP transports must follow the current MCP authorization spec before launch: bearer tokens on every HTTP request, audience/resource validation, no tokens in query strings, and least-privilege scopes.
+
 ## Tool Scope Matrix
 
 | Tool | User | Creator | Admin | Confirmation |
@@ -150,6 +161,7 @@ Tool calls require:
 - Store prompts, tool schemas, and eval fixtures in versioned files.
 - Do not let the LLM provider call internal tools directly.
 - Backend tool gateway remains the policy boundary.
+- Do not ship provider-backed generation until provider docs have been checked, prompts/tool schemas are versioned, and eval fixtures cover unsafe money, messaging, publishing, age/KYC, and admin requests.
 
 ## Admin Metrics AI Should Use
 
@@ -171,5 +183,5 @@ Tool calls require:
 
 - OpenAI Agents guide: https://platform.openai.com/docs/guides/agents
 - OpenAI Agents SDK tools: https://openai.github.io/openai-agents-js/guides/tools/
-- MCP authorization: https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization
+- MCP authorization: https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization
 - MCP enterprise managed authorization: https://modelcontextprotocol.io/extensions/auth/enterprise-managed-authorization

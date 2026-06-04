@@ -16,6 +16,7 @@ import type {
   AgeRepository,
   CreatePendingAgeVerificationInput
 } from "../src/modules/age/types";
+import type { AiRepository, AiSession, AiToolCall } from "../src/modules/ai/types";
 import type { ProfileRepository } from "../src/modules/profile/types";
 import type { ReferralRepository } from "../src/modules/referral/types";
 import type {
@@ -2060,6 +2061,157 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("creates scoped AI sessions and executes safe user tools", async () => {
+    const aiRepository = fakeAiRepository();
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      aiRepository
+    });
+    await app.ready();
+
+    const sessionResponse = await app.inject({
+      method: "POST",
+      url: "/v1/ai/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "ai-session-1"
+      },
+      payload: {
+        scope: "user_self_service",
+        requestedTools: ["explain_app_state", "provider_health_summary"]
+      }
+    });
+    const session = sessionResponse.json() as AiSession;
+    const toolResponse = await app.inject({
+      method: "POST",
+      url: `/v1/ai/sessions/${session.id}/tool-calls`,
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "ai-tool-1"
+      },
+      payload: {
+        toolName: "explain_app_state",
+        input: { topic: "payments" }
+      }
+    });
+
+    expect(sessionResponse.statusCode).toBe(201);
+    expect(session).toMatchObject({
+      scope: "user_self_service",
+      state: "active",
+      allowedTools: ["explain_app_state"]
+    });
+    expect(toolResponse.statusCode).toBe(201);
+    expect(toolResponse.json()).toMatchObject({
+      toolName: "explain_app_state",
+      state: "executed",
+      confirmationState: "not_required",
+      outputSummary: "App state explanation prepared"
+    });
+
+    await app.close();
+  });
+
+  it("prepares confirmation-required admin AI tools without mutating admin state", async () => {
+    const aiRepository = fakeAiRepository();
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      adminRepository: fakeAdminRepository,
+      aiRepository
+    });
+    await app.ready();
+
+    const sessionResponse = await app.inject({
+      method: "POST",
+      url: "/v1/ai/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "ai-admin-session-1"
+      },
+      payload: {
+        scope: "admin_ops",
+        requestedTools: ["prepare_refund_decision"]
+      }
+    });
+    const session = sessionResponse.json() as AiSession;
+    const toolResponse = await app.inject({
+      method: "POST",
+      url: `/v1/ai/sessions/${session.id}/tool-calls`,
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "ai-admin-tool-1"
+      },
+      payload: {
+        toolName: "prepare_refund_decision",
+        input: { resourceType: "payment", resourceId: "00000000-0000-4000-8000-000000000050" }
+      }
+    });
+
+    expect(sessionResponse.statusCode).toBe(201);
+    expect(toolResponse.statusCode).toBe(201);
+    expect(toolResponse.json()).toMatchObject({
+      toolName: "prepare_refund_decision",
+      state: "prepared",
+      confirmationState: "required",
+      affectedResource: {
+        type: "payment",
+        id: "00000000-0000-4000-8000-000000000050"
+      }
+    });
+
+    await app.close();
+  });
+
+  it("rejects admin AI sessions for non-staff users", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      adminRepository: {
+        async hasAdminAccess() {
+          return false;
+        },
+        async getOpsSummary() {
+          throw new Error("not implemented");
+        },
+        async listPaymentIntents() {
+          throw new Error("not implemented");
+        },
+        async listUnlocks() {
+          throw new Error("not implemented");
+        },
+        async listProviderEvents() {
+          throw new Error("not implemented");
+        },
+        async getDatingSafety() {
+          throw new Error("not implemented");
+        }
+      },
+      aiRepository: fakeAiRepository()
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/ai/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "ai-admin-denied"
+      },
+      payload: {
+        scope: "admin_ops"
+      }
+    });
+
+    expect(response.statusCode).toBe(403);
+
+    await app.close();
+  });
+
   it("rejects admin reads for non-staff users", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -3300,6 +3452,54 @@ const walletRepositoryWithoutWallet: WalletRepository = {
     throw new Error("not implemented");
   }
 };
+
+function fakeAiRepository(): AiRepository {
+  const sessions = new Map<string, AiSession>();
+  const toolCalls = new Map<string, AiToolCall>();
+
+  return {
+    async createOrReuseSession(input) {
+      const existing = [...sessions.values()].find(
+        (session) => session.scope === input.scope && session.id === input.idempotencyKey
+      );
+      if (existing) return existing;
+
+      const session: AiSession = {
+        id: input.idempotencyKey,
+        scope: input.scope,
+        state: "active",
+        allowedTools: input.allowedTools,
+        createdAt: "2026-06-04T23:59:00.000Z",
+        expiresAt: input.expiresAt.toISOString()
+      };
+      sessions.set(session.id, session);
+      return session;
+    },
+    async findSessionForSupabaseUser(input) {
+      return sessions.get(input.sessionId) ?? null;
+    },
+    async createOrReuseToolCall(input) {
+      const key = `${input.session.id}:${input.idempotencyKey}`;
+      const existing = toolCalls.get(key);
+      if (existing) return existing;
+
+      const toolCall: AiToolCall = {
+        id: input.idempotencyKey,
+        sessionId: input.session.id,
+        toolName: input.toolName,
+        state: input.state,
+        confirmationState: input.confirmationState,
+        inputSummary: input.inputSummary,
+        outputSummary: input.outputSummary,
+        result: input.outputRedacted,
+        affectedResource: input.affectedResource,
+        createdAt: "2026-06-04T23:59:10.000Z"
+      };
+      toolCalls.set(key, toolCall);
+      return toolCall;
+    }
+  };
+}
 
 const fakeAdminRepository: AdminRepository = {
   async hasAdminAccess(supabaseUserId) {

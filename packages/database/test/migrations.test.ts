@@ -187,6 +187,36 @@ describe("database migrations", () => {
     expect(sql).not.toMatch(/raw_payload|private_key|service_role|payment_proof/i);
   });
 
+  it("adds AI/MCP scoped sessions and tool-call audit rows with RLS and redaction", () => {
+    const sql = readMigration("0025_ai_mcp_scoped_assistant.sql");
+
+    expect(sql).toContain("create table ai_sessions");
+    expect(sql).toContain("create table ai_tool_calls");
+    expect(sql).toContain("scope in ('user_self_service', 'creator_helper', 'admin_ops')");
+    expect(sql).toContain("confirmation_state text not null default 'not_required'");
+    expect(sql).toContain("foreign key (session_id, actor_user_id, scope)");
+    expect(sql).toContain("input_summary text not null");
+    expect(sql).toContain("output_summary text not null");
+    expect(sql).toContain("input_redacted jsonb not null default '{}'::jsonb");
+    expect(sql).toContain("output_redacted jsonb not null default '{}'::jsonb");
+    expect(sql).toContain("alter table ai_sessions enable row level security");
+    expect(sql).toContain("alter table ai_tool_calls enable row level security");
+    expect(sql).toContain("grant select on table ai_sessions to authenticated");
+    expect(sql).toContain("create policy ai_sessions_select_self_or_staff");
+    expect(sql).toContain("create policy ai_tool_calls_select_self_or_staff");
+    expect(sql).toContain("to authenticated");
+    expect(sql).toContain("(select private.current_app_user_id())");
+    expect(sql).not.toMatch(/to anon|using\s*\(\s*true\s*\)|with check\s*\(\s*true\s*\)/i);
+    expect(sql).not.toMatch(/raw_payload|private_key|seed_phrase|mnemonic|service_role_key|api_key/i);
+  });
+
+  it("covers AI/MCP composite foreign keys for Supabase performance advisors", () => {
+    const sql = readMigration("0026_ai_mcp_fk_indexes.sql");
+
+    expect(sql).toContain("create index ai_tool_calls_session_actor_scope_idx");
+    expect(sql).toContain("on ai_tool_calls (session_id, actor_user_id, scope)");
+  });
+
   it("adds wallet transaction activity records without custody or raw provider payloads", () => {
     const sql = readMigration("0016_activity_wallet_transactions.sql");
 

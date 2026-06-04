@@ -12,6 +12,9 @@ import { createAgeProviderWaterfall } from "./modules/age/age-provider-waterfall
 import { createPostgresAgeRepository } from "./modules/age/age-repository.js";
 import { registerAgeRoutes } from "./modules/age/age-routes.js";
 import type { AgeProviderWaterfall, AgeRepository } from "./modules/age/types.js";
+import { createPostgresAiRepository } from "./modules/ai/ai-repository.js";
+import { registerAiRoutes } from "./modules/ai/ai-routes.js";
+import type { AiRepository } from "./modules/ai/types.js";
 import { createPostgresContentRepository } from "./modules/content/content-repository.js";
 import { registerContentRoutes } from "./modules/content/content-routes.js";
 import { createBunnyStreamUploadAdapter } from "./modules/content/media-upload-adapter.js";
@@ -69,6 +72,7 @@ export interface BuildApiOptions {
   referralRepository?: ReferralRepository;
   walletRepository?: WalletRepository;
   adminRepository?: AdminRepository;
+  aiRepository?: AiRepository;
 }
 
 export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyInstance> {
@@ -128,6 +132,7 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     options.walletRepository ?? createPostgresWalletRepository(app.config.DATABASE_URL);
   const adminRepository =
     options.adminRepository ?? createPostgresAdminRepository(app.config.DATABASE_URL);
+  const aiRepository = options.aiRepository ?? createPostgresAiRepository(app.config.DATABASE_URL);
 
   if (sessionRepository.close) {
     app.addHook("onClose", async () => {
@@ -192,6 +197,11 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   if (adminRepository.close) {
     app.addHook("onClose", async () => {
       await adminRepository.close?.();
+    });
+  }
+  if (aiRepository.close) {
+    app.addHook("onClose", async () => {
+      await aiRepository.close?.();
     });
   }
 
@@ -277,6 +287,13 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   await registerAdminRoutes(app, {
     authVerifier,
     adminRepository
+  });
+  await registerAiRoutes(app, {
+    authVerifier,
+    sessionRepository,
+    ageRepository,
+    adminRepository,
+    aiRepository
   });
   await registerWalletRoutes(app, {
     authVerifier,

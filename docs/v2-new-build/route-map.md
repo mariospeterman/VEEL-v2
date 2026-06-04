@@ -59,6 +59,7 @@ Rules:
 | `/app/dating/activate` | Phase 4 | yes | yes | yes | dating | Consent, safety, active-match limits. |
 | `/app/dating/feed` | Phase 4 | yes | yes | yes | dating | Explicit Dating Mode feed only. |
 | `/app/dating/matches` | Phase 4 | yes | yes | yes | dating | Match list and stale/archived state. |
+| `/app/assistant` | Phase 5 | yes | yes | yes | ai | Permission-scoped AI/MCP tool gateway with confirmation states and audit visibility. |
 | `/admin` | MVP internal | admin | yes | yes | admin | Ops dashboard, role-gated. |
 | `/admin/*` | phased | admin | yes | yes | admin | Users, content, reports, payments, events, dating, providers. |
 

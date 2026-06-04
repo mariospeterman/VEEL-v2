@@ -2209,28 +2209,69 @@ components:
       type: object
       required: [scope]
       properties:
-        scope: { type: string, enum: [user_self_service, creator_helper, admin_ops] }
+        scope: { $ref: "#/components/schemas/AiSessionScope" }
+        requestedTools:
+          type: array
+          items: { $ref: "#/components/schemas/AiToolName" }
     AiSession:
       type: object
-      required: [id, scope, allowedTools]
+      required: [id, scope, state, allowedTools, createdAt, expiresAt]
       properties:
         id: { type: string, format: uuid }
-        scope: { type: string }
-        allowedTools: { type: array, items: { type: string } }
+        scope: { $ref: "#/components/schemas/AiSessionScope" }
+        state: { type: string, enum: [active, expired, revoked] }
+        allowedTools:
+          type: array
+          items: { $ref: "#/components/schemas/AiToolName" }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
     CreateAiToolCallRequest:
       type: object
       required: [toolName, input]
       properties:
-        toolName: { type: string }
+        toolName: { $ref: "#/components/schemas/AiToolName" }
         input: { type: object, additionalProperties: true }
-        confirmationToken: { type: string, nullable: true }
+        confirmed: { type: boolean, default: false }
     AiToolCall:
       type: object
-      required: [id, state, confirmationRequired]
+      required:
+        [id, sessionId, toolName, state, confirmationState, inputSummary, outputSummary, result, createdAt]
       properties:
         id: { type: string, format: uuid }
-        state: { type: string, enum: [staged, executed, rejected] }
-        confirmationRequired: { type: boolean }
+        sessionId: { type: string, format: uuid }
+        toolName: { $ref: "#/components/schemas/AiToolName" }
+        state: { type: string, enum: [prepared, executed, blocked, failed] }
+        confirmationState: { type: string, enum: [not_required, required, confirmed, rejected] }
+        inputSummary: { type: string }
+        outputSummary: { type: string }
+        result: { type: object, additionalProperties: true }
+        affectedResource:
+          type: object
+          nullable: true
+          required: [type, id]
+          properties:
+            type: { type: string, enum: [content, event, payment, provider, support_case, report, user, none] }
+            id: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    AiSessionScope:
+      type: string
+      enum: [user_self_service, creator_helper, admin_ops]
+    AiToolName:
+      type: string
+      enum:
+        - explain_app_state
+        - summarize_own_activity
+        - find_own_purchases
+        - draft_caption
+        - suggest_hashtags
+        - prepare_event_copy
+        - summarize_creator_metrics
+        - payment_lookup
+        - provider_health_summary
+        - moderation_queue_summary
+        - draft_support_reply
+        - prepare_refund_decision
+        - prepare_ban_or_restriction
     AdminOpsSummary:
       type: object
       required: [providerHealth, queueHealth, openReports, paymentCounts, unlockCounts, providerEventCounts]
