@@ -1,5 +1,11 @@
 import postgres from "postgres";
-import type { ProfileRepository, UserResource } from "./types.js";
+import type { components } from "@veel/contracts";
+import type {
+  CreatorMonetisationDashboardResource,
+  CreatorProfileResource,
+  ProfileRepository,
+  UserResource
+} from "./types.js";
 
 export class ProfileRepositoryConfigurationError extends Error {
   constructor() {
@@ -22,10 +28,80 @@ interface ProfileRow {
   avatar_url: string | null;
 }
 
+interface CreatorProfileRow extends ProfileRow {
+  bio: string | null;
+  location_label: string | null;
+  content_count: string | number;
+  live_room_count: string | number;
+  confirmed_payment_count: string | number;
+  tips_enabled: boolean;
+  content_unlocks_enabled: boolean;
+  live_passes_enabled: boolean;
+  paid_messages_enabled: boolean;
+  subscriptions_enabled: boolean;
+}
+
+interface CreatorContentRow {
+  id: string;
+  media_type: components["schemas"]["ContentItem"]["mediaType"];
+  caption: string | null;
+  poster_url: string | null;
+  nsfw_label: NonNullable<components["schemas"]["ContentItem"]["nsfwLabel"]>;
+  creator_id: string;
+  handle: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+}
+
+interface DashboardRow extends ProfileRow {
+  state: "active" | "paused" | "blocked";
+  earning_state: "not_configured" | "ready" | "review_required" | "held";
+  kyc_state: "not_required" | "required" | "pending" | "verified" | "failed";
+  tax_profile_state: "not_required" | "required" | "pending" | "verified";
+  recipient_wallet_state: "missing" | "linked";
+  tips_enabled: boolean;
+  content_unlocks_enabled: boolean;
+  live_passes_enabled: boolean;
+  paid_messages_enabled: boolean;
+  subscriptions_enabled: boolean;
+}
+
+interface EarningsRow {
+  creator_earnings_minor: string | number | null;
+  platform_fees_minor: string | number | null;
+  referral_commissions_minor: string | number | null;
+  confirmed_payment_count: string | number | null;
+}
+
+interface ProductRow {
+  product_type: components["schemas"]["ProductType"];
+  amount_minor: string | number;
+  confirmed_payment_count: string | number;
+}
+
+interface RecentPaymentRow {
+  id: string;
+  product_type: components["schemas"]["ProductType"];
+  target_id: string;
+  amount_minor: string | number;
+  currency: components["schemas"]["Currency"];
+  state: components["schemas"]["ActivityItem"]["state"];
+  confirmed_signature: string | null;
+  reference_address: string;
+  created_at: Date;
+  confirmed_at: Date | null;
+}
+
 export function createPostgresProfileRepository(databaseUrl?: string): ProfileRepository {
   if (!databaseUrl) {
     return {
       async upsertMyProfile() {
+        throw new ProfileRepositoryConfigurationError();
+      },
+      async findCreatorProfileByHandle() {
+        throw new ProfileRepositoryConfigurationError();
+      },
+      async getMyCreatorDashboard() {
         throw new ProfileRepositoryConfigurationError();
       }
     };
@@ -96,6 +172,211 @@ export function createPostgresProfileRepository(databaseUrl?: string): ProfileRe
         throw error;
       }
     },
+    async findCreatorProfileByHandle(handle): Promise<CreatorProfileResource | null> {
+      const rows = await sql<CreatorProfileRow[]>`
+        select
+          u.id,
+          p.handle,
+          p.display_name,
+          p.avatar_url,
+          p.bio,
+          p.location_label,
+          coalesce(cms.tips_enabled, true) as tips_enabled,
+          coalesce(cms.content_unlocks_enabled, true) as content_unlocks_enabled,
+          coalesce(cms.live_passes_enabled, true) as live_passes_enabled,
+          coalesce(cms.paid_messages_enabled, true) as paid_messages_enabled,
+          coalesce(cms.subscriptions_enabled, false) as subscriptions_enabled,
+          (
+            select count(*)
+            from content_items ci
+            where ci.creator_user_id = u.id
+              and ci.state = 'ready'
+              and ci.visibility = 'public'
+              and ci.moderation_state = 'approved'
+          ) as content_count,
+          (
+            select count(*)
+            from live_rooms lr
+            where lr.creator_user_id = u.id
+              and lr.state <> 'deleted'
+          ) as live_room_count,
+          (
+            select count(distinct pi.id)
+            from payment_intents pi
+            left join content_items ci on ci.id = pi.target_id
+            left join live_rooms lr on lr.id = pi.target_id
+            where pi.state = 'confirmed'
+              and (
+                pi.target_id = u.id
+                or ci.creator_user_id = u.id
+                or lr.creator_user_id = u.id
+              )
+          ) as confirmed_payment_count
+        from profiles p
+        join users u on u.id = p.user_id
+        left join creator_monetisation_settings cms on cms.user_id = u.id
+        where lower(p.handle) = lower(${handle})
+          and p.visibility = 'public'
+          and u.state = 'active'
+        limit 1
+      `;
+      const row = rows[0];
+
+      if (!row) {
+        return null;
+      }
+
+      const recentContent = await sql<CreatorContentRow[]>`
+        select
+          ci.id,
+          ci.media_type,
+          ci.caption,
+          ci.nsfw_label,
+          ma.poster_url,
+          u.id as creator_id,
+          p.handle,
+          p.display_name,
+          p.avatar_url
+        from content_items ci
+        join users u on u.id = ci.creator_user_id
+        join profiles p on p.user_id = u.id
+        left join lateral (
+          select poster_url
+          from media_assets
+          where content_item_id = ci.id
+          order by created_at asc
+          limit 1
+        ) ma on true
+        where ci.creator_user_id = ${row.id}
+          and ci.state = 'ready'
+          and ci.visibility = 'public'
+          and ci.moderation_state = 'approved'
+        order by ci.created_at desc
+        limit 12
+      `;
+
+      return toCreatorProfile(row, recentContent);
+    },
+    async getMyCreatorDashboard(supabaseUserId): Promise<CreatorMonetisationDashboardResource | null> {
+      const dashboardRows = await sql<DashboardRow[]>`
+        with target_user as (
+          select u.id
+          from users u
+          where u.supabase_user_id = ${supabaseUserId}
+          limit 1
+        ),
+        ensured_settings as (
+          insert into creator_monetisation_settings (user_id)
+          select id from target_user
+          on conflict (user_id) do update set updated_at = creator_monetisation_settings.updated_at
+          returning *
+        )
+        select
+          u.id,
+          p.handle,
+          p.display_name,
+          p.avatar_url,
+          es.state,
+          es.earning_state,
+          es.kyc_state,
+          es.tax_profile_state,
+          case when es.earnings_recipient_wallet_id is null then 'missing' else 'linked' end as recipient_wallet_state,
+          es.tips_enabled,
+          es.content_unlocks_enabled,
+          es.live_passes_enabled,
+          es.paid_messages_enabled,
+          es.subscriptions_enabled
+        from ensured_settings es
+        join users u on u.id = es.user_id
+        join profiles p on p.user_id = u.id
+        limit 1
+      `;
+      const dashboard = dashboardRows[0];
+
+      if (!dashboard) {
+        return null;
+      }
+
+      const [earningsRows, productRows, recentPaymentRows] = await Promise.all([
+        sql<EarningsRow[]>`
+          with creator_payments as (
+            select distinct payment_intent_id
+            from payment_ledger_entries
+            where account_user_id = ${dashboard.id}
+              and account_kind = 'creator_earning'
+          )
+          select
+            (
+              select coalesce(sum(amount_minor), 0)
+              from payment_ledger_entries
+              where account_user_id = ${dashboard.id}
+                and account_kind = 'creator_earning'
+                and state = 'posted'
+            ) as creator_earnings_minor,
+            (
+              select coalesce(sum(ple.amount_minor), 0)
+              from payment_ledger_entries ple
+              join creator_payments cp on cp.payment_intent_id = ple.payment_intent_id
+              where ple.account_kind = 'platform_fee'
+                and ple.state = 'posted'
+            ) as platform_fees_minor,
+            (
+              select coalesce(sum(amount_minor), 0)
+              from referral_commissions
+              where referrer_user_id = ${dashboard.id}
+                and state in ('pending', 'posted', 'earned')
+            ) as referral_commissions_minor,
+            (
+              select count(*)
+              from creator_payments
+            ) as confirmed_payment_count
+        `,
+        sql<ProductRow[]>`
+          with creator_targets as (
+            select id from content_items where creator_user_id = ${dashboard.id}
+            union
+            select id from live_rooms where creator_user_id = ${dashboard.id}
+            union
+            select ${dashboard.id}::uuid as id
+          )
+          select
+            pi.product_type,
+            coalesce(sum(pi.amount_minor), 0) as amount_minor,
+            count(*) as confirmed_payment_count
+          from payment_intents pi
+          join creator_targets ct on ct.id = pi.target_id
+          where pi.state = 'confirmed'
+          group by pi.product_type
+          order by pi.product_type
+        `,
+        sql<RecentPaymentRow[]>`
+          with creator_targets as (
+            select id from content_items where creator_user_id = ${dashboard.id}
+            union
+            select id from live_rooms where creator_user_id = ${dashboard.id}
+            union
+            select ${dashboard.id}::uuid as id
+          )
+          select
+            pi.id,
+            pi.product_type,
+            pi.target_id,
+            pi.amount_minor,
+            pi.currency,
+            pi.state,
+            pi.confirmed_signature,
+            pi.reference_address,
+            pi.created_at,
+            pi.confirmed_at
+          from payment_intents pi
+          join creator_targets ct on ct.id = pi.target_id
+          order by pi.created_at desc
+          limit 10
+        `
+      ]);
+
+      return toCreatorDashboard(dashboard, earningsRows[0], productRows, recentPaymentRows);
+    },
     async close() {
       await sql.end({ timeout: 5 });
     }
@@ -110,6 +391,155 @@ function toUserResource(row: ProfileRow): UserResource {
     avatarUrl: row.avatar_url,
     badges: []
   };
+}
+
+function toCreatorProfile(
+  row: CreatorProfileRow,
+  recentContent: CreatorContentRow[]
+): CreatorProfileResource {
+  return {
+    user: toUserResource(row),
+    bio: row.bio,
+    locationLabel: row.location_label,
+    stats: {
+      contentCount: Number(row.content_count),
+      liveRoomCount: Number(row.live_room_count),
+      confirmedPaymentCount: Number(row.confirmed_payment_count),
+      followerCount: 0
+    },
+    monetisation: {
+      tipsEnabled: row.tips_enabled,
+      contentUnlocksEnabled: row.content_unlocks_enabled,
+      livePassesEnabled: row.live_passes_enabled,
+      paidMessagesEnabled: row.paid_messages_enabled,
+      subscriptionsEnabled: row.subscriptions_enabled
+    },
+    recentContent: recentContent.map(toContentItem)
+  };
+}
+
+function toCreatorDashboard(
+  row: DashboardRow,
+  earnings: EarningsRow | undefined,
+  products: ProductRow[],
+  recentPayments: RecentPaymentRow[]
+): CreatorMonetisationDashboardResource {
+  const blockedReasons: string[] = [];
+
+  if (row.recipient_wallet_state === "missing") {
+    blockedReasons.push("earnings_recipient_wallet_required");
+  }
+  if (row.state !== "active") {
+    blockedReasons.push(`creator_state_${row.state}`);
+  }
+  if (row.earning_state !== "ready") {
+    blockedReasons.push(`earning_state_${row.earning_state}`);
+  }
+
+  return {
+    creator: toUserResource(row),
+    readiness: {
+      state: row.state,
+      earningState: row.earning_state,
+      kycState: row.kyc_state,
+      taxProfileState: row.tax_profile_state,
+      recipientWalletState: row.recipient_wallet_state,
+      blockedReasons
+    },
+    earnings: {
+      currency: "SOL",
+      creatorEarningsMinor: Number(earnings?.creator_earnings_minor ?? 0),
+      platformFeesMinor: Number(earnings?.platform_fees_minor ?? 0),
+      referralCommissionsMinor: Number(earnings?.referral_commissions_minor ?? 0),
+      confirmedPaymentCount: Number(earnings?.confirmed_payment_count ?? 0)
+    },
+    products: productSummaries(row, products),
+    recentActivity: recentPayments.map(toActivityItem)
+  };
+}
+
+function productSummaries(
+  row: DashboardRow,
+  products: ProductRow[]
+): CreatorMonetisationDashboardResource["products"] {
+  const enabledByProduct: Partial<Record<components["schemas"]["ProductType"], boolean>> = {
+    tip: row.tips_enabled,
+    support: row.tips_enabled,
+    content_unlock: row.content_unlocks_enabled,
+    live_pass: row.live_passes_enabled,
+    paid_message: row.paid_messages_enabled,
+    creator_subscription: row.subscriptions_enabled
+  };
+  const productRows = new Map(products.map((product) => [product.product_type, product]));
+
+  return (Object.keys(enabledByProduct) as components["schemas"]["ProductType"][]).map(
+    (productType) => {
+      const product = productRows.get(productType);
+
+      return {
+        productType,
+        enabled: Boolean(enabledByProduct[productType]),
+        confirmedPaymentCount: Number(product?.confirmed_payment_count ?? 0),
+        amountMinor: Number(product?.amount_minor ?? 0),
+        currency: "SOL"
+      };
+    }
+  );
+}
+
+function toActivityItem(row: RecentPaymentRow): components["schemas"]["ActivityItem"] {
+  return {
+    id: row.id,
+    kind: "payment_intent",
+    title: titleForProduct(row.product_type),
+    state: row.state,
+    productType: row.product_type,
+    targetId: row.target_id,
+    amountMinor: Number(row.amount_minor),
+    currency: row.currency,
+    paymentIntentId: row.id,
+    signature: row.confirmed_signature,
+    referenceAddress: row.reference_address,
+    createdAt: row.created_at.toISOString(),
+    confirmedAt: row.confirmed_at?.toISOString() ?? null
+  };
+}
+
+function toContentItem(row: CreatorContentRow): components["schemas"]["ContentItem"] {
+  return {
+    id: row.id,
+    creator: {
+      id: row.creator_id,
+      handle: row.handle ?? "",
+      displayName: row.display_name ?? "",
+      avatarUrl: row.avatar_url,
+      badges: []
+    },
+    mediaType: row.media_type,
+    caption: row.caption,
+    posterUrl: row.poster_url,
+    playback: {
+      state: "not_ready",
+      url: null,
+      provider: "none"
+    },
+    accessState: "free",
+    nsfwLabel: row.nsfw_label,
+    engagement: {
+      liked: false,
+      saved: false,
+      likeCount: 0,
+      commentCount: 0,
+      shareCount: 0
+    }
+  };
+}
+
+function titleForProduct(productType: components["schemas"]["ProductType"]): string {
+  return productType
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function isUniqueViolation(error: unknown): boolean {

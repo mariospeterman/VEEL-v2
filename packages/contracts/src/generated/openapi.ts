@@ -174,6 +174,23 @@ export interface paths {
         patch: operations["updateMyProfile"];
         trace?: never;
     };
+    "/v1/profiles/me/creator-dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Current creator monetisation dashboard */
+        get: operations["getMyCreatorDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/profiles/{handle}": {
         parameters: {
             query?: never;
@@ -1684,6 +1701,61 @@ export interface components {
             avatarUrl?: string | null;
             badges: components["schemas"]["UserBadge"][];
         };
+        CreatorProfile: {
+            user: components["schemas"]["User"];
+            bio?: string | null;
+            locationLabel?: string | null;
+            stats: components["schemas"]["CreatorProfileStats"];
+            monetisation: components["schemas"]["PublicCreatorMonetisation"];
+            recentContent: components["schemas"]["ContentItem"][];
+        };
+        CreatorProfileStats: {
+            contentCount: number;
+            liveRoomCount: number;
+            confirmedPaymentCount: number;
+            followerCount: number;
+        };
+        PublicCreatorMonetisation: {
+            tipsEnabled: boolean;
+            contentUnlocksEnabled: boolean;
+            livePassesEnabled: boolean;
+            paidMessagesEnabled: boolean;
+            subscriptionsEnabled: boolean;
+        };
+        CreatorMonetisationDashboard: {
+            creator: components["schemas"]["User"];
+            readiness: components["schemas"]["CreatorMonetisationReadiness"];
+            earnings: components["schemas"]["CreatorEarningsSummary"];
+            products: components["schemas"]["CreatorProductSummary"][];
+            recentActivity: components["schemas"]["ActivityItem"][];
+        };
+        CreatorMonetisationReadiness: {
+            /** @enum {string} */
+            state: "active" | "paused" | "blocked";
+            /** @enum {string} */
+            earningState: "not_configured" | "ready" | "review_required" | "held";
+            /** @enum {string} */
+            kycState: "not_required" | "required" | "pending" | "verified" | "failed";
+            /** @enum {string} */
+            taxProfileState: "not_required" | "required" | "pending" | "verified";
+            /** @enum {string} */
+            recipientWalletState: "missing" | "linked";
+            blockedReasons: string[];
+        };
+        CreatorEarningsSummary: {
+            currency: components["schemas"]["Currency"];
+            creatorEarningsMinor: number;
+            platformFeesMinor: number;
+            referralCommissionsMinor: number;
+            confirmedPaymentCount: number;
+        };
+        CreatorProductSummary: {
+            productType: components["schemas"]["ProductType"];
+            enabled: boolean;
+            confirmedPaymentCount: number;
+            amountMinor: number;
+            currency: components["schemas"]["Currency"];
+        };
         UpdateProfileRequest: {
             handle: string;
             displayName: string;
@@ -2539,6 +2611,24 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["User"];
+            };
+        };
+        /** @description Creator profile */
+        CreatorProfile: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["CreatorProfile"];
+            };
+        };
+        /** @description Creator monetisation dashboard */
+        CreatorMonetisationDashboard: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["CreatorMonetisationDashboard"];
             };
         };
         /** @description Feed page */
@@ -3525,6 +3615,20 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    getMyCreatorDashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["CreatorMonetisationDashboard"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
     getProfileByHandle: {
         parameters: {
             query?: never;
@@ -3536,7 +3640,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["User"];
+            200: components["responses"]["CreatorProfile"];
             404: components["responses"]["NotFound"];
         };
     };

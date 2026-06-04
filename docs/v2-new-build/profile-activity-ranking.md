@@ -37,7 +37,7 @@ Own profile:
 - badges
 - activity shortcut
 - wallet/transactions shortcut
-- creator dashboard shortcut where applicable
+- creator dashboard shortcut where applicable, backed by `GET /v1/profiles/me/creator-dashboard`
 
 Public creator profile:
 
@@ -46,6 +46,7 @@ Public creator profile:
 - creator badge/status
 - age-verified/trust badge where product allows
 - follow/message/support/subscribe actions
+- backend-derived stats and monetisation capability flags from `GET /v1/profiles/{handle}`
 - media grid/tabs
 - premium/live/event indicators
 - public badges only

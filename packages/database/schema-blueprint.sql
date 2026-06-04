@@ -94,13 +94,22 @@ create table age_verifications (
   unique (provider, provider_reference)
 );
 
-create table creator_accounts (
+create table creator_monetisation_settings (
   user_id uuid primary key references users(id),
-  monetisation_enabled boolean not null default false,
-  kyc_required boolean not null default false,
+  state text not null default 'active',
+  earning_state text not null default 'not_configured',
   kyc_state text not null default 'not_required',
+  tax_profile_state text not null default 'not_required',
   earnings_recipient_wallet_id uuid references wallets(id),
-  created_at timestamptz not null default now()
+  tips_enabled boolean not null default true,
+  content_unlocks_enabled boolean not null default true,
+  live_passes_enabled boolean not null default true,
+  paid_messages_enabled boolean not null default true,
+  subscriptions_enabled boolean not null default false,
+  min_tip_amount_minor bigint not null default 1000000,
+  default_currency text not null default 'SOL',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create table user_badges (

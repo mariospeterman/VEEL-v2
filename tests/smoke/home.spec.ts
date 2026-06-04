@@ -49,3 +49,25 @@ test("renders the activity and wallet transaction projection", async ({ page }) 
   await expect(page.getByText("solana_devnet")).toBeVisible();
   await expect(page.getByText("confirmed").first()).toBeVisible();
 });
+
+test("renders the creator dashboard projection", async ({ page }) => {
+  await page.goto("/profile");
+
+  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Maki" })).toBeVisible();
+  await expect(page.getByText("Creator dashboard")).toBeVisible();
+  await expect(page.getByText("Monetisation readiness")).toBeVisible();
+  await expect(page.getByText("creator_subscription")).toBeVisible();
+  await expect(page.getByText("earnings_recipient_wallet_required")).toBeVisible();
+});
+
+test("renders the public creator profile projection", async ({ page }) => {
+  await page.goto("/profile/maki");
+
+  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Maki" })).toBeVisible();
+  await expect(page.getByText("Creator profile", { exact: true })).toBeVisible();
+  await expect(page.getByText("Building the first Veel v2 creator profile")).toBeVisible();
+  await expect(page.getByText("Studio lighting test")).toBeVisible();
+  await expect(page.locator("article img")).toBeVisible();
+});

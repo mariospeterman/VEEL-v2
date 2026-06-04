@@ -145,6 +145,15 @@ paths:
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /v1/profiles/me/creator-dashboard:
+    get:
+      operationId: getMyCreatorDashboard
+      tags: [Profiles]
+      summary: Current creator monetisation dashboard
+      responses:
+        "200": { $ref: "#/components/responses/CreatorMonetisationDashboard" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /v1/profiles/{handle}:
     get:
       operationId: getProfileByHandle
@@ -153,7 +162,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Handle"
       responses:
-        "200": { $ref: "#/components/responses/User" }
+        "200": { $ref: "#/components/responses/CreatorProfile" }
         "404": { $ref: "#/components/responses/NotFound" }
   /v1/follows/{userId}:
     post:
@@ -1266,6 +1275,8 @@ components:
     Wallet: { description: Wallet, content: { application/json: { schema: { $ref: "#/components/schemas/Wallet" } } } }
     OnrampSession: { description: Onramp session, content: { application/json: { schema: { $ref: "#/components/schemas/OnrampSession" } } } }
     User: { description: User/profile, content: { application/json: { schema: { $ref: "#/components/schemas/User" } } } }
+    CreatorProfile: { description: Creator profile, content: { application/json: { schema: { $ref: "#/components/schemas/CreatorProfile" } } } }
+    CreatorMonetisationDashboard: { description: Creator monetisation dashboard, content: { application/json: { schema: { $ref: "#/components/schemas/CreatorMonetisationDashboard" } } } }
     FeedPage: { description: Feed page, content: { application/json: { schema: { $ref: "#/components/schemas/FeedPage" } } } }
     DiscoverPage: { description: Discover results, content: { application/json: { schema: { $ref: "#/components/schemas/DiscoverPage" } } } }
     HashtagPage: { description: Hashtag results, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Hashtag" } }, nextCursor: { type: string, nullable: true } } } } } }
@@ -1445,6 +1456,70 @@ components:
         displayName: { type: string }
         avatarUrl: { type: string, format: uri, nullable: true }
         badges: { type: array, items: { $ref: "#/components/schemas/UserBadge" } }
+    CreatorProfile:
+      type: object
+      required: [user, stats, monetisation, recentContent]
+      properties:
+        user: { $ref: "#/components/schemas/User" }
+        bio: { type: string, nullable: true }
+        locationLabel: { type: string, nullable: true }
+        stats: { $ref: "#/components/schemas/CreatorProfileStats" }
+        monetisation: { $ref: "#/components/schemas/PublicCreatorMonetisation" }
+        recentContent: { type: array, items: { $ref: "#/components/schemas/ContentItem" } }
+    CreatorProfileStats:
+      type: object
+      required: [contentCount, liveRoomCount, confirmedPaymentCount, followerCount]
+      properties:
+        contentCount: { type: integer }
+        liveRoomCount: { type: integer }
+        confirmedPaymentCount: { type: integer }
+        followerCount: { type: integer }
+    PublicCreatorMonetisation:
+      type: object
+      required: [tipsEnabled, contentUnlocksEnabled, livePassesEnabled, paidMessagesEnabled, subscriptionsEnabled]
+      properties:
+        tipsEnabled: { type: boolean }
+        contentUnlocksEnabled: { type: boolean }
+        livePassesEnabled: { type: boolean }
+        paidMessagesEnabled: { type: boolean }
+        subscriptionsEnabled: { type: boolean }
+    CreatorMonetisationDashboard:
+      type: object
+      required: [creator, readiness, earnings, products, recentActivity]
+      properties:
+        creator: { $ref: "#/components/schemas/User" }
+        readiness: { $ref: "#/components/schemas/CreatorMonetisationReadiness" }
+        earnings: { $ref: "#/components/schemas/CreatorEarningsSummary" }
+        products: { type: array, items: { $ref: "#/components/schemas/CreatorProductSummary" } }
+        recentActivity: { type: array, items: { $ref: "#/components/schemas/ActivityItem" } }
+    CreatorMonetisationReadiness:
+      type: object
+      required: [state, earningState, kycState, taxProfileState, recipientWalletState, blockedReasons]
+      properties:
+        state: { type: string, enum: [active, paused, blocked] }
+        earningState: { type: string, enum: [not_configured, ready, review_required, held] }
+        kycState: { type: string, enum: [not_required, required, pending, verified, failed] }
+        taxProfileState: { type: string, enum: [not_required, required, pending, verified] }
+        recipientWalletState: { type: string, enum: [missing, linked] }
+        blockedReasons: { type: array, items: { type: string } }
+    CreatorEarningsSummary:
+      type: object
+      required: [currency, creatorEarningsMinor, platformFeesMinor, referralCommissionsMinor, confirmedPaymentCount]
+      properties:
+        currency: { $ref: "#/components/schemas/Currency" }
+        creatorEarningsMinor: { type: integer }
+        platformFeesMinor: { type: integer }
+        referralCommissionsMinor: { type: integer }
+        confirmedPaymentCount: { type: integer }
+    CreatorProductSummary:
+      type: object
+      required: [productType, enabled, confirmedPaymentCount, amountMinor, currency]
+      properties:
+        productType: { $ref: "#/components/schemas/ProductType" }
+        enabled: { type: boolean }
+        confirmedPaymentCount: { type: integer }
+        amountMinor: { type: integer }
+        currency: { $ref: "#/components/schemas/Currency" }
     UpdateProfileRequest:
       type: object
       required: [handle, displayName]

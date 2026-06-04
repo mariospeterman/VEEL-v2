@@ -299,6 +299,7 @@ Earning-record rules:
 - KYC/KYB is required for creator earning features where required by legal/provider policy
 - age gate is separate from creator earning KYC/KYB
 - creator earnings visible in dashboard must be based on confirmed settlement
+- `creator_monetisation_settings` stores readiness/product configuration only; it does not create balances, custody, payout queues, escrow, or receivables
 - creator earnings are records and tax/compliance inputs, not a withdrawable Veel balance
 - no pending payout or creator withdrawal queue exists in the launch model
 - pending wallet submissions are not revenue

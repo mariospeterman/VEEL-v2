@@ -1,5 +1,6 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
+import type { AgeRepository } from "../age/types.js";
 import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
 import {
   ProfileHandleConflictError,
@@ -10,6 +11,7 @@ import type { ProfileRepository, UpdateProfileRequest } from "./types.js";
 interface RegisterProfileRoutesOptions {
   authVerifier: SupabaseAuthVerifier;
   sessionRepository: SessionRepository;
+  ageRepository: AgeRepository;
   profileRepository: ProfileRepository;
 }
 
@@ -19,6 +21,68 @@ export async function registerProfileRoutes(
   app: FastifyInstance,
   options: RegisterProfileRoutesOptions
 ): Promise<void> {
+  app.get("/v1/profiles/:handle", async (request, reply) => {
+    const { handle } = request.params as { handle?: string };
+
+    if (!handle || !handlePattern.test(handle)) {
+      return reply.code(404).send({
+        code: "not_found",
+        message: "Profile was not found"
+      });
+    }
+
+    try {
+      const profile = await options.profileRepository.findCreatorProfileByHandle(handle);
+
+      if (!profile) {
+        return reply.code(404).send({
+          code: "not_found",
+          message: "Profile was not found"
+        });
+      }
+
+      return reply.code(200).send(profile);
+    } catch (error) {
+      if (error instanceof ProfileRepositoryConfigurationError) {
+        request.log.warn({ error }, "Profile repository is not configured");
+        return reply.code(404).send({
+          code: "not_found",
+          message: "Profile was not found"
+        });
+      }
+
+      throw error;
+    }
+  });
+
+  app.get("/v1/profiles/me/creator-dashboard", async (request, reply) => {
+    const access = await requireCreatorDashboardAccess(request, reply, options);
+
+    if (!access) {
+      return reply;
+    }
+
+    try {
+      const dashboard = await options.profileRepository.getMyCreatorDashboard(access.supabaseUserId);
+
+      if (!dashboard) {
+        return reply.code(403).send({
+          code: "forbidden",
+          message: "Creator dashboard requires a completed profile"
+        });
+      }
+
+      return reply.code(200).send(dashboard);
+    } catch (error) {
+      if (error instanceof ProfileRepositoryConfigurationError) {
+        request.log.warn({ error }, "Profile repository is not configured");
+        return reply.code(401).send(unauthorizedResponse("Profile storage is not configured"));
+      }
+
+      throw error;
+    }
+  });
+
   app.patch("/v1/profiles/me", async (request, reply) => {
     const verifiedSession = await verifyRequestSession(request, options.authVerifier);
 
@@ -72,6 +136,36 @@ export async function registerProfileRoutes(
       throw error;
     }
   });
+}
+
+async function requireCreatorDashboardAccess(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  options: RegisterProfileRoutesOptions
+): Promise<{ supabaseUserId: string } | null> {
+  const verifiedSession = await verifyRequestSession(request, options.authVerifier);
+
+  if (!verifiedSession) {
+    reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
+    return null;
+  }
+
+  const [profile, ageStatus] = await Promise.all([
+    options.sessionRepository.findProfileBySupabaseUserId(verifiedSession.supabaseUserId),
+    options.ageRepository.findLatestAgeStatusBySupabaseUserId(verifiedSession.supabaseUserId)
+  ]);
+
+  if (!profile?.handle || !profile.displayName || ageStatus.state !== "verified") {
+    reply.code(403).send({
+      code: "forbidden",
+      message: "Creator dashboard requires profile and age verification"
+    });
+    return null;
+  }
+
+  return {
+    supabaseUserId: verifiedSession.supabaseUserId
+  };
 }
 
 function getUpdateProfileValidationError(

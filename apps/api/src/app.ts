@@ -177,6 +177,7 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   await registerProfileRoutes(app, {
     authVerifier,
     sessionRepository,
+    ageRepository,
     profileRepository
   });
   await registerContentRoutes(app, {

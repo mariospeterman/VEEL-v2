@@ -232,4 +232,16 @@ describe("database migrations", () => {
     expect(sql).toContain("wallet_transaction_records_wallet_id_idx");
     expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role/i);
   });
+
+  it("adds creator monetisation settings without balances or custody", () => {
+    const sql = readMigration("0019_creator_monetisation_settings.sql");
+
+    expect(sql).toContain("create table creator_monetisation_settings");
+    expect(sql).toContain("earnings_recipient_wallet_id uuid references wallets(id)");
+    expect(sql).toContain("subscriptions_enabled boolean not null default false");
+    expect(sql).toContain("alter table creator_monetisation_settings enable row level security");
+    expect(sql).toContain("creator_monetisation_settings_select_self_or_staff");
+    expect(sql).toContain("creator_monetisation_settings_wallet_idx");
+    expect(sql).not.toMatch(/balance|withdraw|payout_queue|escrow|private_key|seed_phrase|mnemonic|raw_payload|service_role/i);
+  });
 });

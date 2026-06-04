@@ -1,0 +1,4 @@
+drop index if exists creator_monetisation_settings_state_idx;
+drop index if exists creator_monetisation_settings_wallet_idx;
+drop policy if exists creator_monetisation_settings_select_self_or_staff on creator_monetisation_settings;
+drop table if exists creator_monetisation_settings;

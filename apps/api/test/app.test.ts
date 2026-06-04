@@ -423,6 +423,85 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("returns a public creator profile by handle", async () => {
+    const app = await buildApi({
+      profileRepository: fakeProfileRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/profiles/maki"
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      user: {
+        id: "00000000-0000-4000-8000-000000000010",
+        handle: "maki",
+        displayName: "Maki"
+      },
+      stats: {
+        contentCount: 2,
+        liveRoomCount: 1,
+        confirmedPaymentCount: 3,
+        followerCount: 0
+      },
+      monetisation: {
+        tipsEnabled: true,
+        subscriptionsEnabled: false
+      }
+    });
+
+    await app.close();
+  });
+
+  it("returns the current creator monetisation dashboard for a verified creator", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      ageRepository: verifiedAgeRepository,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      profileRepository: fakeProfileRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/profiles/me/creator-dashboard",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      creator: {
+        handle: "maki"
+      },
+      readiness: {
+        recipientWalletState: "missing",
+        blockedReasons: ["earnings_recipient_wallet_required"]
+      },
+      earnings: {
+        creatorEarningsMinor: 85000000,
+        platformFeesMinor: 15000000,
+        referralCommissionsMinor: 5000000
+      }
+    });
+
+    await app.close();
+  });
+
   it("lists authenticated user wallets", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -2691,6 +2770,73 @@ const fakeProfileRepository: ProfileRepository = {
       displayName: input.displayName,
       avatarUrl: null,
       badges: []
+    };
+  },
+  async findCreatorProfileByHandle(handle) {
+    expect(handle).toBe("maki");
+
+    return {
+      user: {
+        id: "00000000-0000-4000-8000-000000000010",
+        handle: "maki",
+        displayName: "Maki",
+        avatarUrl: null,
+        badges: []
+      },
+      bio: "Building Veel v2",
+      locationLabel: "Belgrade",
+      stats: {
+        contentCount: 2,
+        liveRoomCount: 1,
+        confirmedPaymentCount: 3,
+        followerCount: 0
+      },
+      monetisation: {
+        tipsEnabled: true,
+        contentUnlocksEnabled: true,
+        livePassesEnabled: true,
+        paidMessagesEnabled: true,
+        subscriptionsEnabled: false
+      },
+      recentContent: []
+    };
+  },
+  async getMyCreatorDashboard(supabaseUserId) {
+    expect(supabaseUserId).toBe("00000000-0000-4000-8000-000000000001");
+
+    return {
+      creator: {
+        id: "00000000-0000-4000-8000-000000000010",
+        handle: "maki",
+        displayName: "Maki",
+        avatarUrl: null,
+        badges: []
+      },
+      readiness: {
+        state: "active",
+        earningState: "ready",
+        kycState: "not_required",
+        taxProfileState: "not_required",
+        recipientWalletState: "missing",
+        blockedReasons: ["earnings_recipient_wallet_required"]
+      },
+      earnings: {
+        currency: "SOL",
+        creatorEarningsMinor: 85000000,
+        platformFeesMinor: 15000000,
+        referralCommissionsMinor: 5000000,
+        confirmedPaymentCount: 3
+      },
+      products: [
+        {
+          productType: "tip",
+          enabled: true,
+          confirmedPaymentCount: 2,
+          amountMinor: 70000000,
+          currency: "SOL"
+        }
+      ],
+      recentActivity: []
     };
   }
 };
