@@ -447,6 +447,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/media/assets/{mediaAssetId}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sync provider media status and playback projection */
+        post: operations["syncMediaAsset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/live/rooms": {
         parameters: {
             query?: never;
@@ -2907,6 +2924,7 @@ export interface components {
         SearchQuery: string;
         FeedMode: "recommended" | "following" | "nsfw" | "sfw" | "live" | "premium";
         ContentId: string;
+        MediaAssetId: string;
         RoomId: string;
         PaymentIntentId: string;
         EventId: string;
@@ -3549,6 +3567,28 @@ export interface operations {
         requestBody: components["requestBodies"]["CreateUpload"];
         responses: {
             201: components["responses"]["UploadSession"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    syncMediaAsset: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                mediaAssetId: components["parameters"]["MediaAssetId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: components["responses"]["Accepted"];
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];

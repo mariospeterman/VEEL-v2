@@ -21,8 +21,10 @@ export interface ContentRepository {
   createMediaAsset(input: CreateMediaAssetInput): Promise<void>;
   findContentDetail(input: FindContentDetailInput): Promise<ContentItem | null>;
   findContentUnlockOffer(input: FindContentUnlockOfferInput): Promise<ContentUnlockOffer | null>;
+  findOwnedMediaAssetForSync?(input: FindOwnedMediaAssetForSyncInput): Promise<OwnedMediaAssetForSync | null>;
   findOwnedContentForUpload(input: FindOwnedContentForUploadInput): Promise<OwnedContentForUpload | null>;
   listHomeFeed(input: ListHomeFeedInput): Promise<FeedPage>;
+  updateMediaAssetPlayback?(input: UpdateMediaAssetPlaybackInput): Promise<void>;
   close?(): Promise<void>;
 }
 
@@ -49,6 +51,18 @@ export interface FindContentUnlockOfferInput {
   contentId: string;
 }
 
+export interface FindOwnedMediaAssetForSyncInput {
+  supabaseUserId: string;
+  mediaAssetId: string;
+}
+
+export interface OwnedMediaAssetForSync {
+  id: string;
+  contentId: string;
+  provider: "bunny";
+  providerAssetId: string;
+}
+
 export interface ContentUnlockOffer {
   contentId: string;
   alreadyUnlocked: boolean;
@@ -68,6 +82,15 @@ export interface CreateMediaAssetInput {
   provider: "bunny";
   providerAssetId: string;
   providerState: string;
+}
+
+export interface UpdateMediaAssetPlaybackInput {
+  mediaAssetId: string;
+  providerState: string;
+  providerPlayable: boolean;
+  playbackUrl?: string | null;
+  posterUrl?: string | null;
+  durationMs?: number | null;
 }
 
 export interface MediaUploadProviderSession {
@@ -90,4 +113,17 @@ export interface MediaUploadProviderAdapter {
   createUploadSession(
     input: CreateMediaUploadProviderSessionInput
   ): Promise<MediaUploadProviderSession>;
+  getPlaybackData?(input: GetMediaPlaybackProviderDataInput): Promise<MediaPlaybackProviderData>;
+}
+
+export interface GetMediaPlaybackProviderDataInput {
+  providerAssetId: string;
+}
+
+export interface MediaPlaybackProviderData {
+  providerState: string;
+  providerPlayable: boolean;
+  playbackUrl?: string | null;
+  posterUrl?: string | null;
+  durationMs?: number | null;
 }

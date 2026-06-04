@@ -2,7 +2,9 @@ import { createHash } from "node:crypto";
 import type { ServerEnv } from "@veel/config";
 import type {
   CreateMediaUploadProviderSessionInput,
+  GetMediaPlaybackProviderDataInput,
   MediaUploadProviderAdapter,
+  MediaPlaybackProviderData,
   MediaUploadProviderSession
 } from "./types.js";
 
@@ -26,6 +28,16 @@ export class MediaUploadProviderError extends Error {
 
 interface BunnyCreateVideoResponse {
   guid?: string;
+}
+
+interface BunnyVideoPlayDataResponse {
+  isPlayable?: boolean;
+  isPlaylistPlayable?: boolean;
+  videoPlaylistUrl?: string | null;
+  thumbnailUrl?: string | null;
+  video?: {
+    length?: number | null;
+  };
 }
 
 export function createBunnyStreamUploadAdapter(
@@ -85,6 +97,43 @@ export function createBunnyStreamUploadAdapter(
           VideoId: video.guid
         },
         expiresAt: new Date(expirationTime * 1000)
+      };
+    },
+    async getPlaybackData(
+      input: GetMediaPlaybackProviderDataInput
+    ): Promise<MediaPlaybackProviderData> {
+      const apiKey = env.BUNNY_STREAM_API_KEY;
+      const libraryId = env.BUNNY_STREAM_LIBRARY_ID;
+
+      if (!apiKey || !libraryId) {
+        throw new MediaUploadProviderConfigurationError();
+      }
+
+      const response = await fetchImpl(
+        `${bunnyStreamBaseUrl}/library/${libraryId}/videos/${input.providerAssetId}/play`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            AccessKey: apiKey
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new MediaUploadProviderError();
+      }
+
+      const playData = (await response.json()) as BunnyVideoPlayDataResponse;
+      const providerPlayable = Boolean(playData.isPlayable && playData.videoPlaylistUrl);
+
+      return {
+        providerState: providerPlayable ? "ready" : "processing",
+        providerPlayable,
+        playbackUrl: providerPlayable ? playData.videoPlaylistUrl ?? null : null,
+        posterUrl: playData.thumbnailUrl ?? null,
+        durationMs:
+          typeof playData.video?.length === "number" ? Math.round(playData.video.length * 1000) : null
       };
     }
   };

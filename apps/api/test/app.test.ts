@@ -1023,6 +1023,107 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("syncs Bunny playback status into the backend media projection", async () => {
+    const playbackUpdates: Array<{
+      mediaAssetId: string;
+      providerState: string;
+      providerPlayable: boolean;
+      playbackUrl?: string | null;
+      posterUrl?: string | null;
+      durationMs?: number | null;
+    }> = [];
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        throw new Error("not implemented");
+      },
+      async createMediaAsset() {
+        throw new Error("not implemented");
+      },
+      async findContentDetail() {
+        throw new Error("not implemented");
+      },
+      async findContentUnlockOffer() {
+        throw new Error("not implemented");
+      },
+      async findOwnedContentForUpload() {
+        throw new Error("not implemented");
+      },
+      async findOwnedMediaAssetForSync(input) {
+        expect(input).toEqual({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          mediaAssetId: "00000000-0000-4000-8000-000000000070"
+        });
+
+        return {
+          id: input.mediaAssetId,
+          contentId: "00000000-0000-4000-8000-000000000040",
+          provider: "bunny",
+          providerAssetId: "bunny-video-guid"
+        };
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      },
+      async updateMediaAssetPlayback(input) {
+        playbackUpdates.push(input);
+      }
+    };
+    const mediaUploadProvider: MediaUploadProviderAdapter = {
+      provider: "bunny",
+      isConfigured() {
+        return true;
+      },
+      async createUploadSession() {
+        throw new Error("not implemented");
+      },
+      async getPlaybackData(input) {
+        expect(input).toEqual({
+          providerAssetId: "bunny-video-guid"
+        });
+
+        return {
+          providerState: "ready",
+          providerPlayable: true,
+          playbackUrl: "https://vz.example.test/video/playlist.m3u8",
+          posterUrl: "https://vz.example.test/video/thumbnail.jpg",
+          durationMs: 90000
+        };
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository,
+      mediaUploadProvider
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/media/assets/00000000-0000-4000-8000-000000000070/sync",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "media-sync-1"
+      }
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(playbackUpdates).toEqual([
+      {
+        mediaAssetId: "00000000-0000-4000-8000-000000000070",
+        providerState: "ready",
+        providerPlayable: true,
+        playbackUrl: "https://vz.example.test/video/playlist.m3u8",
+        posterUrl: "https://vz.example.test/video/thumbnail.jpg",
+        durationMs: 90000
+      }
+    ]);
+
+    await app.close();
+  });
+
   it("creates Bunny TUS credentials without exposing the Stream API key", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-04T00:00:00.000Z"));

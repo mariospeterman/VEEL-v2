@@ -334,6 +334,21 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/media/assets/{mediaAssetId}/sync:
+    post:
+      operationId: syncMediaAsset
+      tags: [Media]
+      summary: Sync provider media status and playback projection
+      parameters:
+        - $ref: "#/components/parameters/MediaAssetId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "202": { $ref: "#/components/responses/Accepted" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/live/rooms:
     post:
       operationId: createLiveRoom
@@ -1063,6 +1078,7 @@ components:
         type: string
         enum: [recommended, following, nsfw, sfw, live, premium]
     ContentId: { name: contentId, in: path, required: true, schema: { type: string, format: uuid } }
+    MediaAssetId: { name: mediaAssetId, in: path, required: true, schema: { type: string, format: uuid } }
     RoomId: { name: roomId, in: path, required: true, schema: { type: string, format: uuid } }
     PaymentIntentId: { name: paymentIntentId, in: path, required: true, schema: { type: string, format: uuid } }
     EventId: { name: eventId, in: path, required: true, schema: { type: string, format: uuid } }

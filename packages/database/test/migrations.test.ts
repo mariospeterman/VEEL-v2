@@ -148,4 +148,13 @@ describe("database migrations", () => {
     expect(sql).toContain("unique (payment_intent_id, referral_token_id)");
     expect(sql).not.toMatch(/payout_payload|client_amount|payment_proof|private_key|raw_payload/i);
   });
+
+  it("adds Bunny playback projection columns without signed playback secrets", () => {
+    const sql = readMigration("0013_bunny_vod_playback_projection.sql");
+
+    expect(sql).toContain("add column playback_url text");
+    expect(sql).toContain("add column provider_playable boolean not null default false");
+    expect(sql).toContain("media_assets_playback_ready_idx");
+    expect(sql).not.toMatch(/signed_url|playback_token|api_key|private_key|raw_payload/i);
+  });
 });

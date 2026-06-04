@@ -20,6 +20,10 @@ interface FeedRow {
   display_name: string | null;
   avatar_url: string | null;
   poster_url: string | null;
+  playback_url: string | null;
+  provider: "bunny" | null;
+  provider_state: string | null;
+  provider_playable: boolean | null;
   access_type: string | null;
   product_type: string | null;
   entitlement_id: string | null;
@@ -41,6 +45,10 @@ interface ContentRow {
 
 interface ContentDetailRow extends ContentRow {
   poster_url: string | null;
+  playback_url: string | null;
+  provider: "bunny" | null;
+  provider_state: string | null;
+  provider_playable: boolean | null;
   access_type: string | null;
   product_type: string | null;
   entitlement_id: string | null;
@@ -75,10 +83,16 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
       async findContentUnlockOffer() {
         throw new ContentRepositoryConfigurationError();
       },
+      async findOwnedMediaAssetForSync() {
+        throw new ContentRepositoryConfigurationError();
+      },
       async findOwnedContentForUpload() {
         throw new ContentRepositoryConfigurationError();
       },
       async listHomeFeed() {
+        throw new ContentRepositoryConfigurationError();
+      },
+      async updateMediaAssetPlayback() {
         throw new ContentRepositoryConfigurationError();
       }
     };
@@ -172,6 +186,10 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
           p.display_name,
           p.avatar_url,
           ma.poster_url,
+          ma.playback_url,
+          ma.provider,
+          ma.provider_state,
+          ma.provider_playable,
           car.access_type,
           car.product_type,
           eg.id as entitlement_id,
@@ -183,7 +201,7 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
         join profiles p on p.user_id = u.id
         join users viewer on viewer.supabase_user_id = ${input.supabaseUserId}
         left join lateral (
-          select poster_url
+          select poster_url, playback_url, provider, provider_state, provider_playable
           from media_assets
           where content_item_id = ci.id
           order by created_at asc
@@ -316,6 +334,60 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
           }
         : null;
     },
+    async findOwnedMediaAssetForSync(input) {
+      const rows = await sql<
+        { id: string; content_item_id: string; provider: "bunny"; provider_asset_id: string }[]
+      >`
+        select
+          ma.id,
+          ma.content_item_id,
+          ma.provider,
+          ma.provider_asset_id
+        from media_assets ma
+        join content_items ci on ci.id = ma.content_item_id
+        join users u on u.id = ci.creator_user_id
+        where ma.id = ${input.mediaAssetId}
+          and ma.provider = 'bunny'
+          and u.supabase_user_id = ${input.supabaseUserId}
+        limit 1
+      `;
+      const row = rows[0];
+
+      return row
+        ? {
+            id: row.id,
+            contentId: row.content_item_id,
+            provider: row.provider,
+            providerAssetId: row.provider_asset_id
+          }
+        : null;
+    },
+    async updateMediaAssetPlayback(input) {
+      await sql.begin(async (transaction) => {
+        await transaction`
+          update media_assets
+          set
+            provider_state = ${input.providerState},
+            provider_playable = ${input.providerPlayable},
+            playback_url = ${input.playbackUrl ?? null},
+            poster_url = coalesce(${input.posterUrl ?? null}, poster_url),
+            duration_ms = coalesce(${input.durationMs ?? null}, duration_ms),
+            ready_at = case when ${input.providerPlayable} then coalesce(ready_at, now()) else ready_at end,
+            provider_checked_at = now()
+          where id = ${input.mediaAssetId}
+        `;
+        await transaction`
+          update content_items ci
+          set
+            state = case when ${input.providerPlayable} then 'ready' else state end,
+            moderation_state = case when ${input.providerPlayable} then 'approved' else moderation_state end,
+            updated_at = now()
+          from media_assets ma
+          where ma.content_item_id = ci.id
+            and ma.id = ${input.mediaAssetId}
+        `;
+      });
+    },
     async listHomeFeed(input) {
       const rows = await sql<FeedRow[]>`
         select
@@ -329,6 +401,10 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
           p.display_name,
           p.avatar_url,
           ma.poster_url,
+          ma.playback_url,
+          ma.provider,
+          ma.provider_state,
+          ma.provider_playable,
           car.access_type,
           car.product_type,
           eg.id as entitlement_id,
@@ -340,7 +416,7 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
         join profiles p on p.user_id = u.id
         join users viewer on viewer.supabase_user_id = ${input.supabaseUserId}
         left join lateral (
-          select poster_url
+          select poster_url, playback_url, provider, provider_state, provider_playable
           from media_assets
           where content_item_id = ci.id
           order by created_at asc
@@ -410,11 +486,7 @@ function toContentItem(
     mediaType: row.media_type,
     caption: row.caption,
     posterUrl,
-    playback: {
-      state: "not_ready",
-      url: null,
-      provider: "none"
-    },
+    playback: playbackForRow(row as Partial<PlaybackProjectionRow>, accessState),
     accessState,
     nsfwLabel: row.nsfw_label,
     engagement: {
@@ -425,6 +497,40 @@ function toContentItem(
       shareCount: 0
     }
   };
+}
+
+function playbackForRow(
+  row: Partial<PlaybackProjectionRow>,
+  accessState: ContentItem["accessState"]
+): NonNullable<ContentItem["playback"]> {
+  if (!row.provider || !row.provider_playable || !row.playback_url) {
+    return {
+      state: "not_ready",
+      url: null,
+      provider: "none"
+    };
+  }
+
+  if (!["free", "unlocked", "subscribed"].includes(accessState)) {
+    return {
+      state: accessState === "teaser" ? "teaser" : "blocked",
+      url: null,
+      provider: row.provider
+    };
+  }
+
+  return {
+    state: "full",
+    url: row.playback_url,
+    provider: row.provider
+  };
+}
+
+interface PlaybackProjectionRow {
+  playback_url: string | null;
+  provider: "bunny" | null;
+  provider_state: string | null;
+  provider_playable: boolean | null;
 }
 
 function accessStateForRule(row: {
