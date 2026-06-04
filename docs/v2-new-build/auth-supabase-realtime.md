@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: auth, DB, realtime
-Last updated: 2026-06-03
+Last updated: 2026-06-04
 Source of truth: yes
 
 Owns:
@@ -131,7 +131,11 @@ Wallet is not required for public landing pages, public teaser/deep-link capture
 
 ## RLS Strategy
 
-Use RLS for tables that clients may subscribe to directly:
+Use RLS for tables that clients may subscribe to or read directly. Migration `0017_rls_policy_baseline.sql` enables RLS on current public-schema tables and adds explicit authenticated read policies scoped to owners, participants, creators, active pass holders, or staff.
+
+The browser Supabase key is read-only for app data. Fastify remains the only mutation surface for money, access, messages, live rooms, wallet records, provider callbacks, and admin state.
+
+Use direct Supabase reads/realtime only for:
 
 - conversations participant rows
 - messages visible to participants
@@ -139,7 +143,7 @@ Use RLS for tables that clients may subscribe to directly:
 - live room presence/broadcast authorization
 - safe activity projections
 
-Do not expose raw tables for:
+Do not expose broad client policies for:
 
 - payment intents
 - settlements
@@ -149,6 +153,8 @@ Do not expose raw tables for:
 - audit logs
 - admin/moderation internals
 - age/KYC raw provider references
+
+Payment, settlement, ledger, audit, and provider tables may have staff/self read policies for accountability and operations, but frontend business truth still comes from API resources.
 
 ## Realtime Strategy
 

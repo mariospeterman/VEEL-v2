@@ -198,4 +198,38 @@ describe("database migrations", () => {
     expect(sql).toContain("wallet_transaction_records_user_created_at_idx");
     expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|payment_proof|custodial/i);
   });
+
+  it("enables baseline RLS policies for public Supabase tables", () => {
+    const sql = readMigration("0017_rls_policy_baseline.sql");
+
+    expect(sql).toContain("create schema if not exists private");
+    expect(sql).toContain("create or replace function private.current_app_user_id()");
+    expect(sql).toContain("create or replace function private.is_staff_member()");
+    expect(sql).toContain("alter table users enable row level security");
+    expect(sql).toContain("alter table payment_intents enable row level security");
+    expect(sql).toContain("create policy users_select_self_or_staff");
+    expect(sql).toContain("create policy profiles_select_public_self_or_staff");
+    expect(sql).toContain("create policy payment_intents_select_self_or_staff");
+    expect(sql).toContain("create policy messages_select_conversation_member_or_staff");
+    expect(sql).toContain("create policy wallet_transaction_records_select_self_or_staff");
+    expect(sql).toContain("to authenticated");
+    expect(sql).toContain("(select auth.uid())");
+    expect(sql).not.toMatch(/to anon|using\s*\(\s*true\s*\)|with check\s*\(\s*true\s*\)/i);
+    expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role/i);
+  });
+
+  it("covers foreign keys reported by the Supabase performance advisor", () => {
+    const sql = readMigration("0018_foreign_key_performance_indexes.sql");
+
+    expect(sql).toContain("entitlement_events_actor_user_id_idx");
+    expect(sql).toContain("live_pass_purchase_requests_room_id_idx");
+    expect(sql).toContain("messages_sender_user_id_idx");
+    expect(sql).toContain("paid_message_delivery_requests_recipient_user_id_idx");
+    expect(sql).toContain("payment_intents_referral_token_id_idx");
+    expect(sql).toContain("payment_ledger_entries_account_user_id_idx");
+    expect(sql).toContain("referral_commissions_referral_attribution_id_idx");
+    expect(sql).toContain("staff_memberships_granted_by_user_id_idx");
+    expect(sql).toContain("wallet_transaction_records_wallet_id_idx");
+    expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role/i);
+  });
 });

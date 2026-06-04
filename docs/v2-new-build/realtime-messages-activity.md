@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: realtime, messages, notifications, activity
-Last updated: 2026-06-01
+Last updated: 2026-06-04
 Source of truth: yes
 
 Owns:
@@ -74,7 +74,7 @@ Current implementation slice:
 - `POST /v1/messages/conversations/:id/messages` writes normal messages through Fastify.
 - `POST /v1/messages/conversations/:id/paid-message-intents` stores the paid-message body server-side and creates a server-priced `paid_message` payment intent.
 - Confirmed backend settlement inserts the paid message and audit event transactionally.
-- New public message tables have RLS enabled; browser-visible realtime policies must remain participant-scoped before direct Postgres Changes exposure.
+- New public message tables have RLS enabled. Baseline read policies are participant-scoped before direct Postgres Changes exposure.
 
 ## Activity Model
 
@@ -121,6 +121,12 @@ Own activity may show:
 Public ranking projections must be sanitized and opt-out aware where product policy allows.
 
 ## RLS Requirements
+
+Baseline:
+
+- `0017_rls_policy_baseline.sql` enables RLS on current public-schema tables that were created before explicit realtime policy work.
+- Direct Supabase reads are authenticated only and read-only for browser roles.
+- Business mutations still go through Fastify.
 
 Messages:
 
