@@ -14,6 +14,9 @@ import { createPostgresLiveRepository } from "./modules/live/live-repository.js"
 import { createLivepeerProviderAdapter } from "./modules/live/livepeer-adapter.js";
 import { registerLiveRoutes } from "./modules/live/live-routes.js";
 import type { LiveProviderAdapter, LiveRepository } from "./modules/live/types.js";
+import { createPostgresMessageRepository } from "./modules/message/message-repository.js";
+import { registerMessageRoutes } from "./modules/message/message-routes.js";
+import type { MessageRepository } from "./modules/message/types.js";
 import { createPostgresPaymentRepository } from "./modules/payment/payment-repository.js";
 import { registerPaymentRoutes } from "./modules/payment/payment-routes.js";
 import { createSolanaRpcSettlementVerifier } from "./modules/payment/solana-payment.js";
@@ -44,6 +47,7 @@ export interface BuildApiOptions {
   mediaUploadProvider?: MediaUploadProviderAdapter;
   liveRepository?: LiveRepository;
   liveProvider?: LiveProviderAdapter;
+  messageRepository?: MessageRepository;
   paymentRepository?: PaymentRepository;
   settlementVerifier?: PaymentSettlementVerifier;
   profileRepository?: ProfileRepository;
@@ -90,6 +94,8 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   const liveRepository =
     options.liveRepository ?? createPostgresLiveRepository(app.config.DATABASE_URL);
   const liveProvider = options.liveProvider ?? createLivepeerProviderAdapter(app.config);
+  const messageRepository =
+    options.messageRepository ?? createPostgresMessageRepository(app.config.DATABASE_URL);
   const paymentRepository =
     options.paymentRepository ?? createPostgresPaymentRepository(app.config.DATABASE_URL);
   const settlementVerifier =
@@ -127,6 +133,11 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   if (liveRepository.close) {
     app.addHook("onClose", async () => {
       await liveRepository.close?.();
+    });
+  }
+  if (messageRepository.close) {
+    app.addHook("onClose", async () => {
+      await messageRepository.close?.();
     });
   }
   if (paymentRepository.close) {
@@ -182,6 +193,14 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     paymentRepository,
     liveRepository,
     liveProvider
+  });
+  await registerMessageRoutes(app, {
+    authVerifier,
+    sessionRepository,
+    ageRepository,
+    walletRepository,
+    paymentRepository,
+    messageRepository
   });
   await registerReferralRoutes(app, {
     authVerifier,

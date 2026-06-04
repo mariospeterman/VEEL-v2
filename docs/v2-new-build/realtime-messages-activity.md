@@ -67,6 +67,15 @@ Paid messages require:
 
 Frontend may draft the body, but backend decides when the paid message becomes visible.
 
+Current implementation slice:
+
+- `GET /v1/messages/conversations` lists participant conversations through the API.
+- `GET /v1/messages/conversations/:id/messages` returns participant-visible message rows.
+- `POST /v1/messages/conversations/:id/messages` writes normal messages through Fastify.
+- `POST /v1/messages/conversations/:id/paid-message-intents` stores the paid-message body server-side and creates a server-priced `paid_message` payment intent.
+- Confirmed backend settlement inserts the paid message and audit event transactionally.
+- New public message tables have RLS enabled; browser-visible realtime policies must remain participant-scoped before direct Postgres Changes exposure.
+
 ## Activity Model
 
 Activity is backend-derived:

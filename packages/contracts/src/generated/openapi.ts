@@ -694,10 +694,28 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List participant-visible conversation messages */
+        get: operations["listConversationMessages"];
         put?: never;
         /** Send a conversation message or paid-message delivery */
         post: operations["createConversationMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/messages/conversations/{conversationId}/paid-message-intents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create paid-message intent and store backend-owned delivery draft */
+        post: operations["createPaidMessageIntent"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1946,11 +1964,16 @@ export interface components {
             /** @enum {string} */
             type: "direct" | "match" | "paid";
             title: string;
+            unreadCount: number;
+            lastMessage?: components["schemas"]["MessagePreview"];
         };
         CreateMessageRequest: {
             body: string;
             /** Format: uuid */
             paidMessageIntentId?: string | null;
+        };
+        CreatePaidMessageIntentRequest: {
+            body: string;
         };
         Message: {
             /** Format: uuid */
@@ -1959,8 +1982,30 @@ export interface components {
             conversationId: string;
             sender: components["schemas"]["User"];
             body: string;
+            /** @enum {string} */
+            deliveryState: "visible" | "pending_payment";
+            /** Format: uuid */
+            paymentIntentId?: string | null;
             /** Format: date-time */
             createdAt: string;
+        };
+        MessagePreview: {
+            body: string;
+            sender: components["schemas"]["User"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        MessagePage: {
+            items: components["schemas"]["Message"][];
+            nextCursor?: string | null;
+        };
+        PaidMessageIntent: {
+            /** @enum {string} */
+            state: "payment_required" | "already_delivered";
+            /** Format: uuid */
+            conversationId: string;
+            paymentIntent?: components["schemas"]["PaymentIntent"];
+            message?: components["schemas"]["Message"];
         };
         CreatePaymentIntentRequest: {
             productType: components["schemas"]["ProductType"];
@@ -2626,6 +2671,15 @@ export interface components {
                 };
             };
         };
+        /** @description Messages */
+        MessagePage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["MessagePage"];
+            };
+        };
         /** @description Message */
         Message: {
             headers: {
@@ -2633,6 +2687,15 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["Message"];
+            };
+        };
+        /** @description Paid message intent */
+        PaidMessageIntent: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["PaidMessageIntent"];
             };
         };
         /** @description Payment intent */
@@ -3116,6 +3179,11 @@ export interface components {
         CreateMessage: {
             content: {
                 "application/json": components["schemas"]["CreateMessageRequest"];
+            };
+        };
+        CreatePaidMessageIntent: {
+            content: {
+                "application/json": components["schemas"]["CreatePaidMessageIntentRequest"];
             };
         };
         CreatePaymentIntent: {
@@ -3949,6 +4017,24 @@ export interface operations {
             200: components["responses"]["ConversationList"];
         };
     };
+    listConversationMessages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["MessagePage"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     createConversationMessage: {
         parameters: {
             query?: never;
@@ -3964,6 +4050,34 @@ export interface operations {
         requestBody: components["requestBodies"]["CreateMessage"];
         responses: {
             201: components["responses"]["Message"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createPaidMessageIntent: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["CreatePaidMessageIntent"];
+        responses: {
+            201: components["responses"]["PaidMessageIntent"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     createPaymentIntent: {

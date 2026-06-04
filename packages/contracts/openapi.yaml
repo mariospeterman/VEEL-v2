@@ -533,6 +533,18 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/ConversationList" }
   /v1/messages/conversations/{conversationId}/messages:
+    get:
+      operationId: listConversationMessages
+      tags: [Messages]
+      summary: List participant-visible conversation messages
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      responses:
+        "200": { $ref: "#/components/responses/MessagePage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
     post:
       operationId: createConversationMessage
       tags: [Messages]
@@ -544,6 +556,29 @@ paths:
         $ref: "#/components/requestBodies/CreateMessage"
       responses:
         "201": { $ref: "#/components/responses/Message" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/messages/conversations/{conversationId}/paid-message-intents:
+    post:
+      operationId: createPaidMessageIntent
+      tags: [Messages]
+      summary: Create paid-message intent and store backend-owned delivery draft
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreatePaidMessageIntent"
+      responses:
+        "201": { $ref: "#/components/responses/PaidMessageIntent" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/payments/intents:
     post:
       operationId: createPaymentIntent
@@ -1182,6 +1217,7 @@ components:
     CreateShare: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateShareRequest" } } } }
     CreateReport: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateReportRequest" } } } }
     CreateMessage: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateMessageRequest" } } } }
+    CreatePaidMessageIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreatePaidMessageIntentRequest" } } } }
     CreatePaymentIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreatePaymentIntentRequest" }, examples: { tip: { value: { productType: tip, targetId: "00000000-0000-4000-8000-000000000001", amountMinor: 50000000 } }, contentUnlock: { value: { productType: content_unlock, targetId: "00000000-0000-4000-8000-000000000002" } } } } } }
     SubmitPaymentSignature: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SubmitPaymentSignatureRequest" } } } }
     CreateReferralToken: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateReferralTokenRequest" } } } }
@@ -1241,7 +1277,9 @@ components:
     ModerationIntake: { description: Moderation intake, content: { application/json: { schema: { $ref: "#/components/schemas/ModerationIntake" } } } }
     BlockState: { description: Block state, content: { application/json: { schema: { $ref: "#/components/schemas/BlockState" } } } }
     ConversationList: { description: Conversations, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Conversation" } } } } } } }
+    MessagePage: { description: Messages, content: { application/json: { schema: { $ref: "#/components/schemas/MessagePage" } } } }
     Message: { description: Message, content: { application/json: { schema: { $ref: "#/components/schemas/Message" } } } }
+    PaidMessageIntent: { description: Paid message intent, content: { application/json: { schema: { $ref: "#/components/schemas/PaidMessageIntent" } } } }
     PaymentIntent: { description: Payment intent, content: { application/json: { schema: { $ref: "#/components/schemas/PaymentIntent" } } } }
     TransactionRequest: { description: Transaction request, content: { application/json: { schema: { $ref: "#/components/schemas/TransactionRequest" } } } }
     ContentUnlockIntent: { description: Content unlock intent, content: { application/json: { schema: { $ref: "#/components/schemas/ContentUnlockIntent" } } } }
@@ -1706,26 +1744,56 @@ components:
         blocked: { type: boolean }
     Conversation:
       type: object
-      required: [id, type, title]
+      required: [id, type, title, unreadCount]
       properties:
         id: { type: string, format: uuid }
         type: { type: string, enum: [direct, match, paid] }
         title: { type: string }
+        unreadCount: { type: integer }
+        lastMessage: { $ref: "#/components/schemas/MessagePreview" }
     CreateMessageRequest:
       type: object
       required: [body]
       properties:
         body: { type: string, minLength: 1, maxLength: 4000 }
         paidMessageIntentId: { type: string, format: uuid, nullable: true }
+    CreatePaidMessageIntentRequest:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 4000 }
     Message:
       type: object
-      required: [id, conversationId, sender, body, createdAt]
+      required: [id, conversationId, sender, body, deliveryState, createdAt]
       properties:
         id: { type: string, format: uuid }
         conversationId: { type: string, format: uuid }
         sender: { $ref: "#/components/schemas/User" }
         body: { type: string }
+        deliveryState: { type: string, enum: [visible, pending_payment] }
+        paymentIntentId: { type: string, format: uuid, nullable: true }
         createdAt: { type: string, format: date-time }
+    MessagePreview:
+      type: object
+      required: [body, sender, createdAt]
+      properties:
+        body: { type: string }
+        sender: { $ref: "#/components/schemas/User" }
+        createdAt: { type: string, format: date-time }
+    MessagePage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Message" } }
+        nextCursor: { type: string, nullable: true }
+    PaidMessageIntent:
+      type: object
+      required: [state, conversationId]
+      properties:
+        state: { type: string, enum: [payment_required, already_delivered] }
+        conversationId: { type: string, format: uuid }
+        paymentIntent: { $ref: "#/components/schemas/PaymentIntent" }
+        message: { $ref: "#/components/schemas/Message" }
     CreatePaymentIntentRequest:
       type: object
       required: [productType, targetId]

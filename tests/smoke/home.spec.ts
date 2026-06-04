@@ -28,3 +28,13 @@ test("renders the content media viewer projection", async ({ page }) => {
     /solana:/
   );
 });
+
+test("renders the messages and paid-message projection", async ({ page }) => {
+  await page.goto("/messages");
+
+  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Inbox" })).toBeVisible();
+  await expect(page.getByText("Visible message")).toBeVisible();
+  await expect(page.getByText("Paid hello", { exact: true })).toBeVisible();
+  await expect(page.getByText("pending_payment")).toBeVisible();
+});

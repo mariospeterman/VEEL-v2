@@ -40,6 +40,7 @@ import type {
   LiveRepository,
   StoredLiveRoom
 } from "../src/modules/live/types";
+import type { Message, MessageRepository } from "../src/modules/message/types";
 
 describe("buildApi", () => {
   it("boots the Fastify skeleton and loads the OpenAPI document", async () => {
@@ -1993,6 +1994,161 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("lists participant conversations and messages", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      messageRepository: fakeMessageRepository()
+    });
+    await app.ready();
+
+    const conversationsResponse = await app.inject({
+      method: "GET",
+      url: "/v1/messages/conversations",
+      headers: { authorization: "Bearer valid-token" }
+    });
+    const messagesResponse = await app.inject({
+      method: "GET",
+      url: "/v1/messages/conversations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab10/messages",
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(conversationsResponse.statusCode).toBe(200);
+    expect(conversationsResponse.json()).toMatchObject({
+      items: [
+        {
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab10",
+          title: "Maki"
+        }
+      ]
+    });
+    expect(messagesResponse.statusCode).toBe(200);
+    expect(messagesResponse.json()).toMatchObject({
+      items: [
+        {
+          body: "Visible message",
+          deliveryState: "visible"
+        }
+      ]
+    });
+
+    await app.close();
+  });
+
+  it("creates a normal conversation message through the backend", async () => {
+    const createdBodies: string[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      messageRepository: fakeMessageRepository({
+        async onCreateMessage(input) {
+          createdBodies.push(input.body);
+          return messageFixture({
+            conversationId: input.conversationId,
+            body: input.body
+          });
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/messages/conversations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab11/messages",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "message-create-1"
+      },
+      payload: { body: "Hello from Veel" }
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      conversationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab11",
+      body: "Hello from Veel",
+      deliveryState: "visible"
+    });
+    expect(createdBodies).toEqual(["Hello from Veel"]);
+
+    await app.close();
+  });
+
+  it("creates a server-priced paid message intent and stores the backend delivery draft", async () => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const draftRecords: Array<{ paymentIntentId: string; body: string }> = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      messageRepository: fakeMessageRepository({
+        async onRecordPaidMessageDraft(input) {
+          draftRecords.push({
+            paymentIntentId: input.paymentIntentId,
+            body: input.body
+          });
+        }
+      }),
+      paymentRepository: {
+        async createOrReuseIntent(input) {
+          return {
+            ...storedPaymentIntent,
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab50",
+            productType: input.productType,
+            targetId: input.targetId,
+            amountMinor: input.amountMinor,
+            referenceAddress: input.referenceAddress,
+            expiresAt: input.expiresAt,
+            requestHash: input.requestHash
+          };
+        },
+        async findIntent() {
+          throw new Error("not implemented");
+        },
+        async recordTransactionRequest() {
+          throw new Error("not implemented");
+        },
+        async recordSubmission() {
+          throw new Error("not implemented");
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/messages/conversations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab12/paid-message-intents",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "paid-message-intent-1"
+      },
+      payload: { body: "Paid hello" }
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      state: "payment_required",
+      conversationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab12",
+      paymentIntent: {
+        productType: "paid_message",
+        amountMinor: 10000000
+      }
+    });
+    expect(draftRecords).toEqual([
+      {
+        paymentIntentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab50",
+        body: "Paid hello"
+      }
+    ]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
   it("blocks payment intent creation before age verification", async () => {
     vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
     const app = await buildApi({
@@ -2225,6 +2381,73 @@ function fakeLiveRepository(
           createdAt: "2026-06-04T23:30:00.000Z"
         }
       );
+    }
+  };
+}
+
+function messageFixture(overrides: Partial<Message> = {}): Message {
+  return {
+    id: overrides.id ?? "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab90",
+    conversationId: overrides.conversationId ?? "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab10",
+    sender: overrides.sender ?? homeFeedItem.creator,
+    body: overrides.body ?? "Visible message",
+    deliveryState: overrides.deliveryState ?? "visible",
+    paymentIntentId: overrides.paymentIntentId ?? null,
+    createdAt: overrides.createdAt ?? "2026-06-04T23:45:00.000Z"
+  };
+}
+
+function fakeMessageRepository(
+  overrides: Partial<{
+    onListConversations: MessageRepository["listConversations"];
+    onListMessages: MessageRepository["listMessages"];
+    onCreateMessage: MessageRepository["createMessage"];
+    onFindConversationPrice: MessageRepository["findConversationPrice"];
+    onRecordPaidMessageDraft: MessageRepository["recordPaidMessageDraft"];
+  }> = {}
+): MessageRepository {
+  return {
+    async listConversations(input) {
+      return (
+        (await overrides.onListConversations?.(input)) ?? {
+          items: [
+            {
+              id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab10",
+              type: "direct",
+              title: "Maki",
+              unreadCount: 1,
+              lastMessage: {
+                body: "Visible message",
+                sender: homeFeedItem.creator,
+                createdAt: "2026-06-04T23:45:00.000Z"
+              }
+            }
+          ]
+        }
+      );
+    },
+    async listMessages(input) {
+      return (
+        (await overrides.onListMessages?.(input)) ?? {
+          items: [messageFixture({ conversationId: input.conversationId })]
+        }
+      );
+    },
+    async createMessage(input) {
+      return overrides.onCreateMessage?.(input) ?? messageFixture({ conversationId: input.conversationId });
+    },
+    async findConversationPrice(input) {
+      return (
+        (await overrides.onFindConversationPrice?.(input)) ?? {
+          conversationId: input.conversationId,
+          amountMinor: 10000000,
+          currency: "SOL",
+          recipientUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab20"
+        }
+      );
+    },
+    async recordPaidMessageDraft(input) {
+      await overrides.onRecordPaidMessageDraft?.(input);
     }
   };
 }

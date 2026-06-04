@@ -172,4 +172,18 @@ describe("database migrations", () => {
     expect(sql).toContain("playback_jwt_required boolean not null default true");
     expect(sql).not.toMatch(/api_key|private_key|raw_payload|payment_proof|service_role/i);
   });
+
+  it("adds messages and paid-message delivery tables with RLS and settlement gating", () => {
+    const sql = readMigration("0015_messages_paid_messages.sql");
+
+    expect(sql).toContain("create table conversations");
+    expect(sql).toContain("create table conversation_members");
+    expect(sql).toContain("create table messages");
+    expect(sql).toContain("create table paid_message_delivery_requests");
+    expect(sql).toContain("payment_intent_id uuid primary key references payment_intents(id)");
+    expect(sql).toContain("state text not null default 'pending_payment'");
+    expect(sql).toContain("alter table messages enable row level security");
+    expect(sql).toContain("alter table paid_message_delivery_requests enable row level security");
+    expect(sql).not.toMatch(/raw_payload|private_key|service_role|payment_proof/i);
+  });
 });
