@@ -98,6 +98,13 @@ Activity is backend-derived:
 
 No fake counters.
 
+Current implementation slice:
+
+- `GET /v1/activity` returns a backend-derived activity feed composed from payment and wallet transaction records.
+- `GET /v1/activity/payments` returns normalized payment-intent activity for the authenticated, age-verified user.
+- `GET /v1/activity/wallet-transactions` returns backend-observed wallet transaction records created during payment submission/settlement handling.
+- Wallet transaction records carry submission and confirmation references for user accountability, but do not grant access or revenue by themselves.
+
 ## Profile And Ranking Activity
 
 Own activity may show:

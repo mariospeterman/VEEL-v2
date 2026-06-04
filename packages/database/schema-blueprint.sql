@@ -340,6 +340,24 @@ create table payment_transactions (
   created_at timestamptz not null default now()
 );
 
+create table wallet_transaction_records (
+  id uuid primary key,
+  user_id uuid not null references users(id),
+  wallet_id uuid references wallets(id),
+  payment_intent_id uuid references payment_intents(id),
+  chain text not null,
+  direction text not null,
+  amount_minor bigint not null,
+  currency text not null,
+  state text not null,
+  source text not null default 'payment_intent',
+  signature text,
+  reference_address text,
+  submitted_at timestamptz,
+  confirmed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
 create table settlement_ledger (
   id uuid primary key,
   payment_intent_id uuid not null references payment_intents(id),

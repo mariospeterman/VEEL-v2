@@ -152,14 +152,15 @@ export function createPostgresReferralRepository(databaseUrl?: string): Referral
         items: pageRows.map((row) => ({
           id: row.id,
           kind: "referral",
+          title: "Referral share",
+          state: row.state,
           createdAt: row.created_at.toISOString(),
           token: row.token,
           targetType: row.target_type,
           targetId: row.target_id,
           eligibility: row.eligibility,
-          state: row.state,
           commissionAmountMinor: row.commission_amount_minor,
-          currency: row.currency
+          ...(row.currency ? { currency: row.currency } : {})
         })),
         nextCursor: nextRow ? nextRow.created_at.toISOString() : null
       } satisfies ActivityPage;

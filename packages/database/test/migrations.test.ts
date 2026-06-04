@@ -186,4 +186,16 @@ describe("database migrations", () => {
     expect(sql).toContain("alter table paid_message_delivery_requests enable row level security");
     expect(sql).not.toMatch(/raw_payload|private_key|service_role|payment_proof/i);
   });
+
+  it("adds wallet transaction activity records without custody or raw provider payloads", () => {
+    const sql = readMigration("0016_activity_wallet_transactions.sql");
+
+    expect(sql).toContain("create table wallet_transaction_records");
+    expect(sql).toContain("payment_intent_id uuid references payment_intents(id)");
+    expect(sql).toContain("reference_address text");
+    expect(sql).toContain("alter table wallet_transaction_records enable row level security");
+    expect(sql).toContain("wallet_transaction_records_payment_signature_unique");
+    expect(sql).toContain("wallet_transaction_records_user_created_at_idx");
+    expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|payment_proof|custodial/i);
+  });
 });

@@ -338,6 +338,7 @@ payment_intents
   ├─ split recipients
   ├─ solana_reference
   ├─ transaction_signature
+  ├─ wallet_transaction_records
   ├─ entitlement_id
   ├─ commission_id
   └─ audit_events

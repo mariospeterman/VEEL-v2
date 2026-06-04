@@ -1097,6 +1097,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/activity/wallet-transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Backend-observed wallet transaction activity */
+        get: operations["getWalletTransactionActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/activity/tickets": {
         parameters: {
             query?: never;
@@ -2190,9 +2207,53 @@ export interface components {
         ActivityItem: {
             /** Format: uuid */
             id: string;
-            kind: string;
+            /** @enum {string} */
+            kind: "payment_intent" | "wallet_transaction" | "entitlement" | "referral" | "ticket" | "system";
+            title: string;
+            state: string;
+            productType?: components["schemas"]["ProductType"];
+            /** Format: uuid */
+            targetId?: string | null;
+            amountMinor?: number | null;
+            currency?: components["schemas"]["Currency"];
+            /** Format: uuid */
+            paymentIntentId?: string | null;
+            signature?: string | null;
+            referenceAddress?: string | null;
             /** Format: date-time */
             createdAt: string;
+            /** Format: date-time */
+            confirmedAt?: string | null;
+        };
+        WalletTransactionPage: {
+            items: components["schemas"]["WalletTransaction"][];
+            nextCursor?: string | null;
+        };
+        WalletTransaction: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            chain: "solana_devnet" | "solana_mainnet";
+            /** @enum {string} */
+            direction: "outgoing" | "incoming";
+            amountMinor: number;
+            currency: components["schemas"]["Currency"];
+            /** @enum {string} */
+            state: "submitted" | "confirmed" | "failed";
+            /** @enum {string} */
+            source: "payment_intent" | "subscription_collection" | "manual_adjustment";
+            /** Format: uuid */
+            paymentIntentId?: string | null;
+            /** Format: uuid */
+            walletId?: string | null;
+            signature?: string | null;
+            referenceAddress?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            submittedAt?: string | null;
+            /** Format: date-time */
+            confirmedAt?: string | null;
         };
         CreateAiSessionRequest: {
             /** @enum {string} */
@@ -2858,6 +2919,15 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["ActivityPage"];
+            };
+        };
+        /** @description Wallet transactions */
+        WalletTransactionPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["WalletTransactionPage"];
             };
         };
         /** @description AI session */
@@ -4448,6 +4518,20 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["ActivityPage"];
+        };
+    };
+    getWalletTransactionActivity: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["WalletTransactionPage"];
         };
     };
     getTicketActivity: {

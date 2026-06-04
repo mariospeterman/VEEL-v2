@@ -2,6 +2,9 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import sensible from "@fastify/sensible";
 import Fastify, { type FastifyInstance } from "fastify";
+import { createPostgresActivityRepository } from "./modules/activity/activity-repository.js";
+import { registerActivityRoutes } from "./modules/activity/activity-routes.js";
+import type { ActivityRepository } from "./modules/activity/types.js";
 import { createAgeProviderWaterfall } from "./modules/age/age-provider-waterfall.js";
 import { createPostgresAgeRepository } from "./modules/age/age-repository.js";
 import { registerAgeRoutes } from "./modules/age/age-routes.js";
@@ -49,6 +52,7 @@ export interface BuildApiOptions {
   liveProvider?: LiveProviderAdapter;
   messageRepository?: MessageRepository;
   paymentRepository?: PaymentRepository;
+  activityRepository?: ActivityRepository;
   settlementVerifier?: PaymentSettlementVerifier;
   profileRepository?: ProfileRepository;
   referralRepository?: ReferralRepository;
@@ -98,6 +102,8 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     options.messageRepository ?? createPostgresMessageRepository(app.config.DATABASE_URL);
   const paymentRepository =
     options.paymentRepository ?? createPostgresPaymentRepository(app.config.DATABASE_URL);
+  const activityRepository =
+    options.activityRepository ?? createPostgresActivityRepository(app.config.DATABASE_URL);
   const settlementVerifier =
     options.settlementVerifier ?? createSolanaRpcSettlementVerifier(app.config.SOLANA_RPC_URL);
   const referralRepository =
@@ -143,6 +149,11 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   if (paymentRepository.close) {
     app.addHook("onClose", async () => {
       await paymentRepository.close?.();
+    });
+  }
+  if (activityRepository.close) {
+    app.addHook("onClose", async () => {
+      await activityRepository.close?.();
     });
   }
   if (referralRepository.close) {
@@ -208,6 +219,12 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     ageRepository,
     walletRepository,
     referralRepository
+  });
+  await registerActivityRoutes(app, {
+    authVerifier,
+    sessionRepository,
+    ageRepository,
+    activityRepository
   });
   await registerWalletRoutes(app, {
     authVerifier,

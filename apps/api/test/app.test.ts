@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
 import { buildApi } from "../src/app";
+import type { ActivityRepository } from "../src/modules/activity/types";
 import { createBunnyStreamUploadAdapter } from "../src/modules/content/media-upload-adapter";
 import type {
   ContentItem,
@@ -1335,6 +1336,8 @@ describe("buildApi", () => {
             {
               id: "referral-activity-test-id",
               kind: "referral",
+              title: "Referral share",
+              state: "active",
               createdAt: "2026-06-04T20:00:00.000Z"
             }
           ],
@@ -1365,11 +1368,155 @@ describe("buildApi", () => {
         {
           id: "referral-activity-test-id",
           kind: "referral",
+          title: "Referral share",
+          state: "active",
           createdAt: "2026-06-04T20:00:00.000Z"
         }
       ],
       nextCursor: null
     });
+
+    await app.close();
+  });
+
+  it("returns backend-derived payment activity for the current user", async () => {
+    const activityRepository: ActivityRepository = {
+      async listActivity() {
+        throw new Error("not implemented");
+      },
+      async listPaymentActivity(input) {
+        expect(input).toEqual({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          limit: 20
+        });
+
+        return {
+          items: [
+            {
+              id: "00000000-0000-4000-8000-000000000050",
+              kind: "payment_intent",
+              title: "Tip",
+              state: "confirmed",
+              productType: "tip",
+              targetId: "00000000-0000-4000-8000-000000000010",
+              amountMinor: 10000000,
+              currency: "SOL",
+              paymentIntentId: "00000000-0000-4000-8000-000000000050",
+              signature: "5".repeat(88),
+              referenceAddress: "11111111111111111111111111111112",
+              createdAt: "2026-06-04T20:00:00.000Z",
+              confirmedAt: "2026-06-04T20:01:00.000Z"
+            }
+          ],
+          nextCursor: null
+        };
+      },
+      async listWalletTransactions() {
+        throw new Error("not implemented");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      activityRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/activity/payments",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      items: [
+        {
+          kind: "payment_intent",
+          title: "Tip",
+          state: "confirmed",
+          productType: "tip",
+          amountMinor: 10000000,
+          currency: "SOL"
+        }
+      ],
+      nextCursor: null
+    });
+
+    await app.close();
+  });
+
+  it("returns backend-observed wallet transaction activity without raw provider payloads", async () => {
+    const activityRepository: ActivityRepository = {
+      async listActivity() {
+        throw new Error("not implemented");
+      },
+      async listPaymentActivity() {
+        throw new Error("not implemented");
+      },
+      async listWalletTransactions(input) {
+        expect(input).toEqual({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          limit: 20
+        });
+
+        return {
+          items: [
+            {
+              id: "00000000-0000-4000-8000-000000000060",
+              chain: "solana_devnet",
+              direction: "outgoing",
+              amountMinor: 10000000,
+              currency: "SOL",
+              state: "submitted",
+              source: "payment_intent",
+              paymentIntentId: "00000000-0000-4000-8000-000000000050",
+              walletId: "00000000-0000-4000-8000-000000000030",
+              signature: "4".repeat(88),
+              referenceAddress: "11111111111111111111111111111112",
+              createdAt: "2026-06-04T20:00:00.000Z",
+              submittedAt: "2026-06-04T20:00:00.000Z",
+              confirmedAt: null
+            }
+          ],
+          nextCursor: null
+        };
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      activityRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/activity/wallet-transactions",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      items: [
+        {
+          chain: "solana_devnet",
+          direction: "outgoing",
+          amountMinor: 10000000,
+          currency: "SOL",
+          state: "submitted",
+          source: "payment_intent"
+        }
+      ],
+      nextCursor: null
+    });
+    expect(JSON.stringify(response.json())).not.toMatch(/raw|providerPayload|private/i);
 
     await app.close();
   });

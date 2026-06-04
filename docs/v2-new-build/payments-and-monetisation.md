@@ -31,6 +31,7 @@ Current implementation state:
 - Confirmed `content_unlock` settlement grants an active content entitlement in the same backend transaction, and media/feed access projection returns `unlocked` only from backend entitlement state.
 - Confirmed `tip` and `support` settlement posts creator earning and platform fee ledger entries using the documented launch platform fee, but never writes an access grant.
 - `POST /v1/referrals/tokens` creates backend-owned external/internal referral tokens. Optional payment-intent `referralToken` values are resolved server-side, self-referrals are not attributed, and confirmed eligible tip/support settlement creates at most one commission from the platform fee.
+- `GET /v1/activity`, `GET /v1/activity/payments`, and `GET /v1/activity/wallet-transactions` expose normalized backend activity and wallet transaction history. Wallet transaction records are backend-observed submission/confirmation references, not settlement proof by themselves.
 - Subscriptions and admin reconciliation are deferred to their owning slices.
 
 Official references checked:
@@ -186,7 +187,10 @@ GET  /v1/payments/intents/:id/transaction-request
 POST /v1/payments/intents/:id/submissions
 POST /v1/content/:id/unlock-intents
 POST /v1/webhooks/solana-indexer
+GET  /v1/activity
 GET  /v1/activity/payments
+GET  /v1/activity/wallet-transactions
+GET  /v1/activity/referrals
 ```
 
 ## Test Matrix

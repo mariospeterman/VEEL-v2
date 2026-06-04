@@ -38,3 +38,14 @@ test("renders the messages and paid-message projection", async ({ page }) => {
   await expect(page.getByText("Paid hello", { exact: true })).toBeVisible();
   await expect(page.getByText("pending_payment")).toBeVisible();
 });
+
+test("renders the activity and wallet transaction projection", async ({ page }) => {
+  await page.goto("/activity");
+
+  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Payments" })).toBeVisible();
+  await expect(page.getByText("Wallet transactions")).toBeVisible();
+  await expect(page.getByText("payment_intent").first()).toBeVisible();
+  await expect(page.getByText("solana_devnet")).toBeVisible();
+  await expect(page.getByText("confirmed").first()).toBeVisible();
+});

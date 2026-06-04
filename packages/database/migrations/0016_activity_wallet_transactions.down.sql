@@ -1,0 +1,5 @@
+drop index if exists wallet_transaction_records_signature_idx;
+drop index if exists wallet_transaction_records_intent_idx;
+drop index if exists wallet_transaction_records_user_created_at_idx;
+drop index if exists wallet_transaction_records_payment_signature_unique;
+drop table if exists wallet_transaction_records;

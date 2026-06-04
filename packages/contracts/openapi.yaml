@@ -834,6 +834,15 @@ paths:
         - $ref: "#/components/parameters/Cursor"
       responses:
         "200": { $ref: "#/components/responses/ActivityPage" }
+  /v1/activity/wallet-transactions:
+    get:
+      operationId: getWalletTransactionActivity
+      tags: [Activity]
+      summary: Backend-observed wallet transaction activity
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/WalletTransactionPage" }
   /v1/activity/tickets:
     get:
       operationId: getTicketActivity
@@ -1297,6 +1306,7 @@ components:
     DatingMatchPage: { description: Dating matches, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/DatingMatch" } }, nextCursor: { type: string, nullable: true } } } } } }
     DatingMatch: { description: Dating match, content: { application/json: { schema: { $ref: "#/components/schemas/DatingMatch" } } } }
     ActivityPage: { description: Activity page, content: { application/json: { schema: { $ref: "#/components/schemas/ActivityPage" } } } }
+    WalletTransactionPage: { description: Wallet transactions, content: { application/json: { schema: { $ref: "#/components/schemas/WalletTransactionPage" } } } }
     AiSession: { description: AI session, content: { application/json: { schema: { $ref: "#/components/schemas/AiSession" } } } }
     AiToolCall: { description: AI tool call, content: { application/json: { schema: { $ref: "#/components/schemas/AiToolCall" } } } }
     AdminOpsSummary: { description: Admin ops summary, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOpsSummary" } } } }
@@ -1987,11 +1997,45 @@ components:
         nextCursor: { type: string, nullable: true }
     ActivityItem:
       type: object
-      required: [id, kind, createdAt]
+      required: [id, kind, title, state, createdAt]
       properties:
         id: { type: string, format: uuid }
-        kind: { type: string }
+        kind: { type: string, enum: [payment_intent, wallet_transaction, entitlement, referral, ticket, system] }
+        title: { type: string }
+        state: { type: string }
+        productType: { $ref: "#/components/schemas/ProductType" }
+        targetId: { type: string, format: uuid, nullable: true }
+        amountMinor: { type: integer, nullable: true }
+        currency: { $ref: "#/components/schemas/Currency" }
+        paymentIntentId: { type: string, format: uuid, nullable: true }
+        signature: { type: string, nullable: true }
+        referenceAddress: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
+        confirmedAt: { type: string, format: date-time, nullable: true }
+    WalletTransactionPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/WalletTransaction" } }
+        nextCursor: { type: string, nullable: true }
+    WalletTransaction:
+      type: object
+      required: [id, chain, direction, amountMinor, currency, state, source, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        chain: { type: string, enum: [solana_devnet, solana_mainnet] }
+        direction: { type: string, enum: [outgoing, incoming] }
+        amountMinor: { type: integer }
+        currency: { $ref: "#/components/schemas/Currency" }
+        state: { type: string, enum: [submitted, confirmed, failed] }
+        source: { type: string, enum: [payment_intent, subscription_collection, manual_adjustment] }
+        paymentIntentId: { type: string, format: uuid, nullable: true }
+        walletId: { type: string, format: uuid, nullable: true }
+        signature: { type: string, nullable: true }
+        referenceAddress: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        submittedAt: { type: string, format: date-time, nullable: true }
+        confirmedAt: { type: string, format: date-time, nullable: true }
     CreateAiSessionRequest:
       type: object
       required: [scope]
