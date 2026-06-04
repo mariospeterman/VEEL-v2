@@ -515,6 +515,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/live/rooms/{roomId}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sync Livepeer live room status and playback projection */
+        post: operations["syncLiveRoom"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/live/rooms/{roomId}/pass-intents": {
         parameters: {
             query?: never;
@@ -526,6 +543,24 @@ export interface paths {
         put?: never;
         /** Create live-pass payment intent for a room */
         post: operations["createLivePassIntent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/live/rooms/{roomId}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List pass-gated live chat messages */
+        get: operations["listLiveRoomMessages"];
+        put?: never;
+        /** Create pass-gated live chat message */
+        post: operations["createLiveRoomMessage"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1791,10 +1826,12 @@ export interface components {
             title: string;
             /** @default 60 */
             teaserSeconds: number;
+            passPriceMinor?: number;
         };
         LiveRoom: {
             /** Format: uuid */
             id: string;
+            title: string;
             creator: components["schemas"]["User"];
             /** @enum {string} */
             state: "scheduled" | "waiting" | "live" | "ended" | "replay_ready";
@@ -1803,6 +1840,9 @@ export interface components {
             playback?: components["schemas"]["PlaybackResource"];
             teaserSecondsRemaining?: number | null;
             passOptions: components["schemas"]["LivePassOption"][];
+            chat: components["schemas"]["LiveChatState"];
+            /** Format: uuid */
+            replayContentId?: string | null;
         };
         CreateLivePassIntentRequest: {
             /** @enum {integer} */
@@ -1817,6 +1857,30 @@ export interface components {
         HostConnection: {
             maskedIngestUrl: string;
             streamKeyHint: string;
+            /** @enum {string} */
+            provider: "livepeer";
+        };
+        LiveChatState: {
+            enabled: boolean;
+            /** @enum {string} */
+            accessState: "closed" | "pass_required" | "allowed";
+        };
+        CreateLiveChatMessageRequest: {
+            body: string;
+        };
+        LiveChatPage: {
+            items: components["schemas"]["LiveChatMessage"][];
+            nextCursor?: string | null;
+        };
+        LiveChatMessage: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            roomId: string;
+            author: components["schemas"]["User"];
+            body: string;
+            /** Format: date-time */
+            createdAt: string;
         };
         EngagementState: {
             liked: boolean;
@@ -2470,6 +2534,24 @@ export interface components {
                 "application/json": components["schemas"]["HostConnection"];
             };
         };
+        /** @description Live chat messages */
+        LiveChatPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["LiveChatPage"];
+            };
+        };
+        /** @description Live chat message */
+        LiveChatMessage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["LiveChatMessage"];
+            };
+        };
         /** @description Engagement state */
         EngagementState: {
             headers: {
@@ -3009,6 +3091,11 @@ export interface components {
         CreateLivePassIntent: {
             content: {
                 "application/json": components["schemas"]["CreateLivePassIntentRequest"];
+            };
+        };
+        CreateLiveChatMessage: {
+            content: {
+                "application/json": components["schemas"]["CreateLiveChatMessageRequest"];
             };
         };
         CreateComment: {
@@ -3609,6 +3696,11 @@ export interface operations {
         requestBody: components["requestBodies"]["CreateLiveRoom"];
         responses: {
             201: components["responses"]["LiveRoom"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     getLiveRoom: {
@@ -3623,6 +3715,10 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["LiveRoom"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     getLiveHostConnection: {
@@ -3637,6 +3733,32 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["HostConnection"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    syncLiveRoom: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                roomId: components["parameters"]["RoomId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: components["responses"]["Accepted"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     createLivePassIntent: {
@@ -3658,6 +3780,46 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listLiveRoomMessages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                roomId: components["parameters"]["RoomId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["LiveChatPage"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createLiveRoomMessage: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                roomId: components["parameters"]["RoomId"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["CreateLiveChatMessage"];
+        responses: {
+            201: components["responses"]["LiveChatMessage"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };

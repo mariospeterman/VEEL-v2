@@ -360,6 +360,11 @@ paths:
         $ref: "#/components/requestBodies/CreateLiveRoom"
       responses:
         "201": { $ref: "#/components/responses/LiveRoom" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/live/rooms/{roomId}:
     get:
       operationId: getLiveRoom
@@ -369,6 +374,10 @@ paths:
         - $ref: "#/components/parameters/RoomId"
       responses:
         "200": { $ref: "#/components/responses/LiveRoom" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/live/rooms/{roomId}/host-connection:
     get:
       operationId: getLiveHostConnection
@@ -378,6 +387,25 @@ paths:
         - $ref: "#/components/parameters/RoomId"
       responses:
         "200": { $ref: "#/components/responses/HostConnection" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/live/rooms/{roomId}/sync:
+    post:
+      operationId: syncLiveRoom
+      tags: [Live]
+      summary: Sync Livepeer live room status and playback projection
+      parameters:
+        - $ref: "#/components/parameters/RoomId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "202": { $ref: "#/components/responses/Accepted" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/live/rooms/{roomId}/pass-intents:
     post:
       operationId: createLivePassIntent
@@ -394,6 +422,35 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/live/rooms/{roomId}/messages:
+    get:
+      operationId: listLiveRoomMessages
+      tags: [Live]
+      summary: List pass-gated live chat messages
+      parameters:
+        - $ref: "#/components/parameters/RoomId"
+      responses:
+        "200": { $ref: "#/components/responses/LiveChatPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    post:
+      operationId: createLiveRoomMessage
+      tags: [Live]
+      summary: Create pass-gated live chat message
+      parameters:
+        - $ref: "#/components/parameters/RoomId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateLiveChatMessage"
+      responses:
+        "201": { $ref: "#/components/responses/LiveChatMessage" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/engagement/{contentId}/like:
     post:
@@ -1120,6 +1177,7 @@ components:
     CreateUpload: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateUploadRequest" } } } }
     CreateLiveRoom: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateLiveRoomRequest" } } } }
     CreateLivePassIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateLivePassIntentRequest" } } } }
+    CreateLiveChatMessage: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateLiveChatMessageRequest" } } } }
     CreateComment: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateCommentRequest" } } } }
     CreateShare: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateShareRequest" } } } }
     CreateReport: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateReportRequest" } } } }
@@ -1173,6 +1231,8 @@ components:
     LiveRoom: { description: Live room, content: { application/json: { schema: { $ref: "#/components/schemas/LiveRoom" } } } }
     LiveRoomPage: { description: Live rooms, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/LiveRoom" } }, nextCursor: { type: string, nullable: true } } } } } }
     HostConnection: { description: Masked host connection, content: { application/json: { schema: { $ref: "#/components/schemas/HostConnection" } } } }
+    LiveChatPage: { description: Live chat messages, content: { application/json: { schema: { $ref: "#/components/schemas/LiveChatPage" } } } }
+    LiveChatMessage: { description: Live chat message, content: { application/json: { schema: { $ref: "#/components/schemas/LiveChatMessage" } } } }
     EngagementState: { description: Engagement state, content: { application/json: { schema: { $ref: "#/components/schemas/EngagementState" } } } }
     CommentPage: { description: Comments, content: { application/json: { schema: { $ref: "#/components/schemas/CommentPage" } } } }
     Comment: { description: Comment, content: { application/json: { schema: { $ref: "#/components/schemas/Comment" } } } }
@@ -1516,19 +1576,23 @@ components:
       type: object
       required: [title]
       properties:
-        title: { type: string }
-        teaserSeconds: { type: integer, default: 60 }
+        title: { type: string, minLength: 1, maxLength: 120 }
+        teaserSeconds: { type: integer, minimum: 0, maximum: 300, default: 60 }
+        passPriceMinor: { type: integer, minimum: 1 }
     LiveRoom:
       type: object
-      required: [id, creator, state, accessState, passOptions]
+      required: [id, title, creator, state, accessState, passOptions, chat]
       properties:
         id: { type: string, format: uuid }
+        title: { type: string }
         creator: { $ref: "#/components/schemas/User" }
         state: { type: string, enum: [scheduled, waiting, live, ended, replay_ready] }
         accessState: { type: string, enum: [free, locked, pass_required, pass_active] }
         playback: { $ref: "#/components/schemas/PlaybackResource" }
         teaserSecondsRemaining: { type: integer, nullable: true }
         passOptions: { type: array, items: { $ref: "#/components/schemas/LivePassOption" } }
+        chat: { $ref: "#/components/schemas/LiveChatState" }
+        replayContentId: { type: string, format: uuid, nullable: true }
     CreateLivePassIntentRequest:
       type: object
       required: [durationMinutes]
@@ -1543,10 +1607,37 @@ components:
         currency: { $ref: "#/components/schemas/Currency" }
     HostConnection:
       type: object
-      required: [maskedIngestUrl, streamKeyHint]
+      required: [maskedIngestUrl, streamKeyHint, provider]
       properties:
         maskedIngestUrl: { type: string }
         streamKeyHint: { type: string }
+        provider: { type: string, enum: [livepeer] }
+    LiveChatState:
+      type: object
+      required: [enabled, accessState]
+      properties:
+        enabled: { type: boolean }
+        accessState: { type: string, enum: [closed, pass_required, allowed] }
+    CreateLiveChatMessageRequest:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 500 }
+    LiveChatPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/LiveChatMessage" } }
+        nextCursor: { type: string, nullable: true }
+    LiveChatMessage:
+      type: object
+      required: [id, roomId, author, body, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        roomId: { type: string, format: uuid }
+        author: { $ref: "#/components/schemas/User" }
+        body: { type: string }
+        createdAt: { type: string, format: date-time }
     EngagementState:
       type: object
       required: [liked, saved, likeCount, commentCount, shareCount]

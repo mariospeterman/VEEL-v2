@@ -79,7 +79,7 @@ All routes use `/v1`.
 | Reports/Blocks | `POST /v1/reports`, `POST /v1/blocks/:userId` | MVP | Safety actions audited. |
 | Payments | `POST /v1/payments/intents`, `GET /v1/payments/intents/:id`, `GET /v1/payments/intents/:id/transaction-request`, `POST /v1/payments/intents/:id/submissions`, `POST /v1/content/:id/unlock-intents`, `POST /v1/webhooks/solana-indexer` | MVP | Noncustodial payment intent, content unlock intent, entitlement grant, and evidence. |
 | Referrals | `POST /v1/referrals/tokens`, `GET /v1/referrals/activity` | Phase 2 | External links only create commission eligibility. |
-| Live | `POST /v1/live/rooms`, `GET /v1/live/rooms/:id`, `GET /v1/live/rooms/:id/host-connection`, `POST /v1/live/rooms/:id/pass-intents` | Phase 2 | Livepeer JWT for pass-gated playback. |
+| Live | `POST /v1/live/rooms`, `GET /v1/live/rooms/:id`, `GET /v1/live/rooms/:id/host-connection`, `POST /v1/live/rooms/:id/sync`, `POST /v1/live/rooms/:id/pass-intents`, `GET /v1/live/rooms/:id/messages`, `POST /v1/live/rooms/:id/messages` | Phase 2 | Livepeer room/status, backend-settled live passes, pass-gated playback/chat, replay projection. |
 | Messages | `GET /v1/messages/conversations`, `POST /v1/messages/conversations/:id/messages` | Phase 2 | Paid message delivery after backend settlement. |
 | Subscriptions | `GET /v1/subscriptions/plans`, `POST /v1/subscriptions/intents`, `PATCH /v1/subscriptions/:id/cancel` | Phase 2 | Platform and creator subscriptions share state machine. |
 | Events | `POST /v1/events`, `PATCH /v1/events/:id`, `GET /v1/events/:id`, `POST /v1/events/:id/tickets/intents`, `POST /v1/events/:id/tickets/requests`, `POST /v1/tickets/:id/check-in` | Phase 3 | Ticket price creator-owned, backend-validated. |

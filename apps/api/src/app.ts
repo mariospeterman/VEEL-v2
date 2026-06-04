@@ -10,6 +10,10 @@ import { createPostgresContentRepository } from "./modules/content/content-repos
 import { registerContentRoutes } from "./modules/content/content-routes.js";
 import { createBunnyStreamUploadAdapter } from "./modules/content/media-upload-adapter.js";
 import type { ContentRepository, MediaUploadProviderAdapter } from "./modules/content/types.js";
+import { createPostgresLiveRepository } from "./modules/live/live-repository.js";
+import { createLivepeerProviderAdapter } from "./modules/live/livepeer-adapter.js";
+import { registerLiveRoutes } from "./modules/live/live-routes.js";
+import type { LiveProviderAdapter, LiveRepository } from "./modules/live/types.js";
 import { createPostgresPaymentRepository } from "./modules/payment/payment-repository.js";
 import { registerPaymentRoutes } from "./modules/payment/payment-routes.js";
 import { createSolanaRpcSettlementVerifier } from "./modules/payment/solana-payment.js";
@@ -38,6 +42,8 @@ export interface BuildApiOptions {
   ageProviderWaterfall?: AgeProviderWaterfall;
   contentRepository?: ContentRepository;
   mediaUploadProvider?: MediaUploadProviderAdapter;
+  liveRepository?: LiveRepository;
+  liveProvider?: LiveProviderAdapter;
   paymentRepository?: PaymentRepository;
   settlementVerifier?: PaymentSettlementVerifier;
   profileRepository?: ProfileRepository;
@@ -81,6 +87,9 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     options.contentRepository ?? createPostgresContentRepository(app.config.DATABASE_URL);
   const mediaUploadProvider =
     options.mediaUploadProvider ?? createBunnyStreamUploadAdapter(app.config);
+  const liveRepository =
+    options.liveRepository ?? createPostgresLiveRepository(app.config.DATABASE_URL);
+  const liveProvider = options.liveProvider ?? createLivepeerProviderAdapter(app.config);
   const paymentRepository =
     options.paymentRepository ?? createPostgresPaymentRepository(app.config.DATABASE_URL);
   const settlementVerifier =
@@ -113,6 +122,11 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   if (contentRepository.close) {
     app.addHook("onClose", async () => {
       await contentRepository.close?.();
+    });
+  }
+  if (liveRepository.close) {
+    app.addHook("onClose", async () => {
+      await liveRepository.close?.();
     });
   }
   if (paymentRepository.close) {
@@ -159,6 +173,15 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     contentRepository,
     paymentRepository,
     settlementVerifier
+  });
+  await registerLiveRoutes(app, {
+    authVerifier,
+    sessionRepository,
+    ageRepository,
+    walletRepository,
+    paymentRepository,
+    liveRepository,
+    liveProvider
   });
   await registerReferralRoutes(app, {
     authVerifier,

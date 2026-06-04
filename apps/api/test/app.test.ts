@@ -34,6 +34,12 @@ import type {
   RecordTransactionRequestInput,
   StoredPaymentIntent
 } from "../src/modules/payment/types";
+import type {
+  LiveChatMessage,
+  LiveProviderRoomStatus,
+  LiveRepository,
+  StoredLiveRoom
+} from "../src/modules/live/types";
 
 describe("buildApi", () => {
   it("boots the Fastify skeleton and loads the OpenAPI document", async () => {
@@ -1687,6 +1693,306 @@ describe("buildApi", () => {
     vi.unstubAllEnvs();
   });
 
+  it("creates a Livepeer-backed live room without exposing host secrets in the response", async () => {
+    const providerCreates: Array<{ roomId: string; title: string }> = [];
+    const repositoryCreates: string[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      liveRepository: fakeLiveRepository({
+        async onCreateRoom(input) {
+          repositoryCreates.push(input.title);
+          return liveRoomFixture({
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10",
+            title: input.title,
+            providerStreamId: input.providerRoom.providerStreamId,
+            providerPlaybackId: input.providerRoom.providerPlaybackId,
+            hostIngestUrl: input.providerRoom.hostIngestUrl,
+            hostStreamKey: input.providerRoom.hostStreamKey,
+            requestHash: input.requestHash
+          });
+        },
+        async onFindOwnedRoomByIdempotency() {
+          return null;
+        }
+      }),
+      liveProvider: {
+        isConfigured: () => true,
+        async createRoom(input) {
+          providerCreates.push(input);
+          return {
+            provider: "livepeer",
+            providerStreamId: "livepeer-stream-1",
+            providerPlaybackId: "livepeer-playback-1",
+            providerState: "created",
+            hostIngestUrl: "rtmp://rtmp.livepeer.com/live/secret-stream-key",
+            hostStreamKey: "secret-stream-key",
+            playbackUrl: "https://livepeercdn.studio/hls/livepeer-playback-1/index.m3u8"
+          };
+        },
+        async getRoomStatus() {
+          throw new Error("not implemented");
+        },
+        async createPlaybackJwt() {
+          return null;
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/live/rooms",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "live-room-create-1"
+      },
+      payload: {
+        title: "Friday live room",
+        teaserSeconds: 45,
+        passPriceMinor: 75000000
+      }
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10",
+      title: "Friday live room",
+      state: "waiting",
+      playback: {
+        state: "not_ready",
+        url: null,
+        provider: "livepeer"
+      }
+    });
+    expect(JSON.stringify(response.json())).not.toContain("secret-stream-key");
+    expect(providerCreates).toEqual([{ roomId: "pending", title: "Friday live room" }]);
+    expect(repositoryCreates).toEqual(["Friday live room"]);
+
+    await app.close();
+  });
+
+  it("returns only a masked host connection to the authorized room creator", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      liveRepository: fakeLiveRepository({
+        async onFindOwnedRoom() {
+          return liveRoomFixture({
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa11",
+            hostIngestUrl: "rtmp://rtmp.livepeer.com/live/live-secret-abc123",
+            hostStreamKey: "live-secret-abc123"
+          });
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/live/rooms/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa11/host-connection",
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      provider: "livepeer",
+      maskedIngestUrl: "rtmp://rtmp.livepeer.com/live/****",
+      streamKeyHint: "liv...123"
+    });
+    expect(JSON.stringify(response.json())).not.toContain("live-secret-abc123");
+
+    await app.close();
+  });
+
+  it("creates a server-priced live pass payment intent and records the pass purchase request", async () => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const paymentCreates: StoredPaymentIntent[] = [];
+    const passRequests: Array<{ paymentIntentId: string; durationMinutes: number }> = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      liveRepository: fakeLiveRepository({
+        async onFindRoom() {
+          return liveRoomFixture({
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa12",
+            state: "live",
+            hasPass: false,
+            playbackUrl: "https://livepeercdn.studio/hls/playback-12/index.m3u8"
+          });
+        },
+        async onRecordLivePassPurchaseRequest(input) {
+          passRequests.push({
+            paymentIntentId: input.paymentIntentId,
+            durationMinutes: input.durationMinutes
+          });
+        }
+      }),
+      paymentRepository: {
+        async createOrReuseIntent(input) {
+          const intent: StoredPaymentIntent = {
+            ...storedPaymentIntent,
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa50",
+            productType: input.productType,
+            targetId: input.targetId,
+            amountMinor: input.amountMinor,
+            referenceAddress: input.referenceAddress,
+            expiresAt: input.expiresAt,
+            requestHash: input.requestHash
+          };
+          paymentCreates.push(intent);
+          return intent;
+        },
+        async findIntent() {
+          throw new Error("not implemented");
+        },
+        async recordTransactionRequest() {
+          throw new Error("not implemented");
+        },
+        async recordSubmission() {
+          throw new Error("not implemented");
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/live/rooms/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa12/pass-intents",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "live-pass-intent-1"
+      },
+      payload: { durationMinutes: 60 }
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa50",
+      productType: "live_pass",
+      targetId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa12",
+      amountMinor: 50000000
+    });
+    expect(paymentCreates[0]?.productType).toBe("live_pass");
+    expect(passRequests).toEqual([
+      { paymentIntentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa50", durationMinutes: 60 }
+    ]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("syncs Livepeer status into the backend live room projection", async () => {
+    const syncedStatuses: LiveProviderRoomStatus[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      liveRepository: fakeLiveRepository({
+        async onFindOwnedRoom() {
+          return liveRoomFixture({
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa13",
+            providerStreamId: "livepeer-stream-13",
+            providerPlaybackId: "livepeer-playback-13"
+          });
+        },
+        async onUpdateRoomStatus(input) {
+          syncedStatuses.push(input.status);
+        }
+      }),
+      liveProvider: {
+        isConfigured: () => true,
+        async createRoom() {
+          throw new Error("not implemented");
+        },
+        async getRoomStatus(input) {
+          return {
+            providerStreamId: input.providerStreamId,
+            providerPlaybackId: input.providerPlaybackId,
+            providerState: "active",
+            state: "live",
+            playbackUrl: "https://livepeercdn.studio/hls/livepeer-playback-13/index.m3u8"
+          };
+        },
+        async createPlaybackJwt() {
+          return null;
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/live/rooms/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa13/sync",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "live-sync-1"
+      }
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(syncedStatuses).toEqual([
+      {
+        providerStreamId: "livepeer-stream-13",
+        providerPlaybackId: "livepeer-playback-13",
+        providerState: "active",
+        state: "live",
+        playbackUrl: "https://livepeercdn.studio/hls/livepeer-playback-13/index.m3u8"
+      }
+    ]);
+
+    await app.close();
+  });
+
+  it("allows live chat only when the backend room projection has an active pass", async () => {
+    const createdMessages: string[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      liveRepository: fakeLiveRepository({
+        async onCreateChatMessage(input) {
+          createdMessages.push(input.body);
+          return {
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa90",
+            roomId: input.roomId,
+            author: homeFeedItem.creator,
+            body: input.body,
+            createdAt: "2026-06-04T23:30:00.000Z"
+          };
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/live/rooms/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa14/messages",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "live-chat-1"
+      },
+      payload: { body: "Great stream" }
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      roomId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa14",
+      body: "Great stream"
+    });
+    expect(createdMessages).toEqual(["Great stream"]);
+
+    await app.close();
+  });
+
   it("blocks payment intent creation before age verification", async () => {
     vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
     const app = await buildApi({
@@ -1819,6 +2125,109 @@ const storedPaymentIntent: StoredPaymentIntent = {
   expiresAt: new Date("2026-06-04T23:15:00.000Z"),
   requestHash: "request-hash"
 };
+
+function liveRoomFixture(
+  overrides: Partial<
+    StoredLiveRoom & {
+      hasPass: boolean;
+      playbackUrl: string | null;
+    }
+  > = {}
+): StoredLiveRoom {
+  const hasPass = overrides.hasPass ?? true;
+  const state = overrides.state ?? "waiting";
+  const playbackUrl = overrides.playbackUrl ?? null;
+
+  return {
+    id: overrides.id ?? "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa01",
+    title: overrides.title ?? "Live room",
+    creator: overrides.creator ?? homeFeedItem.creator,
+    state,
+    accessState: hasPass ? "pass_active" : "pass_required",
+    playback:
+      state === "live" && hasPass && playbackUrl
+        ? {
+            state: "full",
+            url: playbackUrl,
+            provider: "livepeer"
+          }
+        : {
+            state: state === "live" && playbackUrl ? "blocked" : "not_ready",
+            url: null,
+            provider: "livepeer"
+          },
+    teaserSecondsRemaining: hasPass ? null : 60,
+    passOptions:
+      overrides.passOptions ??
+      [30, 60, 180].map((durationMinutes) => ({
+        durationMinutes: durationMinutes as 30 | 60 | 180,
+        amountMinor: 50000000,
+        currency: "SOL" as const
+      })),
+    chat: {
+      enabled: state === "live",
+      accessState: state === "live" ? (hasPass ? "allowed" : "pass_required") : "closed"
+    },
+    replayContentId: overrides.replayContentId ?? null,
+    providerStreamId: overrides.providerStreamId ?? "livepeer-stream",
+    providerPlaybackId: overrides.providerPlaybackId ?? "livepeer-playback",
+    hostIngestUrl: overrides.hostIngestUrl ?? "rtmp://rtmp.livepeer.com/live/secret-stream-key",
+    hostStreamKey: overrides.hostStreamKey ?? "secret-stream-key",
+    ...(overrides.requestHash ? { requestHash: overrides.requestHash } : {})
+  };
+}
+
+function fakeLiveRepository(
+  overrides: Partial<{
+    onCreateRoom: LiveRepository["createRoom"];
+    onFindRoom: LiveRepository["findRoom"];
+    onFindOwnedRoom: LiveRepository["findOwnedRoom"];
+    onFindOwnedRoomByIdempotency: LiveRepository["findOwnedRoomByIdempotency"];
+    onRecordLivePassPurchaseRequest: LiveRepository["recordLivePassPurchaseRequest"];
+    onUpdateRoomStatus: LiveRepository["updateRoomStatus"];
+    onListChatMessages: LiveRepository["listChatMessages"];
+    onCreateChatMessage: LiveRepository["createChatMessage"];
+  }> = {}
+): LiveRepository {
+  return {
+    async createRoom(input) {
+      return overrides.onCreateRoom?.(input) ?? liveRoomFixture();
+    },
+    async findRoom(input) {
+      return overrides.onFindRoom?.(input) ?? liveRoomFixture({ id: input.roomId });
+    },
+    async findOwnedRoom(input) {
+      return overrides.onFindOwnedRoom?.(input) ?? liveRoomFixture({ id: input.roomId });
+    },
+    async findOwnedRoomByIdempotency(input) {
+      return overrides.onFindOwnedRoomByIdempotency?.(input) ?? null;
+    },
+    async recordLivePassPurchaseRequest(input) {
+      await overrides.onRecordLivePassPurchaseRequest?.(input);
+    },
+    async updateRoomStatus(input) {
+      await overrides.onUpdateRoomStatus?.(input);
+    },
+    async listChatMessages(input) {
+      return (
+        (await overrides.onListChatMessages?.(input)) ?? {
+          items: []
+        }
+      );
+    },
+    async createChatMessage(input): Promise<LiveChatMessage | null> {
+      return (
+        (await overrides.onCreateChatMessage?.(input)) ?? {
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa91",
+          roomId: input.roomId,
+          author: homeFeedItem.creator,
+          body: input.body,
+          createdAt: "2026-06-04T23:30:00.000Z"
+        }
+      );
+    }
+  };
+}
 
 const fakeUnconfirmedSettlementVerifier: PaymentSettlementVerifier = {
   async verifyNativeSolTransfer() {

@@ -157,4 +157,19 @@ describe("database migrations", () => {
     expect(sql).toContain("media_assets_playback_ready_idx");
     expect(sql).not.toMatch(/signed_url|playback_token|api_key|private_key|raw_payload/i);
   });
+
+  it("adds Livepeer room, pass, chat, and replay tables with RLS and no raw payloads", () => {
+    const sql = readMigration("0014_livepeer_live_rooms_pass_chat_replay.sql");
+
+    expect(sql).toContain("create table live_rooms");
+    expect(sql).toContain("create table live_pass_purchase_requests");
+    expect(sql).toContain("create table live_passes");
+    expect(sql).toContain("create table live_chat_messages");
+    expect(sql).toContain("create table live_replay_assets");
+    expect(sql).toContain("alter table live_rooms enable row level security");
+    expect(sql).toContain("alter table live_passes enable row level security");
+    expect(sql).toContain("alter table live_chat_messages enable row level security");
+    expect(sql).toContain("playback_jwt_required boolean not null default true");
+    expect(sql).not.toMatch(/api_key|private_key|raw_payload|payment_proof|service_role/i);
+  });
 });

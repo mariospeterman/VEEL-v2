@@ -28,6 +28,8 @@ export const serverEnvSchema = z.object({
   BUNNY_STREAM_API_KEY: z.string().optional(),
   BUNNY_STREAM_LIBRARY_ID: z.string().optional(),
   LIVEPEER_API_KEY: z.string().optional(),
+  LIVEPEER_ACCESS_CONTROL_PRIVATE_KEY: z.string().optional(),
+  LIVEPEER_ACCESS_CONTROL_PUBLIC_KEY: z.string().optional(),
   AGE_VERIFICATION_DRIVER: z
     .enum(["yoti_digital_id", "yoti", "sumsub", "veriff", "persona"])
     .optional(),

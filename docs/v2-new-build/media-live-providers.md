@@ -97,7 +97,7 @@ sequenceDiagram
 
 Rules:
 
-- Creator-only host endpoint exposes masked/revealed stream key only after authorization.
+- Current v2 API exposes a masked creator host connection only. A reveal/control workflow must add explicit break-glass UX, auditing, and staging provider validation before exposing full host credentials to a browser surface.
 - Viewer never receives stream key or ingest URL.
 - Replay state is separate from live state.
 - Paid playback access uses Livepeer JWT provider access from day one.
@@ -130,6 +130,17 @@ Rules:
 - Chat access follows live pass state unless a product-specific override is configured.
 - Viewer never receives stream key or ingest URL.
 - Live replays are content items: they can have a free Bit/teaser segment and then follow normal replay/VOD monetisation chosen by the creator.
+
+Current implementation slice:
+
+- `POST /v1/live/rooms` creates a Livepeer stream with JWT playback policy through the backend provider adapter.
+- `GET /v1/live/rooms/:id` returns viewer-safe room, playback, pass, chat, and replay projection.
+- `GET /v1/live/rooms/:id/host-connection` returns masked host connection details only.
+- `POST /v1/live/rooms/:id/sync` refreshes provider state and replay projection.
+- `POST /v1/live/rooms/:id/pass-intents` creates a server-priced `live_pass` payment intent.
+- Confirmed payment settlement creates active live pass access server-side.
+- `GET/POST /v1/live/rooms/:id/messages` gates chat on backend pass state.
+- Livepeer remains launch-gated until staging keys, JWT policy, and real provider smoke are validated.
 
 ## Media Access Resource
 

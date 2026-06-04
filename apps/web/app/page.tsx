@@ -2,6 +2,7 @@ import type { components } from "@veel/contracts";
 import { appShellNavItems } from "@veel/ui";
 
 type ContentItem = components["schemas"]["ContentItem"];
+type LiveRoom = components["schemas"]["LiveRoom"];
 
 const featuredItem: ContentItem = {
   id: "00000000-0000-4000-8000-000000000040",
@@ -29,6 +30,30 @@ const featuredItem: ContentItem = {
     commentCount: 18,
     shareCount: 9
   }
+};
+
+const featuredLiveRoom: LiveRoom = {
+  id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10",
+  title: "Friday live studio",
+  creator: featuredItem.creator,
+  state: "live",
+  accessState: "pass_required",
+  playback: {
+    state: "blocked",
+    url: null,
+    provider: "livepeer"
+  },
+  teaserSecondsRemaining: 45,
+  passOptions: [
+    { durationMinutes: 30, amountMinor: 50000000, currency: "SOL" },
+    { durationMinutes: 60, amountMinor: 50000000, currency: "SOL" },
+    { durationMinutes: 180, amountMinor: 50000000, currency: "SOL" }
+  ],
+  chat: {
+    enabled: true,
+    accessState: "pass_required"
+  },
+  replayContentId: null
 };
 
 export default function HomePage() {
@@ -70,15 +95,51 @@ export default function HomePage() {
           <div className="border-b border-[var(--line)] pb-3">
             <p className="text-sm font-medium text-[var(--muted)]">Live rail</p>
           </div>
-          <div className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
-            <p className="text-sm font-medium">No live rooms yet</p>
-            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-              Creator live surfaces unlock after the Livepeer slice.
-            </p>
-          </div>
+          <LiveRoomRailCard room={featuredLiveRoom} />
         </aside>
       </section>
     </main>
+  );
+}
+
+function LiveRoomRailCard({ room }: { room: LiveRoom }) {
+  const lowestPass = room.passOptions[0];
+
+  return (
+    <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold">{room.title}</p>
+          <p className="text-sm text-[var(--muted)]">@{room.creator.handle}</p>
+        </div>
+        <span className="rounded bg-[#fee2e2] px-2 py-1 text-xs font-semibold text-[#991b1b]">
+          {room.state}
+        </span>
+      </div>
+
+      <div className="mt-4 aspect-video rounded border border-[var(--line)] bg-[#101827] p-3 text-sm text-white">
+        <div className="flex h-full flex-col justify-between">
+          <span className="w-fit rounded bg-white/10 px-2 py-1 text-xs">Livepeer</span>
+          <div>
+            <p className="font-medium">{room.playback?.state ?? "not_ready"}</p>
+            <p className="mt-1 text-xs text-white/70">
+              {room.teaserSecondsRemaining ?? 0}s teaser before pass gate
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-2 text-sm">
+        <div className="flex justify-between gap-3">
+          <span className="text-[var(--muted)]">Pass</span>
+          <span>{lowestPass ? `${lowestPass.amountMinor.toLocaleString()} ${lowestPass.currency}` : "closed"}</span>
+        </div>
+        <div className="flex justify-between gap-3">
+          <span className="text-[var(--muted)]">Chat</span>
+          <span>{room.chat.accessState}</span>
+        </div>
+      </div>
+    </article>
   );
 }
 
