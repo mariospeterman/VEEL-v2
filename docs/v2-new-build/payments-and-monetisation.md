@@ -27,7 +27,9 @@ Current implementation state:
 - `GET /v1/payments/intents/{paymentIntentId}/transaction-request` returns a Solana Pay transfer request URL for native SOL devnet settlement.
 - `POST /v1/payments/intents/{paymentIntentId}/submissions` records the wallet-submitted signature, then marks the intent confirmed only when backend Solana RPC verification finds a successful transaction with the expected reference address, treasury recipient, and lamport amount.
 - Wallet approval, frontend success, and submitted signatures remain non-final until backend settlement verification confirms chain evidence.
-- Content unlock entitlements, tips/support accounting, referrals/commission, subscriptions, and admin reconciliation are deferred to their owning slices.
+- `POST /v1/content/{contentId}/unlock-intents` creates or reuses a backend-priced `content_unlock` intent from active content access rules. The generic payment-intent endpoint does not accept client-priced content unlocks.
+- Confirmed `content_unlock` settlement grants an active content entitlement in the same backend transaction, and media/feed access projection returns `unlocked` only from backend entitlement state.
+- Tips/support accounting, referrals/commission, subscriptions, and admin reconciliation are deferred to their owning slices.
 
 Official references checked:
 
@@ -172,6 +174,7 @@ POST /v1/payments/intents
 GET  /v1/payments/intents/:id
 GET  /v1/payments/intents/:id/transaction-request
 POST /v1/payments/intents/:id/submissions
+POST /v1/content/:id/unlock-intents
 POST /v1/webhooks/solana-indexer
 GET  /v1/activity/payments
 ```

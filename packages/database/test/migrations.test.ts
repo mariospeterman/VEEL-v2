@@ -114,4 +114,16 @@ describe("database migrations", () => {
     expect(sql).toContain("confirmed_signature text unique");
     expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|wallet_secret|service_role/i);
   });
+
+  it("adds backend-owned content unlock entitlements with RLS enabled", () => {
+    const sql = readMigration("0010_content_unlock_entitlements.sql");
+
+    expect(sql).toContain("create table entitlements");
+    expect(sql).toContain("create table entitlement_events");
+    expect(sql).toContain("unique (payment_intent_id)");
+    expect(sql).toContain("entitlements_active_content_unlock_idx");
+    expect(sql).toContain("alter table entitlements enable row level security");
+    expect(sql).toContain("alter table entitlement_events enable row level security");
+    expect(sql).not.toMatch(/payment_proof|signed_url|playback_token|private_key|raw_payload/i);
+  });
 });

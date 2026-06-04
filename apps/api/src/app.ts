@@ -145,6 +145,7 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     sessionRepository,
     ageRepository,
     walletRepository,
+    contentRepository,
     paymentRepository,
     settlementVerifier
   });

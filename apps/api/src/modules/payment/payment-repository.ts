@@ -23,6 +23,7 @@ export class PaymentIdempotencyConflictError extends Error {
 interface PaymentIntentRow {
   id: string;
   product_type: StoredPaymentIntent["productType"];
+  target_id: string;
   amount_minor: number;
   currency: StoredPaymentIntent["currency"];
   state: StoredPaymentIntent["state"];
@@ -108,6 +109,7 @@ export function createPostgresPaymentRepository(databaseUrl?: string): PaymentRe
         select
           id,
           product_type,
+          target_id,
           amount_minor,
           currency,
           state,
@@ -121,6 +123,7 @@ export function createPostgresPaymentRepository(databaseUrl?: string): PaymentRe
         select
           id,
           product_type,
+          target_id,
           amount_minor,
           currency,
           state,
@@ -150,6 +153,7 @@ export function createPostgresPaymentRepository(databaseUrl?: string): PaymentRe
         select
           pi.id,
           pi.product_type,
+          pi.target_id,
           pi.amount_minor,
           pi.currency,
           pi.state,
@@ -197,7 +201,12 @@ export function createPostgresPaymentRepository(databaseUrl?: string): PaymentRe
     async recordSubmission(input) {
       await sql.begin(async (transaction) => {
         const nextState = input.settlement.confirmed ? "confirmed" : "submitted";
-        await transaction`
+        const rows = await transaction<{
+          payment_intent_id: string;
+          user_id: string;
+          product_type: StoredPaymentIntent["productType"];
+          target_id: string;
+        }[]>`
           update payment_intents pi
           set
             state = ${nextState},
@@ -217,7 +226,23 @@ export function createPostgresPaymentRepository(databaseUrl?: string): PaymentRe
             and u.supabase_user_id = ${input.supabaseUserId}
             and pi.id = ${input.paymentIntentId}
             and pi.state in ('pending', 'transaction_requested', 'submitted')
+          returning
+            pi.id as payment_intent_id,
+            pi.user_id,
+            pi.product_type,
+            pi.target_id
         `;
+
+        const updatedIntent = rows[0];
+
+        if (input.settlement.confirmed && updatedIntent?.product_type === "content_unlock") {
+          await grantContentUnlockEntitlement(transaction, {
+            userId: updatedIntent.user_id,
+            contentId: updatedIntent.target_id,
+            paymentIntentId: updatedIntent.payment_intent_id
+          });
+        }
+
         await insertSettlementAttempt(transaction, input);
       });
     },
@@ -231,6 +256,7 @@ function toStoredPaymentIntent(row: PaymentIntentRow): StoredPaymentIntent {
   return {
     id: row.id,
     productType: row.product_type,
+    targetId: row.target_id,
     amountMinor: Number(row.amount_minor),
     currency: row.currency,
     state: row.state,
@@ -240,6 +266,96 @@ function toStoredPaymentIntent(row: PaymentIntentRow): StoredPaymentIntent {
     expiresAt: row.expires_at,
     requestHash: row.request_hash
   };
+}
+
+async function grantContentUnlockEntitlement(
+  transaction: postgres.TransactionSql,
+  input: {
+    userId: string;
+    contentId: string;
+    paymentIntentId: string;
+  }
+): Promise<void> {
+  const rows = await transaction<{ id: string }[]>`
+    with existing_entitlement as (
+      select id
+      from entitlements
+      where user_id = ${input.userId}
+        and target_type = 'content'
+        and target_id = ${input.contentId}
+        and product_type = 'content_unlock'
+        and state = 'active'
+        and starts_at <= now()
+        and (ends_at is null or ends_at > now())
+      limit 1
+    ),
+    inserted_entitlement as (
+      insert into entitlements (
+        id,
+        user_id,
+        target_type,
+        target_id,
+        product_type,
+        payment_intent_id
+      )
+      select
+        ${randomUUID()},
+        ${input.userId},
+        'content',
+        ${input.contentId},
+        'content_unlock',
+        ${input.paymentIntentId}
+      where not exists (select 1 from existing_entitlement)
+      on conflict (payment_intent_id) do update
+      set state = entitlements.state
+      returning id
+    )
+    select id from inserted_entitlement
+    union all
+    select id from existing_entitlement
+    limit 1
+  `;
+  const entitlementId = rows[0]?.id;
+
+  if (!entitlementId) {
+    return;
+  }
+
+  await transaction`
+    insert into entitlement_events (
+      id,
+      entitlement_id,
+      actor_user_id,
+      action,
+      payment_intent_id
+    )
+    values (
+      ${randomUUID()},
+      ${entitlementId},
+      ${input.userId},
+      'granted',
+      ${input.paymentIntentId}
+    )
+  `;
+
+  await transaction`
+    insert into audit_events (
+      id,
+      actor_user_id,
+      subject_type,
+      subject_id,
+      action,
+      metadata
+    )
+    values (
+      ${randomUUID()},
+      ${input.userId},
+      'content',
+      ${input.contentId},
+      'content_unlock_entitlement_granted',
+      ${transaction.json({ paymentIntentId: input.paymentIntentId })}
+    )
+  `;
 }
 
 async function insertSettlementAttempt(

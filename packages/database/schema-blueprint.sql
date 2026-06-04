@@ -356,13 +356,26 @@ create table settlement_ledger (
 create table entitlements (
   id uuid primary key,
   user_id uuid not null references users(id),
-  type entitlement_type not null,
+  target_type text not null,
   target_id uuid not null,
+  product_type payment_product_type not null,
   payment_intent_id uuid references payment_intents(id),
-  starts_at timestamptz not null default now(),
-  expires_at timestamptz,
   state text not null default 'active',
-  unique (user_id, type, target_id)
+  starts_at timestamptz not null default now(),
+  ends_at timestamptz,
+  granted_at timestamptz not null default now(),
+  revoked_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (payment_intent_id)
+);
+
+create table entitlement_events (
+  id uuid primary key,
+  entitlement_id uuid not null references entitlements(id),
+  actor_user_id uuid references users(id),
+  action text not null,
+  payment_intent_id uuid references payment_intents(id),
+  created_at timestamptz not null default now()
 );
 
 create table referrals (

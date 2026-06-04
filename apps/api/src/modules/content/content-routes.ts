@@ -103,6 +103,7 @@ export async function registerContentRoutes(
 
     try {
       const feedInput = {
+        supabaseUserId: access.supabaseUserId,
         mode,
         limit: 20
       };

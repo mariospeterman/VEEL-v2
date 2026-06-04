@@ -560,11 +560,15 @@ describe("buildApi", () => {
       async findContentDetail() {
         throw new Error("not implemented");
       },
+      async findContentUnlockOffer() {
+        throw new Error("not implemented");
+      },
       async findOwnedContentForUpload() {
         throw new Error("not implemented");
       },
       async listHomeFeed(input) {
         expect(input).toEqual({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
           mode: "recommended",
           limit: 20
         });
@@ -636,6 +640,9 @@ describe("buildApi", () => {
 
         return lockedContent;
       },
+      async findContentUnlockOffer() {
+        throw new Error("not implemented");
+      },
       async findOwnedContentForUpload() {
         throw new Error("not implemented");
       },
@@ -687,6 +694,9 @@ describe("buildApi", () => {
       },
       async findContentDetail() {
         return null;
+      },
+      async findContentUnlockOffer() {
+        throw new Error("not implemented");
       },
       async findOwnedContentForUpload() {
         throw new Error("not implemented");
@@ -781,6 +791,9 @@ describe("buildApi", () => {
       async findContentDetail() {
         throw new Error("not implemented");
       },
+      async findContentUnlockOffer() {
+        throw new Error("not implemented");
+      },
       async findOwnedContentForUpload() {
         throw new Error("not implemented");
       },
@@ -838,6 +851,9 @@ describe("buildApi", () => {
         createdAssets.push(input);
       },
       async findContentDetail() {
+        throw new Error("not implemented");
+      },
+      async findContentUnlockOffer() {
         throw new Error("not implemented");
       },
       async findOwnedContentForUpload(input) {
@@ -949,6 +965,9 @@ describe("buildApi", () => {
         throw new Error("not implemented");
       },
       async findContentDetail() {
+        throw new Error("not implemented");
+      },
+      async findContentUnlockOffer() {
         throw new Error("not implemented");
       },
       async findOwnedContentForUpload() {
@@ -1131,6 +1150,141 @@ describe("buildApi", () => {
       amountMinor: 10000000,
       currency: "SOL",
       state: "pending"
+    });
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("creates a server-priced content unlock payment intent", async () => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        throw new Error("not implemented");
+      },
+      async createMediaAsset() {
+        throw new Error("not implemented");
+      },
+      async findContentDetail() {
+        throw new Error("not implemented");
+      },
+      async findContentUnlockOffer(input) {
+        expect(input).toEqual({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          contentId: "00000000-0000-4000-8000-000000000040"
+        });
+
+        return {
+          contentId: "00000000-0000-4000-8000-000000000040",
+          alreadyUnlocked: false,
+          priceMinor: 25000000,
+          currency: "SOL"
+        };
+      },
+      async findOwnedContentForUpload() {
+        throw new Error("not implemented");
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      }
+    };
+    const paymentRepository: PaymentRepository = {
+      async createOrReuseIntent(input) {
+        expect(input).toMatchObject({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          idempotencyKey: "content-unlock-1",
+          productType: "content_unlock",
+          targetId: "00000000-0000-4000-8000-000000000040",
+          amountMinor: 25000000,
+          currency: "SOL",
+          treasuryWallet
+        });
+
+        return {
+          ...storedPaymentIntent,
+          id: "00000000-0000-4000-8000-000000000055",
+          productType: "content_unlock",
+          targetId: input.targetId,
+          amountMinor: input.amountMinor,
+          referenceAddress: input.referenceAddress,
+          requestHash: input.requestHash,
+          expiresAt: input.expiresAt
+        };
+      },
+      async findIntent() {
+        throw new Error("not implemented");
+      },
+      async recordTransactionRequest() {
+        throw new Error("not implemented");
+      },
+      async recordSubmission() {
+        throw new Error("not implemented");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository,
+      paymentRepository,
+      settlementVerifier: fakeUnconfirmedSettlementVerifier
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040/unlock-intents",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "content-unlock-1"
+      }
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toEqual({
+      state: "payment_required",
+      contentId: "00000000-0000-4000-8000-000000000040",
+      paymentIntent: {
+        id: "00000000-0000-4000-8000-000000000055",
+        productType: "content_unlock",
+        amountMinor: 25000000,
+        currency: "SOL",
+        state: "pending"
+      }
+    });
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("rejects client-priced generic content unlock payment intents", async () => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/payments/intents",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "generic-content-unlock-1"
+      },
+      payload: {
+        productType: "content_unlock",
+        targetId: "00000000-0000-4000-8000-000000000040",
+        amountMinor: 1
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: "validation_failed"
     });
 
     await app.close();
@@ -1385,6 +1539,7 @@ const validSolanaSignature =
 const storedPaymentIntent: StoredPaymentIntent = {
   id: "00000000-0000-4000-8000-000000000050",
   productType: "tip",
+  targetId: "00000000-0000-4000-8000-000000000010",
   amountMinor: 10000000,
   currency: "SOL",
   state: "pending",

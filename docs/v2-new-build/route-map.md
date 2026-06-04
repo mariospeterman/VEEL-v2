@@ -77,7 +77,7 @@ All routes use `/v1`.
 | Feed Controls | `PATCH /v1/feed/preferences`, `POST /v1/feed/reset`, `POST /v1/feed/hide-creator`, `POST /v1/feed/hide-topic` | MVP | Backend-owned recommendation preferences and safety controls. |
 | Engagement | `POST /v1/engagement/:contentId/like`, `POST /v1/engagement/:contentId/save`, `POST /v1/engagement/:contentId/comments`, `GET /v1/engagement/:contentId/comments`, `POST /v1/shares` | MVP/Phase 2 | Backend-owned engagement records. |
 | Reports/Blocks | `POST /v1/reports`, `POST /v1/blocks/:userId` | MVP | Safety actions audited. |
-| Payments | `POST /v1/payments/intents`, `GET /v1/payments/intents/:id`, `GET /v1/payments/intents/:id/transaction-request`, `POST /v1/payments/intents/:id/submissions`, `POST /v1/webhooks/solana-indexer` | MVP | Noncustodial payment intent and evidence. |
+| Payments | `POST /v1/payments/intents`, `GET /v1/payments/intents/:id`, `GET /v1/payments/intents/:id/transaction-request`, `POST /v1/payments/intents/:id/submissions`, `POST /v1/content/:id/unlock-intents`, `POST /v1/webhooks/solana-indexer` | MVP | Noncustodial payment intent, content unlock intent, entitlement grant, and evidence. |
 | Referrals | `POST /v1/referrals/tokens`, `GET /v1/referrals/activity` | Phase 2 | External links only create commission eligibility. |
 | Live | `POST /v1/live/rooms`, `GET /v1/live/rooms/:id`, `GET /v1/live/rooms/:id/host-connection`, `POST /v1/live/rooms/:id/pass-intents` | Phase 2 | Livepeer JWT for pass-gated playback. |
 | Messages | `GET /v1/messages/conversations`, `POST /v1/messages/conversations/:id/messages` | Phase 2 | Paid message delivery after backend settlement. |

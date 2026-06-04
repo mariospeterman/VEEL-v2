@@ -20,6 +20,10 @@ export interface CreatePaymentIntentInput {
   expiresAt: Date;
 }
 
+export interface CreateServerPricedPaymentIntentInput extends Omit<CreatePaymentIntentInput, "amountMinor"> {
+  amountMinor: number;
+}
+
 export interface FindPaymentIntentInput {
   supabaseUserId: string;
   paymentIntentId: string;
@@ -39,6 +43,7 @@ export interface RecordPaymentSubmissionInput {
 }
 
 export interface StoredPaymentIntent extends PaymentIntent {
+  targetId: string;
   referenceAddress: string;
   treasuryWallet: string;
   solanaCluster: "devnet" | "mainnet-beta";

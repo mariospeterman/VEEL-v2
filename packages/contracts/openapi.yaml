@@ -526,6 +526,22 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/content/{contentId}/unlock-intents:
+    post:
+      operationId: createContentUnlockIntent
+      tags: [Payments, Content]
+      summary: Create or reuse a server-priced content unlock intent
+      parameters:
+        - $ref: "#/components/parameters/ContentId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "201": { $ref: "#/components/responses/ContentUnlockIntent" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/referrals/tokens:
     post:
       operationId: createReferralToken
@@ -1152,6 +1168,7 @@ components:
     Message: { description: Message, content: { application/json: { schema: { $ref: "#/components/schemas/Message" } } } }
     PaymentIntent: { description: Payment intent, content: { application/json: { schema: { $ref: "#/components/schemas/PaymentIntent" } } } }
     TransactionRequest: { description: Transaction request, content: { application/json: { schema: { $ref: "#/components/schemas/TransactionRequest" } } } }
+    ContentUnlockIntent: { description: Content unlock intent, content: { application/json: { schema: { $ref: "#/components/schemas/ContentUnlockIntent" } } } }
     ReferralToken: { description: Referral token, content: { application/json: { schema: { $ref: "#/components/schemas/ReferralToken" } } } }
     SubscriptionPlanPage: { description: Subscription plans, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionPlanPage" } } } }
     Subscription: { description: Subscription, content: { application/json: { schema: { $ref: "#/components/schemas/Subscription" } } } }
@@ -1630,6 +1647,25 @@ components:
       properties:
         transactionRequestUrl: { type: string, format: uri }
         expiresAt: { type: string, format: date-time }
+    Entitlement:
+      type: object
+      required: [id, targetType, targetId, productType, state, grantedAt]
+      properties:
+        id: { type: string, format: uuid }
+        targetType: { type: string, enum: [content, live_room, event, message, creator] }
+        targetId: { type: string, format: uuid }
+        productType: { $ref: "#/components/schemas/ProductType" }
+        state: { type: string, enum: [active, expired, revoked] }
+        grantedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time, nullable: true }
+    ContentUnlockIntent:
+      type: object
+      required: [state, contentId]
+      properties:
+        state: { type: string, enum: [already_unlocked, payment_required] }
+        contentId: { type: string, format: uuid }
+        paymentIntent: { $ref: "#/components/schemas/PaymentIntent" }
+        entitlement: { $ref: "#/components/schemas/Entitlement" }
     CreateReferralTokenRequest:
       type: object
       required: [targetType, targetId, channel]

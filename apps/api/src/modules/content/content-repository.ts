@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import postgres from "postgres";
-import type { ContentItem, ContentRepository } from "./types.js";
+import type { ContentItem, ContentRepository, Entitlement } from "./types.js";
 
 export class ContentRepositoryConfigurationError extends Error {
   constructor() {
@@ -22,6 +22,10 @@ interface FeedRow {
   poster_url: string | null;
   access_type: string | null;
   product_type: string | null;
+  entitlement_id: string | null;
+  entitlement_state: Entitlement["state"] | null;
+  entitlement_granted_at: Date | null;
+  entitlement_ends_at: Date | null;
 }
 
 interface ContentRow {
@@ -39,6 +43,21 @@ interface ContentDetailRow extends ContentRow {
   poster_url: string | null;
   access_type: string | null;
   product_type: string | null;
+  entitlement_id: string | null;
+  entitlement_state: Entitlement["state"] | null;
+  entitlement_granted_at: Date | null;
+  entitlement_ends_at: Date | null;
+}
+
+interface ContentUnlockOfferRow {
+  content_id: string;
+  price_minor: number;
+  currency: "SOL";
+  entitlement_id: string | null;
+  entitlement_state: Entitlement["state"] | null;
+  entitlement_granted_at: Date | null;
+  entitlement_ends_at: Date | null;
+  is_creator: boolean;
 }
 
 export function createPostgresContentRepository(databaseUrl?: string): ContentRepository {
@@ -51,6 +70,9 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
         throw new ContentRepositoryConfigurationError();
       },
       async findContentDetail() {
+        throw new ContentRepositoryConfigurationError();
+      },
+      async findContentUnlockOffer() {
         throw new ContentRepositoryConfigurationError();
       },
       async findOwnedContentForUpload() {
@@ -151,10 +173,15 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
           p.avatar_url,
           ma.poster_url,
           car.access_type,
-          car.product_type
+          car.product_type,
+          eg.id as entitlement_id,
+          eg.state as entitlement_state,
+          eg.granted_at as entitlement_granted_at,
+          eg.ends_at as entitlement_ends_at
         from content_items ci
         join users u on u.id = ci.creator_user_id
         join profiles p on p.user_id = u.id
+        join users viewer on viewer.supabase_user_id = ${input.supabaseUserId}
         left join lateral (
           select poster_url
           from media_assets
@@ -172,6 +199,19 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
           order by created_at desc
           limit 1
         ) car on true
+        left join lateral (
+          select id, state, granted_at, ends_at
+          from entitlements
+          where user_id = viewer.id
+            and target_type = 'content'
+            and target_id = ci.id
+            and product_type = 'content_unlock'
+            and state = 'active'
+            and starts_at <= now()
+            and (ends_at is null or ends_at > now())
+          order by granted_at desc
+          limit 1
+        ) eg on true
         where ci.id = ${input.contentId}
           and (
             (
@@ -187,6 +227,70 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
       const row = rows[0];
 
       return row ? toContentItem(row, row.poster_url, accessStateForRule(row)) : null;
+    },
+    async findContentUnlockOffer(input) {
+      const rows = await sql<ContentUnlockOfferRow[]>`
+        select
+          ci.id as content_id,
+          car.price_minor,
+          car.currency,
+          eg.id as entitlement_id,
+          eg.state as entitlement_state,
+          eg.granted_at as entitlement_granted_at,
+          eg.ends_at as entitlement_ends_at,
+          creator.supabase_user_id = ${input.supabaseUserId} as is_creator
+        from content_items ci
+        join users creator on creator.id = ci.creator_user_id
+        join users viewer on viewer.supabase_user_id = ${input.supabaseUserId}
+        join lateral (
+          select price_minor, currency
+          from content_access_rules
+          where content_item_id = ci.id
+            and state = 'active'
+            and product_type = 'content_unlock'
+            and access_type in ('locked', 'paid')
+            and price_minor is not null
+            and currency = 'SOL'
+            and (starts_at is null or starts_at <= now())
+            and (ends_at is null or ends_at > now())
+          order by created_at desc
+          limit 1
+        ) car on true
+        left join lateral (
+          select id, state, granted_at, ends_at
+          from entitlements
+          where user_id = viewer.id
+            and target_type = 'content'
+            and target_id = ci.id
+            and product_type = 'content_unlock'
+            and state = 'active'
+            and starts_at <= now()
+            and (ends_at is null or ends_at > now())
+          order by granted_at desc
+          limit 1
+        ) eg on true
+        where ci.id = ${input.contentId}
+          and ci.state = 'ready'
+          and ci.visibility = 'public'
+          and ci.moderation_state = 'approved'
+        limit 1
+      `;
+
+      const row = rows[0];
+
+      if (!row) {
+        return null;
+      }
+
+      const entitlement = toEntitlement(row);
+
+      return {
+        contentId: row.content_id,
+        alreadyUnlocked: row.is_creator || Boolean(row.entitlement_id),
+        priceMinor: Number(row.price_minor),
+        currency: row.currency,
+        ...(entitlement ? { entitlement } : {})
+      };
     },
     async findOwnedContentForUpload(input) {
       const rows = await sql<{ id: string; media_type: ContentItem["mediaType"]; caption: string | null }[]>`
@@ -226,10 +330,15 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
           p.avatar_url,
           ma.poster_url,
           car.access_type,
-          car.product_type
+          car.product_type,
+          eg.id as entitlement_id,
+          eg.state as entitlement_state,
+          eg.granted_at as entitlement_granted_at,
+          eg.ends_at as entitlement_ends_at
         from content_items ci
         join users u on u.id = ci.creator_user_id
         join profiles p on p.user_id = u.id
+        join users viewer on viewer.supabase_user_id = ${input.supabaseUserId}
         left join lateral (
           select poster_url
           from media_assets
@@ -247,6 +356,19 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
           order by created_at desc
           limit 1
         ) car on true
+        left join lateral (
+          select id, state, granted_at, ends_at
+          from entitlements
+          where user_id = viewer.id
+            and target_type = 'content'
+            and target_id = ci.id
+            and product_type = 'content_unlock'
+            and state = 'active'
+            and starts_at <= now()
+            and (ends_at is null or ends_at > now())
+          order by granted_at desc
+          limit 1
+        ) eg on true
         where ci.state = 'ready'
           and ci.visibility = 'public'
           and ci.moderation_state = 'approved'
@@ -308,7 +430,12 @@ function toContentItem(
 function accessStateForRule(row: {
   access_type: string | null;
   product_type: string | null;
+  entitlement_id?: string | null;
 }): ContentItem["accessState"] {
+  if (row.entitlement_id) {
+    return "unlocked";
+  }
+
   if (!row.access_type || row.access_type === "free") {
     return "free";
   }
@@ -331,4 +458,26 @@ function accessStateForRule(row: {
   }
 
   return "locked";
+}
+
+function toEntitlement(row: {
+  content_id: string;
+  entitlement_id: string | null;
+  entitlement_state: Entitlement["state"] | null;
+  entitlement_granted_at: Date | null;
+  entitlement_ends_at: Date | null;
+}): Entitlement | undefined {
+  if (!row.entitlement_id || !row.entitlement_state || !row.entitlement_granted_at) {
+    return undefined;
+  }
+
+  return {
+    id: row.entitlement_id,
+    targetType: "content",
+    targetId: row.content_id,
+    productType: "content_unlock",
+    state: row.entitlement_state,
+    grantedAt: row.entitlement_granted_at.toISOString(),
+    expiresAt: row.entitlement_ends_at ? row.entitlement_ends_at.toISOString() : null
+  };
 }

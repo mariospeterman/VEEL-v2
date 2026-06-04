@@ -720,6 +720,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/content/{contentId}/unlock-intents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create or reuse a server-priced content unlock intent */
+        post: operations["createContentUnlockIntent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/referrals/tokens": {
         parameters: {
             query?: never;
@@ -1890,6 +1907,29 @@ export interface components {
             /** Format: date-time */
             expiresAt: string;
         };
+        Entitlement: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            targetType: "content" | "live_room" | "event" | "message" | "creator";
+            /** Format: uuid */
+            targetId: string;
+            productType: components["schemas"]["ProductType"];
+            /** @enum {string} */
+            state: "active" | "expired" | "revoked";
+            /** Format: date-time */
+            grantedAt: string;
+            /** Format: date-time */
+            expiresAt?: string | null;
+        };
+        ContentUnlockIntent: {
+            /** @enum {string} */
+            state: "already_unlocked" | "payment_required";
+            /** Format: uuid */
+            contentId: string;
+            paymentIntent?: components["schemas"]["PaymentIntent"];
+            entitlement?: components["schemas"]["Entitlement"];
+        };
         CreateReferralTokenRequest: {
             /** @enum {string} */
             targetType: "content" | "profile" | "event";
@@ -2495,6 +2535,15 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["TransactionRequest"];
+            };
+        };
+        /** @description Content unlock intent */
+        ContentUnlockIntent: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ContentUnlockIntent"];
             };
         };
         /** @description Referral token */
@@ -3768,6 +3817,29 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createContentUnlockIntent: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                contentId: components["parameters"]["ContentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: components["responses"]["ContentUnlockIntent"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
