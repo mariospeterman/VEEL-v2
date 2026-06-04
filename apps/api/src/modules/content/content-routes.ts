@@ -125,6 +125,49 @@ export async function registerContentRoutes(
     }
   });
 
+  app.get("/v1/content/:contentId", async (request, reply) => {
+    const access = await verifyAppReadyAccess(request, options);
+
+    if (!access.ok) {
+      return reply.code(access.statusCode).send(access.body);
+    }
+
+    const params = request.params as { contentId?: string };
+
+    if (typeof params.contentId !== "string" || params.contentId.length === 0) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: "contentId is required"
+      });
+    }
+
+    try {
+      const content = await options.contentRepository.findContentDetail({
+        supabaseUserId: access.supabaseUserId,
+        contentId: params.contentId
+      });
+
+      if (!content) {
+        return reply.code(404).send({
+          code: "not_found",
+          message: "Content was not found"
+        });
+      }
+
+      return reply.code(200).send(content);
+    } catch (error) {
+      if (error instanceof ContentRepositoryConfigurationError) {
+        request.log.warn({ error }, "Content repository is not configured");
+        return reply.code(503).send({
+          code: "service_unavailable",
+          message: "Content storage is not configured"
+        });
+      }
+
+      throw error;
+    }
+  });
+
   app.post("/v1/media/uploads", async (request, reply) => {
     const access = await verifyAppReadyAccess(request, options);
 

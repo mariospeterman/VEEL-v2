@@ -549,6 +549,9 @@ describe("buildApi", () => {
       async createMediaAsset() {
         throw new Error("not implemented");
       },
+      async findContentDetail() {
+        throw new Error("not implemented");
+      },
       async findOwnedContentForUpload() {
         throw new Error("not implemented");
       },
@@ -600,6 +603,125 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("returns a protected content detail projection without playback URLs", async () => {
+    const lockedContent: ContentItem = {
+      ...homeFeedItem,
+      accessState: "locked",
+      playback: {
+        state: "not_ready",
+        url: null,
+        provider: "none"
+      }
+    };
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        throw new Error("not implemented");
+      },
+      async createMediaAsset() {
+        throw new Error("not implemented");
+      },
+      async findContentDetail(input) {
+        expect(input).toEqual({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          contentId: "00000000-0000-4000-8000-000000000040"
+        });
+
+        return lockedContent;
+      },
+      async findOwnedContentForUpload() {
+        throw new Error("not implemented");
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(lockedContent);
+    expect(response.json().playback.url).toBeNull();
+
+    await app.close();
+  });
+
+  it("returns 404 for a missing protected content detail", async () => {
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        throw new Error("not implemented");
+      },
+      async createMediaAsset() {
+        throw new Error("not implemented");
+      },
+      async findContentDetail() {
+        return null;
+      },
+      async findOwnedContentForUpload() {
+        throw new Error("not implemented");
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/content/00000000-0000-4000-8000-000000000099",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toMatchObject({
+      code: "not_found"
+    });
+
+    await app.close();
+  });
+
   it("blocks Home feed access before age verification", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -646,6 +768,9 @@ describe("buildApi", () => {
         return homeFeedItem;
       },
       async createMediaAsset() {
+        throw new Error("not implemented");
+      },
+      async findContentDetail() {
         throw new Error("not implemented");
       },
       async findOwnedContentForUpload() {
@@ -703,6 +828,9 @@ describe("buildApi", () => {
       },
       async createMediaAsset(input) {
         createdAssets.push(input);
+      },
+      async findContentDetail() {
+        throw new Error("not implemented");
       },
       async findOwnedContentForUpload(input) {
         expect(input).toEqual({
@@ -810,6 +938,9 @@ describe("buildApi", () => {
         throw new Error("not implemented");
       },
       async createMediaAsset() {
+        throw new Error("not implemented");
+      },
+      async findContentDetail() {
         throw new Error("not implemented");
       },
       async findOwnedContentForUpload() {

@@ -20,6 +20,8 @@ interface FeedRow {
   display_name: string | null;
   avatar_url: string | null;
   poster_url: string | null;
+  access_type: string | null;
+  product_type: string | null;
 }
 
 interface ContentRow {
@@ -33,6 +35,12 @@ interface ContentRow {
   avatar_url: string | null;
 }
 
+interface ContentDetailRow extends ContentRow {
+  poster_url: string | null;
+  access_type: string | null;
+  product_type: string | null;
+}
+
 export function createPostgresContentRepository(databaseUrl?: string): ContentRepository {
   if (!databaseUrl) {
     return {
@@ -40,6 +48,9 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
         throw new ContentRepositoryConfigurationError();
       },
       async createMediaAsset() {
+        throw new ContentRepositoryConfigurationError();
+      },
+      async findContentDetail() {
         throw new ContentRepositoryConfigurationError();
       },
       async findOwnedContentForUpload() {
@@ -127,6 +138,56 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
         on conflict (provider, provider_asset_id) do nothing
       `;
     },
+    async findContentDetail(input) {
+      const rows = await sql<ContentDetailRow[]>`
+        select
+          ci.id,
+          ci.media_type,
+          ci.caption,
+          ci.nsfw_label,
+          u.id as creator_id,
+          p.handle,
+          p.display_name,
+          p.avatar_url,
+          ma.poster_url,
+          car.access_type,
+          car.product_type
+        from content_items ci
+        join users u on u.id = ci.creator_user_id
+        join profiles p on p.user_id = u.id
+        left join lateral (
+          select poster_url
+          from media_assets
+          where content_item_id = ci.id
+          order by created_at asc
+          limit 1
+        ) ma on true
+        left join lateral (
+          select access_type, product_type
+          from content_access_rules
+          where content_item_id = ci.id
+            and state = 'active'
+            and (starts_at is null or starts_at <= now())
+            and (ends_at is null or ends_at > now())
+          order by created_at desc
+          limit 1
+        ) car on true
+        where ci.id = ${input.contentId}
+          and (
+            (
+              ci.state = 'ready'
+              and ci.visibility = 'public'
+              and ci.moderation_state = 'approved'
+            )
+            or u.supabase_user_id = ${input.supabaseUserId}
+          )
+        limit 1
+      `;
+
+      const row = rows[0];
+
+      return row ? toContentItem(row, row.poster_url, accessStateForRule(row)) : null;
+    },
     async findOwnedContentForUpload(input) {
       const rows = await sql<{ id: string; media_type: ContentItem["mediaType"]; caption: string | null }[]>`
         select
@@ -163,7 +224,9 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
           p.handle,
           p.display_name,
           p.avatar_url,
-          ma.poster_url
+          ma.poster_url,
+          car.access_type,
+          car.product_type
         from content_items ci
         join users u on u.id = ci.creator_user_id
         join profiles p on p.user_id = u.id
@@ -174,6 +237,16 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
           order by created_at asc
           limit 1
         ) ma on true
+        left join lateral (
+          select access_type, product_type
+          from content_access_rules
+          where content_item_id = ci.id
+            and state = 'active'
+            and (starts_at is null or starts_at <= now())
+            and (ends_at is null or ends_at > now())
+          order by created_at desc
+          limit 1
+        ) car on true
         where ci.state = 'ready'
           and ci.visibility = 'public'
           and ci.moderation_state = 'approved'
@@ -188,7 +261,7 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
       const nextRow = rows[input.limit];
 
       return {
-        items: pageRows.map((row) => toContentItem(row, row.poster_url)),
+        items: pageRows.map((row) => toContentItem(row, row.poster_url, accessStateForRule(row))),
         nextCursor: nextRow ? nextRow.created_at.toISOString() : null
       };
     },
@@ -198,7 +271,11 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
   };
 }
 
-function toContentItem(row: ContentRow, posterUrl: string | null): ContentItem {
+function toContentItem(
+  row: ContentRow,
+  posterUrl: string | null,
+  accessState: ContentItem["accessState"] = "free"
+): ContentItem {
   return {
     id: row.id,
     creator: {
@@ -216,7 +293,7 @@ function toContentItem(row: ContentRow, posterUrl: string | null): ContentItem {
       url: null,
       provider: "none"
     },
-    accessState: "free",
+    accessState,
     nsfwLabel: row.nsfw_label,
     engagement: {
       liked: false,
@@ -226,4 +303,32 @@ function toContentItem(row: ContentRow, posterUrl: string | null): ContentItem {
       shareCount: 0
     }
   };
+}
+
+function accessStateForRule(row: {
+  access_type: string | null;
+  product_type: string | null;
+}): ContentItem["accessState"] {
+  if (!row.access_type || row.access_type === "free") {
+    return "free";
+  }
+
+  if (row.access_type === "teaser") {
+    return "teaser";
+  }
+
+  if (row.product_type === "live_pass" || row.access_type === "live_pass") {
+    return "pass_required";
+  }
+
+  if (
+    row.product_type === "content_unlock" ||
+    row.product_type === "subscriber_only" ||
+    row.access_type === "locked" ||
+    row.access_type === "paid"
+  ) {
+    return "locked";
+  }
+
+  return "locked";
 }

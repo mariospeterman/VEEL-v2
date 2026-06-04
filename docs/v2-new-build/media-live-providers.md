@@ -27,6 +27,8 @@ Current implementation state:
 - The Bunny adapter follows the current Bunny Stream TUS flow: create video object, generate server-side SHA256 upload signature, return `https://video.bunnycdn.com/tusupload` plus safe upload headers.
 - `BUNNY_STREAM_API_KEY` and `BUNNY_STREAM_LIBRARY_ID` are server-only config values; the Stream API key is never returned to the browser.
 - Upload state is stored in `media_assets` as normalized provider/provider asset/provider state only.
+- `GET /v1/content/{contentId}` returns a frontend-safe media viewer projection backed by `content_access_rules`, creator profile data, and the first media poster.
+- Access projection is conservative: free/teaser/pass/locked states are exposed, but no entitlement grant, signed playback URL, tokenized playback URL, or provider management URL is exposed by this slice.
 - Bunny webhooks, playback token issuing, moderation state transitions, and locked playback are deferred to their owning media/access slices.
 
 Official references checked:

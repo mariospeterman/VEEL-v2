@@ -95,4 +95,13 @@ describe("database migrations", () => {
     expect(sql).toContain("on media_assets (provider, provider_state, created_at desc)");
     expect(sql).not.toMatch(/raw_payload|signed_url|stream_key|api_key|private_key/i);
   });
+
+  it("adds content access projection rules without entitlement shortcuts", () => {
+    const sql = readMigration("0008_content_access_projection.sql");
+
+    expect(sql).toContain("create table content_access_rules");
+    expect(sql).toContain("content_access_rules_active_idx");
+    expect(sql).toContain("product_type text");
+    expect(sql).not.toMatch(/entitled|payment_confirmed|signed_url|playback_token|private_key/i);
+  });
 });

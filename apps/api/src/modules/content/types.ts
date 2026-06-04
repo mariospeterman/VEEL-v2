@@ -16,6 +16,7 @@ export interface ListHomeFeedInput {
 export interface ContentRepository {
   createDraft(input: CreateContentDraftInput): Promise<ContentItem>;
   createMediaAsset(input: CreateMediaAssetInput): Promise<void>;
+  findContentDetail(input: FindContentDetailInput): Promise<ContentItem | null>;
   findOwnedContentForUpload(input: FindOwnedContentForUploadInput): Promise<OwnedContentForUpload | null>;
   listHomeFeed(input: ListHomeFeedInput): Promise<FeedPage>;
   close?(): Promise<void>;
@@ -30,6 +31,11 @@ export interface CreateContentDraftInput {
 }
 
 export interface FindOwnedContentForUploadInput {
+  supabaseUserId: string;
+  contentId: string;
+}
+
+export interface FindContentDetailInput {
   supabaseUserId: string;
   contentId: string;
 }
