@@ -19,4 +19,9 @@ test("renders the content media viewer projection", async ({ page }) => {
   await expect(page.getByText("Studio cut with a locked full playback state.")).toBeVisible();
   await expect(page.getByText("locked", { exact: true })).toBeVisible();
   await expect(page.getByText("not_ready")).toBeVisible();
+  await expect(page.getByText("Payment sheet")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open wallet" })).toHaveAttribute(
+    "href",
+    /solana:/
+  );
 });

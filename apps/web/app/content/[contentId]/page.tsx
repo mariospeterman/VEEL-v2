@@ -2,6 +2,10 @@ import type { components } from "@veel/contracts";
 import { appShellNavItems } from "@veel/ui";
 
 type ContentItem = components["schemas"]["ContentItem"];
+type PaymentIntent = components["schemas"]["PaymentIntent"];
+type TransactionRequest = components["schemas"]["TransactionRequest"];
+const sampleTreasuryWallet = "1".repeat(32);
+const samplePaymentReference = `${"1".repeat(31)}2`;
 
 const sampleContent: ContentItem = {
   id: "00000000-0000-4000-8000-000000000040",
@@ -29,6 +33,19 @@ const sampleContent: ContentItem = {
     commentCount: 18,
     shareCount: 9
   }
+};
+
+const samplePaymentIntent: PaymentIntent = {
+  id: "00000000-0000-4000-8000-000000000050",
+  productType: "tip",
+  amountMinor: 10000000,
+  currency: "SOL",
+  state: "transaction_requested"
+};
+
+const sampleTransactionRequest: TransactionRequest = {
+  transactionRequestUrl: `solana:${sampleTreasuryWallet}?amount=0.01&reference=${samplePaymentReference}&label=Veel`,
+  expiresAt: "2026-06-04T23:15:00.000Z"
 };
 
 export default async function ContentPage({
@@ -129,7 +146,44 @@ function AccessPanel({ item }: { item: ContentItem }) {
           <Metric label="Shares" value={item.engagement.shareCount} />
         </div>
       </section>
+
+      <PaymentSheet intent={samplePaymentIntent} transactionRequest={sampleTransactionRequest} />
     </aside>
+  );
+}
+
+function PaymentSheet({
+  intent,
+  transactionRequest
+}: {
+  intent: PaymentIntent;
+  transactionRequest: TransactionRequest;
+}) {
+  return (
+    <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold">Payment sheet</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">{intent.productType}</p>
+        </div>
+        <span className="rounded bg-[#fef3c7] px-2 py-1 text-xs font-medium uppercase text-[#78350f]">
+          {intent.state}
+        </span>
+      </div>
+
+      <div className="mt-5 grid gap-3 border-t border-[var(--line)] pt-4">
+        <div className="flex items-center justify-between gap-3 text-sm">
+          <span className="text-[var(--muted)]">Amount</span>
+          <span>{formatSol(intent.amountMinor)} SOL</span>
+        </div>
+        <a
+          className="mt-2 rounded bg-[var(--foreground)] px-3 py-2 text-center text-sm font-semibold text-[var(--background)]"
+          href={transactionRequest.transactionRequestUrl}
+        >
+          Open wallet
+        </a>
+      </div>
+    </section>
   );
 }
 
@@ -140,4 +194,10 @@ function Metric({ label, value }: { label: string; value: number }) {
       <p className="text-xs text-[var(--muted)]">{label}</p>
     </div>
   );
+}
+
+function formatSol(lamports: number) {
+  return (lamports / 1_000_000_000).toLocaleString("en-US", {
+    maximumFractionDigits: 9
+  });
 }

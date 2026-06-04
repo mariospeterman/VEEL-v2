@@ -20,6 +20,22 @@ Launch scope:
 Non-goals:
 - historical-context inference, duplicate systems, and unapproved provider/product expansion
 
+Current implementation state:
+
+- `POST /v1/payments/intents` creates a backend-owned native SOL payment intent for app-ready users when `PAYMENT_PLATFORM_TREASURY_WALLET` is configured.
+- The intent stores server-owned amount, currency, product target, treasury wallet, Solana cluster, and a unique Solana reference address.
+- `GET /v1/payments/intents/{paymentIntentId}/transaction-request` returns a Solana Pay transfer request URL for native SOL devnet settlement.
+- `POST /v1/payments/intents/{paymentIntentId}/submissions` records the wallet-submitted signature, then marks the intent confirmed only when backend Solana RPC verification finds a successful transaction with the expected reference address, treasury recipient, and lamport amount.
+- Wallet approval, frontend success, and submitted signatures remain non-final until backend settlement verification confirms chain evidence.
+- Content unlock entitlements, tips/support accounting, referrals/commission, subscriptions, and admin reconciliation are deferred to their owning slices.
+
+Official references checked:
+
+- Solana Pay overview: https://solana.com/docs/tools/solana-pay
+- Solana Pay transfer requests: https://solana.com/docs/tools/solana-pay/quickstart/transfer-requests
+- Solana Pay transaction requests and validation: https://solana.com/docs/tools/solana-pay/quickstart/transaction-requests
+- Solana RPC `getTransaction`: https://solana.com/docs/rpc/http/gettransaction
+
 ## Payment Principles
 
 - Noncustodial wallet approval.

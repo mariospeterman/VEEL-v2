@@ -3548,6 +3548,11 @@ export interface operations {
         requestBody: components["requestBodies"]["CreateLivePassIntent"];
         responses: {
             201: components["responses"]["PaymentIntent"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     toggleContentLike: {
@@ -3720,6 +3725,10 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["PaymentIntent"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     getPaymentTransactionRequest: {
@@ -3734,6 +3743,10 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["TransactionRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     submitPaymentSignature: {
@@ -3751,6 +3764,11 @@ export interface operations {
         requestBody: components["requestBodies"]["SubmitPaymentSignature"];
         responses: {
             202: components["responses"]["Accepted"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     createReferralToken: {

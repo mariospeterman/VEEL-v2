@@ -104,4 +104,14 @@ describe("database migrations", () => {
     expect(sql).toContain("product_type text");
     expect(sql).not.toMatch(/entitled|payment_confirmed|signed_url|playback_token|private_key/i);
   });
+
+  it("adds payment intents without treating signatures as proof", () => {
+    const sql = readMigration("0009_payment_intents.sql");
+
+    expect(sql).toContain("create table payment_intents");
+    expect(sql).toContain("reference_address text not null unique");
+    expect(sql).toContain("create table payment_settlement_attempts");
+    expect(sql).toContain("confirmed_signature text unique");
+    expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|wallet_secret|service_role/i);
+  });
 });

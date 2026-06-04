@@ -25,6 +25,14 @@ import type {
   WalletRepository,
   WalletResource
 } from "../src/modules/wallet/types";
+import type {
+  PaymentRepository,
+  PaymentSettlementInput,
+  PaymentSettlementVerifier,
+  RecordPaymentSubmissionInput,
+  RecordTransactionRequestInput,
+  StoredPaymentIntent
+} from "../src/modules/payment/types";
 
 describe("buildApi", () => {
   it("boots the Fastify skeleton and loads the OpenAPI document", async () => {
@@ -1012,6 +1020,10 @@ describe("buildApi", () => {
         NODE_ENV: "test",
         API_URL: "http://localhost:4000",
         WEB_URL: "http://localhost:3000",
+        SOLANA_CLUSTER: "devnet",
+        SOLANA_NETWORK: "solana:devnet",
+        SOLANA_RPC_URL: "https://api.devnet.solana.com",
+        PAYMENT_DEFAULT_ASSET: "SOL",
         AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: false,
         SUMSUB_API_BASE_URL: "https://api.sumsub.com",
         YOTI_API_BASE_URL: "https://age.yoti.com/api/v1",
@@ -1054,6 +1066,231 @@ describe("buildApi", () => {
     expect(Object.values(session.headers)).not.toContain("bunny-secret");
 
     vi.useRealTimers();
+  });
+
+  it("creates a native SOL payment intent for an app-ready user", async () => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const paymentRepository: PaymentRepository = {
+      async createOrReuseIntent(input) {
+        expect(input).toMatchObject({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          idempotencyKey: "payment-intent-1",
+          productType: "tip",
+          targetId: "00000000-0000-4000-8000-000000000010",
+          amountMinor: 10000000,
+          currency: "SOL",
+          solanaCluster: "devnet",
+          treasuryWallet
+        });
+
+        return {
+          ...storedPaymentIntent,
+          referenceAddress: input.referenceAddress,
+          requestHash: input.requestHash,
+          expiresAt: input.expiresAt
+        };
+      },
+      async findIntent() {
+        throw new Error("not implemented");
+      },
+      async recordTransactionRequest() {
+        throw new Error("not implemented");
+      },
+      async recordSubmission() {
+        throw new Error("not implemented");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      paymentRepository,
+      settlementVerifier: fakeUnconfirmedSettlementVerifier
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/payments/intents",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "payment-intent-1"
+      },
+      payload: {
+        productType: "tip",
+        targetId: "00000000-0000-4000-8000-000000000010",
+        amountMinor: 10000000
+      }
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toEqual({
+      id: storedPaymentIntent.id,
+      productType: "tip",
+      amountMinor: 10000000,
+      currency: "SOL",
+      state: "pending"
+    });
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("returns a Solana Pay transfer request without treating it as settlement", async () => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const recordedRequests: RecordTransactionRequestInput[] = [];
+    const paymentRepository: PaymentRepository = {
+      async createOrReuseIntent() {
+        throw new Error("not implemented");
+      },
+      async findIntent() {
+        return storedPaymentIntent;
+      },
+      async recordTransactionRequest(input) {
+        recordedRequests.push(input);
+
+        return {
+          transactionRequestUrl: input.transactionRequestUrl,
+          expiresAt: storedPaymentIntent.expiresAt.toISOString()
+        };
+      },
+      async recordSubmission() {
+        throw new Error("not implemented");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      paymentRepository,
+      settlementVerifier: fakeUnconfirmedSettlementVerifier
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/payments/intents/${storedPaymentIntent.id}/transaction-request`,
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { transactionRequestUrl: string; expiresAt: string };
+    expect(body.transactionRequestUrl).toContain(`solana:${treasuryWallet}?`);
+    expect(body.transactionRequestUrl).toContain("amount=0.01");
+    expect(body.transactionRequestUrl).toContain(
+      `reference=${storedPaymentIntent.referenceAddress}`
+    );
+    expect(recordedRequests[0]?.transactionRequestUrl).toBe(body.transactionRequestUrl);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("records a payment submission and confirms only verified settlement", async () => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const submissions: RecordPaymentSubmissionInput[] = [];
+    const settlementInputs: PaymentSettlementInput[] = [];
+    const paymentRepository: PaymentRepository = {
+      async createOrReuseIntent() {
+        throw new Error("not implemented");
+      },
+      async findIntent() {
+        return storedPaymentIntent;
+      },
+      async recordTransactionRequest() {
+        throw new Error("not implemented");
+      },
+      async recordSubmission(input) {
+        submissions.push(input);
+      }
+    };
+    const settlementVerifier: PaymentSettlementVerifier = {
+      async verifyNativeSolTransfer(input) {
+        settlementInputs.push(input);
+
+        return {
+          confirmed: true
+        };
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      paymentRepository,
+      settlementVerifier
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/payments/intents/${storedPaymentIntent.id}/submissions`,
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "payment-submission-1"
+      },
+      payload: {
+        signature: validSolanaSignature
+      }
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(settlementInputs).toEqual([
+      {
+        signature: validSolanaSignature,
+        referenceAddress: storedPaymentIntent.referenceAddress,
+        treasuryWallet,
+        amountMinor: storedPaymentIntent.amountMinor
+      }
+    ]);
+    expect(submissions).toEqual([
+      {
+        supabaseUserId: "00000000-0000-4000-8000-000000000001",
+        paymentIntentId: storedPaymentIntent.id,
+        signature: validSolanaSignature,
+        settlement: {
+          confirmed: true
+        }
+      }
+    ]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("blocks payment intent creation before age verification", async () => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: requiredAgeRepository,
+      walletRepository: walletRepositoryWithWallet
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/payments/intents",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "payment-intent-2"
+      },
+      payload: {
+        productType: "tip",
+        targetId: "00000000-0000-4000-8000-000000000010",
+        amountMinor: 10000000
+      }
+    });
+
+    expect(response.statusCode).toBe(403);
+
+    await app.close();
+    vi.unstubAllEnvs();
   });
 });
 
@@ -1140,6 +1377,44 @@ const homeFeedItem: ContentItem = {
     shareCount: 0
   }
 };
+
+const treasuryWallet = "1".repeat(32);
+const validSolanaSignature =
+  "5Pj5fCupXLUePYn18JkY8SrRaWFiUctuDTRwvUy2MLgVFG1FsCeezrWwZsmxkL5YJQFmQpAcY7rc5pN6vrXJt7Qp";
+
+const storedPaymentIntent: StoredPaymentIntent = {
+  id: "00000000-0000-4000-8000-000000000050",
+  productType: "tip",
+  amountMinor: 10000000,
+  currency: "SOL",
+  state: "pending",
+  referenceAddress: `${"1".repeat(31)}2`,
+  treasuryWallet,
+  solanaCluster: "devnet",
+  expiresAt: new Date("2026-06-04T23:15:00.000Z"),
+  requestHash: "request-hash"
+};
+
+const fakeUnconfirmedSettlementVerifier: PaymentSettlementVerifier = {
+  async verifyNativeSolTransfer() {
+    return {
+      confirmed: false,
+      failureCode: "not_found"
+    };
+  }
+};
+
+const appReadySessionRepository = sessionRepositoryWithProfile({
+  async onFind() {
+    return {
+      id: "00000000-0000-4000-8000-000000000010",
+      state: "active",
+      handle: "maki",
+      displayName: "Maki",
+      avatarUrl: null
+    };
+  }
+});
 
 const walletRepositoryWithWallet: WalletRepository = {
   async hasWalletBySupabaseUserId() {
