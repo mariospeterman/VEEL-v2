@@ -25,7 +25,7 @@ This document defines the recommended 2026 operating model for the greenfield v2
 ## Core separation
 
 - age assurance answers: can this person access protected 18+ app surfaces?
-- KYC or KYB answers: does this user need extra review for suspicious, regulated, or operational payout flows?
+- KYC or KYB answers: does this user need extra review for suspicious, regulated, tax, earning, or partner-required flows?
 - creator audience geoblocking answers: does this creator want specific locations blocked from their own audience?
 
 These are separate controls and should stay separate in data, policy, and UI.
@@ -118,13 +118,13 @@ Do not run KYC or KYB for ordinary viewers at signup.
 Trigger KYC or KYB only for:
 
 - suspicious account activity
-- creator payout setup only when a partner, regulator, bank, or operator workflow truly requires it
+- creator earning/tax setup only when a partner, regulator, bank, or operator workflow truly requires it
 - regulated fiat off-ramp or merchant partner handoff
 - business or merchant onboarding
 
-Keep payout risk separate from age-gate state:
+Keep earning, tax, and partner risk separate from age-gate state:
 
-- a user can be age-verified and still be reviewed for payout or merchant risk
+- a user can be age-verified and still be reviewed for earning, tax, partner, or merchant risk
 - a user can fail or skip KYC without losing ordinary viewer access unless another policy requires restriction
 - direct non-custodial creator monetization should stay open by default when settlement is wallet-to-wallet and no regulated partner handoff is involved
 - admin tooling should be able to request KYC or KYB for a specific account and reason without turning that into a universal onboarding requirement

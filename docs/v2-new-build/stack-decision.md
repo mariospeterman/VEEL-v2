@@ -29,7 +29,7 @@ DB/Auth:    Supabase Postgres + Supabase Auth
 Realtime:   Supabase Realtime, selectively
 Workers:    TypeScript worker runtime with pg-boss launch default; BullMQ/Redis only when measured scale requires it
 Contracts:  OpenAPI generated from schemas
-Payments:   Solana JS + Solana Pay
+Payments:   Solana JS + Solana Pay; Solana Subscriptions/Allowances after staging approval
 Wallets:    Embedded wallet provider + Solana wallet adapter
 Media:      Bunny Stream VOD, Livepeer live/replay
 PM:         pnpm workspaces
@@ -45,9 +45,10 @@ Wallet onboarding uses a provider-first embedded wallet integration for mainstre
 - NestJS Fastify adapter/performance: `https://docs.nestjs.com/techniques/performance`
 - Hono runtimes and Cloudflare Workers guide: `https://hono.dev/docs/`, `https://developers.cloudflare.com/workers/framework-guides/web-apps/more-web-frameworks/hono/`
 - Supabase architecture, RLS, Realtime authorization: `https://supabase.com/docs/architecture`, `https://supabase.com/docs/guides/database/postgres/row-level-security`, `https://supabase.com/docs/guides/realtime/authorization`
-- Solana Pay specification and transaction requests: `https://docs.solanapay.com/`, `https://solana.com/tr/docs/tools/solana-pay/specification/version1-1`
+- Solana Pay specification and transaction requests: `https://docs.solanapay.com/`, `https://solana.com/docs/tools/solana-pay/quickstart/transaction-requests`
+- Solana Subscriptions and Allowances: `https://solana.com/docs/payments/subscriptions/overview`, `https://solana.com/docs/payments/subscriptions/fixed-delegation`, `https://solana.com/docs/payments/subscriptions/recurring-delegation`, `https://solana.com/docs/payments/subscriptions/subscription-plan`
 - Embedded wallet providers to evaluate: `https://docs.privy.io/`, `https://www.dynamic.xyz/docs/wallets/mpc/overview`, `https://docs.turnkey.com/embedded-wallets`
-- Onramp providers to evaluate: `https://docs.cdp.coinbase.com/onramp/docs/welcome`, MoonPay/Helio docs if selected
+- Wallet funding/onramp paths to evaluate only for funding user-controlled wallets: `https://docs.cdp.coinbase.com/onramp/docs/welcome`
 - Bunny Stream TUS: `https://docs.bunny.net/stream/tus-resumable-uploads`
 - Livepeer stream creation/playback policy: `Livepeer stream create API reference at docs.livepeer.org`
 - Next.js App Router and env docs: `https://nextjs.org/docs/app`, `https://nextjs.org/docs/pages/guides/environment-variables`

@@ -38,15 +38,21 @@ Official references checked:
 - Solana Pay overview: https://solana.com/docs/tools/solana-pay
 - Solana Pay transfer requests: https://solana.com/docs/tools/solana-pay/quickstart/transfer-requests
 - Solana Pay transaction requests and validation: https://solana.com/docs/tools/solana-pay/quickstart/transaction-requests
+- Solana Subscriptions overview: https://solana.com/docs/payments/subscriptions/overview
+- Solana fixed delegation: https://solana.com/docs/payments/subscriptions/fixed-delegation
+- Solana recurring delegation: https://solana.com/docs/payments/subscriptions/recurring-delegation
+- Solana subscription plan: https://solana.com/docs/payments/subscriptions/subscription-plan
 - Solana RPC `getTransaction`: https://solana.com/docs/rpc/http/gettransaction
 
 ## Payment Principles
 
 - Noncustodial wallet approval.
+- Direct recipient settlement for creator/platform/referral splits.
+- No custody, escrow, internal credits, stored creator balances, pending payouts, or withdrawal queues.
 - Backend computes amount, recipient, splits, reference, memo, and entitlement target.
 - Wallet approval is not proof.
 - Confirmed chain evidence plus backend validation is proof.
-- Access grants, commissions, and creator balances are backend-only.
+- Access grants, commissions, earnings projections, and revenue records are backend-only.
 
 ## Product Types
 
@@ -54,6 +60,7 @@ Official references checked:
 - tip/support
 - paid message
 - creator subscription
+- platform subscription
 - live pass
 - event ticket
 - external referral commission
@@ -127,7 +134,7 @@ Recommended:
 - show immediate submitted UX after wallet signature
 - run scoped RPC confirmation for exact signature
 - post creator earning and platform fee ledger entries only after backend-confirmed settlement
-- include tips in Helius/reconciliation if they create referral commission, creator balance, or payout state
+- include tips in Helius/reconciliation if they create referral commission, creator earning records, or platform revenue state
 - if Helius cost becomes high, batch/reconcile tips with RPC/indexer polling, but do not mark financial totals final from client alone
 
 ## Live Pass Product
@@ -162,7 +169,7 @@ Live replays are ordinary content items after the stream ends. They can use a fr
 - Self-referral blocked.
 - Duplicate paid event blocked.
 - Commission state is tied to payment intent and settlement.
-- Frontend never sends payout amount.
+- Frontend never sends recipient amount, commission amount, or final financial-truth payloads.
 
 Referral types:
 

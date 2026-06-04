@@ -248,7 +248,7 @@ Event mode:
 
 - Solana Pay / Solana RPC for wallet-approved paid tickets.
 - Helius scoped to confirmed ticket payment evidence.
-- Embedded wallet/onramp providers for conversion support.
+- Embedded wallet and user-wallet funding path for conversion support.
 - Email/push provider for optional receipt reminders.
 - No provider grants ticket access directly.
 

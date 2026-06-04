@@ -125,7 +125,7 @@ Wallet approval is required for wallet actions:
 - creator subscription
 - live pass
 - event ticket
-- creator payout/earning setup
+- creator earning/tax setup
 
 Wallet is not required for public landing pages, public teaser/deep-link capture, or reading public marketing content. It is required before the protected 18+ app shell opens. Supabase Auth alone is not enough.
 
@@ -207,7 +207,7 @@ Do not connect AI tooling directly to production data. Use a development project
 ## Age/KYC Separation
 
 - Age gate: required for protected viewing/app access.
-- KYC/KYB: required for earning/payout/compliance flows.
+- KYC/KYB: required for earning, tax, and compliance flows.
 - Normal viewer access should not require KYC unless product/legal policy says so.
 - Frontend receives only state/action, never raw provider payload.
 
@@ -226,13 +226,13 @@ Rules:
 - No protected app entry without age verification.
 - No protected app entry without a wallet path.
 - No double age verification per media item after the app-level age gate, unless a future jurisdiction/product rule explicitly requires it.
-- KYC/KYB remains separate from age verification and is only required for creator earning/payout/risk workflows by default.
+- KYC/KYB remains separate from age verification and is only required for creator earning, tax/compliance, and risk workflows by default.
 
 ## Implementation Decisions Required Before Coding
 
 - define account creation and identity-linking flow
 - define wallet link challenge and primary-wallet flow
-- choose embedded wallet provider and onramp provider
+- choose embedded wallet provider and wallet funding path, if any
 - define wallet creation timing: signup vs first paid action
 - define session refresh and JWT verification behavior
 - define user ID mapping between Supabase Auth and app `users`

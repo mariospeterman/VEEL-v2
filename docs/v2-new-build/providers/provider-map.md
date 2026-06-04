@@ -38,7 +38,7 @@ This map defines which provider does which job and what Veel owns. It exists to 
 | Yoti | age assurance | session creation, minimal result storage | provider redirect/widget only | signed notification/result |
 | Sumsub | age/KYC fallback | applicant/session mapping, minimal state | provider redirect/widget only | signed webhook/result |
 | Persona | identity fallback | inquiry/session mapping, minimal state | provider redirect/widget only | signed webhook/result |
-| Onramp provider | wallet funding | start session, show funding state | provider checkout/widget | provider callback for funding status only |
+| Wallet funding/onramp | user-owned wallet funding only | start session, show funding state | funding widget/session only | provider callback for funding status only |
 | Email/push provider | notifications | notification policy, templates, retries | no secrets | delivery status |
 | OpenTelemetry/logging | observability | traces, logs, redaction | none | trace/log pipeline |
 
@@ -54,7 +54,7 @@ API
   -> computes amount, recipients, splits, reference, memo
   -> builds transaction request
   -> verifies confirmed transaction facts
-  -> grants entitlement / balance / commission
+  -> grants entitlement / earning record / commission
 
 Helius/RPC
   -> supplies confirmed transaction evidence
@@ -90,7 +90,7 @@ KYC/KYB for earning:
   API -> provider session
   Creator -> provider verification
   Provider -> API webhook/result
-  API -> payout eligibility state
+  API -> earning compliance state
 ```
 
 ## Provider Selection Principles
@@ -105,7 +105,7 @@ KYC/KYB for earning:
 ## Required Provider Decisions Before Coding
 
 - embedded wallet provider staging confirmation
-- onramp provider choice
+- wallet funding path, if any
 - age/KYC primary and fallback provider choice
 - Livepeer JWT key management and TTL configuration
 - Bunny signed/tokenized playback TTL configuration

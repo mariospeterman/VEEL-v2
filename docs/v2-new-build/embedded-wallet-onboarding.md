@@ -71,7 +71,7 @@ Provider decision:
 - Privy is the recommended launch provider for Veel if staging confirms Solana wallet creation, funding, export/recovery, external-wallet linking, and noncustodial user approval. It is the fastest default for mainstream email/social/passkey conversion.
 - Turnkey is the advanced policy fallback if Privy cannot satisfy required Solana, audit, key-recovery/export, cost, or policy-control needs. It remains the preferred option for deeper sub-organization controls or future admin/AI guarded-wallet policies.
 - Dynamic remains an alternative to evaluate if Turnkey/Privy do not meet regional, cost, or UX needs.
-- Onramp/funding should be provided through the selected wallet/onramp provider and must fund the user-owned wallet, not a Veel custodial account.
+- Wallet funding should be provided through the selected embedded-wallet or funding path and must fund the user-owned wallet, not a Veel custodial account or product checkout balance.
 
 Selection criteria:
 
@@ -201,9 +201,11 @@ flowchart LR
 Rules:
 
 - onramp funds the user wallet directly
-- onramp provider handles fiat/KYC requirements where applicable
+- funding provider handles fiat/KYC requirements where applicable
 - Veel records safe onramp session references for UX/support only
 - Veel does not credit internal custodial balance as payment proof
+- onramp completion is not content, ticket, pass, message, tip, or subscription checkout
+- Veel does not use wallet funding providers as merchant-of-record product billing
 - paid actions still require backend payment intent and confirmed transaction validation
 
 ## When To Create The Embedded Wallet
@@ -222,7 +224,7 @@ Wallet-required actions:
 - creator subscription
 - live pass
 - event ticket
-- creator payout/earning setup
+- creator earning/tax setup
 
 Non-wallet actions:
 
@@ -264,7 +266,7 @@ Current implementation state:
 Recommended decision record:
 
 - ADR: embedded wallet provider choice
-- ADR: onramp provider choice
+- ADR: wallet funding path, if any
 - threat model
 - regional/compliance review
 - export/recovery policy

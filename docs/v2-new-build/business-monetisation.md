@@ -20,7 +20,7 @@ Launch scope:
 Non-goals:
 - historical-context inference, duplicate systems, and unapproved provider/product expansion
 
-This document defines the full Veel v2 monetisation and business model. It extends `payments-and-monetisation.md`, which owns payment verification mechanics. The rule is unchanged: the frontend can display and request actions, creators choose prices where product policy allows, and the backend enforces admin/env pricing guardrails, splits, settlement, entitlements, commissions, subscriptions, refunds, audit records, and operational reporting.
+This document defines the full Veel v2 monetisation and business model. It extends `payments-and-monetisation.md`, which owns payment verification mechanics, and `noncustodial-money-compliance.md`, which owns the custody and compliance boundary. The rule is unchanged: the frontend can display and request actions, creators choose prices where product policy allows, and the backend enforces admin/env pricing guardrails, splits, settlement, entitlements, commissions, subscriptions, refunds, audit records, and operational reporting.
 
 ## Business Model Summary
 
@@ -30,7 +30,7 @@ Veel earns through:
 - creator subscription platform fee
 - optional platform membership/subscription for user-facing platform features
 - optional external referral commission sourced from the platform share unless explicitly configured otherwise
-- optional on-ramp/partner revenue when providers are added
+- optional wallet-funding referral revenue only if legal/provider review approves it and it is never product checkout revenue
 
 Creators earn through:
 
@@ -72,11 +72,19 @@ Frontend responsibilities:
 - request payment intent and transaction request
 - open wallet approval
 - show submitted/pending/final states from backend
-- never calculate final fee, referral amount, entitlement, or creator payout
+- never calculate final fee, referral amount, entitlement, or creator earning truth
 
-The direct split model means creator/platform/referral balances are primarily accounting projections from confirmed chain settlement, not custodial wallet balances held by Veel.
+The direct split model means creator/platform/referral financial records are confirmed settlement projections, not custodial wallet balances held by Veel.
 
 Embedded wallets do not change this model. They reduce onboarding friction by giving mainstream users a user-controlled wallet after social/email/passkey signup, but payment still happens through wallet-approved transactions and backend-verified settlement.
+
+Hard custody rules:
+
+- never route product funds as `user wallet -> Veel wallet -> creator wallet`
+- never store credits, internal balances, creator balances, pending payouts, or withdrawal requests
+- never implement creator withdrawals; creator recipients receive directly from the buyer transaction where a creator share exists
+- never treat funding/onramp completion as product payment proof
+- keep records as receipts, entitlements, confirmed earnings/revenue projections, tax/compliance metadata, and immutable audit evidence
 
 ## Creator Pricing With Admin Guardrails
 
@@ -116,10 +124,12 @@ Examples:
 | --- | --- | --- | --- |
 | Native SOL split transfer | Devnet testing, low-friction support/tips, possible SOL products | Optional depending product | Signature, reference, payer, lamports, recipients, finality |
 | SPL/USDC split transfer | Production stablecoin products if selected | Optional depending product | Signature, reference, payer, mint, token program, token amounts, recipients, finality |
-| Provider checkout | Helio/MoonPay/on-ramp/subscription providers | Provider-dependent | Authenticated webhook + internal reconciliation |
-
-Onramp sessions are funding flows, not payment settlement flows. A card/onramp provider may help the user add SOL/USDC to their wallet, but Veel product purchases still require the normal payment intent, transaction request, and backend confirmation path.
+| Solana subscription allowance | Creator and platform recurring plans after staging approval | Subscription entitlement only after verified collection | Delegated authority/allowance, payer, mint/program, recipients, amount/period, collection signature, finality |
+| Manual Solana Pay renewal | Subscription fallback until allowance UX is staging-approved | Renewal entitlement only after confirmed payment intent | Signature, reference, payer, amount, recipients, finality |
+| Wallet funding/onramp | User adds SOL/USDC to their own wallet | No access effect | Funding status only for UX/support |
 | Free approval | Free tickets/events/passes | Entitlement only | Backend approval/audit, no wallet settlement |
+
+Onramp sessions are funding flows, not payment settlement flows. A card/onramp provider may help the user add SOL/USDC to their wallet, but Veel product purchases still require the normal payment intent, transaction request or subscription collection, and backend confirmation path. Veel must not use an onramp provider as merchant checkout for content, messages, tickets, passes, tips, or subscriptions.
 
 Native SOL and SPL token modes must share a common intent/split/settlement model. Do not create separate payment systems.
 
@@ -237,9 +247,17 @@ Required records:
 - creator or platform owner
 - current status
 - renewal anchor
-- provider/payment intent references
+- Solana subscription authority, allowance, or payment intent references
 - entitlement scope
 - audit events for every transition
+
+Recurring subscription policy:
+
+- Target provider path is Solana Subscriptions and Allowances through the official Subscription Delegation Program.
+- The delegated subscription path remains `candidate` until devnet/staging authority, revoke, collection, wallet UX, event, and reconciliation fixtures pass.
+- If delegated subscriptions are not staging-approved, use manual Solana Pay renewal intents; do not use merchant checkout, card billing, or provider-operated product subscriptions.
+- Users must be able to cancel in Veel and revoke delegated allowance in wallet/provider UX.
+- Backend subscription status mirrors verified payment/collection evidence and internal entitlement policy; it is not a stored debt or receivable.
 
 ## Referral And Commission Lifecycle
 
@@ -264,23 +282,25 @@ Rules:
 - attribution can survive signup, login, wallet link, and payment
 - commission links to referrer, referred user, content/product, payment intent, settlement signature, and product type
 - replayed chain events cannot create duplicate commission
-- client-supplied payout payloads are rejected
+- client-supplied recipient or financial-truth payloads are rejected
 
-## Creator Earnings And Payout Readiness
+## Creator Earnings, Tax Records, And Financial Risk
 
 Even with direct split transfers, Veel still needs backend-derived earning records for:
 
 - creator dashboard reporting
 - tax/compliance exports where required
-- KYC/KYB payout eligibility
+- KYC/KYB earning eligibility where required
 - dispute/refund/revocation decisions
 - admin and support investigation
 
-Payout readiness rules:
+Earning-record rules:
 
-- KYC/KYB is required for creator earning/withdrawal features where required by provider/legal policy
-- age gate is separate from creator payout/KYC
+- KYC/KYB is required for creator earning features where required by legal/provider policy
+- age gate is separate from creator earning KYC/KYB
 - creator earnings visible in dashboard must be based on confirmed settlement
+- creator earnings are records and tax/compliance inputs, not a withdrawable Veel balance
+- no pending payout or creator withdrawal queue exists in the launch model
 - pending wallet submissions are not revenue
 - failed, expired, rejected, or mismatched transactions are not revenue
 
@@ -325,7 +345,7 @@ Each monetised product should resolve through a backend config object:
 product_type
 price_min_minor
 price_max_minor
-asset_mode: native_sol | spl_token | provider_checkout
+asset_mode: native_sol | spl_token | subscription_allowance | free
 currency_symbol
 mint_address
 token_program
@@ -339,7 +359,7 @@ entitlement_scope
 access_duration
 renewal_rule
 refund_rule
-payout_requirement
+earning_compliance_requirement
 audit_required
 ```
 

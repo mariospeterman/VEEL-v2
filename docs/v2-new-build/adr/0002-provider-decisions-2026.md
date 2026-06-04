@@ -28,10 +28,10 @@ This ADR turns the v2 blueprint into concrete provider defaults for the first im
 | --- | --- | --- |
 | Onboarding order | Identity + mandatory wallet path, then age verification, then protected app access | Keeps app fully 18+ while reducing wallet-install friction through embedded wallet. |
 | Embedded wallet | Privy first, Turnkey as advanced policy fallback | Veel needs noncustodial Solana wallets, policy controls, external wallet support, auditability, and future AI/admin safety controls more than a lowest-code auth widget. |
-| Onramp/funding | Embedded-wallet provider funding UI first | Platform does not handle card processing or custody; user funds their own wallet. |
+| Onramp/funding | Embedded-wallet provider funding UI first, funding only | Platform does not handle card processing, merchant checkout, product billing, or custody; user funds their own wallet. |
 | One-time payments | Solana Pay / Solana transaction requests | Noncustodial, wallet-approved, backend-verified. |
 | Payment evidence | Helius scoped to money/access evidence, with RPC fallback | Cost-aware, not a broad firehose. |
-| Platform subscriptions | Use simple recurring provider checkout adapter until Solana recurring UX is staging-proven | Avoid blocking launch on delegated recurring-wallet UX; keep subscription state backend-owned. |
+| Platform subscriptions | Solana Subscriptions/Allowances target; manual Solana Pay renewal fallback until staging approval | Keeps subscriptions noncustodial and avoids merchant checkout, custodial balances, and provider-operated product billing. |
 | Creator subscriptions | Keep, but treat as creator fan-club access, not a replacement for discovery/unlocks | Supports creator recurring revenue without killing free discovery. |
 | Creator pricing | Creator sets content unlock, paid message, live pass, ticket, and creator subscription prices within admin/env guardrails | Preserves creator ownership while preventing abuse, too-low pricing, and compliance issues. |
 | VOD | Bunny Stream/CDN/TUS | Direct uploads and playback provider infrastructure. |
@@ -78,6 +78,7 @@ Current provider gate:
 | Live/replay | Livepeer JWT | candidate | Stream creation, JWT playback, replay handoff, no viewer stream-key exposure. |
 | Payment evidence | Helius | candidate | Devnet/staging webhook, scoped watched addresses/references, signature/replay validation, confirmed payment fixture. |
 | Onramp/funding | Embedded-wallet funding UI | candidate | User-controlled wallet funding, provider KYC handled by provider, no entitlement on funding completion. |
+| Subscriptions/allowances | Solana Subscription Delegation Program | candidate | Devnet/staging authority setup, revoke, collection, wallet UX, token support, unsafe-extension rejection, event/reconciliation fixtures, direct recipient settlement, cancellation, no custody, no merchant checkout. |
 
 No provider can be treated as launch-approved until its staging smoke, security review, account/terms review, and fallback/rollback notes are documented.
 
@@ -92,6 +93,11 @@ Before implementation, verify the latest official docs for each provider/API. Th
 | Supabase RLS | `https://supabase.com/docs/guides/database/postgres/row-level-security` |
 | Supabase Realtime | `https://supabase.com/docs/guides/realtime` |
 | Solana Pay | `https://docs.solanapay.com/` |
+| Solana Pay transaction requests | `https://solana.com/docs/tools/solana-pay/quickstart/transaction-requests` |
+| Solana Subscriptions overview | `https://solana.com/docs/payments/subscriptions/overview` |
+| Solana Subscriptions fixed delegation | `https://solana.com/docs/payments/subscriptions/fixed-delegation` |
+| Solana Subscriptions recurring delegation | `https://solana.com/docs/payments/subscriptions/recurring-delegation` |
+| Solana Subscriptions plan | `https://solana.com/docs/payments/subscriptions/subscription-plan` |
 | Helius webhooks | `https://www.helius.dev/docs/webhooks` |
 | Bunny Stream auth/security | `https://docs.bunny.net/stream/authentication`, `https://docs.bunny.net/stream/security` |
 | Bunny TUS uploads | `https://docs.bunny.net/stream/tus-resumable-uploads` |
@@ -164,7 +170,8 @@ Turnkey remains the advanced fallback when stronger policy controls, sub-organiz
 
 - The platform never holds user private keys.
 - Backend never signs product purchases for users.
-- Onramp provider delivers funds to the user wallet.
+- Wallet funding/onramp provider delivers funds to the user wallet only.
+- Funding completion is not product checkout, payment proof, subscription renewal, or entitlement proof.
 - A top-up is not a purchase and never grants entitlement by itself.
 - Product purchase still requires a payment intent and backend-confirmed settlement.
 - Browser may receive only publishable wallet/onramp config.
@@ -182,7 +189,7 @@ Use Solana transaction-request architecture for:
 - live passes
 - event tickets
 
-Tips do not unlock content, but they still affect creator balance, platform revenue, optional referral commission, and audit/accounting. They should still be backend-verified. If Helius webhook cost becomes high, tips can use batched reconciliation or RPC fallback, but frontend wallet success is not final financial truth.
+Tips do not unlock content, but they still affect creator earning records, platform revenue, optional referral commission, and audit/accounting. They should still be backend-verified. If Helius webhook cost becomes high, tips can use batched reconciliation or RPC fallback, but frontend wallet success is not final financial truth.
 
 ### Subscriptions
 
@@ -193,9 +200,10 @@ Use one billing architecture for:
 
 Recommended path:
 
-1. Evaluate Solana Subscriptions/Allowances in staging.
-2. If stable and wallet UX is acceptable, use it for native recurring billing.
-3. If not ready, use a provider checkout adapter only for subscriptions while keeping internal subscription state backend-owned.
+1. Build manual Solana Pay renewal as the fallback subscription path when delegated subscriptions are not staging-approved.
+2. Evaluate Solana Subscriptions/Allowances through the official Subscription Delegation Program in staging.
+3. Use delegated recurring billing only after authority setup, revoke, collection, wallet UX, events, and reconciliation pass.
+4. Do not use merchant checkout, card billing, custodial subscription balances, or provider-operated product subscriptions.
 
 Platform subscription tiers:
 
@@ -295,7 +303,7 @@ Do not store raw face images, raw documents, or raw provider payloads in core DB
 Default:
 
 - ordinary users and ordinary creators do not need KYC/KYB beyond age gate
-- admin can require KYC/KYB for high-risk creators, payout thresholds, suspicious activity, jurisdiction changes, or future legal policy
+- admin can require KYC/KYB for high-risk creators, earning thresholds, suspicious activity, jurisdiction changes, or future legal policy
 
 The schema must support enabling KYC/KYB for all earning creators later without redesign.
 

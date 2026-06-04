@@ -48,10 +48,10 @@ Fastify TypeScript API
         ├────────────────────────────┬────────────────────────────┐
         ▼                            ▼                            ▼
 Supabase Platform                 Workers                      Providers
-  ├─ Auth/JWT                       ├─ webhooks                  ├─ Solana RPC / Solana Pay
+  ├─ Auth/JWT                       ├─ webhooks                  ├─ Solana RPC / Pay / Subs
   ├─ Postgres/RLS                   ├─ reconciliation            ├─ Helius payment evidence
   ├─ Realtime Broadcast             ├─ media status              ├─ embedded wallet provider
-  └─ Storage only if needed         ├─ moderation                ├─ onramp provider
+  └─ Storage only if needed         ├─ moderation                ├─ wallet funding path
                                     ├─ notifications             ├─ Bunny Stream/CDN/TUS
                                     └─ retry queues              ├─ Livepeer live/replay
                                                                  ├─ Yoti/Sumsub/Veriff/Persona
@@ -85,7 +85,7 @@ Livepeer
   -> backend owns host authorization and viewer access
 
 Age/KYC providers
-  -> age gate and creator payout eligibility checks
+  -> age gate and creator earning compliance checks
   -> backend stores minimal result, provider reference, timestamps, jurisdiction/rule
 
 Onramp provider
@@ -117,7 +117,7 @@ Creator/User
   ├─ live rooms
   ├─ subscriptions
   ├─ referrals
-  └─ payout/KYC state
+  └─ earning/KYC state
 
 Money object
   ├─ payment intent
@@ -147,7 +147,7 @@ Money object
 7. API validates mandatory facts
 8. API records payment event idempotently
 9. API grants entitlement if product unlocks access
-10. API records commission/creator balance where applicable
+10. API records commission and confirmed earning/revenue records where applicable
 11. Frontend refreshes backend-confirmed state
 ```
 
@@ -191,7 +191,7 @@ Age gate for protected app/media/dating/messages/wallet:
   4. Documentary identity flow only when required
   5. Manual review only if policy requires escalation
 
-Creator earning / payout KYC:
+Creator earning / tax KYC:
   - separate from ordinary viewer age gate
   - provider session/webhook result
   - minimal stored state

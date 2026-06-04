@@ -49,7 +49,7 @@ Frontend does not own:
 - payment success
 - entitlement/access
 - referral commission
-- creator payout
+- creator earning/tax truth
 - provider state
 - age/KYC result
 - moderation/admin truth

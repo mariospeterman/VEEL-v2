@@ -59,7 +59,7 @@ trust badges
   age verified
   wallet linked
   creator verified
-  payout/KYC verified if public policy allows
+  earning/KYC verified if public policy allows
 
 creator badges
   rising creator
@@ -168,7 +168,7 @@ Admin can inspect:
 - badge grants/revocations
 - ranking inputs
 - creator quality signals
-- payout/KYC status
+- earning/KYC status
 - report/block impact
 - ranking abuse attempts
 

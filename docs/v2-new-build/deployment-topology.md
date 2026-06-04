@@ -84,7 +84,7 @@ Use optional edge/serverless functions only for:
 - webhook prefilter if provider latency or DDoS requires it
 - landing page form ingestion if isolated from core auth/money state
 
-Do not put payment settlement, entitlement grants, creator payout logic, admin actions, age/KYC decisions, or provider secrets in edge functions.
+Do not put payment settlement, entitlement grants, creator earning/tax truth, admin actions, age/KYC decisions, or provider secrets in edge functions.
 
 ## Environments
 

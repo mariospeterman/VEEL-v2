@@ -99,7 +99,7 @@ create table creator_accounts (
   monetisation_enabled boolean not null default false,
   kyc_required boolean not null default false,
   kyc_state text not null default 'not_required',
-  payout_wallet_id uuid references wallets(id),
+  earnings_recipient_wallet_id uuid references wallets(id),
   created_at timestamptz not null default now()
 );
 

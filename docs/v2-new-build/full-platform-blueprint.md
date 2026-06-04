@@ -39,7 +39,7 @@ Veel v2 is an 18+ creator PWA/dApp for:
 - events and tickets
 - dating/matches as an explicit opt-in mode
 - messaging and quick chat
-- creator monetisation and payouts
+- creator monetisation and earning/tax records
 - referral commissions
 - user activity and wallet transaction history
 - admin/ops/business control
@@ -74,12 +74,12 @@ Backend
 Providers
   Embedded noncustodial wallet provider
   External Solana wallets
-  Solana RPC / Solana Pay
+  Solana RPC / Solana Pay / Solana Subscriptions
   Helius for confirmed payment/access evidence
   Bunny Stream/CDN/TUS for VOD
   Livepeer for live/replay
   Yoti/Sumsub/Veriff/Persona age/KYC waterfall
-  onramp provider for wallet funding
+  wallet funding path for user-owned wallets
   email/push provider
 ```
 
@@ -115,9 +115,9 @@ Providers
 ┌─────────────────────────┐ ┌─────────────────┐ ┌────────────────────────────┐
 │ Supabase                │ │ Worker Process  │ │ External Providers          │
 │                         │ │                 │ │                            │
-│ Auth/JWT                │ │ webhooks        │ │ Solana RPC / Solana Pay     │
+│ Auth/JWT                │ │ webhooks        │ │ Solana RPC / Pay / Subs     │
 │ Postgres/RLS            │ │ reconciliation  │ │ Helius payment evidence     │
-│ Realtime Broadcast      │ │ media status    │ │ Embedded wallet/onramp      │
+│ Realtime Broadcast      │ │ media status    │ │ Embedded wallet/funding     │
 │ Storage if needed       │ │ moderation      │ │ Bunny VOD/CDN/TUS           │
 │                         │ │ notifications   │ │ Livepeer live/replay        │
 └─────────────────────────┘ │ retries         │ │ Age/KYC providers           │
@@ -140,7 +140,7 @@ Supabase owns:
 
 Providers own:
   wallet UX, chain evidence, media infrastructure, live infrastructure,
-  age/KYC verification, onramp funding, delivery infrastructure
+  age/KYC verification, user-wallet funding, delivery infrastructure
 ```
 
 Frontend never computes final access, final commission, final ticket state, final match state, final KYC state, or final provider status.
@@ -149,16 +149,16 @@ Frontend never computes final access, final commission, final ticket state, fina
 
 | Area | V2 docs | Backend module | Frontend surface | Providers |
 | --- | --- | --- | --- | --- |
-| Landing/onboarding | `landing-page-gsap.md`, `embedded-wallet-onboarding.md` | auth, age, wallet | landing, enter, onboarding | Supabase Auth, wallet provider, onramp |
+| Landing/onboarding | `landing-page-gsap.md`, `embedded-wallet-onboarding.md` | auth, age, wallet | landing, enter, onboarding | Supabase Auth, wallet provider, funding path |
 | App shell/navigation/gestures | `native-ui-ux-screens.md`, `frontend-architecture.md` | profile/session policy | app shell, nav, gesture layer | none |
 | Home/Bits/media viewer | `product-flows.md`, `native-ui-ux-screens.md`, `recommendation-discovery.md`, `frontend/component-map.md` | content, recommendation, engagement, access | Home, Bits, media viewer | Bunny/Livepeer playback |
 | Create/Edit media | `product-flows.md`, `media-live-providers.md`, `frontend/component-map.md` | content, media, moderation | Create/Edit | Bunny TUS, Livepeer, moderation |
 | VOD/media pipeline | `media-live-providers.md`, `providers/content-protection.md` | media, assets, provider callbacks | media cards/viewer | Bunny Stream/CDN/TUS |
 | Live rooms/replays | `media-live-providers.md`, `product-flows.md` | live, passes, chat, replay | live room, replay viewer | Livepeer |
 | Payments/unlocks | `payments-and-monetisation.md`, `business-monetisation.md` | payments, entitlements | payment sheet | Solana Pay/RPC, Helius |
-| Tips/support | `business-monetisation.md`, `payments-and-monetisation.md` | payments, creator balances, referrals | tip/support sheet | Solana Pay/RPC, Helius/RPC evidence |
+| Tips/support | `business-monetisation.md`, `payments-and-monetisation.md` | payments, creator earnings records, referrals | tip/support sheet | Solana Pay/RPC, Helius/RPC evidence |
 | Referrals/commissions | `business-monetisation.md`, `engagement-strategy.md` | referrals, commissions | share/invite, activity | Solana evidence |
-| Subscriptions | `business-monetisation.md`, `payments-and-monetisation.md` | subscriptions, renewals | subscribe sheet/profile | Solana/checkout provider ADR |
+| Subscriptions | `business-monetisation.md`, `payments-and-monetisation.md`, `noncustodial-money-compliance.md` | subscriptions, renewals | subscribe sheet/profile | Solana Subscriptions/Allowances or manual Solana Pay renewal |
 | Paid messages | `business-monetisation.md`, `realtime-messages-activity.md` | messages, payments, access | messages/quick chat | Solana evidence |
 | Engagement | `engagement-strategy.md` | likes, comments, saves, shares, follows | cards, viewer, profile | none |
 | Messages/activity/realtime | `realtime-messages-activity.md`, `auth-supabase-realtime.md` | conversations, activity, notifications | messages, quick chat, activity | Supabase Realtime |
@@ -167,7 +167,7 @@ Frontend never computes final access, final commission, final ticket state, fina
 | Events/tickets | `product/events-ticketing.md`, `business-monetisation.md` | events, tickets, payments | event sheet, tickets | Solana evidence, email/push |
 | AI/MCP | `safety-admin-ai.md`, `ai-mcp-use-cases.md` | AI sessions, tools, permissions, audit | AI assistant/admin AI | OpenAI-compatible adapter first |
 | Admin/ops | `admin-operations-dashboard.md`, `deployment-topology.md` | admin, audit, ops diagnostics | admin app | all providers via sanitized diagnostics |
-| Adult compliance/age/KYC | `compliance/*`, `providers/identity-provider-wiring.md` | age, KYC/KYB, audit | age gate, creator payout setup | Yoti/Sumsub/Veriff/Persona |
+| Adult compliance/age/KYC | `compliance/*`, `providers/identity-provider-wiring.md` | age, KYC/KYB, audit | age gate, creator earning/tax setup | Yoti/Sumsub/Veriff/Persona |
 | Security/content protection | `providers/content-protection.md`, `safety-admin-ai.md` | access policy, signed playback | safe media resources | Bunny, Livepeer |
 | Deployment/ops | `deployment-topology.md`, `slice-workflow.md` | API/worker/observability | health/admin views | Supabase, providers, telemetry |
 
@@ -197,7 +197,7 @@ Sign up
   -> age gate
   -> create profile
   -> optional creator monetisation setup
-  -> KYC/KYB for earning/payout where required
+  -> KYC/KYB for earning, tax, and compliance where required
   -> upload/capture media
   -> choose thumbnail/teaser/access/monetisation and creator prices within admin guardrails
   -> optional event attachment with date/time, ticket amount, public/private, and location

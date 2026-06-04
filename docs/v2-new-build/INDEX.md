@@ -46,7 +46,7 @@ This folder is the canonical new-build pack. It is intentionally self-contained 
 | API shape | `packages/contracts/openapi.yaml` | Generated client and Fastify schemas must match exactly. |
 | Frontend routes/screens/gestures | `route-map.md`, `native-ui-ux-screens.md`, frontend docs | Next routes encode route state only. |
 | Database shape | `packages/database/schema-blueprint.sql` until migrations exist | Migrations must be derived slice-by-slice from the blueprint. |
-| Money/access/referral truth | `payments-and-monetisation.md`, `business-monetisation.md`, OpenAPI | Backend owns final state; frontend is UX/cache only. |
+| Money/access/referral truth | `payments-and-monetisation.md`, `business-monetisation.md`, `noncustodial-money-compliance.md`, OpenAPI | Backend owns final state; frontend is UX/cache only. |
 | Provider boundaries | `providers/provider-map.md`, provider-specific docs, ADRs | Use official provider docs/SDKs first; adapters hide secrets. |
 | Security/compliance | compliance docs, `safety-admin-ai.md`, ADRs | Age, moderation, audit, and privacy rules block launch if incomplete. |
 | Admin/ops | `admin-operations-dashboard.md` | Every launch slice needs admin visibility where relevant. |
@@ -95,21 +95,22 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 
 29. [Payments and monetisation](payments-and-monetisation.md)
 30. [Business monetisation](business-monetisation.md)
-31. [Provider map](providers/provider-map.md)
-32. [Media and live providers](media-live-providers.md)
-33. [Identity provider wiring](providers/identity-provider-wiring.md)
-34. [Content protection](providers/content-protection.md)
-35. [Safety, admin, and AI/MCP](safety-admin-ai.md)
-36. [AI/MCP practical use cases](ai-mcp-use-cases.md)
-37. [Admin and operations dashboard](admin-operations-dashboard.md)
-38. [Adult content compliance](compliance/adult-content-compliance.md)
-39. [Age/KYC jurisdictions and provider waterfall](compliance/age-kyc-jurisdictions.md)
+31. [Noncustodial money and compliance boundary](noncustodial-money-compliance.md)
+32. [Provider map](providers/provider-map.md)
+33. [Media and live providers](media-live-providers.md)
+34. [Identity provider wiring](providers/identity-provider-wiring.md)
+35. [Content protection](providers/content-protection.md)
+36. [Safety, admin, and AI/MCP](safety-admin-ai.md)
+37. [AI/MCP practical use cases](ai-mcp-use-cases.md)
+38. [Admin and operations dashboard](admin-operations-dashboard.md)
+39. [Adult content compliance](compliance/adult-content-compliance.md)
+40. [Age/KYC jurisdictions and provider waterfall](compliance/age-kyc-jurisdictions.md)
 
 ## Infrastructure And Execution
 
-40. [Infrastructure and research decisions](infra-decisions.md)
-41. [Deployment topology](deployment-topology.md)
-42. [Slice workflow](slice-workflow.md)
+41. [Infrastructure and research decisions](infra-decisions.md)
+42. [Deployment topology](deployment-topology.md)
+43. [Slice workflow](slice-workflow.md)
 
 ## How To Use In A New Repo
 

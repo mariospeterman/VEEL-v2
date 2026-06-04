@@ -217,9 +217,9 @@ For low-cost microtips, v2 can use:
 - scoped RPC confirmation for the submitted signature
 - Helius/reconciliation for final evidence
 
-Do not let frontend mark creator balance or referral commission final.
+Do not let frontend mark creator earning records, platform revenue, or referral commission final.
 
-If the user has an embedded wallet with insufficient balance, the same sheet should offer top-up through the selected onramp provider and then return to the pending tip/support intent. The onramp session itself is not payment proof.
+If the user has an embedded wallet with insufficient balance, the same sheet should offer top-up through the selected user-wallet funding path and then return to the pending tip/support intent. The funding session itself is not payment proof and must not be product checkout.
 
 ## Referral Flow
 

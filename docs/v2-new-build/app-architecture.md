@@ -64,7 +64,8 @@ Supabase             Providers
   └─ RLS               ├─ Bunny Stream/CDN/TUS
                        ├─ Livepeer live/replay
                        ├─ Age/KYC providers
-                       └─ Onramp provider
+                       ├─ Solana Subscriptions/Allowances
+                       └─ Wallet funding/onramp
 ```
 
 Mermaid source for GitHub or Mermaid-enabled previews:
@@ -94,12 +95,13 @@ flowchart TB
 
   subgraph Providers["Providers"]
     Solana["Solana RPC + Solana Pay"]
+    SolanaSubs["Solana Subscriptions/Allowances"]
     WalletProvider["Embedded wallet provider"]
     Helius["Helius payment evidence"]
     Bunny["Bunny Stream/CDN/TUS"]
     Livepeer["Livepeer live/replay"]
     Age["Age/KYC providers"]
-    Onramp["Helio/MoonPay/on-ramp adapters"]
+    Funding["Wallet funding/onramp"]
   end
 
   Shell --> Gateway
@@ -110,12 +112,13 @@ flowchart TB
   Gateway --> Postgres
   Gateway --> Realtime
   Domain --> Solana
+  Domain --> SolanaSubs
   Domain --> WalletProvider
   Domain --> Helius
   Domain --> Bunny
   Domain --> Livepeer
   Domain --> Age
-  Domain --> Onramp
+  Domain --> Funding
   Jobs --> Postgres
   Jobs --> Audit
   Providers --> Jobs
@@ -147,7 +150,7 @@ flowchart TB
 | Contracts | OpenAPI generated from Fastify schemas or shared Zod schema source | API contracts must remain source of truth for frontend client types. |
 | Package manager | pnpm workspaces | Current repo already uses pnpm; lowest migration risk for monorepo and CI. |
 | Runtime | Node.js LTS | Best provider SDK and ops compatibility for launch. |
-| Payments | Official Solana JS/Solana Pay tooling | Solana ecosystem is TypeScript-first; server composes transaction requests. |
+| Payments | Official Solana JS/Solana Pay tooling and Solana Subscriptions/Allowances after staging approval | Solana ecosystem is TypeScript-first; server composes transaction requests and keeps recurring billing noncustodial. |
 | Media | Bunny Stream for VOD, Livepeer for live/replay | Provider-first, no custom media infra. |
 | Observability | OpenTelemetry + structured logs + provider/audit tables | Required for payments, media, safety, and launch ops. |
 
@@ -214,7 +217,7 @@ Not allowed direct client ownership:
 - commissions
 - content publish decisions
 - ticket issuance
-- creator payout/KYC state
+- creator earning/KYC state
 - moderation/admin actions
 - provider upload object creation without backend policy
 
@@ -297,6 +300,6 @@ Before implementation starts, approve these greenfield decisions:
 
 - Fastify TypeScript API.
 - Supabase Auth/Realtime/Postgres as platform foundation.
-- Embedded wallet provider and onramp provider.
+- Embedded wallet provider and user-wallet funding path.
 - Provider-first payment/media architecture.
 - Contract-first vertical slice order in `build-plan.md`.

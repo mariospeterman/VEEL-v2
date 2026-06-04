@@ -33,7 +33,7 @@ Required:
 - creator verification, consent, recordkeeping, and takedown workflows for adult content
 - monetisation holds
 - viewer payment holds
-- KYC/KYB for earning/payout where required
+- KYC/KYB for earning, tax, and compliance where required
 - audit logs
 - admin review queues
 
