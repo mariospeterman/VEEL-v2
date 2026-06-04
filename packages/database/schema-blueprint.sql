@@ -332,6 +332,13 @@ create table payment_intents (
   created_at timestamptz not null default now()
 );
 
+create index payment_intents_created_at_idx
+  on payment_intents (created_at desc);
+
+create index payment_intents_submitted_signature_idx
+  on payment_intents (submitted_signature)
+  where submitted_signature is not null;
+
 create table payment_splits (
   id uuid primary key,
   payment_intent_id uuid not null references payment_intents(id),
@@ -409,6 +416,9 @@ create table entitlements (
   created_at timestamptz not null default now(),
   unique (payment_intent_id)
 );
+
+create index entitlements_granted_at_idx
+  on entitlements (granted_at desc);
 
 create table entitlement_events (
   id uuid primary key,
@@ -637,6 +647,9 @@ create table provider_events (
   processed_at timestamptz,
   unique (provider, provider_event_id)
 );
+
+create index provider_events_received_at_idx
+  on provider_events (received_at desc);
 
 create table provider_webhook_receipts (
   id uuid primary key,

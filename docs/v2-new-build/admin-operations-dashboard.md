@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: admin, business operations, support, devops visibility
-Last updated: 2026-06-01
+Last updated: 2026-06-04
 Source of truth: yes
 
 Owns:
@@ -21,6 +21,16 @@ Non-goals:
 - historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 This document defines the admin and operations surface required to run Veel as a business. It complements `safety-admin-ai.md`, which covers safety and AI boundaries. The admin dashboard is a separate protected product surface, not part of the normal user app shell.
+
+Current implementation state:
+
+- `GET /v1/admin/ops/summary` returns role-gated payment, unlock, provider event, report, provider health, and queue health counts.
+- `GET /v1/admin/payments/intents` returns sanitized payment intent reconciliation rows with server-owned product, amount, state, reference address, submitted/confirmed signatures, settlement attempt count, and linked entitlement ID.
+- `GET /v1/admin/unlocks` returns sanitized entitlement rows for content unlock and access investigation.
+- `GET /v1/admin/provider-events` returns sanitized provider event status and timing only.
+- The `/admin` web surface is separate from normal user navigation and mirrors the read-only payment/unlock/provider ops projection for smoke coverage.
+- Admin reads require a valid session whose app user has an active staff membership in an operations, finance, support, creator-success, readonly-auditor, admin, or owner role.
+- Raw provider payloads, webhook bodies, private media URLs, stream keys, provider secrets, wallet private keys, service-role keys, and frontend-computed payment truth are not returned.
 
 ## Admin Principles
 

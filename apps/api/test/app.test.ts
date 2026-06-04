@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
 import { buildApi } from "../src/app";
+import type { AdminRepository } from "../src/modules/admin/types";
 import type { ActivityRepository } from "../src/modules/activity/types";
 import { createBunnyStreamUploadAdapter } from "../src/modules/content/media-upload-adapter";
 import type {
@@ -1600,6 +1601,101 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("rejects admin reads for non-staff users", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: {
+        async hasAdminAccess() {
+          return false;
+        },
+        async getOpsSummary() {
+          throw new Error("not implemented");
+        },
+        async listPaymentIntents() {
+          throw new Error("not implemented");
+        },
+        async listUnlocks() {
+          throw new Error("not implemented");
+        },
+        async listProviderEvents() {
+          throw new Error("not implemented");
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/admin/ops/summary",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(403);
+
+    await app.close();
+  });
+
+  it("returns admin payment, unlock, and provider ops projections", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: fakeAdminRepository
+    });
+    await app.ready();
+
+    const [summary, payments, unlocks, providerEvents] = await Promise.all([
+      app.inject({
+        method: "GET",
+        url: "/v1/admin/ops/summary",
+        headers: { authorization: "Bearer valid-token" }
+      }),
+      app.inject({
+        method: "GET",
+        url: "/v1/admin/payments/intents?q=1111",
+        headers: { authorization: "Bearer valid-token" }
+      }),
+      app.inject({
+        method: "GET",
+        url: "/v1/admin/unlocks",
+        headers: { authorization: "Bearer valid-token" }
+      }),
+      app.inject({
+        method: "GET",
+        url: "/v1/admin/provider-events",
+        headers: { authorization: "Bearer valid-token" }
+      })
+    ]);
+
+    expect(summary.statusCode).toBe(200);
+    expect(summary.json()).toMatchObject({
+      providerHealth: "ok",
+      paymentCounts: { confirmed: 1 },
+      unlockCounts: { confirmed: 1 }
+    });
+    expect(payments.statusCode).toBe(200);
+    expect(payments.json().items[0]).toMatchObject({
+      productType: "content_unlock",
+      state: "confirmed",
+      settlementAttemptCount: 1,
+      entitlementId: "00000000-0000-4000-8000-000000000090"
+    });
+    expect(unlocks.statusCode).toBe(200);
+    expect(unlocks.json().items[0]).toMatchObject({
+      productType: "content_unlock",
+      state: "active"
+    });
+    expect(providerEvents.statusCode).toBe(200);
+    expect(providerEvents.json().items[0]).toMatchObject({
+      provider: "solana_rpc",
+      eventType: "payment.settlement",
+      state: "processed"
+    });
+    expect(JSON.stringify(providerEvents.json())).not.toMatch(/raw|payload|secret|streamKey/i);
+
+    await app.close();
+  });
+
   it("passes referral tokens to backend-owned payment intent creation", async () => {
     vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
     const paymentRepository: PaymentRepository = {
@@ -2740,6 +2836,80 @@ const walletRepositoryWithoutWallet: WalletRepository = {
   },
   async consumeVerifiedExternalWalletLink() {
     throw new Error("not implemented");
+  }
+};
+
+const fakeAdminRepository: AdminRepository = {
+  async hasAdminAccess(supabaseUserId) {
+    expect(supabaseUserId).toBe("00000000-0000-4000-8000-000000000001");
+    return true;
+  },
+  async getOpsSummary() {
+    return {
+      providerHealth: "ok",
+      queueHealth: "ok",
+      openReports: 0,
+      paymentCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 },
+      unlockCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 },
+      providerEventCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 }
+    };
+  },
+  async listPaymentIntents(input) {
+    expect(input.query).toBe("1111");
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-000000000050",
+          productType: "content_unlock",
+          amountMinor: 10000000,
+          currency: "SOL",
+          state: "confirmed",
+          userId: "00000000-0000-4000-8000-000000000011",
+          targetId: "00000000-0000-4000-8000-000000000040",
+          referenceAddress: "11111111111111111111111111111112",
+          submittedSignature: "4".repeat(88),
+          confirmedSignature: "5".repeat(88),
+          settlementAttemptCount: 1,
+          entitlementId: "00000000-0000-4000-8000-000000000090",
+          createdAt: "2026-06-04T20:00:00.000Z",
+          confirmedAt: "2026-06-04T20:01:00.000Z"
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async listUnlocks() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-000000000090",
+          userId: "00000000-0000-4000-8000-000000000011",
+          targetType: "content",
+          targetId: "00000000-0000-4000-8000-000000000040",
+          productType: "content_unlock",
+          paymentIntentId: "00000000-0000-4000-8000-000000000050",
+          state: "active",
+          grantedAt: "2026-06-04T20:01:00.000Z",
+          expiresAt: null
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async listProviderEvents() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-0000000000a0",
+          provider: "solana_rpc",
+          eventType: "payment.settlement",
+          state: "processed",
+          receivedAt: "2026-06-04T20:01:00.000Z",
+          processedAt: "2026-06-04T20:01:01.000Z"
+        }
+      ],
+      nextCursor: null
+    };
   }
 };
 

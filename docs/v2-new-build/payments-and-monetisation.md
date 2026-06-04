@@ -33,7 +33,8 @@ Current implementation state:
 - `POST /v1/referrals/tokens` creates backend-owned external/internal referral tokens. Optional payment-intent `referralToken` values are resolved server-side, self-referrals are not attributed, and confirmed eligible tip/support settlement creates at most one commission from the platform fee.
 - `GET /v1/activity`, `GET /v1/activity/payments`, and `GET /v1/activity/wallet-transactions` expose normalized backend activity and wallet transaction history. Wallet transaction records are backend-observed submission/confirmation references, not settlement proof by themselves.
 - `GET /v1/profiles/me/creator-dashboard` exposes creator monetisation readiness, product toggles, confirmed earning records, platform fees, referral commissions, and recent payment activity from backend tables only.
-- Subscriptions and admin reconciliation are deferred to their owning slices.
+- Admin reconciliation is available through role-gated read-only projections for payment intents, unlock entitlements, provider events, and operations counts. These projections never expose raw provider payloads, provider secrets, private keys, or frontend-computed payment truth.
+- Subscriptions are deferred to their owning slice.
 
 Official references checked:
 

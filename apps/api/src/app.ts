@@ -2,6 +2,9 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import sensible from "@fastify/sensible";
 import Fastify, { type FastifyInstance } from "fastify";
+import { createPostgresAdminRepository } from "./modules/admin/admin-repository.js";
+import { registerAdminRoutes } from "./modules/admin/admin-routes.js";
+import type { AdminRepository } from "./modules/admin/types.js";
 import { createPostgresActivityRepository } from "./modules/activity/activity-repository.js";
 import { registerActivityRoutes } from "./modules/activity/activity-routes.js";
 import type { ActivityRepository } from "./modules/activity/types.js";
@@ -57,6 +60,7 @@ export interface BuildApiOptions {
   profileRepository?: ProfileRepository;
   referralRepository?: ReferralRepository;
   walletRepository?: WalletRepository;
+  adminRepository?: AdminRepository;
 }
 
 export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyInstance> {
@@ -110,6 +114,8 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     options.referralRepository ?? createPostgresReferralRepository(app.config.DATABASE_URL);
   const walletRepository =
     options.walletRepository ?? createPostgresWalletRepository(app.config.DATABASE_URL);
+  const adminRepository =
+    options.adminRepository ?? createPostgresAdminRepository(app.config.DATABASE_URL);
 
   if (sessionRepository.close) {
     app.addHook("onClose", async () => {
@@ -159,6 +165,11 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   if (referralRepository.close) {
     app.addHook("onClose", async () => {
       await referralRepository.close?.();
+    });
+  }
+  if (adminRepository.close) {
+    app.addHook("onClose", async () => {
+      await adminRepository.close?.();
     });
   }
 
@@ -226,6 +237,10 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     sessionRepository,
     ageRepository,
     activityRepository
+  });
+  await registerAdminRoutes(app, {
+    authVerifier,
+    adminRepository
   });
   await registerWalletRoutes(app, {
     authVerifier,

@@ -244,4 +244,14 @@ describe("database migrations", () => {
     expect(sql).toContain("creator_monetisation_settings_wallet_idx");
     expect(sql).not.toMatch(/balance|withdraw|payout_queue|escrow|private_key|seed_phrase|mnemonic|raw_payload|service_role/i);
   });
+
+  it("adds admin ops indexes for payments, unlocks, and provider events", () => {
+    const sql = readMigration("0020_admin_ops_indexes.sql");
+
+    expect(sql).toContain("payment_intents_created_at_idx");
+    expect(sql).toContain("payment_intents_submitted_signature_idx");
+    expect(sql).toContain("entitlements_granted_at_idx");
+    expect(sql).toContain("provider_events_received_at_idx");
+    expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role/i);
+  });
 });

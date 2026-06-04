@@ -71,3 +71,17 @@ test("renders the public creator profile projection", async ({ page }) => {
   await expect(page.getByText("Studio lighting test")).toBeVisible();
   await expect(page.locator("article img")).toBeVisible();
 });
+
+test("renders the admin payment unlock and provider ops projection", async ({ page }) => {
+  await page.goto("/admin");
+
+  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Payments and unlocks" })).toBeVisible();
+  await expect(page.getByText("Admin ops")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Payments", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Unlocks", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Provider events", exact: true })).toBeVisible();
+  await expect(page.getByText("content_unlock").first()).toBeVisible();
+  await expect(page.getByText("payment.settlement")).toBeVisible();
+  await expect(page.locator("span").getByText("processed", { exact: true })).toBeVisible();
+});

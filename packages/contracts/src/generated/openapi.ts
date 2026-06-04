@@ -1352,6 +1352,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/unlocks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Admin content unlock and entitlement list */
+        get: operations["listAdminUnlocks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/provider-events": {
         parameters: {
             query?: never;
@@ -2357,6 +2374,16 @@ export interface components {
             /** @enum {string} */
             queueHealth: "ok" | "degraded" | "down";
             openReports: number;
+            paymentCounts: components["schemas"]["AdminStateCounts"];
+            unlockCounts: components["schemas"]["AdminStateCounts"];
+            providerEventCounts: components["schemas"]["AdminStateCounts"];
+        };
+        AdminStateCounts: {
+            total: number;
+            pending: number;
+            submitted: number;
+            confirmed: number;
+            failed: number;
         };
         AdminUser: {
             /** Format: uuid */
@@ -2383,6 +2410,48 @@ export interface components {
             state: "submitted" | "reviewing" | "resolved" | "escalated" | "rejected";
             reason: string;
         };
+        AdminPaymentIntent: {
+            /** Format: uuid */
+            id: string;
+            productType: components["schemas"]["ProductType"];
+            amountMinor: number;
+            currency: components["schemas"]["Currency"];
+            /** @enum {string} */
+            state: "pending" | "transaction_requested" | "submitted" | "confirmed" | "failed" | "expired";
+            /** Format: uuid */
+            userId: string;
+            /** Format: uuid */
+            targetId: string;
+            referenceAddress: string;
+            submittedSignature?: string | null;
+            confirmedSignature?: string | null;
+            settlementAttemptCount?: number;
+            /** Format: uuid */
+            entitlementId?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            confirmedAt?: string | null;
+        };
+        AdminUnlock: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            userId: string;
+            /** @enum {string} */
+            targetType: "content" | "live_room" | "event" | "message" | "creator";
+            /** Format: uuid */
+            targetId: string;
+            productType: components["schemas"]["ProductType"];
+            /** Format: uuid */
+            paymentIntentId?: string | null;
+            /** @enum {string} */
+            state: "active" | "expired" | "revoked";
+            /** Format: date-time */
+            grantedAt: string;
+            /** Format: date-time */
+            expiresAt?: string | null;
+        };
         AdminProviderEvent: {
             /** Format: uuid */
             id: string;
@@ -2392,6 +2461,8 @@ export interface components {
             state: "received" | "processed" | "failed" | "replayed" | "ignored";
             /** Format: date-time */
             receivedAt: string;
+            /** Format: date-time */
+            processedAt?: string | null;
         };
         AdminSupportCase: {
             /** Format: uuid */
@@ -3117,7 +3188,19 @@ export interface components {
             };
             content: {
                 "application/json": {
-                    items: components["schemas"]["PaymentIntent"][];
+                    items: components["schemas"]["AdminPaymentIntent"][];
+                    nextCursor?: string | null;
+                };
+            };
+        };
+        /** @description Admin unlocks */
+        AdminUnlockPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    items: components["schemas"]["AdminUnlock"][];
                     nextCursor?: string | null;
                 };
             };
@@ -4836,6 +4919,22 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["AdminPaymentIntentPage"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAdminUnlocks: {
+        parameters: {
+            query?: {
+                q?: components["parameters"]["SearchQuery"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminUnlockPage"];
             403: components["responses"]["Forbidden"];
         };
     };

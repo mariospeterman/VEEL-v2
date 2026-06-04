@@ -989,6 +989,17 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/AdminPaymentIntentPage" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/unlocks:
+    get:
+      operationId: listAdminUnlocks
+      tags: [Admin]
+      summary: Admin content unlock and entitlement list
+      parameters:
+        - $ref: "#/components/parameters/SearchQuery"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminUnlockPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /v1/admin/provider-events:
     get:
       operationId: listAdminProviderEvents
@@ -1327,7 +1338,8 @@ components:
     AdminContentPage: { description: Admin content queue, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminContentItem" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminReport: { description: Admin report, content: { application/json: { schema: { $ref: "#/components/schemas/AdminReport" } } } }
     AdminReportPage: { description: Admin reports, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminReport" } }, nextCursor: { type: string, nullable: true } } } } } }
-    AdminPaymentIntentPage: { description: Admin payment intents, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/PaymentIntent" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminPaymentIntentPage: { description: Admin payment intents, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminPaymentIntent" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminUnlockPage: { description: Admin unlocks, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminUnlock" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminProviderEventPage: { description: Admin provider events, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminProviderEvent" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminSupportCase: { description: Admin support case, content: { application/json: { schema: { $ref: "#/components/schemas/AdminSupportCase" } } } }
     AdminSupportCasePage: { description: Admin support cases, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminSupportCase" } }, nextCursor: { type: string, nullable: true } } } } } }
@@ -2139,11 +2151,23 @@ components:
         confirmationRequired: { type: boolean }
     AdminOpsSummary:
       type: object
-      required: [providerHealth, queueHealth, openReports]
+      required: [providerHealth, queueHealth, openReports, paymentCounts, unlockCounts, providerEventCounts]
       properties:
         providerHealth: { type: string, enum: [ok, degraded, down] }
         queueHealth: { type: string, enum: [ok, degraded, down] }
         openReports: { type: integer }
+        paymentCounts: { $ref: "#/components/schemas/AdminStateCounts" }
+        unlockCounts: { $ref: "#/components/schemas/AdminStateCounts" }
+        providerEventCounts: { $ref: "#/components/schemas/AdminStateCounts" }
+    AdminStateCounts:
+      type: object
+      required: [total, pending, submitted, confirmed, failed]
+      properties:
+        total: { type: integer }
+        pending: { type: integer }
+        submitted: { type: integer }
+        confirmed: { type: integer }
+        failed: { type: integer }
     AdminUser:
       type: object
       required: [id, handle, state, ageState, walletState]
@@ -2170,6 +2194,37 @@ components:
         subjectId: { type: string, format: uuid }
         state: { type: string, enum: [submitted, reviewing, resolved, escalated, rejected] }
         reason: { type: string }
+    AdminPaymentIntent:
+      type: object
+      required: [id, productType, amountMinor, currency, state, userId, targetId, referenceAddress, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        productType: { $ref: "#/components/schemas/ProductType" }
+        amountMinor: { type: integer }
+        currency: { $ref: "#/components/schemas/Currency" }
+        state: { type: string, enum: [pending, transaction_requested, submitted, confirmed, failed, expired] }
+        userId: { type: string, format: uuid }
+        targetId: { type: string, format: uuid }
+        referenceAddress: { type: string }
+        submittedSignature: { type: string, nullable: true }
+        confirmedSignature: { type: string, nullable: true }
+        settlementAttemptCount: { type: integer }
+        entitlementId: { type: string, format: uuid, nullable: true }
+        createdAt: { type: string, format: date-time }
+        confirmedAt: { type: string, format: date-time, nullable: true }
+    AdminUnlock:
+      type: object
+      required: [id, userId, targetType, targetId, productType, state, grantedAt]
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        targetType: { type: string, enum: [content, live_room, event, message, creator] }
+        targetId: { type: string, format: uuid }
+        productType: { $ref: "#/components/schemas/ProductType" }
+        paymentIntentId: { type: string, format: uuid, nullable: true }
+        state: { type: string, enum: [active, expired, revoked] }
+        grantedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time, nullable: true }
     AdminProviderEvent:
       type: object
       required: [id, provider, eventType, state, receivedAt]
@@ -2179,6 +2234,7 @@ components:
         eventType: { type: string }
         state: { type: string, enum: [received, processed, failed, replayed, ignored] }
         receivedAt: { type: string, format: date-time }
+        processedAt: { type: string, format: date-time, nullable: true }
     AdminSupportCase:
       type: object
       required: [id, state, subjectType]
