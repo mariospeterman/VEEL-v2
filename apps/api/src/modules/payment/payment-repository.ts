@@ -206,6 +206,8 @@ export function createPostgresPaymentRepository(databaseUrl?: string): PaymentRe
           user_id: string;
           product_type: StoredPaymentIntent["productType"];
           target_id: string;
+          amount_minor: number;
+          currency: StoredPaymentIntent["currency"];
         }[]>`
           update payment_intents pi
           set
@@ -230,7 +232,9 @@ export function createPostgresPaymentRepository(databaseUrl?: string): PaymentRe
             pi.id as payment_intent_id,
             pi.user_id,
             pi.product_type,
-            pi.target_id
+            pi.target_id,
+            pi.amount_minor,
+            pi.currency
         `;
 
         const updatedIntent = rows[0];
@@ -240,6 +244,20 @@ export function createPostgresPaymentRepository(databaseUrl?: string): PaymentRe
             userId: updatedIntent.user_id,
             contentId: updatedIntent.target_id,
             paymentIntentId: updatedIntent.payment_intent_id
+          });
+        }
+
+        if (
+          input.settlement.confirmed &&
+          (updatedIntent?.product_type === "tip" || updatedIntent?.product_type === "support")
+        ) {
+          await recordTipSupportSettlementLedger(transaction, {
+            paymentIntentId: updatedIntent.payment_intent_id,
+            actorUserId: updatedIntent.user_id,
+            creatorUserId: updatedIntent.target_id,
+            amountMinor: Number(updatedIntent.amount_minor),
+            currency: updatedIntent.currency,
+            productType: updatedIntent.product_type
           });
         }
 
@@ -266,6 +284,82 @@ function toStoredPaymentIntent(row: PaymentIntentRow): StoredPaymentIntent {
     expiresAt: row.expires_at,
     requestHash: row.request_hash
   };
+}
+
+const defaultPlatformFeeBps = 1000;
+
+async function recordTipSupportSettlementLedger(
+  transaction: postgres.TransactionSql,
+  input: {
+    paymentIntentId: string;
+    actorUserId: string;
+    creatorUserId: string;
+    amountMinor: number;
+    currency: StoredPaymentIntent["currency"];
+    productType: "tip" | "support";
+  }
+): Promise<void> {
+  const platformFeeMinor = Math.floor((input.amountMinor * defaultPlatformFeeBps) / 10_000);
+  const creatorAmountMinor = input.amountMinor - platformFeeMinor;
+
+  await transaction`
+    insert into payment_ledger_entries (
+      id,
+      payment_intent_id,
+      account_kind,
+      account_key,
+      account_user_id,
+      amount_minor,
+      currency,
+      direction
+    )
+    values
+      (
+        ${randomUUID()},
+        ${input.paymentIntentId},
+        'creator_earning',
+        ${`creator:${input.creatorUserId}`},
+        ${input.creatorUserId},
+        ${creatorAmountMinor},
+        ${input.currency},
+        'credit'
+      ),
+      (
+        ${randomUUID()},
+        ${input.paymentIntentId},
+        'platform_fee',
+        'platform',
+        null,
+        ${platformFeeMinor},
+        ${input.currency},
+        'credit'
+      )
+    on conflict (payment_intent_id, account_kind, account_key) do nothing
+  `;
+
+  await transaction`
+    insert into audit_events (
+      id,
+      actor_user_id,
+      subject_type,
+      subject_id,
+      action,
+      metadata
+    )
+    values (
+      ${randomUUID()},
+      ${input.actorUserId},
+      'payment_intent',
+      ${input.paymentIntentId},
+      'tip_support_settlement_posted',
+      ${transaction.json({
+        productType: input.productType,
+        creatorUserId: input.creatorUserId,
+        creatorAmountMinor,
+        platformFeeMinor
+      })}
+    )
+  `;
 }
 
 async function grantContentUnlockEntitlement(

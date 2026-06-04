@@ -29,7 +29,8 @@ Current implementation state:
 - Wallet approval, frontend success, and submitted signatures remain non-final until backend settlement verification confirms chain evidence.
 - `POST /v1/content/{contentId}/unlock-intents` creates or reuses a backend-priced `content_unlock` intent from active content access rules. The generic payment-intent endpoint does not accept client-priced content unlocks.
 - Confirmed `content_unlock` settlement grants an active content entitlement in the same backend transaction, and media/feed access projection returns `unlocked` only from backend entitlement state.
-- Tips/support accounting, referrals/commission, subscriptions, and admin reconciliation are deferred to their owning slices.
+- Confirmed `tip` and `support` settlement posts creator earning and platform fee ledger entries using the documented launch platform fee, but never writes an access grant.
+- Referrals/commission, subscriptions, and admin reconciliation are deferred to their owning slices.
 
 Official references checked:
 
@@ -124,6 +125,7 @@ Recommended:
 
 - show immediate submitted UX after wallet signature
 - run scoped RPC confirmation for exact signature
+- post creator earning and platform fee ledger entries only after backend-confirmed settlement
 - include tips in Helius/reconciliation if they create referral commission, creator balance, or payout state
 - if Helius cost becomes high, batch/reconcile tips with RPC/indexer polling, but do not mark financial totals final from client alone
 

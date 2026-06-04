@@ -353,6 +353,20 @@ create table settlement_ledger (
   created_at timestamptz not null default now()
 );
 
+create table payment_ledger_entries (
+  id uuid primary key,
+  payment_intent_id uuid not null references payment_intents(id),
+  account_kind text not null,
+  account_key text not null,
+  account_user_id uuid references users(id),
+  amount_minor bigint not null,
+  currency text not null,
+  direction text not null,
+  state text not null default 'posted',
+  created_at timestamptz not null default now(),
+  unique (payment_intent_id, account_kind, account_key)
+);
+
 create table entitlements (
   id uuid primary key,
   user_id uuid not null references users(id),

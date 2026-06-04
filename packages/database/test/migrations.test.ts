@@ -126,4 +126,14 @@ describe("database migrations", () => {
     expect(sql).toContain("alter table entitlement_events enable row level security");
     expect(sql).not.toMatch(/payment_proof|signed_url|playback_token|private_key|raw_payload/i);
   });
+
+  it("adds tip and support settlement ledger entries without access grants", () => {
+    const sql = readMigration("0011_tip_support_settlement_ledger.sql");
+
+    expect(sql).toContain("create table payment_ledger_entries");
+    expect(sql).toContain("account_kind text not null");
+    expect(sql).toContain("unique (payment_intent_id, account_kind, account_key)");
+    expect(sql).toContain("alter table payment_ledger_entries enable row level security");
+    expect(sql).not.toMatch(/entitlement|access_grant|payment_proof|private_key|raw_payload/i);
+  });
 });
