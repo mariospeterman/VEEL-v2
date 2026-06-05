@@ -147,8 +147,73 @@ function AccessPanel({ item }: { item: ContentItem }) {
         </div>
       </section>
 
+      <EngagementActions item={item} />
+
       <PaymentSheet intent={samplePaymentIntent} transactionRequest={sampleTransactionRequest} />
     </aside>
+  );
+}
+
+function EngagementActions({ item }: { item: ContentItem }) {
+  return (
+    <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold">Engagement</p>
+        <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">
+          server-owned
+        </span>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <button
+          className="rounded border border-[var(--line)] px-3 py-2 text-sm font-medium transition hover:bg-[var(--background)]"
+          type="button"
+        >
+          {item.engagement.liked ? "Liked" : "Like"}
+        </button>
+        <button
+          className="rounded border border-[var(--line)] px-3 py-2 text-sm font-medium transition hover:bg-[var(--background)]"
+          type="button"
+        >
+          {item.engagement.saved ? "Saved" : "Save"}
+        </button>
+        <button
+          className="rounded border border-[var(--line)] px-3 py-2 text-sm font-medium transition hover:bg-[var(--background)]"
+          type="button"
+        >
+          Share
+        </button>
+        <button
+          className="rounded border border-[var(--line)] px-3 py-2 text-sm font-medium transition hover:bg-[var(--background)]"
+          type="button"
+        >
+          Comment
+        </button>
+      </div>
+
+      <div className="mt-3 grid gap-2">
+        <button
+          className="rounded border border-[#fca5a5] px-3 py-2 text-sm font-medium text-[#b91c1c] transition hover:bg-[#fef2f2]"
+          type="button"
+        >
+          Report content
+        </button>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            className="rounded border border-[var(--line)] px-3 py-2 text-sm font-medium transition hover:bg-[var(--background)]"
+            type="button"
+          >
+            Hide creator
+          </button>
+          <button
+            className="rounded border border-[var(--line)] px-3 py-2 text-sm font-medium transition hover:bg-[var(--background)]"
+            type="button"
+          >
+            Block creator
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 

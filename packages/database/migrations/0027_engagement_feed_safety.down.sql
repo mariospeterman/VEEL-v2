@@ -1,0 +1,44 @@
+drop policy if exists blocks_select_blocker_or_staff on blocks;
+drop policy if exists reports_select_reporter_or_staff on reports;
+drop policy if exists share_records_select_actor_or_staff on share_records;
+drop policy if exists comments_select_visible_author_creator_or_staff on comments;
+drop policy if exists engagement_action_receipts_select_self_or_staff on engagement_action_receipts;
+drop policy if exists content_saves_select_self_or_staff on content_saves;
+drop policy if exists content_reactions_select_self_or_staff on content_reactions;
+drop policy if exists viewer_hidden_topics_select_self_or_staff on viewer_hidden_topics;
+drop policy if exists viewer_hidden_creators_select_self_or_staff on viewer_hidden_creators;
+drop policy if exists viewer_feed_preferences_select_self_or_staff on viewer_feed_preferences;
+
+revoke select on table blocks from authenticated;
+revoke select on table reports from authenticated;
+revoke select on table share_records from authenticated;
+revoke select on table comments from authenticated;
+revoke select on table engagement_action_receipts from authenticated;
+revoke select on table content_saves from authenticated;
+revoke select on table content_reactions from authenticated;
+revoke select on table viewer_hidden_topics from authenticated;
+revoke select on table viewer_hidden_creators from authenticated;
+revoke select on table viewer_feed_preferences from authenticated;
+
+drop index if exists blocks_blocked_user_id_idx;
+drop index if exists reports_subject_idx;
+drop index if exists reports_queue_state_created_at_idx;
+drop index if exists share_records_actor_created_at_idx;
+drop index if exists share_records_target_created_at_idx;
+drop index if exists comments_parent_comment_id_idx;
+drop index if exists comments_user_created_at_idx;
+drop index if exists comments_content_created_at_idx;
+drop index if exists content_saves_content_active_idx;
+drop index if exists content_reactions_content_active_idx;
+drop index if exists viewer_hidden_creators_creator_idx;
+
+drop table if exists blocks;
+drop table if exists reports;
+drop table if exists share_records;
+drop table if exists comments;
+drop table if exists engagement_action_receipts;
+drop table if exists content_saves;
+drop table if exists content_reactions;
+drop table if exists viewer_hidden_topics;
+drop table if exists viewer_hidden_creators;
+drop table if exists viewer_feed_preferences;

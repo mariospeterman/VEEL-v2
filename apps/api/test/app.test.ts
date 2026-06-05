@@ -46,6 +46,7 @@ import type {
 import type { Message, MessageRepository } from "../src/modules/message/types";
 import type { EventRepository } from "../src/modules/event/types";
 import type { DatingRepository } from "../src/modules/dating/types";
+import type { EngagementRepository } from "../src/modules/engagement/types";
 
 describe("buildApi", () => {
   it("boots the Fastify skeleton and loads the OpenAPI document", async () => {
@@ -3085,6 +3086,196 @@ describe("buildApi", () => {
     vi.unstubAllEnvs();
   });
 
+  it("updates feed controls through the backend engagement boundary", async () => {
+    const calls: Array<{ kind: string; input: unknown }> = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      engagementRepository: fakeEngagementRepository({
+        async onUpdateFeedPreferences(input) {
+          calls.push({ kind: "preferences", input });
+        },
+        async onHideCreator(input) {
+          calls.push({ kind: "hide_creator", input });
+        },
+        async onHideTopic(input) {
+          calls.push({ kind: "hide_topic", input });
+        }
+      })
+    });
+    await app.ready();
+
+    const preferencesResponse = await app.inject({
+      method: "PATCH",
+      url: "/v1/feed/preferences",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "feed-prefs-1"
+      },
+      payload: {
+        defaultMode: "following",
+        nsfwPreference: "sfw"
+      }
+    });
+    const hideCreatorResponse = await app.inject({
+      method: "POST",
+      url: "/v1/feed/hide-creator",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "hide-creator-1"
+      },
+      payload: {
+        creatorUserId: "00000000-0000-4000-8000-000000000011"
+      }
+    });
+    const hideTopicResponse = await app.inject({
+      method: "POST",
+      url: "/v1/feed/hide-topic",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "hide-topic-1"
+      },
+      payload: {
+        topic: "studio"
+      }
+    });
+
+    expect(preferencesResponse.statusCode).toBe(200);
+    expect(hideCreatorResponse.statusCode).toBe(200);
+    expect(hideTopicResponse.statusCode).toBe(200);
+    expect(calls).toMatchObject([
+      {
+        kind: "preferences",
+        input: {
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          body: {
+            defaultMode: "following",
+            nsfwPreference: "sfw"
+          }
+        }
+      },
+      {
+        kind: "hide_creator",
+        input: {
+          creatorUserId: "00000000-0000-4000-8000-000000000011",
+          idempotencyKey: "hide-creator-1"
+        }
+      },
+      {
+        kind: "hide_topic",
+        input: {
+          topic: "studio",
+          idempotencyKey: "hide-topic-1"
+        }
+      }
+    ]);
+
+    await app.close();
+  });
+
+  it("records content engagement, safety reports, and blocks through server-owned routes", async () => {
+    const calls: Array<{ kind: string; input: unknown }> = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      engagementRepository: fakeEngagementRepository({
+        async onToggleLike(input) {
+          calls.push({ kind: "like", input });
+        },
+        async onCreateComment(input) {
+          calls.push({ kind: "comment", input });
+        },
+        async onCreateShare(input) {
+          calls.push({ kind: "share", input });
+        },
+        async onCreateReport(input) {
+          calls.push({ kind: "report", input });
+        },
+        async onBlockUser(input) {
+          calls.push({ kind: "block", input });
+        }
+      })
+    });
+    await app.ready();
+
+    const likeResponse = await app.inject({
+      method: "POST",
+      url: "/v1/engagement/00000000-0000-4000-8000-000000000040/like",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "like-1" }
+    });
+    const commentResponse = await app.inject({
+      method: "POST",
+      url: "/v1/engagement/00000000-0000-4000-8000-000000000040/comments",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "comment-1" },
+      payload: { body: "Server-owned comment" }
+    });
+    const shareResponse = await app.inject({
+      method: "POST",
+      url: "/v1/shares",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "share-1" },
+      payload: {
+        targetType: "content",
+        targetId: "00000000-0000-4000-8000-000000000040",
+        mode: "copy_link"
+      }
+    });
+    const reportResponse = await app.inject({
+      method: "POST",
+      url: "/v1/reports",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "report-1" },
+      payload: {
+        subjectType: "content",
+        subjectId: "00000000-0000-4000-8000-000000000040",
+        reason: "Safety review"
+      }
+    });
+    const blockResponse = await app.inject({
+      method: "POST",
+      url: "/v1/blocks/00000000-0000-4000-8000-000000000011",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "block-1" }
+    });
+
+    expect(likeResponse.statusCode).toBe(200);
+    expect(commentResponse.statusCode).toBe(201);
+    expect(shareResponse.statusCode).toBe(201);
+    expect(reportResponse.statusCode).toBe(201);
+    expect(blockResponse.statusCode).toBe(200);
+    expect(calls).toMatchObject([
+      { kind: "like", input: { contentId: "00000000-0000-4000-8000-000000000040", idempotencyKey: "like-1" } },
+      { kind: "comment", input: { body: { body: "Server-owned comment" }, idempotencyKey: "comment-1" } },
+      { kind: "share", input: { body: { targetType: "content", mode: "copy_link" }, idempotencyKey: "share-1" } },
+      { kind: "report", input: { body: { subjectType: "content", reason: "Safety review" }, idempotencyKey: "report-1" } },
+      { kind: "block", input: { blockedUserId: "00000000-0000-4000-8000-000000000011", idempotencyKey: "block-1" } }
+    ]);
+
+    await app.close();
+  });
+
+  it("blocks engagement before age verification", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: requiredAgeRepository,
+      engagementRepository: fakeEngagementRepository()
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/engagement/00000000-0000-4000-8000-000000000040/like",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "like-denied-1"
+      }
+    });
+
+    expect(response.statusCode).toBe(403);
+
+    await app.close();
+  });
+
   it("blocks payment intent creation before age verification", async () => {
     vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
     const app = await buildApi({
@@ -3396,6 +3587,119 @@ const fakeUnconfirmedSettlementVerifier: PaymentSettlementVerifier = {
     };
   }
 };
+
+function fakeEngagementRepository(
+  overrides: Partial<{
+    onUpdateFeedPreferences: EngagementCallback<"updateFeedPreferences">;
+    onResetFeedRecommendations: EngagementCallback<"resetFeedRecommendations">;
+    onHideCreator: EngagementCallback<"hideCreator">;
+    onHideTopic: EngagementCallback<"hideTopic">;
+    onToggleLike: EngagementCallback<"toggleLike">;
+    onToggleSave: EngagementCallback<"toggleSave">;
+    onListComments: EngagementCallback<"listComments">;
+    onCreateComment: EngagementCallback<"createComment">;
+    onCreateShare: EngagementCallback<"createShare">;
+    onCreateReport: EngagementCallback<"createReport">;
+    onBlockUser: EngagementCallback<"blockUser">;
+  }> = {}
+): EngagementRepository {
+  return {
+    async updateFeedPreferences(input) {
+      await overrides.onUpdateFeedPreferences?.(input);
+      return {
+        defaultMode: input.body.defaultMode ?? "recommended",
+        nsfwPreference: input.body.nsfwPreference ?? "recommended",
+        hiddenCreatorIds: [],
+        hiddenTopics: []
+      };
+    },
+    async resetFeedRecommendations(input) {
+      await overrides.onResetFeedRecommendations?.(input);
+    },
+    async hideCreator(input) {
+      await overrides.onHideCreator?.(input);
+      return {
+        defaultMode: "recommended",
+        nsfwPreference: "recommended",
+        hiddenCreatorIds: [input.creatorUserId],
+        hiddenTopics: []
+      };
+    },
+    async hideTopic(input) {
+      await overrides.onHideTopic?.(input);
+      return {
+        defaultMode: "recommended",
+        nsfwPreference: "recommended",
+        hiddenCreatorIds: [],
+        hiddenTopics: [input.topic]
+      };
+    },
+    async toggleLike(input) {
+      await overrides.onToggleLike?.(input);
+      return engagementStateFixture({ liked: true, likeCount: 1 });
+    },
+    async toggleSave(input) {
+      await overrides.onToggleSave?.(input);
+      return engagementStateFixture({ saved: true });
+    },
+    async listComments(input) {
+      await overrides.onListComments?.(input);
+      return { items: [], nextCursor: null };
+    },
+    async createComment(input) {
+      await overrides.onCreateComment?.(input);
+      return {
+        id: "00000000-0000-4000-8000-0000000000c1",
+        author: homeFeedItem.creator,
+        body: input.body.body,
+        moderationState: "visible",
+        createdAt: "2026-06-05T12:00:00.000Z"
+      };
+    },
+    async createShare(input) {
+      await overrides.onCreateShare?.(input);
+      return {
+        id: "00000000-0000-4000-8000-0000000000c2",
+        mode: input.body.mode,
+        url: input.body.mode === "internal_message" ? null : "http://localhost:3000/share/content/00000000-0000-4000-8000-000000000040"
+      };
+    },
+    async createReport(input) {
+      await overrides.onCreateReport?.(input);
+      return {
+        id: "00000000-0000-4000-8000-0000000000c3",
+        state: "queued",
+        queue: input.body.subjectType === "content" ? "content" : "general"
+      };
+    },
+    async blockUser(input) {
+      await overrides.onBlockUser?.(input);
+      return {
+        blocked: true,
+        blockedUserId: input.blockedUserId
+      };
+    }
+  };
+}
+
+type EngagementCallback<Key extends keyof EngagementRepository> = (
+  input: EngagementInput<Key>
+) => Promise<void> | void;
+
+type EngagementInput<Key extends keyof EngagementRepository> =
+  NonNullable<EngagementRepository[Key]> extends (input: infer Input) => Promise<unknown> ? Input : never;
+
+type EngagementStateFixture = ReturnType<EngagementRepository["toggleLike"]> extends Promise<infer T> ? T : never;
+
+function engagementStateFixture(overrides: Partial<EngagementStateFixture> = {}): EngagementStateFixture {
+  return {
+    liked: overrides.liked ?? false,
+    saved: overrides.saved ?? false,
+    likeCount: overrides.likeCount ?? 0,
+    commentCount: overrides.commentCount ?? 0,
+    shareCount: overrides.shareCount ?? 0
+  };
+}
 
 const appReadySessionRepository = sessionRepositoryWithProfile({
   async onFind() {

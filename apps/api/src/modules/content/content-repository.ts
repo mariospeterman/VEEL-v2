@@ -30,6 +30,11 @@ interface FeedRow {
   entitlement_state: Entitlement["state"] | null;
   entitlement_granted_at: Date | null;
   entitlement_ends_at: Date | null;
+  liked: boolean;
+  saved: boolean;
+  like_count: string | number;
+  comment_count: string | number;
+  share_count: string | number;
 }
 
 interface ContentRow {
@@ -41,6 +46,11 @@ interface ContentRow {
   handle: string | null;
   display_name: string | null;
   avatar_url: string | null;
+  liked?: boolean;
+  saved?: boolean;
+  like_count?: string | number;
+  comment_count?: string | number;
+  share_count?: string | number;
 }
 
 interface ContentDetailRow extends ContentRow {
@@ -195,7 +205,42 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
           eg.id as entitlement_id,
           eg.state as entitlement_state,
           eg.granted_at as entitlement_granted_at,
-          eg.ends_at as entitlement_ends_at
+          eg.ends_at as entitlement_ends_at,
+          exists (
+            select 1
+            from content_reactions cr
+            where cr.content_item_id = ci.id
+              and cr.user_id = viewer.id
+              and cr.reaction_key = 'like'
+              and cr.state = 'active'
+          ) as liked,
+          exists (
+            select 1
+            from content_saves cs
+            where cs.content_item_id = ci.id
+              and cs.user_id = viewer.id
+              and cs.state = 'active'
+          ) as saved,
+          (
+            select count(*)
+            from content_reactions cr
+            where cr.content_item_id = ci.id
+              and cr.reaction_key = 'like'
+              and cr.state = 'active'
+          ) as like_count,
+          (
+            select count(*)
+            from comments c
+            where c.content_item_id = ci.id
+              and c.moderation_state = 'visible'
+          ) as comment_count,
+          (
+            select count(*)
+            from share_records sr
+            where sr.target_type = 'content'
+              and sr.target_id = ci.id
+              and sr.state = 'created'
+          ) as share_count
         from content_items ci
         join users u on u.id = ci.creator_user_id
         join profiles p on p.user_id = u.id
@@ -291,6 +336,12 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
           and ci.state = 'ready'
           and ci.visibility = 'public'
           and ci.moderation_state = 'approved'
+          and not exists (
+            select 1
+            from blocks b
+            where (b.blocker_user_id = viewer.id and b.blocked_user_id = ci.creator_user_id)
+               or (b.blocker_user_id = ci.creator_user_id and b.blocked_user_id = viewer.id)
+          )
         limit 1
       `;
 
@@ -410,7 +461,42 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
           eg.id as entitlement_id,
           eg.state as entitlement_state,
           eg.granted_at as entitlement_granted_at,
-          eg.ends_at as entitlement_ends_at
+          eg.ends_at as entitlement_ends_at,
+          exists (
+            select 1
+            from content_reactions cr
+            where cr.content_item_id = ci.id
+              and cr.user_id = viewer.id
+              and cr.reaction_key = 'like'
+              and cr.state = 'active'
+          ) as liked,
+          exists (
+            select 1
+            from content_saves cs
+            where cs.content_item_id = ci.id
+              and cs.user_id = viewer.id
+              and cs.state = 'active'
+          ) as saved,
+          (
+            select count(*)
+            from content_reactions cr
+            where cr.content_item_id = ci.id
+              and cr.reaction_key = 'like'
+              and cr.state = 'active'
+          ) as like_count,
+          (
+            select count(*)
+            from comments c
+            where c.content_item_id = ci.id
+              and c.moderation_state = 'visible'
+          ) as comment_count,
+          (
+            select count(*)
+            from share_records sr
+            where sr.target_type = 'content'
+              and sr.target_id = ci.id
+              and sr.state = 'created'
+          ) as share_count
         from content_items ci
         join users u on u.id = ci.creator_user_id
         join profiles p on p.user_id = u.id
@@ -451,6 +537,18 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
           and (${input.mode} != 'sfw' or ci.nsfw_label = 'none')
           and (${input.mode} != 'nsfw' or ci.nsfw_label in ('adult', 'explicit'))
           and (${input.cursor ?? null}::timestamptz is null or ci.created_at < ${input.cursor ?? null}::timestamptz)
+          and not exists (
+            select 1
+            from viewer_hidden_creators vhc
+            where vhc.user_id = viewer.id
+              and vhc.creator_user_id = ci.creator_user_id
+          )
+          and not exists (
+            select 1
+            from blocks b
+            where (b.blocker_user_id = viewer.id and b.blocked_user_id = ci.creator_user_id)
+               or (b.blocker_user_id = ci.creator_user_id and b.blocked_user_id = viewer.id)
+          )
         order by ci.created_at desc
         limit ${input.limit + 1}
       `;
@@ -490,11 +588,11 @@ function toContentItem(
     accessState,
     nsfwLabel: row.nsfw_label,
     engagement: {
-      liked: false,
-      saved: false,
-      likeCount: 0,
-      commentCount: 0,
-      shareCount: 0
+      liked: Boolean(row.liked),
+      saved: Boolean(row.saved),
+      likeCount: Number(row.like_count ?? 0),
+      commentCount: Number(row.comment_count ?? 0),
+      shareCount: Number(row.share_count ?? 0)
     }
   };
 }

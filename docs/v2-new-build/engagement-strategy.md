@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: engagement, social graph, activity
-Last updated: 2026-06-03
+Last updated: 2026-06-05
 Source of truth: yes
 
 Owns:
@@ -102,12 +102,14 @@ Like:
 
 - toggle endpoint: `POST /v1/engagement/:contentId/like`
 - unique key: `(viewer_id, content_id, reaction_type)`
+- backend returns canonical liked/saved/count projection; frontend optimistic state must reconcile
 
 Save:
 
 - toggle endpoint: `POST /v1/engagement/:contentId/save`
 - private to viewer
 - appears in Activity/Saved surfaces
+- save state is never public ranking proof by itself
 
 Comment:
 
@@ -115,6 +117,18 @@ Comment:
 - list endpoint: `GET /v1/engagement/:contentId/comments`
 - supports deletion/moderation
 - never bypasses block/report/safety rules
+- launch comment writes start `visible` only after backend access, block graph, and content visibility checks pass; admin moderation can later hide/remove.
+
+## Feed Controls, Reports, And Blocks
+
+Launch implementation rules:
+
+- `PATCH /v1/feed/preferences` owns default mode and NSFW/SFW preference server-side.
+- `POST /v1/feed/reset` clears backend-owned recommendation hides and writes an audit event.
+- `POST /v1/feed/hide-creator` and `POST /v1/feed/hide-topic` write private viewer controls that feed ranking must honor before scoring.
+- `POST /v1/reports` writes a safety report, queues it by subject type, and appends an audit event.
+- `POST /v1/blocks/:userId` creates a private block edge, suppresses future engagement visibility where relevant, and appends an audit event.
+- No frontend-only local preference, report, or block state is business truth.
 
 ## Share Strategy
 

@@ -142,6 +142,22 @@ create table viewer_feed_preferences (
   updated_at timestamptz not null default now()
 );
 
+create table viewer_hidden_creators (
+  user_id uuid not null references users(id),
+  creator_user_id uuid not null references users(id),
+  idempotency_key text not null,
+  created_at timestamptz not null default now(),
+  primary key (user_id, creator_user_id)
+);
+
+create table viewer_hidden_topics (
+  user_id uuid not null references users(id),
+  topic text not null,
+  idempotency_key text not null,
+  created_at timestamptz not null default now(),
+  primary key (user_id, topic)
+);
+
 create table content_items (
   id uuid primary key,
   creator_user_id uuid not null references users(id),
@@ -235,7 +251,9 @@ create table content_reactions (
   content_item_id uuid not null references content_items(id),
   reaction_key text not null default 'like',
   state text not null default 'active',
+  last_idempotency_key text not null,
   created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
   primary key (user_id, content_item_id, reaction_key)
 );
 
@@ -243,8 +261,19 @@ create table content_saves (
   user_id uuid not null references users(id),
   content_item_id uuid not null references content_items(id),
   state text not null default 'active',
+  last_idempotency_key text not null,
   created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
   primary key (user_id, content_item_id)
+);
+
+create table engagement_action_receipts (
+  actor_user_id uuid not null references users(id),
+  action text not null,
+  target_id uuid not null,
+  idempotency_key text not null,
+  created_at timestamptz not null default now(),
+  primary key (actor_user_id, action, idempotency_key)
 );
 
 create table share_records (
@@ -254,9 +283,11 @@ create table share_records (
   target_id uuid not null,
   mode text not null,
   referral_id uuid,
-  destination text,
+  url text,
   state text not null default 'created',
-  created_at timestamptz not null default now()
+  idempotency_key text not null,
+  created_at timestamptz not null default now(),
+  unique (actor_user_id, idempotency_key)
 );
 
 create table follows (
@@ -274,8 +305,10 @@ create table comments (
   parent_comment_id uuid references comments(id),
   body text not null,
   moderation_state text not null default 'visible',
+  idempotency_key text not null,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  unique (user_id, idempotency_key)
 );
 
 create table reports (
@@ -284,14 +317,19 @@ create table reports (
   subject_type text not null,
   subject_id uuid not null,
   reason text not null,
+  queue text not null,
   state text not null default 'submitted',
-  created_at timestamptz not null default now()
+  idempotency_key text not null,
+  created_at timestamptz not null default now(),
+  reviewed_at timestamptz,
+  reviewed_by_user_id uuid references users(id),
+  unique (reporter_user_id, idempotency_key)
 );
 
 create table blocks (
   blocker_user_id uuid not null references users(id),
   blocked_user_id uuid not null references users(id),
-  reason text,
+  idempotency_key text not null,
   created_at timestamptz not null default now(),
   primary key (blocker_user_id, blocked_user_id)
 );

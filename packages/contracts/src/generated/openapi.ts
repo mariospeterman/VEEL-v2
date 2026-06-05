@@ -1814,6 +1814,8 @@ export interface components {
             defaultMode: "recommended" | "following" | "nsfw" | "sfw";
             /** @enum {string} */
             nsfwPreference: "recommended" | "nsfw" | "sfw";
+            hiddenCreatorIds?: string[];
+            hiddenTopics?: string[];
         };
         UpdateFeedPreferencesRequest: {
             /** @enum {string} */
@@ -2055,6 +2057,8 @@ export interface components {
             id: string;
             author: components["schemas"]["User"];
             body: string;
+            /** @enum {string} */
+            moderationState: "visible" | "pending_review" | "hidden" | "removed";
             /** Format: date-time */
             createdAt: string;
         };
@@ -2093,9 +2097,13 @@ export interface components {
             id: string;
             /** @enum {string} */
             state: "submitted" | "queued";
+            /** @enum {string} */
+            queue: "content" | "user" | "message" | "live" | "event" | "general";
         };
         BlockState: {
             blocked: boolean;
+            /** Format: uuid */
+            blockedUserId: string;
         };
         Conversation: {
             /** Format: uuid */

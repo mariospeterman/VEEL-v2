@@ -217,6 +217,34 @@ describe("database migrations", () => {
     expect(sql).toContain("on ai_tool_calls (session_id, actor_user_id, scope)");
   });
 
+  it("adds engagement feed controls reports and blocks with RLS and idempotency", () => {
+    const sql = readMigration("0027_engagement_feed_safety.sql");
+
+    expect(sql).toContain("create table viewer_feed_preferences");
+    expect(sql).toContain("create table viewer_hidden_creators");
+    expect(sql).toContain("create table viewer_hidden_topics");
+    expect(sql).toContain("create table content_reactions");
+    expect(sql).toContain("create table content_saves");
+    expect(sql).toContain("create table engagement_action_receipts");
+    expect(sql).toContain("create table comments");
+    expect(sql).toContain("create table share_records");
+    expect(sql).toContain("create table reports");
+    expect(sql).toContain("create table blocks");
+    expect(sql).toContain("last_idempotency_key text not null");
+    expect(sql).toContain("idempotency_key text not null");
+    expect(sql).toContain("primary key (actor_user_id, action, idempotency_key)");
+    expect(sql).toContain("alter table engagement_action_receipts enable row level security");
+    expect(sql).toContain("alter table reports enable row level security");
+    expect(sql).toContain("alter table blocks enable row level security");
+    expect(sql).toContain("create policy reports_select_reporter_or_staff");
+    expect(sql).toContain("create policy blocks_select_blocker_or_staff");
+    expect(sql).toContain("create index reports_queue_state_created_at_idx");
+    expect(sql).toContain("to authenticated");
+    expect(sql).toContain("(select private.current_app_user_id())");
+    expect(sql).not.toMatch(/to anon|using\s*\(\s*true\s*\)|with check\s*\(\s*true\s*\)/i);
+    expect(sql).not.toMatch(/raw_payload|private_key|seed_phrase|mnemonic|service_role|api_key/i);
+  });
+
   it("adds wallet transaction activity records without custody or raw provider payloads", () => {
     const sql = readMigration("0016_activity_wallet_transactions.sql");
 

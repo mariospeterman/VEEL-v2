@@ -1570,6 +1570,12 @@ components:
       properties:
         defaultMode: { type: string, enum: [recommended, following, nsfw, sfw] }
         nsfwPreference: { type: string, enum: [recommended, nsfw, sfw] }
+        hiddenCreatorIds:
+          type: array
+          items: { type: string, format: uuid }
+        hiddenTopics:
+          type: array
+          items: { type: string }
     UpdateFeedPreferencesRequest:
       type: object
       properties:
@@ -1814,11 +1820,12 @@ components:
         nextCursor: { type: string, nullable: true }
     Comment:
       type: object
-      required: [id, author, body, createdAt]
+      required: [id, author, body, moderationState, createdAt]
       properties:
         id: { type: string, format: uuid }
         author: { $ref: "#/components/schemas/User" }
         body: { type: string }
+        moderationState: { type: string, enum: [visible, pending_review, hidden, removed] }
         createdAt: { type: string, format: date-time }
     CreateCommentRequest:
       type: object
@@ -1851,18 +1858,20 @@ components:
       properties:
         subjectType: { type: string, enum: [content, user, message, live_room, event] }
         subjectId: { type: string, format: uuid }
-        reason: { type: string }
+        reason: { type: string, minLength: 3, maxLength: 500 }
     ModerationIntake:
       type: object
-      required: [id, state]
+      required: [id, state, queue]
       properties:
         id: { type: string, format: uuid }
         state: { type: string, enum: [submitted, queued] }
+        queue: { type: string, enum: [content, user, message, live, event, general] }
     BlockState:
       type: object
-      required: [blocked]
+      required: [blocked, blockedUserId]
       properties:
         blocked: { type: boolean }
+        blockedUserId: { type: string, format: uuid }
     Conversation:
       type: object
       required: [id, type, title, unreadCount]
