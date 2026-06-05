@@ -31,17 +31,17 @@ This ADR turns the v2 blueprint into concrete provider defaults for the first im
 | Onramp/funding | Embedded-wallet provider funding UI first, funding only | Platform does not handle card processing, merchant checkout, product billing, or custody; user funds their own wallet. |
 | One-time payments | Solana Pay / Solana transaction requests | Noncustodial, wallet-approved, backend-verified. |
 | Payment evidence | Helius scoped to money/access evidence, with RPC fallback | Cost-aware, not a broad firehose. |
-| Platform subscriptions | Solana Subscriptions/Allowances auto-renewal; manual Solana Pay recovery fallback only | Keeps subscriptions recurring, noncustodial, revocable, and avoids merchant checkout, custodial balances, and provider-operated product billing. |
-| Creator subscriptions | Keep, but treat as creator fan-club access, not a replacement for discovery/unlocks | Supports creator recurring revenue without killing free discovery. |
-| Creator pricing | Creator sets content unlock, paid message, live pass, ticket, and creator subscription prices within admin/env guardrails | Preserves creator ownership while preventing abuse, too-low pricing, and compliance issues. |
+| Platform plans | Solana Subscriptions/Allowances auto-renewal; manual Solana Pay recovery fallback only | Keeps plans recurring, noncustodial, revocable, and avoids merchant checkout, custodial balances, and provider-operated product billing. |
+| Creator Memberships | Keep, but treat as creator fan-club access, not a replacement for discovery/unlocks | Supports creator recurring revenue without killing free discovery. |
+| Creator pricing | Creator sets content unlock, paid message, live pass, Event Access Pass, and Creator Membership prices within admin/env guardrails | Preserves creator ownership while preventing abuse, too-low pricing, and compliance issues. |
 | VOD | Bunny Stream/CDN/TUS | Direct uploads and playback provider infrastructure. |
 | Live/replay | Livepeer with JWT playback access from day one for paid streams/replays | Provider-owned live infra and provider-enforced protected playback. |
 | Age assurance | Yoti app/Digital ID first, Sumsub reusable/KYC fallback, Veriff age-assurance fallback, Persona documentary fallback only after privacy/procurement review | User choice, reusable/low-friction first, no raw identity data in core DB. |
 | Creator KYC/KYB | Disabled by default except high-risk/admin-required creators; Sumsub primary candidate | Avoid unnecessary friction while keeping an easy switch for legal/risk expansion. |
 | AI/MCP | Provider-agnostic LLM gateway with OpenAI-compatible adapter first | Avoid lock-in; all tools permission-scoped and audited. |
 | Create flow | Raw/simple create: record/upload, essential edits, caption/#/@/location, NSFW label, optional event, monetisation, preview, publish | Avoids overbuilt editor while preserving creator conversion controls. |
-| Dating | Profile/settings-owned explicit mode; not configured per Create draft | Dating appears on creator media only when profile mode is active and viewer also opted in. |
-| Event tickets | Internal backend QR/ticket entitlement + Solana Pay settlement first; NFT/Solana ticketing ADR later | Proven, simple, noncustodial split settlement without premature custom smart contracts. |
+| Mutuals | Profile/settings-owned explicit mode; not configured per Create draft | Mutuals appears on creator media only when profile mode is active and viewer also opted in. |
+| Event Access | Internal backend QR/pass entitlement + Solana Pay settlement first; NFT/Solana pass ADR later | Proven, simple, noncustodial split settlement without premature custom smart contracts. |
 | Event location | Browser geolocation with permission + manual OSM-backed place search | Free/low-cost launch UX without platform handling private location carelessly. |
 | Share | Internal Veel share/repost/message has no referral commission; external share tab uses backend referral URL | Keeps social sharing clean while preserving referral attribution for off-platform conversion. |
 
@@ -182,21 +182,20 @@ Turnkey remains the advanced fallback when stronger policy controls, sub-organiz
 
 Use Solana transaction-request architecture for:
 
-- tips
 - support
 - content unlocks
 - paid messages
 - live passes
-- event tickets
+- Event Access Passes
 
-Tips do not unlock content, but they still affect creator earning records, platform revenue, optional referral commission, and audit/accounting. They should still be backend-verified. If Helius webhook cost becomes high, tips can use batched reconciliation or RPC fallback, but frontend wallet success is not final financial truth.
+Support does not unlock content by default, but it still affects creator earning records, platform revenue, optional referral commission, compliance ledger, receipt, and audit/accounting. It must still be backend-verified. If Helius webhook cost becomes high, support can use batched reconciliation or RPC fallback, but frontend wallet success is not final financial truth.
 
 ### Subscriptions
 
-Use one billing architecture for:
+Use one recurring authorization/collection architecture for:
 
-- platform subscription tiers
-- creator profile subscriptions
+- platform plans
+- Creator Memberships
 
 Recommended path:
 
@@ -205,7 +204,7 @@ Recommended path:
 3. Keep manual Solana Pay renewal as recovery fallback only; it must not become the normal subscription product path.
 4. Do not use merchant checkout, card billing, custodial subscription balances, or provider-operated product subscriptions.
 
-Platform subscription tiers:
+Platform plan tiers:
 
 ```text
 Free Verified
@@ -214,28 +213,30 @@ Free Verified
   reporting/blocking and safe discovery controls
 
 Veel Plus
-  recommended launch target: 15 USDC/month or local equivalent
+  recommended launch target: 8.99 USDC/month, 89 USDC/year, or local equivalent
   higher fair-use watch allowance / bandwidth fairness
   better collections, activity, notifications, feed controls, and priority support
+  no feed ranking boost, Mutuals boost, or message priority
   still pays creators separately unless a documented bundle exists
 
 Veel Studio
-  recommended launch target: 29 USDC/month or local equivalent
-  creator dashboard upgrades, scheduling, advanced analytics, pricing presets, event tools
+  recommended launch target: 29 USDC/month, 290 USDC/year, or local equivalent
+  creator dashboard upgrades, scheduling, advanced analytics, pricing presets, Event Access tools
+  KYC/KYB, wallet, and tax setup
   AI setup assistant where enabled
-  not a hidden ranking boost and not a substitute for creator subscriptions
+  not a hidden ranking boost and not a substitute for Creator Memberships
 
-Enterprise/Partner
-  custom pricing
-  creator/team/admin/business support tier, not ordinary viewer default
+Enterprise
+  custom, from 199 USDC/month equivalent
+  organization, agency, venue, KYB, RBAC, consolidated reporting, and business support tier
 ```
 
-Creator subscriptions:
+Creator Memberships:
 
 - Viewer pays monthly to a creator profile.
 - Backend owns entitlement scope.
-- Creator subscription should not replace paid unlocks or free Bits; it complements them.
-- The same subscription engine should power platform and creator subscriptions.
+- Creator Membership should not replace paid unlocks or free Bits; it complements them.
+- The same delegated authorization engine should power platform plans and Creator Memberships.
 
 Subscriber benefits should be simple and conversion-friendly:
 
@@ -243,9 +244,9 @@ Subscriber benefits should be simple and conversion-friendly:
 - subscriber-only posts or full clips where creator chooses
 - discounted unlocks or included monthly unlock allowance if creator config allows it
 - live pass discount or subscriber live chat access where creator enables it
-- priority paid-message response lane if creator enables it
+- clearly labeled member-only paid-message access if creator enables it; no paid message priority ranking
 
-Do not hide all good creator content behind subscriptions. The product needs free Bits/teasers and public profile content for discovery. Subscriptions should reward recurring fans, not make the platform feel locked by default.
+Do not hide all good creator content behind memberships. The product needs free Bits/teasers and public profile content for discovery. Memberships should reward recurring fans, not make the platform feel locked by default.
 
 ## Media Playback Strategy
 
@@ -337,33 +338,34 @@ Live moderation:
 - private streams still need report/block/safety escalation
 - do not store private stream content unless provider/legal policy explicitly requires recording
 
-## Dating Product Decision
+## Mutuals Product Decision
 
-Dating should stay raw/simple at launch:
+Mutuals should stay raw/simple at launch:
 
-- user activates Dating Mode from profile/settings
-- creator media shows a dating-active affordance when the creator has Dating Mode enabled
-- viewers see dating actions only if they also enabled Dating Mode
-- eligible viewers swipe or press Yes / Not interested
+- user activates Mutuals mode from profile/settings
+- creator media shows a Mutuals-active affordance when the creator has Mutuals enabled
+- viewers see Mutuals actions only if they also enabled Mutuals
+- eligible viewers press Show Interest / Not interested
 - no advanced filters at launch
-- match only after backend-confirmed mutual interest
-- match chat lives in Messages
-- limit active matches/conversations to reduce ghosting and overwhelm
+- Mutual only after backend-confirmed reciprocal interest
+- Mutual chat lives in Messages
+- limit active Mutuals/conversations to reduce ghosting and overwhelm
 - gentle notifications, not spammy push pressure
-- if a match has no first reply within a configurable window, mark it as stale and nudge once
-- if repeated matches go stale, pause Dating Mode until the user clears or responds to active matches
-- max active matches defaults to 10 for launch; admin can tune it
-- require explicit dating conduct consent before activation
+- if a Mutual has no first reply within a configurable window, mark it as stale and nudge once
+- if repeated Mutuals go stale, pause Mutuals until the user clears or responds to active Mutuals
+- max active Mutuals defaults to 10 for launch; admin can tune it
+- require explicit Mutuals conduct consent before activation
+- payments support creators; payments do not buy people, Mutuals boosts, or message priority
 
 Anti-misuse limits:
 
-- daily yes-action limit
-- active match cap
+- daily Show Interest action limit
+- active Mutual cap
 - cooldown after mass rejections/reports
 - block/report always visible
-- no dating gestures outside Dating Mode
+- no Mutuals gestures outside Mutuals mode
 
-## Events Product Decision
+## Event Access Product Decision
 
 Event creation is a Create/Edit toggle:
 
@@ -371,22 +373,23 @@ Event creation is a Create/Edit toggle:
 - description
 - date/time
 - digital live stream or physical location
-- ticket count/capacity
+- pass count/capacity
 - free/request-to-join/paid
-- ticket price
+- pass price
 - direct purchase or precheck/approval mode
 
-Ticketing launch strategy:
+Event Access launch strategy:
 
-- backend ticket entitlement is source of truth
-- Solana payment settlement for paid tickets
-- QR/receipt generated from backend ticket record
+- backend Event Access Pass entitlement is source of truth
+- Solana payment settlement for paid access
+- QR/access receipt generated from backend pass record
+- compliance ledger and receipt/invoice determination are written before entitlement grant
 - platform commission comes from split transaction
-- Crossmint compressed NFT/SFT ticketing can be evaluated later for collectible or transferable event tickets
+- Crossmint compressed NFT/SFT passes can be evaluated later for collectible or transferable access
 - do not use an unproven Solana-only ticketing provider as launch-critical infrastructure without vendor due diligence
-- NFT/token ticketing is future ADR after provider/protocol proof
+- NFT/token pass/ticketing is future ADR after provider/protocol proof
 
-Reason: Solana-native NFT ticket platforms exist, but a proven API/provider path for Veel needs vendor validation. Internal entitlement + Solana Pay settlement is faster, safer, lower-cost, and still noncustodial.
+Reason: Solana-native NFT ticket platforms exist, but a proven API/provider path for Veel needs vendor validation. Internal Event Access entitlement + Solana settlement is faster, safer, lower-cost, and still noncustodial.
 
 ## Admin Dashboard Requirements
 
@@ -400,11 +403,11 @@ Admin must measure and operate:
 - media provider state
 - live room state
 - messages/paid messages
-- payments/unlocks/tips/support
-- subscriptions
+- payments/unlocks/support
+- memberships/platform plans
 - referrals/commissions
-- event tickets/check-ins/refunds
-- dating opt-ins/matches/reports
+- Event Access/check-ins/refunds
+- Mutuals opt-ins/Mutuals/reports
 - AI/MCP tool calls
 - provider health
 - webhook health

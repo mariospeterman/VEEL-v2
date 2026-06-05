@@ -28,6 +28,12 @@ create type entitlement_type as enum (
 );
 create type dating_action as enum ('yes', 'not_interested');
 
+-- Launch-language migration targets:
+-- tip -> support, content_unlock -> unlock, event_ticket -> event_access_pass,
+-- creator_subscription -> membership, platform_subscription -> platform_plus/platform_studio,
+-- dating_profiles/swipes/matches -> mutual_profiles/interests/mutuals,
+-- yes -> interested.
+
 create table users (
   id uuid primary key,
   supabase_user_id uuid unique not null,
@@ -94,6 +100,24 @@ create table age_verifications (
   unique (provider, provider_reference)
 );
 
+create table identity_verifications (
+  id uuid primary key,
+  user_id uuid not null references users(id),
+  provider text not null,
+  provider_reference text not null,
+  verification_type text not null,
+  state text not null default 'pending',
+  country_code text,
+  legal_name_hash text,
+  document_type text,
+  liveness_state text,
+  wallet_ownership_state text,
+  verified_at timestamptz,
+  expires_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (provider, provider_reference)
+);
+
 create table creator_monetisation_settings (
   user_id uuid primary key references users(id),
   state text not null default 'active',
@@ -110,6 +134,292 @@ create table creator_monetisation_settings (
   default_currency text not null default 'SOL',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
+);
+
+create table tax_profiles (
+  id uuid primary key,
+  user_id uuid references users(id),
+  organization_id uuid,
+  subject_type text not null,
+  state text not null default 'draft',
+  tax_residence_country text,
+  tin_hash text,
+  vat_id_hash text,
+  vat_id_country text,
+  is_business boolean not null default false,
+  dac7_reportable boolean,
+  carf_reportable boolean not null default false,
+  carf_reporting_required boolean not null default false,
+  current_version_id uuid,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table tax_profile_versions (
+  id uuid primary key,
+  tax_profile_id uuid not null references tax_profiles(id),
+  version_number integer not null,
+  snapshot jsonb not null,
+  collected_by_user_id uuid references users(id),
+  created_at timestamptz not null default now(),
+  unique (tax_profile_id, version_number)
+);
+
+create table seller_of_record_determinations (
+  id uuid primary key,
+  product_type text not null,
+  seller_user_id uuid references users(id),
+  buyer_user_id uuid references users(id),
+  seller_of_record text not null default 'undetermined',
+  determination_reason text not null,
+  review_state text not null default 'clear',
+  created_at timestamptz not null default now()
+);
+
+create table jurisdiction_tax_rules (
+  id uuid primary key,
+  jurisdiction text not null,
+  product_type text not null,
+  rule_key text not null,
+  rule_payload jsonb not null default '{}'::jsonb,
+  effective_from date not null,
+  effective_to date,
+  state text not null default 'active',
+  created_at timestamptz not null default now(),
+  unique (jurisdiction, product_type, rule_key, effective_from)
+);
+
+create table product_tax_matrix (
+  id uuid primary key,
+  product_type text not null,
+  default_seller_of_record text not null,
+  dac7_candidate boolean not null default false,
+  carf_candidate boolean not null default false,
+  vat_review_required boolean not null default true,
+  counsel_status text not null default 'pending_review',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (product_type)
+);
+
+create table buyer_location_evidence (
+  id uuid primary key,
+  buyer_user_id uuid references users(id),
+  payment_intent_id uuid,
+  evidence_type text not null,
+  country_code text,
+  region_code text,
+  confidence text not null default 'low',
+  evidence_hash text,
+  created_at timestamptz not null default now()
+);
+
+create table vat_determinations (
+  id uuid primary key,
+  payment_intent_id uuid,
+  product_type text not null,
+  seller_of_record text not null,
+  seller_country text,
+  buyer_country text,
+  buyer_vat_id_hash text,
+  vies_status text not null default 'not_checked',
+  place_of_supply text,
+  vat_status text not null default 'pending',
+  vat_rate_bps integer,
+  vat_amount_minor bigint,
+  currency text not null,
+  review_state text not null default 'clear',
+  created_at timestamptz not null default now()
+);
+
+create table receipts (
+  id uuid primary key,
+  receipt_number text unique not null,
+  buyer_user_id uuid references users(id),
+  seller_user_id uuid references users(id),
+  payment_intent_id uuid,
+  product_type text not null,
+  gross_amount_minor bigint not null,
+  currency text not null,
+  state text not null default 'issued',
+  issued_at timestamptz not null default now()
+);
+
+create table receipt_lines (
+  id uuid primary key,
+  receipt_id uuid not null references receipts(id),
+  line_type text not null,
+  description text not null,
+  amount_minor bigint not null,
+  currency text not null,
+  created_at timestamptz not null default now()
+);
+
+create table platform_fee_statements (
+  id uuid primary key,
+  payment_intent_id uuid,
+  creator_user_id uuid references users(id),
+  platform_fee_minor bigint not null,
+  currency text not null,
+  state text not null default 'recorded',
+  created_at timestamptz not null default now()
+);
+
+create table vat_invoices (
+  id uuid primary key,
+  invoice_number text unique not null,
+  receipt_id uuid references receipts(id),
+  seller_user_id uuid references users(id),
+  buyer_user_id uuid references users(id),
+  seller_of_record text not null,
+  total_amount_minor bigint not null,
+  vat_amount_minor bigint not null,
+  currency text not null,
+  state text not null default 'issued',
+  issued_at timestamptz not null default now()
+);
+
+create table vat_invoice_lines (
+  id uuid primary key,
+  vat_invoice_id uuid not null references vat_invoices(id),
+  description text not null,
+  net_amount_minor bigint not null,
+  vat_rate_bps integer,
+  vat_amount_minor bigint not null,
+  currency text not null,
+  created_at timestamptz not null default now()
+);
+
+create table tax_adjustments (
+  id uuid primary key,
+  payment_intent_id uuid,
+  vat_determination_id uuid references vat_determinations(id),
+  adjustment_type text not null,
+  amount_minor bigint not null,
+  currency text not null,
+  reason text not null,
+  created_by_user_id uuid references users(id),
+  created_at timestamptz not null default now()
+);
+
+create table compliance_ledger_entries (
+  id uuid primary key,
+  event_type text not null,
+  product_type text not null,
+  settlement_model text not null,
+  seller_user_id uuid references users(id),
+  buyer_user_id uuid references users(id),
+  seller_tax_profile_version_id uuid references tax_profile_versions(id),
+  buyer_tax_profile_version_id uuid references tax_profile_versions(id),
+  payment_intent_id uuid,
+  entitlement_id uuid,
+  receipt_id uuid references receipts(id),
+  vat_invoice_id uuid references vat_invoices(id),
+  gross_amount_minor bigint not null,
+  platform_fee_minor bigint,
+  creator_net_amount_minor bigint,
+  tax_amount_minor bigint,
+  currency text not null,
+  fiat_currency text not null,
+  fx_rate numeric,
+  fx_observed_at timestamptz,
+  seller_country text,
+  buyer_country text,
+  seller_of_record text not null default 'undetermined',
+  vat_status text not null default 'pending',
+  dac7_reportable boolean not null default false,
+  carf_reportable boolean not null default false,
+  immutable_hash text unique,
+  previous_hash text,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index compliance_ledger_entries_created_at_idx
+  on compliance_ledger_entries (created_at desc);
+
+create index compliance_ledger_entries_seller_idx
+  on compliance_ledger_entries (seller_user_id, created_at desc)
+  where seller_user_id is not null;
+
+create index compliance_ledger_entries_buyer_idx
+  on compliance_ledger_entries (buyer_user_id, created_at desc)
+  where buyer_user_id is not null;
+
+create table dac7_reports (
+  id uuid primary key,
+  reporting_year integer not null,
+  jurisdiction text,
+  state text not null default 'draft',
+  line_count integer not null default 0,
+  export_id uuid,
+  created_at timestamptz not null default now(),
+  exported_at timestamptz,
+  unique (reporting_year, jurisdiction)
+);
+
+create table dac7_report_lines (
+  id uuid primary key,
+  report_id uuid not null references dac7_reports(id),
+  seller_user_id uuid references users(id),
+  tax_profile_version_id uuid references tax_profile_versions(id),
+  gross_amount_minor bigint not null,
+  platform_fee_minor bigint not null default 0,
+  transaction_count integer not null default 0,
+  currency text not null,
+  review_state text not null default 'pending',
+  created_at timestamptz not null default now()
+);
+
+create table carf_reports (
+  id uuid primary key,
+  reporting_year integer not null,
+  jurisdiction text,
+  state text not null default 'draft',
+  carf_reporting_required boolean not null default false,
+  line_count integer not null default 0,
+  export_id uuid,
+  created_at timestamptz not null default now(),
+  exported_at timestamptz,
+  unique (reporting_year, jurisdiction)
+);
+
+create table carf_report_lines (
+  id uuid primary key,
+  report_id uuid not null references carf_reports(id),
+  user_id uuid references users(id),
+  wallet_address text,
+  tax_profile_version_id uuid references tax_profile_versions(id),
+  gross_amount_minor bigint not null,
+  transaction_count integer not null default 0,
+  currency text not null,
+  review_state text not null default 'pending',
+  created_at timestamptz not null default now()
+);
+
+create table compliance_review_queue (
+  id uuid primary key,
+  subject_type text not null,
+  subject_id uuid not null,
+  queue_type text not null,
+  priority text not null default 'normal',
+  state text not null default 'open',
+  assigned_staff_user_id uuid references users(id),
+  reason text not null,
+  resolved_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create table compliance_exports (
+  id uuid primary key,
+  export_type text not null,
+  reporting_year integer,
+  state text not null default 'created',
+  file_uri text,
+  file_hash text,
+  created_by_user_id uuid references users(id),
+  created_at timestamptz not null default now(),
+  completed_at timestamptz
 );
 
 create table user_badges (

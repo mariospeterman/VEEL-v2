@@ -31,7 +31,9 @@ Use this order for every meaningful change:
 ## Non-Negotiables
 
 - No duplicate app shells, media viewers, payment systems, provider adapters, realtime systems, API clients, or CSS systems.
-- No frontend-owned business truth for payments, access, referrals, commissions, tickets, subscriptions, age/KYC, moderation, admin, or provider state.
+- No frontend-owned business truth for payments, access, referrals, commissions, Event Access Passes, memberships, age/KYC, tax/compliance, moderation, admin, or provider state.
+- No custody, creator balances, internal credits, withdrawals, escrow, or platform-controlled payout queue.
+- No money-based ranking boost for feeds, recommendations, messages, or Mutuals.
 - No provider secrets, private keys, stream keys, signed URLs, service-role keys, webhook secrets, or raw PII in client code or logs.
 - No wallet approval treated as payment proof.
 - No custom provider infrastructure when official provider APIs solve the job.

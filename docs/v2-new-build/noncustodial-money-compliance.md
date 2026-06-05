@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: custody boundary, subscriptions, wallet funding, compliance risk controls
-Last updated: 2026-06-04
+Last updated: 2026-06-05
 Source of truth: yes
 
 Owns:
@@ -42,8 +42,8 @@ Subscription implementation rules:
 - Backend owns plan, entitlement, renewal, grace, cancellation, suspension, and audit state.
 - On-chain delegated authority or confirmed renewal collection is evidence, not final business truth by itself.
 - Backend verifies the subscription authority, token mint/program, allowance, period, payer, recipient splits, collection signature, and finality before changing access.
-- Creator subscriptions settle directly to creator and platform fee recipients.
-- Platform subscriptions settle directly to the platform fee wallet.
+- Creator Memberships settle directly to creator and platform fee recipients.
+- Platform plans settle directly to the platform fee wallet.
 - Users can cancel in Veel and revoke delegated authority in wallet/provider UX.
 - Failed or revoked renewals must move through grace/cancel/expire states without creating debt or internal receivables.
 
@@ -53,11 +53,11 @@ Wallet funding is not product checkout. Any onramp or embedded-wallet funding UI
 
 Funding-session rules:
 
-- Funding completion does not unlock content, tickets, passes, messages, subscriptions, or commissions.
+- Funding completion does not unlock content, Event Access, passes, messages, memberships, platform plans, or commissions.
 - Veel must not act as merchant of record for product purchases through a wallet funding provider.
 - Browser code may receive only publishable funding config and provider session URLs.
 - Provider callbacks may update funding status for UX/support only.
-- Product purchase always returns to a backend-created payment intent or subscription collection path.
+- Product purchase always returns to a backend-created payment intent or delegated collection path.
 
 ## Compliance Still Required
 
@@ -67,7 +67,7 @@ Noncustodial money movement does not remove launch obligations:
 - creator verification and tax/compliance onboarding where required
 - consent verification and illegal-content removal process
 - moderation, reports, blocks, safety escalation, and law-enforcement workflow
-- clear subscription cancellation, refund, dispute, and support policy
+- clear membership/platform plan cancellation, refund, dispute, and support policy
 - immutable records for purchase receipts, refunds, revocations, commissions, tax exports, and admin actions
 - region/product restrictions when legal, provider, or bank policy requires them
 
@@ -77,7 +77,7 @@ Veel may use agents to assist users, creators, and admins, but agents must not s
 
 Agent rules:
 
-- No autonomous wallet signing, delegated allowance setup, renewal collection, refund, cancellation, ticket issuance, paid-message send, or entitlement mutation.
+- No autonomous wallet signing, delegated allowance setup, renewal collection, refund, cancellation, Event Access issuance, paid-message send, or entitlement mutation.
 - Any AI-suggested money action must require explicit user/admin confirmation and backend policy validation.
 - AI tools receive redacted financial and identity data by default.
 - All AI tool calls that inspect or propose money, age/KYC, moderation, or admin changes are audited.

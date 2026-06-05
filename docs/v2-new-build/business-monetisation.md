@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: business model, monetisation, noncustodial money movement
-Last updated: 2026-06-03
+Last updated: 2026-06-05
 Source of truth: yes
 
 Owns:
@@ -20,26 +20,26 @@ Launch scope:
 Non-goals:
 - historical-context inference, duplicate systems, and unapproved provider/product expansion
 
-This document defines the full Veel v2 monetisation and business model. It extends `payments-and-monetisation.md`, which owns payment verification mechanics, and `noncustodial-money-compliance.md`, which owns the custody and compliance boundary. The rule is unchanged: the frontend can display and request actions, creators choose prices where product policy allows, and the backend enforces admin/env pricing guardrails, splits, settlement, entitlements, commissions, subscriptions, refunds, audit records, and operational reporting.
+This document defines the full Veel v2 monetisation and business model. It extends `payments-and-monetisation.md`, which owns payment verification mechanics, `noncustodial-money-compliance.md`, which owns the custody boundary, and `compliance/dac7-dac8-vat-system.md`, which owns DAC7/DAC8/VAT readiness. The rule is unchanged: the frontend can display and request actions, creators choose prices where product policy allows, and the backend enforces admin/env pricing guardrails, splits, settlement, compliance ledger writes, receipts, entitlements, commissions, memberships, refunds, audit records, and operational reporting.
 
 ## Business Model Summary
 
 Veel earns through:
 
-- platform fee on content unlocks, paid messages, live passes, event tickets, tips, and support
-- creator subscription platform fee
-- optional platform membership/subscription for user-facing platform features
-- optional external referral commission sourced from the platform share unless explicitly configured otherwise
+- platform fee on content unlocks, paid messages, live passes, Event Access Passes, and support
+- Creator Membership platform fee
+- platform plans: Free Verified, Veel Plus, Veel Studio, and Enterprise
+- optional referral commission sourced only from Veel platform commission net of refunds and tax
 - optional wallet-funding referral revenue only if legal/provider review approves it and it is never product checkout revenue
 
 Creators earn through:
 
 - paid clips, premium posts, VOD, and replay content unlocks
-- tips and support
+- support
 - paid messages
-- creator subscriptions
+- Creator Memberships
 - live passes
-- event tickets
+- Event Access Passes
 - referral earnings where product rules allow creator-as-referrer flows
 
 ## Noncustodial Split Transfer Model
@@ -54,8 +54,8 @@ flowchart LR
   Tx --> Referral["Optional referral wallet"]
   Tx --> Chain["Confirmed chain record"]
   Chain --> API["Backend settlement verification"]
-  API --> Ledger["Internal financial ledger/audit"]
-  API --> Entitlement["Unlock/subscription/ticket/pass if applicable"]
+  API --> Ledger["Compliance ledger + receipt"]
+  API --> Entitlement["Unlock/membership/pass if applicable"]
 ```
 
 Backend responsibilities:
@@ -63,7 +63,7 @@ Backend responsibilities:
 - select product type, validated creator price, asset, recipient wallets, split recipients, reference, memo, expiry, and entitlement target
 - compose or serve the Solana Pay transaction request
 - verify confirmed chain facts before final settlement
-- write immutable settlement, split, and audit records
+- write immutable settlement, compliance ledger, receipt/invoice, split, and audit records
 - derive creator earnings, platform revenue, referral commission, and user activity from confirmed settlement
 
 Frontend responsibilities:
@@ -82,9 +82,9 @@ Hard custody rules:
 
 - never route product funds as `user wallet -> Veel wallet -> creator wallet`
 - never store credits, internal balances, creator balances, pending payouts, or withdrawal requests
-- never implement creator withdrawals; creator recipients receive directly from the buyer transaction where a creator share exists
+- never implement creator withdrawals or a platform-controlled payout queue; creator recipients receive directly from the buyer transaction where a creator share exists
 - never treat funding/onramp completion as product payment proof
-- keep records as receipts, entitlements, confirmed earnings/revenue projections, tax/compliance metadata, and immutable audit evidence
+- keep records as receipts, invoices/statements, entitlements, confirmed earnings/revenue projections, tax/compliance metadata, and immutable audit evidence
 
 ## Creator Pricing With Admin Guardrails
 
@@ -92,10 +92,10 @@ Creators own monetisation pricing for creator products:
 
 - content unlocks
 - paid messages
-- tips/support presets where creator offers presets
+- support presets where creator offers presets
 - live pass prices and available durations from allowed duration templates
-- event tickets
-- creator subscriptions
+- Event Access Passes
+- Creator Memberships
 
 Admin/env owns guardrails:
 
@@ -116,7 +116,7 @@ Examples:
 - Creator sets a paid message price above that minimum.
 - Admin sets live pass duration templates to `30`, `60`, and `180` minutes.
 - Creator chooses which durations to offer and sets prices above the minimum.
-- Admin sets minimum event ticket price; creator sets actual ticket price and capacity within policy.
+- Admin sets minimum Event Access price; creator sets actual pass price and capacity within policy.
 
 ## Money Movement Modes
 
@@ -124,12 +124,12 @@ Examples:
 | --- | --- | --- | --- |
 | Native SOL split transfer | Devnet testing, low-friction support/tips, possible SOL products | Optional depending product | Signature, reference, payer, lamports, recipients, finality |
 | SPL/USDC split transfer | Production stablecoin products if selected | Optional depending product | Signature, reference, payer, mint, token program, token amounts, recipients, finality |
-| Solana delegated subscription | Creator and platform recurring plans | Subscription entitlement only after verified authorization and recurring collection | Authority PDA, subscription/delegation PDA, payer token account, mint/program, recipients, amount/period, collection signature, finality |
+| Solana delegated subscription | Creator Memberships and platform recurring plans | Membership/platform entitlement only after verified authorization and recurring collection | Authority PDA, subscription/delegation PDA, payer token account, mint/program, recipients, amount/period, collection signature, finality |
 | Manual Solana Pay recovery | Emergency fallback for failed delegated setup/collection only | Renewal entitlement only after confirmed payment intent | Signature, reference, payer, amount, recipients, finality |
 | Wallet funding/onramp | User adds SOL/USDC to their own wallet | No access effect | Funding status only for UX/support |
-| Free approval | Free tickets/events/passes | Entitlement only | Backend approval/audit, no wallet settlement |
+| Free approval | Free Event Access/Passes | Entitlement only | Backend approval/audit, no wallet settlement |
 
-Onramp sessions are funding flows, not payment settlement flows. A card/onramp provider may help the user add SOL/USDC to their wallet, but Veel product purchases still require the normal payment intent, transaction request or subscription collection, and backend confirmation path. Veel must not use an onramp provider as merchant checkout for content, messages, tickets, passes, tips, or subscriptions.
+Onramp sessions are funding flows, not payment settlement flows. A card/onramp provider may help the user add SOL/USDC to their wallet, but Veel product purchases still require the normal payment intent, transaction request or subscription collection, and backend confirmation path. Veel must not use an onramp provider as merchant checkout for content, messages, Event Access, support, or memberships.
 
 Native SOL and SPL token modes must share a common intent/split/settlement model. Do not create separate payment systems.
 
@@ -138,14 +138,15 @@ Native SOL and SPL token modes must share a common intent/split/settlement model
 | Product | Buyer pays | Creator earns | Platform earns | Entitlement |
 | --- | --- | --- | --- | --- |
 | Content unlock | One-time price | Creator share | Platform fee | Content access grant |
-| Tip | Preset/custom amount | Creator share | Platform fee if configured | No access grant |
 | Support | Preset/custom amount or campaign amount | Creator share | Platform fee | No access grant unless explicitly attached |
 | Paid message | Message price | Creator share | Platform fee | Message delivery/open entitlement |
-| Creator subscription | Recurring plan price | Creator share | Platform fee | Creator-specific access plan |
-| Platform subscription | Recurring platform price | No creator share unless bundled | Platform revenue | Platform feature/member entitlement |
+| Creator Membership | Recurring plan price | Creator share | Platform fee | Creator-specific access plan |
+| Veel Plus | 8.99 USDC/month or 89 USDC/year | No creator share unless bundled | Platform revenue | Heavy-user platform entitlement |
+| Veel Studio | 29 USDC/month or 290 USDC/year | No creator share unless bundled | Platform revenue | Creator business/tool entitlement |
+| Enterprise | Custom, from 199 USDC/month equivalent | No creator share unless contracted | Platform revenue | Organization/agency/venue entitlement |
 | Live pass | Duration/pass price | Creator share | Platform fee | Live playback/chat access |
-| Event ticket | Ticket price | Creator/event owner share | Platform fee | Ticket entitlement/QR |
-| External referral commission | From configured share | Referrer earns | Usually platform share reduced | Attribution/commission record |
+| Event Access Pass | Pass price | Creator/event owner share | Platform fee | Access entitlement/QR |
+| Referral commission | From Veel platform commission net of refunds/tax | Referrer/partner earns | Platform share reduced | Attribution/commission record |
 
 Launch product type enum:
 
@@ -160,7 +161,25 @@ creator_subscription
 platform_subscription
 ```
 
-Future products such as drops, resale, NFT ticketing, bundles, gifts, or premium-room variants require a separate ADR and must not appear in launch contracts or schema until approved.
+Future products such as drops, resale, NFT pass/ticketing, bundles, gifts, or premium-room variants require a separate ADR and must not appear in launch contracts or schema until approved.
+
+Target product language for new docs/UI:
+
+```text
+support
+unlock
+paid_message
+live_pass
+event_access_pass
+membership
+platform_plus
+platform_studio
+enterprise
+platform_fee
+referral_commission
+```
+
+Until the compatibility migration lands, OpenAPI and database enums keep `tip`, `content_unlock`, `event_ticket`, `creator_subscription`, and `platform_subscription` where implemented. Frontend copy must use the target product language.
 
 ## Default Split Policy
 
@@ -168,8 +187,8 @@ Default launch recommendation:
 
 - platform fee: `1000 bps` on eligible paid products
 - creator share: gross price minus platform fee and configured taxes/fees where applicable
-- referral share: paid from platform fee by default
-- creator share is not reduced by referral unless a product configuration explicitly says so
+- referral share: paid only from Veel platform commission net of refunds and tax
+- creator share is never reduced by referral
 - self-referral is always rejected
 - duplicate commission is always rejected
 
@@ -185,12 +204,12 @@ Platform net:      0.080 SOL
 
 The backend stores the exact integer unit amounts used in the transaction request. Display decimals are presentation only.
 
-## Platform Subscription vs Creator Subscription
+## Platform Plans vs Creator Membership
 
-Platform subscription:
+Platform plans:
 
 - belongs to Veel, not a specific creator
-- can grant platform-level benefits such as membership badge, lower platform fees, advanced discovery, or future app-level features
+- can grant platform-level benefits such as membership badge, higher fair-use watch allowance, creator business tooling, organization tooling, or future app-level features
 - must not unlock creator premium content unless a bundled product explicitly says so
 - is managed by platform billing policy and admin operations
 
@@ -198,29 +217,29 @@ Recommended platform tiers for first pricing tests:
 
 | Tier | Suggested price | Position |
 | --- | --- | --- |
-| Free Verified | Free | 18+ verified account, wallet, free Bits/teasers, basic social/media participation, reporting/blocking, and safe discovery controls. |
-| Veel Plus | 15 USDC/month equivalent | Heavy viewer tier: higher fair-use watch allowance, better collections/activity tools, better notification/feed controls, profile polish, and priority support. |
-| Veel Studio | 29 USDC/month equivalent | Creator/productivity tier: creator dashboard upgrades, scheduling, advanced analytics, pricing presets, event tools, and AI setup assistant where enabled. |
-| Enterprise/Partner | Custom | Agency, venue, partner, and operations support tier with manual account review and business support. |
+| Free Verified | Free | 18+ verified account, wallet, weekly free watch time up to 60 minutes or 1.5 GB transfer, previews, basic social/media participation, reporting/blocking, and safe discovery controls. |
+| Veel Plus | 8.99 USDC/month or 89 USDC/year | Heavy viewer tier: higher fair-use watch allowance, better collections/activity tools, better notification/feed controls, profile polish, and priority support. No feed/Mutuals boost. |
+| Veel Studio | 29 USDC/month or 290 USDC/year | Creator business tier: creator dashboard upgrades, scheduling, advanced analytics, pricing presets, Event Access tools, KYC/KYB/wallet/tax setup, and AI setup assistant where enabled. |
+| Enterprise | Custom, from 199 USDC/month equivalent | Organization, agency, venue, and partner tier with KYB, RBAC, consolidated reporting, business support, and contract review. |
 
 Tier rules:
 
-- platform subscriptions must not hide core safety, basic publishing, normal dating access, or creator discovery behind a paywall
-- platform subscriptions must not secretly boost paid content ranking in a way users cannot understand
+- platform plans must not hide core safety, basic publishing, Mutuals access, or creator discovery behind a paywall
+- platform plans must not boost paid content ranking, Mutuals ranking, or message priority
 - creator content purchases still happen separately unless a specific bundle is implemented and documented
 - creator-facing productivity value should live in Veel Studio, not in a viewer-only upsell
-- dating/event/AI limits can be configured by admin, but the free tier must remain usable enough for real network effects
+- Mutuals/Event Access/AI limits can be configured by admin, but the free tier must remain usable enough for real network effects
 
-Pricing, allowance limits, date/match limits, live pass defaults, and platform feature gates must live in backend/admin configuration. Environment variables provide safe defaults; admin configuration can override them without a deploy.
+Pricing, allowance limits, Mutual/Event Access limits, live pass defaults, and platform feature gates must live in backend/admin configuration. Environment variables provide safe defaults; admin configuration can override them without a deploy.
 
-Creator subscription:
+Creator Membership:
 
 - belongs to a creator and plan
 - grants creator-specific benefits such as subscriber-only media, premium posts, live access tiers, or message privileges
 - can have plan tiers, renewal state, grace period, cancellation, and failed-renewal recovery
 - must be auditable per creator, subscriber, plan, billing event, entitlement, and settlement
 
-Both subscription types use the same core state machine but different entitlement scopes.
+Platform plans and Creator Memberships use the same recurring authorization/collection state machine but different entitlement scopes.
 
 ## Subscription State Machine
 

@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: admin, business operations, support, devops visibility
-Last updated: 2026-06-04
+Last updated: 2026-06-05
 Source of truth: yes
 
 Owns:
@@ -29,7 +29,8 @@ Current implementation state:
 - `GET /v1/admin/unlocks` returns sanitized entitlement rows for content unlock and access investigation.
 - `GET /v1/admin/provider-events` returns sanitized provider event status and timing only.
 - The `/admin` web surface is separate from normal user navigation and mirrors the read-only payment/unlock/provider ops projection for smoke coverage.
-- Event ticket operations are inspectable through payment intent state, ticket entitlement state, QR/check-in state, and provider event state; admin mutations remain deferred to their dedicated role-policy slices.
+- Event Access operations are inspectable through payment intent state, pass entitlement state, QR/check-in state, compliance ledger state, and provider event state; admin mutations remain deferred to their dedicated role-policy slices.
+- DAC7/DAC8/CARF/VAT readiness is surfaced through read-only compliance routes before export or filing workflows are enabled.
 - Admin reads require a valid session whose app user has an active staff membership in an operations, finance, support, creator-success, readonly-auditor, admin, or owner role.
 - Raw provider payloads, webhook bodies, private media URLs, stream keys, provider secrets, wallet private keys, service-role keys, and frontend-computed payment truth are not returned.
 
@@ -53,14 +54,21 @@ Current implementation state:
 /admin/payments
 /admin/unlocks
 /admin/referrals
-/admin/subscriptions
+/admin/memberships
 /admin/creator-earnings
 /admin/live
 /admin/media-providers
 /admin/events
-/admin/dating
+/admin/event-access
+/admin/mutuals
 /admin/messages
 /admin/age-kyc
+/admin/compliance/ledger
+/admin/compliance/dac7/reports
+/admin/compliance/carf/reports
+/admin/compliance/vat/determinations
+/admin/compliance/receipts
+/admin/compliance/invoices
 /admin/ai
 /admin/audit-log
 /admin/support
@@ -73,11 +81,12 @@ Current implementation state:
 | --- | --- |
 | Super admin | Full admin access, break-glass actions, role management |
 | Operations | Provider status, queues, deployments, webhooks, diagnostics |
-| Finance | payments, settlements, referrals, subscriptions, refunds, creator earnings |
+| Finance | payments, settlements, referrals, memberships, platform plans, receipts, invoices, refunds, creator earnings |
 | Trust and safety | reports, moderation, blocks, age/KYC review state |
-| Support | user lookup, safe payment/access status, ticket escalation |
+| Support | user lookup, safe payment/access status, Event Access escalation |
 | Creator success | creator dashboards, onboarding, monetisation readiness |
-| Event ops | event ticketing, check-ins, refunds/escalations |
+| Event ops | Event Access, check-ins, refunds/escalations |
+| Compliance | DAC7/DAC8/CARF/VAT ledger, receipts, invoices, export preparation |
 | AI ops | AI sessions/tools/audit, no money or safety bypass |
 
 Role permissions should be explicit in code and documented as policy tests.
@@ -87,7 +96,7 @@ Role permissions should be explicit in code and documented as policy tests.
 The admin landing dashboard should show:
 
 - GMV, platform revenue, creator earnings, referral commissions
-- active users, creators, subscribers, paying users
+- active users, creators, members, paying users
 - content unlock conversion and failed payment rate
 - live rooms active, waiting, replay processing
 - media upload/processing health
@@ -117,14 +126,25 @@ Referrals and commissions:
 - self-referral/duplicate rejection reasons
 - fraud/suspicious attribution flags
 
-Subscriptions:
+Memberships and platform plans:
 
-- platform subscription state
-- creator subscription state
+- platform plan state
+- Creator Membership state
 - renewal/failure/grace/cancel state
 - entitlement scope
-- provider billing/webhook audit
+- delegated authorization, collection, and revoke audit
 - churn and revenue metrics
+
+Compliance:
+
+- immutable compliance ledger entries by product, buyer, seller, wallet, receipt, invoice, entitlement, and payment intent
+- DAC7 report preparation by reporting year, seller, due-diligence status, line count, export state, and correction state
+- DAC8/CARF readiness behind `carf_reporting_required = false` until counsel enables reporting
+- VAT/MWST determinations by seller-of-record, buyer/seller country, B2B/B2C/VIES state, rate, amount, and review status
+- user-visible receipts and access receipts
+- formal VAT invoices and platform fee statements
+- tax adjustments and correction entries
+- compliance review queue and export records
 
 Creator earnings:
 
@@ -137,8 +157,8 @@ Creator earnings:
 Events:
 
 - event status
-- ticket inventory
-- paid/free ticket issuance
+- pass inventory
+- paid/free pass issuance
 - check-in/QR status
 - refunds/disputes
 - event owner and moderation state
@@ -188,11 +208,11 @@ Messages:
 - report/block context
 - no private message content access unless support/compliance policy explicitly allows and audits it
 
-Dating:
+Mutuals:
 
 - opt-in state
-- match/report/block safety queues
-- no accidental exposure of private match content outside role policy
+- Mutual/report/block safety queues
+- no accidental exposure of private Mutual chat content outside role policy
 
 AI/MCP:
 
@@ -233,8 +253,8 @@ Business:
 - creator earnings
 - paying conversion rate
 - content unlock conversion rate
-- subscription MRR/ARR/churn
-- event ticket sales
+- membership and platform plan MRR/ARR/churn
+- Event Access Pass sales
 - creator retention
 
 Product:
@@ -298,7 +318,7 @@ Every admin mutation must include:
 - finance role can inspect settlement and split records
 - ops role can view provider health but not mutate money state
 
-Current dating ops implementation:
+Current Mutuals ops implementation:
 
-- `GET /v1/admin/dating/safety` returns aggregate open dating reports, active matches, and stale matches.
-- Admin dating visibility is aggregate-only for this slice; private match message content remains outside default admin visibility.
+- `GET /v1/admin/dating/safety` is the current compatibility route for aggregate open Mutuals reports, active Mutuals, and stale Mutuals.
+- Admin Mutuals visibility is aggregate-only for this slice; private Mutual chat content remains outside default admin visibility.

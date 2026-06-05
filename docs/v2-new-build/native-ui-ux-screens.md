@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: desktop/mobile PWA UX
-Last updated: 2026-06-03
+Last updated: 2026-06-05
 Source of truth: yes
 
 Owns:
@@ -26,9 +26,12 @@ This document defines how every main v2 screen should behave so Veel feels like 
 
 - Media first, actions second, text third, metadata last.
 - Desktop and mobile adapt; they do not simply scale.
+- The primary app should feel like an installed native app, not a scrolling web page.
+- Main media surfaces are viewport-locked: one focused screen, no document-level scroll, next media by swipe, click, keyboard, or visible controls.
+- Internal panels/sheets may scroll, but the root app viewport must stay stable.
 - One gesture has one meaning inside one visual mode.
 - Every gesture has a visible accessible control.
-- Money, publishing, tickets, matching, reporting, and moderation require explicit controls.
+- Money, publishing, Event Access, Mutuals, reporting, and moderation require explicit controls.
 - PWA should feel installable, fast, resilient, and safe.
 
 ## App Shell
@@ -59,8 +62,8 @@ Profile
 Desktop secondary:
 
 ```text
-Events
-Dating
+Event Access
+Mutuals
 Wallet
 Settings
 ```
@@ -68,8 +71,8 @@ Settings
 Rules:
 
 - Admin is separate protected surface.
-- Dating is explicit mode, not root nav.
-- Events are content type + conversion flow.
+- Mutuals is explicit mode, not root nav.
+- Events are content type + Event Access conversion flow.
 - AI/MCP is not root nav.
 - Activity lives under Profile/Settings/Wallet.
 
@@ -107,7 +110,7 @@ This prevents the platform from becoming too locked and keeps discovery healthy.
 | Create | Full-screen native capture/upload flow | Studio workspace/panel |
 | Messages | Inbox screen, thread full-screen | List + thread workspace, quick chat desktop-only |
 | Profile | Instagram-like profile/tabs/grid | Wider grid, creator/action panel |
-| Media viewer | Full-screen Reels/TikTok style | Viewport-locked stage + action rail + side panels |
+| Media viewer | Full-screen Reels/TikTok style, no root scroll | Viewport-locked stage + action rail + side panels |
 | Live room | Stage first, pass/chat sheets | Large stage, chat/access panels secondary |
 | Moment viewer | Tap progression | Story/moment modal with keyboard support |
 | Activity | List-based categories | Filtered activity table/list |
@@ -137,7 +140,7 @@ Actions:
 - tapping media opens media viewer
 - follow/like/save happen in place
 - comment/share/more open sheet/popover
-- tip/support/unlock open same-screen payment sheet
+- support/unlock open same-screen payment sheet
 
 ## Media Viewer
 
@@ -161,6 +164,8 @@ Mobile:
 - share sheet has actions for Copy link, internal Veel send/repost, WhatsApp, Telegram, Instagram, TikTok, X, LinkedIn, and system share where available
 - external share links include referral attribution when policy allows; internal Veel send/repost does not create referral commission by default
 - swipe up/down next/previous
+- click/tap the next affordance advances to the next media item when swipe is unavailable
+- haptic/vibration feedback is used where browser/device support exists and user settings allow it
 - no desktop quick chat dock
 - bottom nav hidden or safely integrated depending mode
 
@@ -191,8 +196,8 @@ Mobile:
 - bottom-aligned steps: media, thumbnail/teaser, caption, labels, monetise, optional event, preview, publish
 - thumbnail and Bit/teaser selection are simple native controls
 - labels include NSFW/adult/sensitive and optional event attachment only
-- event attachment captures date/time, ticket amount/capacity, public sale or private request-to-join, digital live stream or physical location, and map-assisted location search
-- Dating Mode is not configured in Create; it is enabled from profile/settings and appears as a dating-active affordance on eligible creator media
+- event attachment captures date/time, pass capacity, public sale or private request-to-join, digital live stream or physical location, and map-assisted location search
+- Mutuals is not configured in Create; it is enabled from profile/settings and appears as a Mutuals-active affordance on eligible creator media
 - record/publish explicit
 - global gestures disabled
 - safe-area aware
@@ -224,7 +229,7 @@ Own profile:
 
 Public profile:
 
-- Follow, Message, Support, Subscribe/Unlock where applicable
+- Follow, Message, Support, Membership/Unlock where applicable
 - creator media grid
 - premium/live/event states
 
@@ -251,8 +256,8 @@ Desktop:
 | App shell | Scroll page/feed | Avoid root switching unless safe | Browser/OS back or visible back |
 | Home | Feed scroll | None by default | Bottom nav/back |
 | Bits/media | Next/previous media | Creator panel/create action in normal mode | Esc/back/X |
-| Dating mode | Next/previous media | Yes / Not interested | Exit mode/back |
-| Event mode | Next/previous media | Interested/ticket / not interested | Exit/back |
+| Mutuals mode | Next/previous media | Show Interest / Not interested | Exit mode/back |
+| Event Access mode | Next/previous media | Interested / Get Access / Not interested | Exit/back |
 | Profile | Scroll profile | Profile tabs only | Back/nav |
 | Moment viewer | Tap/limited vertical | Previous/next story group | X/back/swipe-down where safe |
 | Create/editor | Editing gestures only | Editing gestures only | Cancel/save/back |
@@ -267,7 +272,7 @@ Do not start custom horizontal gestures from the extreme screen edge. OS/browser
 - Media viewer is full-screen/viewport-locked.
 - Bottom sheets on mobile; side panels or compact modals on desktop.
 - Wallet linking/signing should stay same-screen where provider allows it.
-- No unnecessary redirects for payment, unlock, tip, support, ticket, or dating actions.
+- No unnecessary redirects for payment, unlock, support, Event Access, or Mutuals actions.
 - Gestures are shortcuts only; buttons remain visible.
 
 ## Motion Rules

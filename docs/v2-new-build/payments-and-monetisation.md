@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Solana Pay, monetisation, referrals
-Last updated: 2026-06-04
+Last updated: 2026-06-05
 Source of truth: yes
 
 Owns:
@@ -29,13 +29,13 @@ Current implementation state:
 - Wallet approval, frontend success, and submitted signatures remain non-final until backend settlement verification confirms chain evidence.
 - `POST /v1/content/{contentId}/unlock-intents` creates or reuses a backend-priced `content_unlock` intent from active content access rules. The generic payment-intent endpoint does not accept client-priced content unlocks.
 - Confirmed `content_unlock` settlement grants an active content entitlement in the same backend transaction, and media/feed access projection returns `unlocked` only from backend entitlement state.
-- Confirmed `tip` and `support` settlement posts creator earning and platform fee ledger entries using the documented launch platform fee, but never writes an access grant.
-- Confirmed `event_ticket` settlement grants a backend ticket entitlement and QR/check-in record. Ticket access is never created from wallet approval, redirect state, or frontend-computed payment success.
-- `POST /v1/referrals/tokens` creates backend-owned external/internal referral tokens. Optional payment-intent `referralToken` values are resolved server-side, self-referrals are not attributed, and confirmed eligible tip/support settlement creates at most one commission from the platform fee.
+- Confirmed `tip` and `support` compatibility settlement posts creator earning and platform fee ledger entries using the documented launch platform fee, but never writes an access grant. UI copy should say support.
+- Confirmed `event_ticket` compatibility settlement grants a backend Event Access Pass entitlement and QR/check-in record. Event Access is never created from wallet approval, redirect state, or frontend-computed payment success.
+- `POST /v1/referrals/tokens` creates backend-owned external/internal referral tokens. Optional payment-intent `referralToken` values are resolved server-side, self-referrals are not attributed, and confirmed eligible support settlement creates at most one commission from Veel platform commission net of refunds and tax.
 - `GET /v1/activity`, `GET /v1/activity/payments`, and `GET /v1/activity/wallet-transactions` expose normalized backend activity and wallet transaction history. Wallet transaction records are backend-observed submission/confirmation references, not settlement proof by themselves.
 - `GET /v1/profiles/me/creator-dashboard` exposes creator monetisation readiness, product toggles, confirmed earning records, platform fees, referral commissions, and recent payment activity from backend tables only.
 - Admin reconciliation is available through role-gated read-only projections for payment intents, unlock entitlements, provider events, and operations counts. These projections never expose raw provider payloads, provider secrets, private keys, or frontend-computed payment truth.
-- Subscription plans, authorizations, and recurring collection state are backend-owned. The primary path is auto-renewing Solana delegated subscriptions: the user authorizes bounded token collection once, backend/worker collection runs each period until cancellation/revocation, and access changes only after verified authorization or collection evidence.
+- Membership/platform plan authorizations and recurring collection state are backend-owned. The primary path is auto-renewing Solana delegated subscriptions: the user authorizes bounded token collection once, backend/worker collection runs each period until cancellation/revocation, and access changes only after verified authorization or collection evidence.
 
 Official references checked:
 
@@ -57,16 +57,17 @@ Official references checked:
 - Wallet approval is not proof.
 - Confirmed chain evidence plus backend validation is proof.
 - Access grants, commissions, earnings projections, and revenue records are backend-only.
+- Compliance ledger entries, receipts, VAT determinations, invoices/statements, and entitlement grants are backend-only.
 
 ## Product Types
 
 - content unlock for paid clip/post/VOD/replay
 - tip/support
 - paid message
-- creator subscription
-- platform subscription
+- Creator Membership
+- platform plans: Free Verified, Veel Plus, Veel Studio, Enterprise
 - live pass
-- event ticket
+- Event Access Pass
 - external referral commission
 
 ## Solana Pay Architecture
@@ -78,6 +79,16 @@ Veel stays noncustodial:
 - funds move directly to creator/platform/referral recipients where the product supports split transfers
 - backend verifies chain facts before granting access or recording final revenue
 - frontend wallet success is not final payment proof
+
+Required settlement ordering:
+
+```text
+confirmed chain evidence
+  -> immutable compliance ledger entry
+  -> receipt and VAT/invoice determination
+  -> entitlement/access/membership grant
+  -> activity/admin projection
+```
 
 ```mermaid
 sequenceDiagram
@@ -123,23 +134,23 @@ Helius is used only for payment/access evidence:
 - content unlocks
 - subscriptions
 - live passes
-- support/tips if chosen for reconciliation
+- support if chosen for reconciliation
 - paid messages
-- tickets
+- Event Access Passes
 
 Avoid broad `Any transaction` firehose except short fixture capture. Prefer scoped recipient/treasury/reference monitoring where provider supports it.
 
-## Tips Policy
+## Support Policy
 
-Tips do not unlock anything, but they still affect money and referral accounting.
+Support does not unlock anything by default, but it still affects money, referral, tax/compliance, receipt, and audit accounting.
 
 Recommended:
 
 - show immediate submitted UX after wallet signature
 - run scoped RPC confirmation for exact signature
 - post creator earning and platform fee ledger entries only after backend-confirmed settlement
-- include tips in Helius/reconciliation if they create referral commission, creator earning records, or platform revenue state
-- if Helius cost becomes high, batch/reconcile tips with RPC/indexer polling, but do not mark financial totals final from client alone
+- include support in Helius/reconciliation if it creates referral commission, creator earning records, platform revenue state, or compliance ledger state
+- if Helius cost becomes high, batch/reconcile support with RPC/indexer polling, but do not mark financial totals final from client alone
 
 ## Live Pass Product
 
@@ -173,6 +184,8 @@ Live replays are ordinary content items after the stream ends. They can use a fr
 - Self-referral blocked.
 - Duplicate paid event blocked.
 - Commission state is tied to payment intent and settlement.
+- Commission is paid only from Veel platform commission net of refunds and tax.
+- Priority is Partner Referral, then Invite Referral, then Share Referral; only one attribution can win.
 - Frontend never sends recipient amount, commission amount, or final financial-truth payloads.
 
 Referral types:

@@ -1556,6 +1556,176 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/compliance/ledger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Compliance ledger entries for DAC7, DAC8/CARF, VAT, receipts, and entitlement evidence */
+        get: operations["listAdminComplianceLedger"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/compliance/dac7/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** DAC7 annual report preparation and export state */
+        get: operations["listAdminDac7Reports"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/compliance/carf/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** DAC8/CARF report readiness, disabled unless carf_reporting_required is enabled */
+        get: operations["listAdminCarfReports"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/compliance/vat/determinations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** VAT/MWST seller-of-record and tax determinations */
+        get: operations["listAdminVatDeterminations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/compliance/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Payment and access receipt search */
+        get: operations["listAdminReceipts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/compliance/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** VAT invoice search and export */
+        get: operations["listAdminInvoices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/referrals/programs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Referral program governance */
+        get: operations["listAdminReferralPrograms"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/referrals/partner-campaigns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Partner referral campaign governance */
+        get: operations["listAdminPartnerCampaigns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/tier-waivers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Partner and operational platform tier waiver policy */
+        get: operations["listAdminTierWaivers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/organizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Enterprise organization, KYB, and RBAC administration */
+        get: operations["listAdminOrganizations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/feature-flags": {
         parameters: {
             query?: never;
@@ -2695,6 +2865,177 @@ export interface components {
             activeMatches: number;
             staleMatches: number;
         };
+        AdminComplianceLedgerEntry: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            eventType: "payment_settled" | "refund_recorded" | "entitlement_granted" | "fee_recorded" | "referral_commission_recorded" | "tax_adjusted";
+            /** @enum {string} */
+            productType: "support" | "content_unlock" | "paid_message" | "live_pass" | "event_access_pass" | "membership" | "platform_plus" | "platform_studio" | "enterprise" | "platform_fee" | "referral_commission";
+            /** @enum {string} */
+            settlementModel: "user_to_creator_split" | "user_to_platform" | "platform_fee_only" | "referral_commission_only";
+            /** Format: uuid */
+            sellerUserId?: string | null;
+            /** Format: uuid */
+            buyerUserId?: string | null;
+            /** Format: uuid */
+            paymentIntentId?: string | null;
+            /** Format: uuid */
+            entitlementId?: string | null;
+            /** Format: uuid */
+            receiptId?: string | null;
+            /** Format: uuid */
+            invoiceId?: string | null;
+            grossAmountMinor: number;
+            platformFeeMinor?: number | null;
+            creatorNetAmountMinor?: number | null;
+            taxAmountMinor?: number | null;
+            currency: components["schemas"]["Currency"];
+            fiatCurrency: string;
+            fxRate?: string | null;
+            sellerCountry?: string | null;
+            buyerCountry?: string | null;
+            /** @enum {string} */
+            sellerOfRecord?: "creator" | "veel" | "enterprise_merchant" | "undetermined";
+            /** @enum {string} */
+            vatStatus: "not_applicable" | "pending" | "reverse_charge" | "taxable" | "exempt" | "out_of_scope" | "review_required";
+            dac7Reportable: boolean;
+            carfReportable: boolean;
+            immutableHash?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AdminComplianceReport: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            reportType: "dac7" | "carf";
+            reportingYear: number;
+            /** @enum {string} */
+            state: "draft" | "collecting" | "ready_for_review" | "exported" | "filed" | "blocked";
+            lineCount: number;
+            jurisdiction?: string | null;
+            /** Format: uuid */
+            exportId?: string | null;
+            carfReportingRequired?: boolean | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            exportedAt?: string | null;
+        };
+        AdminVatDetermination: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            productType: "support" | "content_unlock" | "paid_message" | "live_pass" | "event_access_pass" | "membership" | "platform_plus" | "platform_studio" | "enterprise" | "platform_fee" | "referral_commission";
+            /** @enum {string} */
+            sellerOfRecord: "creator" | "veel" | "enterprise_merchant" | "undetermined";
+            buyerCountry: string | null;
+            sellerCountry: string | null;
+            buyerVatId?: string | null;
+            /** @enum {string|null} */
+            viesStatus?: "not_checked" | "valid" | "invalid" | "unavailable" | null;
+            placeOfSupply?: string | null;
+            /** @enum {string} */
+            vatStatus: "not_applicable" | "pending" | "reverse_charge" | "taxable" | "exempt" | "out_of_scope" | "review_required";
+            vatRateBps?: number | null;
+            vatAmountMinor?: number | null;
+            /** @enum {string} */
+            reviewState?: "clear" | "needs_review" | "resolved";
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AdminReceipt: {
+            /** Format: uuid */
+            id: string;
+            receiptNumber: string;
+            /** @enum {string} */
+            productType: "support" | "content_unlock" | "paid_message" | "live_pass" | "event_access_pass" | "membership" | "platform_plus" | "platform_studio" | "enterprise" | "platform_fee" | "referral_commission";
+            /** Format: uuid */
+            buyerUserId?: string | null;
+            /** Format: uuid */
+            sellerUserId?: string | null;
+            /** Format: uuid */
+            paymentIntentId?: string | null;
+            grossAmountMinor: number;
+            currency: components["schemas"]["Currency"];
+            /** @enum {string} */
+            state: "issued" | "voided" | "corrected";
+            /** Format: date-time */
+            issuedAt: string;
+        };
+        AdminInvoice: {
+            /** Format: uuid */
+            id: string;
+            invoiceNumber: string;
+            /** @enum {string} */
+            sellerOfRecord: "creator" | "veel" | "enterprise_merchant" | "undetermined";
+            /** Format: uuid */
+            buyerUserId?: string | null;
+            /** Format: uuid */
+            sellerUserId?: string | null;
+            totalAmountMinor: number;
+            vatAmountMinor: number;
+            currency: components["schemas"]["Currency"];
+            /** @enum {string} */
+            state: "draft" | "issued" | "voided" | "corrected";
+            /** Format: date-time */
+            issuedAt: string;
+        };
+        AdminReferralProgram: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @enum {string} */
+            state: "draft" | "active" | "paused" | "archived";
+            /** @enum {string} */
+            priority: "partner" | "invite" | "share";
+            /** @enum {string} */
+            commissionSource?: "veel_platform_commission_net_of_refunds_and_tax";
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AdminPartnerCampaign: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            partnerName: string;
+            /** @enum {string} */
+            state: "draft" | "active" | "paused" | "archived";
+            /** Format: uuid */
+            contractId?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AdminTierWaiver: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            subjectType: "user" | "creator" | "organization" | "partner_campaign";
+            /** Format: uuid */
+            subjectId?: string;
+            /** @enum {string} */
+            tierKey: "free_verified" | "veel_plus" | "veel_studio" | "enterprise";
+            /** @enum {string} */
+            state: "active" | "expired" | "revoked";
+            /** Format: date-time */
+            startsAt: string;
+            /** Format: date-time */
+            endsAt?: string | null;
+        };
+        AdminOrganization: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @enum {string} */
+            state: "pending_kyb" | "active" | "suspended" | "archived";
+            /** @enum {string} */
+            plan: "enterprise";
+            /** @enum {string|null} */
+            kybState?: "not_started" | "pending" | "verified" | "rejected" | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
         AdminFeatureFlag: {
             key: string;
             value: {
@@ -3489,6 +3830,114 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["AdminDatingSafety"];
+            };
+        };
+        /** @description Admin compliance ledger entries */
+        AdminComplianceLedgerPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    items: components["schemas"]["AdminComplianceLedgerEntry"][];
+                    nextCursor?: string | null;
+                };
+            };
+        };
+        /** @description Admin compliance reports */
+        AdminComplianceReportPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    items: components["schemas"]["AdminComplianceReport"][];
+                    nextCursor?: string | null;
+                };
+            };
+        };
+        /** @description Admin VAT determinations */
+        AdminVatDeterminationPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    items: components["schemas"]["AdminVatDetermination"][];
+                    nextCursor?: string | null;
+                };
+            };
+        };
+        /** @description Admin receipts */
+        AdminReceiptPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    items: components["schemas"]["AdminReceipt"][];
+                    nextCursor?: string | null;
+                };
+            };
+        };
+        /** @description Admin VAT invoices */
+        AdminInvoicePage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    items: components["schemas"]["AdminInvoice"][];
+                    nextCursor?: string | null;
+                };
+            };
+        };
+        /** @description Admin referral programs */
+        AdminReferralProgramPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    items: components["schemas"]["AdminReferralProgram"][];
+                    nextCursor?: string | null;
+                };
+            };
+        };
+        /** @description Admin partner campaigns */
+        AdminPartnerCampaignPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    items: components["schemas"]["AdminPartnerCampaign"][];
+                    nextCursor?: string | null;
+                };
+            };
+        };
+        /** @description Admin tier waivers */
+        AdminTierWaiverPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    items: components["schemas"]["AdminTierWaiver"][];
+                    nextCursor?: string | null;
+                };
+            };
+        };
+        /** @description Admin organizations */
+        AdminOrganizationPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    items: components["schemas"]["AdminOrganization"][];
+                    nextCursor?: string | null;
+                };
             };
         };
         /** @description Admin feature flag */
@@ -5353,6 +5802,156 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["AdminDatingSafety"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAdminComplianceLedger: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminComplianceLedgerPage"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAdminDac7Reports: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminComplianceReportPage"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAdminCarfReports: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminComplianceReportPage"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAdminVatDeterminations: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminVatDeterminationPage"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAdminReceipts: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminReceiptPage"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAdminInvoices: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminInvoicePage"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAdminReferralPrograms: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminReferralProgramPage"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAdminPartnerCampaigns: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminPartnerCampaignPage"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAdminTierWaivers: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminTierWaiverPage"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAdminOrganizations: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminOrganizationPage"];
             403: components["responses"]["Forbidden"];
         };
     };

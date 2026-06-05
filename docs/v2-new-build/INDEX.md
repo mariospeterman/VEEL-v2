@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: complete standalone Veel v2 build instructions
-Last updated: 2026-06-03
+Last updated: 2026-06-05
 Source of truth: yes
 
 Owns:
@@ -28,7 +28,7 @@ This folder is the canonical new-build pack. It is intentionally self-contained 
 - Provider-first architecture.
 - Backend business truth with minimal custom infrastructure.
 - Frontend native PWA UX plan.
-- Noncustodial payments, embedded wallets, subscriptions, referrals, media, live, messages, dating, events, AI/MCP, compliance, admin, and ops.
+- Noncustodial payments, embedded wallets, memberships, referrals, media, live, messages, Mutuals, Event Access, AI/MCP, compliance, admin, and ops.
 
 ## What This Pack Is Not
 
@@ -46,7 +46,7 @@ This folder is the canonical new-build pack. It is intentionally self-contained 
 | API shape | `packages/contracts/openapi.yaml` | Generated client and Fastify schemas must match exactly. |
 | Frontend routes/screens/gestures | `route-map.md`, `native-ui-ux-screens.md`, frontend docs | Next routes encode route state only. |
 | Database shape | `packages/database/schema-blueprint.sql` until migrations exist | Migrations must be derived slice-by-slice from the blueprint. |
-| Money/access/referral truth | `payments-and-monetisation.md`, `business-monetisation.md`, `noncustodial-money-compliance.md`, OpenAPI | Backend owns final state; frontend is UX/cache only. |
+| Money/access/referral/tax truth | `payments-and-monetisation.md`, `business-monetisation.md`, `noncustodial-money-compliance.md`, `compliance/dac7-dac8-vat-system.md`, OpenAPI | Backend owns final state; frontend is UX/cache only. |
 | Provider boundaries | `providers/provider-map.md`, provider-specific docs, ADRs | Use official provider docs/SDKs first; adapters hide secrets. |
 | Security/compliance | compliance docs, `safety-admin-ai.md`, ADRs | Age, moderation, audit, and privacy rules block launch if incomplete. |
 | Admin/ops | `admin-operations-dashboard.md` | Every launch slice needs admin visibility where relevant. |
@@ -70,8 +70,8 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 ## Product And UX
 
 11. [Product flows](product-flows.md)
-12. [Dating Mode architecture](product/dating-mode.md)
-13. [Events and ticketing architecture](product/events-ticketing.md)
+12. [Mutuals architecture](product/mutuals.md)
+13. [Event Access architecture](product/event-access.md)
 14. [Frontend architecture](frontend-architecture.md)
 15. [Native UI, screens, gestures, and motion](native-ui-ux-screens.md)
 16. [Landing page and GSAP blueprint](landing-page-gsap.md)
@@ -105,12 +105,13 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 38. [Admin and operations dashboard](admin-operations-dashboard.md)
 39. [Adult content compliance](compliance/adult-content-compliance.md)
 40. [Age/KYC jurisdictions and provider waterfall](compliance/age-kyc-jurisdictions.md)
+41. [DAC7, DAC8/CARF, VAT/MWST system](compliance/dac7-dac8-vat-system.md)
 
 ## Infrastructure And Execution
 
-41. [Infrastructure and research decisions](infra-decisions.md)
-42. [Deployment topology](deployment-topology.md)
-43. [Slice workflow](slice-workflow.md)
+42. [Infrastructure and research decisions](infra-decisions.md)
+43. [Deployment topology](deployment-topology.md)
+44. [Slice workflow](slice-workflow.md)
 
 ## How To Use In A New Repo
 
@@ -138,7 +139,7 @@ Docs/ADRs
   -> providers/media/live
   -> messages/activity
   -> admin/ops
-  -> events/dating/AI
+  -> Event Access/Mutuals/AI
 ```
 
 Every production slice must include contracts, migrations, tests, provider boundary checks, frontend smoke coverage, and admin/ops visibility where relevant.

@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: documentation
-Last updated: 2026-06-03
+Last updated: 2026-06-05
 Source of truth: yes
 
 Owns:
@@ -86,7 +86,23 @@ Product-facing naming:
 - say `Clip` for a longer video
 - say `Moment` for the product-facing story format
 - say `Mirror` for the product-facing share action
+- say `Support` instead of tip
+- say `Unlock` for paid content access in UI, while contracts may still use `content_unlock`
+- say `Creator Membership`, `Member access`, and `Membership tier`
+- say `Event Access`, `Pass`, `Passes`, `Get Access`, and `Reserve Access`
+- say `Mutuals`, `Show Interest`, `Interested`, `Mutual`, `Mutual chat`, and `Mutuals mode`
+- say `Use Veel wallet`, `Connect my wallet`, and `Pay from wallet`
+- say `Free Verified`, `Veel Plus`, `Veel Studio`, and `Enterprise`
 - keep `video` as the generic fallback when the duration bucket is not the point of the UI
+
+Avoid:
+
+- `tip` in user-facing UI
+- `ticket` for launch-facing Event Access UI
+- `dating`, `swipe`, `match`, or `match chat` for launch-facing Mutuals UI
+- `creator subscription` for launch-facing Creator Membership UI
+- `Max`, `Power`, or other platform tier names outside the approved tier list
+- any copy implying money buys people, ranking boosts, Mutuals priority, or message priority
 
 Allowed:
 

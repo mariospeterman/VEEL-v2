@@ -22,7 +22,8 @@ This repo is a clean standalone build. The historical context is reference only.
 
 - Do not bulk-copy historical context code.
 - Do not create duplicate routes, app shells, media viewers, payment systems, provider adapters, realtime systems, CSS systems, or API clients.
-- Do not move payment/access/referral/subscription/ticket/age/KYC/admin truth to the frontend.
+- Do not move payment/access/referral/membership/Event Access/age/KYC/tax/admin truth to the frontend.
+- Do not introduce custody, creator balances, withdrawals, escrow, internal credits, or money-based ranking boosts.
 - Do not expose provider secrets, service-role keys, stream keys, signed playback URLs, webhook secrets, raw PII, or private keys.
 - Do not invent provider payloads or SDK methods. Check official provider docs before integration.
 - Do not add dependencies without a clear reason and maintenance/security check.

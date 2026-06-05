@@ -2,7 +2,7 @@
 
 ## Mission
 
-Build Veel v2 as a clean, provider-first, production-grade 18+ creator PWA/dApp for media, live/VOD, premium unlocks, messages, events, dating/matches, creator monetisation, and admin operations.
+Build Veel v2 as a clean, provider-first, production-grade 18+ creator PWA/dApp for media, live/VOD, premium unlocks, messages, Event Access, Mutuals, creator monetisation, and admin/compliance operations.
 
 This is a standalone build. The historical context is context only for validated lessons.
 
@@ -23,7 +23,9 @@ Before implementing or changing provider code, re-check the latest official prov
 
 - No bulk-copying historical context code.
 - No duplicate routes, app shells, media viewers, payment systems, provider adapters, realtime systems, or CSS systems.
-- No frontend business truth for payments, access, referrals, commissions, tickets, subscriptions, age/KYC, moderation, or admin state.
+- No frontend business truth for payments, access, referrals, commissions, Event Access Passes, memberships, age/KYC, tax/compliance, moderation, or admin state.
+- No custody. No Veel-held creator balances. No internal credits. No withdrawals. No escrow. No platform-controlled payout queue.
+- No money-based people ranking, feed ranking, recommendation boost, Mutuals boost, or message priority.
 - No provider secrets, private keys, stream keys, signed media URLs, webhook secrets, raw PII, or service-role keys in browser bundles.
 - No custom media infrastructure when Bunny/Livepeer do the provider job.
 - No custom key custody. Embedded wallet provider must be noncustodial/user-controlled.
@@ -69,7 +71,7 @@ Historical repositories and notes are context only. If a useful lesson appears t
 - Follow OWASP API Top 10.
 - Validate all input.
 - Authorize object and function access server-side.
-- Rate-limit auth, wallet, payment, age, upload, message, dating, ticketing, moderation, and admin flows.
+- Rate-limit auth, wallet, payment, age, upload, message, Mutuals, Event Access, moderation, tax/compliance, and admin flows.
 - Audit money, provider callbacks, access changes, age/KYC, safety, admin, and AI tool calls.
 - Redact logs.
 - Keep service-role and provider keys server-only.

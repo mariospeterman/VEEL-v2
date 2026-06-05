@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: auth, wallets, onboarding, onramp, conversion
-Last updated: 2026-06-03
+Last updated: 2026-06-05
 Source of truth: yes
 
 Owns:
@@ -52,7 +52,7 @@ Wallet-mandatory onboarding creates a conversion cliff for mainstream users. A c
 - sign up with email, social, or passkey
 - receive or create a user-owned embedded wallet
 - top up that wallet by card/onramp when they need to pay
-- participate in unlocks, tips, support, messages, live passes, and tickets without installing a browser extension first
+- participate in unlocks, support, messages, live passes, Event Access, and memberships without installing a browser extension first
 
 External wallets remain first-class for crypto-native users.
 
@@ -100,7 +100,7 @@ Allowed:
 Not allowed:
 
 - Veel holding user private keys
-- app-controlled payment signing for tips, unlocks, subscriptions, tickets, paid messages, or live passes
+- app-controlled payment signing for support, unlocks, memberships, Event Access, paid messages, or live passes
 - frontend deciding payment success
 - provider wallet state granting access without backend settlement verification
 - custodial internal balance as launch default
@@ -204,7 +204,7 @@ Rules:
 - funding provider handles fiat/KYC requirements where applicable
 - Veel records safe onramp session references for UX/support only
 - Veel does not credit internal custodial balance as payment proof
-- onramp completion is not content, ticket, pass, message, tip, or subscription checkout
+- onramp completion is not content, Event Access, pass, message, support, or membership checkout
 - Veel does not use wallet funding providers as merchant-of-record product billing
 - paid actions still require backend payment intent and confirmed transaction validation
 
@@ -219,11 +219,11 @@ Recommended launch behavior:
 Wallet-required actions:
 
 - unlock paid content
-- tip/support
+- support
 - paid message
-- creator subscription
+- Creator Membership
 - live pass
-- event ticket
+- Event Access Pass
 - creator earning/tax setup
 
 Non-wallet actions:
@@ -236,7 +236,12 @@ Non-wallet actions:
 ## UX Requirements
 
 - Do not show crypto jargon during signup.
-- Explain wallet only when needed: "Your Veel wallet lets you unlock, support creators, and receive purchases."
+- The flow should feel like one step with progressive checks, not a long form.
+- Viewer flow: teaser, Continue, auth, embedded wallet silently created/loaded, optional native wallet connect, age assurance before adult/protected access, first feed value moment, wallet funding/connect only at payment or allowance need.
+- Explain wallet only when needed: "Your Veel wallet lets you unlock, support creators, and pay from your wallet."
+- Preferred wallet CTAs: `Use Veel wallet`, `Connect my wallet`, `Pay from wallet`.
+- Creator onboarding CTA: `Start Earning` or `Become Creator`.
+- Creator onboarding uses hosted verification for age, identity, liveness, country, wallet ownership, and tax basics.
 - Payment sheets show amount, asset, creator, platform/referral summary where useful, and confirmation.
 - Top-up is an action inside the same payment sheet when balance is insufficient.
 - Users can choose embedded wallet or external wallet.

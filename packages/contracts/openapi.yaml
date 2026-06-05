@@ -1134,6 +1134,106 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/AdminDatingSafety" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/compliance/ledger:
+    get:
+      operationId: listAdminComplianceLedger
+      tags: [Admin]
+      summary: Compliance ledger entries for DAC7, DAC8/CARF, VAT, receipts, and entitlement evidence
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminComplianceLedgerPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/compliance/dac7/reports:
+    get:
+      operationId: listAdminDac7Reports
+      tags: [Admin]
+      summary: DAC7 annual report preparation and export state
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminComplianceReportPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/compliance/carf/reports:
+    get:
+      operationId: listAdminCarfReports
+      tags: [Admin]
+      summary: DAC8/CARF report readiness, disabled unless carf_reporting_required is enabled
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminComplianceReportPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/compliance/vat/determinations:
+    get:
+      operationId: listAdminVatDeterminations
+      tags: [Admin]
+      summary: VAT/MWST seller-of-record and tax determinations
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminVatDeterminationPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/compliance/receipts:
+    get:
+      operationId: listAdminReceipts
+      tags: [Admin]
+      summary: Payment and access receipt search
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminReceiptPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/compliance/invoices:
+    get:
+      operationId: listAdminInvoices
+      tags: [Admin]
+      summary: VAT invoice search and export
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminInvoicePage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/referrals/programs:
+    get:
+      operationId: listAdminReferralPrograms
+      tags: [Admin]
+      summary: Referral program governance
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminReferralProgramPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/referrals/partner-campaigns:
+    get:
+      operationId: listAdminPartnerCampaigns
+      tags: [Admin]
+      summary: Partner referral campaign governance
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminPartnerCampaignPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/tier-waivers:
+    get:
+      operationId: listAdminTierWaivers
+      tags: [Admin]
+      summary: Partner and operational platform tier waiver policy
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminTierWaiverPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/organizations:
+    get:
+      operationId: listAdminOrganizations
+      tags: [Admin]
+      summary: Enterprise organization, KYB, and RBAC administration
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminOrganizationPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /v1/admin/feature-flags:
     get:
       operationId: listAdminFeatureFlags
@@ -1387,6 +1487,15 @@ components:
     AdminDataRequest: { description: Admin data request, content: { application/json: { schema: { $ref: "#/components/schemas/AdminDataRequest" } } } }
     AdminDataRequestPage: { description: Admin data requests, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminDataRequest" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminDatingSafety: { description: Admin dating safety, content: { application/json: { schema: { $ref: "#/components/schemas/AdminDatingSafety" } } } }
+    AdminComplianceLedgerPage: { description: Admin compliance ledger entries, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminComplianceLedgerEntry" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminComplianceReportPage: { description: Admin compliance reports, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminComplianceReport" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminVatDeterminationPage: { description: Admin VAT determinations, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminVatDetermination" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminReceiptPage: { description: Admin receipts, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminReceipt" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminInvoicePage: { description: Admin VAT invoices, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminInvoice" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminReferralProgramPage: { description: Admin referral programs, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminReferralProgram" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminPartnerCampaignPage: { description: Admin partner campaigns, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminPartnerCampaign" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminTierWaiverPage: { description: Admin tier waivers, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminTierWaiver" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminOrganizationPage: { description: Admin organizations, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminOrganization" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminFeatureFlag: { description: Admin feature flag, content: { application/json: { schema: { $ref: "#/components/schemas/AdminFeatureFlag" } } } }
     AdminFeatureFlagPage: { description: Admin feature flags, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminFeatureFlag" } } } } } } }
     AuditEventPage: { description: Audit events, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AuditEvent" } }, nextCursor: { type: string, nullable: true } } } } } }
@@ -2459,6 +2568,135 @@ components:
         openReports: { type: integer }
         activeMatches: { type: integer }
         staleMatches: { type: integer }
+    AdminComplianceLedgerEntry:
+      type: object
+      required: [id, eventType, productType, settlementModel, grossAmountMinor, currency, fiatCurrency, vatStatus, dac7Reportable, carfReportable, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        eventType: { type: string, enum: [payment_settled, refund_recorded, entitlement_granted, fee_recorded, referral_commission_recorded, tax_adjusted] }
+        productType: { type: string, enum: [support, content_unlock, paid_message, live_pass, event_access_pass, membership, platform_plus, platform_studio, enterprise, platform_fee, referral_commission] }
+        settlementModel: { type: string, enum: [user_to_creator_split, user_to_platform, platform_fee_only, referral_commission_only] }
+        sellerUserId: { type: string, format: uuid, nullable: true }
+        buyerUserId: { type: string, format: uuid, nullable: true }
+        paymentIntentId: { type: string, format: uuid, nullable: true }
+        entitlementId: { type: string, format: uuid, nullable: true }
+        receiptId: { type: string, format: uuid, nullable: true }
+        invoiceId: { type: string, format: uuid, nullable: true }
+        grossAmountMinor: { type: integer }
+        platformFeeMinor: { type: integer, nullable: true }
+        creatorNetAmountMinor: { type: integer, nullable: true }
+        taxAmountMinor: { type: integer, nullable: true }
+        currency: { $ref: "#/components/schemas/Currency" }
+        fiatCurrency: { type: string, minLength: 3, maxLength: 3 }
+        fxRate: { type: string, nullable: true }
+        sellerCountry: { type: string, nullable: true }
+        buyerCountry: { type: string, nullable: true }
+        sellerOfRecord: { type: string, enum: [creator, veel, enterprise_merchant, undetermined] }
+        vatStatus: { type: string, enum: [not_applicable, pending, reverse_charge, taxable, exempt, out_of_scope, review_required] }
+        dac7Reportable: { type: boolean }
+        carfReportable: { type: boolean }
+        immutableHash: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    AdminComplianceReport:
+      type: object
+      required: [id, reportType, reportingYear, state, lineCount, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        reportType: { type: string, enum: [dac7, carf] }
+        reportingYear: { type: integer }
+        state: { type: string, enum: [draft, collecting, ready_for_review, exported, filed, blocked] }
+        lineCount: { type: integer }
+        jurisdiction: { type: string, nullable: true }
+        exportId: { type: string, format: uuid, nullable: true }
+        carfReportingRequired: { type: boolean, nullable: true }
+        createdAt: { type: string, format: date-time }
+        exportedAt: { type: string, format: date-time, nullable: true }
+    AdminVatDetermination:
+      type: object
+      required: [id, productType, sellerOfRecord, buyerCountry, sellerCountry, vatStatus, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        productType: { type: string, enum: [support, content_unlock, paid_message, live_pass, event_access_pass, membership, platform_plus, platform_studio, enterprise, platform_fee, referral_commission] }
+        sellerOfRecord: { type: string, enum: [creator, veel, enterprise_merchant, undetermined] }
+        buyerCountry: { type: string, nullable: true }
+        sellerCountry: { type: string, nullable: true }
+        buyerVatId: { type: string, nullable: true }
+        viesStatus: { type: string, enum: [not_checked, valid, invalid, unavailable], nullable: true }
+        placeOfSupply: { type: string, nullable: true }
+        vatStatus: { type: string, enum: [not_applicable, pending, reverse_charge, taxable, exempt, out_of_scope, review_required] }
+        vatRateBps: { type: integer, nullable: true }
+        vatAmountMinor: { type: integer, nullable: true }
+        reviewState: { type: string, enum: [clear, needs_review, resolved] }
+        createdAt: { type: string, format: date-time }
+    AdminReceipt:
+      type: object
+      required: [id, receiptNumber, productType, grossAmountMinor, currency, state, issuedAt]
+      properties:
+        id: { type: string, format: uuid }
+        receiptNumber: { type: string }
+        productType: { type: string, enum: [support, content_unlock, paid_message, live_pass, event_access_pass, membership, platform_plus, platform_studio, enterprise, platform_fee, referral_commission] }
+        buyerUserId: { type: string, format: uuid, nullable: true }
+        sellerUserId: { type: string, format: uuid, nullable: true }
+        paymentIntentId: { type: string, format: uuid, nullable: true }
+        grossAmountMinor: { type: integer }
+        currency: { $ref: "#/components/schemas/Currency" }
+        state: { type: string, enum: [issued, voided, corrected] }
+        issuedAt: { type: string, format: date-time }
+    AdminInvoice:
+      type: object
+      required: [id, invoiceNumber, sellerOfRecord, totalAmountMinor, vatAmountMinor, currency, state, issuedAt]
+      properties:
+        id: { type: string, format: uuid }
+        invoiceNumber: { type: string }
+        sellerOfRecord: { type: string, enum: [creator, veel, enterprise_merchant, undetermined] }
+        buyerUserId: { type: string, format: uuid, nullable: true }
+        sellerUserId: { type: string, format: uuid, nullable: true }
+        totalAmountMinor: { type: integer }
+        vatAmountMinor: { type: integer }
+        currency: { $ref: "#/components/schemas/Currency" }
+        state: { type: string, enum: [draft, issued, voided, corrected] }
+        issuedAt: { type: string, format: date-time }
+    AdminReferralProgram:
+      type: object
+      required: [id, name, state, priority, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        state: { type: string, enum: [draft, active, paused, archived] }
+        priority: { type: string, enum: [partner, invite, share] }
+        commissionSource: { type: string, enum: [veel_platform_commission_net_of_refunds_and_tax] }
+        createdAt: { type: string, format: date-time }
+    AdminPartnerCampaign:
+      type: object
+      required: [id, name, state, partnerName, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        partnerName: { type: string }
+        state: { type: string, enum: [draft, active, paused, archived] }
+        contractId: { type: string, format: uuid, nullable: true }
+        createdAt: { type: string, format: date-time }
+    AdminTierWaiver:
+      type: object
+      required: [id, subjectType, tierKey, state, startsAt]
+      properties:
+        id: { type: string, format: uuid }
+        subjectType: { type: string, enum: [user, creator, organization, partner_campaign] }
+        subjectId: { type: string, format: uuid }
+        tierKey: { type: string, enum: [free_verified, veel_plus, veel_studio, enterprise] }
+        state: { type: string, enum: [active, expired, revoked] }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time, nullable: true }
+    AdminOrganization:
+      type: object
+      required: [id, name, state, plan, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        state: { type: string, enum: [pending_kyb, active, suspended, archived] }
+        plan: { type: string, enum: [enterprise] }
+        kybState: { type: string, enum: [not_started, pending, verified, rejected], nullable: true }
+        createdAt: { type: string, format: date-time }
     AdminFeatureFlag:
       type: object
       required: [key, value, updatedAt]

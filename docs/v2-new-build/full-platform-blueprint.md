@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: complete standalone Veel platform blueprint
-Last updated: 2026-06-03
+Last updated: 2026-06-05
 Source of truth: yes
 
 Owns:
@@ -32,14 +32,14 @@ Veel v2 is an 18+ creator PWA/dApp for:
 - live rooms and live-to-replay content
 - VOD/media upload and playback
 - paid unlocks and premium content
-- tips and direct support
+- direct support
 - paid messages
-- creator subscriptions
+- Creator Memberships
 - live passes
-- events and tickets
-- dating/matches as an explicit opt-in mode
+- Event Access and Passes
+- Mutuals as an explicit opt-in mode
 - messaging and quick chat
-- creator monetisation and earning/tax records
+- creator monetisation, receipts, invoices, and tax/compliance records
 - referral commissions
 - user activity and wallet transaction history
 - admin/ops/business control
@@ -91,7 +91,7 @@ Providers
 │                                                                             │
 │  Landing/Enter   Age Gate   App Shell   Home/Bits   Media Viewer            │
 │  Create/Edit     Live Room  Messages    Profile     Activity/Wallet         │
-│  Dating Mode     Events     AI Helper   Admin Gate  Settings                │
+│  Mutuals         Event Access AI Helper   Admin Gate  Settings              │
 │                                                                             │
 │  TanStack Query = server cache                                               │
 │  Zustand/local state = sheets, panels, gestures, playback UI                 │
@@ -103,7 +103,7 @@ Providers
 │                         Fastify Modular Monolith API                         │
 │                                                                             │
 │  auth/profile  age/access  content/media  live  messages  engagement        │
-│  payments      referrals   subscriptions  events/tickets  dating            │
+│  payments      referrals   memberships   event-access    mutuals           │
 │  safety/moderation/report/block  activity  notifications  admin/ops         │
 │  AI/MCP tool gateway  provider adapters  audit/idempotency                  │
 │                                                                             │
@@ -133,7 +133,8 @@ Frontend owns:
 
 Fastify API owns:
   payment truth, entitlement truth, referral truth, commission truth,
-  access policy, dating match truth, ticket truth, safety/admin decisions
+  tax/compliance truth, access policy, Mutual truth, Event Access truth,
+  safety/admin decisions
 
 Supabase owns:
   database, auth sessions, realtime transport, RLS enforcement
@@ -143,7 +144,7 @@ Providers own:
   age/KYC verification, user-wallet funding, delivery infrastructure
 ```
 
-Frontend never computes final access, final commission, final ticket state, final match state, final KYC state, or final provider status.
+Frontend never computes final access, final commission, final pass state, final Mutual state, final KYC/tax state, or final provider status.
 
 ## Module Coverage Matrix
 
@@ -156,15 +157,16 @@ Frontend never computes final access, final commission, final ticket state, fina
 | VOD/media pipeline | `media-live-providers.md`, `providers/content-protection.md` | media, assets, provider callbacks | media cards/viewer | Bunny Stream/CDN/TUS |
 | Live rooms/replays | `media-live-providers.md`, `product-flows.md` | live, passes, chat, replay | live room, replay viewer | Livepeer |
 | Payments/unlocks | `payments-and-monetisation.md`, `business-monetisation.md` | payments, entitlements | payment sheet | Solana Pay/RPC, Helius |
-| Tips/support | `business-monetisation.md`, `payments-and-monetisation.md` | payments, creator earnings records, referrals | tip/support sheet | Solana Pay/RPC, Helius/RPC evidence |
+| Support | `business-monetisation.md`, `payments-and-monetisation.md` | payments, creator earnings records, referrals | support sheet | Solana Pay/RPC, Helius/RPC evidence |
 | Referrals/commissions | `business-monetisation.md`, `engagement-strategy.md` | referrals, commissions | share/invite, activity | Solana evidence |
-| Subscriptions | `business-monetisation.md`, `payments-and-monetisation.md`, `noncustodial-money-compliance.md` | subscriptions, renewals | subscribe sheet/profile | Auto-renewing Solana Subscriptions/Allowances; manual Solana Pay recovery only |
+| Memberships | `business-monetisation.md`, `payments-and-monetisation.md`, `noncustodial-money-compliance.md` | memberships, renewals | membership sheet/profile | Auto-renewing Solana Subscriptions/Allowances; manual Solana Pay recovery only |
 | Paid messages | `business-monetisation.md`, `realtime-messages-activity.md` | messages, payments, access | messages/quick chat | Solana evidence |
 | Engagement | `engagement-strategy.md` | likes, comments, saves, shares, follows | cards, viewer, profile | none |
 | Messages/activity/realtime | `realtime-messages-activity.md`, `auth-supabase-realtime.md` | conversations, activity, notifications | messages, quick chat, activity | Supabase Realtime |
 | Profile/creator dashboard | `frontend/component-map.md`, `business-monetisation.md`, `profile-activity-ranking.md` | profile, badges, rankings, creator settings, activity | profile, activity, creator dashboard | KYC provider |
-| Dating/matches | `product/dating-mode.md`, `native-ui-ux-screens.md` | dating, matches, safety | dating mode, matches, match chat | age provider, realtime |
-| Events/tickets | `product/events-ticketing.md`, `business-monetisation.md` | events, tickets, payments | event sheet, tickets | Solana evidence, email/push |
+| Mutuals | `product/mutuals.md`, `native-ui-ux-screens.md` | mutuals, interests, safety | Mutuals mode, Mutuals, Mutual chat | age provider, realtime |
+| Event Access | `product/event-access.md`, `business-monetisation.md` | events, passes, payments | event sheet, passes | Solana evidence, email/push |
+| DAC7/DAC8/VAT | `compliance/dac7-dac8-vat-system.md` | compliance, receipts, invoices, exports | admin compliance | Supabase Postgres, counsel-reviewed exports |
 | AI/MCP | `safety-admin-ai.md`, `ai-mcp-use-cases.md` | AI sessions, tools, permissions, audit | AI assistant/admin AI | OpenAI-compatible adapter first |
 | Admin/ops | `admin-operations-dashboard.md`, `deployment-topology.md` | admin, audit, ops diagnostics | admin app | all providers via sanitized diagnostics |
 | Adult compliance/age/KYC | `compliance/*`, `providers/identity-provider-wiring.md` | age, KYC/KYB, audit | age gate, creator earning/tax setup | Yoti/Sumsub/Veriff/Persona |
@@ -183,7 +185,7 @@ Landing
   -> protected app access
   -> Home feed
   -> watch teaser/free media
-  -> tip/support/content-unlock/pass/ticket when desired
+  -> support/content-unlock/pass/membership when desired
   -> wallet approval
   -> backend verification
   -> refreshed access/activity state
@@ -200,7 +202,7 @@ Sign up
   -> KYC/KYB for earning, tax, and compliance where required
   -> upload/capture media
   -> choose thumbnail/teaser/access/monetisation and creator prices within admin guardrails
-  -> optional event attachment with date/time, ticket amount, public/private, and location
+  -> optional event attachment with date/time, pass capacity, public/private, and location
   -> publish
   -> dashboard shows backend-derived revenue/activity/provider state
 ```
@@ -232,30 +234,31 @@ Creator starts live
   -> replay becomes content item after live ends
 ```
 
-### Event Ticket
+### Event Access Pass
 
 ```text
 Media/event sheet
-  -> ticket selection
+  -> pass selection
   -> backend validates creator price, inventory, and policy
-  -> wallet approval for paid ticket or approval path for free/requested ticket
-  -> backend grants ticket entitlement
-  -> QR/receipt
-  -> admin/check-in sees ticket state
+  -> wallet approval for paid pass or approval path for free/requested access
+  -> backend writes compliance ledger and receipt state
+  -> backend grants Event Access Pass entitlement
+  -> QR/access receipt
+  -> admin/check-in sees pass state
 ```
 
-### Dating Match
+### Mutual
 
 ```text
-User explicitly activates Dating Mode
+User explicitly activates Mutuals
   -> age/consent check
-  -> profile/settings Dating Mode enabled
-  -> eligible creator media displays dating-active icon
-  -> dating feed
-  -> Yes / Not interested visible controls
-  -> backend records swipe
-  -> mutual interest creates match
-  -> match chat opens in Messages
+  -> profile/settings Mutuals enabled
+  -> eligible creator media displays Mutuals-active icon
+  -> Mutuals feed
+  -> Show Interest / Not interested visible controls
+  -> backend records interest
+  -> reciprocal interest creates Mutual
+  -> Mutual chat opens in Messages
   -> report/block always available
 ```
 
@@ -265,7 +268,7 @@ User explicitly activates Dating Mode
 Admin login
   -> role/policy check
   -> dashboard: revenue, provider health, queue health, reports, age/KYC, media
-  -> inspect user/content/payment/ticket/live/referral records
+  -> inspect user/content/payment/pass/live/referral/compliance records
   -> perform moderated actions with confirmation
   -> every mutation writes audit event
 ```
@@ -317,8 +320,10 @@ users
   ├─ conversations/messages
   ├─ follows/likes/saves/comments/shares
   ├─ referral_attributions
-  ├─ dating_profiles/swipes/matches
-  ├─ ticket_entitlements
+  ├─ mutual_profiles/interests/mutuals
+  ├─ event_access_passes
+  ├─ compliance_ledger_entries
+  ├─ receipts/vat_invoices/tax_profiles
   └─ activity_events
 
 content_items
@@ -328,7 +333,7 @@ content_items
   ├─ teaser_ranges
   ├─ moderation_state
   ├─ optional_event
-  └─ optional_dating_setting
+  └─ optional_mutuals_setting
 
 payment_intents
   ├─ product_type
@@ -378,9 +383,9 @@ Every frontend response is:
 10. Messages/activity/realtime slice
 11. Livepeer live/pass/replay slice
 12. Admin/ops baseline
-13. Creator monetisation/subscriptions
-14. Events/ticketing
-15. Dating mode
+13. Creator monetisation/memberships
+14. Event Access
+15. Mutuals
 16. AI/MCP assistant
 17. Compliance hardening, provider smoke, launch QA
 18. UI polish
@@ -388,7 +393,7 @@ Every frontend response is:
 
 ## Required Provider ADR
 
-Provider defaults are defined in `adr/0002-provider-decisions-2026.md`. Use it before writing wallet, onramp, subscription, media playback, age/KYC, ticketing, moderation, or AI/MCP code.
+Provider defaults are defined in `adr/0002-provider-decisions-2026.md`. Use it before writing wallet, onramp, membership, media playback, age/KYC, Event Access, tax/compliance, moderation, or AI/MCP code.
 
 ## New Repo Rule
 

@@ -69,6 +69,12 @@ Cursor will automatically pick up `.cursor/rules/veel-v2.mdc`. Claude-style tool
 
 Use the first 10 tickets in [build-plan.md](docs/v2-new-build/build-plan.md#first-10-implementation-tickets).
 
+## Product And Compliance Language
+
+Veel v2 is an 18+ creator media, access, noncustodial settlement, and admin/compliance platform. Product docs use `Mutuals` instead of dating, `Event Access` / `Passes` instead of ticketing, and `Creator Memberships` instead of creator subscriptions.
+
+The legal/financial boundary is explicit: no custody, no Veel-held creator balances, no internal credits, no withdrawals, no escrow, and no payment-based ranking boosts. DAC7/DAC8/VAT readiness is tracked in [dac7-dac8-vat-system.md](docs/v2-new-build/compliance/dac7-dac8-vat-system.md).
+
 Do not start by coding random screens. Start with repo foundation, contracts, database, Fastify API skeleton, and app shell.
 
 ## Current Validation
