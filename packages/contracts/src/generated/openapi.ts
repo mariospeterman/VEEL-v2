@@ -884,8 +884,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create platform or creator subscription payment intent */
+        /** Create platform or creator delegated subscription authorization */
         post: operations["createSubscriptionIntent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/subscriptions/authorizations/{authorizationIntentId}/submissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit a signed delegated subscription authorization for backend verification */
+        post: operations["submitSubscriptionAuthorization"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2242,20 +2259,70 @@ export interface components {
             id: string;
             /** @enum {string} */
             scope: "platform" | "creator";
+            creator?: components["schemas"]["User"];
             label: string;
             amountMinor: number;
             currency: components["schemas"]["Currency"];
+            periodDays: number;
+            /** @enum {string} */
+            billingMode: "manual_solana_pay" | "delegated_solana_subscription";
+            /** @enum {string} */
+            providerState: "fallback_active" | "staging_required" | "disabled";
+            tokenMint?: string | null;
+            /** @enum {string|null} */
+            tokenProgram?: "spl_token" | "token_2022" | null;
         };
         CreateSubscriptionIntentRequest: {
             planId: string;
+            /** Format: uuid */
+            creatorUserId?: string;
         };
         Subscription: {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
             scope: "platform" | "creator";
+            planId: string;
+            creator?: components["schemas"]["User"];
             /** @enum {string} */
-            state: "active" | "renewal_pending" | "grace_period" | "cancelled" | "suspended" | "expired";
+            state: "authorization_pending" | "active" | "renewal_pending" | "grace_period" | "cancelled" | "suspended" | "expired" | "revoked";
+            /** @enum {string} */
+            renewalMode: "manual_solana_pay" | "delegated_solana_subscription";
+            /** Format: date-time */
+            currentPeriodEndsAt?: string | null;
+            /** Format: date-time */
+            nextCollectionAt?: string | null;
+            /** Format: date-time */
+            cancelledAt?: string | null;
+            /** Format: date-time */
+            revokedAt?: string | null;
+            authorityAddress?: string | null;
+            delegationAddress?: string | null;
+        };
+        SubscriptionAuthorizationIntent: {
+            /** Format: uuid */
+            id: string;
+            subscription: components["schemas"]["Subscription"];
+            /** @enum {string} */
+            authorizationMode: "delegated_solana_subscription";
+            /** Format: uuid */
+            setupReference: string;
+            /** Format: uri */
+            transactionRequestUrl?: string | null;
+            /** Format: date-time */
+            expiresAt?: string;
+            providerReadiness: {
+                /** @enum {string} */
+                activeMode: "delegated_solana_subscription";
+                /** @enum {string} */
+                delegatedSubscriptions: "candidate" | "staging_required" | "launch_approved";
+            };
+        };
+        SubmitSubscriptionAuthorizationRequest: {
+            signature: string;
+            authorityAddress: string;
+            delegationAddress: string;
+            subscriberTokenAccount: string;
         };
         CreateEventRequest: components["schemas"]["EventDraft"];
         UpdateEventRequest: components["schemas"]["EventPatch"];
@@ -3118,6 +3185,15 @@ export interface components {
                 "application/json": components["schemas"]["Subscription"];
             };
         };
+        /** @description Subscription authorization intent */
+        SubscriptionAuthorizationIntent: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["SubscriptionAuthorizationIntent"];
+            };
+        };
         /** @description Event */
         Event: {
             headers: {
@@ -3468,6 +3544,7 @@ export interface components {
         WalletId: string;
         ConversationId: string;
         SubscriptionId: string;
+        SubscriptionAuthorizationIntentId: string;
         AiSessionId: string;
         MatchId: string;
         ReportId: string;
@@ -3594,6 +3671,11 @@ export interface components {
         CreateSubscriptionIntent: {
             content: {
                 "application/json": components["schemas"]["CreateSubscriptionIntentRequest"];
+            };
+        };
+        SubmitSubscriptionAuthorization: {
+            content: {
+                "application/json": components["schemas"]["SubmitSubscriptionAuthorizationRequest"];
             };
         };
         CreateEvent: {
@@ -4633,7 +4715,35 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["CreateSubscriptionIntent"];
         responses: {
-            201: components["responses"]["PaymentIntent"];
+            201: components["responses"]["SubscriptionAuthorizationIntent"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    submitSubscriptionAuthorization: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                authorizationIntentId: components["parameters"]["SubscriptionAuthorizationIntentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["SubmitSubscriptionAuthorization"];
+        responses: {
+            202: components["responses"]["Subscription"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     cancelSubscription: {
@@ -4651,6 +4761,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["Subscription"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     createEvent: {

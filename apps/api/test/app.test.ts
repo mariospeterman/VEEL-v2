@@ -47,6 +47,13 @@ import type { Message, MessageRepository } from "../src/modules/message/types";
 import type { EventRepository } from "../src/modules/event/types";
 import type { DatingRepository } from "../src/modules/dating/types";
 import type { EngagementRepository } from "../src/modules/engagement/types";
+import type {
+  Subscription,
+  SubscriptionAuthorizationIntent,
+  SubscriptionAuthorizationVerifier,
+  SubscriptionPlan,
+  SubscriptionRepository
+} from "../src/modules/subscription/types";
 
 describe("buildApi", () => {
   it("boots the Fastify skeleton and loads the OpenAPI document", async () => {
@@ -1237,6 +1244,7 @@ describe("buildApi", () => {
         SOLANA_NETWORK: "solana:devnet",
         SOLANA_RPC_URL: "https://api.devnet.solana.com",
         PAYMENT_DEFAULT_ASSET: "SOL",
+        SOLANA_SUBSCRIPTION_DELEGATION_PROGRAM_ID: "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
         AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: false,
         SUMSUB_API_BASE_URL: "https://api.sumsub.com",
         YOTI_API_BASE_URL: "https://age.yoti.com/api/v1",
@@ -3305,6 +3313,154 @@ describe("buildApi", () => {
     await app.close();
     vi.unstubAllEnvs();
   });
+
+  it("creates delegated subscription intents and keeps activation behind backend verification", async () => {
+    const calls: Array<{ kind: string; input: unknown }> = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      subscriptionRepository: fakeSubscriptionRepository({
+        async onListPlans(input) {
+          calls.push({ kind: "plans", input });
+
+          return {
+            items: [subscriptionPlanFixture()]
+          };
+        },
+        async onCreateAuthorizationIntent(input) {
+          calls.push({ kind: "intent", input });
+
+          return subscriptionAuthorizationIntentFixture({
+            subscription: subscriptionFixture({
+              state: "authorization_pending"
+            })
+          });
+        },
+        async onSubmitAuthorization(input) {
+          calls.push({ kind: "submit", input });
+
+          return subscriptionFixture({
+            state: "authorization_pending",
+            authorityAddress: input.body.authorityAddress,
+            delegationAddress: input.body.delegationAddress
+          });
+        }
+      }),
+      subscriptionAuthorizationVerifier: fakeSubscriptionAuthorizationVerifier(false)
+    });
+    await app.ready();
+
+    const plansResponse = await app.inject({
+      method: "GET",
+      url: "/v1/subscriptions/plans",
+      headers: { authorization: "Bearer valid-token" }
+    });
+    const intentResponse = await app.inject({
+      method: "POST",
+      url: "/v1/subscriptions/intents",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "sub-intent-1" },
+      payload: {
+        planId: "platform_plus_monthly"
+      }
+    });
+    const submitResponse = await app.inject({
+      method: "POST",
+      url: "/v1/subscriptions/authorizations/00000000-0000-4000-8000-000000000071/submissions",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "sub-submit-1" },
+      payload: {
+        signature: validSolanaSignature,
+        authorityAddress: "11111111111111111111111111111111",
+        delegationAddress: "11111111111111111111111111111112",
+        subscriberTokenAccount: "11111111111111111111111111111113"
+      }
+    });
+
+    expect(plansResponse.statusCode).toBe(200);
+    expect(plansResponse.json()).toMatchObject({
+      items: [
+        {
+          id: "platform_plus_monthly",
+          billingMode: "delegated_solana_subscription",
+          providerState: "staging_required"
+        }
+      ]
+    });
+    expect(intentResponse.statusCode).toBe(201);
+    expect(intentResponse.json()).toMatchObject({
+      id: "00000000-0000-4000-8000-000000000071",
+      authorizationMode: "delegated_solana_subscription",
+      providerReadiness: {
+        activeMode: "delegated_solana_subscription",
+        delegatedSubscriptions: "staging_required"
+      }
+    });
+    expect(submitResponse.statusCode).toBe(202);
+    expect(submitResponse.json()).toMatchObject({
+      state: "authorization_pending",
+      renewalMode: "delegated_solana_subscription"
+    });
+    expect(calls).toMatchObject([
+      { kind: "plans", input: { supabaseUserId: "00000000-0000-4000-8000-000000000001" } },
+      { kind: "intent", input: { idempotencyKey: "sub-intent-1", body: { planId: "platform_plus_monthly" } } },
+      {
+        kind: "submit",
+        input: {
+          authorizationIntentId: "00000000-0000-4000-8000-000000000071",
+          idempotencyKey: "sub-submit-1",
+          verification: { verified: false, failureCode: "delegation_verifier_not_configured" }
+        }
+      }
+    ]);
+
+    await app.close();
+  });
+
+  it("cancels subscriptions server-side without frontend state truth", async () => {
+    const calls: Array<{ kind: string; input: unknown }> = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      subscriptionRepository: fakeSubscriptionRepository({
+        async onCancel(input) {
+          calls.push({ kind: "cancel", input });
+
+          return subscriptionFixture({
+            state: "cancelled",
+            cancelledAt: "2026-06-05T00:00:00.000Z"
+          });
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/subscriptions/00000000-0000-4000-8000-000000000070/cancel",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "sub-cancel-1" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      id: "00000000-0000-4000-8000-000000000070",
+      state: "cancelled",
+      renewalMode: "delegated_solana_subscription"
+    });
+    expect(calls).toMatchObject([
+      {
+        kind: "cancel",
+        input: {
+          subscriptionId: "00000000-0000-4000-8000-000000000070",
+          idempotencyKey: "sub-cancel-1"
+        }
+      }
+    ]);
+
+    await app.close();
+  });
 });
 
 const fakeAuthVerifier: SupabaseAuthVerifier = {
@@ -3521,6 +3677,100 @@ function messageFixture(overrides: Partial<Message> = {}): Message {
     deliveryState: overrides.deliveryState ?? "visible",
     paymentIntentId: overrides.paymentIntentId ?? null,
     createdAt: overrides.createdAt ?? "2026-06-04T23:45:00.000Z"
+  };
+}
+
+function subscriptionPlanFixture(overrides: Partial<SubscriptionPlan> = {}): SubscriptionPlan {
+  return {
+    id: overrides.id ?? "platform_plus_monthly",
+    scope: overrides.scope ?? "platform",
+    label: overrides.label ?? "Veel Plus",
+    amountMinor: overrides.amountMinor ?? 15000000,
+    currency: overrides.currency ?? "USDC",
+    periodDays: overrides.periodDays ?? 30,
+    billingMode: overrides.billingMode ?? "delegated_solana_subscription",
+    providerState: overrides.providerState ?? "staging_required",
+    tokenMint: overrides.tokenMint ?? "USDC_MINT_CONFIG_REQUIRED",
+    tokenProgram: overrides.tokenProgram ?? "spl_token"
+  };
+}
+
+function subscriptionFixture(overrides: Partial<Subscription> = {}): Subscription {
+  return {
+    id: overrides.id ?? "00000000-0000-4000-8000-000000000070",
+    scope: overrides.scope ?? "platform",
+    planId: overrides.planId ?? "platform_plus_monthly",
+    state: overrides.state ?? "authorization_pending",
+    renewalMode: overrides.renewalMode ?? "delegated_solana_subscription",
+    currentPeriodEndsAt: overrides.currentPeriodEndsAt ?? null,
+    nextCollectionAt: overrides.nextCollectionAt ?? null,
+    cancelledAt: overrides.cancelledAt ?? null,
+    revokedAt: overrides.revokedAt ?? null,
+    authorityAddress: overrides.authorityAddress ?? null,
+    delegationAddress: overrides.delegationAddress ?? null
+  };
+}
+
+function subscriptionAuthorizationIntentFixture(
+  overrides: Partial<SubscriptionAuthorizationIntent> = {}
+): SubscriptionAuthorizationIntent {
+  return {
+    id: overrides.id ?? "00000000-0000-4000-8000-000000000071",
+    subscription: overrides.subscription ?? subscriptionFixture(),
+    authorizationMode: "delegated_solana_subscription",
+    setupReference: overrides.setupReference ?? "00000000-0000-4000-8000-000000000072",
+    transactionRequestUrl: overrides.transactionRequestUrl ?? null,
+    expiresAt: overrides.expiresAt ?? "2026-06-05T00:15:00.000Z",
+    providerReadiness: overrides.providerReadiness ?? {
+      activeMode: "delegated_solana_subscription",
+      delegatedSubscriptions: "staging_required"
+    }
+  };
+}
+
+function fakeSubscriptionRepository(
+  overrides: Partial<{
+    onListPlans: SubscriptionRepository["listPlans"];
+    onCreateAuthorizationIntent: SubscriptionRepository["createAuthorizationIntent"];
+    onSubmitAuthorization: SubscriptionRepository["submitAuthorization"];
+    onCancel: SubscriptionRepository["cancel"];
+  }> = {}
+): SubscriptionRepository {
+  return {
+    async listPlans(input) {
+      return overrides.onListPlans?.(input) ?? { items: [subscriptionPlanFixture()] };
+    },
+    async createAuthorizationIntent(input) {
+      return overrides.onCreateAuthorizationIntent?.(input) ?? subscriptionAuthorizationIntentFixture();
+    },
+    async findAuthorizationVerificationContext(input) {
+      return {
+        authorizationIntentId: input.authorizationIntentId,
+        setupReference: "00000000-0000-4000-8000-000000000072",
+        delegationProgramId: input.delegationProgramId,
+        collectorAddress: null,
+        tokenMint: "USDC_MINT_CONFIG_REQUIRED",
+        tokenProgram: "spl_token",
+        amountMinor: 15000000,
+        periodDays: 30
+      };
+    },
+    async submitAuthorization(input) {
+      return overrides.onSubmitAuthorization?.(input) ?? subscriptionFixture();
+    },
+    async cancel(input) {
+      return overrides.onCancel?.(input) ?? subscriptionFixture({ id: input.subscriptionId });
+    }
+  };
+}
+
+function fakeSubscriptionAuthorizationVerifier(verified: boolean): SubscriptionAuthorizationVerifier {
+  return {
+    async verifyAuthorization() {
+      return verified
+        ? { verified: true }
+        : { verified: false, failureCode: "delegation_verifier_not_configured" };
+    }
   };
 }
 

@@ -49,6 +49,13 @@ import { createPostgresSessionRepository } from "./modules/session/session-repos
 import { registerSessionRoutes } from "./modules/session/session-routes.js";
 import { createSupabaseAuthVerifier } from "./modules/session/supabase-auth.js";
 import type { SessionRepository, SupabaseAuthVerifier } from "./modules/session/types.js";
+import { createPostgresSubscriptionRepository } from "./modules/subscription/subscription-repository.js";
+import { registerSubscriptionRoutes } from "./modules/subscription/subscription-routes.js";
+import { createSolanaSubscriptionAuthorizationVerifier } from "./modules/subscription/subscription-verifier.js";
+import type {
+  SubscriptionAuthorizationVerifier,
+  SubscriptionRepository
+} from "./modules/subscription/types.js";
 import { createPostgresWalletRepository } from "./modules/wallet/wallet-repository.js";
 import { registerWalletRoutes } from "./modules/wallet/wallet-routes.js";
 import type { WalletRepository } from "./modules/wallet/types.js";
@@ -74,6 +81,8 @@ export interface BuildApiOptions {
   settlementVerifier?: PaymentSettlementVerifier;
   profileRepository?: ProfileRepository;
   referralRepository?: ReferralRepository;
+  subscriptionRepository?: SubscriptionRepository;
+  subscriptionAuthorizationVerifier?: SubscriptionAuthorizationVerifier;
   walletRepository?: WalletRepository;
   adminRepository?: AdminRepository;
   aiRepository?: AiRepository;
@@ -134,6 +143,10 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     options.settlementVerifier ?? createSolanaRpcSettlementVerifier(app.config.SOLANA_RPC_URL);
   const referralRepository =
     options.referralRepository ?? createPostgresReferralRepository(app.config.DATABASE_URL);
+  const subscriptionRepository =
+    options.subscriptionRepository ?? createPostgresSubscriptionRepository(app.config.DATABASE_URL);
+  const subscriptionAuthorizationVerifier =
+    options.subscriptionAuthorizationVerifier ?? createSolanaSubscriptionAuthorizationVerifier();
   const walletRepository =
     options.walletRepository ?? createPostgresWalletRepository(app.config.DATABASE_URL);
   const adminRepository =
@@ -203,6 +216,11 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   if (referralRepository.close) {
     app.addHook("onClose", async () => {
       await referralRepository.close?.();
+    });
+  }
+  if (subscriptionRepository.close) {
+    app.addHook("onClose", async () => {
+      await subscriptionRepository.close?.();
     });
   }
   if (adminRepository.close) {
@@ -294,6 +312,14 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     ageRepository,
     walletRepository,
     referralRepository
+  });
+  await registerSubscriptionRoutes(app, {
+    authVerifier,
+    sessionRepository,
+    ageRepository,
+    walletRepository,
+    subscriptionRepository,
+    subscriptionAuthorizationVerifier
   });
   await registerActivityRoutes(app, {
     authVerifier,

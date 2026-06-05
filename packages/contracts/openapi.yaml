@@ -689,13 +689,36 @@ paths:
     post:
       operationId: createSubscriptionIntent
       tags: [Subscriptions]
-      summary: Create platform or creator subscription payment intent
+      summary: Create platform or creator delegated subscription authorization
       parameters:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       requestBody:
         $ref: "#/components/requestBodies/CreateSubscriptionIntent"
       responses:
-        "201": { $ref: "#/components/responses/PaymentIntent" }
+        "201": { $ref: "#/components/responses/SubscriptionAuthorizationIntent" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/subscriptions/authorizations/{authorizationIntentId}/submissions:
+    post:
+      operationId: submitSubscriptionAuthorization
+      tags: [Subscriptions]
+      summary: Submit a signed delegated subscription authorization for backend verification
+      parameters:
+        - $ref: "#/components/parameters/SubscriptionAuthorizationIntentId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/SubmitSubscriptionAuthorization"
+      responses:
+        "202": { $ref: "#/components/responses/Subscription" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/subscriptions/{subscriptionId}/cancel:
     patch:
       operationId: cancelSubscription
@@ -706,6 +729,11 @@ paths:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       responses:
         "200": { $ref: "#/components/responses/Subscription" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/events:
     post:
       operationId: createEvent
@@ -1217,6 +1245,7 @@ components:
     WalletId: { name: walletId, in: path, required: true, schema: { type: string, format: uuid } }
     ConversationId: { name: conversationId, in: path, required: true, schema: { type: string, format: uuid } }
     SubscriptionId: { name: subscriptionId, in: path, required: true, schema: { type: string, format: uuid } }
+    SubscriptionAuthorizationIntentId: { name: authorizationIntentId, in: path, required: true, schema: { type: string, format: uuid } }
     AiSessionId: { name: aiSessionId, in: path, required: true, schema: { type: string, format: uuid } }
     MatchId: { name: matchId, in: path, required: true, schema: { type: string, format: uuid } }
     ReportId: { name: reportId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1260,6 +1289,7 @@ components:
     SubmitPaymentSignature: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SubmitPaymentSignatureRequest" } } } }
     CreateReferralToken: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateReferralTokenRequest" } } } }
     CreateSubscriptionIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateSubscriptionIntentRequest" } } } }
+    SubmitSubscriptionAuthorization: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SubmitSubscriptionAuthorizationRequest" } } } }
     CreateEvent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateEventRequest" } } } }
     UpdateEvent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateEventRequest" } } } }
     CreateTicketIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateTicketIntentRequest" } } } }
@@ -1326,6 +1356,7 @@ components:
     ReferralToken: { description: Referral token, content: { application/json: { schema: { $ref: "#/components/schemas/ReferralToken" } } } }
     SubscriptionPlanPage: { description: Subscription plans, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionPlanPage" } } } }
     Subscription: { description: Subscription, content: { application/json: { schema: { $ref: "#/components/schemas/Subscription" } } } }
+    SubscriptionAuthorizationIntent: { description: Subscription authorization intent, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionAuthorizationIntent" } } } }
     Event: { description: Event, content: { application/json: { schema: { $ref: "#/components/schemas/Event" } } } }
     EventPage: { description: Events, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Event" } }, nextCursor: { type: string, nullable: true } } } } } }
     TicketIntent: { description: Ticket intent, content: { application/json: { schema: { $ref: "#/components/schemas/TicketIntent" } } } }
@@ -2006,25 +2037,65 @@ components:
         items: { type: array, items: { $ref: "#/components/schemas/SubscriptionPlan" } }
     SubscriptionPlan:
       type: object
-      required: [id, scope, label, amountMinor, currency]
+      required: [id, scope, label, amountMinor, currency, periodDays, billingMode, providerState]
       properties:
         id: { type: string }
         scope: { type: string, enum: [platform, creator] }
+        creator: { $ref: "#/components/schemas/User" }
         label: { type: string }
         amountMinor: { type: integer }
         currency: { $ref: "#/components/schemas/Currency" }
+        periodDays: { type: integer }
+        billingMode: { type: string, enum: [manual_solana_pay, delegated_solana_subscription] }
+        providerState: { type: string, enum: [fallback_active, staging_required, disabled] }
+        tokenMint: { type: string, nullable: true }
+        tokenProgram: { type: string, enum: [spl_token, token_2022], nullable: true }
     CreateSubscriptionIntentRequest:
       type: object
       required: [planId]
       properties:
         planId: { type: string }
+        creatorUserId: { type: string, format: uuid }
     Subscription:
       type: object
-      required: [id, scope, state]
+      required: [id, scope, planId, state, renewalMode]
       properties:
         id: { type: string, format: uuid }
         scope: { type: string, enum: [platform, creator] }
-        state: { type: string, enum: [active, renewal_pending, grace_period, cancelled, suspended, expired] }
+        planId: { type: string }
+        creator: { $ref: "#/components/schemas/User" }
+        state: { type: string, enum: [authorization_pending, active, renewal_pending, grace_period, cancelled, suspended, expired, revoked] }
+        renewalMode: { type: string, enum: [manual_solana_pay, delegated_solana_subscription] }
+        currentPeriodEndsAt: { type: string, format: date-time, nullable: true }
+        nextCollectionAt: { type: string, format: date-time, nullable: true }
+        cancelledAt: { type: string, format: date-time, nullable: true }
+        revokedAt: { type: string, format: date-time, nullable: true }
+        authorityAddress: { type: string, nullable: true }
+        delegationAddress: { type: string, nullable: true }
+    SubscriptionAuthorizationIntent:
+      type: object
+      required: [id, subscription, authorizationMode, setupReference, providerReadiness]
+      properties:
+        id: { type: string, format: uuid }
+        subscription: { $ref: "#/components/schemas/Subscription" }
+        authorizationMode: { type: string, enum: [delegated_solana_subscription] }
+        setupReference: { type: string, format: uuid }
+        transactionRequestUrl: { type: string, format: uri, nullable: true }
+        expiresAt: { type: string, format: date-time }
+        providerReadiness:
+          type: object
+          required: [activeMode, delegatedSubscriptions]
+          properties:
+            activeMode: { type: string, enum: [delegated_solana_subscription] }
+            delegatedSubscriptions: { type: string, enum: [candidate, staging_required, launch_approved] }
+    SubmitSubscriptionAuthorizationRequest:
+      type: object
+      required: [signature, authorityAddress, delegationAddress, subscriberTokenAccount]
+      properties:
+        signature: { type: string }
+        authorityAddress: { type: string }
+        delegationAddress: { type: string }
+        subscriberTokenAccount: { type: string }
     CreateEventRequest: { $ref: "#/components/schemas/EventDraft" }
     UpdateEventRequest: { $ref: "#/components/schemas/EventPatch" }
     Event:

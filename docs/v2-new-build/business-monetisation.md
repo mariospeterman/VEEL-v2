@@ -124,8 +124,8 @@ Examples:
 | --- | --- | --- | --- |
 | Native SOL split transfer | Devnet testing, low-friction support/tips, possible SOL products | Optional depending product | Signature, reference, payer, lamports, recipients, finality |
 | SPL/USDC split transfer | Production stablecoin products if selected | Optional depending product | Signature, reference, payer, mint, token program, token amounts, recipients, finality |
-| Solana subscription allowance | Creator and platform recurring plans after staging approval | Subscription entitlement only after verified collection | Delegated authority/allowance, payer, mint/program, recipients, amount/period, collection signature, finality |
-| Manual Solana Pay renewal | Subscription fallback until allowance UX is staging-approved | Renewal entitlement only after confirmed payment intent | Signature, reference, payer, amount, recipients, finality |
+| Solana delegated subscription | Creator and platform recurring plans | Subscription entitlement only after verified authorization and recurring collection | Authority PDA, subscription/delegation PDA, payer token account, mint/program, recipients, amount/period, collection signature, finality |
+| Manual Solana Pay recovery | Emergency fallback for failed delegated setup/collection only | Renewal entitlement only after confirmed payment intent | Signature, reference, payer, amount, recipients, finality |
 | Wallet funding/onramp | User adds SOL/USDC to their own wallet | No access effect | Funding status only for UX/support |
 | Free approval | Free tickets/events/passes | Entitlement only | Backend approval/audit, no wallet settlement |
 
@@ -247,15 +247,16 @@ Required records:
 - creator or platform owner
 - current status
 - renewal anchor
-- Solana subscription authority, allowance, or payment intent references
+- Solana subscription authority, delegation/subscription PDA, token account, collection schedule, and collection signature references
 - entitlement scope
 - audit events for every transition
 
 Recurring subscription policy:
 
 - Target provider path is Solana Subscriptions and Allowances through the official Subscription Delegation Program.
-- The delegated subscription path remains `candidate` until devnet/staging authority, revoke, collection, wallet UX, event, and reconciliation fixtures pass.
-- If delegated subscriptions are not staging-approved, use manual Solana Pay renewal intents; do not use merchant checkout, card billing, or provider-operated product subscriptions.
+- Subscription products are modeled as auto-renewing delegated subscriptions until the user cancels in Veel and/or revokes the delegation in wallet/provider UX.
+- The delegated subscription production switch remains gated until devnet/staging authority setup, revoke, collection, wallet UX, event, and reconciliation fixtures pass.
+- Manual Solana Pay renewal is recovery fallback only; do not use merchant checkout, card billing, custodial subscription balances, or provider-operated product subscriptions.
 - Users must be able to cancel in Veel and revoke delegated allowance in wallet/provider UX.
 - Backend subscription status mirrors verified payment/collection evidence and internal entitlement policy; it is not a stored debt or receivable.
 

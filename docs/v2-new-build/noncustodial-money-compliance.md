@@ -33,9 +33,9 @@ Veel reduces custody and payment-processor dependency by using user-approved Sol
 
 ## Subscriptions Boundary
 
-Target native recurring billing is Solana Subscriptions and Allowances through the official Solana Subscription Delegation Program after staging approval. Users delegate a bounded allowance or subscription authority from their own wallet and must be able to revoke it.
+Target native recurring billing is Solana Subscriptions and Allowances through the official Solana Subscription Delegation Program. Users delegate a bounded allowance or subscription authority from their own wallet, recurring collection runs until cancellation/revocation, and users must be able to revoke it.
 
-Until delegated subscriptions are staging-approved, Veel may use manual renewal through ordinary Solana Pay payment intents. The fallback is not merchant checkout, card billing, custodial billing, or any provider-operated product subscription.
+Manual renewal through ordinary Solana Pay payment intents is only a recovery fallback for failed delegated setup or collection. The fallback is not merchant checkout, card billing, custodial billing, or any provider-operated product subscription.
 
 Subscription implementation rules:
 

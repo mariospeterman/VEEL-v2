@@ -158,7 +158,7 @@ Frontend never computes final access, final commission, final ticket state, fina
 | Payments/unlocks | `payments-and-monetisation.md`, `business-monetisation.md` | payments, entitlements | payment sheet | Solana Pay/RPC, Helius |
 | Tips/support | `business-monetisation.md`, `payments-and-monetisation.md` | payments, creator earnings records, referrals | tip/support sheet | Solana Pay/RPC, Helius/RPC evidence |
 | Referrals/commissions | `business-monetisation.md`, `engagement-strategy.md` | referrals, commissions | share/invite, activity | Solana evidence |
-| Subscriptions | `business-monetisation.md`, `payments-and-monetisation.md`, `noncustodial-money-compliance.md` | subscriptions, renewals | subscribe sheet/profile | Solana Subscriptions/Allowances or manual Solana Pay renewal |
+| Subscriptions | `business-monetisation.md`, `payments-and-monetisation.md`, `noncustodial-money-compliance.md` | subscriptions, renewals | subscribe sheet/profile | Auto-renewing Solana Subscriptions/Allowances; manual Solana Pay recovery only |
 | Paid messages | `business-monetisation.md`, `realtime-messages-activity.md` | messages, payments, access | messages/quick chat | Solana evidence |
 | Engagement | `engagement-strategy.md` | likes, comments, saves, shares, follows | cards, viewer, profile | none |
 | Messages/activity/realtime | `realtime-messages-activity.md`, `auth-supabase-realtime.md` | conversations, activity, notifications | messages, quick chat, activity | Supabase Realtime |

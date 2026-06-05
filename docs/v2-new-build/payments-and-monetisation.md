@@ -35,7 +35,7 @@ Current implementation state:
 - `GET /v1/activity`, `GET /v1/activity/payments`, and `GET /v1/activity/wallet-transactions` expose normalized backend activity and wallet transaction history. Wallet transaction records are backend-observed submission/confirmation references, not settlement proof by themselves.
 - `GET /v1/profiles/me/creator-dashboard` exposes creator monetisation readiness, product toggles, confirmed earning records, platform fees, referral commissions, and recent payment activity from backend tables only.
 - Admin reconciliation is available through role-gated read-only projections for payment intents, unlock entitlements, provider events, and operations counts. These projections never expose raw provider payloads, provider secrets, private keys, or frontend-computed payment truth.
-- Subscriptions are deferred to their owning slice.
+- Subscription plans, authorizations, and recurring collection state are backend-owned. The primary path is auto-renewing Solana delegated subscriptions: the user authorizes bounded token collection once, backend/worker collection runs each period until cancellation/revocation, and access changes only after verified authorization or collection evidence.
 
 Official references checked:
 

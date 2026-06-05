@@ -65,6 +65,16 @@ test("renders the creator dashboard projection", async ({ page }) => {
   await expect(page.getByText("earnings_recipient_wallet_required")).toBeVisible();
 });
 
+test("renders the delegated subscription projection", async ({ page }) => {
+  await page.goto("/subscriptions");
+
+  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Auto-renewing access" })).toBeVisible();
+  await expect(page.getByText("delegated_solana_subscription").first()).toBeVisible();
+  await expect(page.getByText("staging_required").first()).toBeVisible();
+  await expect(page.getByText("Manual Solana Pay renewal is reserved")).toBeVisible();
+});
+
 test("renders the public creator profile projection", async ({ page }) => {
   await page.goto("/profile/maki");
 

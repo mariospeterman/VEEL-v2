@@ -31,7 +31,7 @@ This ADR turns the v2 blueprint into concrete provider defaults for the first im
 | Onramp/funding | Embedded-wallet provider funding UI first, funding only | Platform does not handle card processing, merchant checkout, product billing, or custody; user funds their own wallet. |
 | One-time payments | Solana Pay / Solana transaction requests | Noncustodial, wallet-approved, backend-verified. |
 | Payment evidence | Helius scoped to money/access evidence, with RPC fallback | Cost-aware, not a broad firehose. |
-| Platform subscriptions | Solana Subscriptions/Allowances target; manual Solana Pay renewal fallback until staging approval | Keeps subscriptions noncustodial and avoids merchant checkout, custodial balances, and provider-operated product billing. |
+| Platform subscriptions | Solana Subscriptions/Allowances auto-renewal; manual Solana Pay recovery fallback only | Keeps subscriptions recurring, noncustodial, revocable, and avoids merchant checkout, custodial balances, and provider-operated product billing. |
 | Creator subscriptions | Keep, but treat as creator fan-club access, not a replacement for discovery/unlocks | Supports creator recurring revenue without killing free discovery. |
 | Creator pricing | Creator sets content unlock, paid message, live pass, ticket, and creator subscription prices within admin/env guardrails | Preserves creator ownership while preventing abuse, too-low pricing, and compliance issues. |
 | VOD | Bunny Stream/CDN/TUS | Direct uploads and playback provider infrastructure. |
@@ -200,9 +200,9 @@ Use one billing architecture for:
 
 Recommended path:
 
-1. Build manual Solana Pay renewal as the fallback subscription path when delegated subscriptions are not staging-approved.
+1. Build delegated subscription authorization, recurring collection state, cancellation, revoke tracking, and worker scheduling as the subscription foundation.
 2. Evaluate Solana Subscriptions/Allowances through the official Subscription Delegation Program in staging.
-3. Use delegated recurring billing only after authority setup, revoke, collection, wallet UX, events, and reconciliation pass.
+3. Keep manual Solana Pay renewal as recovery fallback only; it must not become the normal subscription product path.
 4. Do not use merchant checkout, card billing, custodial subscription balances, or provider-operated product subscriptions.
 
 Platform subscription tiers:

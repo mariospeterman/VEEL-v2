@@ -542,28 +542,103 @@ create table referral_commissions (
   unique (payment_intent_id, referral_token_id)
 );
 
-create table platform_subscriptions (
+create table subscription_plans (
+  id text primary key,
+  scope text not null,
+  creator_user_id uuid references users(id),
+  label text not null,
+  amount_minor bigint not null,
+  currency text not null default 'USDC',
+  period_days integer not null,
+  billing_mode text not null default 'delegated_solana_subscription',
+  provider_state text not null default 'staging_required',
+  token_mint text,
+  token_program text,
+  provider_plan_reference text,
+  state text not null default 'active',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table subscriptions (
   id uuid primary key,
-  user_id uuid not null references users(id),
-  tier text not null,
-  provider text not null,
+  subscriber_user_id uuid not null references users(id),
+  scope text not null,
+  plan_id text not null references subscription_plans(id),
+  creator_user_id uuid references users(id),
+  state text not null default 'authorization_pending',
+  renewal_mode text not null default 'delegated_solana_subscription',
+  authority_address text,
+  delegation_address text,
+  subscriber_token_account text,
+  collector_address text,
   provider_reference text,
-  state text not null,
-  renews_at timestamptz,
+  current_period_starts_at timestamptz,
+  current_period_ends_at timestamptz,
+  next_collection_at timestamptz,
+  cancel_at_period_end boolean not null default false,
+  cancelled_at timestamptz,
+  revoked_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index subscriptions_plan_id_idx
+  on subscriptions (plan_id);
+
+create table subscription_authorization_intents (
+  id uuid primary key,
+  subscription_id uuid not null references subscriptions(id),
+  idempotency_key text not null,
+  request_hash text not null,
+  state text not null default 'created',
+  authorization_mode text not null default 'delegated_solana_subscription',
+  setup_reference text not null unique,
+  transaction_request_url text,
+  submitted_signature text unique,
+  verified_signature text unique,
+  expires_at timestamptz not null,
+  submitted_at timestamptz,
+  verified_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (subscription_id, idempotency_key)
+);
+
+create table subscription_collections (
+  id uuid primary key,
+  subscription_id uuid not null references subscriptions(id),
+  period_starts_at timestamptz not null,
+  period_ends_at timestamptz not null,
+  amount_minor bigint not null,
+  currency text not null,
+  state text not null default 'due',
+  collection_signature text unique,
+  failure_code text,
+  due_at timestamptz not null,
+  submitted_at timestamptz,
+  confirmed_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (subscription_id, period_starts_at)
+);
+
+create table subscription_events (
+  id uuid primary key,
+  subscription_id uuid not null references subscriptions(id),
+  actor_user_id uuid references users(id),
+  action text not null,
+  authorization_intent_id uuid references subscription_authorization_intents(id),
+  collection_id uuid references subscription_collections(id),
+  metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
 
-create table creator_subscriptions (
-  id uuid primary key,
-  subscriber_user_id uuid not null references users(id),
-  creator_user_id uuid not null references users(id),
-  provider text not null,
-  provider_reference text,
-  state text not null,
-  renews_at timestamptz,
-  created_at timestamptz not null default now(),
-  unique (subscriber_user_id, creator_user_id)
-);
+create index subscription_events_authorization_intent_id_idx
+  on subscription_events (authorization_intent_id)
+  where authorization_intent_id is not null;
+
+create index subscription_events_collection_id_idx
+  on subscription_events (collection_id)
+  where collection_id is not null;
 
 create table events (
   id uuid primary key,

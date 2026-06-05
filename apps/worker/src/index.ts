@@ -6,7 +6,14 @@ export const buildWorkerRuntime = () => {
   return {
     name: "veel-worker",
     environment: config.NODE_ENV,
-    queues: [] as string[]
+    queues: ["subscription-authorizations", "subscription-collections"],
+    schedules: [
+      {
+        name: "subscription-collections",
+        cadence: "every_minute",
+        sourceIndex: "subscriptions_next_collection_idx"
+      }
+    ]
   };
 };
 

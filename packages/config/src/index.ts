@@ -25,6 +25,11 @@ export const serverEnvSchema = z.object({
   SOLANA_RPC_URL: z.string().url().default("https://api.devnet.solana.com"),
   PAYMENT_DEFAULT_ASSET: z.enum(["SOL"]).default("SOL"),
   PAYMENT_PLATFORM_TREASURY_WALLET: z.string().optional(),
+  SOLANA_SUBSCRIPTION_DELEGATION_PROGRAM_ID: z
+    .string()
+    .default("De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44"),
+  SOLANA_SUBSCRIPTION_USDC_MINT: z.string().optional(),
+  SOLANA_SUBSCRIPTION_COLLECTOR_WALLET: z.string().optional(),
   BUNNY_STREAM_API_KEY: z.string().optional(),
   BUNNY_STREAM_LIBRARY_ID: z.string().optional(),
   LIVEPEER_API_KEY: z.string().optional(),

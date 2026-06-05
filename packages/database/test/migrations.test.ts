@@ -245,6 +245,40 @@ describe("database migrations", () => {
     expect(sql).not.toMatch(/raw_payload|private_key|seed_phrase|mnemonic|service_role|api_key/i);
   });
 
+  it("adds delegated auto-renew subscription state with RLS and collection scheduling", () => {
+    const sql = readMigration("0028_subscription_foundation.sql");
+
+    expect(sql).toContain("create table subscription_plans");
+    expect(sql).toContain("create table subscriptions");
+    expect(sql).toContain("create table subscription_authorization_intents");
+    expect(sql).toContain("create table subscription_collections");
+    expect(sql).toContain("create table subscription_events");
+    expect(sql).toContain("delegated_solana_subscription");
+    expect(sql).toContain("request_hash text not null");
+    expect(sql).toContain("authority_address text");
+    expect(sql).toContain("delegation_address text");
+    expect(sql).toContain("subscriber_token_account text");
+    expect(sql).toContain("next_collection_at timestamptz");
+    expect(sql).toContain("collection_signature text unique");
+    expect(sql).toContain("subscriptions_next_collection_idx");
+    expect(sql).toContain("alter table subscription_collections enable row level security");
+    expect(sql).toContain("create policy subscription_authorization_intents_select_self_creator_or_staff");
+    expect(sql).toContain("create policy subscription_collections_select_self_creator_or_staff");
+    expect(sql).toContain("to authenticated");
+    expect(sql).toContain("(select private.current_app_user_id())");
+    expect(sql).not.toMatch(/helio|moonpay|merchant_checkout|to anon|using\s*\(\s*true\s*\)|with check\s*\(\s*true\s*\)/i);
+    expect(sql).not.toMatch(/raw_payload|private_key|seed_phrase|mnemonic|service_role|api_key|\bcustodial\b|\bbalance\b|withdrawal/i);
+  });
+
+  it("covers subscription foreign keys reported by the Supabase performance advisor", () => {
+    const sql = readMigration("0029_subscription_fk_indexes.sql");
+
+    expect(sql).toContain("subscriptions_plan_id_idx");
+    expect(sql).toContain("subscription_events_authorization_intent_id_idx");
+    expect(sql).toContain("subscription_events_collection_id_idx");
+    expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role/i);
+  });
+
   it("adds wallet transaction activity records without custody or raw provider payloads", () => {
     const sql = readMigration("0016_activity_wallet_transactions.sql");
 
