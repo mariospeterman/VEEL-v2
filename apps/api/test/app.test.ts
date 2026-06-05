@@ -2198,7 +2198,8 @@ describe("buildApi", () => {
         },
         async getDatingSafety() {
           throw new Error("not implemented");
-        }
+        },
+        ...unimplementedComplianceAdminMethods
       },
       aiRepository: fakeAiRepository()
     });
@@ -2242,7 +2243,8 @@ describe("buildApi", () => {
         },
         async getDatingSafety() {
           throw new Error("not implemented");
-        }
+        },
+        ...unimplementedComplianceAdminMethods
       }
     });
     await app.ready();
@@ -2256,6 +2258,74 @@ describe("buildApi", () => {
     });
 
     expect(response.statusCode).toBe(403);
+
+    await app.close();
+  });
+
+  it("returns admin compliance, referral governance, tier waiver, and organization projections", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: fakeAdminRepository
+    });
+    await app.ready();
+
+    const headers = { authorization: "Bearer valid-token" };
+    const [
+      ledger,
+      dac7Reports,
+      carfReports,
+      vatDeterminations,
+      receipts,
+      invoices,
+      referralPrograms,
+      partnerCampaigns,
+      tierWaivers,
+      organizations
+    ] = await Promise.all([
+      app.inject({ method: "GET", url: "/v1/admin/compliance/ledger", headers }),
+      app.inject({ method: "GET", url: "/v1/admin/compliance/dac7/reports", headers }),
+      app.inject({ method: "GET", url: "/v1/admin/compliance/carf/reports", headers }),
+      app.inject({ method: "GET", url: "/v1/admin/compliance/vat/determinations", headers }),
+      app.inject({ method: "GET", url: "/v1/admin/compliance/receipts", headers }),
+      app.inject({ method: "GET", url: "/v1/admin/compliance/invoices", headers }),
+      app.inject({ method: "GET", url: "/v1/admin/referrals/programs", headers }),
+      app.inject({ method: "GET", url: "/v1/admin/referrals/partner-campaigns", headers }),
+      app.inject({ method: "GET", url: "/v1/admin/tier-waivers", headers }),
+      app.inject({ method: "GET", url: "/v1/admin/organizations", headers })
+    ]);
+
+    for (const response of [
+      ledger,
+      dac7Reports,
+      carfReports,
+      vatDeterminations,
+      receipts,
+      invoices,
+      referralPrograms,
+      partnerCampaigns,
+      tierWaivers,
+      organizations
+    ]) {
+      expect(response.statusCode).toBe(200);
+      expect(JSON.stringify(response.json())).not.toMatch(/raw|payload|secret|privateKey|serviceRole/i);
+    }
+
+    expect(ledger.json().items[0]).toMatchObject({
+      productType: "event_access_pass",
+      vatStatus: "pending",
+      dac7Reportable: true
+    });
+    expect(carfReports.json().items[0]).toMatchObject({
+      reportType: "carf",
+      carfReportingRequired: false
+    });
+    expect(referralPrograms.json().items[0]).toMatchObject({
+      commissionSource: "veel_platform_commission_net_of_refunds_and_tax"
+    });
+    expect(organizations.json().items[0]).toMatchObject({
+      plan: "enterprise",
+      kybState: "pending"
+    });
 
     await app.close();
   });
@@ -4055,6 +4125,51 @@ function fakeAiRepository(): AiRepository {
   };
 }
 
+const unimplementedComplianceAdminMethods = {
+  async listComplianceLedger() {
+    throw new Error("not implemented");
+  },
+  async listDac7Reports() {
+    throw new Error("not implemented");
+  },
+  async listCarfReports() {
+    throw new Error("not implemented");
+  },
+  async listVatDeterminations() {
+    throw new Error("not implemented");
+  },
+  async listReceipts() {
+    throw new Error("not implemented");
+  },
+  async listInvoices() {
+    throw new Error("not implemented");
+  },
+  async listReferralPrograms() {
+    throw new Error("not implemented");
+  },
+  async listPartnerCampaigns() {
+    throw new Error("not implemented");
+  },
+  async listTierWaivers() {
+    throw new Error("not implemented");
+  },
+  async listOrganizations() {
+    throw new Error("not implemented");
+  }
+} satisfies Pick<
+  AdminRepository,
+  | "listComplianceLedger"
+  | "listDac7Reports"
+  | "listCarfReports"
+  | "listVatDeterminations"
+  | "listReceipts"
+  | "listInvoices"
+  | "listReferralPrograms"
+  | "listPartnerCampaigns"
+  | "listTierWaivers"
+  | "listOrganizations"
+>;
+
 const fakeAdminRepository: AdminRepository = {
   async hasAdminAccess(supabaseUserId) {
     expect(supabaseUserId).toBe("00000000-0000-4000-8000-000000000001");
@@ -4132,6 +4247,199 @@ const fakeAdminRepository: AdminRepository = {
       openReports: 0,
       activeMatches: 1,
       staleMatches: 0
+    };
+  },
+  async listComplianceLedger() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-0000000000b0",
+          eventType: "payment_settled",
+          productType: "event_access_pass",
+          settlementModel: "user_to_creator_split",
+          sellerUserId: "00000000-0000-4000-8000-000000000010",
+          buyerUserId: "00000000-0000-4000-8000-000000000011",
+          paymentIntentId: "00000000-0000-4000-8000-000000000050",
+          entitlementId: "00000000-0000-4000-8000-000000000091",
+          receiptId: "00000000-0000-4000-8000-0000000000c0",
+          invoiceId: null,
+          grossAmountMinor: 10000000,
+          platformFeeMinor: 1000000,
+          creatorNetAmountMinor: 9000000,
+          taxAmountMinor: null,
+          currency: "SOL",
+          fiatCurrency: "USD",
+          fxRate: null,
+          sellerCountry: "CH",
+          buyerCountry: "DE",
+          sellerOfRecord: "creator",
+          vatStatus: "pending",
+          dac7Reportable: true,
+          carfReportable: false,
+          immutableHash: "hash",
+          createdAt: "2026-06-05T10:00:00.000Z"
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async listDac7Reports() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-0000000000d0",
+          reportType: "dac7",
+          reportingYear: 2026,
+          state: "draft",
+          lineCount: 0,
+          jurisdiction: "EU",
+          exportId: null,
+          carfReportingRequired: null,
+          createdAt: "2026-06-05T10:00:00.000Z",
+          exportedAt: null
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async listCarfReports() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-0000000000d1",
+          reportType: "carf",
+          reportingYear: 2026,
+          state: "draft",
+          lineCount: 0,
+          jurisdiction: "EU",
+          exportId: null,
+          carfReportingRequired: false,
+          createdAt: "2026-06-05T10:00:00.000Z",
+          exportedAt: null
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async listVatDeterminations() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-0000000000e0",
+          productType: "event_access_pass",
+          sellerOfRecord: "creator",
+          buyerCountry: "DE",
+          sellerCountry: "CH",
+          buyerVatId: null,
+          viesStatus: "not_checked",
+          placeOfSupply: null,
+          vatStatus: "pending",
+          vatRateBps: null,
+          vatAmountMinor: null,
+          reviewState: "clear",
+          createdAt: "2026-06-05T10:00:00.000Z"
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async listReceipts() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-0000000000c0",
+          receiptNumber: "R-2026-0001",
+          productType: "event_access_pass",
+          buyerUserId: "00000000-0000-4000-8000-000000000011",
+          sellerUserId: "00000000-0000-4000-8000-000000000010",
+          paymentIntentId: "00000000-0000-4000-8000-000000000050",
+          grossAmountMinor: 10000000,
+          currency: "SOL",
+          state: "issued",
+          issuedAt: "2026-06-05T10:00:00.000Z"
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async listInvoices() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-0000000000f0",
+          invoiceNumber: "V-2026-0001",
+          sellerOfRecord: "veel",
+          buyerUserId: "00000000-0000-4000-8000-000000000011",
+          sellerUserId: null,
+          totalAmountMinor: 8990000,
+          vatAmountMinor: 0,
+          currency: "USDC",
+          state: "issued",
+          issuedAt: "2026-06-05T10:00:00.000Z"
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async listReferralPrograms() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-000000000110",
+          name: "Invite Referral",
+          state: "active",
+          priority: "invite",
+          commissionSource: "veel_platform_commission_net_of_refunds_and_tax",
+          createdAt: "2026-06-05T10:00:00.000Z"
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async listPartnerCampaigns() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-000000000120",
+          name: "Partner launch",
+          partnerName: "Partner",
+          state: "active",
+          contractId: null,
+          createdAt: "2026-06-05T10:00:00.000Z"
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async listTierWaivers() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-000000000130",
+          subjectType: "partner_campaign",
+          subjectId: "00000000-0000-4000-8000-000000000120",
+          tierKey: "veel_studio",
+          state: "active",
+          startsAt: "2026-06-05T10:00:00.000Z",
+          endsAt: null
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async listOrganizations() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-000000000140",
+          name: "Veel Enterprise",
+          state: "pending_kyb",
+          plan: "enterprise",
+          kybState: "pending",
+          createdAt: "2026-06-05T10:00:00.000Z"
+        }
+      ],
+      nextCursor: null
     };
   }
 };

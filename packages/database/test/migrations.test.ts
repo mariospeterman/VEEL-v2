@@ -396,4 +396,24 @@ describe("database migrations", () => {
     expect(sql).toContain("dating_matches_archived_by_user_id_idx");
     expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role|payment_proof/i);
   });
+
+  it("adds compliance, tax, receipt, and report tables with RLS and no custody fields", () => {
+    const sql = readMigration("0030_compliance_tax_foundation.sql");
+
+    expect(sql).toContain("create table tax_profiles");
+    expect(sql).toContain("create table compliance_ledger_entries");
+    expect(sql).toContain("create table receipts");
+    expect(sql).toContain("create table vat_invoices");
+    expect(sql).toContain("create table dac7_reports");
+    expect(sql).toContain("create table carf_reports");
+    expect(sql).toContain("create table compliance_exports");
+    expect(sql).toContain("create table referral_programs");
+    expect(sql).toContain("create table tier_waivers");
+    expect(sql).toContain("create table organizations");
+    expect(sql).toContain("carf_reporting_required boolean not null default false");
+    expect(sql).toContain("commission_source = 'veel_platform_commission_net_of_refunds_and_tax'");
+    expect(sql).toContain("alter table compliance_ledger_entries enable row level security");
+    expect(sql).toContain("compliance_ledger_entries_staff_select");
+    expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role|creator_balance|withdraw|payout_queue|escrow/i);
+  });
 });
