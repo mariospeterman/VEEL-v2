@@ -44,7 +44,7 @@ Rules:
 | `/app/home` | MVP | yes | yes | yes | home | Recommended/Following/NSFW/SFW feed. |
 | `/app/bits` | MVP | yes | yes | yes | media | Reels-style Bit feed. |
 | `/app/discover` | MVP | yes | yes | yes | discover | Search, hashtags, creators, events; not a redirect alias. |
-| `/app/create` | MVP | yes | yes | yes | create | Upload/capture, labels, event attach, monetisation, publish. |
+| `/create` | MVP | yes | yes | yes | create | Upload/capture, labels, event attach, monetisation, publish. |
 | `/app/messages` | Phase 2 | yes | yes | yes | messages | Inbox, paid messages, match/event contexts. |
 | `/app/profile` | MVP | yes | yes | yes | profile | Own profile, wallet/activity/settings links. |
 | `/app/profile/:handle` | MVP | yes | yes | yes | profile | Public creator/user profile. |

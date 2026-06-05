@@ -33,6 +33,17 @@ test("renders the content media viewer projection", async ({ page }) => {
   );
 });
 
+test("renders the create upload workspace projection", async ({ page }) => {
+  await page.goto("/create");
+
+  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Upload workspace" })).toBeVisible();
+  await expect(page.getByText("POST /v1/content")).toBeVisible();
+  await expect(page.getByText("Bunny TUS session")).toBeVisible();
+  await expect(page.getByText("safe session headers only")).toBeVisible();
+  await expect(page.locator("span").getByText("explicit", { exact: true })).toBeVisible();
+});
+
 test("renders the messages and paid-message projection", async ({ page }) => {
   await page.goto("/messages");
 
