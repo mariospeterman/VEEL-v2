@@ -25,6 +25,7 @@ export type Subscription = components["schemas"]["Subscription"];
 export type SubscriptionPage = components["schemas"]["SubscriptionPage"];
 export type SubscriptionPlan = components["schemas"]["SubscriptionPlan"];
 export type SubscriptionPlanPage = components["schemas"]["SubscriptionPlanPage"];
+export type DiscoverPage = components["schemas"]["DiscoverPage"];
 
 export type ApiResult<T> =
   | {
@@ -79,6 +80,16 @@ export async function getSubscriptionPlans(): Promise<ApiResult<SubscriptionPlan
 
 export async function getSubscriptions(): Promise<ApiResult<SubscriptionPage>> {
   return getJson<SubscriptionPage>("/v1/subscriptions");
+}
+
+export async function getDiscoverSearch(query = ""): Promise<ApiResult<DiscoverPage>> {
+  const search = new URLSearchParams();
+
+  if (query) {
+    search.set("q", query);
+  }
+
+  return getJson<DiscoverPage>(`/v1/discover/search${search.size > 0 ? `?${search.toString()}` : ""}`);
 }
 
 async function getJson<T>(path: string): Promise<ApiResult<T>> {

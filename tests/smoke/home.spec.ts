@@ -59,11 +59,10 @@ test("renders the discover projection", async ({ page }) => {
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Search and explore" })).toBeVisible();
-  await expect(page.getByText("Studio lighting test #studio")).toBeVisible();
-  await expect(page.getByRole("link", { name: "#studio" })).toBeVisible();
-  await expect(page.getByText("Studio meetup")).toBeVisible();
-  await expect(page.getByText("Friday live studio")).toBeVisible();
-  await expect(page.getByText("pass_required")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Discover unavailable" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Discover sidebars unavailable" })).toBeVisible();
+  await expect(page.getByText("HTTP 503").first()).toBeVisible();
+  await expect(page.getByText("API is unavailable").first()).toBeVisible();
 });
 
 test("renders the messages and paid-message projection", async ({ page }) => {

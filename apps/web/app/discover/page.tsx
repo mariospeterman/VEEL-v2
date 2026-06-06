@@ -1,103 +1,19 @@
-import type { components } from "@veel/contracts";
 import { appShellNavItems } from "@veel/ui";
+import {
+  getDiscoverSearch,
+  type ApiResult,
+  type ContentItem,
+  type DiscoverPage
+} from "@/api-client";
 
-type DiscoverPage = components["schemas"]["DiscoverPage"];
-
-const discoverProjection: DiscoverPage = {
-  content: [
-    {
-      id: "00000000-0000-4000-8000-000000000040",
-      creator: {
-        id: "00000000-0000-4000-8000-000000000010",
-        handle: "maki",
-        displayName: "Maki",
-        avatarUrl: null,
-        badges: []
-      },
-      mediaType: "image",
-      caption: "Studio lighting test #studio",
-      posterUrl: "https://picsum.photos/seed/veel-discover/960/1280",
-      playback: {
-        state: "not_ready",
-        url: null,
-        provider: "none"
-      },
-      accessState: "free",
-      nsfwLabel: "none",
-      engagement: {
-        liked: false,
-        saved: false,
-        likeCount: 128,
-        commentCount: 18,
-        shareCount: 9
-      }
-    }
-  ],
-  creators: [
-    {
-      id: "00000000-0000-4000-8000-000000000010",
-      handle: "maki",
-      displayName: "Maki",
-      avatarUrl: null,
-      badges: []
-    }
-  ],
-  hashtags: [
-    { slug: "studio", displayName: "#studio", state: "active" },
-    { slug: "live", displayName: "#live", state: "active" },
-    { slug: "events", displayName: "#events", state: "restricted" }
-  ],
-  events: [
-    {
-      id: "00000000-0000-4000-8000-0000000000e1",
-      title: "Studio meetup",
-      description: null,
-      startsAt: "2026-07-01T20:00:00.000Z",
-      endsAt: null,
-      accessRule: "public_sale",
-      location: { type: "physical", label: "Belgrade studio" },
-      state: "published",
-      ticketTypes: [
-        {
-          id: "00000000-0000-4000-8000-0000000000e2",
-          label: "General admission",
-          priceMinor: 10000000,
-          currency: "SOL",
-          capacity: 25,
-          remaining: 25,
-          state: "active",
-          saleStartsAt: null,
-          saleEndsAt: null,
-          perUserLimit: 1
-        }
-      ]
-    }
-  ],
-  liveRooms: [
-    {
-      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10",
-      title: "Friday live studio",
-      creator: {
-        id: "00000000-0000-4000-8000-000000000010",
-        handle: "maki",
-        displayName: "Maki",
-        avatarUrl: null,
-        badges: []
-      },
-      state: "live",
-      accessState: "pass_required",
-      playback: { state: "blocked", url: null, provider: "livepeer" },
-      teaserSecondsRemaining: 45,
-      passOptions: [{ durationMinutes: 30, amountMinor: 50000000, currency: "SOL" }],
-      chat: { enabled: true, accessState: "pass_required" },
-      replayContentId: null
-    }
-  ],
-  nextCursor: null
-};
-
-export default function DiscoverPageView() {
-  const featured = discoverProjection.content[0];
+export default async function DiscoverPageView({
+  searchParams
+}: {
+  searchParams?: Promise<{ q?: string }>;
+}) {
+  const params = await searchParams;
+  const discover = await getDiscoverSearch(params?.q ?? "");
+  const featured = discover.ok ? (discover.data.content[0] ?? null) : null;
 
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
@@ -130,58 +46,87 @@ export default function DiscoverPageView() {
             </div>
           </div>
 
-          {featured ? <FeaturedDiscoverCard item={featured} /> : null}
+          {discover.ok ? (
+            featured ? (
+              <FeaturedDiscoverCard item={featured} />
+            ) : (
+              <EmptyState label="No discover content is available" />
+            )
+          ) : (
+            <UnavailableState result={discover} title="Discover unavailable" />
+          )}
         </div>
 
         <aside className="grid min-h-0 content-start gap-4 overflow-hidden">
-          <section className="grid gap-2">
-            <h2 className="text-sm font-semibold tracking-normal text-[var(--muted)]">Hashtags</h2>
-            <div className="flex flex-wrap gap-2">
-              {discoverProjection.hashtags.map((hashtag) => (
-                <a
-                  className="rounded border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-sm"
-                  href={`/discover?tag=${hashtag.slug}`}
-                  key={hashtag.slug}
-                >
-                  {hashtag.displayName}
-                </a>
-              ))}
-            </div>
-          </section>
+          {discover.ok ? (
+            <>
+              <section className="grid gap-2">
+                <h2 className="text-sm font-semibold tracking-normal text-[var(--muted)]">Hashtags</h2>
+                <div className="flex flex-wrap gap-2">
+                  {discover.data.hashtags.length > 0 ? (
+                    discover.data.hashtags.map((hashtag) => (
+                      <a
+                        className="rounded border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-sm"
+                        href={`/discover?q=${encodeURIComponent(hashtag.slug)}`}
+                        key={hashtag.slug}
+                      >
+                        {hashtag.displayName}
+                      </a>
+                    ))
+                  ) : (
+                    <EmptyState label="No hashtags yet" />
+                  )}
+                </div>
+              </section>
 
-          <section className="grid gap-2">
-            <h2 className="text-sm font-semibold tracking-normal text-[var(--muted)]">Creators</h2>
-            {discoverProjection.creators.map((creator) => (
-              <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-4" key={creator.id}>
-                <p className="font-medium">{creator.displayName}</p>
-                <p className="text-sm text-[var(--muted)]">@{creator.handle}</p>
-              </article>
-            ))}
-          </section>
+              <section className="grid gap-2">
+                <h2 className="text-sm font-semibold tracking-normal text-[var(--muted)]">Creators</h2>
+                {discover.data.creators.length > 0 ? (
+                  discover.data.creators.map((creator) => (
+                    <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-4" key={creator.id}>
+                      <p className="font-medium">{creator.displayName}</p>
+                      <p className="text-sm text-[var(--muted)]">@{creator.handle}</p>
+                    </article>
+                  ))
+                ) : (
+                  <EmptyState label="No creators yet" />
+                )}
+              </section>
 
-          <section className="grid gap-2">
-            <h2 className="text-sm font-semibold tracking-normal text-[var(--muted)]">Events and live</h2>
-            <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
-              <p className="font-medium">{discoverProjection.events[0]?.title}</p>
-              <p className="mt-1 text-sm text-[var(--muted)]">{discoverProjection.events[0]?.accessRule}</p>
-            </article>
-            <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
-              <div className="flex items-center justify-between gap-3">
-                <p className="font-medium">{discoverProjection.liveRooms[0]?.title}</p>
-                <span className="rounded bg-[#fee2e2] px-2 py-1 text-xs font-semibold text-[#991b1b]">
-                  {discoverProjection.liveRooms[0]?.state}
-                </span>
-              </div>
-              <p className="mt-1 text-sm text-[var(--muted)]">{discoverProjection.liveRooms[0]?.accessState}</p>
-            </article>
-          </section>
+              <section className="grid gap-2">
+                <h2 className="text-sm font-semibold tracking-normal text-[var(--muted)]">Events and live</h2>
+                {discover.data.events.map((event) => (
+                  <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-4" key={event.id}>
+                    <p className="font-medium">{event.title}</p>
+                    <p className="mt-1 text-sm text-[var(--muted)]">{event.accessRule}</p>
+                  </article>
+                ))}
+                {discover.data.liveRooms.map((room) => (
+                  <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-4" key={room.id}>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-medium">{room.title}</p>
+                      <span className="rounded bg-[#fee2e2] px-2 py-1 text-xs font-semibold text-[#991b1b]">
+                        {room.state}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-[var(--muted)]">{room.accessState}</p>
+                  </article>
+                ))}
+                {discover.data.events.length === 0 && discover.data.liveRooms.length === 0 ? (
+                  <EmptyState label="No events or live rooms yet" />
+                ) : null}
+              </section>
+            </>
+          ) : (
+            <UnavailableState result={discover} title="Discover sidebars unavailable" />
+          )}
         </aside>
       </section>
     </main>
   );
 }
 
-function FeaturedDiscoverCard({ item }: { item: NonNullable<DiscoverPage["content"][number]> }) {
+function FeaturedDiscoverCard({ item }: { item: ContentItem }) {
   return (
     <article className="grid min-h-0 overflow-hidden rounded border border-[var(--line)] bg-[var(--panel)] lg:grid-cols-[minmax(0,1fr)_300px]">
       <div className="relative min-h-[420px] bg-[#111827]">
@@ -208,5 +153,33 @@ function FeaturedDiscoverCard({ item }: { item: NonNullable<DiscoverPage["conten
         </div>
       </div>
     </article>
+  );
+}
+
+function EmptyState({ label }: { label: string }) {
+  return (
+    <div className="rounded border border-[var(--line)] bg-[var(--panel)] p-4 text-sm text-[var(--muted)]">
+      {label}
+    </div>
+  );
+}
+
+function UnavailableState({
+  result,
+  title
+}: {
+  result: ApiResult<DiscoverPage>;
+  title: string;
+}) {
+  if (result.ok) {
+    return null;
+  }
+
+  return (
+    <div className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
+      <p className="text-sm font-medium text-[var(--accent)]">HTTP {result.status}</p>
+      <h2 className="mt-2 text-base font-semibold tracking-normal">{title}</h2>
+      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{result.message}</p>
+    </div>
   );
 }
