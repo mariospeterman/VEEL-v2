@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
@@ -1096,6 +1096,176 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("returns tokenized Bunny playback for backend-unlocked content", async () => {
+    const unlockedContent: ContentItem = {
+      ...homeFeedItem,
+      accessState: "unlocked",
+      playback: {
+        state: "full",
+        url: "https://vz-example.b-cdn.net/11111111-1111-4111-8111-111111111111/playlist.m3u8",
+        provider: "bunny"
+      }
+    };
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        throw new Error("not implemented");
+      },
+      async createMediaAsset() {
+        throw new Error("not implemented");
+      },
+      async findContentDetail() {
+        return unlockedContent;
+      },
+      async findContentUnlockOffer() {
+        throw new Error("not implemented");
+      },
+      async findOwnedContentForUpload() {
+        throw new Error("not implemented");
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      }
+    };
+    const mediaUploadProvider: MediaUploadProviderAdapter = {
+      provider: "bunny",
+      isConfigured() {
+        return true;
+      },
+      async createUploadSession() {
+        throw new Error("not implemented");
+      },
+      createPlaybackResource(input) {
+        expect(input.providerAssetId).toBe("11111111-1111-4111-8111-111111111111");
+
+        return {
+          state: "full",
+          url: "https://iframe.mediadelivery.net/embed/123/11111111-1111-4111-8111-111111111111?token=signed&expires=1770000900",
+          provider: "bunny",
+          resourceType: "embed",
+          expiresAt: "2026-02-02T10:15:00.000Z"
+        };
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository,
+      mediaUploadProvider
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().playback).toEqual({
+      state: "full",
+      url: "https://iframe.mediadelivery.net/embed/123/11111111-1111-4111-8111-111111111111?token=signed&expires=1770000900",
+      provider: "bunny",
+      resourceType: "embed",
+      expiresAt: "2026-02-02T10:15:00.000Z"
+    });
+
+    await app.close();
+  });
+
+  it("fails Bunny playback closed when the signer is unavailable", async () => {
+    const unlockedContent: ContentItem = {
+      ...homeFeedItem,
+      accessState: "unlocked",
+      playback: {
+        state: "full",
+        url: "https://vz-example.b-cdn.net/11111111-1111-4111-8111-111111111111/playlist.m3u8",
+        provider: "bunny"
+      }
+    };
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        throw new Error("not implemented");
+      },
+      async createMediaAsset() {
+        throw new Error("not implemented");
+      },
+      async findContentDetail() {
+        return unlockedContent;
+      },
+      async findContentUnlockOffer() {
+        throw new Error("not implemented");
+      },
+      async findOwnedContentForUpload() {
+        throw new Error("not implemented");
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      }
+    };
+    const mediaUploadProvider: MediaUploadProviderAdapter = {
+      provider: "bunny",
+      isConfigured() {
+        return true;
+      },
+      async createUploadSession() {
+        throw new Error("not implemented");
+      },
+      createPlaybackResource() {
+        throw new Error("signer unavailable");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository,
+      mediaUploadProvider
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().playback).toEqual({
+      state: "blocked",
+      url: null,
+      provider: "bunny"
+    });
+
+    await app.close();
+  });
+
   it("returns 404 for a missing protected content detail", async () => {
     const contentRepository: ContentRepository = {
       async createDraft() {
@@ -2008,7 +2178,8 @@ describe("buildApi", () => {
         VERIFF_API_BASE_URL: "https://stationapi.veriff.com",
         PERSONA_API_BASE_URL: "https://api.withpersona.com",
         BUNNY_STREAM_API_KEY: "bunny-secret",
-        BUNNY_STREAM_LIBRARY_ID: "library-id"
+        BUNNY_STREAM_LIBRARY_ID: "library-id",
+        BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS: 900
       },
       fetchMock
     );
@@ -2041,6 +2212,57 @@ describe("buildApi", () => {
     expect(session.headers.AuthorizationExpire).toMatch(/^\d+$/);
     expect(session.headers.AuthorizationSignature).toMatch(/^[a-f0-9]{64}$/);
     expect(Object.values(session.headers)).not.toContain("bunny-secret");
+
+    vi.useRealTimers();
+  });
+
+  it("creates a Bunny embed playback token without exposing the token key", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-04T00:00:00.000Z"));
+
+    const adapter = createBunnyStreamUploadAdapter({
+      NODE_ENV: "test",
+      API_URL: "http://localhost:4000",
+      WEB_URL: "http://localhost:3000",
+      SOLANA_CLUSTER: "devnet",
+      SOLANA_NETWORK: "solana:devnet",
+      SOLANA_RPC_URL: "https://api.devnet.solana.com",
+      PAYMENT_DEFAULT_ASSET: "SOL",
+      SOLANA_SUBSCRIPTION_DELEGATION_PROGRAM_ID: "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
+      HELIUS_CLUSTER: "devnet",
+      ONRAMP_PROVIDER: "disabled",
+      ONRAMP_PURCHASE_CURRENCY: "SOL",
+      COINBASE_CDP_API_BASE_URL: "https://api.cdp.coinbase.com",
+      COINBASE_ONRAMP_DESTINATION_NETWORK: "solana",
+      AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: false,
+      SUMSUB_API_BASE_URL: "https://api.sumsub.com",
+      YOTI_API_BASE_URL: "https://age.yoti.com/api/v1",
+      YOTI_LAUNCH_BASE_URL: "https://age.yoti.com",
+      VERIFF_API_BASE_URL: "https://stationapi.veriff.com",
+      PERSONA_API_BASE_URL: "https://api.withpersona.com",
+      BUNNY_STREAM_API_KEY: "bunny-secret",
+      BUNNY_STREAM_LIBRARY_ID: "759",
+      BUNNY_STREAM_EMBED_TOKEN_KEY: "embed-token-secret",
+      BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS: 900
+    });
+    const providerAssetId = "eb1c4f77-0cda-46be-b47d-1118ad7c2ffe";
+    const expires = 1_780_531_200 + 900;
+    const token = createHash("sha256")
+      .update(`embed-token-secret${providerAssetId}${expires}`)
+      .digest("hex");
+
+    const playback = adapter.createPlaybackResource?.({
+      providerAssetId
+    });
+
+    expect(playback).toEqual({
+      state: "full",
+      url: `https://iframe.mediadelivery.net/embed/759/${providerAssetId}?token=${token}&expires=${expires}`,
+      provider: "bunny",
+      resourceType: "embed",
+      expiresAt: "2026-06-04T00:15:00.000Z"
+    });
+    expect(playback?.url).not.toContain("embed-token-secret");
 
     vi.useRealTimers();
   });

@@ -2071,9 +2071,13 @@ export interface components {
             /** @enum {string} */
             state: "not_ready" | "teaser" | "full" | "blocked";
             /** Format: uri */
-            url?: string | null;
+            url: string | null;
             /** @enum {string} */
-            provider?: "bunny" | "livepeer" | "none";
+            provider: "bunny" | "livepeer" | "none";
+            /** @enum {string|null} */
+            resourceType?: "embed" | "hls" | "direct" | null;
+            /** Format: date-time */
+            expiresAt?: string | null;
         };
         CreateContentRequest: {
             /** @enum {string} */

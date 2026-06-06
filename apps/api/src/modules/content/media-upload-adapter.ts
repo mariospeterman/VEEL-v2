@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { ServerEnv } from "@veel/config";
 import type {
+  CreateMediaPlaybackResourceInput,
   CreateMediaUploadProviderSessionInput,
   GetMediaPlaybackProviderDataInput,
   MediaUploadProviderAdapter,
@@ -10,6 +11,7 @@ import type {
 
 const bunnyStreamBaseUrl = "https://video.bunnycdn.com";
 const bunnyTusUploadUrl = "https://video.bunnycdn.com/tusupload";
+const bunnyEmbedBaseUrl = "https://iframe.mediadelivery.net/embed";
 const uploadTtlSeconds = 24 * 60 * 60;
 
 export class MediaUploadProviderConfigurationError extends Error {
@@ -97,6 +99,29 @@ export function createBunnyStreamUploadAdapter(
           VideoId: video.guid
         },
         expiresAt: new Date(expirationTime * 1000)
+      };
+    },
+    createPlaybackResource(input: CreateMediaPlaybackResourceInput) {
+      const tokenKey = env.BUNNY_STREAM_EMBED_TOKEN_KEY;
+      const libraryId = env.BUNNY_STREAM_LIBRARY_ID;
+
+      if (!tokenKey || !libraryId) {
+        throw new MediaUploadProviderConfigurationError();
+      }
+
+      const expires =
+        Math.floor((input.now?.getTime() ?? Date.now()) / 1000) +
+        env.BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS;
+      const token = createHash("sha256")
+        .update(`${tokenKey}${input.providerAssetId}${expires}`)
+        .digest("hex");
+
+      return {
+        state: "full",
+        url: `${bunnyEmbedBaseUrl}/${libraryId}/${input.providerAssetId}?token=${token}&expires=${expires}`,
+        provider: "bunny",
+        resourceType: "embed",
+        expiresAt: new Date(expires * 1000).toISOString()
       };
     },
     async getPlaybackData(

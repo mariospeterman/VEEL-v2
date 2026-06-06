@@ -131,7 +131,15 @@ export interface MediaUploadProviderAdapter {
   createUploadSession(
     input: CreateMediaUploadProviderSessionInput
   ): Promise<MediaUploadProviderSession>;
+  createPlaybackResource?(
+    input: CreateMediaPlaybackResourceInput
+  ): NonNullable<ContentItem["playback"]>;
   getPlaybackData?(input: GetMediaPlaybackProviderDataInput): Promise<MediaPlaybackProviderData>;
+}
+
+export interface CreateMediaPlaybackResourceInput {
+  providerAssetId: string;
+  now?: Date;
 }
 
 export interface GetMediaPlaybackProviderDataInput {

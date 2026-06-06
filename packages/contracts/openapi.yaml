@@ -1815,11 +1815,13 @@ components:
         engagement: { $ref: "#/components/schemas/EngagementState" }
     PlaybackResource:
       type: object
-      required: [state]
+      required: [state, url, provider]
       properties:
         state: { type: string, enum: [not_ready, teaser, full, blocked] }
         url: { type: string, format: uri, nullable: true }
         provider: { type: string, enum: [bunny, livepeer, none] }
+        resourceType: { type: string, enum: [embed, hls, direct], nullable: true }
+        expiresAt: { type: string, format: date-time, nullable: true }
     CreateContentRequest:
       type: object
       required: [mediaType, visibility, nsfwLabel]

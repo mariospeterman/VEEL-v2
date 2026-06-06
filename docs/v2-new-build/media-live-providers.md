@@ -29,8 +29,9 @@ Current implementation state:
 - Upload state is stored in `media_assets` as normalized provider/provider asset/provider state only.
 - `GET /v1/content/{contentId}` returns a frontend-safe media viewer projection backed by `content_access_rules`, creator profile data, and the first media poster.
 - Access projection is conservative: free/teaser/pass/locked states are exposed, but no entitlement grant, signed playback URL, tokenized playback URL, or provider management URL is exposed by this slice.
+- `GET /v1/content/{contentId}` fails full Bunny playback closed unless backend access is already `free`, `unlocked`, or `subscribed` and a short-lived Bunny embed token can be generated server-side.
 - `POST /v1/webhooks/media/{provider}` accepts Bunny Stream signed webhooks for the `bunny` provider and Livepeer signed stream webhooks for the `livepeer` provider, verifies raw-body HMAC signatures, records idempotent provider receipts, and applies normalized media/live processing state.
-- Playback token issuing, moderation state transitions, and locked playback are deferred to their owning media/access slices.
+- Bunny playback token issuing is backend-owned through embed-view token authentication; moderation state transitions and broader locked playback policy surfaces are deferred to their owning media/access slices.
 
 Official references checked:
 
@@ -38,6 +39,7 @@ Official references checked:
 - Bunny TUS resumable uploads: https://docs.bunny.net/stream/tus-resumable-uploads
 - Bunny Stream webhooks and HMAC validation: https://docs.bunny.net/stream/webhooks
 - Bunny Stream security and token authentication: https://docs.bunny.net/stream/security
+- Bunny Stream embed view token authentication: https://docs.bunny.net/stream/token-authentication
 - Livepeer webhook setup and signatures: https://docs.livepeer.org/developers/guides/setup-and-listen-to-webhooks
 - Livepeer stream event webhooks: https://docs.livepeer.org/developers/guides/listen-to-stream-events
 - Livepeer asset upload reference: https://docs.livepeer.org/api-reference/asset/upload
@@ -80,6 +82,7 @@ Rules:
 - Provider payload is sanitized before frontend response.
 - Paid full playback requires backend access state and backend-issued signed/tokenized Bunny playback.
 - Full locked Bunny playback is never exposed as an unsigned long-lived URL.
+- Bunny embed playback resources require `BUNNY_STREAM_EMBED_TOKEN_KEY` and use short-lived `token` and `expires` query parameters generated server-side from the provider video id. The frontend receives only the signed embed URL and expiry metadata.
 
 ## Livepeer Live Flow
 

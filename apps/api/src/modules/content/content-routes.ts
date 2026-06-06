@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { components } from "@veel/contracts";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { AgeRepository } from "../age/types.js";
 import type { LiveRepository } from "../live/types.js";
@@ -299,7 +300,7 @@ export async function registerContentRoutes(
         });
       }
 
-      return reply.code(200).send(content);
+      return reply.code(200).send(withSignedPlayback(content, options.mediaUploadProvider));
     } catch (error) {
       if (error instanceof ContentRepositoryConfigurationError) {
         request.log.warn({ error }, "Content repository is not configured");
@@ -508,6 +509,69 @@ function rawBodyBuffer(rawBody: unknown): Buffer {
   }
 
   return Buffer.alloc(0);
+}
+
+function withSignedPlayback(
+  content: components["schemas"]["ContentItem"],
+  mediaUploadProvider: MediaUploadProviderAdapter
+): components["schemas"]["ContentItem"] {
+  const playback = content.playback;
+
+  if (playback?.state !== "full" || playback.provider !== "bunny" || !playback.url) {
+    return content;
+  }
+
+  const blockedPlayback: NonNullable<components["schemas"]["ContentItem"]["playback"]> = {
+    state: "blocked",
+    url: null,
+    provider: "bunny"
+  };
+
+  if (!mediaUploadProvider.createPlaybackResource) {
+    return {
+      ...content,
+      playback: blockedPlayback
+    };
+  }
+
+  const providerAssetId = bunnyProviderAssetIdFromPlaybackUrl(playback.url);
+
+  if (!providerAssetId) {
+    return {
+      ...content,
+      playback: blockedPlayback
+    };
+  }
+
+  try {
+    return {
+      ...content,
+      playback: mediaUploadProvider.createPlaybackResource({
+        providerAssetId
+      })
+    };
+  } catch {
+    return {
+      ...content,
+      playback: blockedPlayback
+    };
+  }
+}
+
+function bunnyProviderAssetIdFromPlaybackUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    const providerAssetId = parsed.pathname
+      .split("/")
+      .map((part) => part.trim())
+      .find((part) =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(part)
+      );
+
+    return providerAssetId ?? null;
+  } catch {
+    return null;
+  }
 }
 
 type AppReadyAccessResult =
