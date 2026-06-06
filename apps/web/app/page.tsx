@@ -1,62 +1,22 @@
-import type { components } from "@veel/contracts";
 import { appShellNavItems } from "@veel/ui";
+import {
+  getDiscoverSearch,
+  getHomeFeed,
+  type ApiResult,
+  type ContentItem,
+  type DiscoverPage,
+  type FeedPage,
+  type LiveRoom
+} from "@/api-client";
 
-type ContentItem = components["schemas"]["ContentItem"];
-type LiveRoom = components["schemas"]["LiveRoom"];
+export default async function HomePage() {
+  const [feed, discover] = await Promise.all([
+    getHomeFeed("recommended"),
+    getDiscoverSearch("")
+  ]);
+  const featuredItem = feed.ok ? (feed.data.items[0] ?? null) : null;
+  const featuredLiveRoom = discover.ok ? (discover.data.liveRooms[0] ?? null) : null;
 
-const featuredItem: ContentItem = {
-  id: "00000000-0000-4000-8000-000000000040",
-  creator: {
-    id: "00000000-0000-4000-8000-000000000010",
-    handle: "maki",
-    displayName: "Maki",
-    avatarUrl: null,
-    badges: []
-  },
-  mediaType: "image",
-  caption: "Late-night set build, softbox tests, and the first Veel v2 media surface.",
-  posterUrl: "https://picsum.photos/seed/veel-home/1200/750",
-  playback: {
-    state: "not_ready",
-    url: null,
-    provider: "none"
-  },
-  accessState: "free",
-  nsfwLabel: "none",
-  engagement: {
-    liked: false,
-    saved: false,
-    likeCount: 128,
-    commentCount: 18,
-    shareCount: 9
-  }
-};
-
-const featuredLiveRoom: LiveRoom = {
-  id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10",
-  title: "Friday live studio",
-  creator: featuredItem.creator,
-  state: "live",
-  accessState: "pass_required",
-  playback: {
-    state: "blocked",
-    url: null,
-    provider: "livepeer"
-  },
-  teaserSecondsRemaining: 45,
-  passOptions: [
-    { durationMinutes: 30, amountMinor: 50000000, currency: "SOL" },
-    { durationMinutes: 60, amountMinor: 50000000, currency: "SOL" },
-    { durationMinutes: 180, amountMinor: 50000000, currency: "SOL" }
-  ],
-  chat: {
-    enabled: true,
-    accessState: "pass_required"
-  },
-  replayContentId: null
-};
-
-export default function HomePage() {
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-[var(--line)] px-5 py-4">
@@ -88,14 +48,30 @@ export default function HomePage() {
             </div>
           </div>
 
-          <MediaCard item={featuredItem} />
+          {feed.ok ? (
+            featuredItem ? (
+              <MediaCard item={featuredItem} />
+            ) : (
+              <EmptyState label="No recommended media is available" />
+            )
+          ) : (
+            <UnavailableState result={feed} title="Home feed unavailable" />
+          )}
         </div>
 
         <aside className="grid content-start gap-3">
           <div className="border-b border-[var(--line)] pb-3">
             <p className="text-sm font-medium text-[var(--muted)]">Live rail</p>
           </div>
-          <LiveRoomRailCard room={featuredLiveRoom} />
+          {discover.ok ? (
+            featuredLiveRoom ? (
+              <LiveRoomRailCard room={featuredLiveRoom} />
+            ) : (
+              <EmptyState label="No live rooms are available" />
+            )
+          ) : (
+            <UnavailableState result={discover} title="Live rail unavailable" />
+          )}
         </aside>
       </section>
     </main>
@@ -178,5 +154,33 @@ function MediaCard({ item }: { item: ContentItem }) {
         </div>
       </div>
     </article>
+  );
+}
+
+function EmptyState({ label }: { label: string }) {
+  return (
+    <div className="rounded border border-[var(--line)] bg-[var(--panel)] p-4 text-sm text-[var(--muted)]">
+      {label}
+    </div>
+  );
+}
+
+function UnavailableState({
+  result,
+  title
+}: {
+  result: ApiResult<DiscoverPage> | ApiResult<FeedPage>;
+  title: string;
+}) {
+  if (result.ok) {
+    return null;
+  }
+
+  return (
+    <div className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
+      <p className="text-sm font-medium text-[var(--accent)]">HTTP {result.status}</p>
+      <h2 className="mt-2 text-base font-semibold tracking-normal">{title}</h2>
+      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{result.message}</p>
+    </div>
   );
 }

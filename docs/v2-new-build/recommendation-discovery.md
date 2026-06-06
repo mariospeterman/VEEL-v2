@@ -30,7 +30,7 @@ Current implementation state:
 - Captions are parsed server-side for normalized hashtags. Frontend does not submit trusted hashtag state.
 - The first read query returns approved public `content_items` joined to creator profiles and the first media poster only.
 - Playback URLs, paid entitlement state, provider media tokens, personalized ranking, and hidden/blocked creator filters are deferred to their owning slices.
-- The web Home surface still renders a launch fixture. `/discover` reads protected backend discovery projections through the typed web API helper and keeps raw provider payloads out of the browser.
+- The web Home surface reads `GET /v1/content/feed` for recommended media and the protected discovery projection for the live rail through the typed web API helper. `/discover` reads protected backend discovery projections through the same helper. Neither surface renders local media/discovery business-data fixtures or raw provider payloads.
 
 ## Feed Surfaces
 

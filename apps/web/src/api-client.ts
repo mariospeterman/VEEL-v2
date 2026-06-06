@@ -26,6 +26,7 @@ export type SubscriptionPage = components["schemas"]["SubscriptionPage"];
 export type SubscriptionPlan = components["schemas"]["SubscriptionPlan"];
 export type SubscriptionPlanPage = components["schemas"]["SubscriptionPlanPage"];
 export type DiscoverPage = components["schemas"]["DiscoverPage"];
+export type FeedPage = components["schemas"]["FeedPage"];
 
 export type ApiResult<T> =
   | {
@@ -90,6 +91,10 @@ export async function getDiscoverSearch(query = ""): Promise<ApiResult<DiscoverP
   }
 
   return getJson<DiscoverPage>(`/v1/discover/search${search.size > 0 ? `?${search.toString()}` : ""}`);
+}
+
+export async function getHomeFeed(mode = "recommended"): Promise<ApiResult<FeedPage>> {
+  return getJson<FeedPage>(`/v1/content/feed?mode=${encodeURIComponent(mode)}`);
 }
 
 async function getJson<T>(path: string): Promise<ApiResult<T>> {
