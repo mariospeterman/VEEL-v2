@@ -45,7 +45,8 @@ Use Supabase Realtime selectively. Do not build a custom websocket server unless
 - Admin notification health counts are exposed through a staff-only sanitized projection, including delivery queue state counts.
 - Settings includes browser service-worker enrollment. Enrollment is gated by `GET /v1/notifications/push-config`, browser Push API support, browser permission, and a Supabase session.
 - The worker includes a server-only VAPID Web Push send-provider boundary. It uses encrypted browser subscription material, sends sanitized notification payloads, retries transient push failures, and revokes devices when push services return expired subscription responses.
-- Production still needs real VAPID key configuration, staging push-service verification across target browsers, and Realtime subscription wiring.
+- Supabase Realtime publication DDL now includes only `notifications`, `messages`, and `conversation_members` as user-owned projection tables. Browser realtime wiring invalidates typed API caches and refreshes server-owned projections; it does not compute payment, access, messaging, notification, or social truth from realtime payloads.
+- Production still needs real VAPID key configuration, staging push-service verification across target browsers, and live Supabase Realtime staging verification with real RLS claims.
 - In unconfigured environments, user-facing notification copy must show browser push as waiting for provider configuration rather than active delivery.
 
 ## Message Flow

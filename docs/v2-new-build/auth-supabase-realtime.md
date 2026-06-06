@@ -173,6 +173,8 @@ Use:
 - Broadcast for typing, live viewer presence, lightweight room events.
 - Presence for online state.
 - Postgres Changes for messages, notifications, room status, and activity projections after RLS review.
+- Current implementation publishes only `notifications`, `messages`, and `conversation_members` to `supabase_realtime`; browser code uses these changes to invalidate typed API caches and refresh server-owned projections.
+- Do not add money, provider, device-secret, compliance, admin, or raw payload tables to the realtime publication.
 
 Avoid:
 

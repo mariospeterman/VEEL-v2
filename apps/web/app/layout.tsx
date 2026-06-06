@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { QueryProvider } from "@/query-provider";
+import { RealtimeProvider } from "@/realtime-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -17,7 +18,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body>
-        <QueryProvider>{children}</QueryProvider>
+        <QueryProvider>
+          <RealtimeProvider />
+          {children}
+        </QueryProvider>
       </body>
     </html>
   );

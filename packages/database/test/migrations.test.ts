@@ -453,4 +453,13 @@ describe("database migrations", () => {
     expect(sql).toContain("organizations_select_member_or_staff");
     expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role|creator_balance|withdraw|payout_queue|escrow/i);
   });
+
+  it("adds only user-owned projections to the Supabase realtime publication", () => {
+    const sql = readMigration("0039_realtime_projection_publication.sql");
+
+    expect(sql).toContain("alter publication supabase_realtime add table notifications");
+    expect(sql).toContain("alter publication supabase_realtime add table messages");
+    expect(sql).toContain("alter publication supabase_realtime add table conversation_members");
+    expect(sql).not.toMatch(/payment_intents|provider_events|notification_devices|notification_delivery_attempts|private_key|seed_phrase|mnemonic|raw_payload|service_role|creator_balance|withdraw|payout_queue|escrow/i);
+  });
 });

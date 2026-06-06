@@ -193,6 +193,7 @@ Current implementation state:
 - CI installs Chromium and runs the smoke suite after lint, typecheck, and unit tests.
 - `/`, `/age`, `/content/[contentId]`, `/live/[liveRoomId]`, `/profile`, `/profile/[handle]`, `/activity`, `/messages`, `/wallet`, `/subscriptions`, `/studio`, `/discover`, `/events/[eventId]`, `/tickets`, `/dating`, `/dating/matches`, `/admin`, and `/settings` read backend projections through the typed web API helper instead of local business-data fixtures.
 - Settings reads session, age, wallet, feed preference, and notification preference projections from the API; feed/notification preference mutation remains backend-owned through explicit control actions.
+- Browser Supabase Realtime subscribes only to approved user-owned projection tables and invalidates typed API caches/server component projections. It must not use realtime payloads as payment, access, notification, messaging, or social truth.
 - Home/age/detail/profile/activity/messages/wallet/subscriptions/studio/discover/Event Access/Mutuals/admin/settings screens attach the current Supabase access token when present and render a fail-closed unavailable state on API/auth/provider errors.
 - Current smoke coverage starts the web app only, so API-backed home/age/detail/profile/activity/messages/wallet/subscriptions/studio/discover/Event Access/Mutuals/admin/settings smoke asserts the fail-closed API-unavailable state; API-backed happy-path browser coverage belongs in the combined app integration harness.
 - `/create` is a mutation-safe launch surface: it describes backend-owned
