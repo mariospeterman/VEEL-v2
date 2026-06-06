@@ -4,23 +4,27 @@ import {
   getAgeStatus,
   getFeedPreferences,
   getNotificationPreferences,
+  getNotificationPushConfig,
   getSession,
   getWallets,
   type AgeStatus,
   type ApiResult,
   type FeedPreferences,
   type NotificationPreferences,
+  type NotificationPushConfig,
   type SessionState,
   type WalletList
 } from "@/api-client";
+import { NotificationEnrollment } from "./notification-enrollment";
 
 export default async function SettingsPage() {
-  const [session, ageStatus, wallets, feedPreferences, notificationPreferences] = await Promise.all([
+  const [session, ageStatus, wallets, feedPreferences, notificationPreferences, pushConfig] = await Promise.all([
     getSession(),
     getAgeStatus(),
     getWallets(),
     getFeedPreferences(),
-    getNotificationPreferences()
+    getNotificationPreferences(),
+    getNotificationPushConfig()
   ]);
 
   return (
@@ -68,7 +72,7 @@ export default async function SettingsPage() {
           </SettingsGroup>
 
           <SettingsGroup id="notifications" title="Notifications">
-            <NotificationFacts notificationPreferences={notificationPreferences} />
+            <NotificationFacts notificationPreferences={notificationPreferences} pushConfig={pushConfig} />
           </SettingsGroup>
         </section>
       </section>
@@ -77,30 +81,40 @@ export default async function SettingsPage() {
 }
 
 function NotificationFacts({
-  notificationPreferences
+  notificationPreferences,
+  pushConfig
 }: {
   notificationPreferences: ApiResult<NotificationPreferences>;
+  pushConfig: ApiResult<NotificationPushConfig>;
 }) {
   if (!notificationPreferences.ok) {
-    return <UnavailableState result={notificationPreferences} />;
+    return (
+      <div className="grid gap-4">
+        <UnavailableState result={notificationPreferences} />
+        <NotificationEnrollment pushConfig={pushConfig} />
+      </div>
+    );
   }
 
   const preferences = notificationPreferences.data;
 
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
-      <Fact label="Messages" value={enabledLabel(preferences.messagesEnabled)} />
-      <Fact label="Engagement" value={enabledLabel(preferences.engagementEnabled)} />
-      <Fact label="Live" value={enabledLabel(preferences.liveEnabled)} />
-      <Fact label="Payments" value={enabledLabel(preferences.paymentsEnabled)} />
-      <Fact label="Memberships" value={enabledLabel(preferences.membershipsEnabled)} />
-      <Fact label="Event access" value={enabledLabel(preferences.eventAccessEnabled)} />
-      <Fact label="Mutuals" value={enabledLabel(preferences.mutualsEnabled)} />
-      <Fact label="Safety" value={enabledLabel(preferences.safetyEnabled)} />
-      <Fact label="Wallet" value={enabledLabel(preferences.walletEnabled)} />
-      <Fact label="Creator setup" value={enabledLabel(preferences.creatorSetupEnabled)} />
-      <Fact label="Studio setup" value={enabledLabel(preferences.studioSetupEnabled)} />
-      <Fact label="Push" value={enabledLabel(preferences.pushEnabled)} />
+    <div className="grid gap-4">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Fact label="Messages" value={enabledLabel(preferences.messagesEnabled)} />
+        <Fact label="Engagement" value={enabledLabel(preferences.engagementEnabled)} />
+        <Fact label="Live" value={enabledLabel(preferences.liveEnabled)} />
+        <Fact label="Payments" value={enabledLabel(preferences.paymentsEnabled)} />
+        <Fact label="Memberships" value={enabledLabel(preferences.membershipsEnabled)} />
+        <Fact label="Event access" value={enabledLabel(preferences.eventAccessEnabled)} />
+        <Fact label="Mutuals" value={enabledLabel(preferences.mutualsEnabled)} />
+        <Fact label="Safety" value={enabledLabel(preferences.safetyEnabled)} />
+        <Fact label="Wallet" value={enabledLabel(preferences.walletEnabled)} />
+        <Fact label="Creator setup" value={enabledLabel(preferences.creatorSetupEnabled)} />
+        <Fact label="Studio setup" value={enabledLabel(preferences.studioSetupEnabled)} />
+        <Fact label="Push" value={enabledLabel(preferences.pushEnabled)} />
+      </div>
+      <NotificationEnrollment pushConfig={pushConfig} />
     </div>
   );
 }

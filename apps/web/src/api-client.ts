@@ -30,6 +30,7 @@ export type DiscoverPage = components["schemas"]["DiscoverPage"];
 export type FeedPage = components["schemas"]["FeedPage"];
 export type FeedPreferences = components["schemas"]["FeedPreferences"];
 export type NotificationPreferences = components["schemas"]["NotificationPreferences"];
+export type NotificationPushConfig = components["schemas"]["NotificationPushConfig"];
 export type AgeStatus = components["schemas"]["AgeStatus"];
 export type Event = components["schemas"]["Event"];
 export type TicketPage = components["schemas"]["TicketPage"];
@@ -131,6 +132,10 @@ export async function getFeedPreferences(): Promise<ApiResult<FeedPreferences>> 
 
 export async function getNotificationPreferences(): Promise<ApiResult<NotificationPreferences>> {
   return getJson<NotificationPreferences>("/v1/notifications/preferences");
+}
+
+export async function getNotificationPushConfig(): Promise<ApiResult<NotificationPushConfig>> {
+  return getJson<NotificationPushConfig>("/v1/notifications/push-config");
 }
 
 export async function getAgeStatus(): Promise<ApiResult<AgeStatus>> {

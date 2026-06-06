@@ -356,6 +356,13 @@ paths:
         "200": { $ref: "#/components/responses/NotificationPreferences" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+  /v1/notifications/push-config:
+    get:
+      operationId: getNotificationPushConfig
+      tags: [Notifications]
+      summary: Browser-safe web push enrollment configuration
+      responses:
+        "200": { $ref: "#/components/responses/NotificationPushConfig" }
   /v1/notifications/devices:
     post:
       operationId: registerNotificationDevice
@@ -1586,6 +1593,7 @@ components:
     NotificationPage: { description: Notifications, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationPage" } } } }
     Notification: { description: Notification, content: { application/json: { schema: { $ref: "#/components/schemas/Notification" } } } }
     NotificationPreferences: { description: Notification preferences, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationPreferences" } } } }
+    NotificationPushConfig: { description: Browser-safe notification push config, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationPushConfig" } } } }
     NotificationDevice: { description: Notification device, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationDevice" } } } }
     ContentItem: { description: Content item, content: { application/json: { schema: { $ref: "#/components/schemas/ContentItem" } } } }
     UploadSession: { description: Safe upload session, content: { application/json: { schema: { $ref: "#/components/schemas/UploadSession" } } } }
@@ -1971,6 +1979,12 @@ components:
         creatorSetupEnabled: { type: boolean }
         studioSetupEnabled: { type: boolean }
         pushEnabled: { type: boolean }
+    NotificationPushConfig:
+      type: object
+      required: [enabled, vapidPublicKey]
+      properties:
+        enabled: { type: boolean }
+        vapidPublicKey: { type: string, nullable: true }
     RegisterNotificationDeviceRequest:
       type: object
       required: [provider, platform, endpoint, p256dh, auth]

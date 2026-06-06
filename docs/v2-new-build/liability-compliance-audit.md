@@ -55,7 +55,7 @@ Implementation consequences:
 | Creator verification | Age/profile/wallet foundations exist. | Single "Become Creator" onboarding flow, identity/KYB provider approval, tax profile collection, and conversion-friendly UX remain. |
 | Mutuals/Connections | Compatibility backend route family and frontend projections exist. | Rename/migration from dating tables/routes, conduct UX, and hard social-money rule tests remain. |
 | Tiers | Free Verified, Veel Plus, Veel Studio, Enterprise are documented; organization member dashboards now expose software governance/readiness only. | Feature gates, admin overrides, and non-pay-to-win policy tests remain. |
-| Notifications | OpenAPI routes, RLS-backed notification/preference/device/delivery-attempt tables, Fastify account routes, worker delivery queue boundary, backend tests, settings preference reads, and admin health visibility exist. | Browser service-worker subscription UX, real VAPID/web-push provider configuration, and Realtime subscription wiring remain. |
+| Notifications | OpenAPI routes, RLS-backed notification/preference/device/delivery-attempt tables, Fastify account routes, worker delivery queue boundary, browser service-worker enrollment UI, backend tests, settings preference reads, and admin health visibility exist. | Real VAPID/web-push send-provider configuration and Realtime subscription wiring remain. |
 | User/creator/studio/enterprise dashboards | User activity, creator monetisation dashboard, member-scoped Studio/Enterprise dashboards, and admin ops read-only panels exist. | Full admin route-map breadth, organization mutation workflows, and support/KYB workflow depth remain. |
 
 ## Risk Matrix
@@ -125,7 +125,7 @@ Implementation consequences:
 ## Implementation Priority Order
 
 1. Keep hard social-money rule in contracts, docs, tests, ranking, Mutuals, platform tier gates, and admin policy.
-2. Complete browser notification enrollment and realtime wiring: service-worker subscription UX, real VAPID/web-push provider configuration, and Realtime account channels.
+2. Complete notification provider/realtime wiring: real VAPID/web-push send-provider configuration and Realtime account channels.
 3. Complete single creator onboarding/readiness flow and creator/studio dashboard expansion.
 4. Complete Studio/Enterprise organization dashboards and RBAC policy surfaces.
 5. Complete refund/dispute request workflow without custody or platform payout obligations.

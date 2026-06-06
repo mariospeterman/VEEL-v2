@@ -4,6 +4,7 @@ export type Notification = components["schemas"]["Notification"];
 export type NotificationDevice = components["schemas"]["NotificationDevice"];
 export type NotificationPage = components["schemas"]["NotificationPage"];
 export type NotificationPreferences = components["schemas"]["NotificationPreferences"];
+export type NotificationPushConfig = components["schemas"]["NotificationPushConfig"];
 export type RegisterNotificationDeviceRequest = components["schemas"]["RegisterNotificationDeviceRequest"];
 export type UpdateNotificationPreferencesRequest = components["schemas"]["UpdateNotificationPreferencesRequest"];
 

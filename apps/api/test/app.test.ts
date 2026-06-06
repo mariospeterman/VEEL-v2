@@ -2670,6 +2670,10 @@ describe("buildApi", () => {
     });
     await app.ready();
 
+    const pushConfigResponse = await app.inject({
+      method: "GET",
+      url: "/v1/notifications/push-config"
+    });
     const listResponse = await app.inject({
       method: "GET",
       url: "/v1/notifications",
@@ -2722,6 +2726,12 @@ describe("buildApi", () => {
       }
     });
 
+    expect(pushConfigResponse.statusCode).toBe(200);
+    expect(pushConfigResponse.json()).toEqual({
+      enabled: false,
+      vapidPublicKey: null
+    });
+    expect(JSON.stringify(pushConfigResponse.json())).not.toMatch(/private|secret|endpoint|auth/i);
     expect(listResponse.statusCode).toBe(200);
     expect(listResponse.json()).toMatchObject({
       items: [

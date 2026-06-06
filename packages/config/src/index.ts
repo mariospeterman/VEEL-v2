@@ -70,7 +70,8 @@ export const serverEnvSchema = z.object({
   PERSONA_WEBHOOK_SECRET: z.string().optional(),
   PERSONA_TEMPLATE_ID: z.string().optional(),
   PERSONA_API_BASE_URL: z.string().url().default("https://api.withpersona.com"),
-  NOTIFICATION_DEVICE_ENCRYPTION_KEY: z.string().optional()
+  NOTIFICATION_DEVICE_ENCRYPTION_KEY: z.string().optional(),
+  WEB_PUSH_VAPID_PUBLIC_KEY: z.string().optional()
 });
 
 export type PublicWebEnv = z.infer<typeof publicWebEnvSchema>;

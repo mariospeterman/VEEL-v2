@@ -390,7 +390,8 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   });
   await registerNotificationRoutes(app, {
     authVerifier,
-    notificationRepository
+    notificationRepository,
+    vapidPublicKey: app.config.WEB_PUSH_VAPID_PUBLIC_KEY
   });
   await registerOrganizationRoutes(app, {
     authVerifier,

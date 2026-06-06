@@ -142,6 +142,7 @@ test("renders the settings projection", async ({ page }) => {
   await expect(page.getByText("Settings API unavailable").first()).toBeVisible();
   await expect(page.getByText("HTTP 503").first()).toBeVisible();
   await expect(page.getByText("privacy-safe only")).toBeVisible();
+  await expect(page.getByText("Browser push")).toBeVisible();
   await expect(page.getByText("server-owned").first()).toBeVisible();
 });
 

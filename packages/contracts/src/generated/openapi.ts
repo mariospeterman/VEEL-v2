@@ -465,6 +465,23 @@ export interface paths {
         patch: operations["updateNotificationPreferences"];
         trace?: never;
     };
+    "/v1/notifications/push-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Browser-safe web push enrollment configuration */
+        get: operations["getNotificationPushConfig"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/notifications/devices": {
         parameters: {
             query?: never;
@@ -2236,6 +2253,10 @@ export interface components {
             studioSetupEnabled?: boolean;
             pushEnabled?: boolean;
         };
+        NotificationPushConfig: {
+            enabled: boolean;
+            vapidPublicKey: string | null;
+        };
         RegisterNotificationDeviceRequest: {
             /** @enum {string} */
             provider: "web_push";
@@ -3716,6 +3737,15 @@ export interface components {
                 "application/json": components["schemas"]["NotificationPreferences"];
             };
         };
+        /** @description Browser-safe notification push config */
+        NotificationPushConfig: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["NotificationPushConfig"];
+            };
+        };
         /** @description Notification device */
         NotificationDevice: {
             headers: {
@@ -5164,6 +5194,18 @@ export interface operations {
             200: components["responses"]["NotificationPreferences"];
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    getNotificationPushConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["NotificationPushConfig"];
         };
     };
     registerNotificationDevice: {

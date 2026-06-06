@@ -4,6 +4,7 @@ import type { SupabaseAuthVerifier } from "../session/types.js";
 import { NotificationRepositoryConfigurationError } from "./notification-repository.js";
 import type {
   NotificationRepository,
+  NotificationPushConfig,
   RegisterNotificationDeviceRequest,
   UpdateNotificationPreferencesRequest
 } from "./types.js";
@@ -11,6 +12,7 @@ import type {
 interface RegisterNotificationRoutesOptions {
   authVerifier: SupabaseAuthVerifier;
   notificationRepository: NotificationRepository;
+  vapidPublicKey?: string | undefined;
 }
 
 const deviceProviders = new Set(["web_push"]);
@@ -34,6 +36,15 @@ export async function registerNotificationRoutes(
   app: FastifyInstance,
   options: RegisterNotificationRoutesOptions
 ): Promise<void> {
+  app.get("/v1/notifications/push-config", async () => {
+    const config: NotificationPushConfig = {
+      enabled: Boolean(options.vapidPublicKey),
+      vapidPublicKey: options.vapidPublicKey ?? null
+    };
+
+    return config;
+  });
+
   app.get("/v1/notifications", async (request, reply) => {
     const access = await verifyNotificationAccess(request, options);
     if (!access.ok) return reply.code(access.statusCode).send(access.body);
