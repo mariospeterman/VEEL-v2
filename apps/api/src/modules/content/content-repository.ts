@@ -21,7 +21,7 @@ interface FeedRow {
   avatar_url: string | null;
   poster_url: string | null;
   playback_url: string | null;
-  provider: "bunny" | null;
+  provider: "bunny" | "livepeer" | null;
   provider_state: string | null;
   provider_playable: boolean | null;
   access_type: string | null;
@@ -56,7 +56,7 @@ interface ContentRow {
 interface ContentDetailRow extends ContentRow {
   poster_url: string | null;
   playback_url: string | null;
-  provider: "bunny" | null;
+  provider: "bunny" | "livepeer" | null;
   provider_state: string | null;
   provider_playable: boolean | null;
   access_type: string | null;
@@ -737,7 +737,7 @@ function playbackForRow(
 
 interface PlaybackProjectionRow {
   playback_url: string | null;
-  provider: "bunny" | null;
+  provider: "bunny" | "livepeer" | null;
   provider_state: string | null;
   provider_playable: boolean | null;
 }

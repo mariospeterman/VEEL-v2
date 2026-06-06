@@ -1266,6 +1266,74 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("blocks generic Livepeer content playback until replay signing exists", async () => {
+    const replayContent: ContentItem = {
+      ...homeFeedItem,
+      mediaType: "live_replay",
+      accessState: "unlocked",
+      playback: {
+        state: "full",
+        url: "https://livepeercdn.studio/hls/livepeer-replay-1/index.m3u8",
+        provider: "livepeer"
+      }
+    };
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        throw new Error("not implemented");
+      },
+      async createMediaAsset() {
+        throw new Error("not implemented");
+      },
+      async findContentDetail() {
+        return replayContent;
+      },
+      async findContentUnlockOffer() {
+        throw new Error("not implemented");
+      },
+      async findOwnedContentForUpload() {
+        throw new Error("not implemented");
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().playback).toEqual({
+      state: "blocked",
+      url: null,
+      provider: "livepeer"
+    });
+
+    await app.close();
+  });
+
   it("returns 404 for a missing protected content detail", async () => {
     const contentRepository: ContentRepository = {
       async createDraft() {

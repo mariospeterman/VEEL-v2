@@ -517,6 +517,17 @@ function withSignedPlayback(
 ): components["schemas"]["ContentItem"] {
   const playback = content.playback;
 
+  if (playback?.state === "full" && playback.provider === "livepeer") {
+    return {
+      ...content,
+      playback: {
+        state: "blocked",
+        url: null,
+        provider: "livepeer"
+      }
+    };
+  }
+
   if (playback?.state !== "full" || playback.provider !== "bunny" || !playback.url) {
     return content;
   }
