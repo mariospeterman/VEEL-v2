@@ -1428,11 +1428,20 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/TicketPage" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/mutuals/safety:
+    get:
+      operationId: getAdminMutualsSafety
+      tags: [Admin]
+      summary: Mutuals safety queue and metrics
+      responses:
+        "200": { $ref: "#/components/responses/AdminMutualsSafety" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /v1/admin/dating/safety:
     get:
       operationId: getAdminDatingSafety
       tags: [Admin]
-      summary: Dating safety queue and metrics
+      deprecated: true
+      summary: Compatibility alias for Mutuals safety queue and metrics
       responses:
         "200": { $ref: "#/components/responses/AdminDatingSafety" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -1864,7 +1873,8 @@ components:
     AdminRefundDisputePage: { description: Admin refund or dispute records, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminRefundDispute" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminDataRequest: { description: Admin data request, content: { application/json: { schema: { $ref: "#/components/schemas/AdminDataRequest" } } } }
     AdminDataRequestPage: { description: Admin data requests, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminDataRequest" } }, nextCursor: { type: string, nullable: true } } } } } }
-    AdminDatingSafety: { description: Admin dating safety, content: { application/json: { schema: { $ref: "#/components/schemas/AdminDatingSafety" } } } }
+    AdminMutualsSafety: { description: Admin Mutuals safety, content: { application/json: { schema: { $ref: "#/components/schemas/AdminMutualsSafety" } } } }
+    AdminDatingSafety: { description: Deprecated compatibility alias for Admin Mutuals safety, content: { application/json: { schema: { $ref: "#/components/schemas/AdminDatingSafety" } } } }
     AdminComplianceLedgerPage: { description: Admin compliance ledger entries, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminComplianceLedgerEntry" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminComplianceReportPage: { description: Admin compliance reports, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminComplianceReport" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminVatDeterminationPage: { description: Admin VAT determinations, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminVatDetermination" } }, nextCursor: { type: string, nullable: true } } } } } }
@@ -3341,6 +3351,14 @@ components:
         openReports: { type: integer }
         activeMatches: { type: integer }
         staleMatches: { type: integer }
+    AdminMutualsSafety:
+      type: object
+      required: [openReports, activeMutuals, staleMutuals, socialMoneyBoundary]
+      properties:
+        openReports: { type: integer }
+        activeMutuals: { type: integer }
+        staleMutuals: { type: integer }
+        socialMoneyBoundary: { type: string, enum: [money_never_buys_people_visibility_matches_or_social_priority] }
     AdminComplianceLedgerEntry:
       type: object
       required: [id, eventType, productType, settlementModel, grossAmountMinor, currency, fiatCurrency, vatStatus, dac7Reportable, carfReportable, createdAt]

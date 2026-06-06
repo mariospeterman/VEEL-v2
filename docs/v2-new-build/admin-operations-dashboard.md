@@ -36,6 +36,7 @@ Current implementation state:
 - `GET /v1/admin/refunds/disputes` and `PATCH /v1/admin/refunds/disputes/{refundDisputeId}` expose sanitized refund/dispute review state to staff. Admin updates require `Idempotency-Key`, write `audit_events`, and may only change review state/resolution; creator/admin refund execution and entitlement revocation/replacement remain separate policy-approved slices.
 - `GET /v1/admin/data-requests` and `PATCH /v1/admin/data-requests/{dataRequestId}` expose the privacy request lifecycle to staff. Rows are sanitized lifecycle records only, user-visible through owner/staff RLS, and carry the `sanitized_identity_minimized_no_raw_exports` boundary. Admin updates require `Idempotency-Key`, reason text, and audit events.
 - `GET /v1/admin/feature-flags` and `PATCH /v1/admin/feature-flags/{featureFlagKey}` expose software policy controls to staff. Feature flags are audited software controls only and carry the `software_policy_only_no_payment_access_or_social_priority` boundary; they must never become payment truth, access truth, reporting truth, bookkeeping truth, recommendation priority, Mutuals treatment, visibility boost, or message priority.
+- `GET /v1/admin/mutuals/safety` exposes aggregate open Mutuals reports, active Mutuals, and stale Mutuals with the hard social-money boundary. `GET /v1/admin/dating/safety` remains a deprecated compatibility alias only and must not appear in launch-facing frontend calls or copy.
 - The `/admin` web surface is separate from normal user navigation and uses
   typed API projections for ops summary, payment intents, unlocks, provider
   events, compliance ledger, DAC7/CARF reports, VAT determinations, receipts,
@@ -351,5 +352,5 @@ Every admin mutation must include:
 
 Current Mutuals ops implementation:
 
-- `GET /v1/admin/dating/safety` is the current compatibility route for aggregate open Mutuals reports, active Mutuals, and stale Mutuals.
+- `GET /v1/admin/mutuals/safety` is the canonical route for aggregate open Mutuals reports, active Mutuals, and stale Mutuals. `GET /v1/admin/dating/safety` remains a deprecated compatibility route only.
 - Admin Mutuals visibility is aggregate-only for this slice; private Mutual chat content remains outside default admin visibility.

@@ -1951,6 +1951,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/mutuals/safety": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Mutuals safety queue and metrics */
+        get: operations["getAdminMutualsSafety"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/dating/safety": {
         parameters: {
             query?: never;
@@ -1958,7 +1975,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Dating safety queue and metrics */
+        /**
+         * Compatibility alias for Mutuals safety queue and metrics
+         * @deprecated
+         */
         get: operations["getAdminDatingSafety"];
         put?: never;
         post?: never;
@@ -3676,6 +3696,13 @@ export interface components {
             activeMatches: number;
             staleMatches: number;
         };
+        AdminMutualsSafety: {
+            openReports: number;
+            activeMutuals: number;
+            staleMutuals: number;
+            /** @enum {string} */
+            socialMoneyBoundary: "money_never_buys_people_visibility_matches_or_social_priority";
+        };
         AdminComplianceLedgerEntry: {
             /** Format: uuid */
             id: string;
@@ -4849,7 +4876,16 @@ export interface components {
                 };
             };
         };
-        /** @description Admin dating safety */
+        /** @description Admin Mutuals safety */
+        AdminMutualsSafety: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["AdminMutualsSafety"];
+            };
+        };
+        /** @description Deprecated compatibility alias for Admin Mutuals safety */
         AdminDatingSafety: {
             headers: {
                 [name: string]: unknown;
@@ -7324,6 +7360,19 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["TicketPage"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getAdminMutualsSafety: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminMutualsSafety"];
             403: components["responses"]["Forbidden"];
         };
     };

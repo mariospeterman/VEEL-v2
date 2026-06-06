@@ -65,6 +65,9 @@ Money can never buy access to people, visibility, matches, recommendations, or p
 - The pre-rename API family, including `GET /v1/dating/feed` and
   `GET /v1/dating/matches`, remains a deprecated compatibility alias only
   during migration and must not be used by launch-facing frontend calls.
+- Admin safety operations use canonical `GET /v1/admin/mutuals/safety`.
+  `GET /v1/admin/dating/safety` remains a deprecated compatibility alias
+  only and must not appear in launch-facing frontend calls or copy.
 - The target schema names are `mutual_profiles`, `mutual_interests`, and `mutuals`.
 - Current migration tables named `dating_profiles`, `dating_swipes`, and `dating_matches` must be migrated before launch-facing copy ships.
 - Frontend projections must use Mutuals copy even while the backend compatibility aliases exist.

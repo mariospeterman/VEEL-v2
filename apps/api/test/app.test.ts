@@ -4951,7 +4951,8 @@ describe("buildApi", () => {
     });
     await app.ready();
 
-    const [summary, notificationHealth, payments, unlocks, providerEvents] = await Promise.all([
+    const [summary, notificationHealth, payments, unlocks, providerEvents, mutualsSafety, datingSafety] =
+      await Promise.all([
       app.inject({
         method: "GET",
         url: "/v1/admin/ops/summary",
@@ -4975,6 +4976,16 @@ describe("buildApi", () => {
       app.inject({
         method: "GET",
         url: "/v1/admin/provider-events",
+        headers: { authorization: "Bearer valid-token" }
+      }),
+      app.inject({
+        method: "GET",
+        url: "/v1/admin/mutuals/safety",
+        headers: { authorization: "Bearer valid-token" }
+      }),
+      app.inject({
+        method: "GET",
+        url: "/v1/admin/dating/safety",
         headers: { authorization: "Bearer valid-token" }
       })
     ]);
@@ -5015,6 +5026,19 @@ describe("buildApi", () => {
       latestReplayProcessedAt: null
     });
     expect(JSON.stringify(providerEvents.json())).not.toMatch(/raw|payload|secret|streamKey/i);
+    expect(mutualsSafety.statusCode).toBe(200);
+    expect(mutualsSafety.json()).toEqual({
+      openReports: 0,
+      activeMutuals: 1,
+      staleMutuals: 0,
+      socialMoneyBoundary: "money_never_buys_people_visibility_matches_or_social_priority"
+    });
+    expect(datingSafety.statusCode).toBe(200);
+    expect(datingSafety.json()).toEqual({
+      openReports: 0,
+      activeMatches: 1,
+      staleMatches: 0
+    });
 
     const replayResponse = await app.inject({
       method: "POST",

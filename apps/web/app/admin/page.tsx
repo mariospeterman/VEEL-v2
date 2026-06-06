@@ -8,6 +8,7 @@ import {
   getAdminDataRequests,
   getAdminEvents,
   getAdminFeatureFlags,
+  getAdminMutualsSafety,
   getAdminNotificationHealth,
   getAdminOpsSummary,
   getAdminOrganizationMembers,
@@ -29,6 +30,7 @@ import {
   type AdminContentItem,
   type AdminDataRequest,
   type AdminFeatureFlag,
+  type AdminMutualsSafety,
   type AdminNotificationHealth,
   type AdminOpsSummary,
   type AdminOrganization,
@@ -73,6 +75,7 @@ export default async function AdminPage() {
     dataRequests,
     events,
     tickets,
+    mutualsSafety,
     featureFlags
   ] = await Promise.all([
     getAdminOpsSummary(),
@@ -97,6 +100,7 @@ export default async function AdminPage() {
     getAdminDataRequests(),
     getAdminEvents(),
     getAdminTickets(),
+    getAdminMutualsSafety(),
     getAdminFeatureFlags()
   ]);
 
@@ -190,6 +194,10 @@ export default async function AdminPage() {
               <EventAccessPanel events={events} tickets={tickets} />
             </Panel>
 
+            <Panel title="Mutuals safety">
+              <MutualsSafetyPanel mutualsSafety={mutualsSafety} />
+            </Panel>
+
             <Panel title="Data requests">
               <PageState result={dataRequests} emptyLabel="No data requests">
                 {(page) => (
@@ -251,6 +259,25 @@ export default async function AdminPage() {
         </section>
       </section>
     </main>
+  );
+}
+
+function MutualsSafetyPanel({ mutualsSafety }: { mutualsSafety: ApiResult<AdminMutualsSafety> }) {
+  if (!mutualsSafety.ok) {
+    return <UnavailableState result={mutualsSafety} />;
+  }
+
+  return (
+    <div className="grid gap-2">
+      <article className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm md:grid-cols-3">
+        <Fact label="Open reports" value={mutualsSafety.data.openReports.toString()} />
+        <Fact label="Active Mutuals" value={mutualsSafety.data.activeMutuals.toString()} />
+        <Fact label="Stale Mutuals" value={mutualsSafety.data.staleMutuals.toString()} />
+      </article>
+      <div className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm text-[var(--muted)]">
+        Money never buys people, visibility, Mutuals, or social priority.
+      </div>
+    </div>
   );
 }
 

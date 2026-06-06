@@ -42,6 +42,7 @@ export type AiCapabilities = components["schemas"]["AiCapabilities"];
 export type OrganizationDashboardPage = components["schemas"]["OrganizationDashboardPage"];
 export type AdminOpsSummary = components["schemas"]["AdminOpsSummary"];
 export type AdminNotificationHealth = components["schemas"]["AdminNotificationHealth"];
+export type AdminMutualsSafety = components["schemas"]["AdminMutualsSafety"];
 export type AuditEvent = components["schemas"]["AuditEvent"];
 export type AdminContentItem = components["schemas"]["AdminContentItem"];
 export type AdminPaymentIntent = components["schemas"]["AdminPaymentIntent"];
@@ -241,6 +242,10 @@ export async function getAdminEvents(): Promise<ApiResult<AdminPage<Event>>> {
 
 export async function getAdminTickets(): Promise<ApiResult<AdminPage<EventAccessPass>>> {
   return getJson<AdminPage<EventAccessPass>>("/v1/admin/tickets");
+}
+
+export async function getAdminMutualsSafety(): Promise<ApiResult<AdminMutualsSafety>> {
+  return getJson<AdminMutualsSafety>("/v1/admin/mutuals/safety");
 }
 
 export async function getAdminComplianceLedger(): Promise<ApiResult<AdminPage<AdminComplianceLedgerEntry>>> {

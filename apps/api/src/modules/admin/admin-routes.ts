@@ -484,6 +484,21 @@ export async function registerAdminRoutes(
     return reply.code(200).send(await options.adminRepository.listTickets(adminListInput(query)));
   });
 
+  async function getMutualsSafety(request: FastifyRequest, reply: FastifyReply) {
+    const allowed = await requireAdminAccess(request, reply, options);
+    if (!allowed) return reply;
+
+    const safety = await options.adminRepository.getDatingSafety();
+    return reply.code(200).send({
+      openReports: safety.openReports,
+      activeMutuals: safety.activeMatches,
+      staleMutuals: safety.staleMatches,
+      socialMoneyBoundary: "money_never_buys_people_visibility_matches_or_social_priority"
+    });
+  }
+
+  app.get("/v1/admin/mutuals/safety", getMutualsSafety);
+
   app.get("/v1/admin/dating/safety", async (request, reply) => {
     const allowed = await requireAdminAccess(request, reply, options);
     if (!allowed) return reply;
