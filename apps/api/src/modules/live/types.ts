@@ -85,6 +85,22 @@ export interface UpdateLiveRoomStatusInput {
   status: LiveProviderRoomStatus;
 }
 
+export interface RecordLiveProviderWebhookInput {
+  providerEventId: string;
+  eventType: string;
+  normalizedState: string;
+  signatureHash?: string | null;
+}
+
+export interface UpdateLiveRoomFromWebhookInput {
+  providerEventId: string;
+  providerStreamId: string;
+  providerPlaybackId: string | null;
+  providerState: string;
+  state: "waiting" | "live" | "ended" | "replay_ready";
+  playbackUrl: string | null;
+}
+
 export interface CreateLiveChatMessageInput {
   supabaseUserId: string;
   roomId: string;
@@ -105,7 +121,9 @@ export interface LiveRepository {
   findOwnedRoom(input: FindOwnedLiveRoomInput): Promise<StoredLiveRoom | null>;
   findOwnedRoomByIdempotency(input: FindOwnedLiveRoomByIdempotencyInput): Promise<StoredLiveRoom | null>;
   recordLivePassPurchaseRequest(input: CreateLivePassPurchaseRequestInput): Promise<void>;
+  recordLiveProviderWebhook?(input: RecordLiveProviderWebhookInput): Promise<boolean>;
   updateRoomStatus(input: UpdateLiveRoomStatusInput): Promise<void>;
+  updateRoomFromWebhook?(input: UpdateLiveRoomFromWebhookInput): Promise<boolean>;
   listChatMessages(input: FindLiveRoomInput): Promise<LiveChatPage | null>;
   createChatMessage(input: CreateLiveChatMessageInput): Promise<LiveChatMessage | null>;
   close?(): Promise<void>;

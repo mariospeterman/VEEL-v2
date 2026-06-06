@@ -29,7 +29,7 @@ Current implementation state:
 - Upload state is stored in `media_assets` as normalized provider/provider asset/provider state only.
 - `GET /v1/content/{contentId}` returns a frontend-safe media viewer projection backed by `content_access_rules`, creator profile data, and the first media poster.
 - Access projection is conservative: free/teaser/pass/locked states are exposed, but no entitlement grant, signed playback URL, tokenized playback URL, or provider management URL is exposed by this slice.
-- `POST /v1/webhooks/media/{provider}` accepts Bunny Stream signed webhooks for the `bunny` provider, verifies the raw-body HMAC using the library read-only key, records idempotent provider receipts, and applies normalized media processing state.
+- `POST /v1/webhooks/media/{provider}` accepts Bunny Stream signed webhooks for the `bunny` provider and Livepeer signed stream webhooks for the `livepeer` provider, verifies raw-body HMAC signatures, records idempotent provider receipts, and applies normalized media/live processing state.
 - Playback token issuing, moderation state transitions, and locked playback are deferred to their owning media/access slices.
 
 Official references checked:
@@ -38,6 +38,8 @@ Official references checked:
 - Bunny TUS resumable uploads: https://docs.bunny.net/stream/tus-resumable-uploads
 - Bunny Stream webhooks and HMAC validation: https://docs.bunny.net/stream/webhooks
 - Bunny Stream security and token authentication: https://docs.bunny.net/stream/security
+- Livepeer webhook setup and signatures: https://docs.livepeer.org/developers/guides/setup-and-listen-to-webhooks
+- Livepeer stream event webhooks: https://docs.livepeer.org/developers/guides/listen-to-stream-events
 - Livepeer asset upload reference: https://docs.livepeer.org/api-reference/asset/upload
 
 ## Provider Split
@@ -109,6 +111,8 @@ Rules:
 - Use Livepeer React/player primitives where they fit the UX, especially for live/replay playback.
 - Use provider-supported JWT access for paid/pass-gated streams and paid replay assets.
 - Livepeer JWT signing keys stay backend-only.
+- Livepeer stream webhooks require `Livepeer-Signature` with `t=` and `v1=` values; the backend verifies the exact raw request body with `LIVEPEER_WEBHOOK_SECRET` and a five-minute replay window.
+- Livepeer `stream.started`, `stream.idle`, `recording.waiting`, and `recording.ready` events are normalized into live room provider state by provider stream id. Provider payloads and host credentials are not exposed to viewer resources.
 
 ## Live Monetisation Model
 

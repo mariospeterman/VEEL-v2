@@ -73,7 +73,13 @@ export function createPostgresLiveRepository(databaseUrl?: string): LiveReposito
       async recordLivePassPurchaseRequest() {
         throw new LiveRepositoryConfigurationError();
       },
+      async recordLiveProviderWebhook() {
+        throw new LiveRepositoryConfigurationError();
+      },
       async updateRoomStatus() {
+        throw new LiveRepositoryConfigurationError();
+      },
+      async updateRoomFromWebhook() {
         throw new LiveRepositoryConfigurationError();
       },
       async listChatMessages() {
@@ -283,6 +289,80 @@ export function createPostgresLiveRepository(databaseUrl?: string): LiveReposito
           `;
         }
       });
+    },
+    async recordLiveProviderWebhook(input) {
+      const insertedReceipts = await sql<{ id: string }[]>`
+        insert into provider_webhook_receipts (
+          id,
+          provider,
+          webhook_type,
+          signature_hash,
+          idempotency_key
+        )
+        values (
+          ${randomUUID()},
+          'livepeer',
+          'media-status',
+          ${input.signatureHash ?? null},
+          ${input.providerEventId}
+        )
+        on conflict (provider, webhook_type, idempotency_key) do nothing
+        returning id
+      `;
+
+      if (insertedReceipts.length === 0) {
+        return false;
+      }
+
+      await sql`
+        insert into provider_events (
+          id,
+          provider,
+          provider_event_id,
+          event_type,
+          normalized_state
+        )
+        values (
+          ${randomUUID()},
+          'livepeer',
+          ${input.providerEventId},
+          ${input.eventType},
+          ${input.normalizedState}
+        )
+        on conflict (provider, provider_event_id) do nothing
+      `;
+
+      return true;
+    },
+    async updateRoomFromWebhook(input) {
+      const rows = await sql.begin(async (transaction) => {
+        const updated = await transaction<{ id: string }[]>`
+          update live_rooms
+          set
+            provider_playback_id = coalesce(${input.providerPlaybackId}, provider_playback_id),
+            provider_state = ${input.providerState},
+            state = ${input.state},
+            playback_url = coalesce(${input.playbackUrl}, playback_url),
+            starts_at = case when ${input.state} = 'live' then coalesce(starts_at, now()) else starts_at end,
+            ended_at = case when ${input.state} in ('ended', 'replay_ready') then coalesce(ended_at, now()) else ended_at end,
+            updated_at = now()
+          where provider_stream_id = ${input.providerStreamId}
+          returning id
+        `;
+
+        await transaction`
+          update provider_events
+          set
+            normalized_state = ${input.providerState},
+            processed_at = now()
+          where provider = 'livepeer'
+            and provider_event_id = ${input.providerEventId}
+        `;
+
+        return updated;
+      });
+
+      return rows.length > 0;
     },
     async listChatMessages(input) {
       const room = await this.findRoom(input);

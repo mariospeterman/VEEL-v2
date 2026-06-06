@@ -1823,6 +1823,157 @@ describe("buildApi", () => {
     vi.unstubAllEnvs();
   });
 
+  it("accepts a signed Livepeer stream webhook and applies normalized live state", async () => {
+    vi.stubEnv("LIVEPEER_WEBHOOK_SECRET", "livepeer-webhook-secret");
+    const recordedEvents: unknown[] = [];
+    const appliedEvents: unknown[] = [];
+    const liveRepository = fakeLiveRepository({
+      async onRecordLiveProviderWebhook(input) {
+        recordedEvents.push(input);
+        return true;
+      },
+      async onUpdateRoomFromWebhook(input) {
+        appliedEvents.push(input);
+        return true;
+      }
+    });
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      liveRepository
+    });
+    await app.ready();
+    const timestamp = Math.floor(Date.now() / 1000);
+    const payload = {
+      webhookId: "livepeer-webhook-1",
+      timestamp: String(timestamp),
+      event: "stream.started",
+      event_object: {
+        id: "livepeer-stream-13",
+        playbackId: "livepeer-playback-13"
+      }
+    };
+    const rawPayload = JSON.stringify(payload);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/webhooks/media/livepeer",
+      headers: {
+        "content-type": "application/json",
+        "livepeer-signature": livepeerSignature(rawPayload, timestamp)
+      },
+      payload: rawPayload
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(202);
+    expect(response.json()).toEqual({
+      provider: "livepeer",
+      received: 1,
+      processed: 1
+    });
+    expect(recordedEvents).toMatchObject([
+      {
+        providerEventId: `livepeer-webhook-1:stream.started:livepeer-stream-13:${timestamp}`,
+        eventType: "stream.started",
+        normalizedState: "active"
+      }
+    ]);
+    expect(appliedEvents).toEqual([
+      {
+        providerEventId: `livepeer-webhook-1:stream.started:livepeer-stream-13:${timestamp}`,
+        providerStreamId: "livepeer-stream-13",
+        providerPlaybackId: "livepeer-playback-13",
+        providerState: "active",
+        state: "live",
+        playbackUrl: "https://livepeercdn.studio/hls/livepeer-playback-13/index.m3u8"
+      }
+    ]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("deduplicates repeated signed Livepeer stream webhooks", async () => {
+    vi.stubEnv("LIVEPEER_WEBHOOK_SECRET", "livepeer-webhook-secret");
+    const appliedEvents: unknown[] = [];
+    const liveRepository = fakeLiveRepository({
+      async onRecordLiveProviderWebhook() {
+        return false;
+      },
+      async onUpdateRoomFromWebhook(input) {
+        appliedEvents.push(input);
+        return true;
+      }
+    });
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      liveRepository
+    });
+    await app.ready();
+    const timestamp = Math.floor(Date.now() / 1000);
+    const rawPayload = JSON.stringify({
+      webhookId: "livepeer-webhook-1",
+      timestamp: String(timestamp),
+      event: "stream.started",
+      event_object: {
+        id: "livepeer-stream-13",
+        playbackId: "livepeer-playback-13"
+      }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/webhooks/media/livepeer",
+      headers: {
+        "content-type": "application/json",
+        "livepeer-signature": livepeerSignature(rawPayload, timestamp)
+      },
+      payload: rawPayload
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual({
+      provider: "livepeer",
+      received: 1,
+      processed: 0
+    });
+    expect(appliedEvents).toEqual([]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("rejects Livepeer stream webhooks with invalid signatures", async () => {
+    vi.stubEnv("LIVEPEER_WEBHOOK_SECRET", "livepeer-webhook-secret");
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier
+    });
+    await app.ready();
+    const timestamp = Math.floor(Date.now() / 1000);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/webhooks/media/livepeer",
+      headers: {
+        "content-type": "application/json",
+        "livepeer-signature": `t=${timestamp},v1=00`
+      },
+      payload: {
+        webhookId: "livepeer-webhook-1",
+        timestamp: String(timestamp),
+        event: "stream.started",
+        event_object: {
+          id: "livepeer-stream-13",
+          playbackId: "livepeer-playback-13"
+        }
+      }
+    });
+
+    expect(response.statusCode).toBe(401);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
   it("creates Bunny TUS credentials without exposing the Stream API key", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-04T00:00:00.000Z"));
@@ -4406,6 +4557,11 @@ function bunnySignature(payload: string): string {
   return createHmac("sha256", "bunny-readonly-secret").update(payload).digest("hex");
 }
 
+function livepeerSignature(payload: string, timestamp: number): string {
+  const signature = createHmac("sha256", "livepeer-webhook-secret").update(payload).digest("hex");
+  return `t=${timestamp},v1=${signature}`;
+}
+
 const homeFeedItem: ContentItem = {
   id: "00000000-0000-4000-8000-000000000040",
   creator: {
@@ -4510,7 +4666,9 @@ function fakeLiveRepository(
     onFindOwnedRoom: LiveRepository["findOwnedRoom"];
     onFindOwnedRoomByIdempotency: LiveRepository["findOwnedRoomByIdempotency"];
     onRecordLivePassPurchaseRequest: LiveRepository["recordLivePassPurchaseRequest"];
+    onRecordLiveProviderWebhook: NonNullable<LiveRepository["recordLiveProviderWebhook"]>;
     onUpdateRoomStatus: LiveRepository["updateRoomStatus"];
+    onUpdateRoomFromWebhook: NonNullable<LiveRepository["updateRoomFromWebhook"]>;
     onListChatMessages: LiveRepository["listChatMessages"];
     onCreateChatMessage: LiveRepository["createChatMessage"];
   }> = {}
@@ -4531,8 +4689,14 @@ function fakeLiveRepository(
     async recordLivePassPurchaseRequest(input) {
       await overrides.onRecordLivePassPurchaseRequest?.(input);
     },
+    async recordLiveProviderWebhook(input) {
+      return overrides.onRecordLiveProviderWebhook?.(input) ?? true;
+    },
     async updateRoomStatus(input) {
       await overrides.onUpdateRoomStatus?.(input);
+    },
+    async updateRoomFromWebhook(input) {
+      return overrides.onUpdateRoomFromWebhook?.(input) ?? true;
     },
     async listChatMessages(input) {
       return (

@@ -32,6 +32,12 @@ export interface NormalizedMediaWebhook {
   providerState: string;
   providerPlayable: boolean;
   signatureHash: string | null;
+  livepeerStream?: {
+    providerStreamId: string;
+    providerPlaybackId: string | null;
+    roomState: "waiting" | "live" | "ended" | "replay_ready";
+    playbackUrl: string | null;
+  };
 }
 
 export function normalizeMediaWebhook(input: {
@@ -43,6 +49,10 @@ export function normalizeMediaWebhook(input: {
 }): NormalizedMediaWebhook {
   if (input.provider === "bunny") {
     return normalizeBunnyWebhook(input);
+  }
+
+  if (input.provider === "livepeer") {
+    return normalizeLivepeerWebhook(input);
   }
 
   throw new MediaWebhookConfigurationError(input.provider);
@@ -105,6 +115,121 @@ function verifyBunnySignature(input: {
   return secureEqualHex(expected, input.signature);
 }
 
+function normalizeLivepeerWebhook(input: {
+  body: unknown;
+  rawBody: Buffer;
+  headers: Record<string, string | string[] | undefined>;
+  env: ServerEnv;
+}): NormalizedMediaWebhook {
+  const secret = input.env.LIVEPEER_WEBHOOK_SECRET;
+
+  if (!secret) {
+    throw new MediaWebhookConfigurationError("livepeer");
+  }
+
+  const signatureHeader = headerValue(input.headers["livepeer-signature"]);
+  const parsedSignature = parseLivepeerSignature(signatureHeader);
+
+  if (
+    !parsedSignature ||
+    !verifyLivepeerSignature({ rawBody: input.rawBody, secret, signature: parsedSignature.v1 }) ||
+    !isRecentLivepeerTimestamp(parsedSignature.timestamp)
+  ) {
+    throw new MediaWebhookSignatureError("livepeer");
+  }
+
+  const body = objectBody(input.body);
+  const eventType = stringValue(body.event);
+  const eventObject = objectValue(body.event_object) ?? objectValue(body.eventObject);
+  const providerStreamId = stringValue(eventObject?.id) ?? stringValue(eventObject?.streamId);
+
+  if (!eventType || !eventObject || !providerStreamId) {
+    throw new MediaWebhookValidationError("Livepeer webhook is missing event or stream id");
+  }
+
+  const mapped = mapLivepeerStreamEvent(eventType);
+  const providerPlaybackId = stringValue(eventObject.playbackId) ?? stringValue(eventObject.playback_id);
+
+  return {
+    provider: "livepeer",
+    providerEventId: [
+      stringValue(body.webhookId),
+      eventType,
+      providerStreamId,
+      String(parsedSignature.timestamp)
+    ]
+      .filter(Boolean)
+      .join(":"),
+    providerAssetId: providerStreamId,
+    eventType,
+    providerState: mapped.providerState,
+    providerPlayable: mapped.roomState === "live",
+    signatureHash: sha256Hex(parsedSignature.v1),
+    livepeerStream: {
+      providerStreamId,
+      providerPlaybackId,
+      roomState: mapped.roomState,
+      playbackUrl: playbackUrlFromLivepeerPlaybackId(providerPlaybackId)
+    }
+  };
+}
+
+function verifyLivepeerSignature(input: { rawBody: Buffer; secret: string; signature: string }): boolean {
+  const expected = createHmac("sha256", input.secret).update(input.rawBody).digest("hex");
+  return secureEqualHex(expected, input.signature);
+}
+
+function parseLivepeerSignature(header: string | null): { timestamp: number; v1: string } | null {
+  if (!header) {
+    return null;
+  }
+
+  const values = new Map<string, string>();
+  for (const part of header.split(",")) {
+    const [key, value] = part.split("=");
+    if (key && value) {
+      values.set(key.trim(), value.trim());
+    }
+  }
+
+  const timestamp = Number(values.get("t"));
+  const v1 = values.get("v1");
+
+  if (!Number.isInteger(timestamp) || !v1) {
+    return null;
+  }
+
+  return { timestamp, v1 };
+}
+
+function isRecentLivepeerTimestamp(timestamp: number): boolean {
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  return Math.abs(nowSeconds - timestamp) <= 5 * 60;
+}
+
+function mapLivepeerStreamEvent(eventType: string): {
+  providerState: string;
+  roomState: "waiting" | "live" | "ended" | "replay_ready";
+} {
+  if (eventType === "stream.started") {
+    return { providerState: "active", roomState: "live" };
+  }
+
+  if (eventType === "recording.ready") {
+    return { providerState: "recording_ready", roomState: "replay_ready" };
+  }
+
+  if (eventType === "stream.idle" || eventType === "recording.waiting") {
+    return { providerState: "idle", roomState: "ended" };
+  }
+
+  return { providerState: eventType, roomState: "waiting" };
+}
+
+function playbackUrlFromLivepeerPlaybackId(playbackId: string | null): string | null {
+  return playbackId ? `https://livepeercdn.studio/hls/${playbackId}/index.m3u8` : null;
+}
+
 function mapBunnyStatus(status: number): { providerState: string; providerPlayable: boolean } {
   if (status === 3 || status === 4) {
     return { providerState: "ready", providerPlayable: true };
@@ -123,6 +248,12 @@ function objectBody(input: unknown): Record<string, unknown> {
   }
 
   throw new MediaWebhookValidationError("Media webhook payload must be a JSON object");
+}
+
+function objectValue(input: unknown): Record<string, unknown> | null {
+  return input && typeof input === "object" && !Array.isArray(input)
+    ? (input as Record<string, unknown>)
+    : null;
 }
 
 function stringValue(input: unknown): string | null {

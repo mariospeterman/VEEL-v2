@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { AgeRepository } from "../age/types.js";
+import type { LiveRepository } from "../live/types.js";
 import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
 import type { WalletRepository } from "../wallet/types.js";
 import { ContentRepositoryConfigurationError } from "./content-repository.js";
@@ -30,6 +31,7 @@ interface RegisterContentRoutesOptions {
   walletRepository: WalletRepository;
   contentRepository: ContentRepository;
   mediaUploadProvider: MediaUploadProviderAdapter;
+  liveRepository?: LiveRepository;
 }
 
 const feedModes = new Set(["recommended", "following", "nsfw", "sfw", "live", "premium"]);
@@ -61,6 +63,56 @@ export async function registerContentRoutes(
       }
 
       try {
+        const normalized = normalizeMediaWebhook({
+          provider: params.provider as MediaWebhookProvider,
+          body: request.body,
+          rawBody: rawBodyBuffer(request.rawBody),
+          headers: request.headers,
+          env: app.config
+        });
+
+        if (normalized.provider === "livepeer" && normalized.livepeerStream) {
+          if (
+            !options.liveRepository?.recordLiveProviderWebhook ||
+            !options.liveRepository.updateRoomFromWebhook
+          ) {
+            return reply.code(503).send({
+              code: "service_unavailable",
+              message: "Livepeer webhook storage is not configured"
+            });
+          }
+
+          const isNewLiveEvent = await options.liveRepository.recordLiveProviderWebhook({
+            providerEventId: normalized.providerEventId,
+            eventType: normalized.eventType,
+            normalizedState: normalized.providerState,
+            signatureHash: normalized.signatureHash
+          });
+
+          if (!isNewLiveEvent) {
+            return reply.code(202).send({
+              provider: normalized.provider,
+              received: 1,
+              processed: 0
+            });
+          }
+
+          const appliedLiveEvent = await options.liveRepository.updateRoomFromWebhook({
+            providerEventId: normalized.providerEventId,
+            providerStreamId: normalized.livepeerStream.providerStreamId,
+            providerPlaybackId: normalized.livepeerStream.providerPlaybackId,
+            providerState: normalized.providerState,
+            state: normalized.livepeerStream.roomState,
+            playbackUrl: normalized.livepeerStream.playbackUrl
+          });
+
+          return reply.code(202).send({
+            provider: normalized.provider,
+            received: 1,
+            processed: appliedLiveEvent ? 1 : 0
+          });
+        }
+
         if (
           !options.contentRepository.recordMediaProviderWebhook ||
           !options.contentRepository.updateMediaAssetFromWebhook
@@ -70,14 +122,6 @@ export async function registerContentRoutes(
             message: "Media webhook storage is not configured"
           });
         }
-
-        const normalized = normalizeMediaWebhook({
-          provider: params.provider as MediaWebhookProvider,
-          body: request.body,
-          rawBody: rawBodyBuffer(request.rawBody),
-          headers: request.headers,
-          env: app.config
-        });
         const isNewEvent = await options.contentRepository.recordMediaProviderWebhook({
           provider: normalized.provider,
           providerEventId: normalized.providerEventId,

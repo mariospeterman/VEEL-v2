@@ -299,7 +299,8 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     ageRepository,
     walletRepository,
     contentRepository,
-    mediaUploadProvider
+    mediaUploadProvider,
+    liveRepository
   });
   await registerDiscoverRoutes(app, {
     authVerifier,
