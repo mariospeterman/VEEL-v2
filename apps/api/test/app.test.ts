@@ -30,6 +30,7 @@ import type {
   WalletResource
 } from "../src/modules/wallet/types";
 import type {
+  PaymentEvidenceRepository,
   PaymentRepository,
   PaymentSettlementInput,
   PaymentSettlementVerifier,
@@ -1245,6 +1246,7 @@ describe("buildApi", () => {
         SOLANA_RPC_URL: "https://api.devnet.solana.com",
         PAYMENT_DEFAULT_ASSET: "SOL",
         SOLANA_SUBSCRIPTION_DELEGATION_PROGRAM_ID: "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
+        HELIUS_CLUSTER: "devnet",
         AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: false,
         SUMSUB_API_BASE_URL: "https://api.sumsub.com",
         YOTI_API_BASE_URL: "https://age.yoti.com/api/v1",
@@ -2704,6 +2706,198 @@ describe("buildApi", () => {
         }
       }
     ]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("accepts authenticated Helius payment evidence and still requires backend settlement verification", async () => {
+    vi.stubEnv("HELIUS_WEBHOOK_SECRET", "helius-secret");
+    const providerEvents: unknown[] = [];
+    const eventStates: unknown[] = [];
+    const submissions: RecordPaymentSubmissionInput[] = [];
+    const settlementInputs: PaymentSettlementInput[] = [];
+    const paymentEvidenceRepository: PaymentEvidenceRepository = {
+      async recordSolanaProviderEvent(input) {
+        providerEvents.push(input);
+
+        return true;
+      },
+      async findIntentByReference(input) {
+        expect(input.referenceAddresses).toContain(storedPaymentIntent.referenceAddress);
+
+        return {
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          intent: storedPaymentIntent
+        };
+      },
+      async updateSolanaProviderEvent(input) {
+        eventStates.push(input);
+      }
+    };
+    const paymentRepository: PaymentRepository = {
+      async createOrReuseIntent() {
+        throw new Error("not implemented");
+      },
+      async findIntent() {
+        throw new Error("not implemented");
+      },
+      async recordTransactionRequest() {
+        throw new Error("not implemented");
+      },
+      async recordSubmission(input) {
+        submissions.push(input);
+      }
+    };
+    const settlementVerifier: PaymentSettlementVerifier = {
+      async verifyNativeSolTransfer(input) {
+        settlementInputs.push(input);
+
+        return {
+          confirmed: true
+        };
+      }
+    };
+    const app = await buildApi({
+      paymentRepository,
+      paymentEvidenceRepository,
+      settlementVerifier
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/webhooks/solana-indexer",
+      headers: {
+        authorization: "helius-secret"
+      },
+      payload: [
+        {
+          signature: validSolanaSignature,
+          type: "TRANSFER",
+          accountData: [{ account: storedPaymentIntent.referenceAddress }],
+          nativeTransfers: [
+            {
+              toUserAccount: treasuryWallet,
+              amount: storedPaymentIntent.amountMinor
+            }
+          ]
+        }
+      ]
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual({
+      provider: "helius",
+      received: 1,
+      processed: 1
+    });
+    expect(providerEvents).toMatchObject([
+      {
+        providerEventId: validSolanaSignature,
+        eventType: "TRANSFER",
+        signature: validSolanaSignature,
+        referenceAddresses: expect.arrayContaining([storedPaymentIntent.referenceAddress])
+      }
+    ]);
+    expect(settlementInputs).toEqual([
+      {
+        signature: validSolanaSignature,
+        referenceAddress: storedPaymentIntent.referenceAddress,
+        treasuryWallet,
+        amountMinor: storedPaymentIntent.amountMinor
+      }
+    ]);
+    expect(submissions).toMatchObject([
+      {
+        supabaseUserId: "00000000-0000-4000-8000-000000000001",
+        paymentIntentId: storedPaymentIntent.id,
+        signature: validSolanaSignature,
+        settlement: { confirmed: true }
+      }
+    ]);
+    expect(eventStates).toEqual([
+      {
+        providerEventId: validSolanaSignature,
+        normalizedState: "processed"
+      }
+    ]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("rejects Solana indexer webhooks without the configured Helius auth header", async () => {
+    vi.stubEnv("HELIUS_WEBHOOK_SECRET", "helius-secret");
+    const app = await buildApi();
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/webhooks/solana-indexer",
+      headers: {
+        authorization: "wrong-secret"
+      },
+      payload: [{ signature: validSolanaSignature }]
+    });
+
+    expect(response.statusCode).toBe(401);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("acknowledges duplicate Solana indexer deliveries without replaying settlement", async () => {
+    vi.stubEnv("HELIUS_WEBHOOK_SECRET", "helius-secret");
+    const submissions: RecordPaymentSubmissionInput[] = [];
+    const paymentEvidenceRepository: PaymentEvidenceRepository = {
+      async recordSolanaProviderEvent() {
+        return false;
+      },
+      async findIntentByReference() {
+        throw new Error("duplicate should not resolve payment intent");
+      },
+      async updateSolanaProviderEvent() {
+        throw new Error("duplicate should not update provider state");
+      }
+    };
+    const paymentRepository: PaymentRepository = {
+      async createOrReuseIntent() {
+        throw new Error("not implemented");
+      },
+      async findIntent() {
+        throw new Error("not implemented");
+      },
+      async recordTransactionRequest() {
+        throw new Error("not implemented");
+      },
+      async recordSubmission(input) {
+        submissions.push(input);
+      }
+    };
+    const app = await buildApi({
+      paymentRepository,
+      paymentEvidenceRepository,
+      settlementVerifier: fakeUnconfirmedSettlementVerifier
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/webhooks/solana-indexer",
+      headers: {
+        authorization: "helius-secret"
+      },
+      payload: [{ signature: validSolanaSignature, accountData: [{ account: storedPaymentIntent.referenceAddress }] }]
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual({
+      provider: "helius",
+      received: 1,
+      processed: 0
+    });
+    expect(submissions).toEqual([]);
 
     await app.close();
     vi.unstubAllEnvs();

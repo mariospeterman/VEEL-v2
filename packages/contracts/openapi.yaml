@@ -642,6 +642,18 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/webhooks/solana-indexer:
+    post:
+      operationId: receiveSolanaIndexerWebhook
+      tags: [Webhooks, Payments]
+      summary: Receive scoped Solana payment evidence from the configured indexer
+      security: []
+      requestBody:
+        $ref: "#/components/requestBodies/SolanaIndexerWebhook"
+      responses:
+        "202": { $ref: "#/components/responses/WebhookReceipt" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/content/{contentId}/unlock-intents:
     post:
       operationId: createContentUnlockIntent
@@ -1255,19 +1267,6 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/AdminFeatureFlag" }
         "403": { $ref: "#/components/responses/Forbidden" }
-  /v1/webhooks/solana-indexer:
-    post:
-      operationId: receiveSolanaIndexerWebhook
-      tags: [Webhooks]
-      summary: Confirmed Solana payment evidence webhook
-      security: []
-      parameters:
-        - $ref: "#/components/parameters/WebhookSignature"
-      requestBody:
-        $ref: "#/components/requestBodies/WebhookPayload"
-      responses:
-        "202": { $ref: "#/components/responses/Accepted" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
   /v1/webhooks/media/{provider}:
     post:
       operationId: receiveMediaWebhook
@@ -1387,6 +1386,7 @@ components:
     CreatePaidMessageIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreatePaidMessageIntentRequest" } } } }
     CreatePaymentIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreatePaymentIntentRequest" }, examples: { tip: { value: { productType: tip, targetId: "00000000-0000-4000-8000-000000000001", amountMinor: 50000000 } }, contentUnlock: { value: { productType: content_unlock, targetId: "00000000-0000-4000-8000-000000000002" } } } } } }
     SubmitPaymentSignature: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SubmitPaymentSignatureRequest" } } } }
+    SolanaIndexerWebhook: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SolanaIndexerWebhookPayload" } } } }
     CreateReferralToken: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateReferralTokenRequest" } } } }
     CreateSubscriptionIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateSubscriptionIntentRequest" } } } }
     SubmitSubscriptionAuthorization: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SubmitSubscriptionAuthorizationRequest" } } } }
@@ -1409,6 +1409,7 @@ components:
     WebhookPayload: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
   responses:
     Accepted: { description: Accepted }
+    WebhookReceipt: { description: Webhook accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookReceipt" } } } }
     Unauthorized: { description: Unauthorized, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     Forbidden: { description: Forbidden, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     NotFound: { description: Not found, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
@@ -2087,6 +2088,20 @@ components:
       required: [signature]
       properties:
         signature: { type: string }
+    SolanaIndexerWebhookPayload:
+      description: Helius enhanced webhook payload. Raw provider data is accepted server-side only and never exposed in frontend resources.
+      oneOf:
+        - type: array
+          items: { type: object, additionalProperties: true }
+        - type: object
+          additionalProperties: true
+    WebhookReceipt:
+      type: object
+      required: [provider, received, processed]
+      properties:
+        provider: { type: string, enum: [helius] }
+        received: { type: integer, minimum: 0 }
+        processed: { type: integer, minimum: 0 }
     TransactionRequest:
       type: object
       required: [transactionRequestUrl, expiresAt]

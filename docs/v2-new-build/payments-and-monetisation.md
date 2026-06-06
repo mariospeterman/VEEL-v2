@@ -48,6 +48,8 @@ Official references checked:
 - Solana recurring delegation: https://solana.com/docs/payments/subscriptions/recurring-delegation
 - Solana subscription plan: https://solana.com/docs/payments/subscriptions/subscription-plan
 - Solana RPC `getTransaction`: https://solana.com/docs/rpc/http/gettransaction
+- Helius webhooks overview: https://www.helius.dev/docs/webhooks
+- Helius webhook `authHeader`: https://www.helius.dev/docs/api-reference/webhooks/create-webhook
 
 ## Payment Principles
 
@@ -140,6 +142,8 @@ Helius is used only for payment/access evidence:
 - Event Access Passes
 
 Avoid broad `Any transaction` firehose except short fixture capture. Prefer scoped recipient/treasury/reference monitoring where provider supports it.
+
+The API only accepts Helius deliveries when the configured webhook `authHeader` value is present as the request `Authorization` header. The backend records the provider event idempotently, hashes the shared authorization value for audit storage, then still verifies the exact Solana settlement facts before granting access or financial ledger state.
 
 ## Support Policy
 

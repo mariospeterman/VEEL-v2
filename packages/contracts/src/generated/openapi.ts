@@ -807,6 +807,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/webhooks/solana-indexer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Receive scoped Solana payment evidence from the configured indexer */
+        post: operations["receiveSolanaIndexerWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/content/{contentId}/unlock-intents": {
         parameters: {
             query?: never;
@@ -1760,23 +1777,6 @@ export interface paths {
         patch: operations["updateAdminFeatureFlag"];
         trace?: never;
     };
-    "/v1/webhooks/solana-indexer": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Confirmed Solana payment evidence webhook */
-        post: operations["receiveSolanaIndexerWebhook"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/webhooks/media/{provider}": {
         parameters: {
             query?: never;
@@ -2361,6 +2361,18 @@ export interface components {
         };
         SubmitPaymentSignatureRequest: {
             signature: string;
+        };
+        /** @description Helius enhanced webhook payload. Raw provider data is accepted server-side only and never exposed in frontend resources. */
+        SolanaIndexerWebhookPayload: {
+            [key: string]: unknown;
+        }[] | {
+            [key: string]: unknown;
+        };
+        WebhookReceipt: {
+            /** @enum {string} */
+            provider: "helius";
+            received: number;
+            processed: number;
         };
         TransactionRequest: {
             /** Format: uri */
@@ -3089,6 +3101,15 @@ export interface components {
                 [name: string]: unknown;
             };
             content?: never;
+        };
+        /** @description Webhook accepted */
+        WebhookReceipt: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["WebhookReceipt"];
+            };
         };
         /** @description Unauthorized */
         Unauthorized: {
@@ -4112,6 +4133,11 @@ export interface components {
                 "application/json": components["schemas"]["SubmitPaymentSignatureRequest"];
             };
         };
+        SolanaIndexerWebhook: {
+            content: {
+                "application/json": components["schemas"]["SolanaIndexerWebhookPayload"];
+            };
+        };
         CreateReferralToken: {
             content: {
                 "application/json": components["schemas"]["CreateReferralTokenRequest"];
@@ -5088,6 +5114,20 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    receiveSolanaIndexerWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["SolanaIndexerWebhook"];
+        responses: {
+            202: components["responses"]["WebhookReceipt"];
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     createContentUnlockIntent: {
         parameters: {
             query?: never;
@@ -5984,22 +6024,6 @@ export interface operations {
         responses: {
             200: components["responses"]["AdminFeatureFlag"];
             403: components["responses"]["Forbidden"];
-        };
-    };
-    receiveSolanaIndexerWebhook: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Provider-specific signature or shared-secret header normalized by the adapter. */
-                "X-Veel-Webhook-Signature": components["parameters"]["WebhookSignature"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: components["requestBodies"]["WebhookPayload"];
-        responses: {
-            202: components["responses"]["Accepted"];
-            401: components["responses"]["Unauthorized"];
         };
     };
     receiveMediaWebhook: {

@@ -35,10 +35,17 @@ import type { LiveProviderAdapter, LiveRepository } from "./modules/live/types.j
 import { createPostgresMessageRepository } from "./modules/message/message-repository.js";
 import { registerMessageRoutes } from "./modules/message/message-routes.js";
 import type { MessageRepository } from "./modules/message/types.js";
-import { createPostgresPaymentRepository } from "./modules/payment/payment-repository.js";
+import {
+  createPostgresPaymentEvidenceRepository,
+  createPostgresPaymentRepository
+} from "./modules/payment/payment-repository.js";
 import { registerPaymentRoutes } from "./modules/payment/payment-routes.js";
 import { createSolanaRpcSettlementVerifier } from "./modules/payment/solana-payment.js";
-import type { PaymentRepository, PaymentSettlementVerifier } from "./modules/payment/types.js";
+import type {
+  PaymentEvidenceRepository,
+  PaymentRepository,
+  PaymentSettlementVerifier
+} from "./modules/payment/types.js";
 import { createPostgresProfileRepository } from "./modules/profile/profile-repository.js";
 import { registerProfileRoutes } from "./modules/profile/profile-routes.js";
 import type { ProfileRepository } from "./modules/profile/types.js";
@@ -77,6 +84,7 @@ export interface BuildApiOptions {
   liveProvider?: LiveProviderAdapter;
   messageRepository?: MessageRepository;
   paymentRepository?: PaymentRepository;
+  paymentEvidenceRepository?: PaymentEvidenceRepository;
   activityRepository?: ActivityRepository;
   settlementVerifier?: PaymentSettlementVerifier;
   profileRepository?: ProfileRepository;
@@ -96,7 +104,9 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
         "req.headers.authorization",
         "SUPABASE_SECRET_KEY",
         "SUPABASE_SERVICE_ROLE_KEY",
-        "DATABASE_URL"
+        "DATABASE_URL",
+        "HELIUS_API_KEY",
+        "HELIUS_WEBHOOK_SECRET"
       ]
     }
   });
@@ -137,6 +147,9 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     options.messageRepository ?? createPostgresMessageRepository(app.config.DATABASE_URL);
   const paymentRepository =
     options.paymentRepository ?? createPostgresPaymentRepository(app.config.DATABASE_URL);
+  const paymentEvidenceRepository =
+    options.paymentEvidenceRepository ??
+    createPostgresPaymentEvidenceRepository(app.config.DATABASE_URL);
   const activityRepository =
     options.activityRepository ?? createPostgresActivityRepository(app.config.DATABASE_URL);
   const settlementVerifier =
@@ -206,6 +219,11 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   if (paymentRepository.close) {
     app.addHook("onClose", async () => {
       await paymentRepository.close?.();
+    });
+  }
+  if (paymentEvidenceRepository.close) {
+    app.addHook("onClose", async () => {
+      await paymentEvidenceRepository.close?.();
     });
   }
   if (activityRepository.close) {
@@ -287,6 +305,7 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     walletRepository,
     contentRepository,
     paymentRepository,
+    paymentEvidenceRepository,
     settlementVerifier
   });
   await registerLiveRoutes(app, {

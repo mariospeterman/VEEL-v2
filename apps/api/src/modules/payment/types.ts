@@ -5,6 +5,7 @@ export type PaymentIntent = components["schemas"]["PaymentIntent"];
 export type ProductType = components["schemas"]["ProductType"];
 export type SubmitPaymentSignatureRequest = components["schemas"]["SubmitPaymentSignatureRequest"];
 export type TransactionRequest = components["schemas"]["TransactionRequest"];
+export type WebhookReceipt = components["schemas"]["WebhookReceipt"];
 
 export interface CreatePaymentIntentInput {
   supabaseUserId: string;
@@ -57,6 +58,31 @@ export interface PaymentRepository {
   findIntent(input: FindPaymentIntentInput): Promise<StoredPaymentIntent | null>;
   recordTransactionRequest(input: RecordTransactionRequestInput): Promise<TransactionRequest | null>;
   recordSubmission(input: RecordPaymentSubmissionInput): Promise<void>;
+  close?(): Promise<void>;
+}
+
+export interface ProviderPaymentIntentMatch {
+  supabaseUserId: string;
+  intent: StoredPaymentIntent;
+}
+
+export interface RecordSolanaProviderEventInput {
+  providerEventId: string;
+  eventType: string;
+  signature: string;
+  referenceAddresses: string[];
+  authorizationHash: string | null;
+}
+
+export interface UpdateSolanaProviderEventInput {
+  providerEventId: string;
+  normalizedState: "processed" | "ignored" | "failed";
+}
+
+export interface PaymentEvidenceRepository {
+  recordSolanaProviderEvent(input: RecordSolanaProviderEventInput): Promise<boolean>;
+  findIntentByReference(input: { referenceAddresses: string[] }): Promise<ProviderPaymentIntentMatch | null>;
+  updateSolanaProviderEvent(input: UpdateSolanaProviderEventInput): Promise<void>;
   close?(): Promise<void>;
 }
 
