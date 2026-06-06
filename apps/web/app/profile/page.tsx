@@ -1,15 +1,26 @@
 import { appShellNavItems } from "@veel/ui";
-import { getMyCreatorDashboard, type CreatorDashboard } from "@/api-client";
+import {
+  getMyCreatorDashboard,
+  getMyCreatorOnboarding,
+  type ApiResult,
+  type CreatorDashboard,
+  type CreatorOnboarding
+} from "@/api-client";
 
 export default async function ProfilePage() {
-  const dashboardResult = await getMyCreatorDashboard();
+  const [dashboardResult, onboardingResult] = await Promise.all([
+    getMyCreatorDashboard(),
+    getMyCreatorOnboarding()
+  ]);
 
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <AppNav />
 
       {dashboardResult.ok ? (
-        <DashboardView dashboard={dashboardResult.data} />
+        <DashboardView dashboard={dashboardResult.data} onboarding={onboardingResult} />
+      ) : onboardingResult.ok ? (
+        <OnboardingOnlyView onboarding={onboardingResult.data} unavailable={dashboardResult} />
       ) : (
         <UnavailableState
           message={dashboardResult.message}
@@ -42,7 +53,13 @@ function AppNav() {
   );
 }
 
-function DashboardView({ dashboard }: { dashboard: CreatorDashboard }) {
+function DashboardView({
+  dashboard,
+  onboarding
+}: {
+  dashboard: CreatorDashboard;
+  onboarding: ApiResult<CreatorOnboarding>;
+}) {
   return (
     <section className="mx-auto grid w-full max-w-6xl gap-6 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_340px]">
       <section className="grid content-start gap-5">
@@ -67,6 +84,8 @@ function DashboardView({ dashboard }: { dashboard: CreatorDashboard }) {
       </section>
 
       <aside className="grid content-start gap-3">
+        {onboarding.ok ? <CreatorSetup onboarding={onboarding.data} /> : null}
+
         <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
           <p className="text-sm font-medium">Monetisation readiness</p>
           <div className="mt-4 grid gap-3 text-sm">
@@ -91,6 +110,70 @@ function DashboardView({ dashboard }: { dashboard: CreatorDashboard }) {
           </div>
         </section>
       </aside>
+    </section>
+  );
+}
+
+function OnboardingOnlyView({
+  onboarding,
+  unavailable
+}: {
+  onboarding: CreatorOnboarding;
+  unavailable: ApiResult<CreatorDashboard>;
+}) {
+  return (
+    <section className="mx-auto grid w-full max-w-6xl gap-6 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <section className="grid content-start gap-5">
+        <div>
+          <p className="text-sm font-medium text-[var(--accent)]">Become Creator</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-normal">Creator setup</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
+            Complete the backend-owned readiness checks before monetisation views and creator
+            products become available.
+          </p>
+        </div>
+        <CreatorSetup onboarding={onboarding} />
+      </section>
+
+      <aside className="grid content-start gap-3">
+        <UnavailablePanel result={unavailable} title="Creator dashboard unavailable" />
+      </aside>
+    </section>
+  );
+}
+
+function CreatorSetup({ onboarding }: { onboarding: CreatorOnboarding }) {
+  return (
+    <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium">Become Creator</p>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            State: {onboarding.state}
+          </p>
+        </div>
+        <span className="rounded bg-[var(--background)] px-2 py-1 text-xs text-[var(--muted)]">
+          {onboarding.canStartEarning ? "ready" : "setup"}
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-2">
+        {onboarding.steps.map((step) => (
+          <a
+            className="flex min-h-12 items-center justify-between gap-3 rounded border border-[var(--line)] bg-[var(--background)] px-3 py-2 text-sm"
+            href={step.actionHref ?? "#"}
+            key={step.key}
+          >
+            <span>
+              <span className="block font-medium">{step.label}</span>
+              <span className="text-xs text-[var(--muted)]">{step.required ? "required" : "optional"}</span>
+            </span>
+            <span className="rounded bg-[var(--panel)] px-2 py-1 text-xs text-[var(--muted)]">
+              {step.state}
+            </span>
+          </a>
+        ))}
+      </div>
     </section>
   );
 }
@@ -150,6 +233,26 @@ function UnavailableState({
         <h1 className="mt-2 text-2xl font-semibold tracking-normal">{title}</h1>
         <p className="mt-3 text-sm leading-6 text-[var(--muted)]">{message}</p>
       </div>
+    </section>
+  );
+}
+
+function UnavailablePanel({
+  result,
+  title
+}: {
+  result: ApiResult<unknown>;
+  title: string;
+}) {
+  if (result.ok) {
+    return null;
+  }
+
+  return (
+    <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
+      <p className="text-sm font-medium text-[var(--accent)]">HTTP {result.status}</p>
+      <h2 className="mt-2 text-base font-semibold tracking-normal">{title}</h2>
+      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{result.message}</p>
     </section>
   );
 }

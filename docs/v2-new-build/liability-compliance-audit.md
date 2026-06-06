@@ -52,11 +52,11 @@ Implementation consequences:
 | Event Access | Event/pass/check-in foundation exists. | Launch copy must avoid ticket-marketplace positioning; refund/transfer/resale remain out of launch unless separately approved. |
 | Refunds/disputes | Data model allows audit/revocation/compensating transactions. | Creator-decision workflow, support/admin states, and jurisdiction-specific consumer disclosures remain. |
 | Compliance ledger | DAC7/DAC8/CARF/VAT docs and admin read routes exist. | Export/filing workflows, USD snapshot provider, seller onboarding collection, and counsel/tax review remain. |
-| Creator verification | Age/profile/wallet foundations exist. | Single "Become Creator" onboarding flow, identity/KYB provider approval, tax profile collection, and conversion-friendly UX remain. |
+| Creator verification | Age/profile/wallet foundations and the backend-owned Become Creator readiness checklist exist. | Identity/KYB provider approval, tax profile collection, and deeper conversion/support UX remain. |
 | Mutuals/Connections | Compatibility backend route family and frontend projections exist. | Rename/migration from dating tables/routes, conduct UX, and hard social-money rule tests remain. |
 | Tiers | Free Verified, Veel Plus, Veel Studio, Enterprise are documented; organization member dashboards now expose software governance/readiness only. | Feature gates, admin overrides, and non-pay-to-win policy tests remain. |
 | Notifications | OpenAPI routes, RLS-backed notification/preference/device/delivery-attempt tables, Fastify account routes, worker delivery queue boundary, server-only VAPID Web Push send-provider boundary, browser service-worker enrollment UI, Supabase Realtime projection publication/cache invalidation boundary, backend tests, settings preference reads, and admin health visibility exist. | Real VAPID secrets, staging push-service verification across target browsers, and live Supabase Realtime staging verification remain. |
-| User/creator/studio/enterprise dashboards | User activity, creator monetisation dashboard, member-scoped Studio/Enterprise dashboards, and admin ops read-only panels exist. | Full admin route-map breadth, organization mutation workflows, and support/KYB workflow depth remain. |
+| User/creator/studio/enterprise dashboards | User activity, creator onboarding/readiness, creator monetisation dashboard, member-scoped Studio/Enterprise dashboards, and admin ops read-only panels exist. | Full admin route-map breadth, organization mutation workflows, and support/KYB workflow depth remain. |
 
 ## Risk Matrix
 

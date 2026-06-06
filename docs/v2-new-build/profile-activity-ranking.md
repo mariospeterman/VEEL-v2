@@ -56,6 +56,7 @@ Do not expose private KYC provider details, raw wallet metadata, private activit
 Current implementation state:
 
 - `/profile` reads `GET /v1/profiles/me/creator-dashboard` through the typed web API helper and does not render local earnings/readiness fixtures.
+- `/profile` also reads `GET /v1/profiles/me/creator-onboarding` so incomplete creators get a backend-owned Become Creator checklist before the dashboard is available.
 - `/profile/[handle]` reads `GET /v1/profiles/{handle}` through the typed web API helper and does not render local public profile/media fixtures.
 - Profile screens attach the current Supabase access token when present and render fail-closed unavailable/not-found states when the API, auth, or profile projection cannot return a safe resource.
 

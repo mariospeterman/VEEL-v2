@@ -191,6 +191,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/profiles/me/creator-onboarding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Backend-owned Become Creator readiness checklist */
+        get: operations["getMyCreatorOnboarding"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/profiles/{handle}": {
         parameters: {
             query?: never;
@@ -2145,6 +2162,22 @@ export interface components {
             recipientWalletState: "missing" | "linked";
             blockedReasons: string[];
         };
+        CreatorOnboarding: {
+            /** @enum {string} */
+            state: "ready" | "action_required" | "review_required" | "blocked";
+            canStartEarning: boolean;
+            nextAction?: string | null;
+            steps: components["schemas"]["CreatorOnboardingStep"][];
+        };
+        CreatorOnboardingStep: {
+            /** @enum {string} */
+            key: "profile" | "age" | "wallet" | "kyc" | "tax_profile" | "recipient_wallet" | "products";
+            label: string;
+            /** @enum {string} */
+            state: "complete" | "action_required" | "review_required" | "blocked" | "not_required";
+            required: boolean;
+            actionHref?: string | null;
+        };
         CreatorEarningsSummary: {
             currency: components["schemas"]["Currency"];
             creatorEarningsMinor: number;
@@ -3659,6 +3692,15 @@ export interface components {
                 "application/json": components["schemas"]["CreatorMonetisationDashboard"];
             };
         };
+        /** @description Creator onboarding readiness */
+        CreatorOnboarding: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["CreatorOnboarding"];
+            };
+        };
         /** @description Feed page */
         FeedPage: {
             headers: {
@@ -4903,6 +4945,20 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["CreatorMonetisationDashboard"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getMyCreatorOnboarding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["CreatorOnboarding"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
         };

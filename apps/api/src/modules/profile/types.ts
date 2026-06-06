@@ -5,6 +5,7 @@ export type UpdateProfileRequest = components["schemas"]["UpdateProfileRequest"]
 export type CreatorProfileResource = components["schemas"]["CreatorProfile"];
 export type CreatorMonetisationDashboardResource =
   components["schemas"]["CreatorMonetisationDashboard"];
+export type CreatorOnboardingResource = components["schemas"]["CreatorOnboarding"];
 
 export interface UpsertMyProfileInput {
   handle: string;
@@ -22,5 +23,6 @@ export interface ProfileRepository {
   getMyCreatorDashboard(
     supabaseUserId: string
   ): Promise<CreatorMonetisationDashboardResource | null>;
+  getMyCreatorOnboarding(supabaseUserId: string): Promise<CreatorOnboardingResource | null>;
   close?(): Promise<void>;
 }

@@ -2,6 +2,7 @@ import postgres from "postgres";
 import type { components } from "@veel/contracts";
 import type {
   CreatorMonetisationDashboardResource,
+  CreatorOnboardingResource,
   CreatorProfileResource,
   ProfileRepository,
   UserResource
@@ -66,6 +67,25 @@ interface DashboardRow extends ProfileRow {
   subscriptions_enabled: boolean;
 }
 
+interface CreatorOnboardingRow {
+  id: string;
+  handle: string | null;
+  display_name: string | null;
+  age_state: "not_required" | "required" | "pending" | "verified" | "failed" | null;
+  primary_wallet_id: string | null;
+  wallet_count: string | number;
+  state: "active" | "paused" | "blocked";
+  earning_state: "not_configured" | "ready" | "review_required" | "held";
+  kyc_state: "not_required" | "required" | "pending" | "verified" | "failed";
+  tax_profile_state: "not_required" | "required" | "pending" | "verified";
+  earnings_recipient_wallet_id: string | null;
+  tips_enabled: boolean;
+  content_unlocks_enabled: boolean;
+  live_passes_enabled: boolean;
+  paid_messages_enabled: boolean;
+  subscriptions_enabled: boolean;
+}
+
 interface EarningsRow {
   creator_earnings_minor: string | number | null;
   platform_fees_minor: string | number | null;
@@ -102,6 +122,9 @@ export function createPostgresProfileRepository(databaseUrl?: string): ProfileRe
         throw new ProfileRepositoryConfigurationError();
       },
       async getMyCreatorDashboard() {
+        throw new ProfileRepositoryConfigurationError();
+      },
+      async getMyCreatorOnboarding() {
         throw new ProfileRepositoryConfigurationError();
       }
     };
@@ -377,6 +400,64 @@ export function createPostgresProfileRepository(databaseUrl?: string): ProfileRe
 
       return toCreatorDashboard(dashboard, earningsRows[0], productRows, recentPaymentRows);
     },
+    async getMyCreatorOnboarding(supabaseUserId): Promise<CreatorOnboardingResource | null> {
+      const rows = await sql<CreatorOnboardingRow[]>`
+        with target_user as (
+          select u.id
+          from users u
+          where u.supabase_user_id = ${supabaseUserId}
+          limit 1
+        ),
+        ensured_settings as (
+          insert into creator_monetisation_settings (user_id)
+          select id from target_user
+          on conflict (user_id) do update set updated_at = creator_monetisation_settings.updated_at
+          returning *
+        )
+        select
+          u.id,
+          p.handle,
+          p.display_name,
+          latest_age.state as age_state,
+          primary_wallet.id as primary_wallet_id,
+          (
+            select count(*)
+            from wallets w
+            where w.user_id = u.id
+          ) as wallet_count,
+          es.state,
+          es.earning_state,
+          es.kyc_state,
+          es.tax_profile_state,
+          es.earnings_recipient_wallet_id,
+          es.tips_enabled,
+          es.content_unlocks_enabled,
+          es.live_passes_enabled,
+          es.paid_messages_enabled,
+          es.subscriptions_enabled
+        from ensured_settings es
+        join users u on u.id = es.user_id
+        left join profiles p on p.user_id = u.id
+        left join lateral (
+          select av.state
+          from age_verifications av
+          where av.user_id = u.id
+          order by av.created_at desc
+          limit 1
+        ) latest_age on true
+        left join lateral (
+          select w.id
+          from wallets w
+          where w.user_id = u.id
+          order by w.is_primary desc, w.created_at asc
+          limit 1
+        ) primary_wallet on true
+        limit 1
+      `;
+      const row = rows[0];
+
+      return row ? toCreatorOnboarding(row) : null;
+    },
     async close() {
       await sql.end({ timeout: 5 });
     }
@@ -456,6 +537,154 @@ function toCreatorDashboard(
     products: productSummaries(row, products),
     recentActivity: recentPayments.map(toActivityItem)
   };
+}
+
+function toCreatorOnboarding(row: CreatorOnboardingRow): CreatorOnboardingResource {
+  const hasProfile = Boolean(row.handle && row.display_name);
+  const hasWallet = Boolean(row.primary_wallet_id) || Number(row.wallet_count) > 0;
+  const productsEnabled = [
+    row.tips_enabled,
+    row.content_unlocks_enabled,
+    row.live_passes_enabled,
+    row.paid_messages_enabled,
+    row.subscriptions_enabled
+  ].some(Boolean);
+
+  const steps: CreatorOnboardingResource["steps"] = [
+    {
+      key: "profile",
+      label: "Profile",
+      state: hasProfile ? "complete" : "action_required",
+      required: true,
+      actionHref: hasProfile ? null : "/settings"
+    },
+    {
+      key: "age",
+      label: "Age verification",
+      state: stateForAge(row.age_state),
+      required: true,
+      actionHref: row.age_state === "verified" ? null : "/age"
+    },
+    {
+      key: "wallet",
+      label: "Wallet",
+      state: hasWallet ? "complete" : "action_required",
+      required: true,
+      actionHref: hasWallet ? null : "/wallet"
+    },
+    {
+      key: "kyc",
+      label: "Creator verification",
+      state: stateForKyc(row.kyc_state),
+      required: row.kyc_state !== "not_required",
+      actionHref: hrefForComplianceState(row.kyc_state, "/settings")
+    },
+    {
+      key: "tax_profile",
+      label: "Tax profile",
+      state: stateForTax(row.tax_profile_state),
+      required: row.tax_profile_state !== "not_required",
+      actionHref: hrefForComplianceState(row.tax_profile_state, "/settings")
+    },
+    {
+      key: "recipient_wallet",
+      label: "Earnings wallet",
+      state: row.earnings_recipient_wallet_id ? "complete" : "action_required",
+      required: true,
+      actionHref: row.earnings_recipient_wallet_id ? null : "/wallet"
+    },
+    {
+      key: "products",
+      label: "Products",
+      state: productsEnabled ? "complete" : "action_required",
+      required: true,
+      actionHref: productsEnabled ? null : "/profile"
+    }
+  ];
+
+  const requiredStepsReady = steps
+    .filter((step) => step.required)
+    .every((step) => step.state === "complete" || step.state === "not_required");
+  const hasBlockedStep = steps.some((step) => step.state === "blocked");
+  const hasReviewStep = steps.some((step) => step.state === "review_required");
+
+  const state: CreatorOnboardingResource["state"] =
+    row.state === "blocked" || row.earning_state === "held" || hasBlockedStep
+      ? "blocked"
+      : row.earning_state === "review_required" || hasReviewStep
+        ? "review_required"
+        : row.state === "active" && row.earning_state === "ready" && requiredStepsReady
+          ? "ready"
+          : "action_required";
+
+  const nextStep = steps.find(
+    (step) =>
+      step.state === "action_required" ||
+      step.state === "review_required" ||
+      step.state === "blocked"
+  );
+
+  return {
+    state,
+    canStartEarning: state === "ready",
+    nextAction: nextStep?.actionHref ?? null,
+    steps
+  };
+}
+
+function stateForAge(
+  state: CreatorOnboardingRow["age_state"]
+): CreatorOnboardingResource["steps"][number]["state"] {
+  if (state === "verified") {
+    return "complete";
+  }
+  if (state === "pending") {
+    return "review_required";
+  }
+  if (state === "failed") {
+    return "blocked";
+  }
+  return "action_required";
+}
+
+function stateForKyc(
+  state: CreatorOnboardingRow["kyc_state"]
+): CreatorOnboardingResource["steps"][number]["state"] {
+  if (state === "not_required") {
+    return "not_required";
+  }
+  if (state === "verified") {
+    return "complete";
+  }
+  if (state === "pending") {
+    return "review_required";
+  }
+  if (state === "failed") {
+    return "blocked";
+  }
+  return "action_required";
+}
+
+function stateForTax(
+  state: CreatorOnboardingRow["tax_profile_state"]
+): CreatorOnboardingResource["steps"][number]["state"] {
+  if (state === "not_required") {
+    return "not_required";
+  }
+  if (state === "verified") {
+    return "complete";
+  }
+  if (state === "pending") {
+    return "review_required";
+  }
+  return "action_required";
+}
+
+function hrefForComplianceState(
+  state: CreatorOnboardingRow["kyc_state"] | CreatorOnboardingRow["tax_profile_state"],
+  href: string
+): string | null {
+  return state === "required" || state === "failed" ? href : null;
 }
 
 function productSummaries(

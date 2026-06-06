@@ -161,6 +161,15 @@ paths:
         "200": { $ref: "#/components/responses/CreatorMonetisationDashboard" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/profiles/me/creator-onboarding:
+    get:
+      operationId: getMyCreatorOnboarding
+      tags: [Profiles]
+      summary: Backend-owned Become Creator readiness checklist
+      responses:
+        "200": { $ref: "#/components/responses/CreatorOnboarding" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /v1/profiles/{handle}:
     get:
       operationId: getProfileByHandle
@@ -1585,6 +1594,7 @@ components:
     User: { description: User/profile, content: { application/json: { schema: { $ref: "#/components/schemas/User" } } } }
     CreatorProfile: { description: Creator profile, content: { application/json: { schema: { $ref: "#/components/schemas/CreatorProfile" } } } }
     CreatorMonetisationDashboard: { description: Creator monetisation dashboard, content: { application/json: { schema: { $ref: "#/components/schemas/CreatorMonetisationDashboard" } } } }
+    CreatorOnboarding: { description: Creator onboarding readiness, content: { application/json: { schema: { $ref: "#/components/schemas/CreatorOnboarding" } } } }
     FeedPage: { description: Feed page, content: { application/json: { schema: { $ref: "#/components/schemas/FeedPage" } } } }
     DiscoverPage: { description: Discover results, content: { application/json: { schema: { $ref: "#/components/schemas/DiscoverPage" } } } }
     HashtagPage: { description: Hashtag results, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Hashtag" } }, nextCursor: { type: string, nullable: true } } } } } }
@@ -1836,6 +1846,25 @@ components:
         taxProfileState: { type: string, enum: [not_required, required, pending, verified] }
         recipientWalletState: { type: string, enum: [missing, linked] }
         blockedReasons: { type: array, items: { type: string } }
+    CreatorOnboarding:
+      type: object
+      required: [state, canStartEarning, steps]
+      properties:
+        state: { type: string, enum: [ready, action_required, review_required, blocked] }
+        canStartEarning: { type: boolean }
+        nextAction: { type: string, nullable: true }
+        steps: { type: array, items: { $ref: "#/components/schemas/CreatorOnboardingStep" } }
+    CreatorOnboardingStep:
+      type: object
+      required: [key, label, state, required]
+      properties:
+        key:
+          type: string
+          enum: [profile, age, wallet, kyc, tax_profile, recipient_wallet, products]
+        label: { type: string }
+        state: { type: string, enum: [complete, action_required, review_required, blocked, not_required] }
+        required: { type: boolean }
+        actionHref: { type: string, nullable: true }
     CreatorEarningsSummary:
       type: object
       required: [currency, creatorEarningsMinor, platformFeesMinor, referralCommissionsMinor, confirmedPaymentCount]

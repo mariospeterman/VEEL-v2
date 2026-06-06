@@ -685,6 +685,52 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("returns backend-owned creator onboarding readiness before dashboard access is complete", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        onEnsure(supabaseUserId) {
+          expect(supabaseUserId).toBe("00000000-0000-4000-8000-000000000001");
+        },
+        async onFind() {
+          return null;
+        }
+      }),
+      profileRepository: fakeProfileRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/profiles/me/creator-onboarding",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      state: "action_required",
+      canStartEarning: false,
+      nextAction: "/wallet",
+      steps: expect.arrayContaining([
+        expect.objectContaining({
+          key: "wallet",
+          state: "action_required",
+          actionHref: "/wallet"
+        }),
+        expect.objectContaining({
+          key: "recipient_wallet",
+          state: "action_required",
+          actionHref: "/wallet"
+        })
+      ])
+    });
+    expect(response.body).not.toMatch(/balance|withdraw|payout|escrow|private|secret/i);
+
+    await app.close();
+  });
+
   it("lists authenticated user wallets", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -6680,6 +6726,66 @@ const fakeProfileRepository: ProfileRepository = {
         }
       ],
       recentActivity: []
+    };
+  },
+  async getMyCreatorOnboarding(supabaseUserId) {
+    expect(supabaseUserId).toBe("00000000-0000-4000-8000-000000000001");
+
+    return {
+      state: "action_required",
+      canStartEarning: false,
+      nextAction: "/wallet",
+      steps: [
+        {
+          key: "profile",
+          label: "Profile",
+          state: "complete",
+          required: true,
+          actionHref: null
+        },
+        {
+          key: "age",
+          label: "Age verification",
+          state: "complete",
+          required: true,
+          actionHref: null
+        },
+        {
+          key: "wallet",
+          label: "Wallet",
+          state: "action_required",
+          required: true,
+          actionHref: "/wallet"
+        },
+        {
+          key: "kyc",
+          label: "Creator verification",
+          state: "not_required",
+          required: false,
+          actionHref: null
+        },
+        {
+          key: "tax_profile",
+          label: "Tax profile",
+          state: "not_required",
+          required: false,
+          actionHref: null
+        },
+        {
+          key: "recipient_wallet",
+          label: "Earnings wallet",
+          state: "action_required",
+          required: true,
+          actionHref: "/wallet"
+        },
+        {
+          key: "products",
+          label: "Products",
+          state: "complete",
+          required: true,
+          actionHref: null
+        }
+      ]
     };
   }
 };

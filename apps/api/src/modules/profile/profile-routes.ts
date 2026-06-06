@@ -83,6 +83,37 @@ export async function registerProfileRoutes(
     }
   });
 
+  app.get("/v1/profiles/me/creator-onboarding", async (request, reply) => {
+    const verifiedSession = await verifyRequestSession(request, options.authVerifier);
+
+    if (!verifiedSession) {
+      return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
+    }
+
+    try {
+      await options.sessionRepository.ensureUserForSupabaseId(verifiedSession.supabaseUserId);
+      const onboarding = await options.profileRepository.getMyCreatorOnboarding(
+        verifiedSession.supabaseUserId
+      );
+
+      if (!onboarding) {
+        return reply.code(403).send({
+          code: "forbidden",
+          message: "Creator onboarding requires a Veel account"
+        });
+      }
+
+      return reply.code(200).send(onboarding);
+    } catch (error) {
+      if (error instanceof ProfileRepositoryConfigurationError) {
+        request.log.warn({ error }, "Profile repository is not configured");
+        return reply.code(401).send(unauthorizedResponse("Profile storage is not configured"));
+      }
+
+      throw error;
+    }
+  });
+
   app.patch("/v1/profiles/me", async (request, reply) => {
     const verifiedSession = await verifyRequestSession(request, options.authVerifier);
 

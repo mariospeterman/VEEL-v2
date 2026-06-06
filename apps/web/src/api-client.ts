@@ -6,6 +6,7 @@ import type { components } from "@veel/contracts";
 export type ContentItem = components["schemas"]["ContentItem"];
 export type SessionState = components["schemas"]["SessionState"];
 export type CreatorDashboard = components["schemas"]["CreatorMonetisationDashboard"];
+export type CreatorOnboarding = components["schemas"]["CreatorOnboarding"];
 export type CreatorProfile = components["schemas"]["CreatorProfile"];
 export type LiveRoom = components["schemas"]["LiveRoom"];
 export type ActivityItem = components["schemas"]["ActivityItem"];
@@ -82,6 +83,10 @@ export async function getCreatorProfile(handle: string): Promise<ApiResult<Creat
 
 export async function getMyCreatorDashboard(): Promise<ApiResult<CreatorDashboard>> {
   return getJson<CreatorDashboard>("/v1/profiles/me/creator-dashboard");
+}
+
+export async function getMyCreatorOnboarding(): Promise<ApiResult<CreatorOnboarding>> {
+  return getJson<CreatorOnboarding>("/v1/profiles/me/creator-onboarding");
 }
 
 export async function getPaymentActivity(): Promise<ApiResult<ActivityPage>> {
