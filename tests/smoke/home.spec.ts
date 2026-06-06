@@ -26,9 +26,12 @@ test("renders the age assurance projection", async ({ page }) => {
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Provider-backed 18+ gate" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Age status unavailable" })).toBeVisible();
+  await expect(page.getByText("HTTP 503").first()).toBeVisible();
+  await expect(page.getByText("API is unavailable").first()).toBeVisible();
   await expect(page.getByText("signature verified")).toBeVisible();
   await expect(page.getByText("normalized result only")).toBeVisible();
-  await expect(page.getByText("server-owned")).toBeVisible();
+  await expect(page.getByText("Session launch URLs are created by the backend")).toBeVisible();
 });
 
 test("renders the content media viewer projection", async ({ page }) => {

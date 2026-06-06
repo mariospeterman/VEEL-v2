@@ -1,19 +1,4 @@
-import type { components } from "@veel/contracts";
-
-type AgeStatus = components["schemas"]["AgeStatus"];
-type AgeSession = components["schemas"]["AgeSession"];
-
-const ageStatus: AgeStatus = {
-  state: "required",
-  provider: null
-};
-
-const pendingSession: AgeSession = {
-  id: "00000000-0000-4000-8000-000000000090",
-  provider: "yoti",
-  launchUrl: "https://age.yoti.com/session",
-  expiresAt: "2026-06-06T05:00:00.000Z"
-};
+import { getAgeStatus, type AgeStatus, type ApiResult } from "@/api-client";
 
 const providerRows = [
   { label: "Reusable first", value: "Yoti / portable proof" },
@@ -22,7 +7,9 @@ const providerRows = [
   { label: "Webhook", value: "signature verified" }
 ];
 
-export default function AgePage() {
+export default async function AgePage() {
+  const ageStatus = await getAgeStatus();
+
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <nav className="mx-auto flex w-full max-w-5xl items-center justify-between border-b border-[var(--line)] px-5 py-4">
@@ -45,22 +32,15 @@ export default function AgePage() {
           </header>
 
           <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium">Current status</p>
-                <p className="mt-2 text-3xl font-semibold tracking-normal">{ageStatus.state}</p>
-              </div>
-              <span className="rounded bg-[var(--background)] px-2 py-1 text-xs text-[var(--muted)]">server-owned</span>
-            </div>
+            {ageStatus.ok ? <AgeStatusCard ageStatus={ageStatus.data} /> : <UnavailableState result={ageStatus} />}
           </section>
 
           <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
-            <p className="text-sm font-medium">Pending provider session</p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <Fact label="Provider" value={pendingSession.provider} />
-              <Fact label="Expires" value={new Date(pendingSession.expiresAt).toISOString()} />
-              <Fact label="Launch URL" value="server-issued" />
-            </div>
+            <p className="text-sm font-medium">Provider sessions</p>
+            <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
+              Session launch URLs are created by the backend only after an explicit user action. The
+              page does not render fixture provider links or treat redirects as verification.
+            </p>
           </section>
         </section>
 
@@ -73,6 +53,33 @@ export default function AgePage() {
         </aside>
       </section>
     </main>
+  );
+}
+
+function AgeStatusCard({ ageStatus }: { ageStatus: AgeStatus }) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div>
+        <p className="text-sm font-medium">Current status</p>
+        <p className="mt-2 text-3xl font-semibold tracking-normal">{ageStatus.state}</p>
+        <p className="mt-2 text-sm text-[var(--muted)]">{ageStatus.provider ?? "provider not selected"}</p>
+      </div>
+      <span className="rounded bg-[var(--background)] px-2 py-1 text-xs text-[var(--muted)]">server-owned</span>
+    </div>
+  );
+}
+
+function UnavailableState({ result }: { result: ApiResult<AgeStatus> }) {
+  if (result.ok) {
+    return null;
+  }
+
+  return (
+    <div>
+      <p className="text-sm font-medium text-[var(--accent)]">HTTP {result.status}</p>
+      <h2 className="mt-2 text-base font-semibold tracking-normal">Age status unavailable</h2>
+      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{result.message}</p>
+    </div>
   );
 }
 

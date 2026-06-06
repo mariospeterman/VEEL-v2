@@ -27,6 +27,7 @@ webhooks must be configured before production rollout.
 Current implementation state:
 
 - `POST /v1/age/sessions` is wired to an injectable backend provider waterfall.
+- `GET /v1/age/status` is the browser-safe age read projection. `/age` reads it through the typed web API helper and does not render fixture provider launch URLs.
 - The default runtime waterfall fails closed with `503` until a real provider adapter is launch-approved and configured.
 - Successful provider session starts are stored as pending `age_verifications` rows with provider reference, state, rule/jurisdiction metadata, and timestamps only.
 - Raw provider payloads, identity images, document data, and browser-completed age state are not accepted by this route.

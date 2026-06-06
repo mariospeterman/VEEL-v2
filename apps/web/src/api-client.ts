@@ -27,6 +27,7 @@ export type SubscriptionPlan = components["schemas"]["SubscriptionPlan"];
 export type SubscriptionPlanPage = components["schemas"]["SubscriptionPlanPage"];
 export type DiscoverPage = components["schemas"]["DiscoverPage"];
 export type FeedPage = components["schemas"]["FeedPage"];
+export type AgeStatus = components["schemas"]["AgeStatus"];
 
 export type ApiResult<T> =
   | {
@@ -95,6 +96,10 @@ export async function getDiscoverSearch(query = ""): Promise<ApiResult<DiscoverP
 
 export async function getHomeFeed(mode = "recommended"): Promise<ApiResult<FeedPage>> {
   return getJson<FeedPage>(`/v1/content/feed?mode=${encodeURIComponent(mode)}`);
+}
+
+export async function getAgeStatus(): Promise<ApiResult<AgeStatus>> {
+  return getJson<AgeStatus>("/v1/age/status");
 }
 
 async function getJson<T>(path: string): Promise<ApiResult<T>> {

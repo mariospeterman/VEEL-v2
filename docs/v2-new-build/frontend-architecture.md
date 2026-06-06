@@ -191,6 +191,6 @@ Current implementation state:
 - `pnpm smoke` runs Playwright against the Next.js app shell and Home media card.
 - The smoke suite runs desktop Chromium and mobile Chromium projects from `tests/smoke`.
 - CI installs Chromium and runs the smoke suite after lint, typecheck, and unit tests.
-- `/`, `/content/[contentId]`, `/live/[liveRoomId]`, `/profile`, `/profile/[handle]`, `/activity`, `/messages`, `/wallet`, `/subscriptions`, and `/discover` read backend projections through the typed web API helper instead of local business-data fixtures.
-- Home/detail/profile/activity/messages/wallet/subscriptions/discover screens attach the current Supabase access token when present and render a fail-closed unavailable state on API/auth/provider errors.
-- Current smoke coverage starts the web app only, so API-backed home/detail/profile/activity/messages/wallet/subscriptions/discover smoke asserts the fail-closed API-unavailable state; API-backed happy-path browser coverage belongs in the combined app integration harness.
+- `/`, `/age`, `/content/[contentId]`, `/live/[liveRoomId]`, `/profile`, `/profile/[handle]`, `/activity`, `/messages`, `/wallet`, `/subscriptions`, and `/discover` read backend projections through the typed web API helper instead of local business-data fixtures.
+- Home/age/detail/profile/activity/messages/wallet/subscriptions/discover screens attach the current Supabase access token when present and render a fail-closed unavailable state on API/auth/provider errors.
+- Current smoke coverage starts the web app only, so API-backed home/age/detail/profile/activity/messages/wallet/subscriptions/discover smoke asserts the fail-closed API-unavailable state; API-backed happy-path browser coverage belongs in the combined app integration harness.
