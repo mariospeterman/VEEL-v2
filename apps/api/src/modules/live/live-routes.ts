@@ -140,18 +140,11 @@ export async function registerLiveRoutes(
         return reply.code(404).send(notFoundResponse("Live room was not found"));
       }
 
-      const response = toLiveRoomResponse(room);
-
-      if (response.accessState === "pass_active" && room.providerPlaybackId) {
-        const jwt = await options.liveProvider.createPlaybackJwt({
-          playbackId: room.providerPlaybackId,
-          supabaseUserId: access.supabaseUserId
-        });
-
-        if (jwt && response.playback?.state === "full" && response.playback.url) {
-          response.playback.url = `${response.playback.url}?jwt=${encodeURIComponent(jwt)}`;
-        }
-      }
+      const response = await withSignedLivePlayback({
+        room,
+        supabaseUserId: access.supabaseUserId,
+        liveProvider: options.liveProvider
+      });
 
       return reply.code(200).send(response);
     } catch (error) {
@@ -531,6 +524,64 @@ function toLiveRoomResponse(room: StoredLiveRoom) {
   void requestHash;
 
   return response;
+}
+
+async function withSignedLivePlayback(input: {
+  room: StoredLiveRoom;
+  supabaseUserId: string;
+  liveProvider: LiveProviderAdapter;
+}) {
+  const response = toLiveRoomResponse(input.room);
+  const playback = response.playback;
+
+  if (playback?.state !== "full" || playback.provider !== "livepeer" || !playback.url) {
+    return response;
+  }
+
+  const blockedPlayback: NonNullable<StoredLiveRoom["playback"]> = {
+    state: "blocked",
+    url: null,
+    provider: "livepeer"
+  };
+
+  if (response.accessState !== "pass_active" || !input.room.providerPlaybackId) {
+    return {
+      ...response,
+      playback: blockedPlayback
+    };
+  }
+
+  try {
+    const jwt = await input.liveProvider.createPlaybackJwt({
+      playbackId: input.room.providerPlaybackId,
+      supabaseUserId: input.supabaseUserId
+    });
+
+    if (!jwt) {
+      return {
+        ...response,
+        playback: blockedPlayback
+      };
+    }
+
+    const signedUrl = new URL(playback.url);
+    signedUrl.searchParams.set("jwt", jwt);
+
+    return {
+      ...response,
+      playback: {
+        state: "full",
+        url: signedUrl.toString(),
+        provider: "livepeer",
+        resourceType: "hls"
+      }
+    };
+  } catch {
+    return {
+      ...response,
+      playback: blockedPlayback
+    };
+  }
 }
 
 function hashLiveRequest(value: unknown): string {

@@ -3995,6 +3995,107 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("returns signed Livepeer playback only for an active pass", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      liveRepository: fakeLiveRepository({
+        async onFindRoom() {
+          return liveRoomFixture({
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa15",
+            state: "live",
+            hasPass: true,
+            providerPlaybackId: "livepeer-playback-15",
+            playbackUrl: "https://livepeercdn.studio/hls/livepeer-playback-15/index.m3u8"
+          });
+        }
+      }),
+      liveProvider: {
+        isConfigured: () => true,
+        async createRoom() {
+          throw new Error("not implemented");
+        },
+        async getRoomStatus() {
+          throw new Error("not implemented");
+        },
+        async createPlaybackJwt(input) {
+          expect(input).toEqual({
+            playbackId: "livepeer-playback-15",
+            supabaseUserId: "00000000-0000-4000-8000-000000000001"
+          });
+          return "livepeer.jwt.token";
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/live/rooms/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa15",
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().playback).toEqual({
+      state: "full",
+      url: "https://livepeercdn.studio/hls/livepeer-playback-15/index.m3u8?jwt=livepeer.jwt.token",
+      provider: "livepeer",
+      resourceType: "hls"
+    });
+
+    await app.close();
+  });
+
+  it("fails Livepeer playback closed when JWT signing is unavailable", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      liveRepository: fakeLiveRepository({
+        async onFindRoom() {
+          return liveRoomFixture({
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa16",
+            state: "live",
+            hasPass: true,
+            providerPlaybackId: "livepeer-playback-16",
+            playbackUrl: "https://livepeercdn.studio/hls/livepeer-playback-16/index.m3u8"
+          });
+        }
+      }),
+      liveProvider: {
+        isConfigured: () => true,
+        async createRoom() {
+          throw new Error("not implemented");
+        },
+        async getRoomStatus() {
+          throw new Error("not implemented");
+        },
+        async createPlaybackJwt() {
+          return null;
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/live/rooms/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa16",
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().playback).toEqual({
+      state: "blocked",
+      url: null,
+      provider: "livepeer"
+    });
+
+    await app.close();
+  });
+
   it("creates a server-priced live pass payment intent and records the pass purchase request", async () => {
     vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
     const paymentCreates: StoredPaymentIntent[] = [];

@@ -42,6 +42,7 @@ Official references checked:
 - Bunny Stream embed view token authentication: https://docs.bunny.net/stream/token-authentication
 - Livepeer webhook setup and signatures: https://docs.livepeer.org/developers/guides/setup-and-listen-to-webhooks
 - Livepeer stream event webhooks: https://docs.livepeer.org/developers/guides/listen-to-stream-events
+- Livepeer JWT access control: https://docs.livepeer.org/developers/guides/access-control-jwt
 - Livepeer asset upload reference: https://docs.livepeer.org/api-reference/asset/upload
 
 ## Provider Split
@@ -147,6 +148,7 @@ Current implementation slice:
 
 - `POST /v1/live/rooms` creates a Livepeer stream with JWT playback policy through the backend provider adapter.
 - `GET /v1/live/rooms/:id` returns viewer-safe room, playback, pass, chat, and replay projection.
+- Active-pass Livepeer playback is signed server-side and returned as a short-lived HLS resource with a JWT query parameter. If JWT signing keys are unavailable, full playback fails closed as `blocked` even when the database pass projection is active.
 - `GET /v1/live/rooms/:id/host-connection` returns masked host connection details only.
 - `POST /v1/live/rooms/:id/sync` refreshes provider state and replay projection.
 - `POST /v1/live/rooms/:id/pass-intents` creates a server-priced `live_pass` payment intent.
