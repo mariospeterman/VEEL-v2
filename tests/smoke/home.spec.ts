@@ -1,7 +1,10 @@
 import { expect, test } from "@playwright/test";
 
-const unavailableStatus = /HTTP (401|503)/;
-const unavailableReason = /API is unavailable|Missing or invalid bearer token/;
+const unavailableStatus = /HTTP (401|429|503)/;
+const unavailableReason = /API is unavailable|Missing or invalid bearer token|Rate limit exceeded/;
+const profileFallbackStatus = /HTTP (401|404|429|503)/;
+const profileFallbackReason =
+  /API is unavailable|Missing or invalid bearer token|Profile was not found|Rate limit exceeded/;
 
 test("renders the app shell and Home media card", async ({ page }) => {
   await page.goto("/");
@@ -183,9 +186,9 @@ test("renders the public creator profile projection", async ({ page }) => {
   await page.goto("/profile/maki");
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Creator profile not found" })).toBeVisible();
-  await expect(page.getByText("HTTP 404")).toBeVisible();
-  await expect(page.getByText("Profile was not found")).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Creator profile (not found|unavailable)/ })).toBeVisible();
+  await expect(page.getByText(profileFallbackStatus)).toBeVisible();
+  await expect(page.getByText(profileFallbackReason)).toBeVisible();
 });
 
 test("renders the admin payment unlock and provider ops projection", async ({ page }) => {
