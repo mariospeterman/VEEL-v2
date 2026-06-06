@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 import type {
+  OnrampSessionResource,
   StoredWalletLinkChallenge,
   WalletLinkChallenge,
   WalletRepository,
@@ -28,6 +29,13 @@ export class WalletLinkChallengeNotFoundError extends Error {
   }
 }
 
+export class WalletNotFoundError extends Error {
+  constructor() {
+    super("WALLET_NOT_FOUND");
+    this.name = "WalletNotFoundError";
+  }
+}
+
 interface WalletRow {
   id: string;
   user_id?: string;
@@ -48,6 +56,17 @@ interface WalletChallengeRow {
   consumed_at: Date | null;
 }
 
+interface OnrampSessionRow {
+  id: string;
+  provider: string;
+  launch_url: string;
+  wallet_id: string;
+  wallet_address: string;
+  state: OnrampSessionResource["state"];
+  created_at: Date;
+  expires_at: Date | null;
+}
+
 export function createPostgresWalletRepository(databaseUrl?: string): WalletRepository {
   if (!databaseUrl) {
     return {
@@ -64,6 +83,18 @@ export function createPostgresWalletRepository(databaseUrl?: string): WalletRepo
         throw new WalletRepositoryConfigurationError();
       },
       async findLinkChallenge() {
+        throw new WalletRepositoryConfigurationError();
+      },
+      async findWalletForSupabaseUser() {
+        throw new WalletRepositoryConfigurationError();
+      },
+      async setPrimaryWallet() {
+        throw new WalletRepositoryConfigurationError();
+      },
+      async findOnrampSessionByIdempotencyKey() {
+        throw new WalletRepositoryConfigurationError();
+      },
+      async recordOnrampSession() {
         throw new WalletRepositoryConfigurationError();
       }
     };
@@ -279,9 +310,218 @@ export function createPostgresWalletRepository(databaseUrl?: string): WalletRepo
         throw error;
       }
     },
+    async findWalletForSupabaseUser(input) {
+      const rows = await sql<WalletRow[]>`
+        select
+          w.id,
+          w.chain,
+          w.address,
+          w.provider,
+          w.is_primary
+        from users u
+        join wallets w on w.user_id = u.id
+        where u.supabase_user_id = ${input.supabaseUserId}
+          and w.id = ${input.walletId}
+        limit 1
+      `;
+
+      const wallet = rows[0];
+
+      return wallet ? toWalletResource(wallet) : null;
+    },
+    async setPrimaryWallet(input) {
+      const rows = await sql.begin(async (tx) => {
+        const walletRows = await tx<WalletRow[]>`
+          select
+            w.id,
+            w.user_id,
+            w.chain,
+            w.address,
+            w.provider,
+            w.is_primary
+          from users u
+          join wallets w on w.user_id = u.id
+          where u.supabase_user_id = ${input.supabaseUserId}
+            and w.id = ${input.walletId}
+          limit 1
+        `;
+
+        const wallet = walletRows[0];
+
+        if (!wallet?.user_id) {
+          throw new WalletNotFoundError();
+        }
+
+        await tx`
+          update wallets
+          set is_primary = false,
+              updated_at = now()
+          where user_id = ${wallet.user_id}
+            and id <> ${wallet.id}
+            and is_primary = true
+        `;
+
+        const primaryRows = await tx<WalletRow[]>`
+          update wallets
+          set is_primary = true,
+              updated_at = now()
+          where id = ${wallet.id}
+          returning id, chain, address, provider, is_primary
+        `;
+
+        await tx`
+          insert into audit_events (
+            id,
+            actor_user_id,
+            subject_type,
+            subject_id,
+            action,
+            metadata
+          )
+          values (
+            ${randomUUID()},
+            ${wallet.user_id},
+            'wallet',
+            ${wallet.id},
+            'wallet.primary_set',
+            ${tx.json({
+              chain: wallet.chain,
+              provider: wallet.provider
+            })}
+          )
+        `;
+
+        return primaryRows;
+      });
+
+      const wallet = rows[0];
+
+      if (!wallet) {
+        throw new WalletNotFoundError();
+      }
+
+      return toWalletResource(wallet);
+    },
+    async findOnrampSessionByIdempotencyKey(input) {
+      const rows = await sql<OnrampSessionRow[]>`
+        select
+          wos.id,
+          wos.provider,
+          wos.launch_url,
+          wos.wallet_id,
+          wos.wallet_address,
+          wos.state,
+          wos.created_at,
+          wos.expires_at
+        from users u
+        join wallet_onramp_sessions wos on wos.user_id = u.id
+        where u.supabase_user_id = ${input.supabaseUserId}
+          and wos.idempotency_key = ${input.idempotencyKey}
+        limit 1
+      `;
+
+      const session = rows[0];
+
+      return session ? toOnrampSessionResource(session) : null;
+    },
+    async recordOnrampSession(input) {
+      try {
+        const rows = await sql<OnrampSessionRow[]>`
+          with target_user as (
+            select id
+            from users
+            where supabase_user_id = ${input.supabaseUserId}
+            limit 1
+          ),
+          target_wallet as (
+            select w.id, w.user_id
+            from wallets w
+            join target_user tu on tu.id = w.user_id
+            where w.id = ${input.walletId}
+            limit 1
+          )
+          insert into wallet_onramp_sessions (
+            id,
+            user_id,
+            wallet_id,
+            idempotency_key,
+            provider,
+            provider_session_reference_hash,
+            wallet_address,
+            chain,
+            purchase_currency,
+            launch_url,
+            return_url,
+            expires_at
+          )
+          select
+            ${randomUUID()},
+            user_id,
+            id,
+            ${input.idempotencyKey},
+            ${input.provider},
+            ${input.providerSessionReferenceHash},
+            ${input.walletAddress},
+            ${input.chain},
+            ${input.purchaseCurrency},
+            ${input.launchUrl},
+            ${input.returnUrl},
+            ${input.expiresAt}
+          from target_wallet
+          returning id, provider, launch_url, wallet_id, wallet_address, state, created_at, expires_at
+        `;
+
+        const session = rows[0];
+
+        if (!session) {
+          throw new WalletNotFoundError();
+        }
+
+        return toOnrampSessionResource(session);
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          const existingRows = await sql<OnrampSessionRow[]>`
+            select
+              wos.id,
+              wos.provider,
+              wos.launch_url,
+              wos.wallet_id,
+              wos.wallet_address,
+              wos.state,
+              wos.created_at,
+              wos.expires_at
+            from users u
+            join wallet_onramp_sessions wos on wos.user_id = u.id
+            where u.supabase_user_id = ${input.supabaseUserId}
+              and wos.idempotency_key = ${input.idempotencyKey}
+            limit 1
+          `;
+          const existing = existingRows[0];
+
+          if (existing) {
+            return toOnrampSessionResource(existing);
+          }
+        }
+
+        throw error;
+      }
+    },
     async close() {
       await sql.end({ timeout: 5 });
     }
+  };
+}
+
+function toOnrampSessionResource(row: OnrampSessionRow): OnrampSessionResource {
+  return {
+    id: row.id,
+    provider: row.provider,
+    launchUrl: row.launch_url,
+    walletId: row.wallet_id,
+    walletAddress: row.wallet_address,
+    state: row.state,
+    createdAt: row.created_at.toISOString(),
+    expiresAt: row.expires_at ? row.expires_at.toISOString() : null
   };
 }
 

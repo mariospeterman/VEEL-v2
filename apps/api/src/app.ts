@@ -67,8 +67,9 @@ import type {
   SubscriptionRepository
 } from "./modules/subscription/types.js";
 import { createPostgresWalletRepository } from "./modules/wallet/wallet-repository.js";
+import { createWalletOnrampProvider } from "./modules/wallet/wallet-onramp-adapter.js";
 import { registerWalletRoutes } from "./modules/wallet/wallet-routes.js";
-import type { WalletRepository } from "./modules/wallet/types.js";
+import type { WalletOnrampProviderAdapter, WalletRepository } from "./modules/wallet/types.js";
 import { envPlugin } from "./plugins/env.js";
 import { openApiPlugin } from "./plugins/openapi.js";
 import { supabaseBoundaryPlugin } from "./plugins/supabase-boundary.js";
@@ -96,6 +97,7 @@ export interface BuildApiOptions {
   subscriptionRepository?: SubscriptionRepository;
   subscriptionAuthorizationVerifier?: SubscriptionAuthorizationVerifier;
   walletRepository?: WalletRepository;
+  onrampProvider?: WalletOnrampProviderAdapter;
   adminRepository?: AdminRepository;
   aiRepository?: AiRepository;
 }
@@ -110,7 +112,8 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
         "SUPABASE_SERVICE_ROLE_KEY",
         "DATABASE_URL",
         "HELIUS_API_KEY",
-        "HELIUS_WEBHOOK_SECRET"
+        "HELIUS_WEBHOOK_SECRET",
+        "COINBASE_CDP_API_KEY_SECRET"
       ]
     }
   });
@@ -168,6 +171,7 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     options.subscriptionAuthorizationVerifier ?? createSolanaSubscriptionAuthorizationVerifier();
   const walletRepository =
     options.walletRepository ?? createPostgresWalletRepository(app.config.DATABASE_URL);
+  const onrampProvider = options.onrampProvider ?? createWalletOnrampProvider(app.config);
   const adminRepository =
     options.adminRepository ?? createPostgresAdminRepository(app.config.DATABASE_URL);
   const aiRepository = options.aiRepository ?? createPostgresAiRepository(app.config.DATABASE_URL);
@@ -378,7 +382,8 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   await registerWalletRoutes(app, {
     authVerifier,
     sessionRepository,
-    walletRepository
+    walletRepository,
+    onrampProvider
   });
   await app.register(openApiPlugin);
 

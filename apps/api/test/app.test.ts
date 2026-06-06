@@ -25,7 +25,9 @@ import type {
   VerifiedSupabaseSession
 } from "../src/modules/session/types";
 import type {
+  OnrampSessionResource,
   StoredWalletLinkChallenge,
+  WalletOnrampProviderAdapter,
   WalletRepository,
   WalletResource
 } from "../src/modules/wallet/types";
@@ -547,6 +549,147 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("sets an authenticated user's primary wallet", async () => {
+    const walletRepository: WalletRepository = {
+      ...walletRepositoryWithWallet,
+      async setPrimaryWallet(input) {
+        expect(input).toEqual({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          walletId: "00000000-0000-4000-8000-000000000020"
+        });
+
+        return {
+          id: input.walletId,
+          chain: "solana_devnet",
+          address: "VeelWallet111111111111111111111111111111111",
+          provider: "embedded_privy",
+          isPrimary: true
+        };
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      walletRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/wallets/00000000-0000-4000-8000-000000000020/primary",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "wallet-primary-1"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      id: "00000000-0000-4000-8000-000000000020",
+      isPrimary: true
+    });
+
+    await app.close();
+  });
+
+  it("creates a wallet funding onramp session without granting payment state", async () => {
+    const onrampSession: OnrampSessionResource = {
+      id: "00000000-0000-4000-8000-000000000070",
+      provider: "coinbase",
+      launchUrl: "https://pay.coinbase.com/buy",
+      walletId: "00000000-0000-4000-8000-000000000020",
+      walletAddress: "VeelWallet111111111111111111111111111111111",
+      state: "created",
+      createdAt: "2026-06-06T00:00:00.000Z",
+      expiresAt: null
+    };
+    const walletRepository: WalletRepository = {
+      ...walletRepositoryWithWallet,
+      async findOnrampSessionByIdempotencyKey() {
+        return null;
+      },
+      async recordOnrampSession(input) {
+        expect(input).toMatchObject({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          walletId: "00000000-0000-4000-8000-000000000020",
+          idempotencyKey: "onramp",
+          provider: "coinbase",
+          walletAddress: "VeelWallet111111111111111111111111111111111",
+          chain: "solana_devnet",
+          purchaseCurrency: "SOL"
+        });
+
+        return onrampSession;
+      }
+    };
+    const onrampProvider: WalletOnrampProviderAdapter = {
+      async createSession(input) {
+        expect(input.wallet.id).toBe("00000000-0000-4000-8000-000000000020");
+        expect(input.returnUrl).toBe("https://veel.example/wallet");
+
+        return {
+          provider: "coinbase",
+          providerSessionReferenceHash: "a".repeat(64),
+          launchUrl: onrampSession.launchUrl,
+          purchaseCurrency: "SOL",
+          expiresAt: null
+        };
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      walletRepository,
+      onrampProvider
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/wallets/onramp-sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "onramp"
+      },
+      payload: {
+        walletId: "00000000-0000-4000-8000-000000000020",
+        returnUrl: "https://veel.example/wallet"
+      }
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toEqual(onrampSession);
+    expect(response.json()).not.toHaveProperty("paymentIntentId");
+    expect(response.json()).not.toHaveProperty("entitlementId");
+
+    await app.close();
+  });
+
+  it("keeps wallet funding unavailable until the provider is configured", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      walletRepository: walletRepositoryWithWallet
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/wallets/onramp-sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "wallet-onramp-disabled"
+      },
+      payload: {
+        walletId: "00000000-0000-4000-8000-000000000020"
+      }
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({
+      code: "service_unavailable"
+    });
+
+    await app.close();
+  });
+
   it("creates and verifies an external wallet link challenge", async () => {
     const walletKeypair = nacl.sign.keyPair();
     const address = bs58.encode(walletKeypair.publicKey);
@@ -591,6 +734,18 @@ describe("buildApi", () => {
       },
       async consumeVerifiedExternalWalletLink() {
         return linkedWallet;
+      },
+      async findWalletForSupabaseUser() {
+        return null;
+      },
+      async setPrimaryWallet() {
+        throw new Error("not implemented");
+      },
+      async findOnrampSessionByIdempotencyKey() {
+        return null;
+      },
+      async recordOnrampSession() {
+        throw new Error("not implemented");
       }
     };
     const app = await buildApi({
@@ -1358,6 +1513,10 @@ describe("buildApi", () => {
         PAYMENT_DEFAULT_ASSET: "SOL",
         SOLANA_SUBSCRIPTION_DELEGATION_PROGRAM_ID: "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
         HELIUS_CLUSTER: "devnet",
+        ONRAMP_PROVIDER: "disabled",
+        ONRAMP_PURCHASE_CURRENCY: "SOL",
+        COINBASE_CDP_API_BASE_URL: "https://api.cdp.coinbase.com",
+        COINBASE_ONRAMP_DESTINATION_NETWORK: "solana",
         AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: false,
         SUMSUB_API_BASE_URL: "https://api.sumsub.com",
         YOTI_API_BASE_URL: "https://age.yoti.com/api/v1",
@@ -4361,6 +4520,28 @@ const walletRepositoryWithWallet: WalletRepository = {
   },
   async consumeVerifiedExternalWalletLink() {
     throw new Error("not implemented");
+  },
+  async findWalletForSupabaseUser(input) {
+    if (input.walletId !== "00000000-0000-4000-8000-000000000020") {
+      return null;
+    }
+
+    return {
+      id: "00000000-0000-4000-8000-000000000020",
+      chain: "solana_devnet",
+      address: "VeelWallet111111111111111111111111111111111",
+      provider: "embedded_privy",
+      isPrimary: true
+    };
+  },
+  async setPrimaryWallet() {
+    throw new Error("not implemented");
+  },
+  async findOnrampSessionByIdempotencyKey() {
+    return null;
+  },
+  async recordOnrampSession() {
+    throw new Error("not implemented");
   }
 };
 
@@ -4378,6 +4559,18 @@ const walletRepositoryWithoutWallet: WalletRepository = {
     throw new Error("not implemented");
   },
   async consumeVerifiedExternalWalletLink() {
+    throw new Error("not implemented");
+  },
+  async findWalletForSupabaseUser() {
+    return null;
+  },
+  async setPrimaryWallet() {
+    throw new Error("not implemented");
+  },
+  async findOnrampSessionByIdempotencyKey() {
+    return null;
+  },
+  async recordOnrampSession() {
     throw new Error("not implemented");
   }
 };

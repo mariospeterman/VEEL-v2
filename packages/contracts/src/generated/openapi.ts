@@ -1901,10 +1901,20 @@ export interface components {
             returnUrl?: string;
         };
         OnrampSession: {
+            /** Format: uuid */
+            id: string;
             provider: string;
             /** Format: uri */
             launchUrl: string;
+            /** Format: uuid */
+            walletId: string;
             walletAddress: string;
+            /** @enum {string} */
+            state: "created" | "completed" | "failed" | "expired" | "canceled";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            expiresAt?: string | null;
         };
         Me: {
             user: components["schemas"]["User"];
@@ -4367,6 +4377,9 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["Wallet"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     createOnrampSession: {
@@ -4382,6 +4395,10 @@ export interface operations {
         requestBody: components["requestBodies"]["CreateOnrampSession"];
         responses: {
             201: components["responses"]["OnrampSession"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     updateMyProfile: {

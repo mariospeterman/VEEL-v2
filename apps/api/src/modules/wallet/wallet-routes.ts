@@ -8,11 +8,15 @@ import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.j
 import {
   WalletLinkChallengeNotFoundError,
   WalletLinkConflictError,
+  WalletNotFoundError,
   WalletRepositoryConfigurationError
 } from "./wallet-repository.js";
+import { WalletOnrampProviderNotConfiguredError } from "./wallet-onramp-adapter.js";
 import type {
+  CreateOnrampSessionRequest,
   CreateWalletLinkChallengeRequest,
   LinkWalletRequest,
+  WalletOnrampProviderAdapter,
   WalletRepository
 } from "./types.js";
 
@@ -20,6 +24,7 @@ interface RegisterWalletRoutesOptions {
   authVerifier: SupabaseAuthVerifier;
   sessionRepository: SessionRepository;
   walletRepository: WalletRepository;
+  onrampProvider: WalletOnrampProviderAdapter;
 }
 
 const walletChallengeTtlMs = 10 * 60 * 1000;
@@ -189,6 +194,138 @@ export async function registerWalletRoutes(
       throw error;
     }
   });
+
+  app.patch("/v1/wallets/:walletId/primary", async (request, reply) => {
+    const verifiedSession = await verifyRequestSession(request, options.authVerifier);
+
+    if (!verifiedSession) {
+      return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
+    }
+
+    if (!request.headers["idempotency-key"]) {
+      return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
+    }
+
+    const walletId = (request.params as { walletId?: string }).walletId;
+
+    if (!walletId) {
+      return reply.code(400).send(validationResponse("Wallet id is required"));
+    }
+
+    try {
+      const wallet = await options.walletRepository.setPrimaryWallet({
+        walletId,
+        supabaseUserId: verifiedSession.supabaseUserId
+      });
+
+      return reply.code(200).send(wallet);
+    } catch (error) {
+      if (error instanceof WalletNotFoundError) {
+        return reply.code(404).send({
+          code: "not_found",
+          message: "Wallet was not found"
+        });
+      }
+
+      if (error instanceof WalletRepositoryConfigurationError) {
+        request.log.warn({ error }, "Wallet repository is not configured");
+        return reply.code(401).send(unauthorizedResponse("Wallet storage is not configured"));
+      }
+
+      throw error;
+    }
+  });
+
+  app.post("/v1/wallets/onramp-sessions", async (request, reply) => {
+    const verifiedSession = await verifyRequestSession(request, options.authVerifier);
+
+    if (!verifiedSession) {
+      return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
+    }
+
+    const idempotencyKey = request.headers["idempotency-key"];
+
+    if (!idempotencyKey || Array.isArray(idempotencyKey)) {
+      return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
+    }
+
+    const body = request.body as CreateOnrampSessionRequest | undefined;
+    const validationError = validateOnrampSessionRequest(body);
+
+    if (validationError) {
+      return reply.code(400).send(validationResponse(validationError));
+    }
+
+    const onrampBody = body as CreateOnrampSessionRequest;
+
+    try {
+      const existing = await options.walletRepository.findOnrampSessionByIdempotencyKey({
+        supabaseUserId: verifiedSession.supabaseUserId,
+        idempotencyKey
+      });
+
+      if (existing) {
+        return reply.code(201).send(existing);
+      }
+
+      const wallet = await options.walletRepository.findWalletForSupabaseUser({
+        supabaseUserId: verifiedSession.supabaseUserId,
+        walletId: onrampBody.walletId
+      });
+
+      if (!wallet) {
+        return reply.code(404).send({
+          code: "not_found",
+          message: "Wallet was not found"
+        });
+      }
+
+      const providerSession = await options.onrampProvider.createSession({
+        supabaseUserId: verifiedSession.supabaseUserId,
+        wallet,
+        idempotencyKey,
+        returnUrl: onrampBody.returnUrl ?? null,
+        clientIp: request.ip
+      });
+
+      const session = await options.walletRepository.recordOnrampSession({
+        supabaseUserId: verifiedSession.supabaseUserId,
+        walletId: wallet.id,
+        idempotencyKey,
+        provider: providerSession.provider,
+        providerSessionReferenceHash: providerSession.providerSessionReferenceHash,
+        walletAddress: wallet.address,
+        chain: wallet.chain,
+        purchaseCurrency: providerSession.purchaseCurrency,
+        launchUrl: providerSession.launchUrl,
+        returnUrl: onrampBody.returnUrl ?? null,
+        expiresAt: providerSession.expiresAt
+      });
+
+      return reply.code(201).send(session);
+    } catch (error) {
+      if (error instanceof WalletOnrampProviderNotConfiguredError) {
+        return reply.code(503).send({
+          code: "service_unavailable",
+          message: "Wallet funding provider is not configured"
+        });
+      }
+
+      if (error instanceof WalletNotFoundError) {
+        return reply.code(404).send({
+          code: "not_found",
+          message: "Wallet was not found"
+        });
+      }
+
+      if (error instanceof WalletRepositoryConfigurationError) {
+        request.log.warn({ error }, "Wallet repository is not configured");
+        return reply.code(401).send(unauthorizedResponse("Wallet storage is not configured"));
+      }
+
+      throw error;
+    }
+  });
 }
 
 function validateChallengeRequest(
@@ -240,6 +377,32 @@ function validateLinkWalletRequest(body: LinkWalletRequest | undefined): string 
 
   if (body.proof.signatureEncoding !== "base58" && body.proof.signatureEncoding !== "base64") {
     return "Unsupported wallet signature encoding";
+  }
+
+  return null;
+}
+
+function validateOnrampSessionRequest(
+  body: CreateOnrampSessionRequest | undefined
+): string | null {
+  if (!body || typeof body !== "object") {
+    return "Request body is required";
+  }
+
+  if (!body.walletId) {
+    return "Wallet id is required";
+  }
+
+  if (body.returnUrl) {
+    try {
+      const returnUrl = new URL(body.returnUrl);
+
+      if (returnUrl.protocol !== "https:" && returnUrl.hostname !== "localhost") {
+        return "Return URL must be HTTPS";
+      }
+    } catch {
+      return "Return URL is invalid";
+    }
   }
 
   return null;

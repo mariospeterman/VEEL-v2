@@ -8,6 +8,8 @@ export type CreateWalletLinkChallengeRequest =
   components["schemas"]["CreateWalletLinkChallengeRequest"];
 export type WalletLinkChallenge = components["schemas"]["WalletLinkChallenge"];
 export type LinkWalletRequest = components["schemas"]["LinkWalletRequest"];
+export type CreateOnrampSessionRequest = components["schemas"]["CreateOnrampSessionRequest"];
+export type OnrampSessionResource = components["schemas"]["OnrampSession"];
 
 export interface WalletRepository {
   listWalletsBySupabaseUserId(supabaseUserId: string): Promise<WalletResource[]>;
@@ -15,6 +17,12 @@ export interface WalletRepository {
   createLinkChallenge(input: CreateWalletChallengeInput): Promise<WalletLinkChallenge>;
   consumeVerifiedExternalWalletLink(input: ConsumeVerifiedExternalWalletLinkInput): Promise<WalletResource>;
   findLinkChallenge(input: FindWalletLinkChallengeInput): Promise<StoredWalletLinkChallenge | null>;
+  findWalletForSupabaseUser(input: FindWalletForSupabaseUserInput): Promise<WalletResource | null>;
+  setPrimaryWallet(input: SetPrimaryWalletInput): Promise<WalletResource>;
+  findOnrampSessionByIdempotencyKey(
+    input: FindOnrampSessionByIdempotencyKeyInput
+  ): Promise<OnrampSessionResource | null>;
+  recordOnrampSession(input: RecordOnrampSessionInput): Promise<OnrampSessionResource>;
   close?(): Promise<void>;
 }
 
@@ -47,6 +55,55 @@ export interface FindWalletLinkChallengeInput {
 export interface ConsumeVerifiedExternalWalletLinkInput {
   challengeId: string;
   supabaseUserId: string;
+}
+
+export interface FindWalletForSupabaseUserInput {
+  walletId: string;
+  supabaseUserId: string;
+}
+
+export interface SetPrimaryWalletInput {
+  walletId: string;
+  supabaseUserId: string;
+}
+
+export interface FindOnrampSessionByIdempotencyKeyInput {
+  supabaseUserId: string;
+  idempotencyKey: string;
+}
+
+export interface RecordOnrampSessionInput {
+  supabaseUserId: string;
+  walletId: string;
+  idempotencyKey: string;
+  provider: string;
+  providerSessionReferenceHash: string;
+  walletAddress: string;
+  chain: WalletChain;
+  purchaseCurrency: "SOL" | "USDC";
+  launchUrl: string;
+  returnUrl: string | null;
+  expiresAt: Date | null;
+}
+
+export interface CreateWalletOnrampSessionInput {
+  supabaseUserId: string;
+  wallet: WalletResource;
+  idempotencyKey: string;
+  returnUrl: string | null;
+  clientIp: string;
+}
+
+export interface WalletOnrampProviderSession {
+  provider: string;
+  providerSessionReferenceHash: string;
+  launchUrl: string;
+  purchaseCurrency: "SOL" | "USDC";
+  expiresAt: Date | null;
+}
+
+export interface WalletOnrampProviderAdapter {
+  createSession(input: CreateWalletOnrampSessionInput): Promise<WalletOnrampProviderSession>;
 }
 
 export interface EmbeddedWalletProvisionRequest {

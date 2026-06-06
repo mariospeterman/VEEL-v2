@@ -77,6 +77,21 @@ test("renders the activity and wallet transaction projection", async ({ page }) 
   await expect(page.getByText("confirmed").first()).toBeVisible();
 });
 
+test("renders the wallet funding and primary-wallet projection", async ({ page }) => {
+  await page.goto("/wallet");
+
+  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Funding and receipts" })).toBeVisible();
+  await expect(page.getByText("Primary wallet")).toBeVisible();
+  await expect(page.getByText("backend settlement only")).toBeVisible();
+  await expect(page.getByText("User-owned wallet funding")).toBeVisible();
+  await expect(page.getByText("Funding sessions do not unlock")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open funding session" })).toHaveAttribute(
+    "href",
+    /pay\.coinbase\.com/
+  );
+});
+
 test("renders the creator dashboard projection", async ({ page }) => {
   await page.goto("/profile");
 

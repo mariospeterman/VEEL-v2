@@ -120,6 +120,9 @@ paths:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       responses:
         "200": { $ref: "#/components/responses/Wallet" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /v1/wallets/onramp-sessions:
     post:
       operationId: createOnrampSession
@@ -131,6 +134,10 @@ paths:
         $ref: "#/components/requestBodies/CreateOnrampSession"
       responses:
         "201": { $ref: "#/components/responses/OnrampSession" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/profiles/me:
     patch:
       operationId: updateMyProfile
@@ -1608,11 +1615,16 @@ components:
         returnUrl: { type: string, format: uri }
     OnrampSession:
       type: object
-      required: [provider, launchUrl, walletAddress]
+      required: [id, provider, launchUrl, walletId, walletAddress, state, createdAt]
       properties:
+        id: { type: string, format: uuid }
         provider: { type: string }
         launchUrl: { type: string, format: uri }
+        walletId: { type: string, format: uuid }
         walletAddress: { type: string }
+        state: { type: string, enum: [created, completed, failed, expired, canceled] }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time, nullable: true }
     Me:
       type: object
       required: [user, ageState, walletState, appAccessState, feedPreferences]

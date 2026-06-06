@@ -60,11 +60,12 @@ External wallets remain first-class for crypto-native users.
 
 Use a wallet infrastructure provider instead of building key management.
 
-Provider docs checked for this implementation slice on 2026-06-03:
+Provider docs checked for this implementation slice on 2026-06-06:
 
 - Privy docs: embedded Solana wallet creation and funding support remain the launch-default path to verify in staging.
 - Turnkey docs: embedded wallets support noncustodial user-controlled mode, Solana account creation, import/export, and stronger policy/sub-organization controls.
 - Dynamic docs: embedded wallets support noncustodial MPC, Solana via EdDSA/FROST, and can remain an evaluated fallback.
+- Coinbase Developer Platform Onramp docs: hosted onramp sessions return a single-use funding URL to the configured destination wallet, support Solana as a destination network, and require server-side CDP JWT authentication generated from a secret API key.
 
 Provider decision:
 
@@ -157,6 +158,7 @@ Implementation contract:
 - `POST /v1/wallets/link` verifies the Ed25519 Solana message signature server-side before inserting the wallet.
 - A verified link challenge is consumed and cannot be replayed.
 - The first linked wallet becomes primary by default.
+- `PATCH /v1/wallets/{walletId}/primary` changes only the authenticated user's primary wallet, requires idempotency, and audits the change.
 - Wallet link completion is an audit event, not payment proof.
 - Current supported external provider values are `phantom`, `solflare`, and `wallet_adapter`.
 
@@ -207,6 +209,8 @@ Rules:
 - onramp completion is not content, Event Access, pass, message, support, or membership checkout
 - Veel does not use wallet funding providers as merchant-of-record product billing
 - paid actions still require backend payment intent and confirmed transaction validation
+- `POST /v1/wallets/onramp-sessions` is implemented as a wallet-funding boundary. The default provider is disabled; when `ONRAMP_PROVIDER=coinbase` and CDP API key envs are present, the API creates a Coinbase hosted onramp session for the selected Veel wallet address and stores a hashed provider reference plus the user-visible launch URL for support/accountability.
+- The onramp table is RLS-protected and owner/staff-readable. It does not link to entitlements, passes, paid-message delivery, subscriptions, unlocks, commissions, or payment settlement.
 
 ## When To Create The Embedded Wallet
 
@@ -266,7 +270,10 @@ Current implementation state:
 
 - Wallet table and backend wallet-readiness gate exist.
 - `GET /v1/wallets` returns normalized wallet resources for the authenticated user.
+- `PATCH /v1/wallets/{walletId}/primary` safely switches the user's primary wallet and writes an audit event.
+- `POST /v1/wallets/onramp-sessions` creates an idempotent user-wallet funding session when the provider is configured, otherwise returns service unavailable without fabricating a checkout URL.
 - Embedded wallet provider code is an adapter interface only. No Privy, Turnkey, or Dynamic SDK calls are implemented until staging credentials, provider account acceptance, and exact SDK behavior are confirmed.
+- Coinbase funding is a server-side provider boundary only. It funds user-owned wallets and is not product billing or payment proof.
 
 Recommended decision record:
 

@@ -4,6 +4,7 @@ export const appShellNavItems = [
   { href: "/create", label: "Create" },
   { href: "/messages", label: "Messages" },
   { href: "/activity", label: "Activity" },
+  { href: "/wallet", label: "Wallet" },
   { href: "/subscriptions", label: "Subscriptions" },
   { href: "/profile", label: "Profile" }
 ] as const;

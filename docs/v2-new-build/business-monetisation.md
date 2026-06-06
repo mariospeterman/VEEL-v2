@@ -131,6 +131,12 @@ Examples:
 
 Onramp sessions are funding flows, not payment settlement flows. A card/onramp provider may help the user add SOL/USDC to their wallet, but Veel product purchases still require the normal payment intent, transaction request or subscription collection, and backend confirmation path. Veel must not use an onramp provider as merchant checkout for content, messages, Event Access, support, or memberships.
 
+Implemented wallet funding boundary:
+
+- `POST /v1/wallets/onramp-sessions` creates a provider funding session only for a wallet owned by the authenticated user.
+- The provider launch URL may be returned to the user, but no access, entitlement, paid-message delivery, ticket, subscription, commission, or revenue state changes from that response.
+- Coinbase CDP is the current provider boundary when configured. It is used only for destination-wallet funding; Solana Pay/payment-intent settlement remains the product payment path.
+
 Native SOL and SPL token modes must share a common intent/split/settlement model. Do not create separate payment systems.
 
 ## Product Catalogue
