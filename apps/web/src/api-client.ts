@@ -35,6 +35,7 @@ export type NotificationPushConfig = components["schemas"]["NotificationPushConf
 export type AgeStatus = components["schemas"]["AgeStatus"];
 export type Event = components["schemas"]["Event"];
 export type EventAccessPassPage = components["schemas"]["TicketPage"];
+export type EventAccessPass = components["schemas"]["Ticket"];
 export type MutualsFeedPage = components["schemas"]["DatingFeedPage"];
 export type MutualsMatchPage = components["schemas"]["DatingMatchPage"];
 export type AiCapabilities = components["schemas"]["AiCapabilities"];
@@ -232,6 +233,14 @@ export async function getAdminRefundDisputes(): Promise<ApiResult<AdminPage<Admi
 
 export async function getAdminDataRequests(): Promise<ApiResult<AdminPage<AdminDataRequest>>> {
   return getJson<AdminPage<AdminDataRequest>>("/v1/admin/data-requests");
+}
+
+export async function getAdminEvents(): Promise<ApiResult<AdminPage<Event>>> {
+  return getJson<AdminPage<Event>>("/v1/admin/events");
+}
+
+export async function getAdminTickets(): Promise<ApiResult<AdminPage<EventAccessPass>>> {
+  return getJson<AdminPage<EventAccessPass>>("/v1/admin/tickets");
 }
 
 export async function getAdminComplianceLedger(): Promise<ApiResult<AdminPage<AdminComplianceLedgerEntry>>> {

@@ -3690,6 +3690,12 @@ describe("buildApi", () => {
         async updateFeatureFlag() {
           throw new Error("not implemented");
         },
+        async listEvents() {
+          throw new Error("not implemented");
+        },
+        async listTickets() {
+          throw new Error("not implemented");
+        },
         async getDatingSafety() {
           throw new Error("not implemented");
         },
@@ -3800,6 +3806,12 @@ describe("buildApi", () => {
         async updateFeatureFlag() {
           throw new Error("not implemented");
         },
+        async listEvents() {
+          throw new Error("not implemented");
+        },
+        async listTickets() {
+          throw new Error("not implemented");
+        },
         async getDatingSafety() {
           throw new Error("not implemented");
         },
@@ -3906,6 +3918,12 @@ describe("buildApi", () => {
           throw new Error("not implemented");
         },
         async updateFeatureFlag() {
+          throw new Error("not implemented");
+        },
+        async listEvents() {
+          throw new Error("not implemented");
+        },
+        async listTickets() {
           throw new Error("not implemented");
         },
         async getDatingSafety() {
@@ -4112,6 +4130,37 @@ describe("buildApi", () => {
       subjectType: "content",
       state: "submitted"
     });
+
+    await app.close();
+  });
+
+  it("returns sanitized admin Event Access projections", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: fakeAdminRepository
+    });
+    await app.ready();
+
+    const headers = { authorization: "Bearer valid-token" };
+    const [events, tickets] = await Promise.all([
+      app.inject({ method: "GET", url: "/v1/admin/events", headers }),
+      app.inject({ method: "GET", url: "/v1/admin/tickets", headers })
+    ]);
+
+    expect(events.statusCode).toBe(200);
+    expect(events.json().items[0]).toMatchObject({
+      title: "Creator live night",
+      state: "published",
+      ticketTypes: [expect.objectContaining({ remaining: 49 })]
+    });
+    expect(tickets.statusCode).toBe(200);
+    expect(tickets.json().items[0]).toMatchObject({
+      eventId: "00000000-0000-4000-8000-0000000000e1",
+      state: "active"
+    });
+    expect(`${events.body}${tickets.body}`).not.toMatch(
+      /raw|payload|secret|privateKey|serviceRole|identityDocument|providerPayload|metadata|streamKey|ingest|balance|payout/i
+    );
 
     await app.close();
   });
@@ -7509,6 +7558,55 @@ const fakeAdminRepository: AdminRepository = {
         input.body.state === "completed" || input.body.state === "rejected"
           ? "2026-06-06T12:30:00.000Z"
           : null
+    };
+  },
+  async listEvents() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-0000000000e1",
+          title: "Creator live night",
+          description: "Event Access test event",
+          startsAt: "2026-06-10T20:00:00.000Z",
+          endsAt: null,
+          accessRule: "public_sale",
+          location: { type: "digital_live_stream", label: "Veel Live" },
+          state: "published",
+          ticketTypes: [
+            {
+              id: "00000000-0000-4000-8000-0000000000e2",
+              label: "Access Pass",
+              priceMinor: 10000000,
+              currency: "SOL",
+              capacity: 50,
+              remaining: 49,
+              state: "active",
+              saleStartsAt: null,
+              saleEndsAt: null,
+              perUserLimit: 1
+            }
+          ]
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async listTickets() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-0000000000e3",
+          eventId: "00000000-0000-4000-8000-0000000000e1",
+          ticketTypeId: "00000000-0000-4000-8000-0000000000e2",
+          holderUserId: "00000000-0000-4000-8000-000000000011",
+          paymentIntentId: "00000000-0000-4000-8000-000000000050",
+          state: "active",
+          qrToken: "veel_ticket_redacted",
+          checkedInAt: null,
+          createdAt: "2026-06-06T14:00:00.000Z"
+        }
+      ],
+      nextCursor: null
     };
   },
   async getDatingSafety() {

@@ -41,6 +41,9 @@ export type AdminFeatureFlagPatchRequest =
 export type AdminModerationActionRequest =
   components["schemas"]["AdminModerationActionRequest"];
 export type AdminReportActionRequest = components["schemas"]["AdminReportActionRequest"];
+export type Event = components["schemas"]["Event"];
+export type EventTicketType = components["schemas"]["EventTicketType"];
+export type Ticket = components["schemas"]["Ticket"];
 
 export interface AdminPage<Item> {
   items: Item[];
@@ -99,6 +102,8 @@ export interface AdminRepository {
     body: AdminDataRequestActionRequest;
     idempotencyKey: string;
   }): Promise<AdminDataRequest | null>;
+  listEvents(input: { cursor?: string }): Promise<AdminPage<Event>>;
+  listTickets(input: { cursor?: string }): Promise<AdminPage<Ticket>>;
   getDatingSafety(): Promise<AdminDatingSafety>;
   listComplianceLedger(input: { cursor?: string }): Promise<AdminPage<AdminComplianceLedgerEntry>>;
   listDac7Reports(input: { cursor?: string }): Promise<AdminPage<AdminComplianceReport>>;

@@ -6,6 +6,7 @@ import {
   getAdminContent,
   getAdminDac7Reports,
   getAdminDataRequests,
+  getAdminEvents,
   getAdminFeatureFlags,
   getAdminNotificationHealth,
   getAdminOpsSummary,
@@ -18,6 +19,7 @@ import {
   getAdminRefundDisputes,
   getAdminSupportCases,
   getAdminSupportPolicies,
+  getAdminTickets,
   getAdminUnlocks,
   getAdminUsers,
   getAdminVatDeterminations,
@@ -42,7 +44,9 @@ import {
   type AdminUnlock,
   type AdminUser,
   type AdminVatDetermination,
-  type ApiResult
+  type ApiResult,
+  type Event,
+  type EventAccessPass
 } from "@/api-client";
 
 export default async function AdminPage() {
@@ -67,6 +71,8 @@ export default async function AdminPage() {
     supportPolicies,
     refundDisputes,
     dataRequests,
+    events,
+    tickets,
     featureFlags
   ] = await Promise.all([
     getAdminOpsSummary(),
@@ -89,6 +95,8 @@ export default async function AdminPage() {
     getAdminSupportPolicies(),
     getAdminRefundDisputes(),
     getAdminDataRequests(),
+    getAdminEvents(),
+    getAdminTickets(),
     getAdminFeatureFlags()
   ]);
 
@@ -176,6 +184,10 @@ export default async function AdminPage() {
                   </div>
                 )}
               </PageState>
+            </Panel>
+
+            <Panel title="Event Access ops">
+              <EventAccessPanel events={events} tickets={tickets} />
             </Panel>
 
             <Panel title="Data requests">
@@ -339,6 +351,37 @@ function ModerationPanel({
       ))}
       {users.data.items.map((user) => (
         <UserQueueRow key={user.id} user={user} />
+      ))}
+    </div>
+  );
+}
+
+function EventAccessPanel({
+  events,
+  tickets
+}: {
+  events: ApiResult<AdminPage<Event>>;
+  tickets: ApiResult<AdminPage<EventAccessPass>>;
+}) {
+  if (!events.ok) {
+    return <UnavailableState result={events} />;
+  }
+
+  if (!tickets.ok) {
+    return <UnavailableState result={tickets} />;
+  }
+
+  if (events.data.items.length === 0 && tickets.data.items.length === 0) {
+    return <EmptyState label="No events or passes" />;
+  }
+
+  return (
+    <div className="grid gap-2">
+      {events.data.items.map((event) => (
+        <EventOpsRow event={event} key={event.id} />
+      ))}
+      {tickets.data.items.map((ticket) => (
+        <TicketOpsRow key={ticket.id} ticket={ticket} />
       ))}
     </div>
   );
@@ -552,6 +595,34 @@ function ReportQueueRow({ report }: { report: AdminReport }) {
       </div>
       <Fact label="State" value={report.state} />
       <Fact label="Subject" value={report.subjectId ?? "none"} />
+    </article>
+  );
+}
+
+function EventOpsRow({ event }: { event: Event }) {
+  const passCount = event.ticketTypes.reduce((total, ticketType) => total + ticketType.capacity - ticketType.remaining, 0);
+
+  return (
+    <article className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm md:grid-cols-[1fr_130px_190px]">
+      <div className="min-w-0">
+        <p className="font-medium">{event.title}</p>
+        <p className="mt-1 truncate text-[var(--muted)]">{event.id}</p>
+      </div>
+      <Fact label="State" value={event.state} />
+      <Fact label="Issued" value={passCount.toString()} />
+    </article>
+  );
+}
+
+function TicketOpsRow({ ticket }: { ticket: EventAccessPass }) {
+  return (
+    <article className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm md:grid-cols-[1fr_130px_190px]">
+      <div className="min-w-0">
+        <p className="font-medium">Event Access Pass</p>
+        <p className="mt-1 truncate text-[var(--muted)]">{ticket.id}</p>
+      </div>
+      <Fact label="State" value={ticket.state} />
+      <Fact label="Check-in" value={timestampLabel(ticket.checkedInAt ?? null)} />
     </article>
   );
 }

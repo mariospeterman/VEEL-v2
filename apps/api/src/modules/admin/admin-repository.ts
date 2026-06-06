@@ -25,7 +25,10 @@ import type {
   AdminUser,
   AdminVatDetermination,
   AdminUnlock,
-  AuditEvent
+  AuditEvent,
+  Event,
+  EventTicketType,
+  Ticket
 } from "./types.js";
 
 export class AdminRepositoryConfigurationError extends Error {
@@ -195,6 +198,46 @@ interface DataRequestRow {
   created_at: Date;
   updated_at: Date | null;
   completed_at: Date | null;
+}
+
+interface EventRow {
+  id: string;
+  title: string;
+  description: string | null;
+  starts_at: Date;
+  ends_at: Date | null;
+  access_rule: Event["accessRule"];
+  location_type: Event["location"]["type"];
+  location_label: string | null;
+  location_lat: string | number | null;
+  location_lng: string | number | null;
+  state: Event["state"];
+  created_at: Date;
+}
+
+interface EventTicketTypeRow {
+  id: string;
+  event_id: string;
+  label: string;
+  price_minor: string | number | null;
+  currency: EventTicketType["currency"];
+  capacity: number;
+  sale_starts_at: Date | null;
+  sale_ends_at: Date | null;
+  per_user_limit: number;
+  state: EventTicketType["state"];
+  issued_count: string | number;
+}
+
+interface TicketRow {
+  id: string;
+  event_id: string;
+  ticket_type_id: string;
+  holder_user_id: string;
+  payment_intent_id: string | null;
+  state: Ticket["state"];
+  checked_in_at: Date | null;
+  created_at: Date;
 }
 
 interface ComplianceLedgerRow {
@@ -407,6 +450,12 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
         throw new AdminRepositoryConfigurationError();
       },
       async updateDataRequest() {
+        throw new AdminRepositoryConfigurationError();
+      },
+      async listEvents() {
+        throw new AdminRepositoryConfigurationError();
+      },
+      async listTickets() {
         throw new AdminRepositoryConfigurationError();
       },
       async getDatingSafety() {
@@ -1322,6 +1371,83 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
 
       return rows[0] ? toDataRequest(rows[0]) : null;
     },
+    async listEvents(input) {
+      const eventRows = await sql<EventRow[]>`
+        select
+          id,
+          title,
+          description,
+          starts_at,
+          ends_at,
+          access_rule,
+          location_type,
+          location_label,
+          location_lat::text,
+          location_lng::text,
+          state,
+          created_at
+        from events
+        where (${input.cursor ?? null}::timestamptz is null or starts_at < ${input.cursor ?? null}::timestamptz)
+        order by starts_at desc
+        limit ${pageSize + 1}
+      `;
+      const visibleRows = eventRows.slice(0, pageSize);
+      const eventIds = visibleRows.map((row) => row.id);
+      const ticketRows =
+        eventIds.length > 0
+          ? await sql<EventTicketTypeRow[]>`
+              select
+                tt.id,
+                tt.event_id,
+                tt.label,
+                tt.price_minor,
+                tt.currency,
+                tt.capacity,
+                tt.sale_starts_at,
+                tt.sale_ends_at,
+                tt.per_user_limit,
+                tt.state,
+                count(te.id) as issued_count
+              from ticket_types tt
+              left join ticket_entitlements te
+                on te.ticket_type_id = tt.id
+                and te.state in ('active', 'checked_in')
+              where tt.event_id in ${sql(eventIds)}
+              group by tt.id
+              order by tt.created_at asc
+            `
+          : [];
+      const ticketTypesByEvent = new Map<string, EventTicketTypeRow[]>();
+      for (const row of ticketRows) {
+        const rows = ticketTypesByEvent.get(row.event_id) ?? [];
+        rows.push(row);
+        ticketTypesByEvent.set(row.event_id, rows);
+      }
+
+      return {
+        items: visibleRows.map((row) => toEvent(row, ticketTypesByEvent.get(row.id) ?? [])),
+        nextCursor: cursorFor(eventRows.length > pageSize ? eventRows[pageSize] : null)
+      };
+    },
+    async listTickets(input) {
+      const rows = await sql<TicketRow[]>`
+        select
+          id,
+          event_id,
+          ticket_type_id,
+          holder_user_id,
+          payment_intent_id,
+          state,
+          checked_in_at,
+          created_at
+        from ticket_entitlements
+        where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
+        order by created_at desc
+        limit ${pageSize + 1}
+      `;
+
+      return page(rows, toTicket);
+    },
     async getDatingSafety() {
       const rows = await sql<{
         open_reports: string | number;
@@ -2018,6 +2144,56 @@ function toDataRequest(row: DataRequestRow): AdminDataRequest {
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at?.toISOString() ?? null,
     completedAt: row.completed_at?.toISOString() ?? null
+  };
+}
+
+function toEvent(row: EventRow, ticketTypeRows: EventTicketTypeRow[]): Event {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    startsAt: row.starts_at.toISOString(),
+    endsAt: row.ends_at?.toISOString() ?? null,
+    accessRule: row.access_rule,
+    location: {
+      type: row.location_type,
+      ...(row.location_label ? { label: row.location_label } : {}),
+      ...(row.location_lat !== null ? { latitude: Number(row.location_lat) } : {}),
+      ...(row.location_lng !== null ? { longitude: Number(row.location_lng) } : {})
+    },
+    state: row.state,
+    ticketTypes: ticketTypeRows.map(toEventTicketType)
+  };
+}
+
+function toEventTicketType(row: EventTicketTypeRow): EventTicketType {
+  const issued = Number(row.issued_count);
+
+  return {
+    id: row.id,
+    label: row.label,
+    priceMinor: nullableNumber(row.price_minor),
+    currency: row.currency,
+    capacity: row.capacity,
+    remaining: Math.max(row.capacity - issued, 0),
+    state: issued >= row.capacity ? "sold_out" : row.state,
+    saleStartsAt: row.sale_starts_at?.toISOString() ?? null,
+    saleEndsAt: row.sale_ends_at?.toISOString() ?? null,
+    perUserLimit: row.per_user_limit
+  };
+}
+
+function toTicket(row: TicketRow): Ticket {
+  return {
+    id: row.id,
+    eventId: row.event_id,
+    ticketTypeId: row.ticket_type_id,
+    holderUserId: row.holder_user_id,
+    paymentIntentId: row.payment_intent_id,
+    state: row.state,
+    qrToken: "redacted",
+    checkedInAt: row.checked_in_at?.toISOString() ?? null,
+    createdAt: row.created_at.toISOString()
   };
 }
 

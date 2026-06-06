@@ -428,6 +428,22 @@ export async function registerAdminRoutes(
     return reply.code(200).send(dataRequest);
   });
 
+  app.get("/v1/admin/events", async (request, reply) => {
+    const allowed = await requireAdminAccess(request, reply, options);
+    if (!allowed) return reply;
+
+    const query = request.query as { cursor?: string };
+    return reply.code(200).send(await options.adminRepository.listEvents(adminListInput(query)));
+  });
+
+  app.get("/v1/admin/tickets", async (request, reply) => {
+    const allowed = await requireAdminAccess(request, reply, options);
+    if (!allowed) return reply;
+
+    const query = request.query as { cursor?: string };
+    return reply.code(200).send(await options.adminRepository.listTickets(adminListInput(query)));
+  });
+
   app.get("/v1/admin/dating/safety", async (request, reply) => {
     const allowed = await requireAdminAccess(request, reply, options);
     if (!allowed) return reply;

@@ -30,6 +30,7 @@ Current implementation state:
 - `GET /v1/admin/provider-events` returns sanitized provider event status and timing only.
 - `GET /v1/admin/audit` returns sanitized audit event id, subject type, action, and timestamp only. It intentionally omits `metadata`, raw provider payloads, reasons, idempotency keys, PII, wallet evidence, and secrets.
 - `GET /v1/admin/users`, `GET /v1/admin/users/{userId}`, `GET /v1/admin/content`, `PATCH /v1/admin/content/{contentId}/moderation`, `GET /v1/admin/reports`, and `PATCH /v1/admin/reports/{reportId}` expose the first user/content/report moderation queue. Reads are sanitized and omit email, phone, raw identity records, provider payloads, report metadata, and secrets. Mutations require `Idempotency-Key`, reason text, and write `audit_events`.
+- `GET /v1/admin/events` and `GET /v1/admin/tickets` expose read-only Event Access operations projections using the same sanitized Event and Event Access Pass schemas as user-facing routes. They do not expose stream keys, raw QR hashes, provider payloads, balances, or payout state.
 - `GET /v1/refunds/requests` and `POST /v1/refunds/requests` let authenticated, age-verified users open refund, dispute, or access-issue review requests for their own payment intents. These routes create review/audit state only and never execute refunds, reverse settlements, create balances, create payout queues, or override blockchain payment truth.
 - `GET /v1/admin/refunds/disputes` and `PATCH /v1/admin/refunds/disputes/{refundDisputeId}` expose sanitized refund/dispute review state to staff. Admin updates require `Idempotency-Key`, write `audit_events`, and may only change review state/resolution; creator/admin refund execution and entitlement revocation/replacement remain separate policy-approved slices.
 - `GET /v1/admin/data-requests` and `PATCH /v1/admin/data-requests/{dataRequestId}` expose the privacy request lifecycle to staff. Rows are sanitized lifecycle records only, user-visible through owner/staff RLS, and carry the `sanitized_identity_minimized_no_raw_exports` boundary. Admin updates require `Idempotency-Key`, reason text, and audit events.
@@ -37,12 +38,12 @@ Current implementation state:
 - The `/admin` web surface is separate from normal user navigation and uses
   typed API projections for ops summary, payment intents, unlocks, provider
   events, compliance ledger, DAC7/CARF reports, VAT determinations, receipts,
-  support policy, user/content/report moderation queues, refund/dispute review,
-  data request lifecycle, sanitized audit events, and feature flag policy
-  controls.
+  support policy, user/content/report moderation queues, Event Access ops,
+  refund/dispute review, data request lifecycle, sanitized audit events, and
+  feature flag policy controls.
   It fails closed per panel when the API or admin authorization is unavailable
   and does not render fixture admin money, provider, tax, or receipt rows.
-- Event Access operations are inspectable through payment intent state, pass entitlement state, QR/check-in state, compliance ledger state, and provider event state; admin mutations remain deferred to their dedicated role-policy slices.
+- Event Access operations are inspectable through payment intent state, pass entitlement state, QR/check-in state, compliance ledger state, and provider event state; admin Event Access mutations remain deferred to their dedicated role-policy slices.
 - DAC7/VAT readiness is surfaced through read-only compliance routes before export or filing workflows are enabled. DAC8/CARF reporting reads are additionally gated by the `compliance.carf_exports` feature flag, which is seeded as paused until counsel/tax review explicitly enables it.
 - Admin reads require a valid session whose app user has an active staff membership in an operations, finance, support, creator-success, readonly-auditor, admin, or owner role.
 - Raw provider payloads, webhook bodies, private media URLs, stream keys, provider secrets, wallet private keys, service-role keys, and frontend-computed payment truth are not returned.
@@ -130,6 +131,7 @@ The admin landing dashboard should show:
 - `GET /v1/admin/compliance/carf/reports` requires the `compliance.carf_exports` flag to be `active` with `value.enabled = true`. A paused/missing flag returns a fail-closed `403` and does not call CARF report storage.
 - `GET /v1/admin/audit` exposes a narrow read-only audit log projection for operations review. Audit metadata remains backend-only until a narrower resource-specific contract is approved.
 - `GET /v1/admin/users`, `GET /v1/admin/content`, and `GET /v1/admin/reports` expose the current moderation queue without raw PII/provider payloads. `PATCH /v1/admin/content/{contentId}/moderation` and `PATCH /v1/admin/reports/{reportId}` are audited state transitions only; they do not create social rank, paid visibility, or payment/access facts.
+- `GET /v1/admin/events` and `GET /v1/admin/tickets` expose read-only Event Access ops state. Provider-event replay remains planned until a dedicated worker/adapter replay boundary exists; a UI/admin state flip must not masquerade as provider replay.
 - current Studio dashboards expose backend-derived RBAC permission rows with denial reasons; the frontend must not infer organization authority from role labels alone
 
 ## Business Operations Modules
