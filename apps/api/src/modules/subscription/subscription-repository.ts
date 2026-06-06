@@ -79,6 +79,9 @@ export function createPostgresSubscriptionRepository(databaseUrl?: string): Subs
       async listPlans() {
         throw new SubscriptionRepositoryConfigurationError();
       },
+      async listSubscriptions() {
+        throw new SubscriptionRepositoryConfigurationError();
+      },
       async createAuthorizationIntent() {
         throw new SubscriptionRepositoryConfigurationError();
       },
@@ -127,6 +130,45 @@ export function createPostgresSubscriptionRepository(databaseUrl?: string): Subs
 
       return {
         items: rows.map(toSubscriptionPlan)
+      };
+    },
+
+    async listSubscriptions(input) {
+      const rows = await sql<SubscriptionRow[]>`
+        select
+          s.id,
+          s.scope,
+          s.plan_id,
+          s.state,
+          s.renewal_mode,
+          s.current_period_ends_at,
+          s.next_collection_at,
+          s.cancelled_at,
+          s.revoked_at,
+          s.authority_address,
+          s.delegation_address,
+          s.creator_user_id,
+          p.handle as creator_handle,
+          p.display_name as creator_display_name,
+          p.avatar_url as creator_avatar_url
+        from subscriptions s
+        join users u on u.id = s.subscriber_user_id
+        left join profiles p on p.user_id = s.creator_user_id
+        where u.supabase_user_id = ${input.supabaseUserId}
+        order by
+          case s.state
+            when 'active' then 0
+            when 'renewal_pending' then 1
+            when 'grace_period' then 2
+            when 'authorization_pending' then 3
+            else 4
+          end,
+          s.next_collection_at asc nulls last,
+          s.created_at desc
+      `;
+
+      return {
+        items: rows.map(toSubscription)
       };
     },
 

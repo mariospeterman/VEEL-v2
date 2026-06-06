@@ -1,51 +1,21 @@
-import type { components } from "@veel/contracts";
 import { appShellNavItems } from "@veel/ui";
+import {
+  getSubscriptionPlans,
+  getSubscriptions,
+  type ApiResult,
+  type Subscription,
+  type SubscriptionPage,
+  type SubscriptionPlan,
+  type SubscriptionPlanPage
+} from "@/api-client";
 
-type SubscriptionPlan = components["schemas"]["SubscriptionPlan"];
-type Subscription = components["schemas"]["Subscription"];
+export default async function SubscriptionsPage() {
+  const [plans, subscriptions] = await Promise.all([
+    getSubscriptionPlans(),
+    getSubscriptions()
+  ]);
+  const currentSubscription = subscriptions.ok ? (subscriptions.data.items[0] ?? null) : null;
 
-const plans: SubscriptionPlan[] = [
-  {
-    id: "platform_plus_monthly",
-    scope: "platform",
-    label: "Veel Plus",
-    amountMinor: 15000000,
-    currency: "USDC",
-    periodDays: 30,
-    billingMode: "delegated_solana_subscription",
-    providerState: "staging_required",
-    tokenMint: "USDC_MINT_CONFIG_REQUIRED",
-    tokenProgram: "spl_token"
-  },
-  {
-    id: "platform_studio_monthly",
-    scope: "platform",
-    label: "Veel Studio",
-    amountMinor: 29000000,
-    currency: "USDC",
-    periodDays: 30,
-    billingMode: "delegated_solana_subscription",
-    providerState: "staging_required",
-    tokenMint: "USDC_MINT_CONFIG_REQUIRED",
-    tokenProgram: "spl_token"
-  }
-];
-
-const subscription: Subscription = {
-  id: "00000000-0000-4000-8000-000000000070",
-  scope: "platform",
-  planId: "platform_plus_monthly",
-  state: "authorization_pending",
-  renewalMode: "delegated_solana_subscription",
-  currentPeriodEndsAt: null,
-  nextCollectionAt: null,
-  cancelledAt: null,
-  revokedAt: null,
-  authorityAddress: null,
-  delegationAddress: null
-};
-
-export default function SubscriptionsPage() {
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <AppNav />
@@ -63,21 +33,30 @@ export default function SubscriptionsPage() {
 
           <section className="grid gap-3">
             <h2 className="text-base font-semibold tracking-normal">Plans</h2>
-            {plans.map((plan) => (
-              <PlanRow plan={plan} key={plan.id} />
-            ))}
+            {plans.ok ? (
+              plans.data.items.length > 0 ? (
+                plans.data.items.map((plan) => <PlanRow plan={plan} key={plan.id} />)
+              ) : (
+                <EmptyState label="No subscription plans are available" />
+              )
+            ) : (
+              <UnavailableState result={plans} title="Subscription plans unavailable" />
+            )}
           </section>
         </section>
 
         <aside className="grid content-start gap-3">
           <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
             <p className="text-sm font-medium">Current subscription</p>
-            <div className="mt-4 grid gap-3 text-sm">
-              <Fact label="State" value={subscription.state} />
-              <Fact label="Renewal" value={subscription.renewalMode} />
-              <Fact label="Next collection" value={subscription.nextCollectionAt ?? "pending authorization"} />
-              <Fact label="Authority" value={subscription.authorityAddress ?? "not verified"} />
-            </div>
+            {subscriptions.ok ? (
+              currentSubscription ? (
+                <SubscriptionSummary subscription={currentSubscription} />
+              ) : (
+                <EmptyState label="No active or pending subscriptions" />
+              )
+            ) : (
+              <UnavailableState result={subscriptions} title="Subscriptions unavailable" />
+            )}
           </section>
 
           <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
@@ -90,6 +69,17 @@ export default function SubscriptionsPage() {
         </aside>
       </section>
     </main>
+  );
+}
+
+function SubscriptionSummary({ subscription }: { subscription: Subscription }) {
+  return (
+    <div className="mt-4 grid gap-3 text-sm">
+      <Fact label="State" value={subscription.state} />
+      <Fact label="Renewal" value={subscription.renewalMode} />
+      <Fact label="Next collection" value={subscription.nextCollectionAt ?? "pending authorization"} />
+      <Fact label="Authority" value={subscription.authorityAddress ?? "not verified"} />
+    </div>
   );
 }
 
@@ -113,6 +103,34 @@ function PlanRow({ plan }: { plan: SubscriptionPlan }) {
         <Fact label="Mint" value={plan.tokenMint ?? "unconfigured"} />
       </dl>
     </article>
+  );
+}
+
+function EmptyState({ label }: { label: string }) {
+  return (
+    <div className="rounded border border-[var(--line)] bg-[var(--background)] p-4 text-sm text-[var(--muted)]">
+      {label}
+    </div>
+  );
+}
+
+function UnavailableState({
+  result,
+  title
+}: {
+  result: ApiResult<SubscriptionPage> | ApiResult<SubscriptionPlanPage>;
+  title: string;
+}) {
+  if (result.ok) {
+    return null;
+  }
+
+  return (
+    <div className="mt-4 rounded border border-[var(--line)] bg-[var(--background)] p-4">
+      <p className="text-sm font-medium text-[var(--accent)]">HTTP {result.status}</p>
+      <h2 className="mt-2 text-base font-semibold tracking-normal">{title}</h2>
+      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{result.message}</p>
+    </div>
   );
 }
 

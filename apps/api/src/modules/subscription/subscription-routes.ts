@@ -55,6 +55,29 @@ export async function registerSubscriptionRoutes(
     }
   });
 
+  app.get("/v1/subscriptions", async (request, reply) => {
+    const access = await verifySubscriptionReadyAccess(request, options);
+
+    if (!access.ok) {
+      return reply.code(access.statusCode).send(access.body);
+    }
+
+    try {
+      const page = await options.subscriptionRepository.listSubscriptions({
+        supabaseUserId: access.supabaseUserId
+      });
+
+      return reply.code(200).send(page);
+    } catch (error) {
+      if (error instanceof SubscriptionRepositoryConfigurationError) {
+        request.log.warn({ error }, "Subscription list lookup failed");
+        return reply.code(503).send(serviceUnavailableResponse("Subscriptions are not configured"));
+      }
+
+      throw error;
+    }
+  });
+
   app.post("/v1/subscriptions/intents", async (request, reply) => {
     const access = await verifySubscriptionReadyAccess(request, options);
 

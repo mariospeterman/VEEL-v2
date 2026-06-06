@@ -56,6 +56,7 @@ import type {
   Subscription,
   SubscriptionAuthorizationIntent,
   SubscriptionAuthorizationVerifier,
+  SubscriptionPage,
   SubscriptionPlan,
   SubscriptionRepository
 } from "../src/modules/subscription/types";
@@ -4757,6 +4758,19 @@ describe("buildApi", () => {
             items: [subscriptionPlanFixture()]
           };
         },
+        async onListSubscriptions(input) {
+          calls.push({ kind: "subscriptions", input });
+
+          return {
+            items: [
+              subscriptionFixture({
+                state: "active",
+                currentPeriodEndsAt: "2026-07-04T00:00:00.000Z",
+                nextCollectionAt: "2026-07-04T00:00:00.000Z"
+              })
+            ]
+          };
+        },
         async onCreateAuthorizationIntent(input) {
           calls.push({ kind: "intent", input });
 
@@ -4783,6 +4797,11 @@ describe("buildApi", () => {
     const plansResponse = await app.inject({
       method: "GET",
       url: "/v1/subscriptions/plans",
+      headers: { authorization: "Bearer valid-token" }
+    });
+    const subscriptionsResponse = await app.inject({
+      method: "GET",
+      url: "/v1/subscriptions",
       headers: { authorization: "Bearer valid-token" }
     });
     const intentResponse = await app.inject({
@@ -4815,6 +4834,17 @@ describe("buildApi", () => {
         }
       ]
     });
+    expect(subscriptionsResponse.statusCode).toBe(200);
+    expect(subscriptionsResponse.json()).toMatchObject({
+      items: [
+        {
+          id: "00000000-0000-4000-8000-000000000070",
+          renewalMode: "delegated_solana_subscription",
+          state: "active",
+          nextCollectionAt: "2026-07-04T00:00:00.000Z"
+        }
+      ]
+    });
     expect(intentResponse.statusCode).toBe(201);
     expect(intentResponse.json()).toMatchObject({
       id: "00000000-0000-4000-8000-000000000071",
@@ -4831,6 +4861,10 @@ describe("buildApi", () => {
     });
     expect(calls).toMatchObject([
       { kind: "plans", input: { supabaseUserId: "00000000-0000-4000-8000-000000000001" } },
+      {
+        kind: "subscriptions",
+        input: { supabaseUserId: "00000000-0000-4000-8000-000000000001" }
+      },
       { kind: "intent", input: { idempotencyKey: "sub-intent-1", body: { planId: "platform_plus_monthly" } } },
       {
         kind: "submit",
@@ -5192,6 +5226,7 @@ function subscriptionAuthorizationIntentFixture(
 function fakeSubscriptionRepository(
   overrides: Partial<{
     onListPlans: SubscriptionRepository["listPlans"];
+    onListSubscriptions: SubscriptionRepository["listSubscriptions"];
     onCreateAuthorizationIntent: SubscriptionRepository["createAuthorizationIntent"];
     onSubmitAuthorization: SubscriptionRepository["submitAuthorization"];
     onCancel: SubscriptionRepository["cancel"];
@@ -5200,6 +5235,9 @@ function fakeSubscriptionRepository(
   return {
     async listPlans(input) {
       return overrides.onListPlans?.(input) ?? { items: [subscriptionPlanFixture()] };
+    },
+    async listSubscriptions(input): Promise<SubscriptionPage> {
+      return overrides.onListSubscriptions?.(input) ?? { items: [subscriptionFixture()] };
     },
     async createAuthorizationIntent(input) {
       return overrides.onCreateAuthorizationIntent?.(input) ?? subscriptionAuthorizationIntentFixture();

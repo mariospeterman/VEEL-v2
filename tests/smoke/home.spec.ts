@@ -116,8 +116,10 @@ test("renders the delegated subscription projection", async ({ page }) => {
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Auto-renewing access" })).toBeVisible();
-  await expect(page.getByText("delegated_solana_subscription").first()).toBeVisible();
-  await expect(page.getByText("staging_required").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Subscription plans unavailable" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Subscriptions unavailable" })).toBeVisible();
+  await expect(page.getByText("HTTP 503").first()).toBeVisible();
+  await expect(page.getByText("API is unavailable").first()).toBeVisible();
   await expect(page.getByText("Manual Solana Pay renewal is reserved")).toBeVisible();
 });
 

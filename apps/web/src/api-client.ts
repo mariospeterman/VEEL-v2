@@ -21,6 +21,10 @@ export type Wallet = components["schemas"]["Wallet"];
 export type WalletList = {
   items: Wallet[];
 };
+export type Subscription = components["schemas"]["Subscription"];
+export type SubscriptionPage = components["schemas"]["SubscriptionPage"];
+export type SubscriptionPlan = components["schemas"]["SubscriptionPlan"];
+export type SubscriptionPlanPage = components["schemas"]["SubscriptionPlanPage"];
 
 export type ApiResult<T> =
   | {
@@ -67,6 +71,14 @@ export async function getConversationMessages(conversationId: string): Promise<A
 
 export async function getWallets(): Promise<ApiResult<WalletList>> {
   return getJson<WalletList>("/v1/wallets");
+}
+
+export async function getSubscriptionPlans(): Promise<ApiResult<SubscriptionPlanPage>> {
+  return getJson<SubscriptionPlanPage>("/v1/subscriptions/plans");
+}
+
+export async function getSubscriptions(): Promise<ApiResult<SubscriptionPage>> {
+  return getJson<SubscriptionPage>("/v1/subscriptions");
 }
 
 async function getJson<T>(path: string): Promise<ApiResult<T>> {

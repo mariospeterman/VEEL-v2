@@ -716,6 +716,16 @@ paths:
       summary: Platform and creator subscription plans
       responses:
         "200": { $ref: "#/components/responses/SubscriptionPlanPage" }
+  /v1/subscriptions:
+    get:
+      operationId: listSubscriptions
+      tags: [Subscriptions]
+      summary: Current platform and creator subscriptions
+      responses:
+        "200": { $ref: "#/components/responses/SubscriptionPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/subscriptions/intents:
     post:
       operationId: createSubscriptionIntent
@@ -1489,6 +1499,7 @@ components:
     ContentUnlockIntent: { description: Content unlock intent, content: { application/json: { schema: { $ref: "#/components/schemas/ContentUnlockIntent" } } } }
     ReferralToken: { description: Referral token, content: { application/json: { schema: { $ref: "#/components/schemas/ReferralToken" } } } }
     SubscriptionPlanPage: { description: Subscription plans, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionPlanPage" } } } }
+    SubscriptionPage: { description: Subscriptions, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionPage" } } } }
     Subscription: { description: Subscription, content: { application/json: { schema: { $ref: "#/components/schemas/Subscription" } } } }
     SubscriptionAuthorizationIntent: { description: Subscription authorization intent, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionAuthorizationIntent" } } } }
     Event: { description: Event, content: { application/json: { schema: { $ref: "#/components/schemas/Event" } } } }
@@ -2229,6 +2240,11 @@ components:
       required: [items]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/SubscriptionPlan" } }
+    SubscriptionPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Subscription" } }
     SubscriptionPlan:
       type: object
       required: [id, scope, label, amountMinor, currency, periodDays, billingMode, providerState]

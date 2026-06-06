@@ -892,6 +892,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Current platform and creator subscriptions */
+        get: operations["listSubscriptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/subscriptions/intents": {
         parameters: {
             query?: never;
@@ -2479,6 +2496,9 @@ export interface components {
         SubscriptionPlanPage: {
             items: components["schemas"]["SubscriptionPlan"][];
         };
+        SubscriptionPage: {
+            items: components["schemas"]["Subscription"][];
+        };
         SubscriptionPlan: {
             id: string;
             /** @enum {string} */
@@ -3578,6 +3598,15 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["SubscriptionPlanPage"];
+            };
+        };
+        /** @description Subscriptions */
+        SubscriptionPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["SubscriptionPage"];
             };
         };
         /** @description Subscription */
@@ -5258,6 +5287,21 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["SubscriptionPlanPage"];
+        };
+    };
+    listSubscriptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["SubscriptionPage"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     createSubscriptionIntent: {
