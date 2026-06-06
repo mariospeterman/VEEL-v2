@@ -10,6 +10,7 @@ import {
   getAdminPaymentIntents,
   getAdminProviderEvents,
   getAdminReceipts,
+  getAdminRefundDisputes,
   getAdminSupportCases,
   getAdminSupportPolicies,
   getAdminUnlocks,
@@ -24,6 +25,7 @@ import {
   type AdminPaymentIntent,
   type AdminProviderEvent,
   type AdminReceipt,
+  type AdminRefundDispute,
   type AdminSupportCase,
   type AdminSupportPolicy,
   type AdminUnlock,
@@ -46,7 +48,8 @@ export default async function AdminPage() {
     organizations,
     organizationMembers,
     supportCases,
-    supportPolicies
+    supportPolicies,
+    refundDisputes
   ] = await Promise.all([
     getAdminOpsSummary(),
     getAdminPaymentIntents(),
@@ -61,7 +64,8 @@ export default async function AdminPage() {
     getAdminOrganizations(),
     getAdminOrganizationMembers("00000000-0000-4000-8000-000000000140"),
     getAdminSupportCases(),
-    getAdminSupportPolicies()
+    getAdminSupportPolicies(),
+    getAdminRefundDisputes()
   ]);
 
   return (
@@ -132,6 +136,18 @@ export default async function AdminPage() {
 
             <Panel title="Support policy">
               <SupportPanel supportCases={supportCases} supportPolicies={supportPolicies} />
+            </Panel>
+
+            <Panel title="Refunds and disputes">
+              <PageState result={refundDisputes} emptyLabel="No refund or dispute requests">
+                {(page) => (
+                  <div className="grid gap-2">
+                    {page.items.map((dispute) => (
+                      <RefundDisputeRow dispute={dispute} key={dispute.id} />
+                    ))}
+                  </div>
+                )}
+              </PageState>
             </Panel>
           </div>
 
@@ -494,6 +510,19 @@ function SupportCaseRow({ supportCase }: { supportCase: AdminSupportCase }) {
       </div>
       <Fact label="State" value={supportCase.state} />
       <Fact label="Priority" value={supportCase.priority} />
+    </article>
+  );
+}
+
+function RefundDisputeRow({ dispute }: { dispute: AdminRefundDispute }) {
+  return (
+    <article className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm md:grid-cols-[1fr_130px_190px]">
+      <div className="min-w-0">
+        <p className="font-medium">{dispute.kind}</p>
+        <p className="mt-1 truncate text-[var(--muted)]">{dispute.paymentIntentId}</p>
+      </div>
+      <Fact label="State" value={dispute.state} />
+      <Fact label="Boundary" value="no custody" />
     </article>
   );
 }

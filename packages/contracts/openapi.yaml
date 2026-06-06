@@ -800,6 +800,29 @@ paths:
         - $ref: "#/components/parameters/Cursor"
       responses:
         "200": { $ref: "#/components/responses/ActivityPage" }
+  /v1/refunds/requests:
+    get:
+      operationId: listRefundDisputeRequests
+      tags: [Refunds]
+      summary: Current user's refund and dispute requests
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/RefundDisputeRequestPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      operationId: createRefundDisputeRequest
+      tags: [Refunds]
+      summary: Create a refund or dispute review request without executing money movement
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateRefundDisputeRequest"
+      responses:
+        "201": { $ref: "#/components/responses/RefundDisputeRequest" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /v1/subscriptions/plans:
     get:
       operationId: listSubscriptionPlans
@@ -1268,6 +1291,31 @@ paths:
         "200": { $ref: "#/components/responses/AdminSupportPolicy" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /v1/admin/refunds/disputes:
+    get:
+      operationId: listAdminRefundDisputes
+      tags: [Admin]
+      summary: Sanitized refund and dispute review queue
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminRefundDisputePage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/refunds/disputes/{refundDisputeId}:
+    patch:
+      operationId: updateAdminRefundDispute
+      tags: [Admin]
+      summary: Update refund or dispute review state without executing a refund
+      parameters:
+        - $ref: "#/components/parameters/RefundDisputeId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/AdminRefundDisputeAction"
+      responses:
+        "200": { $ref: "#/components/responses/AdminRefundDispute" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /v1/admin/data-requests:
     get:
       operationId: listAdminDataRequests
@@ -1572,6 +1620,7 @@ components:
     ProviderEventId: { name: providerEventId, in: path, required: true, schema: { type: string, format: uuid } }
     SupportCaseId: { name: supportCaseId, in: path, required: true, schema: { type: string, format: uuid } }
     SupportPolicyId: { name: supportPolicyId, in: path, required: true, schema: { type: string, format: uuid } }
+    RefundDisputeId: { name: refundDisputeId, in: path, required: true, schema: { type: string, format: uuid } }
     DataRequestId: { name: dataRequestId, in: path, required: true, schema: { type: string, format: uuid } }
     OrganizationId: { name: organizationId, in: path, required: true, schema: { type: string, format: uuid } }
     MembershipId: { name: membershipId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1614,6 +1663,7 @@ components:
     SubmitPaymentSignature: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SubmitPaymentSignatureRequest" } } } }
     SolanaIndexerWebhook: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SolanaIndexerWebhookPayload" } } } }
     CreateReferralToken: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateReferralTokenRequest" } } } }
+    CreateRefundDisputeRequest: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateRefundDisputeRequest" } } } }
     CreateSubscriptionIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateSubscriptionIntentRequest" } } } }
     SubmitSubscriptionAuthorization: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SubmitSubscriptionAuthorizationRequest" } } } }
     CreateEvent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateEventRequest" } } } }
@@ -1631,6 +1681,7 @@ components:
     AdminReportAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminReportActionRequest" } } } }
     AdminSupportCaseAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminSupportCaseActionRequest" } } } }
     AdminSupportPolicyAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminSupportPolicyActionRequest" } } } }
+    AdminRefundDisputeAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminRefundDisputeActionRequest" } } } }
     AdminDataRequestAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminDataRequestActionRequest" } } } }
     AdminOrganizationKybAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOrganizationKybActionRequest" } } } }
     AdminOrganizationMemberAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOrganizationMemberActionRequest" } } } }
@@ -1700,6 +1751,8 @@ components:
     TransactionRequest: { description: Transaction request, content: { application/json: { schema: { $ref: "#/components/schemas/TransactionRequest" } } } }
     ContentUnlockIntent: { description: Content unlock intent, content: { application/json: { schema: { $ref: "#/components/schemas/ContentUnlockIntent" } } } }
     ReferralToken: { description: Referral token, content: { application/json: { schema: { $ref: "#/components/schemas/ReferralToken" } } } }
+    RefundDisputeRequest: { description: Refund or dispute request, content: { application/json: { schema: { $ref: "#/components/schemas/RefundDisputeRequest" } } } }
+    RefundDisputeRequestPage: { description: Refund or dispute requests, content: { application/json: { schema: { $ref: "#/components/schemas/RefundDisputeRequestPage" } } } }
     SubscriptionPlanPage: { description: Subscription plans, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionPlanPage" } } } }
     SubscriptionPage: { description: Subscriptions, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionPage" } } } }
     Subscription: { description: Subscription, content: { application/json: { schema: { $ref: "#/components/schemas/Subscription" } } } }
@@ -1736,6 +1789,8 @@ components:
     AdminSupportCasePage: { description: Admin support cases, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminSupportCase" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminSupportPolicy: { description: Admin support policy, content: { application/json: { schema: { $ref: "#/components/schemas/AdminSupportPolicy" } } } }
     AdminSupportPolicyPage: { description: Admin support policies, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminSupportPolicy" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminRefundDispute: { description: Admin refund or dispute record, content: { application/json: { schema: { $ref: "#/components/schemas/AdminRefundDispute" } } } }
+    AdminRefundDisputePage: { description: Admin refund or dispute records, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminRefundDispute" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminDataRequest: { description: Admin data request, content: { application/json: { schema: { $ref: "#/components/schemas/AdminDataRequest" } } } }
     AdminDataRequestPage: { description: Admin data requests, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminDataRequest" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminDatingSafety: { description: Admin dating safety, content: { application/json: { schema: { $ref: "#/components/schemas/AdminDatingSafety" } } } }
@@ -2553,6 +2608,41 @@ components:
         token: { type: string }
         url: { type: string, format: uri }
         eligibility: { type: string, enum: [external_share, partner_campaign, not_commissionable] }
+    CreateRefundDisputeRequest:
+      type: object
+      required: [paymentIntentId, kind, requestedAction, reason]
+      properties:
+        paymentIntentId: { type: string, format: uuid }
+        kind: { type: string, enum: [refund_request, dispute, access_issue] }
+        requestedAction: { type: string, enum: [review_only, creator_refund, revoke_access, replacement_access] }
+        reason: { type: string, minLength: 10, maxLength: 1000 }
+    RefundDisputeState:
+      type: string
+      enum: [opened, reviewing, creator_action_required, rejected, withdrawn, resolved, closed]
+    RefundDisputeRequest:
+      type: object
+      required: [id, paymentIntentId, reporterUserId, kind, requestedAction, state, custodyBoundary, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        paymentIntentId: { type: string, format: uuid }
+        entitlementId: { type: string, format: uuid, nullable: true }
+        reporterUserId: { type: string, format: uuid }
+        kind: { type: string, enum: [refund_request, dispute, access_issue] }
+        requestedAction: { type: string, enum: [review_only, creator_refund, revoke_access, replacement_access] }
+        state: { $ref: "#/components/schemas/RefundDisputeState" }
+        resolution: { type: string, nullable: true }
+        custodyBoundary: { type: string, enum: [no_platform_custody_no_payout_queue] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time, nullable: true }
+        resolvedAt: { type: string, format: date-time, nullable: true }
+    RefundDisputeRequestPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/RefundDisputeRequest" }
+        nextCursor: { type: string, nullable: true }
     ReferralActivity:
       type: object
       required: [id, token, targetType, targetId, eligibility, state, createdAt]
@@ -3142,6 +3232,22 @@ components:
         moneyBoundary: { type: string, enum: [software_sla_only_no_social_priority] }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    AdminRefundDispute:
+      type: object
+      required: [id, paymentIntentId, reporterUserId, kind, requestedAction, state, custodyBoundary, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        paymentIntentId: { type: string, format: uuid }
+        entitlementId: { type: string, format: uuid, nullable: true }
+        reporterUserId: { type: string, format: uuid }
+        kind: { type: string, enum: [refund_request, dispute, access_issue] }
+        requestedAction: { type: string, enum: [review_only, creator_refund, revoke_access, replacement_access] }
+        state: { $ref: "#/components/schemas/RefundDisputeState" }
+        resolution: { type: string, nullable: true }
+        custodyBoundary: { type: string, enum: [no_platform_custody_no_payout_queue] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time, nullable: true }
+        resolvedAt: { type: string, format: date-time, nullable: true }
     AdminDataRequest:
       type: object
       required: [id, type, state]
@@ -3335,6 +3441,13 @@ components:
         supportState: { type: string, enum: [standard, priority, enterprise_review] }
         slaTier: { type: string, enum: [standard, priority, enterprise_review] }
         state: { type: string, enum: [active, paused, review_required] }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+    AdminRefundDisputeActionRequest:
+      type: object
+      required: [state, resolution, reason]
+      properties:
+        state: { $ref: "#/components/schemas/RefundDisputeState" }
+        resolution: { type: string, minLength: 3, maxLength: 1000 }
         reason: { type: string, minLength: 3, maxLength: 500 }
     AdminDataRequestActionRequest:
       type: object

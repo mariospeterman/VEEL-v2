@@ -1320,13 +1320,17 @@ create table moderation_appeals (
 
 create table refunds_and_disputes (
   id uuid primary key,
-  payment_intent_id uuid references payment_intents(id),
-  reporter_user_id uuid references users(id),
+  payment_intent_id uuid not null references payment_intents(id),
+  entitlement_id uuid references entitlements(id),
+  reporter_user_id uuid not null references users(id),
   kind text not null,
+  requested_action text not null,
   reason text not null,
   state text not null default 'opened',
   resolution text,
+  custody_boundary text not null default 'no_platform_custody_no_payout_queue',
   created_at timestamptz not null default now(),
+  updated_at timestamptz,
   resolved_at timestamptz
 );
 

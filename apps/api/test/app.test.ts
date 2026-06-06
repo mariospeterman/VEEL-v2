@@ -21,6 +21,7 @@ import type {
 import type { AiRepository, AiSession, AiToolCall } from "../src/modules/ai/types";
 import type { ProfileRepository } from "../src/modules/profile/types";
 import type { ReferralRepository } from "../src/modules/referral/types";
+import type { RefundRepository } from "../src/modules/refund/types";
 import type {
   SessionRepository,
   SupabaseAuthVerifier,
@@ -3650,6 +3651,12 @@ describe("buildApi", () => {
         async updateSupportPolicy() {
           throw new Error("not implemented");
         },
+        async listRefundDisputes() {
+          throw new Error("not implemented");
+        },
+        async updateRefundDispute() {
+          throw new Error("not implemented");
+        },
         async getDatingSafety() {
           throw new Error("not implemented");
         },
@@ -3721,6 +3728,12 @@ describe("buildApi", () => {
         async updateSupportPolicy() {
           throw new Error("not implemented");
         },
+        async listRefundDisputes() {
+          throw new Error("not implemented");
+        },
+        async updateRefundDispute() {
+          throw new Error("not implemented");
+        },
         async getDatingSafety() {
           throw new Error("not implemented");
         },
@@ -3788,6 +3801,12 @@ describe("buildApi", () => {
           throw new Error("not implemented");
         },
         async updateSupportPolicy() {
+          throw new Error("not implemented");
+        },
+        async listRefundDisputes() {
+          throw new Error("not implemented");
+        },
+        async updateRefundDispute() {
           throw new Error("not implemented");
         },
         async getDatingSafety() {
@@ -4013,6 +4032,180 @@ describe("buildApi", () => {
     });
 
     expect(response.statusCode).toBe(400);
+
+    await app.close();
+  });
+
+  it("creates and lists refund dispute requests without custody or payout obligations", async () => {
+    const createCalls: Array<Parameters<RefundRepository["createRequest"]>[0]> = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      refundRepository: fakeRefundRepository({
+        onCreateRequest(input) {
+          createCalls.push(input);
+        }
+      })
+    });
+    await app.ready();
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/refunds/requests",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "refund-request-1"
+      },
+      payload: {
+        paymentIntentId: "00000000-0000-4000-8000-000000000050",
+        kind: "refund_request",
+        requestedAction: "creator_refund",
+        reason: "Content access was not available after the confirmed transaction"
+      }
+    });
+    const listed = await app.inject({
+      method: "GET",
+      url: "/v1/refunds/requests",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(created.statusCode).toBe(201);
+    expect(created.json()).toMatchObject({
+      paymentIntentId: "00000000-0000-4000-8000-000000000050",
+      kind: "refund_request",
+      requestedAction: "creator_refund",
+      custodyBoundary: "no_platform_custody_no_payout_queue"
+    });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json().items[0]).toMatchObject({
+      state: "opened",
+      custodyBoundary: "no_platform_custody_no_payout_queue"
+    });
+    expect(createCalls[0]).toMatchObject({
+      supabaseUserId: "00000000-0000-4000-8000-000000000001",
+      idempotencyKey: "refund-request-1"
+    });
+    expect(`${created.body}${listed.body}`).not.toMatch(
+      /raw|payload|secret|privateKey|serviceRole|creatorBalance|withdraw|payoutQueue|escrow|paymentProof|automaticRefund|platformBalance/i
+    );
+
+    await app.close();
+  });
+
+  it("rejects refund dispute requests without idempotency", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      refundRepository: fakeRefundRepository()
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/refunds/requests",
+      headers: {
+        authorization: "Bearer valid-token"
+      },
+      payload: {
+        paymentIntentId: "00000000-0000-4000-8000-000000000050",
+        kind: "access_issue",
+        requestedAction: "review_only",
+        reason: "Access state needs review by support"
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: "validation_failed"
+    });
+
+    await app.close();
+  });
+
+  it("returns and updates sanitized admin refund dispute projections", async () => {
+    const updateCalls: Array<Parameters<AdminRepository["updateRefundDispute"]>[0]> = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: {
+        ...fakeAdminRepository,
+        async updateRefundDispute(input) {
+          updateCalls.push(input);
+          return fakeAdminRepository.updateRefundDispute(input);
+        }
+      }
+    });
+    await app.ready();
+
+    const headers = { authorization: "Bearer valid-token" };
+    const listed = await app.inject({
+      method: "GET",
+      url: "/v1/admin/refunds/disputes",
+      headers
+    });
+    const updated = await app.inject({
+      method: "PATCH",
+      url: "/v1/admin/refunds/disputes/00000000-0000-4000-8000-000000000160",
+      headers: {
+        ...headers,
+        "idempotency-key": "refund-admin-1"
+      },
+      payload: {
+        state: "creator_action_required",
+        resolution: "Creator must decide whether to submit a noncustodial refund transaction",
+        reason: "Confirmed access issue after support review"
+      }
+    });
+
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json().items[0]).toMatchObject({
+      kind: "access_issue",
+      custodyBoundary: "no_platform_custody_no_payout_queue"
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json()).toMatchObject({
+      id: "00000000-0000-4000-8000-000000000160",
+      state: "creator_action_required",
+      custodyBoundary: "no_platform_custody_no_payout_queue"
+    });
+    expect(updateCalls[0]).toMatchObject({
+      supabaseUserId: "00000000-0000-4000-8000-000000000001",
+      idempotencyKey: "refund-admin-1"
+    });
+    expect(`${listed.body}${updated.body}`).not.toMatch(
+      /raw|payload|secret|privateKey|serviceRole|creatorBalance|withdraw|payoutQueue|escrow|paymentProof|automaticRefund|platformBalance/i
+    );
+
+    await app.close();
+  });
+
+  it("rejects admin refund dispute updates without idempotency", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: fakeAdminRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/admin/refunds/disputes/00000000-0000-4000-8000-000000000160",
+      headers: {
+        authorization: "Bearer valid-token"
+      },
+      payload: {
+        state: "reviewing",
+        resolution: "Review opened",
+        reason: "Missing idempotency should fail"
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: "validation_failed"
+    });
 
     await app.close();
   });
@@ -6157,6 +6350,66 @@ function fakeSubscriptionAuthorizationVerifier(verified: boolean): SubscriptionA
   };
 }
 
+function fakeRefundRepository(
+  overrides: Partial<{
+    onListRequests: RefundRepository["listRequests"];
+    onCreateRequest: (
+      input: Parameters<RefundRepository["createRequest"]>[0]
+    ) =>
+      | Awaited<ReturnType<RefundRepository["createRequest"]>>
+      | undefined
+      | void
+      | Promise<Awaited<ReturnType<RefundRepository["createRequest"]>> | undefined | void>;
+  }> = {}
+): RefundRepository {
+  return {
+    async listRequests(input) {
+      return (
+        (await overrides.onListRequests?.(input)) ?? {
+          items: [
+            {
+              id: "00000000-0000-4000-8000-000000000160",
+              paymentIntentId: "00000000-0000-4000-8000-000000000050",
+              entitlementId: "00000000-0000-4000-8000-000000000090",
+              reporterUserId: "00000000-0000-4000-8000-000000000011",
+              kind: "refund_request",
+              requestedAction: "creator_refund",
+              state: "opened",
+              resolution: null,
+              custodyBoundary: "no_platform_custody_no_payout_queue",
+              createdAt: "2026-06-06T11:00:00.000Z",
+              updatedAt: null,
+              resolvedAt: null
+            }
+          ],
+          nextCursor: null
+        }
+      );
+    },
+    async createRequest(input) {
+      const overrideResult = await overrides.onCreateRequest?.(input);
+      if (overrideResult !== undefined) {
+        return overrideResult;
+      }
+
+      return {
+        id: "00000000-0000-4000-8000-000000000160",
+        paymentIntentId: input.body.paymentIntentId,
+        entitlementId: "00000000-0000-4000-8000-000000000090",
+        reporterUserId: "00000000-0000-4000-8000-000000000011",
+        kind: input.body.kind,
+        requestedAction: input.body.requestedAction,
+        state: "opened",
+        resolution: null,
+        custodyBoundary: "no_platform_custody_no_payout_queue",
+        createdAt: "2026-06-06T11:00:00.000Z",
+        updatedAt: null,
+        resolvedAt: null
+      };
+    }
+  };
+}
+
 function fakeMessageRepository(
   overrides: Partial<{
     onListConversations: MessageRepository["listConversations"];
@@ -6684,6 +6937,49 @@ const fakeAdminRepository: AdminRepository = {
       moneyBoundary: "software_sla_only_no_social_priority",
       createdAt: "2026-06-06T09:00:00.000Z",
       updatedAt: "2026-06-06T10:30:00.000Z"
+    };
+  },
+  async listRefundDisputes() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-000000000160",
+          paymentIntentId: "00000000-0000-4000-8000-000000000050",
+          entitlementId: "00000000-0000-4000-8000-000000000090",
+          reporterUserId: "00000000-0000-4000-8000-000000000011",
+          kind: "access_issue",
+          requestedAction: "replacement_access",
+          state: "opened",
+          resolution: null,
+          custodyBoundary: "no_platform_custody_no_payout_queue",
+          createdAt: "2026-06-06T11:00:00.000Z",
+          updatedAt: null,
+          resolvedAt: null
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async updateRefundDispute(input) {
+    return {
+      id: input.refundDisputeId,
+      paymentIntentId: "00000000-0000-4000-8000-000000000050",
+      entitlementId: "00000000-0000-4000-8000-000000000090",
+      reporterUserId: "00000000-0000-4000-8000-000000000011",
+      kind: "access_issue",
+      requestedAction: "replacement_access",
+      state: input.body.state,
+      resolution: input.body.resolution,
+      custodyBoundary: "no_platform_custody_no_payout_queue",
+      createdAt: "2026-06-06T11:00:00.000Z",
+      updatedAt: "2026-06-06T11:30:00.000Z",
+      resolvedAt:
+        input.body.state === "rejected" ||
+        input.body.state === "withdrawn" ||
+        input.body.state === "resolved" ||
+        input.body.state === "closed"
+          ? "2026-06-06T11:30:00.000Z"
+          : null
     };
   },
   async getDatingSafety() {

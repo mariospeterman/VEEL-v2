@@ -996,6 +996,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/refunds/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Current user's refund and dispute requests */
+        get: operations["listRefundDisputeRequests"];
+        put?: never;
+        /** Create a refund or dispute review request without executing money movement */
+        post: operations["createRefundDisputeRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/subscriptions/plans": {
         parameters: {
             query?: never;
@@ -1709,6 +1727,40 @@ export interface paths {
         head?: never;
         /** Update organization support policy with audit trail */
         patch: operations["updateAdminSupportPolicy"];
+        trace?: never;
+    };
+    "/v1/admin/refunds/disputes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sanitized refund and dispute review queue */
+        get: operations["listAdminRefundDisputes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/refunds/disputes/{refundDisputeId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update refund or dispute review state without executing a refund */
+        patch: operations["updateAdminRefundDispute"];
         trace?: never;
     };
     "/v1/admin/data-requests": {
@@ -2832,6 +2884,45 @@ export interface components {
             /** @enum {string} */
             eligibility: "external_share" | "partner_campaign" | "not_commissionable";
         };
+        CreateRefundDisputeRequest: {
+            /** Format: uuid */
+            paymentIntentId: string;
+            /** @enum {string} */
+            kind: "refund_request" | "dispute" | "access_issue";
+            /** @enum {string} */
+            requestedAction: "review_only" | "creator_refund" | "revoke_access" | "replacement_access";
+            reason: string;
+        };
+        /** @enum {string} */
+        RefundDisputeState: "opened" | "reviewing" | "creator_action_required" | "rejected" | "withdrawn" | "resolved" | "closed";
+        RefundDisputeRequest: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            paymentIntentId: string;
+            /** Format: uuid */
+            entitlementId?: string | null;
+            /** Format: uuid */
+            reporterUserId: string;
+            /** @enum {string} */
+            kind: "refund_request" | "dispute" | "access_issue";
+            /** @enum {string} */
+            requestedAction: "review_only" | "creator_refund" | "revoke_access" | "replacement_access";
+            state: components["schemas"]["RefundDisputeState"];
+            resolution?: string | null;
+            /** @enum {string} */
+            custodyBoundary: "no_platform_custody_no_payout_queue";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt?: string | null;
+            /** Format: date-time */
+            resolvedAt?: string | null;
+        };
+        RefundDisputeRequestPage: {
+            items: components["schemas"]["RefundDisputeRequest"][];
+            nextCursor: string | null;
+        };
         ReferralActivity: {
             /** Format: uuid */
             id: string;
@@ -3412,6 +3503,30 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        AdminRefundDispute: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            paymentIntentId: string;
+            /** Format: uuid */
+            entitlementId?: string | null;
+            /** Format: uuid */
+            reporterUserId: string;
+            /** @enum {string} */
+            kind: "refund_request" | "dispute" | "access_issue";
+            /** @enum {string} */
+            requestedAction: "review_only" | "creator_refund" | "revoke_access" | "replacement_access";
+            state: components["schemas"]["RefundDisputeState"];
+            resolution?: string | null;
+            /** @enum {string} */
+            custodyBoundary: "no_platform_custody_no_payout_queue";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt?: string | null;
+            /** Format: date-time */
+            resolvedAt?: string | null;
+        };
         AdminDataRequest: {
             /** Format: uuid */
             id: string;
@@ -3649,6 +3764,11 @@ export interface components {
             slaTier: "standard" | "priority" | "enterprise_review";
             /** @enum {string} */
             state: "active" | "paused" | "review_required";
+            reason: string;
+        };
+        AdminRefundDisputeActionRequest: {
+            state: components["schemas"]["RefundDisputeState"];
+            resolution: string;
             reason: string;
         };
         AdminDataRequestActionRequest: {
@@ -4172,6 +4292,24 @@ export interface components {
                 "application/json": components["schemas"]["ReferralToken"];
             };
         };
+        /** @description Refund or dispute request */
+        RefundDisputeRequest: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["RefundDisputeRequest"];
+            };
+        };
+        /** @description Refund or dispute requests */
+        RefundDisputeRequestPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["RefundDisputeRequestPage"];
+            };
+        };
         /** @description Subscription plans */
         SubscriptionPlanPage: {
             headers: {
@@ -4523,6 +4661,27 @@ export interface components {
                 };
             };
         };
+        /** @description Admin refund or dispute record */
+        AdminRefundDispute: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["AdminRefundDispute"];
+            };
+        };
+        /** @description Admin refund or dispute records */
+        AdminRefundDisputePage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    items: components["schemas"]["AdminRefundDispute"][];
+                    nextCursor?: string | null;
+                };
+            };
+        };
         /** @description Admin data request */
         AdminDataRequest: {
             headers: {
@@ -4753,6 +4912,7 @@ export interface components {
         ProviderEventId: string;
         SupportCaseId: string;
         SupportPolicyId: string;
+        RefundDisputeId: string;
         DataRequestId: string;
         OrganizationId: string;
         MembershipId: string;
@@ -4888,6 +5048,11 @@ export interface components {
                 "application/json": components["schemas"]["CreateReferralTokenRequest"];
             };
         };
+        CreateRefundDisputeRequest: {
+            content: {
+                "application/json": components["schemas"]["CreateRefundDisputeRequest"];
+            };
+        };
         CreateSubscriptionIntent: {
             content: {
                 "application/json": components["schemas"]["CreateSubscriptionIntentRequest"];
@@ -4971,6 +5136,11 @@ export interface components {
         AdminSupportPolicyAction: {
             content: {
                 "application/json": components["schemas"]["AdminSupportPolicyActionRequest"];
+            };
+        };
+        AdminRefundDisputeAction: {
+            content: {
+                "application/json": components["schemas"]["AdminRefundDisputeActionRequest"];
             };
         };
         AdminDataRequestAction: {
@@ -6106,6 +6276,39 @@ export interface operations {
             200: components["responses"]["ActivityPage"];
         };
     };
+    listRefundDisputeRequests: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["RefundDisputeRequestPage"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createRefundDisputeRequest: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["CreateRefundDisputeRequest"];
+        responses: {
+            201: components["responses"]["RefundDisputeRequest"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     listSubscriptionPlans: {
         parameters: {
             query?: never;
@@ -6784,6 +6987,41 @@ export interface operations {
         requestBody: components["requestBodies"]["AdminSupportPolicyAction"];
         responses: {
             200: components["responses"]["AdminSupportPolicy"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listAdminRefundDisputes: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminRefundDisputePage"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    updateAdminRefundDispute: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                refundDisputeId: components["parameters"]["RefundDisputeId"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["AdminRefundDisputeAction"];
+        responses: {
+            200: components["responses"]["AdminRefundDispute"];
+            400: components["responses"]["ValidationFailed"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };

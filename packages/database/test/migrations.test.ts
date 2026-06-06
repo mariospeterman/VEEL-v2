@@ -485,6 +485,16 @@ describe("database migrations", () => {
     expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role|creator_balance|withdraw|payout_queue|escrow|payment_proof|recommendation_boost|visibility_boost|message_priority/i);
   });
 
+  it("adds refund and dispute requests without custody or payout surfaces", () => {
+    const sql = readMigration("0043_refund_dispute_request_workflow.sql");
+
+    expect(sql).toContain("create table refunds_and_disputes");
+    expect(sql).toContain("no_platform_custody_no_payout_queue");
+    expect(sql).toContain("alter table refunds_and_disputes enable row level security");
+    expect(sql).toContain("refunds_and_disputes_select_self_or_staff");
+    expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role|creator_balance|withdrawal|escrow|payment_proof|automatic_refund|platform_balance/i);
+  });
+
   it("adds only user-owned projections to the Supabase realtime publication", () => {
     const sql = readMigration("0039_realtime_projection_publication.sql");
 

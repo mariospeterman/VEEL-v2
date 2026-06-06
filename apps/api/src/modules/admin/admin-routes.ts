@@ -8,6 +8,7 @@ import {
 import type {
   AdminOrganizationKybActionRequest,
   AdminOrganizationMemberActionRequest,
+  AdminRefundDisputeActionRequest,
   AdminRepository,
   AdminSupportCaseActionRequest,
   AdminSupportPolicyActionRequest
@@ -166,6 +167,60 @@ export async function registerAdminRoutes(
     }
 
     return reply.code(200).send(supportPolicy);
+  });
+
+  app.get("/v1/admin/refunds/disputes", async (request, reply) => {
+    const allowed = await requireAdminAccess(request, reply, options);
+    if (!allowed) return reply;
+
+    const query = request.query as { cursor?: string };
+    return reply.code(200).send(await options.adminRepository.listRefundDisputes(adminListInput(query)));
+  });
+
+  app.patch("/v1/admin/refunds/disputes/:refundDisputeId", async (request, reply) => {
+    const access = await requireAdminAccessWithUser(request, reply, options);
+    if (!access) return reply;
+
+    const idempotencyKey = request.headers["idempotency-key"];
+    if (!idempotencyKey || Array.isArray(idempotencyKey)) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: "Idempotency-Key header is required"
+      });
+    }
+
+    const { refundDisputeId } = request.params as { refundDisputeId?: string };
+    if (!refundDisputeId) {
+      return reply.code(404).send({
+        code: "not_found",
+        message: "Refund or dispute request was not found"
+      });
+    }
+
+    const body = request.body as Partial<AdminRefundDisputeActionRequest> | undefined;
+    const validationError = validateRefundDisputeAction(body);
+    if (validationError) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: validationError
+      });
+    }
+
+    const dispute = await options.adminRepository.updateRefundDispute({
+      supabaseUserId: access.supabaseUserId,
+      refundDisputeId,
+      body: body as AdminRefundDisputeActionRequest,
+      idempotencyKey
+    });
+
+    if (!dispute) {
+      return reply.code(404).send({
+        code: "not_found",
+        message: "Refund or dispute request was not found"
+      });
+    }
+
+    return reply.code(200).send(dispute);
   });
 
   app.get("/v1/admin/dating/safety", async (request, reply) => {
@@ -537,6 +592,36 @@ function validateSupportPolicyAction(
 
   if (body.state !== "active" && body.state !== "paused" && body.state !== "review_required") {
     return "state is invalid";
+  }
+
+  if (!body.reason || body.reason.trim().length < 3 || body.reason.length > 500) {
+    return "reason must be 3-500 characters";
+  }
+
+  return null;
+}
+
+function validateRefundDisputeAction(
+  body: Partial<AdminRefundDisputeActionRequest> | undefined
+): string | null {
+  if (!body || typeof body !== "object") {
+    return "Request body is required";
+  }
+
+  if (
+    body.state !== "opened" &&
+    body.state !== "reviewing" &&
+    body.state !== "creator_action_required" &&
+    body.state !== "rejected" &&
+    body.state !== "withdrawn" &&
+    body.state !== "resolved" &&
+    body.state !== "closed"
+  ) {
+    return "state is invalid";
+  }
+
+  if (!body.resolution || body.resolution.trim().length < 3 || body.resolution.length > 1000) {
+    return "resolution must be 3-1000 characters";
   }
 
   if (!body.reason || body.reason.trim().length < 3 || body.reason.length > 500) {

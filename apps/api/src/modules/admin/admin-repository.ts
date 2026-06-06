@@ -13,6 +13,7 @@ import type {
   AdminProviderEvent,
   AdminReceipt,
   AdminRepository,
+  AdminRefundDispute,
   AdminReferralProgram,
   AdminSupportCase,
   AdminSupportPolicy,
@@ -124,6 +125,21 @@ interface SupportPolicyRow {
   money_boundary: AdminSupportPolicy["moneyBoundary"];
   created_at: Date;
   updated_at: Date;
+}
+
+interface RefundDisputeRow {
+  id: string;
+  payment_intent_id: string;
+  entitlement_id: string | null;
+  reporter_user_id: string;
+  kind: AdminRefundDispute["kind"];
+  requested_action: AdminRefundDispute["requestedAction"];
+  state: AdminRefundDispute["state"];
+  resolution: string | null;
+  custody_boundary: AdminRefundDispute["custodyBoundary"];
+  created_at: Date;
+  updated_at: Date | null;
+  resolved_at: Date | null;
 }
 
 interface ComplianceLedgerRow {
@@ -294,6 +310,12 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
         throw new AdminRepositoryConfigurationError();
       },
       async updateSupportPolicy() {
+        throw new AdminRepositoryConfigurationError();
+      },
+      async listRefundDisputes() {
+        throw new AdminRepositoryConfigurationError();
+      },
+      async updateRefundDispute() {
         throw new AdminRepositoryConfigurationError();
       },
       async getDatingSafety() {
@@ -711,6 +733,124 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
       });
 
       return rows[0] ? toSupportPolicy(rows[0]) : null;
+    },
+    async listRefundDisputes(input) {
+      const rows = await sql<RefundDisputeRow[]>`
+        select
+          id,
+          payment_intent_id,
+          entitlement_id,
+          reporter_user_id,
+          kind,
+          requested_action,
+          state,
+          resolution,
+          custody_boundary,
+          created_at,
+          updated_at,
+          resolved_at
+        from refunds_and_disputes
+        where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
+        order by created_at desc
+        limit ${pageSize + 1}
+      `;
+
+      return page(rows, toRefundDispute);
+    },
+    async updateRefundDispute(input) {
+      const rows = await sql.begin(async (transaction) => {
+        const updatedRows = await transaction<RefundDisputeRow[]>`
+          with actor as (
+            select id
+            from users
+            where supabase_user_id = ${input.supabaseUserId}
+            limit 1
+          ),
+          current_request as (
+            select id, state, resolution
+            from refunds_and_disputes
+            where id = ${input.refundDisputeId}
+            for update
+          ),
+          updated_request as (
+            update refunds_and_disputes rd
+            set
+              state = ${input.body.state},
+              resolution = ${input.body.resolution},
+              updated_at = now(),
+              resolved_at = case
+                when ${input.body.state} in ('rejected', 'withdrawn', 'resolved', 'closed') then coalesce(rd.resolved_at, now())
+                else null
+              end
+            from current_request cr
+            where rd.id = cr.id
+            returning
+              rd.id,
+              rd.payment_intent_id,
+              rd.entitlement_id,
+              rd.reporter_user_id,
+              rd.kind,
+              rd.requested_action,
+              rd.state,
+              rd.resolution,
+              rd.custody_boundary,
+              rd.created_at,
+              rd.updated_at,
+              rd.resolved_at,
+              cr.state as previous_state,
+              cr.resolution as previous_resolution
+          ),
+          audit_insert as (
+            insert into audit_events (
+              id,
+              actor_user_id,
+              subject_type,
+              subject_id,
+              action,
+              metadata
+            )
+            select
+              gen_random_uuid(),
+              actor.id,
+              'refund_dispute',
+              updated_request.id,
+              'refund_dispute_updated',
+              jsonb_build_object(
+                'reason', ${input.body.reason},
+                'idempotencyKey', ${input.idempotencyKey},
+                'paymentIntentId', updated_request.payment_intent_id,
+                'entitlementId', updated_request.entitlement_id,
+                'previousState', updated_request.previous_state,
+                'newState', updated_request.state,
+                'previousResolution', updated_request.previous_resolution,
+                'newResolution', updated_request.resolution,
+                'custodyBoundary', updated_request.custody_boundary
+              )
+            from updated_request
+            cross join actor
+            returning id
+          )
+          select
+            id,
+            payment_intent_id,
+            entitlement_id,
+            reporter_user_id,
+            kind,
+            requested_action,
+            state,
+            resolution,
+            custody_boundary,
+            created_at,
+            updated_at,
+            resolved_at
+          from updated_request
+          where exists (select 1 from audit_insert)
+        `;
+
+        return updatedRows;
+      });
+
+      return rows[0] ? toRefundDispute(rows[0]) : null;
     },
     async getDatingSafety() {
       const rows = await sql<{
@@ -1245,6 +1385,23 @@ function toSupportPolicy(row: SupportPolicyRow): AdminSupportPolicy {
     moneyBoundary: row.money_boundary,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString()
+  };
+}
+
+function toRefundDispute(row: RefundDisputeRow): AdminRefundDispute {
+  return {
+    id: row.id,
+    paymentIntentId: row.payment_intent_id,
+    entitlementId: row.entitlement_id,
+    reporterUserId: row.reporter_user_id,
+    kind: row.kind,
+    requestedAction: row.requested_action,
+    state: row.state,
+    resolution: row.resolution,
+    custodyBoundary: row.custody_boundary,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at?.toISOString() ?? null,
+    resolvedAt: row.resolved_at?.toISOString() ?? null
   };
 }
 

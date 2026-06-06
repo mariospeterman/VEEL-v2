@@ -62,6 +62,9 @@ import type { ProfileRepository } from "./modules/profile/types.js";
 import { createPostgresReferralRepository } from "./modules/referral/referral-repository.js";
 import { registerReferralRoutes } from "./modules/referral/referral-routes.js";
 import type { ReferralRepository } from "./modules/referral/types.js";
+import { createPostgresRefundRepository } from "./modules/refund/refund-repository.js";
+import { registerRefundRoutes } from "./modules/refund/refund-routes.js";
+import type { RefundRepository } from "./modules/refund/types.js";
 import { createPostgresSessionRepository } from "./modules/session/session-repository.js";
 import { registerSessionRoutes } from "./modules/session/session-routes.js";
 import { createSupabaseAuthVerifier } from "./modules/session/supabase-auth.js";
@@ -101,6 +104,7 @@ export interface BuildApiOptions {
   settlementVerifier?: PaymentSettlementVerifier;
   profileRepository?: ProfileRepository;
   referralRepository?: ReferralRepository;
+  refundRepository?: RefundRepository;
   notificationRepository?: NotificationRepository;
   organizationRepository?: OrganizationRepository;
   subscriptionRepository?: SubscriptionRepository;
@@ -181,6 +185,8 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     options.settlementVerifier ?? createSolanaRpcSettlementVerifier(app.config.SOLANA_RPC_URL);
   const referralRepository =
     options.referralRepository ?? createPostgresReferralRepository(app.config.DATABASE_URL);
+  const refundRepository =
+    options.refundRepository ?? createPostgresRefundRepository(app.config.DATABASE_URL);
   const notificationRepository =
     options.notificationRepository ??
     createPostgresNotificationRepository(app.config.DATABASE_URL, {
@@ -272,6 +278,11 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   if (referralRepository.close) {
     app.addHook("onClose", async () => {
       await referralRepository.close?.();
+    });
+  }
+  if (refundRepository.close) {
+    app.addHook("onClose", async () => {
+      await refundRepository.close?.();
     });
   }
   if (notificationRepository.close) {
@@ -387,6 +398,12 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     ageRepository,
     walletRepository,
     referralRepository
+  });
+  await registerRefundRoutes(app, {
+    authVerifier,
+    sessionRepository,
+    ageRepository,
+    refundRepository
   });
   await registerNotificationRoutes(app, {
     authVerifier,

@@ -62,7 +62,7 @@ Veel records evidence, state transitions, reporting facts, exports, and accounti
 | Memberships | Delegated Solana subscription foundation exists with cancel/revoke state. | Launch needs official delegated subscription staging evidence, recurring collection worker, grace/expiry operations, and wallet UX. |
 | Live Passes | Live room, pass intent, chat, replay, and Livepeer boundary exist. | Provider launch approval, production stream access signing, and admin/event ops workflows remain. |
 | Event Access | Event/pass/check-in foundation exists. | Launch copy must avoid ticket-marketplace positioning; refund/transfer/resale remain out of launch unless separately approved. |
-| Refunds/disputes | Data model allows audit/revocation/compensating transactions. | Creator-decision workflow, support/admin states, and jurisdiction-specific consumer disclosures remain. |
+| Refunds/disputes | User request routes, admin review routes, RLS-backed request table, sanitized projections, idempotency-required mutations, and audit events exist. | Creator-initiated noncustodial refund transaction evidence, policy-approved entitlement revocation/replacement execution, provider/counsel-reviewed copy, and jurisdiction-specific consumer disclosures remain. |
 | Compliance ledger | DAC7/DAC8/CARF/VAT docs and admin read routes exist. | Export/filing workflows, USD snapshot provider, seller onboarding collection, and counsel/tax review remain. |
 | Creator verification | Age/profile/wallet foundations and the backend-owned Become Creator readiness checklist exist. | Identity/KYB provider approval, tax profile collection, and deeper conversion/support UX remain. |
 | Mutuals/Connections | Compatibility backend route family and frontend projections exist. | Rename/migration from dating tables/routes, conduct UX, and hard social-money rule tests remain. |
@@ -97,7 +97,7 @@ Veel records evidence, state transitions, reporting facts, exports, and accounti
 - Every monetised product must resolve price, recipients, fees, entitlement, tax/compliance metadata, and audit state server-side.
 - Notification events must be backend-derived from existing business state; browser push is delivery only.
 - Studio and Enterprise dashboards must be organization-scoped software/admin surfaces, not financial custody or payout surfaces.
-- Refund workflows must be modeled as request, creator/admin review, optional creator-initiated refund transaction, entitlement revocation/replacement where policy allows, and audit evidence.
+- Refund workflows are modeled as request, creator/admin review, optional creator-initiated refund transaction, entitlement revocation/replacement where policy allows, and audit evidence. The current implementation covers request/review/audit state only; it must not be used as payment truth, access truth, reporting truth, or bookkeeping truth.
 
 ## Compliance Improvements
 
@@ -140,6 +140,6 @@ Veel records evidence, state transitions, reporting facts, exports, and accounti
 2. Complete notification production rollout: real VAPID secrets, staging push-service verification across target browsers, and live Supabase Realtime staging verification with real RLS claims.
 3. Complete single creator onboarding/readiness flow and creator/studio dashboard expansion.
 4. Complete deeper provider-backed KYB surfaces and the remaining admin route-map breadth.
-5. Complete refund/dispute request workflow without custody or platform payout obligations.
+5. Complete refund/dispute execution follow-up only after policy approval: creator-initiated noncustodial refund transaction evidence, entitlement revocation/replacement controls, consumer disclosures, and compliance ledger correction events.
 6. Complete provider launch approvals and staging fixtures for Solana settlement, delegated Membership renewals, Bunny, Livepeer, age/KYC, and embedded wallets.
 7. Complete compliance export/readiness workflows only after counsel/tax review.

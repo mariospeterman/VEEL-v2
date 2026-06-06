@@ -46,6 +46,7 @@ export type AdminUnlock = components["schemas"]["AdminUnlock"];
 export type AdminProviderEvent = components["schemas"]["AdminProviderEvent"];
 export type AdminSupportCase = components["schemas"]["AdminSupportCase"];
 export type AdminSupportPolicy = components["schemas"]["AdminSupportPolicy"];
+export type AdminRefundDispute = components["schemas"]["AdminRefundDispute"];
 export type AdminComplianceLedgerEntry = components["schemas"]["AdminComplianceLedgerEntry"];
 export type AdminComplianceReport = components["schemas"]["AdminComplianceReport"];
 export type AdminVatDetermination = components["schemas"]["AdminVatDetermination"];
@@ -201,6 +202,10 @@ export async function getAdminSupportCases(): Promise<ApiResult<AdminPage<AdminS
 
 export async function getAdminSupportPolicies(): Promise<ApiResult<AdminPage<AdminSupportPolicy>>> {
   return getJson<AdminPage<AdminSupportPolicy>>("/v1/admin/support/policies");
+}
+
+export async function getAdminRefundDisputes(): Promise<ApiResult<AdminPage<AdminRefundDispute>>> {
+  return getJson<AdminPage<AdminRefundDispute>>("/v1/admin/refunds/disputes");
 }
 
 export async function getAdminComplianceLedger(): Promise<ApiResult<AdminPage<AdminComplianceLedgerEntry>>> {

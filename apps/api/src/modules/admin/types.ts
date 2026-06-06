@@ -13,6 +13,7 @@ export type AdminReceipt = components["schemas"]["AdminReceipt"];
 export type AdminInvoice = components["schemas"]["AdminInvoice"];
 export type AdminSupportCase = components["schemas"]["AdminSupportCase"];
 export type AdminSupportPolicy = components["schemas"]["AdminSupportPolicy"];
+export type AdminRefundDispute = components["schemas"]["AdminRefundDispute"];
 export type AdminReferralProgram = components["schemas"]["AdminReferralProgram"];
 export type AdminPartnerCampaign = components["schemas"]["AdminPartnerCampaign"];
 export type AdminTierWaiver = components["schemas"]["AdminTierWaiver"];
@@ -25,6 +26,8 @@ export type AdminOrganizationMemberActionRequest =
 export type AdminSupportCaseActionRequest = components["schemas"]["AdminSupportCaseActionRequest"];
 export type AdminSupportPolicyActionRequest =
   components["schemas"]["AdminSupportPolicyActionRequest"];
+export type AdminRefundDisputeActionRequest =
+  components["schemas"]["AdminRefundDisputeActionRequest"];
 
 export interface AdminPage<Item> {
   items: Item[];
@@ -52,6 +55,13 @@ export interface AdminRepository {
     body: AdminSupportPolicyActionRequest;
     idempotencyKey: string;
   }): Promise<AdminSupportPolicy | null>;
+  listRefundDisputes(input: { cursor?: string }): Promise<AdminPage<AdminRefundDispute>>;
+  updateRefundDispute(input: {
+    supabaseUserId: string;
+    refundDisputeId: string;
+    body: AdminRefundDisputeActionRequest;
+    idempotencyKey: string;
+  }): Promise<AdminRefundDispute | null>;
   getDatingSafety(): Promise<AdminDatingSafety>;
   listComplianceLedger(input: { cursor?: string }): Promise<AdminPage<AdminComplianceLedgerEntry>>;
   listDac7Reports(input: { cursor?: string }): Promise<AdminPage<AdminComplianceReport>>;
