@@ -2460,15 +2460,13 @@ describe("buildApi", () => {
   });
 
   it("returns referral activity for the current user", async () => {
+    const calls: Array<{ supabaseUserId: string; limit: number; cursor?: string }> = [];
     const referralRepository: ReferralRepository = {
       async createOrReuseToken() {
         throw new Error("not implemented");
       },
       async listActivity(input) {
-        expect(input).toEqual({
-          supabaseUserId: "00000000-0000-4000-8000-000000000001",
-          limit: 20
-        });
+        calls.push(input);
 
         return {
           items: [
@@ -2514,6 +2512,27 @@ describe("buildApi", () => {
       ],
       nextCursor: null
     });
+
+    const activityAliasResponse = await app.inject({
+      method: "GET",
+      url: "/v1/activity/referrals",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(activityAliasResponse.statusCode).toBe(200);
+    expect(activityAliasResponse.json()).toEqual(response.json());
+    expect(calls).toEqual([
+      {
+        supabaseUserId: "00000000-0000-4000-8000-000000000001",
+        limit: 20
+      },
+      {
+        supabaseUserId: "00000000-0000-4000-8000-000000000001",
+        limit: 20
+      }
+    ]);
 
     await app.close();
   });

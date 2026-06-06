@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { AgeRepository } from "../age/types.js";
 import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
@@ -83,34 +83,46 @@ export async function registerReferralRoutes(
   });
 
   app.get("/v1/referrals/activity", async (request, reply) => {
-    const access = await verifyReferralReadyAccess(request, options);
-
-    if (!access.ok) {
-      return reply.code(access.statusCode).send(access.body);
-    }
-
-    const query = request.query as { cursor?: string };
-
-    try {
-      const activity = await options.referralRepository.listActivity({
-        supabaseUserId: access.supabaseUserId,
-        limit: 20,
-        ...(query.cursor ? { cursor: query.cursor } : {})
-      });
-
-      return reply.code(200).send(activity);
-    } catch (error) {
-      if (error instanceof ReferralRepositoryConfigurationError) {
-        request.log.warn({ error }, "Referral repository is not configured");
-        return reply.code(200).send({
-          items: [],
-          nextCursor: null
-        });
-      }
-
-      throw error;
-    }
+    return sendReferralActivity(request, reply, options);
   });
+
+  app.get("/v1/activity/referrals", async (request, reply) => {
+    return sendReferralActivity(request, reply, options);
+  });
+}
+
+async function sendReferralActivity(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  options: RegisterReferralRoutesOptions
+) {
+  const access = await verifyReferralReadyAccess(request, options);
+
+  if (!access.ok) {
+    return reply.code(access.statusCode).send(access.body);
+  }
+
+  const query = request.query as { cursor?: string };
+
+  try {
+    const activity = await options.referralRepository.listActivity({
+      supabaseUserId: access.supabaseUserId,
+      limit: 20,
+      ...(query.cursor ? { cursor: query.cursor } : {})
+    });
+
+    return reply.code(200).send(activity);
+  } catch (error) {
+    if (error instanceof ReferralRepositoryConfigurationError) {
+      request.log.warn({ error }, "Referral repository is not configured");
+      return reply.code(200).send({
+        items: [],
+        nextCursor: null
+      });
+    }
+
+    throw error;
+  }
 }
 
 type ReferralReadyAccessResult =

@@ -103,6 +103,7 @@ Current implementation slice:
 - `GET /v1/activity` returns a backend-derived activity feed composed from payment and wallet transaction records.
 - `GET /v1/activity/payments` returns normalized payment-intent activity for the authenticated, age-verified user.
 - `GET /v1/activity/wallet-transactions` returns backend-observed wallet transaction records created during payment submission/settlement handling.
+- `GET /v1/activity/referrals` is the activity route-map alias for the same backend-derived referral activity returned by `GET /v1/referrals/activity`.
 - Wallet transaction records carry submission and confirmation references for user accountability, but do not grant access or revenue by themselves.
 
 ## Profile And Ranking Activity
