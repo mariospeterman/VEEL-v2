@@ -22,6 +22,7 @@ const nextConfig: NextConfig = {
       { source: "/app/stream/:liveRoomId", destination: "/live/:liveRoomId", permanent: false },
       { source: "/app/activity", destination: "/activity", permanent: false },
       { source: "/app/wallet", destination: "/wallet", permanent: false },
+      { source: "/app/studio", destination: "/studio", permanent: false },
       { source: "/app/settings", destination: "/settings", permanent: false },
       { source: "/app/assistant", destination: "/assistant", permanent: false },
       { source: "/passes", destination: "/tickets", permanent: false },

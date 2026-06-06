@@ -122,6 +122,17 @@ test("renders the delegated subscription projection", async ({ page }) => {
   await expect(page.getByText("Manual Solana Pay renewal is reserved")).toBeVisible();
 });
 
+test("renders the Studio organization dashboard projection", async ({ page }) => {
+  await page.goto("/studio");
+
+  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Organization dashboards" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Studio API unavailable" })).toBeVisible();
+  await expect(page.getByText("HTTP 503")).toBeVisible();
+  await expect(page.getByText("API is unavailable")).toBeVisible();
+  await expect(page.getByText("payout queues")).toBeVisible();
+});
+
 test("renders the settings projection", async ({ page }) => {
   await page.goto("/settings");
 
@@ -138,6 +149,10 @@ test("redirects documented app route aliases", async ({ page }) => {
   await page.goto("/app/settings");
   await expect(page).toHaveURL(/\/settings$/);
   await expect(page.getByRole("heading", { name: "Account controls" })).toBeVisible();
+
+  await page.goto("/app/studio");
+  await expect(page).toHaveURL(/\/studio$/);
+  await expect(page.getByRole("heading", { name: "Organization dashboards" })).toBeVisible();
 
   await page.goto("/app/stream/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10");
   await expect(page).toHaveURL(/\/live\/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10$/);

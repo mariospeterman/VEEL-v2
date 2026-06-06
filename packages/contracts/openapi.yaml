@@ -1055,6 +1055,17 @@ paths:
         $ref: "#/components/requestBodies/CreateAiToolCall"
       responses:
         "201": { $ref: "#/components/responses/AiToolCall" }
+  /v1/organizations:
+    get:
+      operationId: listMyOrganizationDashboards
+      tags: [Organizations]
+      summary: Studio and Enterprise organization dashboards for the current member
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/OrganizationDashboardPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /v1/admin/ops/summary:
     get:
       operationId: getAdminOpsSummary
@@ -1610,6 +1621,7 @@ components:
     AiSession: { description: AI session, content: { application/json: { schema: { $ref: "#/components/schemas/AiSession" } } } }
     AiCapabilities: { description: AI capabilities, content: { application/json: { schema: { $ref: "#/components/schemas/AiCapabilities" } } } }
     AiToolCall: { description: AI tool call, content: { application/json: { schema: { $ref: "#/components/schemas/AiToolCall" } } } }
+    OrganizationDashboardPage: { description: Organization dashboards, content: { application/json: { schema: { $ref: "#/components/schemas/OrganizationDashboardPage" } } } }
     AdminOpsSummary: { description: Admin ops summary, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOpsSummary" } } } }
     AdminUser: { description: Admin user, content: { application/json: { schema: { $ref: "#/components/schemas/AdminUser" } } } }
     AdminUserPage: { description: Admin users, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminUser" } }, nextCursor: { type: string, nullable: true } } } } } }
@@ -2770,6 +2782,63 @@ components:
         - draft_support_reply
         - prepare_refund_decision
         - prepare_ban_or_restriction
+    OrganizationDashboardPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/OrganizationDashboard" }
+        nextCursor: { type: string, nullable: true }
+    OrganizationMembership:
+      type: object
+      required: [id, organizationId, name, state, plan, role, membershipState, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        name: { type: string }
+        state: { type: string, enum: [pending_kyb, active, suspended, archived] }
+        plan: { type: string, enum: [enterprise] }
+        kybState: { type: string, enum: [not_started, pending, verified, rejected], nullable: true }
+        role: { type: string, enum: [owner, admin, member, viewer] }
+        membershipState: { type: string, enum: [invited, active, suspended, removed] }
+        createdAt: { type: string, format: date-time }
+        joinedAt: { type: string, format: date-time, nullable: true }
+    OrganizationGovernance:
+      type: object
+      required: [kybState, memberCount, activeMemberCount, tierWaiverState, supportState]
+      properties:
+        kybState: { type: string, enum: [not_started, pending, verified, rejected], nullable: true }
+        memberCount: { type: integer }
+        activeMemberCount: { type: integer }
+        tierWaiverState: { type: string, enum: [none, active, expired, revoked] }
+        supportState: { type: string, enum: [standard, priority, enterprise_review] }
+    OrganizationCapabilities:
+      type: object
+      required: [rbacEnabled, teamPublishingEnabled, consolidatedReportingEnabled, complianceExportsEnabled]
+      properties:
+        rbacEnabled: { type: boolean }
+        teamPublishingEnabled: { type: boolean }
+        consolidatedReportingEnabled: { type: boolean }
+        complianceExportsEnabled: { type: boolean }
+    OrganizationNotice:
+      type: object
+      required: [kind, title, state]
+      properties:
+        kind: { type: string, enum: [kyb_required, member_invite, compliance_review, support_review, none] }
+        title: { type: string }
+        state: { type: string, enum: [open, pending, resolved, none] }
+    OrganizationDashboard:
+      type: object
+      required: [organization, governance, capabilities, financeBoundary, notices]
+      properties:
+        organization: { $ref: "#/components/schemas/OrganizationMembership" }
+        governance: { $ref: "#/components/schemas/OrganizationGovernance" }
+        capabilities: { $ref: "#/components/schemas/OrganizationCapabilities" }
+        financeBoundary: { type: string, enum: [no_custody_no_payout_queue] }
+        notices:
+          type: array
+          items: { $ref: "#/components/schemas/OrganizationNotice" }
     AdminOpsSummary:
       type: object
       required: [providerHealth, queueHealth, openReports, paymentCounts, unlockCounts, providerEventCounts]

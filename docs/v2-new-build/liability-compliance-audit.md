@@ -54,9 +54,9 @@ Implementation consequences:
 | Compliance ledger | DAC7/DAC8/CARF/VAT docs and admin read routes exist. | Export/filing workflows, USD snapshot provider, seller onboarding collection, and counsel/tax review remain. |
 | Creator verification | Age/profile/wallet foundations exist. | Single "Become Creator" onboarding flow, identity/KYB provider approval, tax profile collection, and conversion-friendly UX remain. |
 | Mutuals/Connections | Compatibility backend route family and frontend projections exist. | Rename/migration from dating tables/routes, conduct UX, and hard social-money rule tests remain. |
-| Tiers | Free Verified, Veel Plus, Veel Studio, Enterprise are documented. | Feature gates, admin overrides, organization dashboards, and non-pay-to-win policy tests remain. |
+| Tiers | Free Verified, Veel Plus, Veel Studio, Enterprise are documented; organization member dashboards now expose software governance/readiness only. | Feature gates, admin overrides, and non-pay-to-win policy tests remain. |
 | Notifications | OpenAPI routes, RLS-backed notification/preference/device tables, Fastify account routes, backend tests, and settings preference reads exist. | Worker dispatch, service-worker subscription UX, actual push delivery, Realtime subscription wiring, and notification admin visibility remain. |
-| User/creator/studio/enterprise dashboards | User activity and creator monetisation dashboard exist; admin ops has read-only panels. | Studio/Enterprise organization dashboards and full admin route-map breadth remain. |
+| User/creator/studio/enterprise dashboards | User activity, creator monetisation dashboard, member-scoped Studio/Enterprise dashboards, and admin ops read-only panels exist. | Full admin route-map breadth, organization mutation workflows, and support/KYB workflow depth remain. |
 
 ## Risk Matrix
 

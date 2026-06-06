@@ -42,6 +42,9 @@ import type { MessageRepository } from "./modules/message/types.js";
 import { createPostgresNotificationRepository } from "./modules/notification/notification-repository.js";
 import { registerNotificationRoutes } from "./modules/notification/notification-routes.js";
 import type { NotificationRepository } from "./modules/notification/types.js";
+import { createPostgresOrganizationRepository } from "./modules/organization/organization-repository.js";
+import { registerOrganizationRoutes } from "./modules/organization/organization-routes.js";
+import type { OrganizationRepository } from "./modules/organization/types.js";
 import {
   createPostgresPaymentEvidenceRepository,
   createPostgresPaymentRepository
@@ -99,6 +102,7 @@ export interface BuildApiOptions {
   profileRepository?: ProfileRepository;
   referralRepository?: ReferralRepository;
   notificationRepository?: NotificationRepository;
+  organizationRepository?: OrganizationRepository;
   subscriptionRepository?: SubscriptionRepository;
   subscriptionAuthorizationVerifier?: SubscriptionAuthorizationVerifier;
   walletRepository?: WalletRepository;
@@ -179,6 +183,8 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     options.referralRepository ?? createPostgresReferralRepository(app.config.DATABASE_URL);
   const notificationRepository =
     options.notificationRepository ?? createPostgresNotificationRepository(app.config.DATABASE_URL);
+  const organizationRepository =
+    options.organizationRepository ?? createPostgresOrganizationRepository(app.config.DATABASE_URL);
   const subscriptionRepository =
     options.subscriptionRepository ?? createPostgresSubscriptionRepository(app.config.DATABASE_URL);
   const subscriptionAuthorizationVerifier =
@@ -268,6 +274,11 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   if (notificationRepository.close) {
     app.addHook("onClose", async () => {
       await notificationRepository.close?.();
+    });
+  }
+  if (organizationRepository.close) {
+    app.addHook("onClose", async () => {
+      await organizationRepository.close?.();
     });
   }
   if (subscriptionRepository.close) {
@@ -377,6 +388,12 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   await registerNotificationRoutes(app, {
     authVerifier,
     notificationRepository
+  });
+  await registerOrganizationRoutes(app, {
+    authVerifier,
+    sessionRepository,
+    ageRepository,
+    organizationRepository
   });
   await registerSubscriptionRoutes(app, {
     authVerifier,

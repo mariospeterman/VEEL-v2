@@ -54,6 +54,11 @@ import type {
   NotificationPreferences,
   NotificationRepository
 } from "../src/modules/notification/types";
+import type {
+  OrganizationDashboard,
+  OrganizationDashboardPage,
+  OrganizationRepository
+} from "../src/modules/organization/types";
 import type { EventRepository } from "../src/modules/event/types";
 import type { DatingRepository } from "../src/modules/dating/types";
 import type { DiscoverRepository } from "../src/modules/discover/types";
@@ -2798,6 +2803,67 @@ describe("buildApi", () => {
           notificationDeviceId: "00000000-0000-4000-8000-000000000091",
           idempotencyKey: "del"
         }
+      }
+    ]);
+
+    await app.close();
+  });
+
+  it("returns member-scoped organization dashboards without custody state", async () => {
+    const calls: Array<Parameters<OrganizationRepository["listMyDashboards"]>[0]> = [];
+    const organizationRepository = fakeOrganizationRepository({
+      onListMyDashboards(input) {
+        calls.push(input);
+        return {
+          items: [organizationDashboardFixture()],
+          nextCursor: null
+        };
+      }
+    });
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      organizationRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/organizations",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      items: [
+        {
+          organization: {
+            name: "Veel Enterprise",
+            role: "owner",
+            membershipState: "active"
+          },
+          governance: {
+            kybState: "verified",
+            activeMemberCount: 3,
+            supportState: "priority"
+          },
+          capabilities: {
+            rbacEnabled: true,
+            consolidatedReportingEnabled: true
+          },
+          financeBoundary: "no_custody_no_payout_queue"
+        }
+      ],
+      nextCursor: null
+    });
+    expect(JSON.stringify(response.json())).not.toMatch(/creatorBalance|withdraw|payoutQueue|escrow/i);
+    expect(calls).toEqual([
+      {
+        supabaseUserId: "00000000-0000-4000-8000-000000000001",
+        limit: 20
       }
     ]);
 
@@ -6413,6 +6479,57 @@ function fakeNotificationRepository(
     },
     async deleteDevice(input) {
       return overrides.onDeleteDevice?.(input) ?? Boolean(input.notificationDeviceId);
+    }
+  };
+}
+
+function organizationDashboardFixture(
+  overrides: Partial<OrganizationDashboard> = {}
+): OrganizationDashboard {
+  return {
+    organization: overrides.organization ?? {
+      id: "00000000-0000-4000-8000-0000000000a1",
+      organizationId: "00000000-0000-4000-8000-0000000000a0",
+      name: "Veel Enterprise",
+      state: "active",
+      plan: "enterprise",
+      kybState: "verified",
+      role: "owner",
+      membershipState: "active",
+      createdAt: "2026-06-06T10:00:00.000Z",
+      joinedAt: "2026-06-06T10:01:00.000Z"
+    },
+    governance: overrides.governance ?? {
+      kybState: "verified",
+      memberCount: 3,
+      activeMemberCount: 3,
+      tierWaiverState: "none",
+      supportState: "priority"
+    },
+    capabilities: overrides.capabilities ?? {
+      rbacEnabled: true,
+      teamPublishingEnabled: true,
+      consolidatedReportingEnabled: true,
+      complianceExportsEnabled: true
+    },
+    financeBoundary: overrides.financeBoundary ?? "no_custody_no_payout_queue",
+    notices: overrides.notices ?? []
+  };
+}
+
+function fakeOrganizationRepository(
+  overrides: Partial<{
+    onListMyDashboards: (
+      input: Parameters<OrganizationRepository["listMyDashboards"]>[0]
+    ) => OrganizationDashboardPage;
+  }> = {}
+): OrganizationRepository {
+  return {
+    async listMyDashboards(input) {
+      return overrides.onListMyDashboards?.(input) ?? {
+        items: [organizationDashboardFixture()],
+        nextCursor: null
+      };
     }
   };
 }

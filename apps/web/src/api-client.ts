@@ -36,6 +36,7 @@ export type TicketPage = components["schemas"]["TicketPage"];
 export type DatingFeedPage = components["schemas"]["DatingFeedPage"];
 export type DatingMatchPage = components["schemas"]["DatingMatchPage"];
 export type AiCapabilities = components["schemas"]["AiCapabilities"];
+export type OrganizationDashboardPage = components["schemas"]["OrganizationDashboardPage"];
 export type AdminOpsSummary = components["schemas"]["AdminOpsSummary"];
 export type AdminPaymentIntent = components["schemas"]["AdminPaymentIntent"];
 export type AdminUnlock = components["schemas"]["AdminUnlock"];
@@ -153,6 +154,10 @@ export async function getDatingMatches(): Promise<ApiResult<DatingMatchPage>> {
 
 export async function getAiCapabilities(): Promise<ApiResult<AiCapabilities>> {
   return getJson<AiCapabilities>("/v1/ai/capabilities");
+}
+
+export async function getOrganizationDashboards(): Promise<ApiResult<OrganizationDashboardPage>> {
+  return getJson<OrganizationDashboardPage>("/v1/organizations");
 }
 
 export async function getAdminOpsSummary(): Promise<ApiResult<AdminOpsSummary>> {

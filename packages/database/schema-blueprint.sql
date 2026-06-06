@@ -136,10 +136,32 @@ create table creator_monetisation_settings (
   updated_at timestamptz not null default now()
 );
 
+create table organizations (
+  id uuid primary key,
+  name text not null,
+  state text not null default 'pending_kyb',
+  plan text not null default 'enterprise',
+  kyb_state text,
+  created_at timestamptz not null default now()
+);
+
+create table organization_memberships (
+  id uuid primary key,
+  organization_id uuid not null references organizations(id),
+  user_id uuid not null references users(id),
+  role text not null,
+  state text not null default 'active',
+  invited_by_user_id uuid references users(id),
+  joined_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (organization_id, user_id)
+);
+
 create table tax_profiles (
   id uuid primary key,
   user_id uuid references users(id),
-  organization_id uuid,
+  organization_id uuid references organizations(id),
   subject_type text not null,
   state text not null default 'draft',
   tax_residence_country text,

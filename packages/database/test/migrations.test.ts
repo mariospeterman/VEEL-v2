@@ -430,4 +430,27 @@ describe("database migrations", () => {
     expect(sql).toContain("notification_devices_insert_self");
     expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role|creator_balance|withdraw|payout_queue|escrow|endpoint text|p256dh text|auth text/i);
   });
+
+  it("adds organization memberships with RLS and no custody surfaces", () => {
+    const sql = readMigration("0035_organization_memberships.sql");
+
+    expect(sql).toContain("create table organization_memberships");
+    expect(sql).toContain("unique (organization_id, user_id)");
+    expect(sql).toContain("organization_memberships_user_state_idx");
+    expect(sql).toContain("organization_memberships_org_state_idx");
+    expect(sql).toContain("alter table organization_memberships enable row level security");
+    expect(sql).toContain("organization_memberships_select_self_or_staff");
+    expect(sql).toContain("organizations_member_select");
+    expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role|creator_balance|withdraw|payout_queue|escrow/i);
+  });
+
+  it("covers organization membership advisor fixes", () => {
+    const sql = readMigration("0036_organization_memberships_advisor_fixes.sql");
+
+    expect(sql).toContain("organization_memberships_invited_by_user_idx");
+    expect(sql).toContain("drop policy if exists organizations_member_select");
+    expect(sql).toContain("drop policy if exists organizations_staff_select");
+    expect(sql).toContain("organizations_select_member_or_staff");
+    expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role|creator_balance|withdraw|payout_queue|escrow/i);
+  });
 });

@@ -1371,6 +1371,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/organizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Studio and Enterprise organization dashboards for the current member */
+        get: operations["listMyOrganizationDashboards"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/ops/summary": {
         parameters: {
             query?: never;
@@ -3014,6 +3031,62 @@ export interface components {
         AiSessionScope: "user_self_service" | "creator_helper" | "admin_ops";
         /** @enum {string} */
         AiToolName: "explain_app_state" | "summarize_own_activity" | "find_own_purchases" | "draft_caption" | "suggest_hashtags" | "prepare_event_copy" | "summarize_creator_metrics" | "payment_lookup" | "provider_health_summary" | "moderation_queue_summary" | "draft_support_reply" | "prepare_refund_decision" | "prepare_ban_or_restriction";
+        OrganizationDashboardPage: {
+            items: components["schemas"]["OrganizationDashboard"][];
+            nextCursor: string | null;
+        };
+        OrganizationMembership: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            name: string;
+            /** @enum {string} */
+            state: "pending_kyb" | "active" | "suspended" | "archived";
+            /** @enum {string} */
+            plan: "enterprise";
+            /** @enum {string|null} */
+            kybState?: "not_started" | "pending" | "verified" | "rejected" | null;
+            /** @enum {string} */
+            role: "owner" | "admin" | "member" | "viewer";
+            /** @enum {string} */
+            membershipState: "invited" | "active" | "suspended" | "removed";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            joinedAt?: string | null;
+        };
+        OrganizationGovernance: {
+            /** @enum {string|null} */
+            kybState: "not_started" | "pending" | "verified" | "rejected" | null;
+            memberCount: number;
+            activeMemberCount: number;
+            /** @enum {string} */
+            tierWaiverState: "none" | "active" | "expired" | "revoked";
+            /** @enum {string} */
+            supportState: "standard" | "priority" | "enterprise_review";
+        };
+        OrganizationCapabilities: {
+            rbacEnabled: boolean;
+            teamPublishingEnabled: boolean;
+            consolidatedReportingEnabled: boolean;
+            complianceExportsEnabled: boolean;
+        };
+        OrganizationNotice: {
+            /** @enum {string} */
+            kind: "kyb_required" | "member_invite" | "compliance_review" | "support_review" | "none";
+            title: string;
+            /** @enum {string} */
+            state: "open" | "pending" | "resolved" | "none";
+        };
+        OrganizationDashboard: {
+            organization: components["schemas"]["OrganizationMembership"];
+            governance: components["schemas"]["OrganizationGovernance"];
+            capabilities: components["schemas"]["OrganizationCapabilities"];
+            /** @enum {string} */
+            financeBoundary: "no_custody_no_payout_queue";
+            notices: components["schemas"]["OrganizationNotice"][];
+        };
         AdminOpsSummary: {
             /** @enum {string} */
             providerHealth: "ok" | "degraded" | "down";
@@ -3999,6 +4072,15 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["AiToolCall"];
+            };
+        };
+        /** @description Organization dashboards */
+        OrganizationDashboardPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["OrganizationDashboardPage"];
             };
         };
         /** @description Admin ops summary */
@@ -6032,6 +6114,22 @@ export interface operations {
         requestBody: components["requestBodies"]["CreateAiToolCall"];
         responses: {
             201: components["responses"]["AiToolCall"];
+        };
+    };
+    listMyOrganizationDashboards: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["OrganizationDashboardPage"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     getAdminOpsSummary: {
