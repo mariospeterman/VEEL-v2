@@ -4,6 +4,7 @@ import { parsePublicWebEnv } from "@veel/config";
 import type { components } from "@veel/contracts";
 
 export type ContentItem = components["schemas"]["ContentItem"];
+export type SessionState = components["schemas"]["SessionState"];
 export type CreatorDashboard = components["schemas"]["CreatorMonetisationDashboard"];
 export type CreatorProfile = components["schemas"]["CreatorProfile"];
 export type LiveRoom = components["schemas"]["LiveRoom"];
@@ -59,6 +60,10 @@ export type ApiResult<T> =
 
 export async function getContentItem(contentId: string): Promise<ApiResult<ContentItem>> {
   return getJson<ContentItem>(`/v1/content/${encodeURIComponent(contentId)}`);
+}
+
+export async function getSession(): Promise<ApiResult<SessionState>> {
+  return getJson<SessionState>("/v1/session");
 }
 
 export async function getLiveRoom(liveRoomId: string): Promise<ApiResult<LiveRoom>> {

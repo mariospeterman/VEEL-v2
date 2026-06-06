@@ -128,7 +128,8 @@ test("renders the settings projection", async ({ page }) => {
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Account controls" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Security" })).toBeVisible();
-  await expect(page.getByText("Supabase verified")).toBeVisible();
+  await expect(page.getByText("Settings API unavailable")).toBeVisible();
+  await expect(page.getByText("HTTP 503").first()).toBeVisible();
   await expect(page.getByText("privacy-safe only")).toBeVisible();
   await expect(page.getByText("server-owned").first()).toBeVisible();
 });

@@ -1,49 +1,25 @@
-import type { components } from "@veel/contracts";
 import { appShellNavItems } from "@veel/ui";
 import type { ReactNode } from "react";
-
-type FeedPreferences = components["schemas"]["FeedPreferences"];
-type Wallet = components["schemas"]["Wallet"];
-type AgeStatus = components["schemas"]["AgeStatus"];
-
-const feedPreferences: FeedPreferences = {
-  defaultMode: "following",
-  nsfwPreference: "recommended",
-  hiddenCreatorIds: [
-    "00000000-0000-4000-8000-000000000011",
-    "00000000-0000-4000-8000-000000000012"
-  ],
-  hiddenTopics: ["spoilers", "low-quality-live"]
-};
-
-const primaryWallet: Wallet = {
-  id: "00000000-0000-4000-8000-000000000020",
-  chain: "solana_devnet",
-  address: "VeelWallet111111111111111111111111111111111",
-  provider: "embedded_privy",
-  isPrimary: true
-};
-
-const ageStatus: AgeStatus = {
-  state: "verified",
-  provider: "yoti"
-};
-
-const securityRows = [
-  { label: "Session", value: "Supabase verified" },
-  { label: "Age assurance", value: `${ageStatus.state} via ${ageStatus.provider}` },
-  { label: "Primary wallet", value: shorten(primaryWallet.address) },
-  { label: "Wallet chain", value: primaryWallet.chain }
-];
+import {
+  getAgeStatus,
+  getSession,
+  getWallets,
+  type AgeStatus,
+  type ApiResult,
+  type SessionState,
+  type WalletList
+} from "@/api-client";
 
 const notificationRows = [
-  { label: "Messages", value: "on" },
-  { label: "Live reminders", value: "on" },
-  { label: "Mutuals", value: "quiet" },
+  { label: "Messages", value: "backend preference mutation required" },
+  { label: "Live reminders", value: "backend preference mutation required" },
+  { label: "Mutuals", value: "quiet by product default" },
   { label: "Safety and admin", value: "always on" }
 ];
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const [session, ageStatus, wallets] = await Promise.all([getSession(), getAgeStatus(), getWallets()]);
+
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <AppNav />
@@ -68,27 +44,18 @@ export default function SettingsPage() {
           </header>
 
           <SettingsGroup id="profile" title="Profile">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Fact label="Handle" value="@maki" />
-              <Fact label="Display name" value="Maki" />
-              <Fact label="Visibility" value="public" />
-              <Fact label="Creator mode" value="enabled" />
-            </div>
+            <ProfileFacts session={session} />
           </SettingsGroup>
 
           <SettingsGroup id="security" title="Security">
-            <div className="grid gap-3 sm:grid-cols-2">
-              {securityRows.map((row) => (
-                <Fact label={row.label} value={row.value} key={row.label} />
-              ))}
-            </div>
+            <SecurityFacts ageStatus={ageStatus} session={session} wallets={wallets} />
           </SettingsGroup>
 
           <SettingsGroup id="feed" title="Feed">
             <div className="grid gap-3 sm:grid-cols-3">
-              <Fact label="Default mode" value={feedPreferences.defaultMode} />
-              <Fact label="Hidden creators" value={String(feedPreferences.hiddenCreatorIds?.length ?? 0)} />
-              <Fact label="Hidden topics" value={String(feedPreferences.hiddenTopics?.length ?? 0)} />
+              <Fact label="Default mode" value="server mutation only" />
+              <Fact label="Hidden creators" value="backend-owned" />
+              <Fact label="Hidden topics" value="backend-owned" />
             </div>
           </SettingsGroup>
 
@@ -111,6 +78,42 @@ export default function SettingsPage() {
         </section>
       </section>
     </main>
+  );
+}
+
+function ProfileFacts({ session }: { session: ApiResult<SessionState> }) {
+  if (!session.ok) {
+    return <UnavailableState result={session} />;
+  }
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <Fact label="Handle" value={session.data.user?.handle ? `@${session.data.user.handle}` : "not set"} />
+      <Fact label="Display name" value={session.data.user?.displayName ?? "not set"} />
+      <Fact label="Session" value={session.data.authenticated ? "Supabase verified" : "not authenticated"} />
+      <Fact label="Access" value={session.data.appAccessState.allowed ? "ready" : session.data.appAccessState.reason} />
+    </div>
+  );
+}
+
+function SecurityFacts({
+  ageStatus,
+  session,
+  wallets
+}: {
+  ageStatus: ApiResult<AgeStatus>;
+  session: ApiResult<SessionState>;
+  wallets: ApiResult<WalletList>;
+}) {
+  const primaryWallet = wallets.ok ? wallets.data.items.find((wallet) => wallet.isPrimary) : null;
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <Fact label="Session" value={session.ok && session.data.authenticated ? "Supabase verified" : resultLabel(session)} />
+      <Fact label="Age assurance" value={ageStatus.ok ? `${ageStatus.data.state} via ${ageStatus.data.provider ?? "none"}` : resultLabel(ageStatus)} />
+      <Fact label="Primary wallet" value={primaryWallet ? shorten(primaryWallet.address) : resultLabel(wallets)} />
+      <Fact label="Wallet chain" value={primaryWallet?.chain ?? "not ready"} />
+    </div>
   );
 }
 
@@ -162,6 +165,20 @@ function Fact({ label, value }: { label: string; value: string }) {
       <p className="mt-1 truncate font-medium">{value}</p>
     </div>
   );
+}
+
+function UnavailableState<T>({ result }: { result: Extract<ApiResult<T>, { ok: false }> }) {
+  return (
+    <div className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+      <p className="font-medium">Settings API unavailable</p>
+      <p className="mt-1 text-[var(--muted)]">HTTP {result.status}</p>
+      <p className="mt-1 text-[var(--muted)]">{result.message}</p>
+    </div>
+  );
+}
+
+function resultLabel<T>(result: ApiResult<T>) {
+  return result.ok ? "ready" : `HTTP ${result.status}`;
 }
 
 function shorten(value: string) {
