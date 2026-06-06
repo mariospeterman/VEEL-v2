@@ -5,7 +5,9 @@ import { revalidatePath } from "next/cache";
 import {
   updateAdminOrganizationKyb,
   updateAdminOrganizationMember,
+  updateAdminFeatureFlag,
   updateAdminSupportPolicy,
+  type AdminFeatureFlagPatchRequest,
   type AdminOrganizationKybActionRequest,
   type AdminOrganizationMemberActionRequest,
   type AdminSupportPolicyActionRequest,
@@ -48,6 +50,17 @@ export async function updateSupportPolicyAction(formData: FormData): Promise<voi
   actionResult(result);
 }
 
+export async function updateFeatureFlagAction(formData: FormData): Promise<void> {
+  const body: AdminFeatureFlagPatchRequest = {
+    value: jsonObjectField(formData, "value"),
+    state: enumField(formData, "state", ["active", "paused", "archived"]),
+    reason: stringField(formData, "reason")
+  };
+
+  const result = await updateAdminFeatureFlag(stringField(formData, "featureFlagKey"), body, randomUUID());
+  actionResult(result);
+}
+
 function actionResult<T>(result: ApiResult<T>): void {
   if (!result.ok) {
     throw new Error(`Admin action failed with HTTP ${result.status}: ${result.message}`);
@@ -72,4 +85,14 @@ function enumField<const T extends readonly string[]>(formData: FormData, key: s
   }
 
   return value;
+}
+
+function jsonObjectField(formData: FormData, key: string): Record<string, unknown> {
+  const value = stringField(formData, key);
+  const parsed = JSON.parse(value) as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`${key} must be a JSON object`);
+  }
+
+  return parsed as Record<string, unknown>;
 }

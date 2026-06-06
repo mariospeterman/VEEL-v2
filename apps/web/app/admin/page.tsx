@@ -71,6 +71,7 @@ import {
   type EventAccessPass
 } from "@/api-client";
 import {
+  updateFeatureFlagAction,
   updateOrganizationKybAction,
   updateOrganizationMemberAction,
   updateSupportPolicyAction
@@ -1190,6 +1191,19 @@ function FeatureFlagRow({ flag }: { flag: AdminFeatureFlag }) {
       <div className="mt-3 grid gap-2">
         <Fact label="Boundary" value="software policy" />
       </div>
+      <form action={updateFeatureFlagAction} className="mt-3 grid gap-2 border-t border-[var(--line)] pt-3">
+        <input name="featureFlagKey" type="hidden" value={flag.key} />
+        <AdminJsonInput defaultValue={JSON.stringify(flag.value, null, 2)} />
+        <div className="grid gap-2 sm:grid-cols-[150px_1fr_auto]">
+          <AdminSelect defaultValue={flag.state} label="State" name="state">
+            <option value="active">active</option>
+            <option value="paused">paused</option>
+            <option value="archived">archived</option>
+          </AdminSelect>
+          <AdminReasonInput placeholder="Reason for feature policy change" />
+          <AdminSubmit label="Update flag" />
+        </div>
+      </form>
     </article>
   );
 }
@@ -1343,6 +1357,20 @@ function AdminReasonInput({ placeholder }: { placeholder: string }) {
         minLength={3}
         name="reason"
         placeholder={placeholder}
+        required
+      />
+    </label>
+  );
+}
+
+function AdminJsonInput({ defaultValue }: { defaultValue: string }) {
+  return (
+    <label className="grid min-w-0 gap-1">
+      <span className="text-xs uppercase text-[var(--muted)]">Policy JSON</span>
+      <textarea
+        className="min-h-24 min-w-0 rounded border border-[var(--line)] bg-[var(--panel)] px-2 py-2 font-mono text-xs"
+        defaultValue={defaultValue}
+        name="value"
         required
       />
     </label>

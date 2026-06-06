@@ -74,6 +74,7 @@ export type AdminFeatureFlag = components["schemas"]["AdminFeatureFlag"];
 export type AdminOrganizationKybActionRequest = components["schemas"]["AdminOrganizationKybActionRequest"];
 export type AdminOrganizationMemberActionRequest = components["schemas"]["AdminOrganizationMemberActionRequest"];
 export type AdminSupportPolicyActionRequest = components["schemas"]["AdminSupportPolicyActionRequest"];
+export type AdminFeatureFlagPatchRequest = components["schemas"]["AdminFeatureFlagPatchRequest"];
 
 export type AdminPage<T> = {
   items: T[];
@@ -369,6 +370,18 @@ export async function updateAdminSupportPolicy(
 ): Promise<ApiResult<AdminSupportPolicy>> {
   return patchJson<AdminSupportPolicy>(
     `/v1/admin/support/policies/${encodeURIComponent(supportPolicyId)}`,
+    body,
+    idempotencyKey
+  );
+}
+
+export async function updateAdminFeatureFlag(
+  featureFlagKey: string,
+  body: AdminFeatureFlagPatchRequest,
+  idempotencyKey: string
+): Promise<ApiResult<AdminFeatureFlag>> {
+  return patchJson<AdminFeatureFlag>(
+    `/v1/admin/feature-flags/${encodeURIComponent(featureFlagKey)}`,
     body,
     idempotencyKey
   );
