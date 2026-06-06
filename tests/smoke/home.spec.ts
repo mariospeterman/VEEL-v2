@@ -71,9 +71,10 @@ test("renders the messages and paid-message projection", async ({ page }) => {
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Inbox" })).toBeVisible();
-  await expect(page.getByText("Visible message")).toBeVisible();
-  await expect(page.getByText("Paid hello", { exact: true })).toBeVisible();
-  await expect(page.getByText("pending_payment")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Messages unavailable" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Conversation unavailable" })).toBeVisible();
+  await expect(page.getByText("HTTP 503").first()).toBeVisible();
+  await expect(page.getByText("API is unavailable").first()).toBeVisible();
 });
 
 test("renders the activity and wallet transaction projection", async ({ page }) => {

@@ -75,6 +75,7 @@ Current implementation slice:
 - `POST /v1/messages/conversations/:id/paid-message-intents` stores the paid-message body server-side and creates a server-priced `paid_message` payment intent.
 - Confirmed backend settlement inserts the paid message and audit event transactionally.
 - New public message tables have RLS enabled. Baseline read policies are participant-scoped before direct Postgres Changes exposure.
+- `/messages` reads the participant inbox and selected conversation through the typed web API helper. It does not render local conversation or paid-message fixtures.
 
 ## Activity Model
 

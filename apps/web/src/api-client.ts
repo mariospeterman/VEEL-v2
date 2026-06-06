@@ -11,6 +11,12 @@ export type ActivityItem = components["schemas"]["ActivityItem"];
 export type ActivityPage = components["schemas"]["ActivityPage"];
 export type WalletTransaction = components["schemas"]["WalletTransaction"];
 export type WalletTransactionPage = components["schemas"]["WalletTransactionPage"];
+export type Conversation = components["schemas"]["Conversation"];
+export type ConversationList = {
+  items: Conversation[];
+};
+export type Message = components["schemas"]["Message"];
+export type MessagePage = components["schemas"]["MessagePage"];
 
 export type ApiResult<T> =
   | {
@@ -45,6 +51,14 @@ export async function getPaymentActivity(): Promise<ApiResult<ActivityPage>> {
 
 export async function getWalletTransactionActivity(): Promise<ApiResult<WalletTransactionPage>> {
   return getJson<WalletTransactionPage>("/v1/activity/wallet-transactions");
+}
+
+export async function getConversations(): Promise<ApiResult<ConversationList>> {
+  return getJson<ConversationList>("/v1/messages/conversations");
+}
+
+export async function getConversationMessages(conversationId: string): Promise<ApiResult<MessagePage>> {
+  return getJson<MessagePage>(`/v1/messages/conversations/${encodeURIComponent(conversationId)}/messages`);
 }
 
 async function getJson<T>(path: string): Promise<ApiResult<T>> {

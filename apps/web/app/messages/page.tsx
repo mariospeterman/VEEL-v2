@@ -1,50 +1,21 @@
-import type { components } from "@veel/contracts";
 import { appShellNavItems } from "@veel/ui";
+import {
+  getConversationMessages,
+  getConversations,
+  type ApiResult,
+  type Conversation,
+  type ConversationList,
+  type Message,
+  type MessagePage
+} from "@/api-client";
 
-type Conversation = components["schemas"]["Conversation"];
-type Message = components["schemas"]["Message"];
+export default async function MessagesPage() {
+  const conversations = await getConversations();
+  const selectedConversation = conversations.ok ? (conversations.data.items[0] ?? null) : null;
+  const messages = selectedConversation
+    ? await getConversationMessages(selectedConversation.id)
+    : null;
 
-const creator = {
-  id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab20",
-  handle: "maki",
-  displayName: "Maki",
-  avatarUrl: null,
-  badges: []
-};
-
-const conversation: Conversation = {
-  id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab10",
-  type: "direct",
-  title: "Maki",
-  unreadCount: 1,
-  lastMessage: {
-    body: "Paid hello is waiting for settlement.",
-    sender: creator,
-    createdAt: "2026-06-04T23:45:00.000Z"
-  }
-};
-
-const visibleMessage: Message = {
-  id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab90",
-  conversationId: conversation.id,
-  sender: creator,
-  body: "Visible message",
-  deliveryState: "visible",
-  paymentIntentId: null,
-  createdAt: "2026-06-04T23:45:00.000Z"
-};
-
-const paidDraft: Message = {
-  id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab91",
-  conversationId: conversation.id,
-  sender: creator,
-  body: "Paid hello",
-  deliveryState: "pending_payment",
-  paymentIntentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab50",
-  createdAt: "2026-06-04T23:46:00.000Z"
-};
-
-export default function MessagesPage() {
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-[var(--line)] px-5 py-4">
@@ -70,30 +41,87 @@ export default function MessagesPage() {
             <p className="text-sm font-medium text-[var(--accent)]">Messages</p>
             <h1 className="mt-1 text-2xl font-semibold tracking-normal">Inbox</h1>
           </div>
-          <article className="grid gap-1 border-b border-[var(--line)] p-4">
-            <div className="flex items-center justify-between gap-3">
-              <p className="font-medium">{conversation.title}</p>
-              <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-semibold text-[var(--accent-strong)]">
-                {conversation.unreadCount}
-              </span>
-            </div>
-            <p className="truncate text-sm text-[var(--muted)]">{conversation.lastMessage?.body}</p>
-          </article>
+          {conversations.ok ? (
+            conversations.data.items.length > 0 ? (
+              conversations.data.items.map((conversation) => (
+                <ConversationRow
+                  conversation={conversation}
+                  isSelected={conversation.id === selectedConversation?.id}
+                  key={conversation.id}
+                />
+              ))
+            ) : (
+              <EmptyState label="No conversations yet" />
+            )
+          ) : (
+            <UnavailableState result={conversations} title="Messages unavailable" />
+          )}
         </aside>
 
         <section className="rounded border border-[var(--line)] bg-[var(--panel)]">
-          <div className="border-b border-[var(--line)] p-4">
-            <h2 className="text-lg font-semibold tracking-normal">{conversation.title}</h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">Direct conversation</p>
-          </div>
+          {selectedConversation ? (
+            <>
+              <div className="border-b border-[var(--line)] p-4">
+                <h2 className="text-lg font-semibold tracking-normal">{selectedConversation.title}</h2>
+                <p className="mt-1 text-sm capitalize text-[var(--muted)]">
+                  {selectedConversation.type} conversation
+                </p>
+              </div>
 
-          <div className="grid gap-3 p-4">
-            <MessageBubble message={visibleMessage} />
-            <MessageBubble message={paidDraft} />
-          </div>
+              <div className="grid gap-3 p-4">
+                {messages?.ok ? (
+                  messages.data.items.length > 0 ? (
+                    messages.data.items.map((message) => <MessageBubble message={message} key={message.id} />)
+                  ) : (
+                    <EmptyState label="No visible messages yet" />
+                  )
+                ) : messages ? (
+                  <UnavailableState result={messages} title="Conversation unavailable" />
+                ) : null}
+              </div>
+            </>
+          ) : conversations.ok ? (
+            <div className="p-4">
+              <EmptyState label="Select a conversation after one is available" />
+            </div>
+          ) : (
+            <div className="p-4">
+              <UnavailableState result={conversations} title="Conversation unavailable" />
+            </div>
+          )}
         </section>
       </section>
     </main>
+  );
+}
+
+function ConversationRow({
+  conversation,
+  isSelected
+}: {
+  conversation: Conversation;
+  isSelected: boolean;
+}) {
+  return (
+    <article
+      className={`grid gap-1 border-b border-[var(--line)] p-4 ${
+        isSelected ? "bg-[var(--accent-soft)]" : ""
+      }`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-medium">{conversation.title}</p>
+        {conversation.unreadCount > 0 ? (
+          <span className="rounded bg-[var(--background)] px-2 py-1 text-xs font-semibold text-[var(--accent-strong)]">
+            {conversation.unreadCount}
+          </span>
+        ) : null}
+      </div>
+      {conversation.lastMessage ? (
+        <p className="truncate text-sm text-[var(--muted)]">{conversation.lastMessage.body}</p>
+      ) : (
+        <p className="text-sm text-[var(--muted)]">No messages yet</p>
+      )}
+    </article>
   );
 }
 
@@ -108,5 +136,33 @@ function MessageBubble({ message }: { message: Message }) {
       </div>
       <p className="mt-2 text-sm leading-6">{message.body}</p>
     </article>
+  );
+}
+
+function EmptyState({ label }: { label: string }) {
+  return (
+    <div className="rounded border border-[var(--line)] bg-[var(--background)] p-4 text-sm text-[var(--muted)]">
+      {label}
+    </div>
+  );
+}
+
+function UnavailableState({
+  result,
+  title
+}: {
+  result: ApiResult<ConversationList> | ApiResult<MessagePage>;
+  title: string;
+}) {
+  if (result.ok) {
+    return null;
+  }
+
+  return (
+    <div className="rounded border border-[var(--line)] bg-[var(--background)] p-4">
+      <p className="text-sm font-medium text-[var(--accent)]">HTTP {result.status}</p>
+      <h2 className="mt-2 text-base font-semibold tracking-normal">{title}</h2>
+      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{result.message}</p>
+    </div>
   );
 }
