@@ -31,6 +31,12 @@ Veel reduces custody and payment-processor dependency by using user-approved Sol
 - Store only entitlements, purchases, receipts, chain transaction references, immutable ledger/audit projections, tax/compliance metadata where required, and provider reconciliation evidence.
 - Creator-facing money screens must be labelled and implemented as confirmed earnings/revenue records, not withdrawable balances.
 
+## Hard Social-Money Rule
+
+Money can buy access to content, events, memberships, and live streams. Money can never buy access to people, visibility, matches, recommendations, or preferential social treatment.
+
+This rule reduces custody, consumer-protection, marketplace, and social-risk ambiguity. Paid products grant access entitlements or software tooling only. They must not create a claim to another person, a relationship, a response, a Mutual, a ranking position, a recommendation slot, or higher social priority.
+
 ## Subscriptions Boundary
 
 Target native recurring billing is Solana Subscriptions and Allowances through the official Solana Subscription Delegation Program. Users delegate a bounded allowance or subscription authority from their own wallet, recurring collection runs until cancellation/revocation, and users must be able to revoke it.

@@ -25,7 +25,8 @@ Mutuals is an explicit opt-in social interest mode layered on creator/user media
 Hard line:
 
 ```text
-Payments support creators. Payments do not buy people.
+Money can buy access to content, events, memberships, and live streams.
+Money can never buy access to people, visibility, matches, recommendations, or preferential social treatment.
 ```
 
 ## Product Position
@@ -40,6 +41,7 @@ Payments support creators. Payments do not buy people.
 - Normal media gestures never become Mutuals gestures unless the user is inside Mutuals mode.
 - Money, reporting, blocking, and Mutual actions always have visible controls, not gesture-only controls.
 - Paid content access, support, memberships, or platform plan status never imply romantic consent, social consent, visibility priority, or Mutuals interest.
+- Paid products never increase Mutuals feed position, match probability, message priority, social reputation, or eligibility to contact a person outside ordinary backend safety/access rules.
 
 ## Routes
 

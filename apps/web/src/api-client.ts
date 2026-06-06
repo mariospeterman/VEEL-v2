@@ -29,6 +29,7 @@ export type SubscriptionPlanPage = components["schemas"]["SubscriptionPlanPage"]
 export type DiscoverPage = components["schemas"]["DiscoverPage"];
 export type FeedPage = components["schemas"]["FeedPage"];
 export type FeedPreferences = components["schemas"]["FeedPreferences"];
+export type NotificationPreferences = components["schemas"]["NotificationPreferences"];
 export type AgeStatus = components["schemas"]["AgeStatus"];
 export type Event = components["schemas"]["Event"];
 export type TicketPage = components["schemas"]["TicketPage"];
@@ -124,6 +125,10 @@ export async function getHomeFeed(mode = "recommended"): Promise<ApiResult<FeedP
 
 export async function getFeedPreferences(): Promise<ApiResult<FeedPreferences>> {
   return getJson<FeedPreferences>("/v1/feed/preferences");
+}
+
+export async function getNotificationPreferences(): Promise<ApiResult<NotificationPreferences>> {
+  return getJson<NotificationPreferences>("/v1/notifications/preferences");
 }
 
 export async function getAgeStatus(): Promise<ApiResult<AgeStatus>> {

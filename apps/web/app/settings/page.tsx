@@ -3,28 +3,24 @@ import type { ReactNode } from "react";
 import {
   getAgeStatus,
   getFeedPreferences,
+  getNotificationPreferences,
   getSession,
   getWallets,
   type AgeStatus,
   type ApiResult,
   type FeedPreferences,
+  type NotificationPreferences,
   type SessionState,
   type WalletList
 } from "@/api-client";
 
-const notificationRows = [
-  { label: "Messages", value: "backend preference mutation required" },
-  { label: "Live reminders", value: "backend preference mutation required" },
-  { label: "Mutuals", value: "quiet by product default" },
-  { label: "Safety and admin", value: "always on" }
-];
-
 export default async function SettingsPage() {
-  const [session, ageStatus, wallets, feedPreferences] = await Promise.all([
+  const [session, ageStatus, wallets, feedPreferences, notificationPreferences] = await Promise.all([
     getSession(),
     getAgeStatus(),
     getWallets(),
-    getFeedPreferences()
+    getFeedPreferences(),
+    getNotificationPreferences()
   ]);
 
   return (
@@ -72,15 +68,40 @@ export default async function SettingsPage() {
           </SettingsGroup>
 
           <SettingsGroup id="notifications" title="Notifications">
-            <div className="grid gap-3 sm:grid-cols-2">
-              {notificationRows.map((row) => (
-                <Fact label={row.label} value={row.value} key={row.label} />
-              ))}
-            </div>
+            <NotificationFacts notificationPreferences={notificationPreferences} />
           </SettingsGroup>
         </section>
       </section>
     </main>
+  );
+}
+
+function NotificationFacts({
+  notificationPreferences
+}: {
+  notificationPreferences: ApiResult<NotificationPreferences>;
+}) {
+  if (!notificationPreferences.ok) {
+    return <UnavailableState result={notificationPreferences} />;
+  }
+
+  const preferences = notificationPreferences.data;
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-3">
+      <Fact label="Messages" value={enabledLabel(preferences.messagesEnabled)} />
+      <Fact label="Engagement" value={enabledLabel(preferences.engagementEnabled)} />
+      <Fact label="Live" value={enabledLabel(preferences.liveEnabled)} />
+      <Fact label="Payments" value={enabledLabel(preferences.paymentsEnabled)} />
+      <Fact label="Memberships" value={enabledLabel(preferences.membershipsEnabled)} />
+      <Fact label="Event access" value={enabledLabel(preferences.eventAccessEnabled)} />
+      <Fact label="Mutuals" value={enabledLabel(preferences.mutualsEnabled)} />
+      <Fact label="Safety" value={enabledLabel(preferences.safetyEnabled)} />
+      <Fact label="Wallet" value={enabledLabel(preferences.walletEnabled)} />
+      <Fact label="Creator setup" value={enabledLabel(preferences.creatorSetupEnabled)} />
+      <Fact label="Studio setup" value={enabledLabel(preferences.studioSetupEnabled)} />
+      <Fact label="Push" value={enabledLabel(preferences.pushEnabled)} />
+    </div>
   );
 }
 
@@ -197,6 +218,10 @@ function UnavailableState<T>({ result }: { result: Extract<ApiResult<T>, { ok: f
 
 function resultLabel<T>(result: ApiResult<T>) {
   return result.ok ? "ready" : `HTTP ${result.status}`;
+}
+
+function enabledLabel(enabled: boolean) {
+  return enabled ? "enabled" : "disabled";
 }
 
 function shorten(value: string) {

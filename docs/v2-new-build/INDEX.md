@@ -46,7 +46,7 @@ This folder is the canonical new-build pack. It is intentionally self-contained 
 | API shape | `packages/contracts/openapi.yaml` | Generated client and Fastify schemas must match exactly. |
 | Frontend routes/screens/gestures | `route-map.md`, `native-ui-ux-screens.md`, frontend docs | Next routes encode route state only. |
 | Database shape | `packages/database/schema-blueprint.sql` until migrations exist | Migrations must be derived slice-by-slice from the blueprint. |
-| Money/access/referral/tax truth | `payments-and-monetisation.md`, `business-monetisation.md`, `noncustodial-money-compliance.md`, `compliance/dac7-dac8-vat-system.md`, OpenAPI | Backend owns final state; frontend is UX/cache only. |
+| Money/access/referral/tax truth | `liability-compliance-audit.md`, `payments-and-monetisation.md`, `business-monetisation.md`, `noncustodial-money-compliance.md`, `compliance/dac7-dac8-vat-system.md`, OpenAPI | Backend owns final state; frontend is UX/cache only. |
 | Provider boundaries | `providers/provider-map.md`, provider-specific docs, ADRs | Use official provider docs/SDKs first; adapters hide secrets. |
 | Security/compliance | compliance docs, `safety-admin-ai.md`, ADRs | Age, moderation, audit, and privacy rules block launch if incomplete. |
 | Admin/ops | `admin-operations-dashboard.md` | Every launch slice needs admin visibility where relevant. |
@@ -96,22 +96,23 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 29. [Payments and monetisation](payments-and-monetisation.md)
 30. [Business monetisation](business-monetisation.md)
 31. [Noncustodial money and compliance boundary](noncustodial-money-compliance.md)
-32. [Provider map](providers/provider-map.md)
-33. [Media and live providers](media-live-providers.md)
-34. [Identity provider wiring](providers/identity-provider-wiring.md)
-35. [Content protection](providers/content-protection.md)
-36. [Safety, admin, and AI/MCP](safety-admin-ai.md)
-37. [AI/MCP practical use cases](ai-mcp-use-cases.md)
-38. [Admin and operations dashboard](admin-operations-dashboard.md)
-39. [Adult content compliance](compliance/adult-content-compliance.md)
-40. [Age/KYC jurisdictions and provider waterfall](compliance/age-kyc-jurisdictions.md)
-41. [DAC7, DAC8/CARF, VAT/MWST system](compliance/dac7-dac8-vat-system.md)
+32. [Liability, compliance, and monetisation audit](liability-compliance-audit.md)
+33. [Provider map](providers/provider-map.md)
+34. [Media and live providers](media-live-providers.md)
+35. [Identity provider wiring](providers/identity-provider-wiring.md)
+36. [Content protection](providers/content-protection.md)
+37. [Safety, admin, and AI/MCP](safety-admin-ai.md)
+38. [AI/MCP practical use cases](ai-mcp-use-cases.md)
+39. [Admin and operations dashboard](admin-operations-dashboard.md)
+40. [Adult content compliance](compliance/adult-content-compliance.md)
+41. [Age/KYC jurisdictions and provider waterfall](compliance/age-kyc-jurisdictions.md)
+42. [DAC7, DAC8/CARF, VAT/MWST system](compliance/dac7-dac8-vat-system.md)
 
 ## Infrastructure And Execution
 
-42. [Infrastructure and research decisions](infra-decisions.md)
-43. [Deployment topology](deployment-topology.md)
-44. [Slice workflow](slice-workflow.md)
+43. [Infrastructure and research decisions](infra-decisions.md)
+44. [Deployment topology](deployment-topology.md)
+45. [Slice workflow](slice-workflow.md)
 
 ## How To Use In A New Repo
 

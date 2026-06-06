@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: realtime, messages, notifications, activity
-Last updated: 2026-06-04
+Last updated: 2026-06-06
 Source of truth: yes
 
 Owns:
@@ -36,6 +36,13 @@ Use Supabase Realtime selectively. Do not build a custom websocket server unless
 | Live room status | Backend write + realtime projection | Backend remains source. |
 | Payment status | Backend event to user channel or polling | Do not expose internal settlements directly. |
 | Activity | Projection rows | Backend-derived. |
+
+## Current Notification Implementation State
+
+- The notification foundation includes OpenAPI routes, `0034_notifications_foundation`, RLS-protected notification/preference/device tables, a Fastify notification module, backend tests, and settings-page preference reads.
+- Web push device registration stores endpoint/key material as server-side hashes and returns only sanitized device projections.
+- Worker dispatch jobs, browser service-worker subscription UX, actual push delivery, Realtime subscription wiring, and admin delivery-health views remain planned production gaps.
+- Until the push-delivery slice lands, user-facing notification copy may show server-owned preferences and account notification projections, but must not imply active browser push delivery.
 
 ## Message Flow
 
@@ -138,6 +145,13 @@ Messages:
 - admin/moderator access goes through backend/admin tools, not broad client RLS.
 
 Notifications:
+
+- are backend-derived projections from existing business events
+- may inform the user about engagement, messages, paid-message delivery, access/pass state, Membership renewal/cancel/grace state, wallet action required, age/KYC action required, creator/studio setup tasks, safety/admin decisions, provider incidents, and account issues
+- never grant access, confirm payment, create revenue, change settlement state, create Mutuals, raise ranking, or override backend access truth
+- must be user-owned rows under RLS before direct Realtime exposure
+- must support explicit preference controls and device revocation
+- direct client-facing resources must not include raw web-push endpoints, browser auth keys, provider secrets, raw provider payloads, or service-role data
 
 - user can read own notifications.
 

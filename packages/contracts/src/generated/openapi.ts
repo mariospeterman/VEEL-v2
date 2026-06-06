@@ -413,6 +413,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** User-owned notification projection */
+        get: operations["listNotifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/notifications/{notificationId}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Mark a notification read */
+        patch: operations["markNotificationRead"];
+        trace?: never;
+    };
+    "/v1/notifications/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get notification preferences */
+        get: operations["getNotificationPreferences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update notification preferences */
+        patch: operations["updateNotificationPreferences"];
+        trace?: never;
+    };
+    "/v1/notifications/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register a PWA push device */
+        post: operations["registerNotificationDevice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/notifications/devices/{notificationDeviceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a PWA push device */
+        delete: operations["deleteNotificationDevice"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/content": {
         parameters: {
             query?: never;
@@ -2062,6 +2148,84 @@ export interface components {
         HideFeedTopicRequest: {
             topic: string;
         };
+        Notification: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "message" | "engagement" | "live" | "payment" | "membership" | "event_access" | "mutuals" | "safety" | "wallet_action_required" | "creator_setup" | "studio_setup" | "admin_issue" | "provider_incident";
+            title: string;
+            body?: string | null;
+            actionUrl?: string | null;
+            /** @enum {string} */
+            state: "unread" | "read" | "archived";
+            relatedResource?: {
+                /** @enum {string} */
+                type: "content" | "live_room" | "message" | "payment" | "membership" | "event" | "mutual" | "wallet" | "creator_setup" | "studio_setup" | "safety_case" | "provider" | "none";
+                id: string | null;
+            } | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            readAt?: string | null;
+        };
+        NotificationPage: {
+            items: components["schemas"]["Notification"][];
+            nextCursor?: string | null;
+        };
+        NotificationPreferences: {
+            messagesEnabled: boolean;
+            engagementEnabled: boolean;
+            liveEnabled: boolean;
+            paymentsEnabled: boolean;
+            membershipsEnabled: boolean;
+            eventAccessEnabled: boolean;
+            mutualsEnabled: boolean;
+            safetyEnabled: boolean;
+            walletEnabled: boolean;
+            creatorSetupEnabled: boolean;
+            studioSetupEnabled: boolean;
+            pushEnabled: boolean;
+            /** Format: date-time */
+            updatedAt?: string | null;
+        };
+        UpdateNotificationPreferencesRequest: {
+            messagesEnabled?: boolean;
+            engagementEnabled?: boolean;
+            liveEnabled?: boolean;
+            paymentsEnabled?: boolean;
+            membershipsEnabled?: boolean;
+            eventAccessEnabled?: boolean;
+            mutualsEnabled?: boolean;
+            safetyEnabled?: boolean;
+            walletEnabled?: boolean;
+            creatorSetupEnabled?: boolean;
+            studioSetupEnabled?: boolean;
+            pushEnabled?: boolean;
+        };
+        RegisterNotificationDeviceRequest: {
+            /** @enum {string} */
+            provider: "web_push";
+            /** @enum {string} */
+            platform: "desktop" | "ios" | "android" | "mobile_web";
+            endpoint: string;
+            p256dh: string;
+            auth: string;
+            userAgent?: string | null;
+        };
+        NotificationDevice: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            provider: "web_push";
+            /** @enum {string} */
+            platform: "desktop" | "ios" | "android" | "mobile_web";
+            /** @enum {string} */
+            state: "active" | "revoked";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            lastSeenAt?: string | null;
+        };
         WalletState: {
             connected: boolean;
             /** @enum {string} */
@@ -3415,6 +3579,42 @@ export interface components {
                 "application/json": components["schemas"]["FeedPreferences"];
             };
         };
+        /** @description Notifications */
+        NotificationPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["NotificationPage"];
+            };
+        };
+        /** @description Notification */
+        Notification: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Notification"];
+            };
+        };
+        /** @description Notification preferences */
+        NotificationPreferences: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["NotificationPreferences"];
+            };
+        };
+        /** @description Notification device */
+        NotificationDevice: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["NotificationDevice"];
+            };
+        };
         /** @description Content item */
         ContentItem: {
             headers: {
@@ -4123,6 +4323,8 @@ export interface components {
         SubscriptionId: string;
         SubscriptionAuthorizationIntentId: string;
         AiSessionId: string;
+        NotificationId: string;
+        NotificationDeviceId: string;
         MatchId: string;
         ReportId: string;
         ProviderEventId: string;
@@ -4183,6 +4385,16 @@ export interface components {
         HideFeedTopic: {
             content: {
                 "application/json": components["schemas"]["HideFeedTopicRequest"];
+            };
+        };
+        UpdateNotificationPreferences: {
+            content: {
+                "application/json": components["schemas"]["UpdateNotificationPreferencesRequest"];
+            };
+        };
+        RegisterNotificationDevice: {
+            content: {
+                "application/json": components["schemas"]["RegisterNotificationDeviceRequest"];
             };
         };
         CreateUpload: {
@@ -4760,6 +4972,106 @@ export interface operations {
         requestBody: components["requestBodies"]["HideFeedTopic"];
         responses: {
             200: components["responses"]["FeedPreferences"];
+        };
+    };
+    listNotifications: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["NotificationPage"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    markNotificationRead: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                notificationId: components["parameters"]["NotificationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Notification"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getNotificationPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["NotificationPreferences"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    updateNotificationPreferences: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["UpdateNotificationPreferences"];
+        responses: {
+            200: components["responses"]["NotificationPreferences"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    registerNotificationDevice: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["RegisterNotificationDevice"];
+        responses: {
+            201: components["responses"]["NotificationDevice"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    deleteNotificationDevice: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                notificationDeviceId: components["parameters"]["NotificationDeviceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: components["responses"]["Accepted"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     createContent: {

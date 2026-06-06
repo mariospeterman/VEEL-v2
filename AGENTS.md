@@ -26,6 +26,7 @@ Before implementing or changing provider code, re-check the latest official prov
 - No frontend business truth for payments, access, referrals, commissions, Event Access Passes, memberships, age/KYC, tax/compliance, moderation, or admin state.
 - No custody. No Veel-held creator balances. No internal credits. No withdrawals. No escrow. No platform-controlled payout queue.
 - No money-based people ranking, feed ranking, recommendation boost, Mutuals boost, or message priority.
+- Money can buy access to content, events, memberships, and live streams. Money can never buy access to people, visibility, matches, recommendations, or preferential social treatment.
 - No provider secrets, private keys, stream keys, signed media URLs, webhook secrets, raw PII, or service-role keys in browser bundles.
 - No custom media infrastructure when Bunny/Livepeer do the provider job.
 - No custom key custody. Embedded wallet provider must be noncustodial/user-controlled.

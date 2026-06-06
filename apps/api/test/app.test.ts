@@ -48,6 +48,12 @@ import type {
   StoredLiveRoom
 } from "../src/modules/live/types";
 import type { Message, MessageRepository } from "../src/modules/message/types";
+import type {
+  Notification,
+  NotificationDevice,
+  NotificationPreferences,
+  NotificationRepository
+} from "../src/modules/notification/types";
 import type { EventRepository } from "../src/modules/event/types";
 import type { DatingRepository } from "../src/modules/dating/types";
 import type { DiscoverRepository } from "../src/modules/discover/types";
@@ -2607,6 +2613,193 @@ describe("buildApi", () => {
       ],
       nextCursor: null
     });
+
+    await app.close();
+  });
+
+  it("serves notification projections, preferences, and push devices without raw push secrets", async () => {
+    const calls: Array<{ kind: string; input: unknown }> = [];
+    const notificationRepository = fakeNotificationRepository({
+      onListNotifications(input) {
+        calls.push({ kind: "list", input });
+        return {
+          items: [
+            notificationFixture({
+              title: "Wallet action required",
+              kind: "wallet_action_required",
+              actionUrl: "/settings#wallet"
+            })
+          ],
+          nextCursor: null
+        };
+      },
+      onUpdatePreferences(input) {
+        calls.push({ kind: "preferences", input });
+        return notificationPreferencesFixture({
+          pushEnabled: false,
+          liveEnabled: false
+        });
+      },
+      onRegisterDevice(input) {
+        calls.push({ kind: "device", input });
+        return notificationDeviceFixture({
+          platform: input.body.platform
+        });
+      },
+      onMarkRead(input) {
+        calls.push({ kind: "read", input });
+        return notificationFixture({
+          id: input.notificationId,
+          state: "read",
+          readAt: "2026-06-06T09:01:00.000Z"
+        });
+      },
+      onDeleteDevice(input) {
+        calls.push({ kind: "delete", input });
+        return true;
+      }
+    });
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      notificationRepository
+    });
+    await app.ready();
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/v1/notifications",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+    const preferenceResponse = await app.inject({
+      method: "PATCH",
+      url: "/v1/notifications/preferences",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "notification-prefs-1"
+      },
+      payload: {
+        pushEnabled: false,
+        liveEnabled: false
+      }
+    });
+    const deviceResponse = await app.inject({
+      method: "POST",
+      url: "/v1/notifications/devices",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "notification-device-1"
+      },
+      payload: {
+        provider: "web_push",
+        platform: "desktop",
+        endpoint: "https://push.example.test/token",
+        p256dh: "browser-public-key",
+        auth: "browser-auth-secret",
+        userAgent: "Veel smoke"
+      }
+    });
+    const readResponse = await app.inject({
+      method: "PATCH",
+      url: "/v1/notifications/00000000-0000-4000-8000-000000000090/read",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "notification-read-1"
+      }
+    });
+    const deleteResponse = await app.inject({
+      method: "DELETE",
+      url: "/v1/notifications/devices/00000000-0000-4000-8000-000000000091",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "notification-device-delete-1"
+      }
+    });
+
+    expect(listResponse.statusCode).toBe(200);
+    expect(listResponse.json()).toMatchObject({
+      items: [
+        {
+          kind: "wallet_action_required",
+          title: "Wallet action required",
+          state: "unread",
+          actionUrl: "/settings#wallet"
+        }
+      ],
+      nextCursor: null
+    });
+    expect(preferenceResponse.statusCode).toBe(200);
+    expect(preferenceResponse.json()).toMatchObject({
+      pushEnabled: false,
+      liveEnabled: false
+    });
+    expect(deviceResponse.statusCode).toBe(201);
+    expect(JSON.stringify(deviceResponse.json())).not.toContain("https://push.example.test/token");
+    expect(JSON.stringify(deviceResponse.json())).not.toContain("browser-auth-secret");
+    expect(deviceResponse.json()).toMatchObject({
+      provider: "web_push",
+      platform: "desktop",
+      state: "active"
+    });
+    expect(readResponse.statusCode).toBe(200);
+    expect(readResponse.json()).toMatchObject({
+      state: "read",
+      readAt: "2026-06-06T09:01:00.000Z"
+    });
+    expect(deleteResponse.statusCode).toBe(202);
+    expect(deleteResponse.json()).toEqual({ accepted: true });
+    expect(calls).toEqual([
+      {
+        kind: "list",
+        input: {
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          limit: 20
+        }
+      },
+      {
+        kind: "preferences",
+        input: {
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          body: {
+            pushEnabled: false,
+            liveEnabled: false
+          },
+          idempotencyKey: "notification-prefs-1"
+        }
+      },
+      {
+        kind: "device",
+        input: {
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          body: {
+            provider: "web_push",
+            platform: "desktop",
+            endpoint: "https://push.example.test/token",
+            p256dh: "browser-public-key",
+            auth: "browser-auth-secret",
+            userAgent: "Veel smoke"
+          },
+          idempotencyKey: "notification-device-1"
+        }
+      },
+      {
+        kind: "read",
+        input: {
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          notificationId: "00000000-0000-4000-8000-000000000090",
+          idempotencyKey: "notification-read-1"
+        }
+      },
+      {
+        kind: "delete",
+        input: {
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          notificationDeviceId: "00000000-0000-4000-8000-000000000091",
+          idempotencyKey: "notification-device-delete-1"
+        }
+      }
+    ]);
 
     await app.close();
   });
@@ -6132,6 +6325,95 @@ function ticketFixture(
     qrToken: "veel_ticket_fixture",
     checkedInAt: null,
     createdAt: "2026-07-01T20:00:00.000Z"
+  };
+}
+
+function notificationFixture(overrides: Partial<Notification> = {}): Notification {
+  return {
+    id: overrides.id ?? "00000000-0000-4000-8000-000000000090",
+    kind: overrides.kind ?? "message",
+    title: overrides.title ?? "New message",
+    body: overrides.body ?? null,
+    actionUrl: overrides.actionUrl ?? "/messages",
+    state: overrides.state ?? "unread",
+    relatedResource: overrides.relatedResource ?? null,
+    createdAt: overrides.createdAt ?? "2026-06-06T09:00:00.000Z",
+    readAt: overrides.readAt ?? null
+  };
+}
+
+function notificationPreferencesFixture(
+  overrides: Partial<NotificationPreferences> = {}
+): NotificationPreferences {
+  return {
+    messagesEnabled: overrides.messagesEnabled ?? true,
+    engagementEnabled: overrides.engagementEnabled ?? true,
+    liveEnabled: overrides.liveEnabled ?? true,
+    paymentsEnabled: overrides.paymentsEnabled ?? true,
+    membershipsEnabled: overrides.membershipsEnabled ?? true,
+    eventAccessEnabled: overrides.eventAccessEnabled ?? true,
+    mutualsEnabled: overrides.mutualsEnabled ?? false,
+    safetyEnabled: overrides.safetyEnabled ?? true,
+    walletEnabled: overrides.walletEnabled ?? true,
+    creatorSetupEnabled: overrides.creatorSetupEnabled ?? true,
+    studioSetupEnabled: overrides.studioSetupEnabled ?? true,
+    pushEnabled: overrides.pushEnabled ?? true,
+    updatedAt: overrides.updatedAt ?? "2026-06-06T09:00:00.000Z"
+  };
+}
+
+function notificationDeviceFixture(overrides: Partial<NotificationDevice> = {}): NotificationDevice {
+  return {
+    id: overrides.id ?? "00000000-0000-4000-8000-000000000091",
+    provider: overrides.provider ?? "web_push",
+    platform: overrides.platform ?? "desktop",
+    state: overrides.state ?? "active",
+    createdAt: overrides.createdAt ?? "2026-06-06T09:00:00.000Z",
+    lastSeenAt: overrides.lastSeenAt ?? "2026-06-06T09:00:00.000Z"
+  };
+}
+
+function fakeNotificationRepository(
+  overrides: Partial<{
+    onListNotifications: (
+      input: Parameters<NotificationRepository["listNotifications"]>[0]
+    ) => Awaited<ReturnType<NotificationRepository["listNotifications"]>>;
+    onMarkRead: (
+      input: Parameters<NotificationRepository["markRead"]>[0]
+    ) => Awaited<ReturnType<NotificationRepository["markRead"]>>;
+    onGetPreferences: (
+      input: Parameters<NotificationRepository["getPreferences"]>[0]
+    ) => Awaited<ReturnType<NotificationRepository["getPreferences"]>>;
+    onUpdatePreferences: (
+      input: Parameters<NotificationRepository["updatePreferences"]>[0]
+    ) => Awaited<ReturnType<NotificationRepository["updatePreferences"]>>;
+    onRegisterDevice: (
+      input: Parameters<NotificationRepository["registerDevice"]>[0]
+    ) => Awaited<ReturnType<NotificationRepository["registerDevice"]>>;
+    onDeleteDevice: (
+      input: Parameters<NotificationRepository["deleteDevice"]>[0]
+    ) => Awaited<ReturnType<NotificationRepository["deleteDevice"]>>;
+  }> = {}
+): NotificationRepository {
+  return {
+    async listNotifications(input) {
+      return overrides.onListNotifications?.(input) ?? { items: [notificationFixture()], nextCursor: null };
+    },
+    async markRead(input) {
+      return overrides.onMarkRead?.(input) ?? notificationFixture({ id: input.notificationId, state: "read" });
+    },
+    async getPreferences(input) {
+      return overrides.onGetPreferences?.(input) ?? notificationPreferencesFixture();
+    },
+    async updatePreferences(input) {
+      return overrides.onUpdatePreferences?.(input) ?? notificationPreferencesFixture(input.body);
+    },
+    async registerDevice(input) {
+      return overrides.onRegisterDevice?.(input) ?? notificationDeviceFixture({ platform: input.body.platform });
+    },
+    async deleteDevice(input) {
+      return overrides.onDeleteDevice?.(input) ?? Boolean(input.notificationDeviceId);
+    }
   };
 }
 

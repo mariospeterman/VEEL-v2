@@ -22,6 +22,15 @@ Non-goals:
 
 This document defines the full Veel v2 monetisation and business model. It extends `payments-and-monetisation.md`, which owns payment verification mechanics, `noncustodial-money-compliance.md`, which owns the custody boundary, and `compliance/dac7-dac8-vat-system.md`, which owns DAC7/DAC8/VAT readiness. The rule is unchanged: the frontend can display and request actions, creators choose prices where product policy allows, and the backend enforces admin/env pricing guardrails, splits, settlement, compliance ledger writes, receipts, entitlements, commissions, memberships, refunds, audit records, and operational reporting.
 
+## Hard Social-Money Rule
+
+```text
+Money can buy access to content, events, memberships, and live streams.
+Money can never buy access to people, visibility, matches, recommendations, or preferential social treatment.
+```
+
+This is a hard architectural rule. It applies to Mutuals/Connections, creator monetisation, platform tiers, referrals, notifications, ranking, messaging, AI tools, and admin policy. Any slice that touches money, recommendations, Mutuals, profiles, messaging, notifications, or platform tiers must preserve this rule in contracts, backend policy, tests, and user-facing copy.
+
 ## Business Model Summary
 
 Veel earns through:
@@ -218,6 +227,7 @@ Platform plans:
 - can grant platform-level benefits such as membership badge, higher fair-use watch allowance, creator business tooling, organization tooling, or future app-level features
 - must not unlock creator premium content unless a bundled product explicitly says so
 - is managed by platform billing policy and admin operations
+- must not grant paid access to people, visibility, matches, recommendations, message priority, social ranking, or preferential social treatment
 
 Recommended platform tiers for first pricing tests:
 

@@ -314,6 +314,73 @@ paths:
         $ref: "#/components/requestBodies/HideFeedTopic"
       responses:
         "200": { $ref: "#/components/responses/FeedPreferences" }
+  /v1/notifications:
+    get:
+      operationId: listNotifications
+      tags: [Notifications]
+      summary: User-owned notification projection
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/NotificationPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /v1/notifications/{notificationId}/read:
+    patch:
+      operationId: markNotificationRead
+      tags: [Notifications]
+      summary: Mark a notification read
+      parameters:
+        - $ref: "#/components/parameters/NotificationId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "200": { $ref: "#/components/responses/Notification" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /v1/notifications/preferences:
+    get:
+      operationId: getNotificationPreferences
+      tags: [Notifications]
+      summary: Get notification preferences
+      responses:
+        "200": { $ref: "#/components/responses/NotificationPreferences" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    patch:
+      operationId: updateNotificationPreferences
+      tags: [Notifications]
+      summary: Update notification preferences
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/UpdateNotificationPreferences"
+      responses:
+        "200": { $ref: "#/components/responses/NotificationPreferences" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /v1/notifications/devices:
+    post:
+      operationId: registerNotificationDevice
+      tags: [Notifications]
+      summary: Register a PWA push device
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/RegisterNotificationDevice"
+      responses:
+        "201": { $ref: "#/components/responses/NotificationDevice" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /v1/notifications/devices/{notificationDeviceId}:
+    delete:
+      operationId: deleteNotificationDevice
+      tags: [Notifications]
+      summary: Revoke a PWA push device
+      parameters:
+        - $ref: "#/components/parameters/NotificationDeviceId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "202": { $ref: "#/components/responses/Accepted" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /v1/content:
     post:
       operationId: createContent
@@ -1396,6 +1463,8 @@ components:
     SubscriptionId: { name: subscriptionId, in: path, required: true, schema: { type: string, format: uuid } }
     SubscriptionAuthorizationIntentId: { name: authorizationIntentId, in: path, required: true, schema: { type: string, format: uuid } }
     AiSessionId: { name: aiSessionId, in: path, required: true, schema: { type: string, format: uuid } }
+    NotificationId: { name: notificationId, in: path, required: true, schema: { type: string, format: uuid } }
+    NotificationDeviceId: { name: notificationDeviceId, in: path, required: true, schema: { type: string, format: uuid } }
     MatchId: { name: matchId, in: path, required: true, schema: { type: string, format: uuid } }
     ReportId: { name: reportId, in: path, required: true, schema: { type: string, format: uuid } }
     ProviderEventId: { name: providerEventId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1425,6 +1494,8 @@ components:
     UpdateFeedPreferences: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateFeedPreferencesRequest" } } } }
     HideFeedCreator: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/HideFeedCreatorRequest" } } } }
     HideFeedTopic: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/HideFeedTopicRequest" } } } }
+    UpdateNotificationPreferences: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateNotificationPreferencesRequest" } } } }
+    RegisterNotificationDevice: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RegisterNotificationDeviceRequest" } } } }
     CreateUpload: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateUploadRequest" } } } }
     CreateLiveRoom: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateLiveRoomRequest" } } } }
     CreateLivePassIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateLivePassIntentRequest" } } } }
@@ -1493,6 +1564,10 @@ components:
     HashtagPage: { description: Hashtag results, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Hashtag" } }, nextCursor: { type: string, nullable: true } } } } } }
     CreatorPage: { description: Creator results, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/User" } }, nextCursor: { type: string, nullable: true } } } } } }
     FeedPreferences: { description: Feed preferences, content: { application/json: { schema: { $ref: "#/components/schemas/FeedPreferences" } } } }
+    NotificationPage: { description: Notifications, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationPage" } } } }
+    Notification: { description: Notification, content: { application/json: { schema: { $ref: "#/components/schemas/Notification" } } } }
+    NotificationPreferences: { description: Notification preferences, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationPreferences" } } } }
+    NotificationDevice: { description: Notification device, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationDevice" } } } }
     ContentItem: { description: Content item, content: { application/json: { schema: { $ref: "#/components/schemas/ContentItem" } } } }
     UploadSession: { description: Safe upload session, content: { application/json: { schema: { $ref: "#/components/schemas/UploadSession" } } } }
     LiveRoom: { description: Live room, content: { application/json: { schema: { $ref: "#/components/schemas/LiveRoom" } } } }
@@ -1799,6 +1874,102 @@ components:
       required: [topic]
       properties:
         topic: { type: string, minLength: 1, maxLength: 80 }
+    Notification:
+      type: object
+      required: [id, kind, title, state, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        kind:
+          type: string
+          enum:
+            [
+              message,
+              engagement,
+              live,
+              payment,
+              membership,
+              event_access,
+              mutuals,
+              safety,
+              wallet_action_required,
+              creator_setup,
+              studio_setup,
+              admin_issue,
+              provider_incident
+            ]
+        title: { type: string }
+        body: { type: string, nullable: true }
+        actionUrl: { type: string, nullable: true }
+        state: { type: string, enum: [unread, read, archived] }
+        relatedResource:
+          type: object
+          nullable: true
+          required: [type, id]
+          properties:
+            type: { type: string, enum: [content, live_room, message, payment, membership, event, mutual, wallet, creator_setup, studio_setup, safety_case, provider, none] }
+            id: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        readAt: { type: string, format: date-time, nullable: true }
+    NotificationPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Notification" }
+        nextCursor: { type: string, nullable: true }
+    NotificationPreferences:
+      type: object
+      required: [messagesEnabled, engagementEnabled, liveEnabled, paymentsEnabled, membershipsEnabled, eventAccessEnabled, mutualsEnabled, safetyEnabled, walletEnabled, creatorSetupEnabled, studioSetupEnabled, pushEnabled]
+      properties:
+        messagesEnabled: { type: boolean }
+        engagementEnabled: { type: boolean }
+        liveEnabled: { type: boolean }
+        paymentsEnabled: { type: boolean }
+        membershipsEnabled: { type: boolean }
+        eventAccessEnabled: { type: boolean }
+        mutualsEnabled: { type: boolean }
+        safetyEnabled: { type: boolean }
+        walletEnabled: { type: boolean }
+        creatorSetupEnabled: { type: boolean }
+        studioSetupEnabled: { type: boolean }
+        pushEnabled: { type: boolean }
+        updatedAt: { type: string, format: date-time, nullable: true }
+    UpdateNotificationPreferencesRequest:
+      type: object
+      properties:
+        messagesEnabled: { type: boolean }
+        engagementEnabled: { type: boolean }
+        liveEnabled: { type: boolean }
+        paymentsEnabled: { type: boolean }
+        membershipsEnabled: { type: boolean }
+        eventAccessEnabled: { type: boolean }
+        mutualsEnabled: { type: boolean }
+        safetyEnabled: { type: boolean }
+        walletEnabled: { type: boolean }
+        creatorSetupEnabled: { type: boolean }
+        studioSetupEnabled: { type: boolean }
+        pushEnabled: { type: boolean }
+    RegisterNotificationDeviceRequest:
+      type: object
+      required: [provider, platform, endpoint, p256dh, auth]
+      properties:
+        provider: { type: string, enum: [web_push] }
+        platform: { type: string, enum: [desktop, ios, android, mobile_web] }
+        endpoint: { type: string, minLength: 12, maxLength: 2048 }
+        p256dh: { type: string, minLength: 12, maxLength: 512 }
+        auth: { type: string, minLength: 8, maxLength: 512 }
+        userAgent: { type: string, maxLength: 512, nullable: true }
+    NotificationDevice:
+      type: object
+      required: [id, provider, platform, state, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        provider: { type: string, enum: [web_push] }
+        platform: { type: string, enum: [desktop, ios, android, mobile_web] }
+        state: { type: string, enum: [active, revoked] }
+        createdAt: { type: string, format: date-time }
+        lastSeenAt: { type: string, format: date-time, nullable: true }
     WalletState:
       type: object
       required: [connected, chain]

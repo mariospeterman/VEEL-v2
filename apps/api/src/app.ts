@@ -39,6 +39,9 @@ import type { LiveProviderAdapter, LiveRepository } from "./modules/live/types.j
 import { createPostgresMessageRepository } from "./modules/message/message-repository.js";
 import { registerMessageRoutes } from "./modules/message/message-routes.js";
 import type { MessageRepository } from "./modules/message/types.js";
+import { createPostgresNotificationRepository } from "./modules/notification/notification-repository.js";
+import { registerNotificationRoutes } from "./modules/notification/notification-routes.js";
+import type { NotificationRepository } from "./modules/notification/types.js";
 import {
   createPostgresPaymentEvidenceRepository,
   createPostgresPaymentRepository
@@ -95,6 +98,7 @@ export interface BuildApiOptions {
   settlementVerifier?: PaymentSettlementVerifier;
   profileRepository?: ProfileRepository;
   referralRepository?: ReferralRepository;
+  notificationRepository?: NotificationRepository;
   subscriptionRepository?: SubscriptionRepository;
   subscriptionAuthorizationVerifier?: SubscriptionAuthorizationVerifier;
   walletRepository?: WalletRepository;
@@ -173,6 +177,8 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     options.settlementVerifier ?? createSolanaRpcSettlementVerifier(app.config.SOLANA_RPC_URL);
   const referralRepository =
     options.referralRepository ?? createPostgresReferralRepository(app.config.DATABASE_URL);
+  const notificationRepository =
+    options.notificationRepository ?? createPostgresNotificationRepository(app.config.DATABASE_URL);
   const subscriptionRepository =
     options.subscriptionRepository ?? createPostgresSubscriptionRepository(app.config.DATABASE_URL);
   const subscriptionAuthorizationVerifier =
@@ -257,6 +263,11 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   if (referralRepository.close) {
     app.addHook("onClose", async () => {
       await referralRepository.close?.();
+    });
+  }
+  if (notificationRepository.close) {
+    app.addHook("onClose", async () => {
+      await notificationRepository.close?.();
     });
   }
   if (subscriptionRepository.close) {
@@ -362,6 +373,10 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     ageRepository,
     walletRepository,
     referralRepository
+  });
+  await registerNotificationRoutes(app, {
+    authVerifier,
+    notificationRepository
   });
   await registerSubscriptionRoutes(app, {
     authVerifier,

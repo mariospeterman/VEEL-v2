@@ -416,4 +416,18 @@ describe("database migrations", () => {
     expect(sql).toContain("compliance_ledger_entries_staff_select");
     expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role|creator_balance|withdraw|payout_queue|escrow/i);
   });
+
+  it("adds notification projections and devices with RLS and no raw push secrets", () => {
+    const sql = readMigration("0034_notifications_foundation.sql");
+
+    expect(sql).toContain("create table notifications");
+    expect(sql).toContain("create table notification_preferences");
+    expect(sql).toContain("create table notification_devices");
+    expect(sql).toContain("endpoint_hash text not null");
+    expect(sql).toContain("p256dh_hash text not null");
+    expect(sql).toContain("auth_hash text not null");
+    expect(sql).toContain("alter table notifications enable row level security");
+    expect(sql).toContain("notification_devices_insert_self");
+    expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role|creator_balance|withdraw|payout_queue|escrow|endpoint text|p256dh text|auth text/i);
+  });
 });

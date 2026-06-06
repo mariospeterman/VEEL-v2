@@ -325,6 +325,8 @@ Build each slice end-to-end before starting the next:
 15. Events/tickets.
 16. Dating mode.
 17. AI/MCP scoped assistant.
+18. Notifications foundation.
+19. Studio/Enterprise organization dashboards.
 
 Each slice must include:
 
@@ -335,6 +337,7 @@ Each slice must include:
 - provider boundary test
 - admin/ops visibility if relevant
 - docs update
+- explicit check that money buys only access/software entitlements and never people, visibility, matches, recommendations, or preferential social treatment when the slice touches money, recommendations, Mutuals, profiles, messages, notifications, tiers, or admin policy
 
 ## First 10 Implementation Tickets
 

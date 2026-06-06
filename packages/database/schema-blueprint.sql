@@ -1185,13 +1185,36 @@ create table idempotency_keys (
   created_at timestamptz not null default now()
 );
 
+create table notifications (
+  id uuid primary key,
+  user_id uuid not null references users(id),
+  kind text not null,
+  title text not null,
+  body text,
+  action_url text,
+  state text not null default 'unread',
+  related_resource_type text,
+  related_resource_id uuid,
+  idempotency_key text,
+  created_at timestamptz not null default now(),
+  read_at timestamptz,
+  unique (user_id, idempotency_key)
+);
+
 create table notification_preferences (
   user_id uuid primary key references users(id),
   messages_enabled boolean not null default true,
+  engagement_enabled boolean not null default true,
   live_enabled boolean not null default true,
   payments_enabled boolean not null default true,
-  dating_enabled boolean not null default true,
+  memberships_enabled boolean not null default true,
+  event_access_enabled boolean not null default true,
+  mutuals_enabled boolean not null default true,
   safety_enabled boolean not null default true,
+  wallet_enabled boolean not null default true,
+  creator_setup_enabled boolean not null default true,
+  studio_setup_enabled boolean not null default true,
+  push_enabled boolean not null default false,
   updated_at timestamptz not null default now()
 );
 
@@ -1199,12 +1222,18 @@ create table notification_devices (
   id uuid primary key,
   user_id uuid not null references users(id),
   provider text not null,
-  token_hash text not null,
   platform text not null,
+  endpoint_hash text not null,
+  p256dh_hash text not null,
+  auth_hash text not null,
+  user_agent text,
   state text not null default 'active',
   last_seen_at timestamptz,
+  idempotency_key text,
   created_at timestamptz not null default now(),
-  unique (provider, token_hash)
+  updated_at timestamptz not null default now(),
+  unique (provider, endpoint_hash),
+  unique (user_id, idempotency_key)
 );
 
 create table moderation_reviews (
