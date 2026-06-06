@@ -28,6 +28,8 @@ export type SubscriptionPlanPage = components["schemas"]["SubscriptionPlanPage"]
 export type DiscoverPage = components["schemas"]["DiscoverPage"];
 export type FeedPage = components["schemas"]["FeedPage"];
 export type AgeStatus = components["schemas"]["AgeStatus"];
+export type Event = components["schemas"]["Event"];
+export type TicketPage = components["schemas"]["TicketPage"];
 
 export type ApiResult<T> =
   | {
@@ -100,6 +102,14 @@ export async function getHomeFeed(mode = "recommended"): Promise<ApiResult<FeedP
 
 export async function getAgeStatus(): Promise<ApiResult<AgeStatus>> {
   return getJson<AgeStatus>("/v1/age/status");
+}
+
+export async function getEvent(eventId: string): Promise<ApiResult<Event>> {
+  return getJson<Event>(`/v1/events/${encodeURIComponent(eventId)}`);
+}
+
+export async function getTicketActivity(): Promise<ApiResult<TicketPage>> {
+  return getJson<TicketPage>("/v1/activity/tickets");
 }
 
 async function getJson<T>(path: string): Promise<ApiResult<T>> {

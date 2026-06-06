@@ -1,23 +1,9 @@
-import type { components } from "@veel/contracts";
 import { appShellNavItems } from "@veel/ui";
+import { getTicketActivity, type TicketPage } from "@/api-client";
 
-type Ticket = components["schemas"]["Ticket"];
+export default async function TicketsPage() {
+  const ticketsResult = await getTicketActivity();
 
-const tickets: Ticket[] = [
-  {
-    id: "00000000-0000-4000-8000-0000000000f1",
-    eventId: "00000000-0000-4000-8000-0000000000e1",
-    ticketTypeId: "00000000-0000-4000-8000-0000000000e2",
-    holderUserId: "00000000-0000-4000-8000-000000000001",
-    paymentIntentId: "00000000-0000-4000-8000-000000000050",
-    state: "active",
-    qrToken: "veel_ticket_fixture",
-    checkedInAt: null,
-    createdAt: "2026-07-01T20:00:00.000Z"
-  }
-];
-
-export default function TicketsPage() {
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <AppNav />
@@ -28,32 +14,58 @@ export default function TicketsPage() {
           <h1 className="mt-1 text-2xl font-semibold tracking-normal">My passes</h1>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          {tickets.map((ticket) => (
-            <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-4" key={ticket.id}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="font-medium">Studio meetup</p>
-                  <p className="mt-1 truncate text-sm text-[var(--muted)]">{ticket.eventId}</p>
-                </div>
-                <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">
-                  {ticket.state}
-                </span>
-              </div>
-              <div className="mt-4 rounded border border-[var(--line)] bg-[var(--background)] p-4 text-center">
-                <p className="text-xs uppercase text-[var(--muted)]">QR token</p>
-                <p className="mt-2 break-all font-mono text-sm">{ticket.qrToken}</p>
-              </div>
-              <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
-                <Fact label="Pass" value={ticket.id} />
-                <Fact label="Payment" value={ticket.paymentIntentId ?? "free"} />
-                <Fact label="Check-in" value={ticket.checkedInAt ?? "not checked in"} />
-              </div>
-            </article>
-          ))}
-        </div>
+        {ticketsResult.ok ? (
+          <TicketGrid tickets={ticketsResult.data} />
+        ) : (
+          <UnavailableState
+            message={ticketsResult.message}
+            status={ticketsResult.status}
+            title="Passes unavailable"
+          />
+        )}
       </section>
     </main>
+  );
+}
+
+function TicketGrid({ tickets }: { tickets: TicketPage }) {
+  if (tickets.items.length === 0) {
+    return (
+      <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-5">
+        <h2 className="text-base font-semibold tracking-normal">No passes yet</h2>
+        <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+          Backend-issued Event Access passes and QR tokens will appear here after confirmed
+          settlement or creator approval.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      {tickets.items.map((ticket) => (
+        <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-4" key={ticket.id}>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="font-medium">Event Access Pass</p>
+              <p className="mt-1 truncate text-sm text-[var(--muted)]">{ticket.eventId}</p>
+            </div>
+            <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">
+              {ticket.state}
+            </span>
+          </div>
+          <div className="mt-4 rounded border border-[var(--line)] bg-[var(--background)] p-4 text-center">
+            <p className="text-xs uppercase text-[var(--muted)]">QR token</p>
+            <p className="mt-2 break-all font-mono text-sm">{ticket.qrToken}</p>
+          </div>
+          <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
+            <Fact label="Pass" value={ticket.id} />
+            <Fact label="Payment" value={ticket.paymentIntentId ?? "free"} />
+            <Fact label="Check-in" value={ticket.checkedInAt ?? "not checked in"} />
+          </div>
+        </article>
+      ))}
+    </div>
   );
 }
 
@@ -84,5 +96,23 @@ function Fact({ label, value }: { label: string; value: string }) {
       <p className="text-xs uppercase text-[var(--muted)]">{label}</p>
       <p className="mt-1 truncate font-medium">{value}</p>
     </div>
+  );
+}
+
+function UnavailableState({
+  message,
+  status,
+  title
+}: {
+  message: string;
+  status: number;
+  title: string;
+}) {
+  return (
+    <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-5">
+      <p className="text-sm font-medium text-[var(--accent)]">HTTP {status}</p>
+      <h2 className="mt-2 text-base font-semibold tracking-normal">{title}</h2>
+      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{message}</p>
+    </section>
   );
 }

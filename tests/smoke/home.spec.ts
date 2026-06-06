@@ -144,7 +144,7 @@ test("redirects documented app route aliases", async ({ page }) => {
 
   await page.goto("/event-access/00000000-0000-4000-8000-0000000000e1");
   await expect(page).toHaveURL(/\/events\/00000000-0000-4000-8000-0000000000e1$/);
-  await expect(page.getByRole("heading", { name: "Studio meetup" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Event unavailable" })).toBeVisible();
 
   await page.goto("/mutuals/mutuals");
   await expect(page).toHaveURL(/\/dating\/matches$/);
@@ -192,10 +192,9 @@ test("renders the event ticket sheet projection", async ({ page }) => {
   await page.goto("/events/00000000-0000-4000-8000-0000000000e1");
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Studio meetup" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Access pass sheet" })).toBeVisible();
-  await expect(page.getByText("General admission")).toBeVisible();
-  await expect(page.getByText("public_sale")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Event unavailable" })).toBeVisible();
+  await expect(page.getByText("HTTP 503")).toBeVisible();
+  await expect(page.getByText("API is unavailable")).toBeVisible();
 });
 
 test("renders the user ticket QR projection", async ({ page }) => {
@@ -203,9 +202,9 @@ test("renders the user ticket QR projection", async ({ page }) => {
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "My passes" })).toBeVisible();
-  await expect(page.getByText("QR token")).toBeVisible();
-  await expect(page.getByText("veel_ticket_fixture")).toBeVisible();
-  await expect(page.locator("span").getByText("active", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Passes unavailable" })).toBeVisible();
+  await expect(page.getByText("HTTP 503")).toBeVisible();
+  await expect(page.getByText("API is unavailable")).toBeVisible();
 });
 
 test("renders the Mutuals feed projection", async ({ page }) => {

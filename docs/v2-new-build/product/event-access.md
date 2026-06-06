@@ -52,7 +52,9 @@ Avoid launch-facing language:
 - Confirmed `event_ticket` compatibility settlement grants a backend Event Access Pass and QR record in the settlement transaction. Wallet approval or frontend redirect never grants access.
 - `GET /v1/activity/tickets` is the implemented compatibility activity path for current user Event Access records.
 - `POST /v1/tickets/{ticketId}/check-in` validates the backend-issued QR token server-side and idempotently moves an active pass to `checked_in`.
-- `/app/events/:id` and `/app/tickets` have smoke-covered frontend projections for pass sheet and QR display.
+- `/app/events/:id` and `/app/tickets` use typed API-backed frontend
+  projections for pass sheet and QR display. When the API is unavailable, both
+  routes fail closed instead of rendering fixture Event Access data.
 - Target route names are `/event-access` and `/passes`; compatibility ticket route names must be migrated before launch copy ships.
 
 ## Product Position
