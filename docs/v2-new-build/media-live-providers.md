@@ -28,6 +28,7 @@ Current implementation state:
 - `BUNNY_STREAM_API_KEY` and `BUNNY_STREAM_LIBRARY_ID` are server-only config values; the Stream API key is never returned to the browser.
 - Upload state is stored in `media_assets` as normalized provider/provider asset/provider state only.
 - `GET /v1/content/{contentId}` returns a frontend-safe media viewer projection backed by `content_access_rules`, creator profile data, and the first media poster.
+- `/content/[contentId]` consumes that projection through the web API helper and renders backend access/playback state only; it does not create local payment or playback fixtures.
 - Access projection is conservative: free/teaser/pass/locked states are exposed, but no entitlement grant, signed playback URL, tokenized playback URL, or provider management URL is exposed by this slice.
 - `GET /v1/content/{contentId}` fails full Bunny playback closed unless backend access is already `free`, `unlocked`, or `subscribed` and a short-lived Bunny embed token can be generated server-side.
 - `POST /v1/webhooks/media/{provider}` accepts Bunny Stream signed webhooks for the `bunny` provider and Livepeer signed stream webhooks for the `livepeer` provider, verifies raw-body HMAC signatures, records idempotent provider receipts, and applies normalized media/live processing state.
@@ -149,6 +150,7 @@ Current implementation slice:
 
 - `POST /v1/live/rooms` creates a Livepeer stream with JWT playback policy through the backend provider adapter.
 - `GET /v1/live/rooms/:id` returns viewer-safe room, playback, pass, chat, and replay projection.
+- `/live/[liveRoomId]` consumes that live-room projection through the web API helper and renders fail-closed unavailable state when the API or authorization path cannot return a viewer-safe resource.
 - Active-pass Livepeer playback is signed server-side and returned as a short-lived HLS resource with a JWT query parameter. If JWT signing keys are unavailable, full playback fails closed as `blocked` even when the database pass projection is active.
 - `GET /v1/live/rooms/:id/host-connection` returns masked host connection details only.
 - `POST /v1/live/rooms/:id/sync` refreshes provider state and replay projection.

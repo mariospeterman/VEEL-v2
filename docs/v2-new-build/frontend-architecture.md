@@ -191,3 +191,6 @@ Current implementation state:
 - `pnpm smoke` runs Playwright against the Next.js app shell and Home media card.
 - The smoke suite runs desktop Chromium and mobile Chromium projects from `tests/smoke`.
 - CI installs Chromium and runs the smoke suite after lint, typecheck, and unit tests.
+- `/content/[contentId]` and `/live/[liveRoomId]` read backend projections through the typed web API helper instead of local media/live fixtures.
+- Detail screens attach the current Supabase access token when present and render a fail-closed unavailable state on API/auth/provider errors.
+- Current smoke coverage starts the web app only, so content/live detail smoke asserts the fail-closed API-unavailable state; API-backed happy-path browser coverage belongs in the combined app integration harness.

@@ -1,52 +1,5 @@
-import type { components } from "@veel/contracts";
 import { appShellNavItems } from "@veel/ui";
-
-type ContentItem = components["schemas"]["ContentItem"];
-type PaymentIntent = components["schemas"]["PaymentIntent"];
-type TransactionRequest = components["schemas"]["TransactionRequest"];
-const sampleTreasuryWallet = "1".repeat(32);
-const samplePaymentReference = `${"1".repeat(31)}2`;
-
-const sampleContent: ContentItem = {
-  id: "00000000-0000-4000-8000-000000000040",
-  creator: {
-    id: "00000000-0000-4000-8000-000000000010",
-    handle: "maki",
-    displayName: "Maki",
-    avatarUrl: null,
-    badges: []
-  },
-  mediaType: "vod",
-  caption: "Studio cut with a locked full playback state.",
-  posterUrl: "https://picsum.photos/seed/veel-viewer/1400/1800",
-  playback: {
-    state: "not_ready",
-    url: null,
-    provider: "none"
-  },
-  accessState: "locked",
-  nsfwLabel: "none",
-  engagement: {
-    liked: false,
-    saved: false,
-    likeCount: 128,
-    commentCount: 18,
-    shareCount: 9
-  }
-};
-
-const samplePaymentIntent: PaymentIntent = {
-  id: "00000000-0000-4000-8000-000000000050",
-  productType: "tip",
-  amountMinor: 10000000,
-  currency: "SOL",
-  state: "transaction_requested"
-};
-
-const sampleTransactionRequest: TransactionRequest = {
-  transactionRequestUrl: `solana:${sampleTreasuryWallet}?amount=0.01&reference=${samplePaymentReference}&label=Veel`,
-  expiresAt: "2026-06-04T23:15:00.000Z"
-};
+import { getContentItem, type ContentItem } from "@/api-client";
 
 export default async function ContentPage({
   params
@@ -54,10 +7,7 @@ export default async function ContentPage({
   params: Promise<{ contentId: string }>;
 }) {
   const { contentId } = await params;
-  const item = {
-    ...sampleContent,
-    id: contentId
-  };
+  const itemResult = await getContentItem(contentId);
 
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
@@ -79,8 +29,18 @@ export default async function ContentPage({
       </nav>
 
       <section className="mx-auto grid min-h-[calc(100vh-73px)] w-full max-w-7xl gap-5 px-5 py-5 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <MediaStage item={item} />
-        <AccessPanel item={item} />
+        {itemResult.ok ? (
+          <>
+            <MediaStage item={itemResult.data} />
+            <AccessPanel item={itemResult.data} />
+          </>
+        ) : (
+          <UnavailableState
+            message={itemResult.message}
+            status={itemResult.status}
+            title={itemResult.status === 404 ? "Content not found" : "Content unavailable"}
+          />
+        )}
       </section>
     </main>
   );
@@ -148,8 +108,7 @@ function AccessPanel({ item }: { item: ContentItem }) {
       </section>
 
       <EngagementActions item={item} />
-
-      <PaymentSheet intent={samplePaymentIntent} transactionRequest={sampleTransactionRequest} />
+      <AccessAction item={item} />
     </aside>
   );
 }
@@ -217,36 +176,35 @@ function EngagementActions({ item }: { item: ContentItem }) {
   );
 }
 
-function PaymentSheet({
-  intent,
-  transactionRequest
-}: {
-  intent: PaymentIntent;
-  transactionRequest: TransactionRequest;
-}) {
+function AccessAction({ item }: { item: ContentItem }) {
+  const needsUnlock = item.accessState === "locked" || item.accessState === "teaser";
+
   return (
     <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold">Payment sheet</p>
-          <p className="mt-1 text-sm text-[var(--muted)]">{intent.productType}</p>
+          <p className="text-sm font-semibold">Access</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">Backend entitlement required</p>
         </div>
-        <span className="rounded bg-[#fef3c7] px-2 py-1 text-xs font-medium uppercase text-[#78350f]">
-          {intent.state}
+        <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-medium uppercase text-[var(--accent-strong)]">
+          {item.accessState}
         </span>
       </div>
 
       <div className="mt-5 grid gap-3 border-t border-[var(--line)] pt-4">
-        <div className="flex items-center justify-between gap-3 text-sm">
-          <span className="text-[var(--muted)]">Amount</span>
-          <span>{formatSol(intent.amountMinor)} SOL</span>
-        </div>
-        <a
-          className="mt-2 rounded bg-[var(--foreground)] px-3 py-2 text-center text-sm font-semibold text-[var(--background)]"
-          href={transactionRequest.transactionRequestUrl}
-        >
-          Open wallet
-        </a>
+        <p className="text-sm leading-6 text-[var(--muted)]">
+          {needsUnlock
+            ? "Unlock pricing and wallet handoff are created by the API; wallet approval is never treated as final access."
+            : "Full access is already reflected by the backend projection."}
+        </p>
+        {needsUnlock ? (
+          <a
+            className="rounded bg-[var(--foreground)] px-3 py-2 text-center text-sm font-semibold text-[var(--background)]"
+            href={`/content/${item.id}#unlock`}
+          >
+            Start unlock
+          </a>
+        ) : null}
       </div>
     </section>
   );
@@ -261,8 +219,22 @@ function Metric({ label, value }: { label: string; value: number }) {
   );
 }
 
-function formatSol(lamports: number) {
-  return (lamports / 1_000_000_000).toLocaleString("en-US", {
-    maximumFractionDigits: 9
-  });
+function UnavailableState({
+  message,
+  status,
+  title
+}: {
+  message: string;
+  status: number;
+  title: string;
+}) {
+  return (
+    <section className="grid min-h-[68vh] content-center rounded border border-[var(--line)] bg-[var(--panel)] p-6 lg:col-span-2">
+      <div className="max-w-xl">
+        <p className="text-sm font-medium text-[var(--accent)]">HTTP {status}</p>
+        <h1 className="mt-2 text-2xl font-semibold tracking-normal">{title}</h1>
+        <p className="mt-3 text-sm leading-6 text-[var(--muted)]">{message}</p>
+      </div>
+    </section>
+  );
 }

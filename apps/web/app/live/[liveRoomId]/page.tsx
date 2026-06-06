@@ -1,37 +1,5 @@
-import type { components } from "@veel/contracts";
 import { appShellNavItems } from "@veel/ui";
-
-type LiveRoom = components["schemas"]["LiveRoom"];
-
-const sampleRoom: LiveRoom = {
-  id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10",
-  title: "Friday live studio",
-  creator: {
-    id: "00000000-0000-4000-8000-000000000010",
-    handle: "maki",
-    displayName: "Maki",
-    avatarUrl: null,
-    badges: []
-  },
-  state: "live",
-  accessState: "pass_required",
-  playback: {
-    state: "blocked",
-    url: null,
-    provider: "livepeer"
-  },
-  teaserSecondsRemaining: 45,
-  passOptions: [
-    { durationMinutes: 30, amountMinor: 50000000, currency: "SOL" },
-    { durationMinutes: 60, amountMinor: 90000000, currency: "SOL" },
-    { durationMinutes: 180, amountMinor: 220000000, currency: "SOL" }
-  ],
-  chat: {
-    enabled: true,
-    accessState: "pass_required"
-  },
-  replayContentId: null
-};
+import { getLiveRoom, type LiveRoom } from "@/api-client";
 
 export default async function LiveRoomPage({
   params
@@ -39,10 +7,7 @@ export default async function LiveRoomPage({
   params: Promise<{ liveRoomId: string }>;
 }) {
   const { liveRoomId } = await params;
-  const room = {
-    ...sampleRoom,
-    id: liveRoomId
-  };
+  const roomResult = await getLiveRoom(liveRoomId);
 
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
@@ -64,8 +29,18 @@ export default async function LiveRoomPage({
       </nav>
 
       <section className="mx-auto grid min-h-[calc(100vh-73px)] w-full max-w-7xl gap-5 px-5 py-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <LiveStage room={room} />
-        <LiveAccessPanel room={room} />
+        {roomResult.ok ? (
+          <>
+            <LiveStage room={roomResult.data} />
+            <LiveAccessPanel room={roomResult.data} />
+          </>
+        ) : (
+          <UnavailableState
+            message={roomResult.message}
+            status={roomResult.status}
+            title={roomResult.status === 404 ? "Live room not found" : "Live room unavailable"}
+          />
+        )}
       </section>
     </main>
   );
@@ -154,5 +129,25 @@ function Fact({ label, value }: { label: string; value: string }) {
       <span className="text-[var(--muted)]">{label}</span>
       <span className="text-right font-medium">{value}</span>
     </div>
+  );
+}
+
+function UnavailableState({
+  message,
+  status,
+  title
+}: {
+  message: string;
+  status: number;
+  title: string;
+}) {
+  return (
+    <section className="grid min-h-[68vh] content-center rounded border border-[var(--line)] bg-[var(--panel)] p-6 lg:col-span-2">
+      <div className="max-w-xl">
+        <p className="text-sm font-medium text-[var(--accent)]">HTTP {status}</p>
+        <h1 className="mt-2 text-2xl font-semibold tracking-normal">{title}</h1>
+        <p className="mt-3 text-sm leading-6 text-[var(--muted)]">{message}</p>
+      </div>
+    </section>
   );
 }

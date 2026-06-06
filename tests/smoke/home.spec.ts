@@ -38,19 +38,9 @@ test("renders the content media viewer projection", async ({ page }) => {
   await page.goto("/content/00000000-0000-4000-8000-000000000040");
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Media viewer" })).toBeVisible();
-  await expect(page.getByText("Studio cut with a locked full playback state.")).toBeVisible();
-  await expect(page.getByText("locked", { exact: true })).toBeVisible();
-  await expect(page.getByText("not_ready")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Like" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Save" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Report content" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Block creator" })).toBeVisible();
-  await expect(page.getByText("Payment sheet")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Open wallet" })).toHaveAttribute(
-    "href",
-    /solana:/
-  );
+  await expect(page.getByRole("heading", { name: "Content unavailable" })).toBeVisible();
+  await expect(page.getByText("HTTP 503")).toBeVisible();
+  await expect(page.getByText("API is unavailable")).toBeVisible();
 });
 
 test("renders the create upload workspace projection", async ({ page }) => {
@@ -196,12 +186,9 @@ test("renders the Livepeer live room projection", async ({ page }) => {
   await page.goto("/live/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10");
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Live room" })).toBeVisible();
-  await expect(page.getByText("Friday live studio")).toBeVisible();
-  await expect(page.getByText("Livepeer").first()).toBeVisible();
-  await expect(page.getByText("pass_required").first()).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Pass options" })).toBeVisible();
-  await expect(page.getByText("backend-confirmed live pass settlement")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Live room unavailable" })).toBeVisible();
+  await expect(page.getByText("HTTP 503")).toBeVisible();
+  await expect(page.getByText("API is unavailable")).toBeVisible();
 });
 
 test("renders the event ticket sheet projection", async ({ page }) => {
