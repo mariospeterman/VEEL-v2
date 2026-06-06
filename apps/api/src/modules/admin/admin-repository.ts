@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 import type {
+  AdminAgeCheck,
+  AdminAiSession,
+  AdminAiToolCall,
   AdminComplianceLedgerEntry,
   AdminComplianceReport,
   AdminContentItem,
@@ -10,6 +13,7 @@ import type {
   AdminInvoice,
   AdminLiveRoom,
   AdminMediaAsset,
+  AdminIdentityCheck,
   AdminNotificationHealth,
   AdminOpsSummary,
   AdminOrganization,
@@ -176,6 +180,63 @@ interface MediaAssetRow {
   has_playback_url: boolean;
   ready_at: Date | null;
   provider_checked_at: Date | null;
+  created_at: Date;
+}
+
+interface AgeCheckRow {
+  id: string;
+  user_id: string;
+  provider: string;
+  provider_reference: string;
+  state: AdminAgeCheck["state"];
+  jurisdiction: string | null;
+  rule: string | null;
+  has_provider_reference: boolean;
+  verified_at: Date | null;
+  expires_at: Date | null;
+  created_at: Date;
+}
+
+interface IdentityCheckRow {
+  id: string;
+  user_id: string;
+  provider: string;
+  provider_reference: string;
+  verification_type: AdminIdentityCheck["verificationType"];
+  state: AdminIdentityCheck["state"];
+  country_code: string | null;
+  document_type: string | null;
+  liveness_state: string | null;
+  wallet_ownership_state: string | null;
+  has_provider_reference: boolean;
+  has_legal_name_hash: boolean;
+  verified_at: Date | null;
+  expires_at: Date | null;
+  created_at: Date;
+}
+
+interface AiSessionRow {
+  id: string;
+  actor_user_id: string;
+  scope: AdminAiSession["scope"];
+  state: AdminAiSession["state"];
+  allowed_tool_count: string | number;
+  created_at: Date;
+  expires_at: Date;
+}
+
+interface AiToolCallRow {
+  id: string;
+  session_id: string;
+  actor_user_id: string;
+  scope: AdminAiToolCall["scope"];
+  tool_name: AdminAiToolCall["toolName"];
+  state: AdminAiToolCall["state"];
+  confirmation_state: AdminAiToolCall["confirmationState"];
+  subject_type: Exclude<AdminAiToolCall["subjectType"], undefined>;
+  subject_id: string | null;
+  input_summary: string;
+  output_summary: string;
   created_at: Date;
 }
 
@@ -504,6 +565,18 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
         throw new AdminRepositoryConfigurationError();
       },
       async listMediaAssets() {
+        throw new AdminRepositoryConfigurationError();
+      },
+      async listAgeChecks() {
+        throw new AdminRepositoryConfigurationError();
+      },
+      async listIdentityChecks() {
+        throw new AdminRepositoryConfigurationError();
+      },
+      async listAiSessions() {
+        throw new AdminRepositoryConfigurationError();
+      },
+      async listAiToolCalls() {
         throw new AdminRepositoryConfigurationError();
       },
       async getDatingSafety() {
@@ -1625,6 +1698,95 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
 
       return page(rows, toMediaAsset);
     },
+    async listAgeChecks(input) {
+      const rows = await sql<AgeCheckRow[]>`
+        select
+          id,
+          user_id,
+          provider,
+          provider_reference,
+          state,
+          jurisdiction,
+          rule,
+          (provider_reference is not null and provider_reference <> '') as has_provider_reference,
+          verified_at,
+          expires_at,
+          created_at
+        from age_verifications
+        where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
+        order by created_at desc
+        limit ${pageSize + 1}
+      `;
+
+      return page(rows, toAgeCheck);
+    },
+    async listIdentityChecks(input) {
+      const rows = await sql<IdentityCheckRow[]>`
+        select
+          id,
+          user_id,
+          provider,
+          provider_reference,
+          verification_type,
+          state,
+          country_code,
+          document_type,
+          liveness_state,
+          wallet_ownership_state,
+          (provider_reference is not null and provider_reference <> '') as has_provider_reference,
+          (legal_name_hash is not null and legal_name_hash <> '') as has_legal_name_hash,
+          verified_at,
+          expires_at,
+          created_at
+        from identity_verifications
+        where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
+        order by created_at desc
+        limit ${pageSize + 1}
+      `;
+
+      return page(rows, toIdentityCheck);
+    },
+    async listAiSessions(input) {
+      const rows = await sql<AiSessionRow[]>`
+        select
+          id,
+          actor_user_id,
+          scope,
+          state,
+          coalesce(array_length(allowed_tools, 1), 0) as allowed_tool_count,
+          created_at,
+          expires_at
+        from ai_sessions
+        where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
+        order by created_at desc
+        limit ${pageSize + 1}
+      `;
+
+      return page(rows, toAiSession);
+    },
+    async listAiToolCalls(input) {
+      const rows = await sql<AiToolCallRow[]>`
+        select
+          id,
+          session_id,
+          actor_user_id,
+          scope,
+          tool_name,
+          state,
+          confirmation_state,
+          subject_type,
+          subject_id,
+          input_summary,
+          output_summary,
+          created_at
+        from ai_tool_calls
+        where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
+        order by created_at desc
+        limit ${pageSize + 1}
+      `;
+
+      return page(rows, toAiToolCall);
+    },
     async getDatingSafety() {
       const rows = await sql<{
         open_reports: string | number;
@@ -2290,6 +2452,74 @@ function toMediaAsset(row: MediaAssetRow): AdminMediaAsset {
     hasPlaybackUrl: row.has_playback_url,
     readyAt: row.ready_at?.toISOString() ?? null,
     providerCheckedAt: row.provider_checked_at?.toISOString() ?? null,
+    createdAt: row.created_at.toISOString()
+  };
+}
+
+function toAgeCheck(row: AgeCheckRow): AdminAgeCheck {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    provider: row.provider,
+    providerReference: row.provider_reference,
+    state: row.state,
+    jurisdiction: row.jurisdiction,
+    rule: row.rule,
+    hasProviderReference: row.has_provider_reference,
+    privacyBoundary: "sanitized_age_state_no_raw_identity_payloads",
+    verifiedAt: row.verified_at?.toISOString() ?? null,
+    expiresAt: row.expires_at?.toISOString() ?? null,
+    createdAt: row.created_at.toISOString()
+  };
+}
+
+function toIdentityCheck(row: IdentityCheckRow): AdminIdentityCheck {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    provider: row.provider,
+    providerReference: row.provider_reference,
+    verificationType: row.verification_type,
+    state: row.state,
+    countryCode: row.country_code,
+    documentType: row.document_type,
+    livenessState: row.liveness_state,
+    walletOwnershipState: row.wallet_ownership_state,
+    hasProviderReference: row.has_provider_reference,
+    hasLegalNameHash: row.has_legal_name_hash,
+    privacyBoundary: "sanitized_identity_minimized_no_raw_documents_or_pii",
+    verifiedAt: row.verified_at?.toISOString() ?? null,
+    expiresAt: row.expires_at?.toISOString() ?? null,
+    createdAt: row.created_at.toISOString()
+  };
+}
+
+function toAiSession(row: AiSessionRow): AdminAiSession {
+  return {
+    id: row.id,
+    actorUserId: row.actor_user_id,
+    scope: row.scope,
+    state: row.state,
+    allowedToolCount: Number(row.allowed_tool_count),
+    createdAt: row.created_at.toISOString(),
+    expiresAt: row.expires_at.toISOString()
+  };
+}
+
+function toAiToolCall(row: AiToolCallRow): AdminAiToolCall {
+  return {
+    id: row.id,
+    sessionId: row.session_id,
+    actorUserId: row.actor_user_id,
+    scope: row.scope,
+    toolName: row.tool_name,
+    state: row.state,
+    confirmationState: row.confirmation_state,
+    subjectType: row.subject_type,
+    subjectId: row.subject_id,
+    inputSummary: row.input_summary,
+    outputSummary: row.output_summary,
+    redactionBoundary: "summaries_only_no_tool_payloads_or_secrets",
     createdAt: row.created_at.toISOString()
   };
 }

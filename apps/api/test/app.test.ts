@@ -3756,6 +3756,18 @@ describe("buildApi", () => {
         async listMediaAssets() {
           throw new Error("not implemented");
         },
+        async listAgeChecks() {
+          throw new Error("not implemented");
+        },
+        async listIdentityChecks() {
+          throw new Error("not implemented");
+        },
+        async listAiSessions() {
+          throw new Error("not implemented");
+        },
+        async listAiToolCalls() {
+          throw new Error("not implemented");
+        },
         async getDatingSafety() {
           throw new Error("not implemented");
         },
@@ -3881,6 +3893,18 @@ describe("buildApi", () => {
         async listMediaAssets() {
           throw new Error("not implemented");
         },
+        async listAgeChecks() {
+          throw new Error("not implemented");
+        },
+        async listIdentityChecks() {
+          throw new Error("not implemented");
+        },
+        async listAiSessions() {
+          throw new Error("not implemented");
+        },
+        async listAiToolCalls() {
+          throw new Error("not implemented");
+        },
         async getDatingSafety() {
           throw new Error("not implemented");
         },
@@ -4002,6 +4026,18 @@ describe("buildApi", () => {
           throw new Error("not implemented");
         },
         async listMediaAssets() {
+          throw new Error("not implemented");
+        },
+        async listAgeChecks() {
+          throw new Error("not implemented");
+        },
+        async listIdentityChecks() {
+          throw new Error("not implemented");
+        },
+        async listAiSessions() {
+          throw new Error("not implemented");
+        },
+        async listAiToolCalls() {
           throw new Error("not implemented");
         },
         async getDatingSafety() {
@@ -4969,8 +5005,21 @@ describe("buildApi", () => {
     });
     await app.ready();
 
-    const [summary, notificationHealth, payments, unlocks, providerEvents, liveRooms, mediaAssets, mutualsSafety, datingSafety] =
-      await Promise.all([
+    const [
+      summary,
+      notificationHealth,
+      payments,
+      unlocks,
+      providerEvents,
+      liveRooms,
+      mediaAssets,
+      ageChecks,
+      identityChecks,
+      aiSessions,
+      aiToolCalls,
+      mutualsSafety,
+      datingSafety
+    ] = await Promise.all([
       app.inject({
         method: "GET",
         url: "/v1/admin/ops/summary",
@@ -5004,6 +5053,26 @@ describe("buildApi", () => {
       app.inject({
         method: "GET",
         url: "/v1/admin/media/assets",
+        headers: { authorization: "Bearer valid-token" }
+      }),
+      app.inject({
+        method: "GET",
+        url: "/v1/admin/age-kyc/age-checks",
+        headers: { authorization: "Bearer valid-token" }
+      }),
+      app.inject({
+        method: "GET",
+        url: "/v1/admin/age-kyc/identity-checks",
+        headers: { authorization: "Bearer valid-token" }
+      }),
+      app.inject({
+        method: "GET",
+        url: "/v1/admin/ai/sessions",
+        headers: { authorization: "Bearer valid-token" }
+      }),
+      app.inject({
+        method: "GET",
+        url: "/v1/admin/ai/tool-calls",
         headers: { authorization: "Bearer valid-token" }
       }),
       app.inject({
@@ -5074,6 +5143,42 @@ describe("buildApi", () => {
     });
     expect(JSON.stringify(mediaAssets.json())).not.toMatch(
       /"playbackUrl"|playback_url|"url"|raw|payload|secret|streamKeyValue|ingestUrl/i
+    );
+    expect(ageChecks.statusCode).toBe(200);
+    expect(ageChecks.json().items[0]).toMatchObject({
+      provider: "sumsub",
+      state: "verified",
+      hasProviderReference: true,
+      privacyBoundary: "sanitized_age_state_no_raw_identity_payloads"
+    });
+    expect(JSON.stringify(ageChecks.json())).not.toMatch(
+      /rawProviderPayload|documentImage|documentNumber|legalName|payloadBody|secret|privateKey|serviceRole/i
+    );
+    expect(identityChecks.statusCode).toBe(200);
+    expect(identityChecks.json().items[0]).toMatchObject({
+      verificationType: "kyc",
+      state: "pending",
+      hasLegalNameHash: true,
+      privacyBoundary: "sanitized_identity_minimized_no_raw_documents_or_pii"
+    });
+    expect(JSON.stringify(identityChecks.json())).not.toMatch(
+      /rawProviderPayload|payloadBody|documentImage|documentNumber|legalName[^H]|tin|vatId|secret|privateKey|serviceRole/i
+    );
+    expect(aiSessions.statusCode).toBe(200);
+    expect(aiSessions.json().items[0]).toMatchObject({
+      scope: "admin_ops",
+      state: "active",
+      allowedToolCount: 2
+    });
+    expect(JSON.stringify(aiSessions.json())).not.toMatch(/idempotencyKey|allowedTools|inputRedacted|outputRedacted|secret/i);
+    expect(aiToolCalls.statusCode).toBe(200);
+    expect(aiToolCalls.json().items[0]).toMatchObject({
+      toolName: "provider_health_summary",
+      state: "executed",
+      redactionBoundary: "summaries_only_no_tool_payloads_or_secrets"
+    });
+    expect(JSON.stringify(aiToolCalls.json())).not.toMatch(
+      /inputRedacted|outputRedacted|payloadBody|secretValue|privateKey|serviceRole/i
     );
     expect(mutualsSafety.statusCode).toBe(200);
     expect(mutualsSafety.json()).toEqual({
@@ -7802,6 +7907,90 @@ const fakeAdminRepository: AdminRepository = {
           readyAt: "2026-06-06T15:00:00.000Z",
           providerCheckedAt: "2026-06-06T15:01:00.000Z",
           createdAt: "2026-06-06T14:00:00.000Z"
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async listAgeChecks() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-0000000000f0",
+          userId: "00000000-0000-4000-8000-000000000011",
+          provider: "sumsub",
+          providerReference: "sumsub-age-ref-1",
+          state: "verified",
+          jurisdiction: "EU",
+          rule: "18_plus",
+          hasProviderReference: true,
+          privacyBoundary: "sanitized_age_state_no_raw_identity_payloads",
+          verifiedAt: "2026-06-06T14:05:00.000Z",
+          expiresAt: "2027-06-06T14:05:00.000Z",
+          createdAt: "2026-06-06T14:00:00.000Z"
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async listIdentityChecks() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-0000000000f1",
+          userId: "00000000-0000-4000-8000-000000000011",
+          provider: "sumsub",
+          providerReference: "sumsub-kyc-ref-1",
+          verificationType: "kyc",
+          state: "pending",
+          countryCode: "DE",
+          documentType: "passport",
+          livenessState: "passed",
+          walletOwnershipState: null,
+          hasProviderReference: true,
+          hasLegalNameHash: true,
+          privacyBoundary: "sanitized_identity_minimized_no_raw_documents_or_pii",
+          verifiedAt: null,
+          expiresAt: null,
+          createdAt: "2026-06-06T14:00:00.000Z"
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async listAiSessions() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-0000000000f2",
+          actorUserId: "00000000-0000-4000-8000-000000000001",
+          scope: "admin_ops",
+          state: "active",
+          allowedToolCount: 2,
+          createdAt: "2026-06-06T14:00:00.000Z",
+          expiresAt: "2026-06-06T15:00:00.000Z"
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async listAiToolCalls() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-0000000000f3",
+          sessionId: "00000000-0000-4000-8000-0000000000f2",
+          actorUserId: "00000000-0000-4000-8000-000000000001",
+          scope: "admin_ops",
+          toolName: "provider_health_summary",
+          state: "executed",
+          confirmationState: "not_required",
+          subjectType: "provider",
+          subjectId: null,
+          inputSummary: "Summarize provider state",
+          outputSummary: "Providers healthy",
+          redactionBoundary: "summaries_only_no_tool_payloads_or_secrets",
+          createdAt: "2026-06-06T14:02:00.000Z"
         }
       ],
       nextCursor: null

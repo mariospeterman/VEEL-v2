@@ -1985,6 +1985,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/age-kyc/age-checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Admin age assurance provider projection */
+        get: operations["listAdminAgeChecks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/age-kyc/identity-checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Admin identity, KYC, and KYB verification projection */
+        get: operations["listAdminIdentityChecks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/ai/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Admin AI scoped assistant sessions */
+        get: operations["listAdminAiSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/ai/tool-calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Admin AI tool call audit projection */
+        get: operations["listAdminAiToolCalls"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/mutuals/safety": {
         parameters: {
             query?: never;
@@ -3783,6 +3851,91 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        AdminAgeCheck: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            userId: string;
+            provider: string;
+            providerReference: string;
+            state: components["schemas"]["AgeState"];
+            jurisdiction?: string | null;
+            rule?: string | null;
+            hasProviderReference: boolean;
+            /** @enum {string} */
+            privacyBoundary: "sanitized_age_state_no_raw_identity_payloads";
+            /** Format: date-time */
+            verifiedAt?: string | null;
+            /** Format: date-time */
+            expiresAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AdminIdentityCheck: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            userId: string;
+            provider: string;
+            providerReference: string;
+            /** @enum {string} */
+            verificationType: "age" | "identity" | "liveness" | "wallet_ownership" | "kyc" | "kyb";
+            /** @enum {string} */
+            state: "pending" | "verified" | "failed" | "expired" | "cancelled";
+            countryCode?: string | null;
+            documentType?: string | null;
+            livenessState?: string | null;
+            walletOwnershipState?: string | null;
+            hasProviderReference: boolean;
+            hasLegalNameHash: boolean;
+            /** @enum {string} */
+            privacyBoundary: "sanitized_identity_minimized_no_raw_documents_or_pii";
+            /** Format: date-time */
+            verifiedAt?: string | null;
+            /** Format: date-time */
+            expiresAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AdminAiSession: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            actorUserId: string;
+            /** @enum {string} */
+            scope: "user_self_service" | "creator_helper" | "admin_ops";
+            /** @enum {string} */
+            state: "active" | "expired" | "revoked";
+            allowedToolCount: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        AdminAiToolCall: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            sessionId: string;
+            /** Format: uuid */
+            actorUserId: string;
+            /** @enum {string} */
+            scope: "user_self_service" | "creator_helper" | "admin_ops";
+            toolName: components["schemas"]["AiToolName"];
+            /** @enum {string} */
+            state: "prepared" | "executed" | "blocked" | "failed";
+            /** @enum {string} */
+            confirmationState: "not_required" | "required" | "confirmed" | "rejected";
+            /** @enum {string|null} */
+            subjectType?: "content" | "event" | "payment" | "provider" | "support_case" | "report" | "user" | "none" | null;
+            subjectId?: string | null;
+            inputSummary: string;
+            outputSummary: string;
+            /** @enum {string} */
+            redactionBoundary: "summaries_only_no_tool_payloads_or_secrets";
+            /** Format: date-time */
+            createdAt: string;
+        };
         AdminComplianceLedgerEntry: {
             /** Format: uuid */
             id: string;
@@ -4994,6 +5147,54 @@ export interface components {
             content: {
                 "application/json": {
                     items: components["schemas"]["AdminMediaAsset"][];
+                    nextCursor?: string | null;
+                };
+            };
+        };
+        /** @description Admin age assurance checks */
+        AdminAgeCheckPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    items: components["schemas"]["AdminAgeCheck"][];
+                    nextCursor?: string | null;
+                };
+            };
+        };
+        /** @description Admin identity */
+        AdminIdentityCheckPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    items: components["schemas"]["AdminIdentityCheck"][];
+                    nextCursor?: string | null;
+                };
+            };
+        };
+        /** @description Admin AI sessions */
+        AdminAiSessionPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    items: components["schemas"]["AdminAiSession"][];
+                    nextCursor?: string | null;
+                };
+            };
+        };
+        /** @description Admin AI tool calls */
+        AdminAiToolCallPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    items: components["schemas"]["AdminAiToolCall"][];
                     nextCursor?: string | null;
                 };
             };
@@ -7494,6 +7695,66 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["AdminMediaAssetPage"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAdminAgeChecks: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminAgeCheckPage"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAdminIdentityChecks: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminIdentityCheckPage"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAdminAiSessions: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminAiSessionPage"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAdminAiToolCalls: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminAiToolCallPage"];
             403: components["responses"]["Forbidden"];
         };
     };

@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
 import {
+  getAdminAgeChecks,
+  getAdminAiSessions,
+  getAdminAiToolCalls,
   getAdminAuditEvents,
   getAdminCarfReports,
   getAdminComplianceLedger,
@@ -30,6 +33,10 @@ import {
   getAdminUnlocks,
   getAdminUsers,
   getAdminVatDeterminations,
+  getAdminIdentityChecks,
+  type AdminAgeCheck,
+  type AdminAiSession,
+  type AdminAiToolCall,
   type AuditEvent,
   type AdminComplianceLedgerEntry,
   type AdminComplianceReport,
@@ -37,6 +44,7 @@ import {
   type AdminDataRequest,
   type AdminFeatureFlag,
   type AdminInvoice,
+  type AdminIdentityCheck,
   type AdminLiveRoom,
   type AdminMediaAsset,
   type AdminMutualsSafety,
@@ -71,6 +79,10 @@ export default async function AdminPage() {
     providerEvents,
     liveRooms,
     mediaAssets,
+    ageChecks,
+    identityChecks,
+    aiSessions,
+    aiToolCalls,
     auditEvents,
     notificationHealth,
     users,
@@ -102,6 +114,10 @@ export default async function AdminPage() {
     getAdminProviderEvents(),
     getAdminLiveRooms(),
     getAdminMediaAssets(),
+    getAdminAgeChecks(),
+    getAdminIdentityChecks(),
+    getAdminAiSessions(),
+    getAdminAiToolCalls(),
     getAdminAuditEvents(),
     getAdminNotificationHealth(),
     getAdminUsers(),
@@ -276,6 +292,14 @@ export default async function AdminPage() {
               <LiveMediaProviderPanel liveRooms={liveRooms} mediaAssets={mediaAssets} />
             </Panel>
 
+            <Panel title="Age and KYC providers">
+              <AgeKycProviderPanel ageChecks={ageChecks} identityChecks={identityChecks} />
+            </Panel>
+
+            <Panel title="AI operations">
+              <AiOperationsPanel aiSessions={aiSessions} aiToolCalls={aiToolCalls} />
+            </Panel>
+
             <Panel title="VAT receipts and invoices">
               <VatReceiptPanel invoices={invoices} receipts={receipts} vatDeterminations={vatDeterminations} />
             </Panel>
@@ -343,6 +367,68 @@ function LiveMediaProviderPanel({
       ))}
       {mediaAssets.data.items.map((asset) => (
         <MediaProviderRow asset={asset} key={asset.id} />
+      ))}
+    </div>
+  );
+}
+
+function AgeKycProviderPanel({
+  ageChecks,
+  identityChecks
+}: {
+  ageChecks: ApiResult<AdminPage<AdminAgeCheck>>;
+  identityChecks: ApiResult<AdminPage<AdminIdentityCheck>>;
+}) {
+  if (!ageChecks.ok) {
+    return <UnavailableState result={ageChecks} />;
+  }
+
+  if (!identityChecks.ok) {
+    return <UnavailableState result={identityChecks} />;
+  }
+
+  if (ageChecks.data.items.length === 0 && identityChecks.data.items.length === 0) {
+    return <EmptyState label="No age or identity checks" />;
+  }
+
+  return (
+    <div className="grid gap-2">
+      {ageChecks.data.items.map((check) => (
+        <AgeCheckRow check={check} key={check.id} />
+      ))}
+      {identityChecks.data.items.map((check) => (
+        <IdentityCheckRow check={check} key={check.id} />
+      ))}
+    </div>
+  );
+}
+
+function AiOperationsPanel({
+  aiSessions,
+  aiToolCalls
+}: {
+  aiSessions: ApiResult<AdminPage<AdminAiSession>>;
+  aiToolCalls: ApiResult<AdminPage<AdminAiToolCall>>;
+}) {
+  if (!aiSessions.ok) {
+    return <UnavailableState result={aiSessions} />;
+  }
+
+  if (!aiToolCalls.ok) {
+    return <UnavailableState result={aiToolCalls} />;
+  }
+
+  if (aiSessions.data.items.length === 0 && aiToolCalls.data.items.length === 0) {
+    return <EmptyState label="No AI operations" />;
+  }
+
+  return (
+    <div className="grid gap-2">
+      {aiSessions.data.items.map((session) => (
+        <AiSessionRow key={session.id} session={session} />
+      ))}
+      {aiToolCalls.data.items.map((toolCall) => (
+        <AiToolCallRow key={toolCall.id} toolCall={toolCall} />
       ))}
     </div>
   );
@@ -837,6 +923,89 @@ function MediaProviderRow({ asset }: { asset: AdminMediaAsset }) {
         <Fact label="Playable" value={asset.providerPlayable ? "yes" : "no"} />
         <Fact label="Playback URL" value={asset.hasPlaybackUrl ? "present" : "none"} />
         <Fact label="Checked" value={timestampLabel(asset.providerCheckedAt ?? null)} />
+      </div>
+    </article>
+  );
+}
+
+function AgeCheckRow({ check }: { check: AdminAgeCheck }) {
+  return (
+    <article className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-medium">Age assurance</p>
+          <p className="mt-1 truncate text-[var(--muted)]">{check.provider}</p>
+        </div>
+        <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">
+          {check.state}
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2">
+        <Fact label="Jurisdiction" value={check.jurisdiction ?? "unknown"} />
+        <Fact label="Provider ref" value={check.hasProviderReference ? "present" : "none"} />
+        <Fact label="Boundary" value="no raw identity" />
+      </div>
+    </article>
+  );
+}
+
+function IdentityCheckRow({ check }: { check: AdminIdentityCheck }) {
+  return (
+    <article className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-medium">{check.verificationType.toUpperCase()}</p>
+          <p className="mt-1 truncate text-[var(--muted)]">{check.provider}</p>
+        </div>
+        <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">
+          {check.state}
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2">
+        <Fact label="Country" value={check.countryCode ?? "unknown"} />
+        <Fact label="Legal name" value={check.hasLegalNameHash ? "hashed" : "none"} />
+        <Fact label="Boundary" value="no raw documents" />
+      </div>
+    </article>
+  );
+}
+
+function AiSessionRow({ session }: { session: AdminAiSession }) {
+  return (
+    <article className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-medium">{session.scope}</p>
+          <p className="mt-1 truncate text-[var(--muted)]">{session.actorUserId}</p>
+        </div>
+        <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">
+          {session.state}
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2">
+        <Fact label="Tools" value={session.allowedToolCount.toString()} />
+        <Fact label="Expires" value={timestampLabel(session.expiresAt)} />
+      </div>
+    </article>
+  );
+}
+
+function AiToolCallRow({ toolCall }: { toolCall: AdminAiToolCall }) {
+  return (
+    <article className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-medium">{toolCall.toolName}</p>
+          <p className="mt-1 truncate text-[var(--muted)]">{toolCall.inputSummary}</p>
+        </div>
+        <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">
+          {toolCall.state}
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2">
+        <Fact label="Confirm" value={toolCall.confirmationState} />
+        <Fact label="Subject" value={toolCall.subjectType ?? "none"} />
+        <Fact label="Boundary" value="summaries only" />
       </div>
     </article>
   );

@@ -50,6 +50,10 @@ export type AdminUnlock = components["schemas"]["AdminUnlock"];
 export type AdminProviderEvent = components["schemas"]["AdminProviderEvent"];
 export type AdminLiveRoom = components["schemas"]["AdminLiveRoom"];
 export type AdminMediaAsset = components["schemas"]["AdminMediaAsset"];
+export type AdminAgeCheck = components["schemas"]["AdminAgeCheck"];
+export type AdminIdentityCheck = components["schemas"]["AdminIdentityCheck"];
+export type AdminAiSession = components["schemas"]["AdminAiSession"];
+export type AdminAiToolCall = components["schemas"]["AdminAiToolCall"];
 export type AdminReport = components["schemas"]["AdminReport"];
 export type AdminUser = components["schemas"]["AdminUser"];
 export type AdminSupportCase = components["schemas"]["AdminSupportCase"];
@@ -228,6 +232,22 @@ export async function getAdminLiveRooms(): Promise<ApiResult<AdminPage<AdminLive
 
 export async function getAdminMediaAssets(): Promise<ApiResult<AdminPage<AdminMediaAsset>>> {
   return getJson<AdminPage<AdminMediaAsset>>("/v1/admin/media/assets");
+}
+
+export async function getAdminAgeChecks(): Promise<ApiResult<AdminPage<AdminAgeCheck>>> {
+  return getJson<AdminPage<AdminAgeCheck>>("/v1/admin/age-kyc/age-checks");
+}
+
+export async function getAdminIdentityChecks(): Promise<ApiResult<AdminPage<AdminIdentityCheck>>> {
+  return getJson<AdminPage<AdminIdentityCheck>>("/v1/admin/age-kyc/identity-checks");
+}
+
+export async function getAdminAiSessions(): Promise<ApiResult<AdminPage<AdminAiSession>>> {
+  return getJson<AdminPage<AdminAiSession>>("/v1/admin/ai/sessions");
+}
+
+export async function getAdminAiToolCalls(): Promise<ApiResult<AdminPage<AdminAiToolCall>>> {
+  return getJson<AdminPage<AdminAiToolCall>>("/v1/admin/ai/tool-calls");
 }
 
 export async function getAdminAuditEvents(): Promise<ApiResult<AdminPage<AuditEvent>>> {

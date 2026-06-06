@@ -144,7 +144,7 @@ Veel records evidence, state transitions, reporting facts, exports, and accounti
 1. Keep hard social-money rule in contracts, docs, tests, ranking, Mutuals, platform tier gates, and admin policy.
 2. Complete notification production rollout: real VAPID secrets, staging push-service verification across target browsers, and live Supabase Realtime staging verification with real RLS claims.
 3. Complete single creator onboarding/readiness flow and creator/studio dashboard expansion.
-4. Complete deeper provider-backed KYB surfaces and the remaining admin route-map breadth.
+4. Complete provider launch approvals and any remaining provider-backed KYB expansion after staging provider fixtures are verified.
 5. Complete refund/dispute execution follow-up only after policy approval: creator-initiated noncustodial refund transaction evidence, entitlement revocation/replacement controls, consumer disclosures, and compliance ledger correction events.
 6. Complete provider launch approvals and staging fixtures for Solana settlement, delegated Membership renewals, Bunny, Livepeer, age/KYC, and embedded wallets.
 7. Complete compliance export/readiness workflows only after counsel/tax review.

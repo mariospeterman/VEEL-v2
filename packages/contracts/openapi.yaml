@@ -1448,6 +1448,46 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/AdminMediaAssetPage" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/age-kyc/age-checks:
+    get:
+      operationId: listAdminAgeChecks
+      tags: [Admin]
+      summary: Admin age assurance provider projection
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminAgeCheckPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/age-kyc/identity-checks:
+    get:
+      operationId: listAdminIdentityChecks
+      tags: [Admin]
+      summary: Admin identity, KYC, and KYB verification projection
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminIdentityCheckPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/ai/sessions:
+    get:
+      operationId: listAdminAiSessions
+      tags: [Admin]
+      summary: Admin AI scoped assistant sessions
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminAiSessionPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/ai/tool-calls:
+    get:
+      operationId: listAdminAiToolCalls
+      tags: [Admin]
+      summary: Admin AI tool call audit projection
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminAiToolCallPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /v1/admin/mutuals/safety:
     get:
       operationId: getAdminMutualsSafety
@@ -1897,6 +1937,10 @@ components:
     AdminDatingSafety: { description: Deprecated compatibility alias for Admin Mutuals safety, content: { application/json: { schema: { $ref: "#/components/schemas/AdminDatingSafety" } } } }
     AdminLiveRoomPage: { description: Admin live room provider projections, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminLiveRoom" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminMediaAssetPage: { description: Admin media provider projections, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminMediaAsset" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminAgeCheckPage: { description: Admin age assurance checks, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminAgeCheck" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminIdentityCheckPage: { description: Admin identity, KYC, and KYB checks, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminIdentityCheck" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminAiSessionPage: { description: Admin AI sessions, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminAiSession" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminAiToolCallPage: { description: Admin AI tool calls, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminAiToolCall" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminComplianceLedgerPage: { description: Admin compliance ledger entries, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminComplianceLedgerEntry" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminComplianceReportPage: { description: Admin compliance reports, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminComplianceReport" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminVatDeterminationPage: { description: Admin VAT determinations, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminVatDetermination" } }, nextCursor: { type: string, nullable: true } } } } } }
@@ -3415,6 +3459,70 @@ components:
         hasPlaybackUrl: { type: boolean }
         readyAt: { type: string, format: date-time, nullable: true }
         providerCheckedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    AdminAgeCheck:
+      type: object
+      required: [id, userId, provider, providerReference, state, hasProviderReference, privacyBoundary, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        provider: { type: string }
+        providerReference: { type: string }
+        state: { $ref: "#/components/schemas/AgeState" }
+        jurisdiction: { type: string, nullable: true }
+        rule: { type: string, nullable: true }
+        hasProviderReference: { type: boolean }
+        privacyBoundary: { type: string, enum: [sanitized_age_state_no_raw_identity_payloads] }
+        verifiedAt: { type: string, format: date-time, nullable: true }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    AdminIdentityCheck:
+      type: object
+      required: [id, userId, provider, providerReference, verificationType, state, hasProviderReference, hasLegalNameHash, privacyBoundary, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        provider: { type: string }
+        providerReference: { type: string }
+        verificationType: { type: string, enum: [age, identity, liveness, wallet_ownership, kyc, kyb] }
+        state: { type: string, enum: [pending, verified, failed, expired, cancelled] }
+        countryCode: { type: string, nullable: true }
+        documentType: { type: string, nullable: true }
+        livenessState: { type: string, nullable: true }
+        walletOwnershipState: { type: string, nullable: true }
+        hasProviderReference: { type: boolean }
+        hasLegalNameHash: { type: boolean }
+        privacyBoundary: { type: string, enum: [sanitized_identity_minimized_no_raw_documents_or_pii] }
+        verifiedAt: { type: string, format: date-time, nullable: true }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    AdminAiSession:
+      type: object
+      required: [id, actorUserId, scope, state, allowedToolCount, createdAt, expiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        actorUserId: { type: string, format: uuid }
+        scope: { type: string, enum: [user_self_service, creator_helper, admin_ops] }
+        state: { type: string, enum: [active, expired, revoked] }
+        allowedToolCount: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+    AdminAiToolCall:
+      type: object
+      required: [id, sessionId, actorUserId, scope, toolName, state, confirmationState, inputSummary, outputSummary, redactionBoundary, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        sessionId: { type: string, format: uuid }
+        actorUserId: { type: string, format: uuid }
+        scope: { type: string, enum: [user_self_service, creator_helper, admin_ops] }
+        toolName: { $ref: "#/components/schemas/AiToolName" }
+        state: { type: string, enum: [prepared, executed, blocked, failed] }
+        confirmationState: { type: string, enum: [not_required, required, confirmed, rejected] }
+        subjectType: { type: string, enum: [content, event, payment, provider, support_case, report, user, none], nullable: true }
+        subjectId: { type: string, nullable: true }
+        inputSummary: { type: string }
+        outputSummary: { type: string }
+        redactionBoundary: { type: string, enum: [summaries_only_no_tool_payloads_or_secrets] }
         createdAt: { type: string, format: date-time }
     AdminComplianceLedgerEntry:
       type: object

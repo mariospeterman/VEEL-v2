@@ -500,6 +500,38 @@ export async function registerAdminRoutes(
     return reply.code(200).send(await options.adminRepository.listMediaAssets(adminListInput(query)));
   });
 
+  app.get("/v1/admin/age-kyc/age-checks", async (request, reply) => {
+    const allowed = await requireAdminAccess(request, reply, options);
+    if (!allowed) return reply;
+
+    const query = request.query as { cursor?: string };
+    return reply.code(200).send(await options.adminRepository.listAgeChecks(adminListInput(query)));
+  });
+
+  app.get("/v1/admin/age-kyc/identity-checks", async (request, reply) => {
+    const allowed = await requireAdminAccess(request, reply, options);
+    if (!allowed) return reply;
+
+    const query = request.query as { cursor?: string };
+    return reply.code(200).send(await options.adminRepository.listIdentityChecks(adminListInput(query)));
+  });
+
+  app.get("/v1/admin/ai/sessions", async (request, reply) => {
+    const allowed = await requireAdminAccess(request, reply, options);
+    if (!allowed) return reply;
+
+    const query = request.query as { cursor?: string };
+    return reply.code(200).send(await options.adminRepository.listAiSessions(adminListInput(query)));
+  });
+
+  app.get("/v1/admin/ai/tool-calls", async (request, reply) => {
+    const allowed = await requireAdminAccess(request, reply, options);
+    if (!allowed) return reply;
+
+    const query = request.query as { cursor?: string };
+    return reply.code(200).send(await options.adminRepository.listAiToolCalls(adminListInput(query)));
+  });
+
   async function getMutualsSafety(request: FastifyRequest, reply: FastifyReply) {
     const allowed = await requireAdminAccess(request, reply, options);
     if (!allowed) return reply;
