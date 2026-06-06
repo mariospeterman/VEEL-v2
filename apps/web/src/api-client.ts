@@ -7,6 +7,10 @@ export type ContentItem = components["schemas"]["ContentItem"];
 export type CreatorDashboard = components["schemas"]["CreatorMonetisationDashboard"];
 export type CreatorProfile = components["schemas"]["CreatorProfile"];
 export type LiveRoom = components["schemas"]["LiveRoom"];
+export type ActivityItem = components["schemas"]["ActivityItem"];
+export type ActivityPage = components["schemas"]["ActivityPage"];
+export type WalletTransaction = components["schemas"]["WalletTransaction"];
+export type WalletTransactionPage = components["schemas"]["WalletTransactionPage"];
 
 export type ApiResult<T> =
   | {
@@ -33,6 +37,14 @@ export async function getCreatorProfile(handle: string): Promise<ApiResult<Creat
 
 export async function getMyCreatorDashboard(): Promise<ApiResult<CreatorDashboard>> {
   return getJson<CreatorDashboard>("/v1/profiles/me/creator-dashboard");
+}
+
+export async function getPaymentActivity(): Promise<ApiResult<ActivityPage>> {
+  return getJson<ActivityPage>("/v1/activity/payments");
+}
+
+export async function getWalletTransactionActivity(): Promise<ApiResult<WalletTransactionPage>> {
+  return getJson<WalletTransactionPage>("/v1/activity/wallet-transactions");
 }
 
 async function getJson<T>(path: string): Promise<ApiResult<T>> {

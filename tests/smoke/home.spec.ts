@@ -81,10 +81,11 @@ test("renders the activity and wallet transaction projection", async ({ page }) 
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Payments" })).toBeVisible();
-  await expect(page.getByText("Wallet transactions")).toBeVisible();
-  await expect(page.getByText("payment_intent").first()).toBeVisible();
-  await expect(page.getByText("solana_devnet")).toBeVisible();
-  await expect(page.getByText("confirmed").first()).toBeVisible();
+  await expect(page.getByText("Wallet transactions", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Payment activity unavailable" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Wallet transactions unavailable" })).toBeVisible();
+  await expect(page.getByText("HTTP 503").first()).toBeVisible();
+  await expect(page.getByText("API is unavailable").first()).toBeVisible();
 });
 
 test("renders the wallet funding and primary-wallet projection", async ({ page }) => {

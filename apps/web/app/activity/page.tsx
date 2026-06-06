@@ -1,62 +1,19 @@
-import type { components } from "@veel/contracts";
 import { appShellNavItems } from "@veel/ui";
+import {
+  getPaymentActivity,
+  getWalletTransactionActivity,
+  type ActivityItem,
+  type ApiResult,
+  type WalletTransaction,
+  type WalletTransactionPage
+} from "@/api-client";
 
-type ActivityItem = components["schemas"]["ActivityItem"];
-type WalletTransaction = components["schemas"]["WalletTransaction"];
+export default async function ActivityPage() {
+  const [paymentActivity, walletTransactions] = await Promise.all([
+    getPaymentActivity(),
+    getWalletTransactionActivity()
+  ]);
 
-const paymentActivity: ActivityItem[] = [
-  {
-    id: "00000000-0000-4000-8000-000000000050",
-    kind: "payment_intent",
-    title: "Tip",
-    state: "confirmed",
-    productType: "tip",
-    targetId: "00000000-0000-4000-8000-000000000010",
-    amountMinor: 10000000,
-    currency: "SOL",
-    paymentIntentId: "00000000-0000-4000-8000-000000000050",
-    signature: "5".repeat(88),
-    referenceAddress: "11111111111111111111111111111112",
-    createdAt: "2026-06-04T20:00:00.000Z",
-    confirmedAt: "2026-06-04T20:01:00.000Z"
-  },
-  {
-    id: "00000000-0000-4000-8000-000000000051",
-    kind: "payment_intent",
-    title: "Paid message",
-    state: "submitted",
-    productType: "paid_message",
-    targetId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab10",
-    amountMinor: 25000000,
-    currency: "SOL",
-    paymentIntentId: "00000000-0000-4000-8000-000000000051",
-    signature: "4".repeat(88),
-    referenceAddress: "11111111111111111111111111111113",
-    createdAt: "2026-06-04T20:05:00.000Z",
-    confirmedAt: null
-  }
-];
-
-const walletTransactions: WalletTransaction[] = [
-  {
-    id: "00000000-0000-4000-8000-000000000060",
-    chain: "solana_devnet",
-    direction: "outgoing",
-    amountMinor: 10000000,
-    currency: "SOL",
-    state: "confirmed",
-    source: "payment_intent",
-    paymentIntentId: "00000000-0000-4000-8000-000000000050",
-    walletId: "00000000-0000-4000-8000-000000000030",
-    signature: "5".repeat(88),
-    referenceAddress: "11111111111111111111111111111112",
-    createdAt: "2026-06-04T20:00:00.000Z",
-    submittedAt: "2026-06-04T20:00:00.000Z",
-    confirmedAt: "2026-06-04T20:01:00.000Z"
-  }
-];
-
-export default function ActivityPage() {
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-[var(--line)] px-5 py-4">
@@ -84,9 +41,15 @@ export default function ActivityPage() {
           </div>
 
           <div className="grid gap-3">
-            {paymentActivity.map((item) => (
-              <ActivityRow item={item} key={item.id} />
-            ))}
+            {paymentActivity.ok ? (
+              paymentActivity.data.items.length > 0 ? (
+                paymentActivity.data.items.map((item) => <ActivityRow item={item} key={item.id} />)
+              ) : (
+                <EmptyState label="No payment activity yet" />
+              )
+            ) : (
+              <UnavailableState result={paymentActivity} title="Payment activity unavailable" />
+            )}
           </div>
         </section>
 
@@ -94,9 +57,17 @@ export default function ActivityPage() {
           <div className="border-b border-[var(--line)] pb-3">
             <p className="text-sm font-medium text-[var(--muted)]">Wallet transactions</p>
           </div>
-          {walletTransactions.map((transaction) => (
-            <WalletTransactionCard transaction={transaction} key={transaction.id} />
-          ))}
+          {walletTransactions.ok ? (
+            walletTransactions.data.items.length > 0 ? (
+              walletTransactions.data.items.map((transaction) => (
+                <WalletTransactionCard transaction={transaction} key={transaction.id} />
+              ))
+            ) : (
+              <EmptyState label="No wallet transactions yet" />
+            )
+          ) : (
+            <UnavailableState result={walletTransactions} title="Wallet transactions unavailable" />
+          )}
         </aside>
       </section>
     </main>
@@ -160,4 +131,32 @@ function shorten(value: string | null | undefined) {
   }
 
   return `${value.slice(0, 6)}...${value.slice(-4)}`;
+}
+
+function EmptyState({ label }: { label: string }) {
+  return (
+    <div className="rounded border border-[var(--line)] bg-[var(--panel)] p-4 text-sm text-[var(--muted)]">
+      {label}
+    </div>
+  );
+}
+
+function UnavailableState({
+  result,
+  title
+}: {
+  result: ApiResult<unknown> | ApiResult<WalletTransactionPage>;
+  title: string;
+}) {
+  if (result.ok) {
+    return null;
+  }
+
+  return (
+    <div className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
+      <p className="text-sm font-medium text-[var(--accent)]">HTTP {result.status}</p>
+      <h2 className="mt-2 text-base font-semibold tracking-normal">{title}</h2>
+      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{result.message}</p>
+    </div>
+  );
 }
