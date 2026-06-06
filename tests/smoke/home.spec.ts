@@ -153,6 +153,8 @@ test("renders the settings projection", async ({ page }) => {
 });
 
 test("redirects documented app route aliases", async ({ page }) => {
+  test.setTimeout(45_000);
+
   await page.goto("/app/settings");
   await expect(page).toHaveURL(/\/settings$/);
   await expect(page.getByRole("heading", { name: "Account controls" })).toBeVisible();

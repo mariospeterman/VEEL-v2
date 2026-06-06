@@ -5,11 +5,17 @@ import { revalidatePath } from "next/cache";
 import {
   updateAdminOrganizationKyb,
   updateAdminOrganizationMember,
+  updateAdminDataRequest,
   updateAdminFeatureFlag,
+  updateAdminRefundDispute,
+  updateAdminSupportCase,
   updateAdminSupportPolicy,
+  type AdminDataRequestActionRequest,
   type AdminFeatureFlagPatchRequest,
   type AdminOrganizationKybActionRequest,
   type AdminOrganizationMemberActionRequest,
+  type AdminRefundDisputeActionRequest,
+  type AdminSupportCaseActionRequest,
   type AdminSupportPolicyActionRequest,
   type ApiResult
 } from "@/api-client";
@@ -47,6 +53,45 @@ export async function updateSupportPolicyAction(formData: FormData): Promise<voi
   };
 
   const result = await updateAdminSupportPolicy(stringField(formData, "supportPolicyId"), body, randomUUID());
+  actionResult(result);
+}
+
+export async function updateSupportCaseAction(formData: FormData): Promise<void> {
+  const body: AdminSupportCaseActionRequest = {
+    state: enumField(formData, "state", ["open", "pending_user", "pending_internal", "resolved", "closed"]),
+    reason: stringField(formData, "reason")
+  };
+
+  const result = await updateAdminSupportCase(stringField(formData, "supportCaseId"), body, randomUUID());
+  actionResult(result);
+}
+
+export async function updateRefundDisputeAction(formData: FormData): Promise<void> {
+  const body: AdminRefundDisputeActionRequest = {
+    state: enumField(formData, "state", [
+      "opened",
+      "reviewing",
+      "creator_action_required",
+      "rejected",
+      "withdrawn",
+      "resolved",
+      "closed"
+    ]),
+    resolution: stringField(formData, "resolution"),
+    reason: stringField(formData, "reason")
+  };
+
+  const result = await updateAdminRefundDispute(stringField(formData, "refundDisputeId"), body, randomUUID());
+  actionResult(result);
+}
+
+export async function updateDataRequestAction(formData: FormData): Promise<void> {
+  const body: AdminDataRequestActionRequest = {
+    state: enumField(formData, "state", ["verifying", "processing", "completed", "rejected"]),
+    reason: stringField(formData, "reason")
+  };
+
+  const result = await updateAdminDataRequest(stringField(formData, "dataRequestId"), body, randomUUID());
   actionResult(result);
 }
 

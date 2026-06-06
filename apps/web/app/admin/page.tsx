@@ -72,8 +72,11 @@ import {
 } from "@/api-client";
 import {
   updateFeatureFlagAction,
+  updateDataRequestAction,
   updateOrganizationKybAction,
   updateOrganizationMemberAction,
+  updateRefundDisputeAction,
+  updateSupportCaseAction,
   updateSupportPolicyAction
 } from "./actions";
 
@@ -1139,39 +1142,83 @@ function SupportPolicyRow({ policy }: { policy: AdminSupportPolicy }) {
 
 function SupportCaseRow({ supportCase }: { supportCase: AdminSupportCase }) {
   return (
-    <article className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm md:grid-cols-[1fr_130px_180px]">
-      <div className="min-w-0">
-        <p className="font-medium">{supportCase.category}</p>
-        <p className="mt-1 truncate text-[var(--muted)]">{supportCase.subjectType}</p>
+    <article className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+      <div className="grid gap-3 md:grid-cols-[1fr_130px_180px]">
+        <div className="min-w-0">
+          <p className="font-medium">{supportCase.category}</p>
+          <p className="mt-1 truncate text-[var(--muted)]">{supportCase.subjectType}</p>
+        </div>
+        <Fact label="State" value={supportCase.state} />
+        <Fact label="Priority" value={supportCase.priority} />
       </div>
-      <Fact label="State" value={supportCase.state} />
-      <Fact label="Priority" value={supportCase.priority} />
+      <form action={updateSupportCaseAction} className="mt-3 grid gap-2 border-t border-[var(--line)] pt-3 sm:grid-cols-[150px_1fr_auto]">
+        <input name="supportCaseId" type="hidden" value={supportCase.id} />
+        <AdminSelect defaultValue={supportCase.state} label="State" name="state">
+          <option value="open">open</option>
+          <option value="pending_user">pending user</option>
+          <option value="pending_internal">pending internal</option>
+          <option value="resolved">resolved</option>
+          <option value="closed">closed</option>
+        </AdminSelect>
+        <AdminReasonInput placeholder="Reason for support case change" />
+        <AdminSubmit label="Update case" />
+      </form>
     </article>
   );
 }
 
 function RefundDisputeRow({ dispute }: { dispute: AdminRefundDispute }) {
   return (
-    <article className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm md:grid-cols-[1fr_130px_190px]">
-      <div className="min-w-0">
-        <p className="font-medium">{dispute.kind}</p>
-        <p className="mt-1 truncate text-[var(--muted)]">{dispute.paymentIntentId}</p>
+    <article className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+      <div className="grid gap-3 md:grid-cols-[1fr_130px_190px]">
+        <div className="min-w-0">
+          <p className="font-medium">{dispute.kind}</p>
+          <p className="mt-1 truncate text-[var(--muted)]">{dispute.paymentIntentId}</p>
+        </div>
+        <Fact label="State" value={dispute.state} />
+        <Fact label="Boundary" value="no custody" />
       </div>
-      <Fact label="State" value={dispute.state} />
-      <Fact label="Boundary" value="no custody" />
+      <form action={updateRefundDisputeAction} className="mt-3 grid gap-2 border-t border-[var(--line)] pt-3 sm:grid-cols-[190px_1fr_1fr_auto]">
+        <input name="refundDisputeId" type="hidden" value={dispute.id} />
+        <AdminSelect defaultValue={dispute.state} label="State" name="state">
+          <option value="opened">opened</option>
+          <option value="reviewing">reviewing</option>
+          <option value="creator_action_required">creator action required</option>
+          <option value="rejected">rejected</option>
+          <option value="withdrawn">withdrawn</option>
+          <option value="resolved">resolved</option>
+          <option value="closed">closed</option>
+        </AdminSelect>
+        <AdminTextInput name="resolution" placeholder="Resolution note" />
+        <AdminReasonInput placeholder="Reason for refund/dispute review change" />
+        <AdminSubmit label="Update review" />
+      </form>
     </article>
   );
 }
 
 function DataRequestRow({ request }: { request: AdminDataRequest }) {
   return (
-    <article className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm md:grid-cols-[1fr_130px_190px]">
-      <div className="min-w-0">
-        <p className="font-medium">{request.type}</p>
-        <p className="mt-1 truncate text-[var(--muted)]">{request.requesterUserId}</p>
+    <article className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+      <div className="grid gap-3 md:grid-cols-[1fr_130px_190px]">
+        <div className="min-w-0">
+          <p className="font-medium">{request.type}</p>
+          <p className="mt-1 truncate text-[var(--muted)]">{request.requesterUserId}</p>
+        </div>
+        <Fact label="State" value={request.state} />
+        <Fact label="Boundary" value="minimized" />
       </div>
-      <Fact label="State" value={request.state} />
-      <Fact label="Boundary" value="minimized" />
+      <form action={updateDataRequestAction} className="mt-3 grid gap-2 border-t border-[var(--line)] pt-3 sm:grid-cols-[150px_1fr_auto]">
+        <input name="dataRequestId" type="hidden" value={request.id} />
+        <AdminSelect defaultValue={request.state === "requested" ? "verifying" : request.state} label="State" name="state">
+          <option value="verifying">verifying</option>
+          <option value="processing">processing</option>
+          <option value="completed">completed</option>
+          <option value="rejected">rejected</option>
+        </AdminSelect>
+        <AdminReasonInput placeholder="Reason for data request lifecycle change" />
+        <AdminSubmit label="Update request" />
+      </form>
     </article>
   );
 }
@@ -1356,6 +1403,21 @@ function AdminReasonInput({ placeholder }: { placeholder: string }) {
         className="h-9 min-w-0 rounded border border-[var(--line)] bg-[var(--panel)] px-2 text-sm"
         minLength={3}
         name="reason"
+        placeholder={placeholder}
+        required
+      />
+    </label>
+  );
+}
+
+function AdminTextInput({ name, placeholder }: { name: string; placeholder: string }) {
+  return (
+    <label className="grid min-w-0 gap-1">
+      <span className="text-xs uppercase text-[var(--muted)]">{name}</span>
+      <input
+        className="h-9 min-w-0 rounded border border-[var(--line)] bg-[var(--panel)] px-2 text-sm"
+        minLength={3}
+        name={name}
         placeholder={placeholder}
         required
       />

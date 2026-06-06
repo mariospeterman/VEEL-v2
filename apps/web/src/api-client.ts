@@ -75,6 +75,9 @@ export type AdminOrganizationKybActionRequest = components["schemas"]["AdminOrga
 export type AdminOrganizationMemberActionRequest = components["schemas"]["AdminOrganizationMemberActionRequest"];
 export type AdminSupportPolicyActionRequest = components["schemas"]["AdminSupportPolicyActionRequest"];
 export type AdminFeatureFlagPatchRequest = components["schemas"]["AdminFeatureFlagPatchRequest"];
+export type AdminSupportCaseActionRequest = components["schemas"]["AdminSupportCaseActionRequest"];
+export type AdminRefundDisputeActionRequest = components["schemas"]["AdminRefundDisputeActionRequest"];
+export type AdminDataRequestActionRequest = components["schemas"]["AdminDataRequestActionRequest"];
 
 export type AdminPage<T> = {
   items: T[];
@@ -370,6 +373,42 @@ export async function updateAdminSupportPolicy(
 ): Promise<ApiResult<AdminSupportPolicy>> {
   return patchJson<AdminSupportPolicy>(
     `/v1/admin/support/policies/${encodeURIComponent(supportPolicyId)}`,
+    body,
+    idempotencyKey
+  );
+}
+
+export async function updateAdminSupportCase(
+  supportCaseId: string,
+  body: AdminSupportCaseActionRequest,
+  idempotencyKey: string
+): Promise<ApiResult<AdminSupportCase>> {
+  return patchJson<AdminSupportCase>(
+    `/v1/admin/support/cases/${encodeURIComponent(supportCaseId)}`,
+    body,
+    idempotencyKey
+  );
+}
+
+export async function updateAdminRefundDispute(
+  refundDisputeId: string,
+  body: AdminRefundDisputeActionRequest,
+  idempotencyKey: string
+): Promise<ApiResult<AdminRefundDispute>> {
+  return patchJson<AdminRefundDispute>(
+    `/v1/admin/refunds/disputes/${encodeURIComponent(refundDisputeId)}`,
+    body,
+    idempotencyKey
+  );
+}
+
+export async function updateAdminDataRequest(
+  dataRequestId: string,
+  body: AdminDataRequestActionRequest,
+  idempotencyKey: string
+): Promise<ApiResult<AdminDataRequest>> {
+  return patchJson<AdminDataRequest>(
+    `/v1/admin/data-requests/${encodeURIComponent(dataRequestId)}`,
     body,
     idempotencyKey
   );
