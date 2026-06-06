@@ -516,6 +516,7 @@ function toCreatorDashboard(
   if (row.earning_state !== "ready") {
     blockedReasons.push(`earning_state_${row.earning_state}`);
   }
+  const canMonetize = blockedReasons.length === 0;
 
   return {
     creator: toUserResource(row),
@@ -525,6 +526,10 @@ function toCreatorDashboard(
       kycState: row.kyc_state,
       taxProfileState: row.tax_profile_state,
       recipientWalletState: row.recipient_wallet_state,
+      readinessScore: readinessScoreForDashboard(row),
+      canMonetize,
+      nextAction: canMonetize ? null : nextActionForDashboard(row),
+      policyBoundary: "creator_records_only_no_balances_payout_queue_or_social_priority",
       blockedReasons
     },
     earnings: {
@@ -627,9 +632,53 @@ function toCreatorOnboarding(row: CreatorOnboardingRow): CreatorOnboardingResour
   return {
     state,
     canStartEarning: state === "ready",
+    readinessScore: readinessScoreForSteps(steps),
     nextAction: nextStep?.actionHref ?? null,
+    policyBoundary: "creator_records_only_no_balances_payout_queue_or_social_priority",
     steps
   };
+}
+
+function readinessScoreForDashboard(row: DashboardRow): number {
+  const checks = [
+    row.state === "active",
+    row.earning_state === "ready",
+    row.kyc_state === "not_required" || row.kyc_state === "verified",
+    row.tax_profile_state === "not_required" || row.tax_profile_state === "verified",
+    row.recipient_wallet_state === "linked"
+  ];
+
+  return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+}
+
+function nextActionForDashboard(row: DashboardRow): string | null {
+  if (row.state !== "active") {
+    return "/profile";
+  }
+  if (row.earning_state !== "ready") {
+    return "/profile";
+  }
+  if (row.kyc_state === "required" || row.kyc_state === "failed") {
+    return "/settings";
+  }
+  if (row.tax_profile_state === "required") {
+    return "/settings";
+  }
+  if (row.recipient_wallet_state === "missing") {
+    return "/wallet";
+  }
+
+  return null;
+}
+
+function readinessScoreForSteps(steps: CreatorOnboardingResource["steps"]): number {
+  const requiredSteps = steps.filter((step) => step.required);
+  if (requiredSteps.length === 0) {
+    return 100;
+  }
+
+  const completeSteps = requiredSteps.filter((step) => step.state === "complete" || step.state === "not_required");
+  return Math.round((completeSteps.length / requiredSteps.length) * 100);
 }
 
 function stateForAge(

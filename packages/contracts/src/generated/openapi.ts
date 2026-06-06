@@ -2539,13 +2539,21 @@ export interface components {
             taxProfileState: "not_required" | "required" | "pending" | "verified";
             /** @enum {string} */
             recipientWalletState: "missing" | "linked";
+            readinessScore: number;
+            canMonetize: boolean;
+            nextAction?: string | null;
+            /** @enum {string} */
+            policyBoundary: "creator_records_only_no_balances_payout_queue_or_social_priority";
             blockedReasons: string[];
         };
         CreatorOnboarding: {
             /** @enum {string} */
             state: "ready" | "action_required" | "review_required" | "blocked";
             canStartEarning: boolean;
+            readinessScore: number;
             nextAction?: string | null;
+            /** @enum {string} */
+            policyBoundary: "creator_records_only_no_balances_payout_queue_or_social_priority";
             steps: components["schemas"]["CreatorOnboardingStep"][];
         };
         CreatorOnboardingStep: {

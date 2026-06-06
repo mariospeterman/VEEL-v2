@@ -73,6 +73,7 @@ function DashboardView({
           <Metric label="Creator earnings" value={formatAmount(dashboard.earnings.creatorEarningsMinor)} />
           <Metric label="Platform fees" value={formatAmount(dashboard.earnings.platformFeesMinor)} />
           <Metric label="Referral commissions" value={formatAmount(dashboard.earnings.referralCommissionsMinor)} />
+          <Metric label="Readiness score" value={`${dashboard.readiness.readinessScore}%`} />
         </div>
 
         <section className="grid gap-3">
@@ -93,6 +94,8 @@ function DashboardView({
             <Fact label="KYC" value={dashboard.readiness.kycState} />
             <Fact label="Tax profile" value={dashboard.readiness.taxProfileState} />
             <Fact label="Wallet" value={dashboard.readiness.recipientWalletState} />
+            <Fact label="Can monetize" value={dashboard.readiness.canMonetize ? "yes" : "no"} />
+            <Fact label="Boundary" value="no balances or social priority" />
           </div>
         </section>
 
@@ -149,7 +152,7 @@ function CreatorSetup({ onboarding }: { onboarding: CreatorOnboarding }) {
         <div>
           <p className="text-sm font-medium">Become Creator</p>
           <p className="mt-1 text-xs text-[var(--muted)]">
-            State: {onboarding.state}
+            State: {onboarding.state} / {onboarding.readinessScore}%
           </p>
         </div>
         <span className="rounded bg-[var(--background)] px-2 py-1 text-xs text-[var(--muted)]">

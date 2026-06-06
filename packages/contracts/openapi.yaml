@@ -2118,21 +2118,27 @@ components:
         recentActivity: { type: array, items: { $ref: "#/components/schemas/ActivityItem" } }
     CreatorMonetisationReadiness:
       type: object
-      required: [state, earningState, kycState, taxProfileState, recipientWalletState, blockedReasons]
+      required: [state, earningState, kycState, taxProfileState, recipientWalletState, readinessScore, canMonetize, policyBoundary, blockedReasons]
       properties:
         state: { type: string, enum: [active, paused, blocked] }
         earningState: { type: string, enum: [not_configured, ready, review_required, held] }
         kycState: { type: string, enum: [not_required, required, pending, verified, failed] }
         taxProfileState: { type: string, enum: [not_required, required, pending, verified] }
         recipientWalletState: { type: string, enum: [missing, linked] }
+        readinessScore: { type: integer, minimum: 0, maximum: 100 }
+        canMonetize: { type: boolean }
+        nextAction: { type: string, nullable: true }
+        policyBoundary: { type: string, enum: [creator_records_only_no_balances_payout_queue_or_social_priority] }
         blockedReasons: { type: array, items: { type: string } }
     CreatorOnboarding:
       type: object
-      required: [state, canStartEarning, steps]
+      required: [state, canStartEarning, readinessScore, policyBoundary, steps]
       properties:
         state: { type: string, enum: [ready, action_required, review_required, blocked] }
         canStartEarning: { type: boolean }
+        readinessScore: { type: integer, minimum: 0, maximum: 100 }
         nextAction: { type: string, nullable: true }
+        policyBoundary: { type: string, enum: [creator_records_only_no_balances_payout_queue_or_social_priority] }
         steps: { type: array, items: { $ref: "#/components/schemas/CreatorOnboardingStep" } }
     CreatorOnboardingStep:
       type: object

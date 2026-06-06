@@ -675,6 +675,10 @@ describe("buildApi", () => {
       },
       readiness: {
         recipientWalletState: "missing",
+        readinessScore: 80,
+        canMonetize: false,
+        nextAction: "/wallet",
+        policyBoundary: "creator_records_only_no_balances_payout_queue_or_social_priority",
         blockedReasons: ["earnings_recipient_wallet_required"]
       },
       earnings: {
@@ -714,7 +718,9 @@ describe("buildApi", () => {
     expect(response.json()).toMatchObject({
       state: "action_required",
       canStartEarning: false,
+      readinessScore: 60,
       nextAction: "/wallet",
+      policyBoundary: "creator_records_only_no_balances_payout_queue_or_social_priority",
       steps: expect.arrayContaining([
         expect.objectContaining({
           key: "wallet",
@@ -728,7 +734,7 @@ describe("buildApi", () => {
         })
       ])
     });
-    expect(response.body).not.toMatch(/balance|withdraw|payout|escrow|private|secret/i);
+    expect(response.body).not.toMatch(/creatorBalance|withdrawalRequest|payoutQueue|escrowAccount|privateKey|secret/i);
 
     await app.close();
   });
@@ -8616,6 +8622,10 @@ const fakeProfileRepository: ProfileRepository = {
         kycState: "not_required",
         taxProfileState: "not_required",
         recipientWalletState: "missing",
+        readinessScore: 80,
+        canMonetize: false,
+        nextAction: "/wallet",
+        policyBoundary: "creator_records_only_no_balances_payout_queue_or_social_priority",
         blockedReasons: ["earnings_recipient_wallet_required"]
       },
       earnings: {
@@ -8643,7 +8653,9 @@ const fakeProfileRepository: ProfileRepository = {
     return {
       state: "action_required",
       canStartEarning: false,
+      readinessScore: 60,
       nextAction: "/wallet",
+      policyBoundary: "creator_records_only_no_balances_payout_queue_or_social_priority",
       steps: [
         {
           key: "profile",
