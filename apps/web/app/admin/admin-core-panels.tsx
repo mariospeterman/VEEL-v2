@@ -17,7 +17,7 @@ import {
   ContentQueueRow,
   EventOpsRow,
   ReportQueueRow,
-  TicketOpsRow,
+  AccessPassOpsRow,
   UserQueueRow
 } from "./admin-rows";
 
@@ -63,20 +63,20 @@ export function ModerationPanel({
 
 export function EventAccessPanel({
   events,
-  tickets
+  accessPasses
 }: {
   events: ApiResult<AdminPage<Event>>;
-  tickets: ApiResult<AdminPage<EventAccessPass>>;
+  accessPasses: ApiResult<AdminPage<EventAccessPass>>;
 }) {
   if (!events.ok) {
     return <UnavailableState result={events} />;
   }
 
-  if (!tickets.ok) {
-    return <UnavailableState result={tickets} />;
+  if (!accessPasses.ok) {
+    return <UnavailableState result={accessPasses} />;
   }
 
-  if (events.data.items.length === 0 && tickets.data.items.length === 0) {
+  if (events.data.items.length === 0 && accessPasses.data.items.length === 0) {
     return <EmptyState label="No events or passes" />;
   }
 
@@ -85,8 +85,8 @@ export function EventAccessPanel({
       {events.data.items.map((event) => (
         <EventOpsRow event={event} key={event.id} />
       ))}
-      {tickets.data.items.map((ticket) => (
-        <TicketOpsRow key={ticket.id} ticket={ticket} />
+      {accessPasses.data.items.map((accessPass) => (
+        <AccessPassOpsRow accessPass={accessPass} key={accessPass.id} />
       ))}
     </div>
   );

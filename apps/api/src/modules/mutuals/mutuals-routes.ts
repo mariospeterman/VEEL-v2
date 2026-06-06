@@ -210,10 +210,11 @@ export async function registerMutualsRoutes(
       return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
     }
 
-    const matchId = (request.params as { matchId?: string }).matchId ?? "";
+    const params = request.params as { mutualId?: string; matchId?: string };
+    const mutualId = params.mutualId ?? params.matchId ?? "";
     const mutual = await options.mutualsRepository.archiveMutual({
       supabaseUserId: access.supabaseUserId,
-      matchId
+      mutualId
     });
 
     if (!mutual) {
@@ -243,7 +244,7 @@ export async function registerMutualsRoutes(
     app.get(routePath, listMutuals);
   }
 
-  for (const routePath of ["/v1/mutuals/:matchId/archive", "/v1/dating/matches/:matchId/archive"]) {
+  for (const routePath of ["/v1/mutuals/:mutualId/archive", "/v1/dating/matches/:matchId/archive"]) {
     app.patch(routePath, archiveMutual);
   }
 }

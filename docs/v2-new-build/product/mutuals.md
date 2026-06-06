@@ -57,8 +57,7 @@ Money can never buy access to people, visibility, matches, recommendations, or p
 
 ## Current Implementation State
 
-- The current backend exposes the pre-rename dating route family as the implemented compatibility surface.
-- The backend now exposes canonical Mutuals API aliases:
+- The backend exposes canonical Mutuals API routes:
   `POST /v1/mutuals/activate`, `PATCH /v1/mutuals/preferences`,
   `GET /v1/mutuals/feed`, `POST /v1/mutuals/interests`,
   `GET /v1/mutuals`, and `PATCH /v1/mutuals/:id/archive`.
@@ -68,8 +67,8 @@ Money can never buy access to people, visibility, matches, recommendations, or p
 - Admin safety operations use canonical `GET /v1/admin/mutuals/safety`.
   `GET /v1/admin/dating/safety` remains a deprecated compatibility alias
   only and must not appear in launch-facing frontend calls or copy.
-- The target schema names are `mutual_profiles`, `mutual_interests`, and `mutuals`.
-- Current migration tables named `dating_profiles`, `dating_swipes`, and `dating_matches` must be migrated before launch-facing copy ships.
+- The canonical schema names are `mutual_profiles`, `mutual_interests`, and `mutuals`.
+- The `0049_event_access_mutuals_canonical_names` migration renames the pre-launch dating tables to canonical Mutuals tables before launch-facing copy ships.
 - Frontend projections must use Mutuals copy even while the backend compatibility aliases exist.
 - `/mutuals/feed` and `/mutuals` use typed API-backed projections through the
   canonical API routes `GET /v1/mutuals/feed` and `GET /v1/mutuals`; they fail
@@ -130,15 +129,15 @@ mutuals
   └─ state: active | blocked | reported | expired
 ```
 
-Compatibility names until migration:
+Canonical table names:
 
 ```text
-dating_profiles -> mutual_profiles
-dating_swipes   -> mutual_interests
-dating_matches  -> mutuals
-yes             -> interested
-match chat      -> mutual chat
+mutual_profiles
+mutual_interests
+mutuals
 ```
+
+Historical migrations, rollback files, and deprecated dating API aliases may still contain `dating`, `swipe`, or `match` vocabulary for compatibility only. New implementation and launch-facing copy must use Mutuals, interests, and mutuals.
 
 ## Gesture Model
 

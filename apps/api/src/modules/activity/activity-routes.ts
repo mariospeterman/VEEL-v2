@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { AgeRepository } from "../age/types.js";
 import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
@@ -97,7 +97,7 @@ export async function registerActivityRoutes(
     }
   });
 
-  app.get("/v1/activity/tickets", async (request, reply) => {
+  const listAccessPasses = async (request: FastifyRequest, reply: FastifyReply) => {
     const access = await verifyActivityAccess(request, options);
 
     if (!access.ok) {
@@ -107,13 +107,13 @@ export async function registerActivityRoutes(
     const query = request.query as { cursor?: string };
 
     try {
-      const tickets = await options.activityRepository.listTickets({
+      const accessPasses = await options.activityRepository.listAccessPasses({
         supabaseUserId: access.supabaseUserId,
         limit: 20,
         ...(query.cursor ? { cursor: query.cursor } : {})
       });
 
-      return reply.code(200).send(tickets);
+      return reply.code(200).send(accessPasses);
     } catch (error) {
       if (error instanceof ActivityRepositoryConfigurationError) {
         request.log.warn({ error }, "Activity repository is not configured");
@@ -122,7 +122,10 @@ export async function registerActivityRoutes(
 
       throw error;
     }
-  });
+  };
+
+  app.get("/v1/activity/access-passes", listAccessPasses);
+  app.get("/v1/activity/tickets", listAccessPasses);
 }
 
 type ActivityAccessResult =

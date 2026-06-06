@@ -528,4 +528,20 @@ describe("database migrations", () => {
     expect(sql).toContain("alter publication supabase_realtime add table conversation_members");
     expect(sql).not.toMatch(/payment_intents|provider_events|notification_devices|notification_delivery_attempts|private_key|seed_phrase|mnemonic|raw_payload|service_role|creator_balance|withdraw|payout_queue|escrow/i);
   });
+
+  it("renames Event Access Pass and Mutuals tables to canonical launch vocabulary", () => {
+    const sql = readMigration("0049_event_access_mutuals_canonical_names.sql");
+
+    expect(sql).toContain("rename to event_access_pass_types");
+    expect(sql).toContain("rename to event_access_purchase_requests");
+    expect(sql).toContain("rename to event_access_passes");
+    expect(sql).toContain("rename to event_access_requests");
+    expect(sql).toContain("rename column ticket_type_id to access_pass_type_id");
+    expect(sql).toContain("rename to mutual_profiles");
+    expect(sql).toContain("rename to mutual_interests");
+    expect(sql).toContain("rename to mutuals");
+    expect(sql).toContain("event_access_passes_select_self_creator_or_staff");
+    expect(sql).toContain("mutuals_select_member_or_staff");
+    expect(sql).not.toMatch(/creator_balance|withdrawal|escrow|payment_proof|recommendation_boost|visibility_boost|message_priority|mutuals_boost/i);
+  });
 });

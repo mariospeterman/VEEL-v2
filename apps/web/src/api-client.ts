@@ -34,10 +34,10 @@ export type NotificationPreferences = components["schemas"]["NotificationPrefere
 export type NotificationPushConfig = components["schemas"]["NotificationPushConfig"];
 export type AgeStatus = components["schemas"]["AgeStatus"];
 export type Event = components["schemas"]["Event"];
-export type EventAccessPassPage = components["schemas"]["TicketPage"];
-export type EventAccessPass = components["schemas"]["Ticket"];
-export type MutualsFeedPage = components["schemas"]["DatingFeedPage"];
-export type MutualsMatchPage = components["schemas"]["DatingMatchPage"];
+export type EventAccessPassPage = components["schemas"]["AccessPassPage"];
+export type EventAccessPass = components["schemas"]["AccessPass"];
+export type MutualsFeedPage = components["schemas"]["MutualsFeedPage"];
+export type MutualsMatchPage = components["schemas"]["MutualsPage"];
 export type AiCapabilities = components["schemas"]["AiCapabilities"];
 export type OrganizationDashboardPage = components["schemas"]["OrganizationDashboardPage"];
 export type AdminOpsSummary = components["schemas"]["AdminOpsSummary"];
@@ -182,7 +182,7 @@ export async function getEvent(eventId: string): Promise<ApiResult<Event>> {
 }
 
 export async function getEventAccessPassActivity(): Promise<ApiResult<EventAccessPassPage>> {
-  return getJson<EventAccessPassPage>("/v1/activity/tickets");
+  return getJson<EventAccessPassPage>("/v1/activity/access-passes");
 }
 
 export async function getMutualsFeed(): Promise<ApiResult<MutualsFeedPage>> {
@@ -281,8 +281,8 @@ export async function getAdminEvents(): Promise<ApiResult<AdminPage<Event>>> {
   return getJson<AdminPage<Event>>("/v1/admin/events");
 }
 
-export async function getAdminTickets(): Promise<ApiResult<AdminPage<EventAccessPass>>> {
-  return getJson<AdminPage<EventAccessPass>>("/v1/admin/tickets");
+export async function getAdminEventAccessPasses(): Promise<ApiResult<AdminPage<EventAccessPass>>> {
+  return getJson<AdminPage<EventAccessPass>>("/v1/admin/event-access-passes");
 }
 
 export async function getAdminMutualsSafety(): Promise<ApiResult<AdminMutualsSafety>> {

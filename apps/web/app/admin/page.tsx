@@ -9,6 +9,7 @@ import {
   getAdminDac7Reports,
   getAdminDataRequests,
   getAdminEvents,
+  getAdminEventAccessPasses,
   getAdminFeatureFlags,
   getAdminInvoices,
   getAdminLiveRooms,
@@ -28,7 +29,6 @@ import {
   getAdminSupportCases,
   getAdminSupportPolicies,
   getAdminTierWaivers,
-  getAdminTickets,
   getAdminUnlocks,
   getAdminUsers,
   getAdminVatDeterminations,
@@ -92,7 +92,7 @@ export default async function AdminPage() {
     refundDisputes,
     dataRequests,
     events,
-    tickets,
+    accessPasses,
     mutualsSafety,
     featureFlags
   ] = await Promise.all([
@@ -127,7 +127,7 @@ export default async function AdminPage() {
     getAdminRefundDisputes(),
     getAdminDataRequests(),
     getAdminEvents(),
-    getAdminTickets(),
+    getAdminEventAccessPasses(),
     getAdminMutualsSafety(),
     getAdminFeatureFlags()
   ]);
@@ -224,7 +224,7 @@ export default async function AdminPage() {
             </Panel>
 
             <Panel title="Event Access ops">
-              <EventAccessPanel events={events} tickets={tickets} />
+              <EventAccessPanel events={events} accessPasses={accessPasses} />
             </Panel>
             <Panel title="Mutuals safety">
               <MutualsSafetyPanel mutualsSafety={mutualsSafety} />

@@ -1002,21 +1002,21 @@ async function grantEventTicketEntitlement(
   const rows = await transaction<{
     ticket_id: string;
     event_id: string;
-    ticket_type_id: string;
+    access_pass_type_id: string;
   }[]>`
     with purchase as (
       select
         event_id,
-        ticket_type_id,
+        access_pass_type_id,
         buyer_user_id
-      from ticket_purchase_requests
+      from event_access_purchase_requests
       where payment_intent_id = ${input.paymentIntentId}
         and buyer_user_id = ${input.userId}
         and state = 'pending_payment'
       limit 1
     ),
     ticket_lock as (
-      select pg_advisory_xact_lock(hashtextextended(ticket_type_id::text, 0))
+      select pg_advisory_xact_lock(hashtextextended(access_pass_type_id::text, 0))
       from purchase
     ),
     inventory as (
@@ -1025,20 +1025,20 @@ async function grantEventTicketEntitlement(
         tt.event_id,
         tt.capacity,
         count(te.id) filter (where te.state in ('active', 'checked_in')) as issued_count
-      from ticket_types tt
-      join purchase p on p.ticket_type_id = tt.id and p.event_id = tt.event_id
+      from event_access_pass_types tt
+      join purchase p on p.access_pass_type_id = tt.id and p.event_id = tt.event_id
       cross join ticket_lock
-      left join ticket_entitlements te on te.ticket_type_id = tt.id
+      left join event_access_passes te on te.access_pass_type_id = tt.id
       where tt.state = 'active'
       group by tt.id
       having count(te.id) filter (where te.state in ('active', 'checked_in')) < tt.capacity
       limit 1
     ),
     inserted_ticket as (
-      insert into ticket_entitlements (
+      insert into event_access_passes (
         id,
         event_id,
-        ticket_type_id,
+        access_pass_type_id,
         holder_user_id,
         payment_intent_id,
         qr_token,
@@ -1047,28 +1047,28 @@ async function grantEventTicketEntitlement(
       select
         ${randomUUID()},
         purchase.event_id,
-        purchase.ticket_type_id,
+        purchase.access_pass_type_id,
         purchase.buyer_user_id,
         ${input.paymentIntentId},
         ${qrToken},
         ${hashTicketQrToken(qrToken)}
       from purchase
-      join inventory on inventory.id = purchase.ticket_type_id
+      join inventory on inventory.id = purchase.access_pass_type_id
       on conflict (payment_intent_id) do update
-      set state = ticket_entitlements.state
-      returning id, event_id, ticket_type_id
+      set state = event_access_passes.state
+      returning id, event_id, access_pass_type_id
     ),
     updated_purchase as (
-      update ticket_purchase_requests tpr
+      update event_access_purchase_requests tpr
       set state = 'ticket_granted'
       from inserted_ticket it
       where tpr.payment_intent_id = ${input.paymentIntentId}
-      returning it.id, it.event_id, it.ticket_type_id
+      returning it.id, it.event_id, it.access_pass_type_id
     )
     select
       id as ticket_id,
       event_id,
-      ticket_type_id
+      access_pass_type_id
     from updated_purchase
     limit 1
   `;
@@ -1096,7 +1096,7 @@ async function grantEventTicketEntitlement(
       ${transaction.json({
         paymentIntentId: input.paymentIntentId,
         ticketId: ticket.ticket_id,
-        ticketTypeId: ticket.ticket_type_id
+        ticketTypeId: ticket.access_pass_type_id
       })}
     )
   `;

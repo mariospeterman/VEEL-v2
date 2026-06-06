@@ -2638,7 +2638,7 @@ describe("buildApi", () => {
       async listWalletTransactions() {
         throw new Error("not implemented");
       },
-      async listTickets() {
+      async listAccessPasses() {
         throw new Error("not implemented");
       }
     };
@@ -2982,7 +2982,7 @@ describe("buildApi", () => {
           nextCursor: null
         };
       },
-      async listTickets() {
+      async listAccessPasses() {
         throw new Error("not implemented");
       }
     };
@@ -3206,10 +3206,21 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("grants a free ticket and supports ticket activity/check-in projections", async () => {
+  it("grants a free Event Access Pass and supports activity/check-in projections", async () => {
     const eventId = "00000000-0000-4000-8000-0000000000e1";
     const ticketTypeId = "00000000-0000-4000-8000-0000000000e2";
     const ticket = ticketFixture({ eventId, ticketTypeId });
+    const accessPass = {
+      id: ticket.id,
+      eventId: ticket.eventId,
+      accessPassTypeId: ticket.ticketTypeId,
+      holderUserId: ticket.holderUserId,
+      paymentIntentId: ticket.paymentIntentId,
+      state: ticket.state,
+      qrToken: ticket.qrToken,
+      checkedInAt: ticket.checkedInAt,
+      createdAt: ticket.createdAt
+    };
     const eventRepository: EventRepository = {
       async createEvent() {
         throw new Error("not implemented");
@@ -3254,12 +3265,12 @@ describe("buildApi", () => {
       async listWalletTransactions() {
         throw new Error("not implemented");
       },
-      async listTickets(input) {
+      async listAccessPasses(input) {
         expect(input).toMatchObject({
           supabaseUserId: "00000000-0000-4000-8000-000000000001",
           limit: 20
         });
-        return { items: [ticket], nextCursor: null };
+        return { items: [accessPass], nextCursor: null };
       }
     };
     const app = await buildApi({
@@ -3273,21 +3284,21 @@ describe("buildApi", () => {
 
     const grantResponse = await app.inject({
       method: "POST",
-      url: `/v1/events/${eventId}/tickets/intents`,
+      url: `/v1/events/${eventId}/access-passes/intents`,
       headers: {
         authorization: "Bearer valid-token",
         "idempotency-key": "free-ticket-key"
       },
-      payload: { ticketTypeId }
+      payload: { accessPassTypeId: ticketTypeId }
     });
     const activityResponse = await app.inject({
       method: "GET",
-      url: "/v1/activity/tickets",
+      url: "/v1/activity/access-passes",
       headers: { authorization: "Bearer valid-token" }
     });
     const checkInResponse = await app.inject({
       method: "POST",
-      url: `/v1/tickets/${ticket.id}/check-in`,
+      url: `/v1/access-passes/${ticket.id}/check-in`,
       headers: {
         authorization: "Bearer valid-token",
         "idempotency-key": "check-in-key"
@@ -3296,9 +3307,9 @@ describe("buildApi", () => {
     });
 
     expect(grantResponse.statusCode).toBe(201);
-    expect(grantResponse.json()).toMatchObject({ state: "free_granted", ticket });
+    expect(grantResponse.json()).toMatchObject({ state: "free_granted", accessPass });
     expect(activityResponse.statusCode).toBe(200);
-    expect(activityResponse.json()).toMatchObject({ items: [ticket], nextCursor: null });
+    expect(activityResponse.json()).toMatchObject({ items: [accessPass], nextCursor: null });
     expect(checkInResponse.statusCode).toBe(200);
     expect(checkInResponse.json()).toMatchObject({ state: "checked_in" });
 
@@ -3404,10 +3415,10 @@ describe("buildApi", () => {
           }
         });
         return {
-          swipeId: "00000000-0000-4000-8000-0000000000d1",
-          matchCreated: true,
-          matchId: match.id,
-          match
+          interestId: "00000000-0000-4000-8000-0000000000d1",
+          mutualCreated: true,
+          mutualId: match.id,
+          mutual: match
         };
       },
       async listMutuals(input) {
@@ -3418,7 +3429,7 @@ describe("buildApi", () => {
         return { items: [match], nextCursor: null };
       },
       async archiveMutual(input) {
-        expect(input).toMatchObject({ matchId: match.id });
+        expect(input).toMatchObject({ mutualId: match.id });
         return { ...match, state: "archived" };
       }
     };
@@ -3459,9 +3470,9 @@ describe("buildApi", () => {
 
     expect(swipeResponse.statusCode).toBe(200);
     expect(swipeResponse.json()).toMatchObject({
-      matchCreated: true,
-      matchId: match.id,
-      match: { conversationId: match.conversationId }
+      mutualCreated: true,
+      mutualId: match.id,
+      mutual: { conversationId: match.conversationId }
     });
     expect(matchesResponse.statusCode).toBe(200);
     expect(matchesResponse.json()).toMatchObject({ items: [match], nextCursor: null });

@@ -1,10 +1,18 @@
 import type { components } from "@veel/contracts";
 
 export type CheckInTicketRequest = components["schemas"]["CheckInTicketRequest"];
+export type CheckInAccessPassRequest = components["schemas"]["CheckInAccessPassRequest"];
 export type CreateEventRequest = components["schemas"]["CreateEventRequest"];
+export type CreateAccessPassIntentRequest = components["schemas"]["CreateAccessPassIntentRequest"];
+export type CreateAccessPassRequestRequest = components["schemas"]["CreateAccessPassRequestRequest"];
 export type CreateTicketIntentRequest = components["schemas"]["CreateTicketIntentRequest"];
 export type CreateTicketRequestRequest = components["schemas"]["CreateTicketRequestRequest"];
+export type AccessPass = components["schemas"]["AccessPass"];
+export type AccessPassIntent = components["schemas"]["AccessPassIntent"];
+export type AccessPassPage = components["schemas"]["AccessPassPage"];
+export type AccessPassRequest = components["schemas"]["AccessPassRequest"];
 export type Event = components["schemas"]["Event"];
+export type EventAccessPassType = components["schemas"]["EventAccessPassType"];
 export type EventTicketType = components["schemas"]["EventTicketType"];
 export type Ticket = components["schemas"]["Ticket"];
 export type TicketIntent = components["schemas"]["TicketIntent"];

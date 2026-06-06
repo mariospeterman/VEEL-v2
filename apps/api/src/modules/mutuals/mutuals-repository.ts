@@ -110,7 +110,7 @@ export function createPostgresMutualsRepository(databaseUrl?: string): MutualsRe
           where supabase_user_id = ${input.supabaseUserId}
           limit 1
         )
-        insert into dating_profiles (
+        insert into mutual_profiles (
           user_id,
           enabled,
           consent_version,
@@ -142,7 +142,7 @@ export function createPostgresMutualsRepository(databaseUrl?: string): MutualsRe
           where supabase_user_id = ${input.supabaseUserId}
           limit 1
         )
-        update dating_profiles dp
+        update mutual_profiles dp
         set
           enabled = coalesce(${input.body.enabled ?? null}, enabled),
           active_match_limit = coalesce(${input.body.activeMatchLimit ?? null}, active_match_limit),
@@ -159,7 +159,7 @@ export function createPostgresMutualsRepository(databaseUrl?: string): MutualsRe
         with actor as (
           select u.id
           from users u
-          join dating_profiles dp on dp.user_id = u.id
+          join mutual_profiles dp on dp.user_id = u.id
           where u.supabase_user_id = ${input.supabaseUserId}
             and dp.enabled = true
             and dp.safety_state <> 'blocked'
@@ -176,7 +176,7 @@ export function createPostgresMutualsRepository(databaseUrl?: string): MutualsRe
           ma.poster_url,
           ci.created_at
         from content_items ci
-        join dating_profiles creator_dating
+        join mutual_profiles creator_dating
           on creator_dating.user_id = ci.creator_user_id
           and creator_dating.enabled = true
           and creator_dating.visible_on_media = true
@@ -190,7 +190,7 @@ export function createPostgresMutualsRepository(databaseUrl?: string): MutualsRe
           and (${input.cursor ?? null}::timestamptz is null or ci.created_at < ${input.cursor ?? null}::timestamptz)
           and not exists (
             select 1
-            from dating_swipes ds
+            from mutual_interests ds
             where ds.actor_user_id = (select id from actor)
               and ds.target_user_id = ci.creator_user_id
               and (ds.content_item_id = ci.id or ds.content_item_id is null)
@@ -218,7 +218,7 @@ export function createPostgresMutualsRepository(databaseUrl?: string): MutualsRe
         with actor as (
           select u.id
           from users u
-          join dating_profiles dp on dp.user_id = u.id
+          join mutual_profiles dp on dp.user_id = u.id
           where u.supabase_user_id = ${input.supabaseUserId}
             and dp.enabled = true
             and dp.safety_state <> 'blocked'
@@ -226,7 +226,7 @@ export function createPostgresMutualsRepository(databaseUrl?: string): MutualsRe
         ),
         target_profile as (
           select dp.user_id
-          from dating_profiles dp
+          from mutual_profiles dp
           where dp.user_id = ${input.body.targetUserId}
             and dp.enabled = true
             and dp.safety_state = 'clear'
@@ -244,13 +244,13 @@ export function createPostgresMutualsRepository(databaseUrl?: string): MutualsRe
         ),
         existing_swipe as (
           select *
-          from dating_swipes ds
+          from mutual_interests ds
           where ds.actor_user_id = (select id from actor)
             and ds.idempotency_key = ${input.idempotencyKey}
           limit 1
         ),
         inserted_swipe as (
-          insert into dating_swipes (
+          insert into mutual_interests (
             id,
             actor_user_id,
             target_user_id,
@@ -270,7 +270,7 @@ export function createPostgresMutualsRepository(databaseUrl?: string): MutualsRe
           from actor, target_profile, target_content
           where not exists (select 1 from existing_swipe)
           on conflict (actor_user_id, target_user_id, content_item_id) where content_item_id is not null do update
-          set action = dating_swipes.action
+          set action = mutual_interests.action
           returning *
         ),
         selected_swipe as (
@@ -281,7 +281,7 @@ export function createPostgresMutualsRepository(databaseUrl?: string): MutualsRe
         ),
         reciprocal_yes as (
           select ds.*
-          from dating_swipes ds, selected_swipe ss
+          from mutual_interests ds, selected_swipe ss
           where ss.action = 'yes'
             and ds.action = 'yes'
             and ds.actor_user_id = ss.target_user_id
@@ -296,7 +296,7 @@ export function createPostgresMutualsRepository(databaseUrl?: string): MutualsRe
           returning id
         ),
         inserted_match as (
-          insert into dating_matches (
+          insert into mutuals (
             id,
             user_a_id,
             user_b_id,
@@ -317,7 +317,7 @@ export function createPostgresMutualsRepository(databaseUrl?: string): MutualsRe
           where ss.action = 'yes'
             and exists (select 1 from reciprocal_yes)
           on conflict (user_a_id, user_b_id) do update
-          set state = dating_matches.state
+          set state = mutuals.state
           returning *
         ),
         inserted_members as (
@@ -375,7 +375,7 @@ export function createPostgresMutualsRepository(databaseUrl?: string): MutualsRe
           stale_at,
           expires_at,
           created_at
-        from dating_matches
+        from mutuals
         where (user_a_id = (select id from actor) or user_b_id = (select id from actor))
           and state in ('active', 'stale')
           and (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
@@ -399,12 +399,12 @@ export function createPostgresMutualsRepository(databaseUrl?: string): MutualsRe
           where supabase_user_id = ${input.supabaseUserId}
           limit 1
         )
-        update dating_matches dm
+        update mutuals dm
         set
           state = 'archived',
           archived_by_user_id = (select id from actor),
           updated_at = now()
-        where dm.id = ${input.matchId}
+        where dm.id = ${input.mutualId}
           and (dm.user_a_id = (select id from actor) or dm.user_b_id = (select id from actor))
           and dm.state in ('active', 'stale')
         returning
@@ -432,7 +432,7 @@ async function hasActiveMutualsProfile(sql: postgres.Sql, supabaseUserId: string
     select exists (
       select 1
       from users u
-      join dating_profiles dp on dp.user_id = u.id
+      join mutual_profiles dp on dp.user_id = u.id
       where u.supabase_user_id = ${supabaseUserId}
         and dp.enabled = true
     )
@@ -485,10 +485,10 @@ function toInterestResult(row: MutualsInterestResultRow): MutualsInterestResult 
     : undefined;
 
   return {
-    swipeId: row.swipe_id,
-    matchCreated: Boolean(row.match_id),
-    matchId: row.match_id,
-    ...(match ? { match } : {})
+    interestId: row.swipe_id,
+    mutualCreated: Boolean(row.match_id),
+    mutualId: row.match_id,
+    ...(match ? { mutual: match } : {})
   };
 }
 

@@ -48,10 +48,11 @@ Avoid launch-facing language:
 ## Current Implementation State
 
 - `POST /v1/events`, `GET /v1/events/{eventId}`, and `PATCH /v1/events/{eventId}` provide profile/age-gated event creation and owner updates.
-- `POST /v1/events/{eventId}/tickets/intents` is the implemented compatibility path for Event Access payment or approval intents.
+- `POST /v1/events/{eventId}/access-passes/intents` is the canonical path for Event Access payment or approval intents.
+- `POST /v1/events/{eventId}/tickets/intents` remains a deprecated compatibility alias only.
 - Confirmed `event_ticket` compatibility settlement grants a backend Event Access Pass and QR record in the settlement transaction. Wallet approval or frontend redirect never grants access.
-- `GET /v1/activity/tickets` is the implemented compatibility activity path for current user Event Access records.
-- `POST /v1/tickets/{ticketId}/check-in` validates the backend-issued QR token server-side and idempotently moves an active pass to `checked_in`.
+- `GET /v1/activity/access-passes` is the canonical activity path for current user Event Access records.
+- `POST /v1/access-passes/{accessPassId}/check-in` validates the backend-issued QR token server-side and idempotently moves an active pass to `checked_in`.
 - `/event-access/:id` and `/passes` are the canonical typed API-backed frontend
   projections for Event Access sheets and Pass QR display. When the API is
   unavailable, both routes fail closed instead of rendering fixture Event
@@ -91,8 +92,10 @@ Noncustodial boundary:
 
 /events/:id                    compatibility frontend redirect
 /tickets                       compatibility frontend redirect
-/v1/events/{eventId}/tickets/intents compatibility API path
-/v1/tickets/:id/check-in       compatibility API path
+/v1/events/{eventId}/access-passes/intents canonical API path
+/v1/events/{eventId}/tickets/intents deprecated compatibility API alias
+/v1/access-passes/:id/check-in canonical API path
+/v1/tickets/:id/check-in       deprecated compatibility API alias
 ```
 
 ## Backend Ownership
@@ -169,14 +172,16 @@ refunds_and_disputes
   └─ reason/audit metadata
 ```
 
-Compatibility names until migration:
+Canonical table names:
 
 ```text
-ticket_types        -> event_access_pass_types
-ticket_entitlements -> event_access_passes
-ticket_reservations -> event_access_reservations
-ticket receipt      -> access receipt
+event_access_pass_types
+event_access_purchase_requests
+event_access_passes
+event_access_requests
 ```
+
+The `0049_event_access_mutuals_canonical_names` migration renames the pre-launch ticket tables and `ticket_type_id` columns to the canonical Event Access Pass vocabulary. Historical migrations and deprecated API aliases may still contain `ticket` names for rollback/API compatibility only.
 
 ## Paid Event Access Flow
 

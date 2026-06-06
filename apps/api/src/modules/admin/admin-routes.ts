@@ -6,6 +6,7 @@ import {
   AdminRepositoryStateConflictError
 } from "./admin-repository.js";
 import type {
+  AccessPass,
   AdminModerationActionRequest,
   AdminOrganizationKybActionRequest,
   AdminOrganizationMemberActionRequest,
@@ -15,6 +16,7 @@ import type {
   AdminReasonRequest,
   AdminReportActionRequest,
   AdminRepository,
+  Ticket,
   AdminSupportCaseActionRequest,
   AdminSupportPolicyActionRequest
 } from "./types.js";
@@ -476,13 +478,31 @@ export async function registerAdminRoutes(
     return reply.code(200).send(await options.adminRepository.listEvents(adminListInput(query)));
   });
 
-  app.get("/v1/admin/tickets", async (request, reply) => {
+  const listEventAccessPasses = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    responseShape: "access_pass" | "ticket"
+  ) => {
     const allowed = await requireAdminAccess(request, reply, options);
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
-    return reply.code(200).send(await options.adminRepository.listTickets(adminListInput(query)));
-  });
+    const page = await options.adminRepository.listTickets(adminListInput(query));
+    const response =
+      responseShape === "ticket"
+        ? page
+        : {
+            items: page.items.map(toAccessPass),
+            nextCursor: page.nextCursor
+          };
+
+    return reply.code(200).send(response);
+  };
+
+  app.get("/v1/admin/event-access-passes", (request, reply) =>
+    listEventAccessPasses(request, reply, "access_pass")
+  );
+  app.get("/v1/admin/tickets", (request, reply) => listEventAccessPasses(request, reply, "ticket"));
 
   app.get("/v1/admin/live/rooms", async (request, reply) => {
     const allowed = await requireAdminAccess(request, reply, options);
@@ -1132,6 +1152,20 @@ async function featureFlagEnabled(repository: AdminRepository, key: string): Pro
   }
 
   return (flag.value as { enabled?: unknown }).enabled === true;
+}
+
+function toAccessPass(ticket: Ticket): AccessPass {
+  return {
+    id: ticket.id,
+    eventId: ticket.eventId,
+    accessPassTypeId: ticket.ticketTypeId,
+    holderUserId: ticket.holderUserId,
+    state: ticket.state,
+    qrToken: ticket.qrToken,
+    createdAt: ticket.createdAt,
+    ...(ticket.paymentIntentId !== undefined ? { paymentIntentId: ticket.paymentIntentId } : {}),
+    ...(ticket.checkedInAt !== undefined ? { checkedInAt: ticket.checkedInAt } : {})
+  };
 }
 
 function validateOrganizationMemberAction(

@@ -332,7 +332,7 @@ interface EventTicketTypeRow {
 interface TicketRow {
   id: string;
   event_id: string;
-  ticket_type_id: string;
+  access_pass_type_id: string;
   holder_user_id: string;
   payment_intent_id: string | null;
   state: Ticket["state"];
@@ -1609,9 +1609,9 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
                 tt.per_user_limit,
                 tt.state,
                 count(te.id) as issued_count
-              from ticket_types tt
-              left join ticket_entitlements te
-                on te.ticket_type_id = tt.id
+              from event_access_pass_types tt
+              left join event_access_passes te
+                on te.access_pass_type_id = tt.id
                 and te.state in ('active', 'checked_in')
               where tt.event_id in ${sql(eventIds)}
               group by tt.id
@@ -1635,13 +1635,13 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
         select
           id,
           event_id,
-          ticket_type_id,
+          access_pass_type_id,
           holder_user_id,
           payment_intent_id,
           state,
           checked_in_at,
           created_at
-        from ticket_entitlements
+        from event_access_passes
         where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
         order by created_at desc
         limit ${pageSize + 1}
@@ -1797,7 +1797,7 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
           0 as open_reports,
           count(*) filter (where state = 'active') as active_matches,
           count(*) filter (where state = 'stale') as stale_matches
-        from dating_matches
+        from mutuals
       `;
       const row = rows[0];
 
@@ -2635,7 +2635,7 @@ function toTicket(row: TicketRow): Ticket {
   return {
     id: row.id,
     eventId: row.event_id,
-    ticketTypeId: row.ticket_type_id,
+    ticketTypeId: row.access_pass_type_id,
     holderUserId: row.holder_user_id,
     paymentIntentId: row.payment_intent_id,
     state: row.state,

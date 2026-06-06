@@ -1,8 +1,8 @@
 import postgres from "postgres";
 import type {
+  AccessPassPage,
   ActivityItem,
   ActivityRepository,
-  TicketPage,
   WalletTransaction
 } from "./types.js";
 
@@ -46,14 +46,14 @@ interface WalletTransactionRow {
   confirmed_at: Date | null;
 }
 
-interface TicketRow {
+interface AccessPassRow {
   id: string;
   event_id: string;
-  ticket_type_id: string;
+  access_pass_type_id: string;
   holder_user_id: string;
   payment_intent_id: string | null;
   qr_token: string;
-  state: TicketPage["items"][number]["state"];
+  state: AccessPassPage["items"][number]["state"];
   checked_in_at: Date | null;
   created_at: Date;
 }
@@ -70,7 +70,7 @@ export function createPostgresActivityRepository(databaseUrl?: string): Activity
       async listWalletTransactions() {
         throw new ActivityRepositoryConfigurationError();
       },
-      async listTickets() {
+      async listAccessPasses() {
         throw new ActivityRepositoryConfigurationError();
       }
     };
@@ -215,8 +215,8 @@ export function createPostgresActivityRepository(databaseUrl?: string): Activity
         nextCursor: extraRow ? extraRow.created_at.toISOString() : null
       };
     },
-    async listTickets(input) {
-      const rows = await sql<TicketRow[]>`
+    async listAccessPasses(input) {
+      const rows = await sql<AccessPassRow[]>`
         with target_user as (
           select id
           from users
@@ -226,14 +226,14 @@ export function createPostgresActivityRepository(databaseUrl?: string): Activity
         select
           te.id,
           te.event_id,
-          te.ticket_type_id,
+          te.access_pass_type_id,
           te.holder_user_id,
           te.payment_intent_id,
           te.qr_token,
           te.state,
           te.checked_in_at,
           te.created_at
-        from ticket_entitlements te
+        from event_access_passes te
         join target_user tu on tu.id = te.holder_user_id
         where (${input.cursor ?? null}::timestamptz is null or te.created_at < ${input.cursor ?? null}::timestamptz)
         order by te.created_at desc
@@ -243,7 +243,7 @@ export function createPostgresActivityRepository(databaseUrl?: string): Activity
       const extraRow = rows[input.limit];
 
       return {
-        items: pageRows.map(toTicket),
+        items: pageRows.map(toAccessPass),
         nextCursor: extraRow ? extraRow.created_at.toISOString() : null
       };
     },
@@ -300,11 +300,11 @@ function toWalletTransaction(row: WalletTransactionRow): WalletTransaction {
   };
 }
 
-function toTicket(row: TicketRow): TicketPage["items"][number] {
+function toAccessPass(row: AccessPassRow): AccessPassPage["items"][number] {
   return {
     id: row.id,
     eventId: row.event_id,
-    ticketTypeId: row.ticket_type_id,
+    accessPassTypeId: row.access_pass_type_id,
     holderUserId: row.holder_user_id,
     paymentIntentId: row.payment_intent_id,
     state: row.state,

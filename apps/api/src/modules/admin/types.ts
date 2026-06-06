@@ -50,6 +50,7 @@ export type AdminReportActionRequest = components["schemas"]["AdminReportActionR
 export type AdminReasonRequest = components["schemas"]["AdminReasonRequest"];
 export type Event = components["schemas"]["Event"];
 export type EventTicketType = components["schemas"]["EventTicketType"];
+export type AccessPass = components["schemas"]["AccessPass"];
 export type Ticket = components["schemas"]["Ticket"];
 
 export interface AdminPage<Item> {

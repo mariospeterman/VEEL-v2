@@ -1143,7 +1143,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create ticket payment or approval intent */
+        /**
+         * Create ticket payment or approval intent
+         * @deprecated
+         */
         post: operations["createTicketIntent"];
         delete?: never;
         options?: never;
@@ -1160,7 +1163,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Request creator approval for a private event ticket */
+        /**
+         * Request creator approval for a private event ticket
+         * @deprecated
+         */
         post: operations["requestPrivateEventTicket"];
         delete?: never;
         options?: never;
@@ -1177,8 +1183,62 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Check in an event ticket by QR/token */
+        /**
+         * Check in an event ticket by QR/token
+         * @deprecated
+         */
         post: operations["checkInTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/events/{eventId}/access-passes/intents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Event Access Pass payment or approval intent */
+        post: operations["createAccessPassIntent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/events/{eventId}/access-passes/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request creator approval for a private Event Access Pass */
+        post: operations["requestPrivateEventAccessPass"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/access-passes/{accessPassId}/check-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check in an Event Access Pass by backend-issued QR/token */
+        post: operations["checkInAccessPass"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1270,7 +1330,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/mutuals/{matchId}/archive": {
+    "/v1/mutuals/{mutualId}/archive": {
         parameters: {
             query?: never;
             header?: never;
@@ -1465,8 +1525,28 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Ticket ownership and event activity */
+        /**
+         * Ticket ownership and event activity
+         * @deprecated
+         */
         get: operations["getTicketActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/activity/access-passes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Event Access Pass ownership and event activity */
+        get: operations["getAccessPassActivity"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1941,8 +2021,28 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Admin ticket entitlement and check-in list */
+        /**
+         * Admin ticket entitlement and check-in list
+         * @deprecated
+         */
         get: operations["listAdminTickets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/event-access-passes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Admin Event Access Pass entitlement and check-in list */
+        get: operations["listAdminEventAccessPasses"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2839,6 +2939,8 @@ export interface components {
             provider?: "openstreetmap" | "manual" | "none";
             providerPlaceId?: string;
         };
+        EventAccessPassType: components["schemas"]["EventTicketType"];
+        EventAccessPassTypeDraft: components["schemas"]["EventTicketTypeDraft"];
         CreateUploadRequest: {
             /** Format: uuid */
             contentId: string;
@@ -3282,6 +3384,59 @@ export interface components {
             state: "draft" | "published" | "sold_out" | "cancelled" | "completed";
             ticketTypes: components["schemas"]["EventTicketType"][];
         };
+        CreateAccessPassIntentRequest: {
+            /** Format: uuid */
+            accessPassTypeId: string;
+        };
+        AccessPassIntent: {
+            /** @enum {string} */
+            state: "free_granted" | "approval_required" | "payment_required";
+            paymentIntent?: components["schemas"]["PaymentIntent"];
+            accessPass?: components["schemas"]["AccessPass"];
+        };
+        CreateAccessPassRequestRequest: {
+            /** Format: uuid */
+            accessPassTypeId: string;
+            note?: string;
+        };
+        AccessPassRequest: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            eventId: string;
+            /** Format: uuid */
+            accessPassTypeId: string;
+            /** @enum {string} */
+            state: "requested" | "approved" | "rejected" | "expired";
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CheckInAccessPassRequest: {
+            qrToken: string;
+        };
+        AccessPass: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            eventId: string;
+            /** Format: uuid */
+            accessPassTypeId: string;
+            /** Format: uuid */
+            holderUserId: string;
+            /** Format: uuid */
+            paymentIntentId?: string | null;
+            /** @enum {string} */
+            state: "active" | "checked_in" | "revoked" | "expired";
+            qrToken: string;
+            /** Format: date-time */
+            checkedInAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AccessPassPage: {
+            items: components["schemas"]["AccessPass"][];
+            nextCursor?: string | null;
+        };
         CreateTicketIntentRequest: {
             /** Format: uuid */
             ticketTypeId: string;
@@ -3333,6 +3488,47 @@ export interface components {
         };
         TicketPage: {
             items: components["schemas"]["Ticket"][];
+            nextCursor?: string | null;
+        };
+        ActivateMutualsRequest: components["schemas"]["ActivateDatingRequest"];
+        UpdateMutualsPreferencesRequest: components["schemas"]["UpdateDatingPreferencesRequest"];
+        MutualsProfile: components["schemas"]["DatingProfile"];
+        MutualsFeedItem: components["schemas"]["DatingFeedItem"];
+        MutualsFeedPage: {
+            items: components["schemas"]["MutualsFeedItem"][];
+            nextCursor?: string | null;
+        };
+        MutualsInterestRequest: components["schemas"]["DatingSwipeRequest"];
+        MutualsInterestResult: {
+            /** Format: uuid */
+            interestId: string;
+            mutualCreated: boolean;
+            /** Format: uuid */
+            mutualId?: string | null;
+            mutual?: components["schemas"]["Mutual"];
+        };
+        Mutual: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            userAId: string;
+            /** Format: uuid */
+            userBId: string;
+            /** Format: uuid */
+            sourceContentId?: string | null;
+            /** Format: uuid */
+            conversationId?: string | null;
+            /** @enum {string} */
+            state: "active" | "stale" | "archived" | "blocked" | "reported" | "expired";
+            /** Format: date-time */
+            staleAt?: string | null;
+            /** Format: date-time */
+            expiresAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        MutualsPage: {
+            items: components["schemas"]["Mutual"][];
             nextCursor?: string | null;
         };
         ActivateDatingRequest: {
@@ -4781,6 +4977,42 @@ export interface components {
                 };
             };
         };
+        /** @description Event Access Pass intent */
+        AccessPassIntent: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["AccessPassIntent"];
+            };
+        };
+        /** @description Event Access Pass request */
+        AccessPassRequest: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["AccessPassRequest"];
+            };
+        };
+        /** @description Event Access Pass */
+        AccessPass: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["AccessPass"];
+            };
+        };
+        /** @description Event Access Passes */
+        AccessPassPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["AccessPassPage"];
+            };
+        };
         /** @description Ticket intent */
         TicketIntent: {
             headers: {
@@ -4815,6 +5047,51 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["TicketPage"];
+            };
+        };
+        /** @description Mutuals profile */
+        MutualsProfile: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["MutualsProfile"];
+            };
+        };
+        /** @description Mutuals feed */
+        MutualsFeedPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["MutualsFeedPage"];
+            };
+        };
+        /** @description Mutuals interest action result */
+        MutualsInterestResult: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["MutualsInterestResult"];
+            };
+        };
+        /** @description Mutuals */
+        MutualsPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["MutualsPage"];
+            };
+        };
+        /** @description Mutual */
+        Mutual: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Mutual"];
             };
         };
         /** @description Mutuals profile */
@@ -5393,6 +5670,7 @@ export interface components {
         RoomId: string;
         PaymentIntentId: string;
         EventId: string;
+        AccessPassId: string;
         TicketId: string;
         UserId: string;
         WalletId: string;
@@ -5402,6 +5680,7 @@ export interface components {
         AiSessionId: string;
         NotificationId: string;
         NotificationDeviceId: string;
+        MutualId: string;
         MatchId: string;
         ReportId: string;
         ProviderEventId: string;
@@ -5568,6 +5847,21 @@ export interface components {
                 "application/json": components["schemas"]["UpdateEventRequest"];
             };
         };
+        CreateAccessPassIntent: {
+            content: {
+                "application/json": components["schemas"]["CreateAccessPassIntentRequest"];
+            };
+        };
+        CreateAccessPassRequest: {
+            content: {
+                "application/json": components["schemas"]["CreateAccessPassRequestRequest"];
+            };
+        };
+        CheckInAccessPass: {
+            content: {
+                "application/json": components["schemas"]["CheckInAccessPassRequest"];
+            };
+        };
         CreateTicketIntent: {
             content: {
                 "application/json": components["schemas"]["CreateTicketIntentRequest"];
@@ -5581,6 +5875,21 @@ export interface components {
         CheckInTicket: {
             content: {
                 "application/json": components["schemas"]["CheckInTicketRequest"];
+            };
+        };
+        ActivateMutuals: {
+            content: {
+                "application/json": components["schemas"]["ActivateMutualsRequest"];
+            };
+        };
+        UpdateMutualsPreferences: {
+            content: {
+                "application/json": components["schemas"]["UpdateMutualsPreferencesRequest"];
+            };
+        };
+        MutualsInterest: {
+            content: {
+                "application/json": components["schemas"]["MutualsInterestRequest"];
             };
         };
         ActivateDating: {
@@ -6993,6 +7302,57 @@ export interface operations {
             200: components["responses"]["Ticket"];
         };
     };
+    createAccessPassIntent: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                eventId: components["parameters"]["EventId"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["CreateAccessPassIntent"];
+        responses: {
+            201: components["responses"]["AccessPassIntent"];
+        };
+    };
+    requestPrivateEventAccessPass: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                eventId: components["parameters"]["EventId"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["CreateAccessPassRequest"];
+        responses: {
+            201: components["responses"]["AccessPassRequest"];
+        };
+    };
+    checkInAccessPass: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                accessPassId: components["parameters"]["AccessPassId"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["CheckInAccessPass"];
+        responses: {
+            200: components["responses"]["AccessPass"];
+        };
+    };
     activateMutualsMode: {
         parameters: {
             query?: never;
@@ -7003,9 +7363,9 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["ActivateDating"];
+        requestBody: components["requestBodies"]["ActivateMutuals"];
         responses: {
-            200: components["responses"]["DatingProfile"];
+            200: components["responses"]["MutualsProfile"];
         };
     };
     updateMutualsPreferences: {
@@ -7018,9 +7378,9 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["UpdateDatingPreferences"];
+        requestBody: components["requestBodies"]["UpdateMutualsPreferences"];
         responses: {
-            200: components["responses"]["DatingProfile"];
+            200: components["responses"]["MutualsProfile"];
         };
     };
     createMutualsInterest: {
@@ -7033,9 +7393,9 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["DatingSwipe"];
+        requestBody: components["requestBodies"]["MutualsInterest"];
         responses: {
-            200: components["responses"]["DatingSwipeResult"];
+            200: components["responses"]["MutualsInterestResult"];
         };
     };
     getMutualsFeed: {
@@ -7049,7 +7409,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["DatingFeedPage"];
+            200: components["responses"]["MutualsFeedPage"];
         };
     };
     listMutuals: {
@@ -7063,7 +7423,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["DatingMatchPage"];
+            200: components["responses"]["MutualsPage"];
         };
     };
     archiveMutual: {
@@ -7074,13 +7434,13 @@ export interface operations {
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
-                matchId: components["parameters"]["MatchId"];
+                mutualId: components["parameters"]["MutualId"];
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["DatingMatch"];
+            200: components["responses"]["Mutual"];
         };
     };
     activateDatingMode: {
@@ -7227,6 +7587,20 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["TicketPage"];
+        };
+    };
+    getAccessPassActivity: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AccessPassPage"];
         };
     };
     getActivityReferrals: {
@@ -7673,6 +8047,21 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["TicketPage"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAdminEventAccessPasses: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AccessPassPage"];
             403: components["responses"]["Forbidden"];
         };
     };

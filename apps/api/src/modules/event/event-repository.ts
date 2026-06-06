@@ -55,7 +55,7 @@ interface TicketTypeRow {
 interface TicketRow {
   id: string;
   event_id: string;
-  ticket_type_id: string;
+  access_pass_type_id: string;
   holder_user_id: string;
   payment_intent_id: string | null;
   qr_token: string;
@@ -67,7 +67,7 @@ interface TicketRow {
 interface TicketRequestRow {
   id: string;
   event_id: string;
-  ticket_type_id: string;
+  access_pass_type_id: string;
   state: TicketRequest["state"];
   created_at: Date;
 }
@@ -170,7 +170,7 @@ export function createPostgresEventRepository(databaseUrl?: string): EventReposi
           limit 1
         ),
         inserted_ticket_types as (
-          insert into ticket_types (
+          insert into event_access_pass_types (
             id,
             event_id,
             label,
@@ -282,17 +282,17 @@ export function createPostgresEventRepository(databaseUrl?: string): EventReposi
         select
           te.id,
           te.event_id,
-          te.ticket_type_id,
+          te.access_pass_type_id,
           te.holder_user_id,
           te.payment_intent_id,
           te.qr_token,
           te.state,
           te.checked_in_at,
           te.created_at
-        from ticket_entitlements te
+        from event_access_passes te
         join actor on actor.id = te.holder_user_id
         where te.event_id = ${input.eventId}
-          and te.ticket_type_id = ${input.ticketTypeId}
+          and te.access_pass_type_id = ${input.ticketTypeId}
           and te.state in ('active', 'checked_in')
         order by te.created_at desc
         limit 1
@@ -312,10 +312,10 @@ export function createPostgresEventRepository(databaseUrl?: string): EventReposi
           where supabase_user_id = ${input.supabaseUserId}
           limit 1
         )
-        insert into ticket_purchase_requests (
+        insert into event_access_purchase_requests (
           payment_intent_id,
           event_id,
-          ticket_type_id,
+          access_pass_type_id,
           buyer_user_id,
           amount_minor,
           currency
@@ -349,10 +349,10 @@ export function createPostgresEventRepository(databaseUrl?: string): EventReposi
           where supabase_user_id = ${input.supabaseUserId}
           limit 1
         )
-        insert into ticket_requests (
+        insert into event_access_requests (
           id,
           event_id,
-          ticket_type_id,
+          access_pass_type_id,
           requester_user_id,
           note
         )
@@ -363,9 +363,9 @@ export function createPostgresEventRepository(databaseUrl?: string): EventReposi
           id,
           ${input.note ?? null}
         from requester
-        on conflict (event_id, ticket_type_id, requester_user_id) do update
-        set note = coalesce(excluded.note, ticket_requests.note)
-        returning id, event_id, ticket_type_id, state, created_at
+        on conflict (event_id, access_pass_type_id, requester_user_id) do update
+        set note = coalesce(excluded.note, event_access_requests.note)
+        returning id, event_id, access_pass_type_id, state, created_at
       `;
 
       return rows[0] ? toTicketRequest(rows[0]) : null;
@@ -380,7 +380,7 @@ export function createPostgresEventRepository(databaseUrl?: string): EventReposi
         ),
         matched_ticket as (
           select te.*
-          from ticket_entitlements te
+          from event_access_passes te
           join events e on e.id = te.event_id
           where te.id = ${input.ticketId}
             and te.qr_token_hash = ${hashQrToken(input.qrToken)}
@@ -388,7 +388,7 @@ export function createPostgresEventRepository(databaseUrl?: string): EventReposi
           limit 1
         ),
         updated_ticket as (
-          update ticket_entitlements te
+          update event_access_passes te
           set
             state = case when state = 'active' then 'checked_in' else state end,
             checked_in_at = case when state = 'active' then now() else checked_in_at end,
@@ -401,7 +401,7 @@ export function createPostgresEventRepository(databaseUrl?: string): EventReposi
         select
           id,
           event_id,
-          ticket_type_id,
+          access_pass_type_id,
           holder_user_id,
           payment_intent_id,
           qr_token,
@@ -424,14 +424,14 @@ export function createPostgresEventRepository(databaseUrl?: string): EventReposi
         select
           te.id,
           te.event_id,
-          te.ticket_type_id,
+          te.access_pass_type_id,
           te.holder_user_id,
           te.payment_intent_id,
           te.qr_token,
           te.state,
           te.checked_in_at,
           te.created_at
-        from ticket_entitlements te
+        from event_access_passes te
         join actor on actor.id = te.holder_user_id
         where (${input.cursor ?? null}::timestamptz is null or te.created_at < ${input.cursor ?? null}::timestamptz)
         order by te.created_at desc
@@ -495,8 +495,8 @@ async function eventFromRows(
       tt.sale_ends_at,
       tt.per_user_limit,
       tt.state
-    from ticket_types tt
-    left join ticket_entitlements te on te.ticket_type_id = tt.id
+    from event_access_pass_types tt
+    left join event_access_passes te on te.access_pass_type_id = tt.id
     where tt.event_id = ${row.id}
     group by tt.id
     order by tt.created_at asc
@@ -547,7 +547,7 @@ function toTicket(row: TicketRow): Ticket {
   return {
     id: row.id,
     eventId: row.event_id,
-    ticketTypeId: row.ticket_type_id,
+    ticketTypeId: row.access_pass_type_id,
     holderUserId: row.holder_user_id,
     paymentIntentId: row.payment_intent_id,
     state: row.state,
@@ -561,7 +561,7 @@ function toTicketRequest(row: TicketRequestRow): TicketRequest {
   return {
     id: row.id,
     eventId: row.event_id,
-    ticketTypeId: row.ticket_type_id,
+    ticketTypeId: row.access_pass_type_id,
     state: row.state,
     createdAt: row.created_at.toISOString()
   };
@@ -597,17 +597,17 @@ async function grantTicket(
       select
         te.id,
         te.event_id,
-        te.ticket_type_id,
+        te.access_pass_type_id,
         te.holder_user_id,
         te.payment_intent_id,
         te.qr_token,
         te.state,
         te.checked_in_at,
         te.created_at
-      from ticket_entitlements te
+      from event_access_passes te
       join holder on holder.id = te.holder_user_id
       where te.event_id = ${input.eventId}
-        and te.ticket_type_id = ${input.ticketTypeId}
+        and te.access_pass_type_id = ${input.ticketTypeId}
         and te.state in ('active', 'checked_in')
       limit 1
     ),
@@ -620,9 +620,9 @@ async function grantTicket(
         tt.event_id,
         tt.capacity,
         count(te.id) filter (where te.state in ('active', 'checked_in')) as issued_count
-      from ticket_types tt
+      from event_access_pass_types tt
       cross join ticket_lock
-      left join ticket_entitlements te on te.ticket_type_id = tt.id
+      left join event_access_passes te on te.access_pass_type_id = tt.id
       where tt.id = ${input.ticketTypeId}
         and tt.event_id = ${input.eventId}
         and tt.state = 'active'
@@ -632,10 +632,10 @@ async function grantTicket(
       limit 1
     ),
     inserted_ticket as (
-      insert into ticket_entitlements (
+      insert into event_access_passes (
         id,
         event_id,
-        ticket_type_id,
+        access_pass_type_id,
         holder_user_id,
         payment_intent_id,
         qr_token,
@@ -651,13 +651,13 @@ async function grantTicket(
         ${hashQrToken(qrToken)}
       from holder, inventory
       on conflict (payment_intent_id) do update
-      set state = ticket_entitlements.state
+      set state = event_access_passes.state
       returning *
     )
     select
       id,
       event_id,
-      ticket_type_id,
+      access_pass_type_id,
       holder_user_id,
       payment_intent_id,
       qr_token,
@@ -669,7 +669,7 @@ async function grantTicket(
     select
       id,
       event_id,
-      ticket_type_id,
+      access_pass_type_id,
       holder_user_id,
       payment_intent_id,
       qr_token,

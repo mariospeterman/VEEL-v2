@@ -29,7 +29,7 @@ tags:
   - name: Referrals
   - name: Subscriptions
   - name: Events
-  - name: Tickets
+  - name: Access Passes
   - name: Mutuals
   - name: Activity
   - name: AI
@@ -924,6 +924,7 @@ paths:
     post:
       operationId: createTicketIntent
       tags: [Events]
+      deprecated: true
       summary: Create ticket payment or approval intent
       parameters:
         - $ref: "#/components/parameters/EventId"
@@ -936,6 +937,7 @@ paths:
     post:
       operationId: requestPrivateEventTicket
       tags: [Events]
+      deprecated: true
       summary: Request creator approval for a private event ticket
       parameters:
         - $ref: "#/components/parameters/EventId"
@@ -947,7 +949,8 @@ paths:
   /v1/tickets/{ticketId}/check-in:
     post:
       operationId: checkInTicket
-      tags: [Tickets]
+      tags: [Access Passes]
+      deprecated: true
       summary: Check in an event ticket by QR/token
       parameters:
         - $ref: "#/components/parameters/TicketId"
@@ -956,6 +959,42 @@ paths:
         $ref: "#/components/requestBodies/CheckInTicket"
       responses:
         "200": { $ref: "#/components/responses/Ticket" }
+  /v1/events/{eventId}/access-passes/intents:
+    post:
+      operationId: createAccessPassIntent
+      tags: [Events]
+      summary: Create Event Access Pass payment or approval intent
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateAccessPassIntent"
+      responses:
+        "201": { $ref: "#/components/responses/AccessPassIntent" }
+  /v1/events/{eventId}/access-passes/requests:
+    post:
+      operationId: requestPrivateEventAccessPass
+      tags: [Events]
+      summary: Request creator approval for a private Event Access Pass
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateAccessPassRequest"
+      responses:
+        "201": { $ref: "#/components/responses/AccessPassRequest" }
+  /v1/access-passes/{accessPassId}/check-in:
+    post:
+      operationId: checkInAccessPass
+      tags: [Access Passes]
+      summary: Check in an Event Access Pass by backend-issued QR/token
+      parameters:
+        - $ref: "#/components/parameters/AccessPassId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CheckInAccessPass"
+      responses:
+        "200": { $ref: "#/components/responses/AccessPass" }
   /v1/mutuals/activate:
     post:
       operationId: activateMutualsMode
@@ -964,9 +1003,9 @@ paths:
       parameters:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       requestBody:
-        $ref: "#/components/requestBodies/ActivateDating"
+        $ref: "#/components/requestBodies/ActivateMutuals"
       responses:
-        "200": { $ref: "#/components/responses/DatingProfile" }
+        "200": { $ref: "#/components/responses/MutualsProfile" }
   /v1/mutuals/preferences:
     patch:
       operationId: updateMutualsPreferences
@@ -975,9 +1014,9 @@ paths:
       parameters:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       requestBody:
-        $ref: "#/components/requestBodies/UpdateDatingPreferences"
+        $ref: "#/components/requestBodies/UpdateMutualsPreferences"
       responses:
-        "200": { $ref: "#/components/responses/DatingProfile" }
+        "200": { $ref: "#/components/responses/MutualsProfile" }
   /v1/mutuals/interests:
     post:
       operationId: createMutualsInterest
@@ -986,9 +1025,9 @@ paths:
       parameters:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       requestBody:
-        $ref: "#/components/requestBodies/DatingSwipe"
+        $ref: "#/components/requestBodies/MutualsInterest"
       responses:
-        "200": { $ref: "#/components/responses/DatingSwipeResult" }
+        "200": { $ref: "#/components/responses/MutualsInterestResult" }
   /v1/mutuals/feed:
     get:
       operationId: getMutualsFeed
@@ -997,7 +1036,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Cursor"
       responses:
-        "200": { $ref: "#/components/responses/DatingFeedPage" }
+        "200": { $ref: "#/components/responses/MutualsFeedPage" }
   /v1/mutuals:
     get:
       operationId: listMutuals
@@ -1006,17 +1045,17 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Cursor"
       responses:
-        "200": { $ref: "#/components/responses/DatingMatchPage" }
-  /v1/mutuals/{matchId}/archive:
+        "200": { $ref: "#/components/responses/MutualsPage" }
+  /v1/mutuals/{mutualId}/archive:
     patch:
       operationId: archiveMutual
       tags: [Mutuals]
       summary: Archive a Mutual to free active-Mutual capacity
       parameters:
-        - $ref: "#/components/parameters/MatchId"
+        - $ref: "#/components/parameters/MutualId"
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       responses:
-        "200": { $ref: "#/components/responses/DatingMatch" }
+        "200": { $ref: "#/components/responses/Mutual" }
   /v1/dating/activate:
     post:
       operationId: activateDatingMode
@@ -1115,11 +1154,21 @@ paths:
     get:
       operationId: getTicketActivity
       tags: [Activity]
+      deprecated: true
       summary: Ticket ownership and event activity
       parameters:
         - $ref: "#/components/parameters/Cursor"
       responses:
         "200": { $ref: "#/components/responses/TicketPage" }
+  /v1/activity/access-passes:
+    get:
+      operationId: getAccessPassActivity
+      tags: [Activity]
+      summary: Event Access Pass ownership and event activity
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AccessPassPage" }
   /v1/activity/referrals:
     get:
       operationId: getActivityReferrals
@@ -1422,11 +1471,22 @@ paths:
     get:
       operationId: listAdminTickets
       tags: [Admin]
+      deprecated: true
       summary: Admin ticket entitlement and check-in list
       parameters:
         - $ref: "#/components/parameters/Cursor"
       responses:
         "200": { $ref: "#/components/responses/TicketPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/event-access-passes:
+    get:
+      operationId: listAdminEventAccessPasses
+      tags: [Admin]
+      summary: Admin Event Access Pass entitlement and check-in list
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AccessPassPage" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /v1/admin/live/rooms:
     get:
@@ -1746,6 +1806,7 @@ components:
     RoomId: { name: roomId, in: path, required: true, schema: { type: string, format: uuid } }
     PaymentIntentId: { name: paymentIntentId, in: path, required: true, schema: { type: string, format: uuid } }
     EventId: { name: eventId, in: path, required: true, schema: { type: string, format: uuid } }
+    AccessPassId: { name: accessPassId, in: path, required: true, schema: { type: string, format: uuid } }
     TicketId: { name: ticketId, in: path, required: true, schema: { type: string, format: uuid } }
     UserId: { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
     WalletId: { name: walletId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1755,6 +1816,7 @@ components:
     AiSessionId: { name: aiSessionId, in: path, required: true, schema: { type: string, format: uuid } }
     NotificationId: { name: notificationId, in: path, required: true, schema: { type: string, format: uuid } }
     NotificationDeviceId: { name: notificationDeviceId, in: path, required: true, schema: { type: string, format: uuid } }
+    MutualId: { name: mutualId, in: path, required: true, schema: { type: string, format: uuid } }
     MatchId: { name: matchId, in: path, required: true, schema: { type: string, format: uuid } }
     ReportId: { name: reportId, in: path, required: true, schema: { type: string, format: uuid } }
     ProviderEventId: { name: providerEventId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1808,9 +1870,15 @@ components:
     SubmitSubscriptionAuthorization: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SubmitSubscriptionAuthorizationRequest" } } } }
     CreateEvent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateEventRequest" } } } }
     UpdateEvent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateEventRequest" } } } }
+    CreateAccessPassIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateAccessPassIntentRequest" } } } }
+    CreateAccessPassRequest: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateAccessPassRequestRequest" } } } }
+    CheckInAccessPass: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CheckInAccessPassRequest" } } } }
     CreateTicketIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateTicketIntentRequest" } } } }
     CreateTicketRequest: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateTicketRequestRequest" } } } }
     CheckInTicket: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CheckInTicketRequest" } } } }
+    ActivateMutuals: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ActivateMutualsRequest" } } } }
+    UpdateMutualsPreferences: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateMutualsPreferencesRequest" } } } }
+    MutualsInterest: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/MutualsInterestRequest" } } } }
     ActivateDating: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ActivateDatingRequest" } } } }
     UpdateDatingPreferences: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateDatingPreferencesRequest" } } } }
     DatingSwipe: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/DatingSwipeRequest" } } } }
@@ -1899,10 +1967,19 @@ components:
     SubscriptionAuthorizationIntent: { description: Subscription authorization intent, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionAuthorizationIntent" } } } }
     Event: { description: Event, content: { application/json: { schema: { $ref: "#/components/schemas/Event" } } } }
     EventPage: { description: Events, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Event" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AccessPassIntent: { description: Event Access Pass intent, content: { application/json: { schema: { $ref: "#/components/schemas/AccessPassIntent" } } } }
+    AccessPassRequest: { description: Event Access Pass request, content: { application/json: { schema: { $ref: "#/components/schemas/AccessPassRequest" } } } }
+    AccessPass: { description: Event Access Pass, content: { application/json: { schema: { $ref: "#/components/schemas/AccessPass" } } } }
+    AccessPassPage: { description: Event Access Passes, content: { application/json: { schema: { $ref: "#/components/schemas/AccessPassPage" } } } }
     TicketIntent: { description: Ticket intent, content: { application/json: { schema: { $ref: "#/components/schemas/TicketIntent" } } } }
     TicketRequest: { description: Ticket request, content: { application/json: { schema: { $ref: "#/components/schemas/TicketRequest" } } } }
     Ticket: { description: Ticket, content: { application/json: { schema: { $ref: "#/components/schemas/Ticket" } } } }
     TicketPage: { description: Tickets, content: { application/json: { schema: { $ref: "#/components/schemas/TicketPage" } } } }
+    MutualsProfile: { description: Mutuals profile, content: { application/json: { schema: { $ref: "#/components/schemas/MutualsProfile" } } } }
+    MutualsFeedPage: { description: Mutuals feed, content: { application/json: { schema: { $ref: "#/components/schemas/MutualsFeedPage" } } } }
+    MutualsInterestResult: { description: Mutuals interest action result, content: { application/json: { schema: { $ref: "#/components/schemas/MutualsInterestResult" } } } }
+    MutualsPage: { description: Mutuals, content: { application/json: { schema: { $ref: "#/components/schemas/MutualsPage" } } } }
+    Mutual: { description: Mutual, content: { application/json: { schema: { $ref: "#/components/schemas/Mutual" } } } }
     DatingProfile: { description: Mutuals profile, content: { application/json: { schema: { $ref: "#/components/schemas/DatingProfile" } } } }
     DatingFeedPage: { description: Mutuals feed, content: { application/json: { schema: { $ref: "#/components/schemas/DatingFeedPage" } } } }
     DatingSwipeResult: { description: Mutuals interest action result, content: { application/json: { schema: { $ref: "#/components/schemas/DatingSwipeResult" } } } }
@@ -2453,6 +2530,8 @@ components:
         longitude: { type: number, format: double }
         provider: { type: string, enum: [openstreetmap, manual, none] }
         providerPlaceId: { type: string }
+    EventAccessPassType: { $ref: "#/components/schemas/EventTicketType" }
+    EventAccessPassTypeDraft: { $ref: "#/components/schemas/EventTicketTypeDraft" }
     CreateUploadRequest:
       type: object
       required: [contentId, fileName, mimeType]
@@ -2897,6 +2976,57 @@ components:
         ticketTypes:
           type: array
           items: { $ref: "#/components/schemas/EventTicketType" }
+    CreateAccessPassIntentRequest:
+      type: object
+      required: [accessPassTypeId]
+      properties:
+        accessPassTypeId: { type: string, format: uuid }
+    AccessPassIntent:
+      type: object
+      required: [state]
+      properties:
+        state: { type: string, enum: [free_granted, approval_required, payment_required] }
+        paymentIntent: { $ref: "#/components/schemas/PaymentIntent" }
+        accessPass: { $ref: "#/components/schemas/AccessPass" }
+    CreateAccessPassRequestRequest:
+      type: object
+      required: [accessPassTypeId]
+      properties:
+        accessPassTypeId: { type: string, format: uuid }
+        note: { type: string, maxLength: 500 }
+    AccessPassRequest:
+      type: object
+      required: [id, eventId, accessPassTypeId, state, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        eventId: { type: string, format: uuid }
+        accessPassTypeId: { type: string, format: uuid }
+        state: { type: string, enum: [requested, approved, rejected, expired] }
+        createdAt: { type: string, format: date-time }
+    CheckInAccessPassRequest:
+      type: object
+      required: [qrToken]
+      properties:
+        qrToken: { type: string }
+    AccessPass:
+      type: object
+      required: [id, eventId, accessPassTypeId, holderUserId, state, qrToken, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        eventId: { type: string, format: uuid }
+        accessPassTypeId: { type: string, format: uuid }
+        holderUserId: { type: string, format: uuid }
+        paymentIntentId: { type: string, format: uuid, nullable: true }
+        state: { type: string, enum: [active, checked_in, revoked, expired] }
+        qrToken: { type: string }
+        checkedInAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    AccessPassPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/AccessPass" } }
+        nextCursor: { type: string, nullable: true }
     CreateTicketIntentRequest:
       type: object
       required: [ticketTypeId]
@@ -2947,6 +3077,44 @@ components:
       required: [items]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/Ticket" } }
+        nextCursor: { type: string, nullable: true }
+    ActivateMutualsRequest: { $ref: "#/components/schemas/ActivateDatingRequest" }
+    UpdateMutualsPreferencesRequest: { $ref: "#/components/schemas/UpdateDatingPreferencesRequest" }
+    MutualsProfile: { $ref: "#/components/schemas/DatingProfile" }
+    MutualsFeedItem: { $ref: "#/components/schemas/DatingFeedItem" }
+    MutualsFeedPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/MutualsFeedItem" } }
+        nextCursor: { type: string, nullable: true }
+    MutualsInterestRequest: { $ref: "#/components/schemas/DatingSwipeRequest" }
+    MutualsInterestResult:
+      type: object
+      required: [mutualCreated, interestId]
+      properties:
+        interestId: { type: string, format: uuid }
+        mutualCreated: { type: boolean }
+        mutualId: { type: string, format: uuid, nullable: true }
+        mutual: { $ref: "#/components/schemas/Mutual" }
+    Mutual:
+      type: object
+      required: [id, userAId, userBId, state, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        userAId: { type: string, format: uuid }
+        userBId: { type: string, format: uuid }
+        sourceContentId: { type: string, format: uuid, nullable: true }
+        conversationId: { type: string, format: uuid, nullable: true }
+        state: { type: string, enum: [active, stale, archived, blocked, reported, expired] }
+        staleAt: { type: string, format: date-time, nullable: true }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    MutualsPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Mutual" } }
         nextCursor: { type: string, nullable: true }
     ActivateDatingRequest:
       type: object

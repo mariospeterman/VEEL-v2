@@ -66,8 +66,8 @@ Rules:
 | Paid message | `payment_intents`, `messages` | Pending only | Message after confirm | Financial/message delivery | Message visible after confirmed payment. |
 | Live pass | `payment_intents`, `live_access_grants` | Pending only | Room access update | Access | Pass controls playback/chat. |
 | Event interest | `event_interests` | Yes | Optional | None | Purchase still explicit. |
-| Ticket purchase | `payment_intents`, `ticket_entitlements` | Pending only | Ticket event | Access/ticket | Backend QR/receipt after confirm. |
-| Mutuals interested/not interested | `dating_swipes` compatibility table, target `mutual_interests` | Yes | Mutual only after backend state | Mutual | Only inside explicit Mutuals mode. |
+| Event Access Pass purchase | `payment_intents`, `event_access_passes` | Pending only | Event Access event | Access | Backend QR/receipt after confirm. |
+| Mutuals interested/not interested | `mutual_interests` | Yes | Mutual only after backend state | Mutual | Only inside explicit Mutuals mode. |
 
 ## Social Graph
 

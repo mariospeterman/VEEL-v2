@@ -5,7 +5,7 @@ export {
   ContentQueueRow,
   ReportQueueRow,
   EventOpsRow,
-  TicketOpsRow,
+  AccessPassOpsRow,
   AuditEventRow
 } from "./admin-core-rows";
 export {

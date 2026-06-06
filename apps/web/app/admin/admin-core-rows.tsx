@@ -94,15 +94,15 @@ export function EventOpsRow({ event }: { event: Event }) {
   );
 }
 
-export function TicketOpsRow({ ticket }: { ticket: EventAccessPass }) {
+export function AccessPassOpsRow({ accessPass }: { accessPass: EventAccessPass }) {
   return (
     <article className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm md:grid-cols-[1fr_130px_190px]">
       <div className="min-w-0">
         <p className="font-medium">Event Access Pass</p>
-        <p className="mt-1 truncate text-[var(--muted)]">{ticket.id}</p>
+        <p className="mt-1 truncate text-[var(--muted)]">{accessPass.id}</p>
       </div>
-      <Fact label="State" value={ticket.state} />
-      <Fact label="Check-in" value={timestampLabel(ticket.checkedInAt ?? null)} />
+      <Fact label="State" value={accessPass.state} />
+      <Fact label="Check-in" value={timestampLabel(accessPass.checkedInAt ?? null)} />
     </article>
   );
 }

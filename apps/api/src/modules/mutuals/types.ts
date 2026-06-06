@@ -1,14 +1,14 @@
 import type { components } from "@veel/contracts";
 
-export type ActivateMutualsRequest = components["schemas"]["ActivateDatingRequest"];
-export type MutualsFeedItem = components["schemas"]["DatingFeedItem"];
-export type MutualsFeedPage = components["schemas"]["DatingFeedPage"];
-export type Mutual = components["schemas"]["DatingMatch"];
-export type MutualsPage = components["schemas"]["DatingMatchPage"];
-export type MutualsProfile = components["schemas"]["DatingProfile"];
-export type MutualsInterestRequest = components["schemas"]["DatingSwipeRequest"];
-export type MutualsInterestResult = components["schemas"]["DatingSwipeResult"];
-export type UpdateMutualsPreferencesRequest = components["schemas"]["UpdateDatingPreferencesRequest"];
+export type ActivateMutualsRequest = components["schemas"]["ActivateMutualsRequest"];
+export type MutualsFeedItem = components["schemas"]["MutualsFeedItem"];
+export type MutualsFeedPage = components["schemas"]["MutualsFeedPage"];
+export type Mutual = components["schemas"]["Mutual"];
+export type MutualsPage = components["schemas"]["MutualsPage"];
+export type MutualsProfile = components["schemas"]["MutualsProfile"];
+export type MutualsInterestRequest = components["schemas"]["MutualsInterestRequest"];
+export type MutualsInterestResult = components["schemas"]["MutualsInterestResult"];
+export type UpdateMutualsPreferencesRequest = components["schemas"]["UpdateMutualsPreferencesRequest"];
 
 export interface ActivateMutualsInput {
   supabaseUserId: string;
@@ -41,7 +41,7 @@ export interface ListMutualsInput {
 
 export interface ArchiveMutualInput {
   supabaseUserId: string;
-  matchId: string;
+  mutualId: string;
 }
 
 export interface MutualsRepository {
