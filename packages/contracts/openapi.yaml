@@ -1310,10 +1310,12 @@ paths:
         - $ref: "#/components/parameters/AgeProvider"
         - $ref: "#/components/parameters/WebhookSignature"
       requestBody:
-        $ref: "#/components/requestBodies/WebhookPayload"
+        $ref: "#/components/requestBodies/AgeWebhookPayload"
       responses:
-        "202": { $ref: "#/components/responses/Accepted" }
+        "202": { $ref: "#/components/responses/WebhookReceipt" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
 components:
   securitySchemes:
     bearerAuth:
@@ -1426,6 +1428,16 @@ components:
     AdminDataRequestAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminDataRequestActionRequest" } } } }
     AdminFeatureFlagPatch: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminFeatureFlagPatchRequest" } } } }
     WebhookPayload: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+    AgeWebhookPayload:
+      required: true
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: "#/components/schemas/SumsubAgeWebhookPayload"
+              - $ref: "#/components/schemas/YotiAgeWebhookPayload"
+              - type: object
+                additionalProperties: true
   responses:
     Accepted: { description: Accepted }
     WebhookReceipt: { description: Webhook accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookReceipt" } } } }
@@ -2123,9 +2135,39 @@ components:
       type: object
       required: [provider, received, processed]
       properties:
-        provider: { type: string, enum: [helius] }
+        provider: { type: string, enum: [helius, yoti, sumsub, veriff, persona] }
         received: { type: integer, minimum: 0 }
         processed: { type: integer, minimum: 0 }
+    SumsubAgeWebhookPayload:
+      type: object
+      required: [type]
+      properties:
+        type: { type: string }
+        applicantId: { type: string }
+        externalUserId: { type: string }
+        correlationId: { type: string }
+        reviewStatus: { type: string }
+        createdAt: { type: string }
+        createdAtMs: { type: string }
+        reviewResult:
+          type: object
+          additionalProperties: true
+          properties:
+            reviewAnswer: { type: string, enum: [GREEN, RED] }
+            reviewRejectType: { type: string }
+    YotiAgeWebhookPayload:
+      type: object
+      required: [id, session_key, state, signature]
+      properties:
+        id: { type: string }
+        session_key: { type: string }
+        reference_id: { type: string }
+        state: { type: string, enum: [COMPLETE, FAIL, ERROR] }
+        method: { type: string }
+        age: { type: integer }
+        timestamp: { type: integer }
+        sequence_number: { type: integer }
+        signature: { type: string }
     TransactionRequest:
       type: object
       required: [transactionRequestUrl, expiresAt]

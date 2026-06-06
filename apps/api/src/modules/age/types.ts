@@ -4,6 +4,7 @@ export type AgeState = components["schemas"]["AgeState"];
 export type AgeStatus = components["schemas"]["AgeStatus"];
 export type AgeSession = components["schemas"]["AgeSession"];
 export type CreateAgeSessionRequest = components["schemas"]["CreateAgeSessionRequest"];
+export type WebhookReceipt = components["schemas"]["WebhookReceipt"];
 export type AgeProvider = "yoti" | "sumsub" | "veriff" | "persona";
 export type AgeProviderPreference = CreateAgeSessionRequest["providerPreference"];
 
@@ -19,7 +20,26 @@ export interface CreatePendingAgeVerificationInput {
 export interface AgeRepository {
   findLatestAgeStatusBySupabaseUserId(supabaseUserId: string): Promise<AgeStatus>;
   createPendingAgeVerification(input: CreatePendingAgeVerificationInput): Promise<void>;
+  recordProviderWebhook(input: RecordAgeProviderWebhookInput): Promise<boolean>;
+  updateVerificationFromWebhook(input: UpdateAgeVerificationFromWebhookInput): Promise<boolean>;
   close?(): Promise<void>;
+}
+
+export interface RecordAgeProviderWebhookInput {
+  provider: AgeProvider;
+  providerEventId: string;
+  eventType: string;
+  normalizedState: AgeState;
+  signatureHash: string | null;
+}
+
+export interface UpdateAgeVerificationFromWebhookInput {
+  provider: AgeProvider;
+  providerEventId: string;
+  providerReference: string;
+  state: Extract<AgeState, "pending" | "verified" | "failed">;
+  verifiedAt?: Date | null;
+  failureCode?: string | null;
 }
 
 export interface AgeProviderSessionRequest {

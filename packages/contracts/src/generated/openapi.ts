@@ -2380,9 +2380,37 @@ export interface components {
         };
         WebhookReceipt: {
             /** @enum {string} */
-            provider: "helius";
+            provider: "helius" | "yoti" | "sumsub" | "veriff" | "persona";
             received: number;
             processed: number;
+        };
+        SumsubAgeWebhookPayload: {
+            type: string;
+            applicantId?: string;
+            externalUserId?: string;
+            correlationId?: string;
+            reviewStatus?: string;
+            createdAt?: string;
+            createdAtMs?: string;
+            reviewResult?: {
+                /** @enum {string} */
+                reviewAnswer?: "GREEN" | "RED";
+                reviewRejectType?: string;
+            } & {
+                [key: string]: unknown;
+            };
+        };
+        YotiAgeWebhookPayload: {
+            id: string;
+            session_key: string;
+            reference_id?: string;
+            /** @enum {string} */
+            state: "COMPLETE" | "FAIL" | "ERROR";
+            method?: string;
+            age?: number;
+            timestamp?: number;
+            sequence_number?: number;
+            signature: string;
         };
         TransactionRequest: {
             /** Format: uri */
@@ -4250,6 +4278,13 @@ export interface components {
                 };
             };
         };
+        AgeWebhookPayload: {
+            content: {
+                "application/json": components["schemas"]["SumsubAgeWebhookPayload"] | components["schemas"]["YotiAgeWebhookPayload"] | {
+                    [key: string]: unknown;
+                };
+            };
+        };
     };
     headers: never;
     pathItems: never;
@@ -6085,10 +6120,12 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["WebhookPayload"];
+        requestBody: components["requestBodies"]["AgeWebhookPayload"];
         responses: {
-            202: components["responses"]["Accepted"];
+            202: components["responses"]["WebhookReceipt"];
+            400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
 }

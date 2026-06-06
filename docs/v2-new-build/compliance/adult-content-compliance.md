@@ -31,6 +31,7 @@ Provider choice does not remove platform obligations. The Fastify API remains th
 - no non-consensual, exploitative, or illegal material
 - creator verification and age-verification workflows must exist for upload/publish paths
 - viewer age assurance must exist before protected-app and playback access
+- provider webhook results must be signature-verified server-side before any protected-app access state changes
 - report and takedown flows must remain operator-visible and auditable
 
 ## Recordkeeping and review
@@ -38,6 +39,7 @@ Provider choice does not remove platform obligations. The Fastify API remains th
 - maintain creator verification flags
 - maintain moderation status and removal state
 - maintain audit events for upload, publish, playback authorization, report, moderation action, and entitlement grant
+- maintain provider webhook receipt/event records for age-assurance decisions while avoiding raw identity payload storage
 - keep performer-consent and recordkeeping requirements under legal review before launch
 
 ## Jurisdiction notes

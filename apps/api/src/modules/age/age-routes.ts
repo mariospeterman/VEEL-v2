@@ -3,12 +3,19 @@ import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js
 import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
 import { AgeRepositoryConfigurationError } from "./age-repository.js";
 import {
+  AgeWebhookConfigurationError,
+  AgeWebhookSignatureError,
+  AgeWebhookValidationError,
+  normalizeAgeWebhook
+} from "./age-webhook-adapter.js";
+import {
   AgeProviderIntegrationPendingError,
   AgeProviderUnavailableError
 } from "./age-provider-waterfall.js";
 import type {
   AgeProviderWaterfall,
   AgeRepository,
+  AgeProvider,
   CreateAgeSessionRequest
 } from "./types.js";
 
@@ -20,11 +27,95 @@ interface RegisterAgeRoutesOptions {
 }
 
 const ageProviderPreferences = new Set(["reusable_first", "yoti", "sumsub", "veriff", "persona"]);
+const ageProviders = new Set<AgeProvider>(["yoti", "sumsub", "veriff", "persona"]);
 
 export async function registerAgeRoutes(
   app: FastifyInstance,
   options: RegisterAgeRoutesOptions
 ): Promise<void> {
+  app.post(
+    "/v1/webhooks/age/:provider",
+    {
+      config: {
+        rawBody: true
+      }
+    },
+    async (request, reply) => {
+      const params = request.params as { provider?: string };
+
+      if (!params.provider || !ageProviders.has(params.provider as AgeProvider)) {
+        return reply.code(400).send({
+          code: "validation_failed",
+          message: "Unsupported age provider"
+        });
+      }
+
+      try {
+        const normalized = normalizeAgeWebhook({
+          provider: params.provider as AgeProvider,
+          body: request.body,
+          rawBody: rawBodyBuffer(request.rawBody),
+          headers: request.headers,
+          env: app.config
+        });
+        const isNewEvent = await options.ageRepository.recordProviderWebhook({
+          provider: normalized.provider,
+          providerEventId: normalized.providerEventId,
+          eventType: normalized.eventType,
+          normalizedState: normalized.state,
+          signatureHash: normalized.signatureHash
+        });
+
+        if (!isNewEvent) {
+          return reply.code(202).send({
+            provider: normalized.provider,
+            received: 1,
+            processed: 0
+          });
+        }
+
+        const applied = await options.ageRepository.updateVerificationFromWebhook({
+          provider: normalized.provider,
+          providerEventId: normalized.providerEventId,
+          providerReference: normalized.providerReference,
+          state: normalized.state,
+          verifiedAt: normalized.occurredAt ?? null,
+          failureCode: normalized.failureCode ?? null
+        });
+
+        return reply.code(202).send({
+          provider: normalized.provider,
+          received: 1,
+          processed: applied ? 1 : 0
+        });
+      } catch (error) {
+        if (error instanceof AgeWebhookSignatureError) {
+          return reply.code(401).send(unauthorizedResponse("Missing or invalid webhook signature"));
+        }
+
+        if (error instanceof AgeWebhookValidationError) {
+          return reply.code(400).send({
+            code: "validation_failed",
+            message: error.message
+          });
+        }
+
+        if (
+          error instanceof AgeWebhookConfigurationError ||
+          error instanceof AgeRepositoryConfigurationError
+        ) {
+          request.log.warn({ error }, "Age webhook is not configured");
+          return reply.code(503).send({
+            code: "service_unavailable",
+            message: "Age webhook is not configured"
+          });
+        }
+
+        throw error;
+      }
+    }
+  );
+
   app.post("/v1/age/sessions", async (request, reply) => {
     const verifiedSession = await verifyRequestSession(request, options.authVerifier);
 
@@ -135,4 +226,16 @@ export async function registerAgeRoutes(
       throw error;
     }
   });
+}
+
+function rawBodyBuffer(rawBody: string | Buffer | undefined): Buffer {
+  if (Buffer.isBuffer(rawBody)) {
+    return rawBody;
+  }
+
+  if (typeof rawBody === "string") {
+    return Buffer.from(rawBody);
+  }
+
+  return Buffer.alloc(0);
 }

@@ -2,6 +2,7 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import sensible from "@fastify/sensible";
 import Fastify, { type FastifyInstance } from "fastify";
+import rawBody from "fastify-raw-body";
 import { createPostgresAdminRepository } from "./modules/admin/admin-repository.js";
 import { registerAdminRoutes } from "./modules/admin/admin-routes.js";
 import type { AdminRepository } from "./modules/admin/types.js";
@@ -113,7 +114,8 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
         "DATABASE_URL",
         "HELIUS_API_KEY",
         "HELIUS_WEBHOOK_SECRET",
-        "COINBASE_CDP_API_KEY_SECRET"
+        "COINBASE_CDP_API_KEY_SECRET",
+        "SUMSUB_WEBHOOK_SECRET"
       ]
     }
   });
@@ -126,6 +128,12 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   await app.register(rateLimit, {
     max: 100,
     timeWindow: "1 minute"
+  });
+  await app.register(rawBody, {
+    field: "rawBody",
+    global: false,
+    encoding: false,
+    runFirst: true
   });
   await app.register(envPlugin);
   await app.register(supabaseBoundaryPlugin);

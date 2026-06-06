@@ -27,6 +27,12 @@ export function createPostgresAgeRepository(databaseUrl?: string): AgeRepository
       },
       async createPendingAgeVerification() {
         throw new AgeRepositoryConfigurationError();
+      },
+      async recordProviderWebhook() {
+        throw new AgeRepositoryConfigurationError();
+      },
+      async updateVerificationFromWebhook() {
+        throw new AgeRepositoryConfigurationError();
       }
     };
   }
@@ -95,6 +101,115 @@ export function createPostgresAgeRepository(databaseUrl?: string): AgeRepository
           ${input.expiresAt}
         from target_user
       `;
+    },
+    async recordProviderWebhook(input): Promise<boolean> {
+      const receiptRows = await sql<{ id: string }[]>`
+        insert into provider_webhook_receipts (
+          id,
+          provider,
+          webhook_type,
+          signature_hash,
+          idempotency_key
+        )
+        values (
+          ${randomUUID()},
+          ${input.provider},
+          'age-verification',
+          ${input.signatureHash},
+          ${input.providerEventId}
+        )
+        on conflict (provider, webhook_type, idempotency_key) do nothing
+        returning id
+      `;
+
+      if (receiptRows.length === 0) {
+        return false;
+      }
+
+      await sql`
+        insert into provider_events (
+          id,
+          provider,
+          provider_event_id,
+          event_type,
+          normalized_state
+        )
+        values (
+          ${randomUUID()},
+          ${input.provider},
+          ${input.providerEventId},
+          ${input.eventType},
+          ${input.normalizedState}
+        )
+        on conflict (provider, provider_event_id) do nothing
+      `;
+
+      return true;
+    },
+    async updateVerificationFromWebhook(input): Promise<boolean> {
+      const rows = await sql<{ id: string }[]>`
+        update age_verifications
+        set
+          state = ${input.state},
+          verified_at = case
+            when ${input.state} = 'verified' then coalesce(verified_at, ${input.verifiedAt ?? null}, now())
+            else verified_at
+          end
+        where provider = ${input.provider}
+          and provider_reference = ${input.providerReference}
+          and state in ('pending', 'failed', 'verified')
+        returning id
+      `;
+
+      await sql`
+        update provider_events
+        set
+          normalized_state = ${rows.length > 0 ? input.state : "ignored"},
+          processed_at = now()
+        where provider = ${input.provider}
+          and provider_event_id = ${input.providerEventId}
+      `;
+
+      await sql`
+        update provider_webhook_receipts
+        set
+          state = ${rows.length > 0 ? input.state : "ignored"},
+          processed_at = now()
+        where provider = ${input.provider}
+          and webhook_type = 'age-verification'
+          and idempotency_key = ${input.providerEventId}
+      `;
+
+      if (rows.length > 0) {
+        await sql`
+          insert into audit_events (
+            id,
+            actor_user_id,
+            subject_type,
+            subject_id,
+            action,
+            metadata
+          )
+          select
+            ${randomUUID()},
+            null,
+            'age_verification',
+            av.id,
+            'age.webhook_applied',
+            jsonb_build_object(
+              'provider', ${input.provider},
+              'providerEventId', ${input.providerEventId},
+              'state', ${input.state},
+              'failureCode', ${input.failureCode ?? null}
+            )
+          from age_verifications av
+          where av.provider = ${input.provider}
+            and av.provider_reference = ${input.providerReference}
+          limit 1
+        `;
+      }
+
+      return rows.length > 0;
     },
     async close() {
       await sql.end({ timeout: 5 });

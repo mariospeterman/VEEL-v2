@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
@@ -293,6 +294,12 @@ describe("buildApi", () => {
         },
         async createPendingAgeVerification(input) {
           createdPendingVerifications.push(input);
+        },
+        async recordProviderWebhook() {
+          throw new Error("not implemented");
+        },
+        async updateVerificationFromWebhook() {
+          throw new Error("not implemented");
         }
       },
       ageProviderWaterfall: fakeAgeProviderWaterfall
@@ -330,6 +337,154 @@ describe("buildApi", () => {
     ]);
 
     await app.close();
+  });
+
+  it("accepts a signed Sumsub age webhook and applies normalized verification state", async () => {
+    vi.stubEnv("SUMSUB_WEBHOOK_SECRET", "sumsub-test-secret");
+    const recordedEvents: unknown[] = [];
+    const appliedEvents: unknown[] = [];
+    const ageRepository: AgeRepository = {
+      ...requiredAgeRepository,
+      async recordProviderWebhook(input) {
+        recordedEvents.push(input);
+        return true;
+      },
+      async updateVerificationFromWebhook(input) {
+        appliedEvents.push(input);
+        return true;
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      ageRepository
+    });
+    await app.ready();
+    const payload = {
+      type: "applicantReviewed",
+      applicantId: "sumsub-applicant",
+      correlationId: "sumsub-event",
+      reviewResult: {
+        reviewAnswer: "GREEN"
+      },
+      createdAt: "2026-06-06 01:00:00+0000"
+    };
+    const rawPayload = JSON.stringify(payload);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/webhooks/age/sumsub",
+      headers: {
+        "content-type": "application/json",
+        "x-payload-digest": sumsubDigest(rawPayload),
+        "x-payload-digest-alg": "HMAC_SHA256_HEX"
+      },
+      payload: rawPayload
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(202);
+    expect(response.json()).toEqual({
+      provider: "sumsub",
+      received: 1,
+      processed: 1
+    });
+    expect(recordedEvents).toMatchObject([
+      {
+        provider: "sumsub",
+        providerEventId: "sumsub-event",
+        eventType: "applicantReviewed",
+        normalizedState: "verified"
+      }
+    ]);
+    expect(appliedEvents).toMatchObject([
+      {
+        provider: "sumsub",
+        providerEventId: "sumsub-event",
+        providerReference: "sumsub-applicant",
+        state: "verified"
+      }
+    ]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("deduplicates repeated signed Sumsub age webhooks", async () => {
+    vi.stubEnv("SUMSUB_WEBHOOK_SECRET", "sumsub-test-secret");
+    const appliedEvents: unknown[] = [];
+    const ageRepository: AgeRepository = {
+      ...requiredAgeRepository,
+      async recordProviderWebhook() {
+        return false;
+      },
+      async updateVerificationFromWebhook(input) {
+        appliedEvents.push(input);
+        return true;
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      ageRepository
+    });
+    await app.ready();
+    const rawPayload = JSON.stringify({
+      type: "applicantReviewed",
+      applicantId: "sumsub-applicant",
+      correlationId: "sumsub-event",
+      reviewResult: {
+        reviewAnswer: "GREEN"
+      }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/webhooks/age/sumsub",
+      headers: {
+        "content-type": "application/json",
+        "x-payload-digest": sumsubDigest(rawPayload),
+        "x-payload-digest-alg": "HMAC_SHA256_HEX"
+      },
+      payload: rawPayload
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual({
+      provider: "sumsub",
+      received: 1,
+      processed: 0
+    });
+    expect(appliedEvents).toEqual([]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("rejects Sumsub age webhooks with invalid signatures", async () => {
+    vi.stubEnv("SUMSUB_WEBHOOK_SECRET", "sumsub-test-secret");
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      ageRepository: requiredAgeRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/webhooks/age/sumsub",
+      headers: {
+        "content-type": "application/json",
+        "x-payload-digest": "00",
+        "x-payload-digest-alg": "HMAC_SHA256_HEX"
+      },
+      payload: {
+        type: "applicantReviewed",
+        applicantId: "sumsub-applicant",
+        correlationId: "sumsub-event"
+      }
+    });
+
+    expect(response.statusCode).toBe(401);
+
+    await app.close();
+    vi.unstubAllEnvs();
   });
 
   it("fails closed when no age provider is configured", async () => {
@@ -4020,6 +4175,12 @@ const verifiedAgeRepository: AgeRepository = {
   },
   async createPendingAgeVerification() {
     throw new Error("not implemented");
+  },
+  async recordProviderWebhook() {
+    throw new Error("not implemented");
+  },
+  async updateVerificationFromWebhook() {
+    throw new Error("not implemented");
   }
 };
 
@@ -4031,6 +4192,12 @@ const requiredAgeRepository: AgeRepository = {
     };
   },
   async createPendingAgeVerification() {
+    throw new Error("not implemented");
+  },
+  async recordProviderWebhook() {
+    throw new Error("not implemented");
+  },
+  async updateVerificationFromWebhook() {
     throw new Error("not implemented");
   }
 };
@@ -4052,6 +4219,10 @@ const fakeAgeProviderWaterfall: AgeProviderWaterfall = {
     };
   }
 };
+
+function sumsubDigest(payload: string): string {
+  return createHmac("sha256", "sumsub-test-secret").update(payload).digest("hex");
+}
 
 const homeFeedItem: ContentItem = {
   id: "00000000-0000-4000-8000-000000000040",

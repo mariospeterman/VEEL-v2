@@ -37,9 +37,10 @@ Current implementation state:
 - Phantom deeplinks: https://docs.phantom.com/phantom-deeplinks/handling-sessions
 - Solana Mobile Wallet Adapter: https://docs.solanamobile.com/developers/mobile-wallet-adapter
 - Sumsub API auth + webhooks: https://docs.sumsub.com/reference/get-started-with-api
-- Sumsub applicant review webhook: https://docs.sumsub.com/reference/applicantreviewed
+- Sumsub applicant review webhook: https://docs.sumsub.com/docs/receive-verification-results
+- Sumsub webhook signature verification: https://docs.sumsub.com/docs/webhook-manager
 - Yoti age verification overview: https://developers.yoti.com/age-verification/age-verification-introduction
-- Yoti notifications: https://developers.yoti.com/age-verification/age-verification-quick-start-guide
+- Yoti notifications/signature verification: https://developers.yoti.com/age-verification/notifications
 
 ## Wallet signing
 
@@ -105,22 +106,31 @@ Current implementation state:
 ### Sumsub webhook expectations in this repo
 
 - Route:
-  - `POST /v1/webhooks/age/{provider}`
+  - `POST /v1/webhooks/age/{provider}` with `{provider}=sumsub`
 - Signature:
   - header `x-payload-digest`
-  - validated as `HMAC-SHA1(raw-json-payload, SUMSUB_WEBHOOK_SECRET)`
+  - header `x-payload-digest-alg`
+  - validated against the raw JSON payload with the HMAC algorithm declared by Sumsub
+  - supported values are `HMAC_SHA256_HEX`, `HMAC_SHA512_HEX`, and legacy `HMAC_SHA1_HEX`
 - Provider reference lookup:
-  - the repo resolves the challenge by the Sumsub provider reference stored on the age-verification challenge
+  - the repo resolves the pending age verification by `applicantId`, falling back to `externalUserId` when provider setup uses that reference
 - Result ownership:
   - the browser cannot complete or override the result
   - only the verified webhook path applies the over-18 decision
+- Storage:
+  - `provider_webhook_receipts` stores receipt metadata and a hash of the signature only
+  - `provider_events` stores normalized provider event state
+  - `age_verifications` stores normalized `pending`, `verified`, or `failed` state
+  - raw provider payloads, identity images, document data, and private provider comments are not stored
 
 ### Runtime behavior in this repo
 
 - The API starts the Sumsub session.
 - The provider launch URL is returned to the browser.
 - The browser cannot self-complete the age check.
-- The webhook result applies the over-18 decision server-side.
+- A signed `applicantReviewed` webhook with `reviewResult.reviewAnswer=GREEN` applies the over-18 decision server-side.
+- A signed `applicantReviewed` webhook with `reviewResult.reviewAnswer=RED` records a failed age state.
+- Duplicate provider events return `202` but are not applied twice.
 
 ## Yoti
 
@@ -144,23 +154,30 @@ Current implementation state:
 ### Yoti webhook expectations in this repo
 
 - Route:
-  - `POST /v1/webhooks/age/{provider}`
+  - `POST /v1/webhooks/age/{provider}` with `{provider}=yoti`
 - Signature field:
   - JSON payload field `signature`
 - Verification:
-  - the repo verifies the signed notification with the public key at `YOTI_NOTIFICATION_KEY_PATH`
+  - the repo verifies the signed notification with RSA-SHA256/PSS using the public key at `YOTI_NOTIFICATION_KEY_PATH`
 - Provider reference lookup:
-  - the repo resolves the challenge by the Yoti provider session reference stored on the age-verification challenge
+  - the repo resolves the pending age verification by `session_key`, falling back to `reference_id`
 - Result ownership:
   - the browser cannot complete or override the result
   - only the verified webhook path applies the over-18 decision
+- Storage:
+  - `provider_webhook_receipts` stores receipt metadata and a hash of the notification signature only
+  - `provider_events` stores normalized provider event state
+  - `age_verifications` stores normalized `pending`, `verified`, or `failed` state
+  - raw provider payloads and identity artifacts are not stored
 
 ### Runtime behavior in this repo
 
 - The API starts the Yoti session.
 - The launch URL is returned to the browser.
 - The browser cannot self-complete the check.
-- The webhook verifies the signed notification and then applies the decision server-side.
+- A signed notification with `state=COMPLETE` applies the over-18 decision server-side.
+- A signed notification with `state=FAIL` or `state=ERROR` records a failed age state.
+- Duplicate provider events return `202` but are not applied twice.
 
 ## Production guardrails
 

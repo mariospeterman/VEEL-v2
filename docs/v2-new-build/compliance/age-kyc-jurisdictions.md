@@ -55,6 +55,13 @@ This is the best-practice 2026 setup to keep:
 - strong compliance posture because every protected-app path still resolves through a third-party age-assurance flow
 - minimal retained data because the app stores only the result, not raw identity artifacts
 
+Webhook rule:
+
+- provider callbacks are accepted only through `POST /v1/webhooks/age/{provider}`
+- provider signatures must verify before state changes
+- provider retries must be idempotent
+- the app stores normalized receipt/event/result state only, never raw document, biometric, or private provider-review payloads
+
 ## Product rule
 
 Protected app access should be universal:
