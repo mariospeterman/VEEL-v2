@@ -334,13 +334,9 @@ function ReportPanel({
     return <UnavailableState result={dac7Reports} />;
   }
 
-  if (!carfReports.ok) {
-    return <UnavailableState result={carfReports} />;
-  }
+  const reports = [...dac7Reports.data.items, ...(carfReports.ok ? carfReports.data.items : [])];
 
-  const reports = [...dac7Reports.data.items, ...carfReports.data.items];
-
-  if (reports.length === 0) {
+  if (reports.length === 0 && carfReports.ok) {
     return <EmptyState label="No DAC7 or CARF reports" />;
   }
 
@@ -349,6 +345,7 @@ function ReportPanel({
       {reports.map((report) => (
         <ReportRow key={report.id} report={report} />
       ))}
+      {!carfReports.ok ? <UnavailableState result={carfReports} /> : null}
     </div>
   );
 }

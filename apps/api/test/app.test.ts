@@ -3878,7 +3878,24 @@ describe("buildApi", () => {
   it("returns admin compliance, referral governance, tier waiver, and organization projections", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
-      adminRepository: fakeAdminRepository
+      adminRepository: {
+        ...fakeAdminRepository,
+        async listFeatureFlags() {
+          return {
+            items: [
+              {
+                key: "compliance.carf_exports",
+                value: { enabled: true },
+                category: "compliance",
+                policyBoundary: "software_policy_only_no_payment_access_or_social_priority",
+                state: "active",
+                updatedAt: "2026-06-06T12:00:00.000Z"
+              }
+            ],
+            nextCursor: null
+          };
+        }
+      }
     });
     await app.ready();
 
@@ -3938,6 +3955,30 @@ describe("buildApi", () => {
     expect(organizations.json().items[0]).toMatchObject({
       plan: "enterprise",
       kybState: "pending"
+    });
+
+    await app.close();
+  });
+
+  it("blocks CARF report access while the policy feature flag is paused", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: fakeAdminRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/admin/compliance/carf/reports",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({
+      code: "forbidden",
+      message: "CARF reporting is disabled by policy"
     });
 
     await app.close();

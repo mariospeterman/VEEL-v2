@@ -92,8 +92,13 @@ DAC8/CARF is separate from DAC7. Noncustodial wallet-to-wallet settlement reduce
 Default feature flag:
 
 ```text
-carf_reporting_required = false
+compliance.carf_exports = {
+  state: paused,
+  value.enabled: false
+}
 ```
+
+Backend policy treats this as fail-closed: `GET /v1/admin/compliance/carf/reports` is unavailable until the flag is `active` and `value.enabled` is `true`. The flag is a software policy control only and does not create reporting truth; reporting facts still come from the compliance ledger.
 
 If counsel or operating footprint changes this to true, the system must support:
 

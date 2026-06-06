@@ -306,6 +306,14 @@ export async function registerAdminRoutes(
     const allowed = await requireAdminAccess(request, reply, options);
     if (!allowed) return reply;
 
+    const enabled = await featureFlagEnabled(options.adminRepository, "compliance.carf_exports");
+    if (!enabled) {
+      return reply.code(403).send({
+        code: "forbidden",
+        message: "CARF reporting is disabled by policy"
+      });
+    }
+
     const query = request.query as { cursor?: string };
     return reply.code(200).send(await options.adminRepository.listCarfReports(adminListInput(query)));
   });
@@ -783,6 +791,21 @@ function validateFeatureFlagPatch(
   }
 
   return null;
+}
+
+async function featureFlagEnabled(repository: AdminRepository, key: string): Promise<boolean> {
+  const flags = await repository.listFeatureFlags();
+  const flag = flags.items.find((item) => item.key === key);
+
+  if (!flag || flag.state !== "active") {
+    return false;
+  }
+
+  if (typeof flag.value !== "object" || flag.value === null || Array.isArray(flag.value)) {
+    return false;
+  }
+
+  return (flag.value as { enabled?: unknown }).enabled === true;
 }
 
 function validateOrganizationMemberAction(

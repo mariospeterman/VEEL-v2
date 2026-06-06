@@ -1393,7 +1393,7 @@ paths:
     get:
       operationId: listAdminCarfReports
       tags: [Admin]
-      summary: DAC8/CARF report readiness, disabled unless carf_reporting_required is enabled
+      summary: DAC8/CARF report readiness, disabled unless compliance.carf_exports is enabled
       parameters:
         - $ref: "#/components/parameters/Cursor"
       responses:
@@ -3418,7 +3418,10 @@ components:
       required: [key, value, category, policyBoundary, state, updatedAt]
       properties:
         key: { type: string }
-        value: { type: object, additionalProperties: true }
+        value:
+          type: object
+          additionalProperties: true
+          description: Policy-owned flag data. For boolean rollout gates, backend enforcement requires value.enabled to be true and state to be active.
         category: { type: string, enum: [feature, provider, compliance, safety, admin_policy] }
         policyBoundary: { type: string, enum: [software_policy_only_no_payment_access_or_social_priority] }
         state: { type: string, enum: [active, paused, archived] }
@@ -3484,7 +3487,10 @@ components:
       type: object
       required: [value, state, reason]
       properties:
-        value: { type: object, additionalProperties: true }
+        value:
+          type: object
+          additionalProperties: true
+          description: Policy-owned flag data. For boolean rollout gates, backend enforcement requires value.enabled to be true and state to be active.
         state: { type: string, enum: [active, paused, archived] }
         reason: { type: string, minLength: 3, maxLength: 500 }
     AuditEvent:

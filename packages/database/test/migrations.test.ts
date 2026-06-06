@@ -509,6 +509,17 @@ describe("database migrations", () => {
     expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role|creator_balance|withdrawal|escrow|payment_proof|recommendation_boost|visibility_boost|message_priority|mutuals_boost/i);
   });
 
+  it("seeds CARF feature flag policy defaults as paused software controls", () => {
+    const sql = readMigration("0045_seed_feature_flag_policy_defaults.sql");
+
+    expect(sql).toContain("insert into feature_flags");
+    expect(sql).toContain("compliance.carf_exports");
+    expect(sql).toContain('"enabled": false');
+    expect(sql).toContain("software_policy_only_no_payment_access_or_social_priority");
+    expect(sql).toContain("'paused'");
+    expect(sql).not.toMatch(/creator_balance|withdrawal|escrow|recommendation_boost|visibility_boost|message_priority|mutuals_boost/i);
+  });
+
   it("adds only user-owned projections to the Supabase realtime publication", () => {
     const sql = readMigration("0039_realtime_projection_publication.sql");
 

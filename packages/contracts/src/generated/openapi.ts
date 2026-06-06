@@ -1889,7 +1889,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** DAC8/CARF report readiness, disabled unless carf_reporting_required is enabled */
+        /** DAC8/CARF report readiness, disabled unless compliance.carf_exports is enabled */
         get: operations["listAdminCarfReports"];
         put?: never;
         post?: never;
@@ -3743,6 +3743,7 @@ export interface components {
         };
         AdminFeatureFlag: {
             key: string;
+            /** @description Policy-owned flag data. For boolean rollout gates, backend enforcement requires value.enabled to be true and state to be active. */
             value: {
                 [key: string]: unknown;
             };
@@ -3805,6 +3806,7 @@ export interface components {
             reason: string;
         };
         AdminFeatureFlagPatchRequest: {
+            /** @description Policy-owned flag data. For boolean rollout gates, backend enforcement requires value.enabled to be true and state to be active. */
             value: {
                 [key: string]: unknown;
             };
