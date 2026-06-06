@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Bunny, Livepeer, media, live
-Last updated: 2026-06-03
+Last updated: 2026-06-06
 Source of truth: yes
 
 Owns:
@@ -29,12 +29,15 @@ Current implementation state:
 - Upload state is stored in `media_assets` as normalized provider/provider asset/provider state only.
 - `GET /v1/content/{contentId}` returns a frontend-safe media viewer projection backed by `content_access_rules`, creator profile data, and the first media poster.
 - Access projection is conservative: free/teaser/pass/locked states are exposed, but no entitlement grant, signed playback URL, tokenized playback URL, or provider management URL is exposed by this slice.
-- Bunny webhooks, playback token issuing, moderation state transitions, and locked playback are deferred to their owning media/access slices.
+- `POST /v1/webhooks/media/{provider}` accepts Bunny Stream signed webhooks for the `bunny` provider, verifies the raw-body HMAC using the library read-only key, records idempotent provider receipts, and applies normalized media processing state.
+- Playback token issuing, moderation state transitions, and locked playback are deferred to their owning media/access slices.
 
 Official references checked:
 
 - Bunny Stream API reference: https://docs.bunny.net/api-reference/stream
 - Bunny TUS resumable uploads: https://docs.bunny.net/stream/tus-resumable-uploads
+- Bunny Stream webhooks and HMAC validation: https://docs.bunny.net/stream/webhooks
+- Bunny Stream security and token authentication: https://docs.bunny.net/stream/security
 - Livepeer asset upload reference: https://docs.livepeer.org/api-reference/asset/upload
 
 ## Provider Split
@@ -70,6 +73,8 @@ Rules:
 - Bunny video object is created by backend before TUS upload.
 - Bunny API key never reaches frontend.
 - Frontend receives only upload target/headers needed for TUS.
+- Bunny status webhooks require `X-BunnyStream-Signature-Version: v1`, `X-BunnyStream-Signature-Algorithm: hmac-sha256`, and `X-BunnyStream-Signature`; the backend verifies the exact raw request body with `BUNNY_STREAM_WEBHOOK_READONLY_KEY`.
+- Bunny webhook `VideoGuid` and `Status` are normalized into provider event state; raw provider payloads are not returned to frontend resources.
 - Provider payload is sanitized before frontend response.
 - Paid full playback requires backend access state and backend-issued signed/tokenized Bunny playback.
 - Full locked Bunny playback is never exposed as an unsigned long-lived URL.

@@ -1645,6 +1645,184 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("accepts a signed Bunny media webhook and applies normalized playback state", async () => {
+    vi.stubEnv("BUNNY_STREAM_WEBHOOK_READONLY_KEY", "bunny-readonly-secret");
+    const recordedEvents: unknown[] = [];
+    const appliedEvents: unknown[] = [];
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        throw new Error("not implemented");
+      },
+      async createMediaAsset() {
+        throw new Error("not implemented");
+      },
+      async findContentDetail() {
+        throw new Error("not implemented");
+      },
+      async findContentUnlockOffer() {
+        throw new Error("not implemented");
+      },
+      async findOwnedContentForUpload() {
+        throw new Error("not implemented");
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      },
+      async recordMediaProviderWebhook(input) {
+        recordedEvents.push(input);
+        return true;
+      },
+      async updateMediaAssetFromWebhook(input) {
+        appliedEvents.push(input);
+        return true;
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      contentRepository
+    });
+    await app.ready();
+    const payload = {
+      VideoLibraryId: 133,
+      VideoGuid: "bunny-video-guid",
+      Status: 3
+    };
+    const rawPayload = JSON.stringify(payload);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/webhooks/media/bunny",
+      headers: {
+        "content-type": "application/json",
+        "x-bunnystream-signature": bunnySignature(rawPayload),
+        "x-bunnystream-signature-version": "v1",
+        "x-bunnystream-signature-algorithm": "hmac-sha256"
+      },
+      payload: rawPayload
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(202);
+    expect(response.json()).toEqual({
+      provider: "bunny",
+      received: 1,
+      processed: 1
+    });
+    expect(recordedEvents).toMatchObject([
+      {
+        provider: "bunny",
+        providerEventId: "133:bunny-video-guid:3",
+        eventType: "video.status.3",
+        normalizedState: "ready"
+      }
+    ]);
+    expect(appliedEvents).toEqual([
+      {
+        provider: "bunny",
+        providerEventId: "133:bunny-video-guid:3",
+        providerAssetId: "bunny-video-guid",
+        providerState: "ready",
+        providerPlayable: true
+      }
+    ]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("deduplicates repeated signed Bunny media webhooks", async () => {
+    vi.stubEnv("BUNNY_STREAM_WEBHOOK_READONLY_KEY", "bunny-readonly-secret");
+    const appliedEvents: unknown[] = [];
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        throw new Error("not implemented");
+      },
+      async createMediaAsset() {
+        throw new Error("not implemented");
+      },
+      async findContentDetail() {
+        throw new Error("not implemented");
+      },
+      async findContentUnlockOffer() {
+        throw new Error("not implemented");
+      },
+      async findOwnedContentForUpload() {
+        throw new Error("not implemented");
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      },
+      async recordMediaProviderWebhook() {
+        return false;
+      },
+      async updateMediaAssetFromWebhook(input) {
+        appliedEvents.push(input);
+        return true;
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      contentRepository
+    });
+    await app.ready();
+    const rawPayload = JSON.stringify({
+      VideoLibraryId: 133,
+      VideoGuid: "bunny-video-guid",
+      Status: 4
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/webhooks/media/bunny",
+      headers: {
+        "content-type": "application/json",
+        "x-bunnystream-signature": bunnySignature(rawPayload),
+        "x-bunnystream-signature-version": "v1",
+        "x-bunnystream-signature-algorithm": "hmac-sha256"
+      },
+      payload: rawPayload
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual({
+      provider: "bunny",
+      received: 1,
+      processed: 0
+    });
+    expect(appliedEvents).toEqual([]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("rejects Bunny media webhooks with invalid signatures", async () => {
+    vi.stubEnv("BUNNY_STREAM_WEBHOOK_READONLY_KEY", "bunny-readonly-secret");
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/webhooks/media/bunny",
+      headers: {
+        "content-type": "application/json",
+        "x-bunnystream-signature": "00",
+        "x-bunnystream-signature-version": "v1",
+        "x-bunnystream-signature-algorithm": "hmac-sha256"
+      },
+      payload: {
+        VideoLibraryId: 133,
+        VideoGuid: "bunny-video-guid",
+        Status: 3
+      }
+    });
+
+    expect(response.statusCode).toBe(401);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
   it("creates Bunny TUS credentials without exposing the Stream API key", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-04T00:00:00.000Z"));
@@ -4222,6 +4400,10 @@ const fakeAgeProviderWaterfall: AgeProviderWaterfall = {
 
 function sumsubDigest(payload: string): string {
   return createHmac("sha256", "sumsub-test-secret").update(payload).digest("hex");
+}
+
+function bunnySignature(payload: string): string {
+  return createHmac("sha256", "bunny-readonly-secret").update(payload).digest("hex");
 }
 
 const homeFeedItem: ContentItem = {

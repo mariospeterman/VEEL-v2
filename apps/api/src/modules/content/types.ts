@@ -24,6 +24,8 @@ export interface ContentRepository {
   findOwnedMediaAssetForSync?(input: FindOwnedMediaAssetForSyncInput): Promise<OwnedMediaAssetForSync | null>;
   findOwnedContentForUpload(input: FindOwnedContentForUploadInput): Promise<OwnedContentForUpload | null>;
   listHomeFeed(input: ListHomeFeedInput): Promise<FeedPage>;
+  recordMediaProviderWebhook?(input: RecordMediaProviderWebhookInput): Promise<boolean>;
+  updateMediaAssetFromWebhook?(input: UpdateMediaAssetFromWebhookInput): Promise<boolean>;
   updateMediaAssetPlayback?(input: UpdateMediaAssetPlaybackInput): Promise<void>;
   close?(): Promise<void>;
 }
@@ -91,6 +93,22 @@ export interface UpdateMediaAssetPlaybackInput {
   playbackUrl?: string | null;
   posterUrl?: string | null;
   durationMs?: number | null;
+}
+
+export interface RecordMediaProviderWebhookInput {
+  provider: "bunny" | "livepeer";
+  providerEventId: string;
+  eventType: string;
+  normalizedState: string;
+  signatureHash?: string | null;
+}
+
+export interface UpdateMediaAssetFromWebhookInput {
+  provider: "bunny" | "livepeer";
+  providerEventId: string;
+  providerAssetId: string;
+  providerState: string;
+  providerPlayable: boolean;
 }
 
 export interface MediaUploadProviderSession {

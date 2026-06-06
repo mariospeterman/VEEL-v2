@@ -102,6 +102,12 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
       async listHomeFeed() {
         throw new ContentRepositoryConfigurationError();
       },
+      async recordMediaProviderWebhook() {
+        throw new ContentRepositoryConfigurationError();
+      },
+      async updateMediaAssetFromWebhook() {
+        throw new ContentRepositoryConfigurationError();
+      },
       async updateMediaAssetPlayback() {
         throw new ContentRepositoryConfigurationError();
       }
@@ -459,6 +465,90 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
             and ma.id = ${input.mediaAssetId}
         `;
       });
+    },
+    async recordMediaProviderWebhook(input) {
+      const insertedReceipts = await sql<{ id: string }[]>`
+        insert into provider_webhook_receipts (
+          id,
+          provider,
+          webhook_type,
+          signature_hash,
+          idempotency_key
+        )
+        values (
+          ${randomUUID()},
+          ${input.provider},
+          'media-status',
+          ${input.signatureHash ?? null},
+          ${input.providerEventId}
+        )
+        on conflict (provider, webhook_type, idempotency_key) do nothing
+        returning id
+      `;
+
+      if (insertedReceipts.length === 0) {
+        return false;
+      }
+
+      await sql`
+        insert into provider_events (
+          id,
+          provider,
+          provider_event_id,
+          event_type,
+          normalized_state
+        )
+        values (
+          ${randomUUID()},
+          ${input.provider},
+          ${input.providerEventId},
+          ${input.eventType},
+          ${input.normalizedState}
+        )
+        on conflict (provider, provider_event_id) do nothing
+      `;
+
+      return true;
+    },
+    async updateMediaAssetFromWebhook(input) {
+      const rows = await sql.begin(async (transaction) => {
+        const updated = await transaction<{ id: string }[]>`
+          update media_assets
+          set
+            provider_state = ${input.providerState},
+            provider_playable = ${input.providerPlayable},
+            ready_at = case when ${input.providerPlayable} then coalesce(ready_at, now()) else ready_at end,
+            provider_checked_at = now()
+          where provider = ${input.provider}
+            and provider_asset_id = ${input.providerAssetId}
+          returning id
+        `;
+
+        await transaction`
+          update content_items ci
+          set
+            state = case when ${input.providerPlayable} then 'ready' else state end,
+            moderation_state = case when ${input.providerPlayable} then 'approved' else moderation_state end,
+            updated_at = now()
+          from media_assets ma
+          where ma.content_item_id = ci.id
+            and ma.provider = ${input.provider}
+            and ma.provider_asset_id = ${input.providerAssetId}
+        `;
+
+        await transaction`
+          update provider_events
+          set
+            normalized_state = ${input.providerState},
+            processed_at = now()
+          where provider = ${input.provider}
+            and provider_event_id = ${input.providerEventId}
+        `;
+
+        return updated;
+      });
+
+      return rows.length > 0;
     },
     async listHomeFeed(input) {
       const rows = await sql<FeedRow[]>`

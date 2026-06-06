@@ -41,6 +41,7 @@ export const serverEnvSchema = z.object({
   COINBASE_ONRAMP_DESTINATION_NETWORK: z.string().default("solana"),
   BUNNY_STREAM_API_KEY: z.string().optional(),
   BUNNY_STREAM_LIBRARY_ID: z.string().optional(),
+  BUNNY_STREAM_WEBHOOK_READONLY_KEY: z.string().optional(),
   LIVEPEER_API_KEY: z.string().optional(),
   LIVEPEER_ACCESS_CONTROL_PRIVATE_KEY: z.string().optional(),
   LIVEPEER_ACCESS_CONTROL_PUBLIC_KEY: z.string().optional(),

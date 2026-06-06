@@ -8,6 +8,13 @@ import {
   MediaUploadProviderConfigurationError,
   MediaUploadProviderError
 } from "./media-upload-adapter.js";
+import {
+  MediaWebhookConfigurationError,
+  MediaWebhookSignatureError,
+  MediaWebhookValidationError,
+  normalizeMediaWebhook,
+  type MediaWebhookProvider
+} from "./media-webhook-adapter.js";
 import type {
   ContentRepository,
   CreateContentRequest,
@@ -30,11 +37,104 @@ const contentMediaTypes = new Set(["bit", "clip", "image", "vod", "live_replay"]
 const contentVisibilityValues = new Set(["public", "followers", "subscribers", "private"]);
 const nsfwLabels = new Set(["none", "adult", "explicit", "sensitive"]);
 const videoMimeTypes = new Set(["video/mp4", "video/quicktime", "video/webm"]);
+const mediaWebhookProviders = new Set<MediaWebhookProvider>(["bunny", "livepeer"]);
 
 export async function registerContentRoutes(
   app: FastifyInstance,
   options: RegisterContentRoutesOptions
 ): Promise<void> {
+  app.post(
+    "/v1/webhooks/media/:provider",
+    {
+      config: {
+        rawBody: true
+      }
+    },
+    async (request, reply) => {
+      const params = request.params as { provider?: string };
+
+      if (!params.provider || !mediaWebhookProviders.has(params.provider as MediaWebhookProvider)) {
+        return reply.code(400).send({
+          code: "validation_failed",
+          message: "Unsupported media provider"
+        });
+      }
+
+      try {
+        if (
+          !options.contentRepository.recordMediaProviderWebhook ||
+          !options.contentRepository.updateMediaAssetFromWebhook
+        ) {
+          return reply.code(503).send({
+            code: "service_unavailable",
+            message: "Media webhook storage is not configured"
+          });
+        }
+
+        const normalized = normalizeMediaWebhook({
+          provider: params.provider as MediaWebhookProvider,
+          body: request.body,
+          rawBody: rawBodyBuffer(request.rawBody),
+          headers: request.headers,
+          env: app.config
+        });
+        const isNewEvent = await options.contentRepository.recordMediaProviderWebhook({
+          provider: normalized.provider,
+          providerEventId: normalized.providerEventId,
+          eventType: normalized.eventType,
+          normalizedState: normalized.providerState,
+          signatureHash: normalized.signatureHash
+        });
+
+        if (!isNewEvent) {
+          return reply.code(202).send({
+            provider: normalized.provider,
+            received: 1,
+            processed: 0
+          });
+        }
+
+        const applied = await options.contentRepository.updateMediaAssetFromWebhook({
+          provider: normalized.provider,
+          providerEventId: normalized.providerEventId,
+          providerAssetId: normalized.providerAssetId,
+          providerState: normalized.providerState,
+          providerPlayable: normalized.providerPlayable
+        });
+
+        return reply.code(202).send({
+          provider: normalized.provider,
+          received: 1,
+          processed: applied ? 1 : 0
+        });
+      } catch (error) {
+        if (error instanceof MediaWebhookSignatureError) {
+          return reply.code(401).send(unauthorizedResponse("Missing or invalid webhook signature"));
+        }
+
+        if (error instanceof MediaWebhookValidationError) {
+          return reply.code(400).send({
+            code: "validation_failed",
+            message: error.message
+          });
+        }
+
+        if (
+          error instanceof MediaWebhookConfigurationError ||
+          error instanceof ContentRepositoryConfigurationError
+        ) {
+          request.log.warn({ error }, "Media webhook is not configured");
+          return reply.code(503).send({
+            code: "service_unavailable",
+            message: "Media webhook is not configured"
+          });
+        }
+
+        throw error;
+      }
+    }
+  );
+
   app.post("/v1/content", async (request, reply) => {
     const access = await verifyAppReadyAccess(request, options);
 
@@ -352,6 +452,18 @@ export async function registerContentRoutes(
       throw error;
     }
   });
+}
+
+function rawBodyBuffer(rawBody: unknown): Buffer {
+  if (Buffer.isBuffer(rawBody)) {
+    return rawBody;
+  }
+
+  if (typeof rawBody === "string") {
+    return Buffer.from(rawBody, "utf8");
+  }
+
+  return Buffer.alloc(0);
 }
 
 type AppReadyAccessResult =

@@ -1298,8 +1298,10 @@ paths:
       requestBody:
         $ref: "#/components/requestBodies/WebhookPayload"
       responses:
-        "202": { $ref: "#/components/responses/Accepted" }
+        "202": { $ref: "#/components/responses/WebhookReceipt" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/webhooks/age/{provider}:
     post:
       operationId: receiveAgeWebhook
@@ -2135,7 +2137,7 @@ components:
       type: object
       required: [provider, received, processed]
       properties:
-        provider: { type: string, enum: [helius, yoti, sumsub, veriff, persona] }
+        provider: { type: string, enum: [helius, bunny, livepeer, yoti, sumsub, veriff, persona] }
         received: { type: integer, minimum: 0 }
         processed: { type: integer, minimum: 0 }
     SumsubAgeWebhookPayload:
