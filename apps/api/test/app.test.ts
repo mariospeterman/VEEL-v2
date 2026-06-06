@@ -3750,6 +3750,12 @@ describe("buildApi", () => {
         async listTickets() {
           throw new Error("not implemented");
         },
+        async listLiveRooms() {
+          throw new Error("not implemented");
+        },
+        async listMediaAssets() {
+          throw new Error("not implemented");
+        },
         async getDatingSafety() {
           throw new Error("not implemented");
         },
@@ -3869,6 +3875,12 @@ describe("buildApi", () => {
         async listTickets() {
           throw new Error("not implemented");
         },
+        async listLiveRooms() {
+          throw new Error("not implemented");
+        },
+        async listMediaAssets() {
+          throw new Error("not implemented");
+        },
         async getDatingSafety() {
           throw new Error("not implemented");
         },
@@ -3984,6 +3996,12 @@ describe("buildApi", () => {
           throw new Error("not implemented");
         },
         async listTickets() {
+          throw new Error("not implemented");
+        },
+        async listLiveRooms() {
+          throw new Error("not implemented");
+        },
+        async listMediaAssets() {
           throw new Error("not implemented");
         },
         async getDatingSafety() {
@@ -4951,7 +4969,7 @@ describe("buildApi", () => {
     });
     await app.ready();
 
-    const [summary, notificationHealth, payments, unlocks, providerEvents, mutualsSafety, datingSafety] =
+    const [summary, notificationHealth, payments, unlocks, providerEvents, liveRooms, mediaAssets, mutualsSafety, datingSafety] =
       await Promise.all([
       app.inject({
         method: "GET",
@@ -4976,6 +4994,16 @@ describe("buildApi", () => {
       app.inject({
         method: "GET",
         url: "/v1/admin/provider-events",
+        headers: { authorization: "Bearer valid-token" }
+      }),
+      app.inject({
+        method: "GET",
+        url: "/v1/admin/live/rooms",
+        headers: { authorization: "Bearer valid-token" }
+      }),
+      app.inject({
+        method: "GET",
+        url: "/v1/admin/media/assets",
         headers: { authorization: "Bearer valid-token" }
       }),
       app.inject({
@@ -5026,6 +5054,27 @@ describe("buildApi", () => {
       latestReplayProcessedAt: null
     });
     expect(JSON.stringify(providerEvents.json())).not.toMatch(/raw|payload|secret|streamKey/i);
+    expect(liveRooms.statusCode).toBe(200);
+    expect(liveRooms.json().items[0]).toMatchObject({
+      provider: "livepeer",
+      providerState: "active",
+      state: "live",
+      hasPlaybackUrl: true,
+      hasHostStreamKey: true
+    });
+    expect(JSON.stringify(liveRooms.json())).not.toMatch(
+      /"hostStreamKey"|host_stream_key|streamKeyValue|maskedIngestUrl|ingestUrl|"playbackUrl"|playback_url|"url"|raw|payload|secret/i
+    );
+    expect(mediaAssets.statusCode).toBe(200);
+    expect(mediaAssets.json().items[0]).toMatchObject({
+      provider: "bunny",
+      providerState: "ready",
+      providerPlayable: true,
+      hasPlaybackUrl: true
+    });
+    expect(JSON.stringify(mediaAssets.json())).not.toMatch(
+      /"playbackUrl"|playback_url|"url"|raw|payload|secret|streamKeyValue|ingestUrl/i
+    );
     expect(mutualsSafety.statusCode).toBe(200);
     expect(mutualsSafety.json()).toEqual({
       openReports: 0,
@@ -7707,6 +7756,51 @@ const fakeAdminRepository: AdminRepository = {
           state: "active",
           qrToken: "veel_ticket_redacted",
           checkedInAt: null,
+          createdAt: "2026-06-06T14:00:00.000Z"
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async listLiveRooms() {
+    return {
+      items: [
+        {
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10",
+          creatorUserId: "00000000-0000-4000-8000-000000000010",
+          title: "Studio live",
+          provider: "livepeer",
+          providerStreamId: "livepeer-stream-1",
+          providerPlaybackId: "livepeer-playback-1",
+          providerState: "active",
+          state: "live",
+          accessRule: "pass_required",
+          passPriceMinor: 50000000,
+          currency: "SOL",
+          hasPlaybackUrl: true,
+          hasHostStreamKey: true,
+          startsAt: "2026-06-06T15:00:00.000Z",
+          endedAt: null,
+          createdAt: "2026-06-06T14:00:00.000Z",
+          updatedAt: "2026-06-06T15:01:00.000Z"
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async listMediaAssets() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-000000000070",
+          contentItemId: "00000000-0000-4000-8000-000000000040",
+          provider: "bunny",
+          providerAssetId: "bunny-video-1",
+          providerState: "ready",
+          providerPlayable: true,
+          hasPlaybackUrl: true,
+          readyAt: "2026-06-06T15:00:00.000Z",
+          providerCheckedAt: "2026-06-06T15:01:00.000Z",
           createdAt: "2026-06-06T14:00:00.000Z"
         }
       ],

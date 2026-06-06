@@ -27,6 +27,8 @@ export type AdminOrganizationMember = components["schemas"]["AdminOrganizationMe
 export type AdminFeatureFlag = components["schemas"]["AdminFeatureFlag"];
 export type AdminOrganizationKybActionRequest =
   components["schemas"]["AdminOrganizationKybActionRequest"];
+export type AdminLiveRoom = components["schemas"]["AdminLiveRoom"];
+export type AdminMediaAsset = components["schemas"]["AdminMediaAsset"];
 export type AdminOrganizationMemberActionRequest =
   components["schemas"]["AdminOrganizationMemberActionRequest"];
 export type AdminSupportCaseActionRequest = components["schemas"]["AdminSupportCaseActionRequest"];
@@ -111,6 +113,8 @@ export interface AdminRepository {
   }): Promise<AdminDataRequest | null>;
   listEvents(input: { cursor?: string }): Promise<AdminPage<Event>>;
   listTickets(input: { cursor?: string }): Promise<AdminPage<Ticket>>;
+  listLiveRooms(input: { cursor?: string }): Promise<AdminPage<AdminLiveRoom>>;
+  listMediaAssets(input: { cursor?: string }): Promise<AdminPage<AdminMediaAsset>>;
   getDatingSafety(): Promise<AdminDatingSafety>;
   listComplianceLedger(input: { cursor?: string }): Promise<AdminPage<AdminComplianceLedgerEntry>>;
   listDac7Reports(input: { cursor?: string }): Promise<AdminPage<AdminComplianceReport>>;

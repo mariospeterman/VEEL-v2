@@ -8,6 +8,8 @@ import type {
   AdminDatingSafety,
   AdminFeatureFlag,
   AdminInvoice,
+  AdminLiveRoom,
+  AdminMediaAsset,
   AdminNotificationHealth,
   AdminOpsSummary,
   AdminOrganization,
@@ -142,6 +144,39 @@ interface ProviderEventRow {
   latest_replay_state: AdminProviderEvent["latestReplayState"];
   latest_replay_requested_at: Date | null;
   latest_replay_processed_at: Date | null;
+}
+
+interface LiveRoomRow {
+  id: string;
+  creator_user_id: string;
+  title: string;
+  provider: AdminLiveRoom["provider"];
+  provider_stream_id: string | null;
+  provider_playback_id: string | null;
+  provider_state: string;
+  state: AdminLiveRoom["state"];
+  access_rule: AdminLiveRoom["accessRule"];
+  pass_price_minor: string | number;
+  currency: AdminLiveRoom["currency"];
+  has_playback_url: boolean;
+  has_host_stream_key: boolean;
+  starts_at: Date | null;
+  ended_at: Date | null;
+  created_at: Date;
+  updated_at: Date | null;
+}
+
+interface MediaAssetRow {
+  id: string;
+  content_item_id: string;
+  provider: AdminMediaAsset["provider"];
+  provider_asset_id: string;
+  provider_state: string;
+  provider_playable: boolean;
+  has_playback_url: boolean;
+  ready_at: Date | null;
+  provider_checked_at: Date | null;
+  created_at: Date;
 }
 
 interface AuditEventRow {
@@ -463,6 +498,12 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
         throw new AdminRepositoryConfigurationError();
       },
       async listTickets() {
+        throw new AdminRepositoryConfigurationError();
+      },
+      async listLiveRooms() {
+        throw new AdminRepositoryConfigurationError();
+      },
+      async listMediaAssets() {
         throw new AdminRepositoryConfigurationError();
       },
       async getDatingSafety() {
@@ -1535,6 +1576,55 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
 
       return page(rows, toTicket);
     },
+    async listLiveRooms(input) {
+      const rows = await sql<LiveRoomRow[]>`
+        select
+          id,
+          creator_user_id,
+          title,
+          provider,
+          provider_stream_id,
+          provider_playback_id,
+          provider_state,
+          state,
+          access_rule,
+          pass_price_minor,
+          currency,
+          (playback_url is not null) as has_playback_url,
+          (host_stream_key is not null) as has_host_stream_key,
+          starts_at,
+          ended_at,
+          created_at,
+          updated_at
+        from live_rooms
+        where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
+        order by created_at desc
+        limit ${pageSize + 1}
+      `;
+
+      return page(rows, toLiveRoom);
+    },
+    async listMediaAssets(input) {
+      const rows = await sql<MediaAssetRow[]>`
+        select
+          id,
+          content_item_id,
+          provider,
+          provider_asset_id,
+          provider_state,
+          provider_playable,
+          (playback_url is not null) as has_playback_url,
+          ready_at,
+          provider_checked_at,
+          created_at
+        from media_assets
+        where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
+        order by created_at desc
+        limit ${pageSize + 1}
+      `;
+
+      return page(rows, toMediaAsset);
+    },
     async getDatingSafety() {
       const rows = await sql<{
         open_reports: string | number;
@@ -2164,6 +2254,43 @@ function toProviderEvent(row: ProviderEventRow): AdminProviderEvent {
     latestReplayState: row.latest_replay_state ?? null,
     latestReplayRequestedAt: row.latest_replay_requested_at?.toISOString() ?? null,
     latestReplayProcessedAt: row.latest_replay_processed_at?.toISOString() ?? null
+  };
+}
+
+function toLiveRoom(row: LiveRoomRow): AdminLiveRoom {
+  return {
+    id: row.id,
+    creatorUserId: row.creator_user_id,
+    title: row.title,
+    provider: row.provider,
+    providerStreamId: row.provider_stream_id,
+    providerPlaybackId: row.provider_playback_id,
+    providerState: row.provider_state,
+    state: row.state,
+    accessRule: row.access_rule,
+    passPriceMinor: Number(row.pass_price_minor),
+    currency: row.currency,
+    hasPlaybackUrl: row.has_playback_url,
+    hasHostStreamKey: row.has_host_stream_key,
+    startsAt: row.starts_at?.toISOString() ?? null,
+    endedAt: row.ended_at?.toISOString() ?? null,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at?.toISOString() ?? null
+  };
+}
+
+function toMediaAsset(row: MediaAssetRow): AdminMediaAsset {
+  return {
+    id: row.id,
+    contentItemId: row.content_item_id,
+    provider: row.provider,
+    providerAssetId: row.provider_asset_id,
+    providerState: row.provider_state,
+    providerPlayable: row.provider_playable,
+    hasPlaybackUrl: row.has_playback_url,
+    readyAt: row.ready_at?.toISOString() ?? null,
+    providerCheckedAt: row.provider_checked_at?.toISOString() ?? null,
+    createdAt: row.created_at.toISOString()
   };
 }
 

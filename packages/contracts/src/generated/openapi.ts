@@ -1951,6 +1951,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/live/rooms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Admin Livepeer live room provider projection */
+        get: operations["listAdminLiveRooms"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/media/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Admin Bunny media asset provider projection */
+        get: operations["listAdminMediaAssets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/mutuals/safety": {
         parameters: {
             query?: never;
@@ -3703,6 +3737,52 @@ export interface components {
             /** @enum {string} */
             socialMoneyBoundary: "money_never_buys_people_visibility_matches_or_social_priority";
         };
+        AdminLiveRoom: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            creatorUserId: string;
+            title: string;
+            /** @enum {string} */
+            provider: "livepeer";
+            providerStreamId?: string | null;
+            providerPlaybackId?: string | null;
+            providerState: string;
+            /** @enum {string} */
+            state: "scheduled" | "waiting" | "live" | "ended" | "replay_ready";
+            /** @enum {string} */
+            accessRule: "free" | "pass_required";
+            passPriceMinor: number;
+            currency: components["schemas"]["Currency"];
+            hasPlaybackUrl: boolean;
+            hasHostStreamKey: boolean;
+            /** Format: date-time */
+            startsAt?: string | null;
+            /** Format: date-time */
+            endedAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt?: string | null;
+        };
+        AdminMediaAsset: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            contentItemId: string;
+            /** @enum {string} */
+            provider: "bunny" | "livepeer";
+            providerAssetId: string;
+            providerState: string;
+            providerPlayable: boolean;
+            hasPlaybackUrl: boolean;
+            /** Format: date-time */
+            readyAt?: string | null;
+            /** Format: date-time */
+            providerCheckedAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
         AdminComplianceLedgerEntry: {
             /** Format: uuid */
             id: string;
@@ -4892,6 +4972,30 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["AdminDatingSafety"];
+            };
+        };
+        /** @description Admin live room provider projections */
+        AdminLiveRoomPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    items: components["schemas"]["AdminLiveRoom"][];
+                    nextCursor?: string | null;
+                };
+            };
+        };
+        /** @description Admin media provider projections */
+        AdminMediaAssetPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    items: components["schemas"]["AdminMediaAsset"][];
+                    nextCursor?: string | null;
+                };
             };
         };
         /** @description Admin compliance ledger entries */
@@ -7360,6 +7464,36 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["TicketPage"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAdminLiveRooms: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminLiveRoomPage"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAdminMediaAssets: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminMediaAssetPage"];
             403: components["responses"]["Forbidden"];
         };
     };

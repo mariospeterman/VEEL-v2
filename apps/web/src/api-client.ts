@@ -48,6 +48,8 @@ export type AdminContentItem = components["schemas"]["AdminContentItem"];
 export type AdminPaymentIntent = components["schemas"]["AdminPaymentIntent"];
 export type AdminUnlock = components["schemas"]["AdminUnlock"];
 export type AdminProviderEvent = components["schemas"]["AdminProviderEvent"];
+export type AdminLiveRoom = components["schemas"]["AdminLiveRoom"];
+export type AdminMediaAsset = components["schemas"]["AdminMediaAsset"];
 export type AdminReport = components["schemas"]["AdminReport"];
 export type AdminUser = components["schemas"]["AdminUser"];
 export type AdminSupportCase = components["schemas"]["AdminSupportCase"];
@@ -218,6 +220,14 @@ export async function getAdminUnlocks(): Promise<ApiResult<AdminPage<AdminUnlock
 
 export async function getAdminProviderEvents(): Promise<ApiResult<AdminPage<AdminProviderEvent>>> {
   return getJson<AdminPage<AdminProviderEvent>>("/v1/admin/provider-events");
+}
+
+export async function getAdminLiveRooms(): Promise<ApiResult<AdminPage<AdminLiveRoom>>> {
+  return getJson<AdminPage<AdminLiveRoom>>("/v1/admin/live/rooms");
+}
+
+export async function getAdminMediaAssets(): Promise<ApiResult<AdminPage<AdminMediaAsset>>> {
+  return getJson<AdminPage<AdminMediaAsset>>("/v1/admin/media/assets");
 }
 
 export async function getAdminAuditEvents(): Promise<ApiResult<AdminPage<AuditEvent>>> {

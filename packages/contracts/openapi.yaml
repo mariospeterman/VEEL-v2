@@ -1428,6 +1428,26 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/TicketPage" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/live/rooms:
+    get:
+      operationId: listAdminLiveRooms
+      tags: [Admin]
+      summary: Admin Livepeer live room provider projection
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminLiveRoomPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/media/assets:
+    get:
+      operationId: listAdminMediaAssets
+      tags: [Admin]
+      summary: Admin Bunny media asset provider projection
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminMediaAssetPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /v1/admin/mutuals/safety:
     get:
       operationId: getAdminMutualsSafety
@@ -1875,6 +1895,8 @@ components:
     AdminDataRequestPage: { description: Admin data requests, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminDataRequest" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminMutualsSafety: { description: Admin Mutuals safety, content: { application/json: { schema: { $ref: "#/components/schemas/AdminMutualsSafety" } } } }
     AdminDatingSafety: { description: Deprecated compatibility alias for Admin Mutuals safety, content: { application/json: { schema: { $ref: "#/components/schemas/AdminDatingSafety" } } } }
+    AdminLiveRoomPage: { description: Admin live room provider projections, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminLiveRoom" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminMediaAssetPage: { description: Admin media provider projections, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminMediaAsset" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminComplianceLedgerPage: { description: Admin compliance ledger entries, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminComplianceLedgerEntry" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminComplianceReportPage: { description: Admin compliance reports, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminComplianceReport" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminVatDeterminationPage: { description: Admin VAT determinations, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminVatDetermination" } }, nextCursor: { type: string, nullable: true } } } } } }
@@ -3359,6 +3381,41 @@ components:
         activeMutuals: { type: integer }
         staleMutuals: { type: integer }
         socialMoneyBoundary: { type: string, enum: [money_never_buys_people_visibility_matches_or_social_priority] }
+    AdminLiveRoom:
+      type: object
+      required: [id, creatorUserId, title, provider, providerState, state, accessRule, passPriceMinor, currency, hasPlaybackUrl, hasHostStreamKey, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        creatorUserId: { type: string, format: uuid }
+        title: { type: string }
+        provider: { type: string, enum: [livepeer] }
+        providerStreamId: { type: string, nullable: true }
+        providerPlaybackId: { type: string, nullable: true }
+        providerState: { type: string }
+        state: { type: string, enum: [scheduled, waiting, live, ended, replay_ready] }
+        accessRule: { type: string, enum: [free, pass_required] }
+        passPriceMinor: { type: integer }
+        currency: { $ref: "#/components/schemas/Currency" }
+        hasPlaybackUrl: { type: boolean }
+        hasHostStreamKey: { type: boolean }
+        startsAt: { type: string, format: date-time, nullable: true }
+        endedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time, nullable: true }
+    AdminMediaAsset:
+      type: object
+      required: [id, contentItemId, provider, providerAssetId, providerState, providerPlayable, hasPlaybackUrl, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        contentItemId: { type: string, format: uuid }
+        provider: { type: string, enum: [bunny, livepeer] }
+        providerAssetId: { type: string }
+        providerState: { type: string }
+        providerPlayable: { type: boolean }
+        hasPlaybackUrl: { type: boolean }
+        readyAt: { type: string, format: date-time, nullable: true }
+        providerCheckedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
     AdminComplianceLedgerEntry:
       type: object
       required: [id, eventType, productType, settlementModel, grossAmountMinor, currency, fiatCurrency, vatStatus, dac7Reportable, carfReportable, createdAt]

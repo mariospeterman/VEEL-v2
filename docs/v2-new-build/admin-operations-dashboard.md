@@ -29,6 +29,7 @@ Current implementation state:
 - `GET /v1/admin/unlocks` returns sanitized entitlement rows for content unlock and access investigation.
 - `GET /v1/admin/provider-events` returns sanitized provider event status, timing, and latest replay-request state only.
 - `POST /v1/admin/provider-events/{providerEventId}/replay` enqueues an audited, idempotent replay request for the worker boundary. It requires `Idempotency-Key` and reason text, writes `provider_event_replay_requests` plus `audit_events`, and returns `202` only after queueing. It does not expose raw provider payloads and does not mark provider truth as replayed by itself.
+- `GET /v1/admin/live/rooms` and `GET /v1/admin/media/assets` return sanitized Livepeer/Bunny provider projections. They expose provider state, provider IDs, and booleans for playback URL or stream-key presence only; host stream keys, ingest URLs, signed playback URLs, raw payloads, and provider secrets remain server-only.
 - `GET /v1/admin/audit` returns sanitized audit event id, subject type, action, and timestamp only. It intentionally omits `metadata`, raw provider payloads, reasons, idempotency keys, PII, wallet evidence, and secrets.
 - `GET /v1/admin/users`, `GET /v1/admin/users/{userId}`, `GET /v1/admin/content`, `PATCH /v1/admin/content/{contentId}/moderation`, `GET /v1/admin/reports`, and `PATCH /v1/admin/reports/{reportId}` expose the first user/content/report moderation queue. Reads are sanitized and omit email, phone, raw identity records, provider payloads, report metadata, and secrets. Mutations require `Idempotency-Key`, reason text, and write `audit_events`.
 - `GET /v1/admin/events` and `GET /v1/admin/tickets` expose read-only Event Access operations projections using the same sanitized Event and Event Access Pass schemas as user-facing routes. They do not expose stream keys, raw QR hashes, provider payloads, balances, or payout state.
@@ -39,8 +40,8 @@ Current implementation state:
 - `GET /v1/admin/mutuals/safety` exposes aggregate open Mutuals reports, active Mutuals, and stale Mutuals with the hard social-money boundary. `GET /v1/admin/dating/safety` remains a deprecated compatibility alias only and must not appear in launch-facing frontend calls or copy.
 - The `/admin` web surface is separate from normal user navigation and uses
   typed API projections for ops summary, payment intents, unlocks, provider
-  events, compliance ledger, DAC7/CARF reports, VAT determinations, receipts,
-  invoices, referral governance, tier waivers, support policy,
+  events, Livepeer/Bunny provider state, compliance ledger, DAC7/CARF
+  reports, VAT determinations, receipts, invoices, referral governance, tier waivers, support policy,
   user/content/report moderation queues, Event Access ops, refund/dispute
   review, data request lifecycle, sanitized audit events, and feature flag
   policy controls.

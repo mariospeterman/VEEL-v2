@@ -484,6 +484,22 @@ export async function registerAdminRoutes(
     return reply.code(200).send(await options.adminRepository.listTickets(adminListInput(query)));
   });
 
+  app.get("/v1/admin/live/rooms", async (request, reply) => {
+    const allowed = await requireAdminAccess(request, reply, options);
+    if (!allowed) return reply;
+
+    const query = request.query as { cursor?: string };
+    return reply.code(200).send(await options.adminRepository.listLiveRooms(adminListInput(query)));
+  });
+
+  app.get("/v1/admin/media/assets", async (request, reply) => {
+    const allowed = await requireAdminAccess(request, reply, options);
+    if (!allowed) return reply;
+
+    const query = request.query as { cursor?: string };
+    return reply.code(200).send(await options.adminRepository.listMediaAssets(adminListInput(query)));
+  });
+
   async function getMutualsSafety(request: FastifyRequest, reply: FastifyReply) {
     const allowed = await requireAdminAccess(request, reply, options);
     if (!allowed) return reply;

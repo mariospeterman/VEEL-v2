@@ -9,6 +9,8 @@ import {
   getAdminEvents,
   getAdminFeatureFlags,
   getAdminInvoices,
+  getAdminLiveRooms,
+  getAdminMediaAssets,
   getAdminMutualsSafety,
   getAdminNotificationHealth,
   getAdminOpsSummary,
@@ -35,6 +37,8 @@ import {
   type AdminDataRequest,
   type AdminFeatureFlag,
   type AdminInvoice,
+  type AdminLiveRoom,
+  type AdminMediaAsset,
   type AdminMutualsSafety,
   type AdminNotificationHealth,
   type AdminOpsSummary,
@@ -65,6 +69,8 @@ export default async function AdminPage() {
     payments,
     unlocks,
     providerEvents,
+    liveRooms,
+    mediaAssets,
     auditEvents,
     notificationHealth,
     users,
@@ -94,6 +100,8 @@ export default async function AdminPage() {
     getAdminPaymentIntents(),
     getAdminUnlocks(),
     getAdminProviderEvents(),
+    getAdminLiveRooms(),
+    getAdminMediaAssets(),
     getAdminAuditEvents(),
     getAdminNotificationHealth(),
     getAdminUsers(),
@@ -264,6 +272,10 @@ export default async function AdminPage() {
               </PageState>
             </Panel>
 
+            <Panel title="Live and media providers">
+              <LiveMediaProviderPanel liveRooms={liveRooms} mediaAssets={mediaAssets} />
+            </Panel>
+
             <Panel title="VAT receipts and invoices">
               <VatReceiptPanel invoices={invoices} receipts={receipts} vatDeterminations={vatDeterminations} />
             </Panel>
@@ -301,6 +313,37 @@ function MutualsSafetyPanel({ mutualsSafety }: { mutualsSafety: ApiResult<AdminM
       <div className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm text-[var(--muted)]">
         Money never buys people, visibility, Mutuals, or social priority.
       </div>
+    </div>
+  );
+}
+
+function LiveMediaProviderPanel({
+  liveRooms,
+  mediaAssets
+}: {
+  liveRooms: ApiResult<AdminPage<AdminLiveRoom>>;
+  mediaAssets: ApiResult<AdminPage<AdminMediaAsset>>;
+}) {
+  if (!liveRooms.ok) {
+    return <UnavailableState result={liveRooms} />;
+  }
+
+  if (!mediaAssets.ok) {
+    return <UnavailableState result={mediaAssets} />;
+  }
+
+  if (liveRooms.data.items.length === 0 && mediaAssets.data.items.length === 0) {
+    return <EmptyState label="No live rooms or media assets" />;
+  }
+
+  return (
+    <div className="grid gap-2">
+      {liveRooms.data.items.map((room) => (
+        <LiveProviderRow key={room.id} room={room} />
+      ))}
+      {mediaAssets.data.items.map((asset) => (
+        <MediaProviderRow asset={asset} key={asset.id} />
+      ))}
     </div>
   );
 }
@@ -752,6 +795,48 @@ function ProviderEventRow({ event }: { event: AdminProviderEvent }) {
         <Fact label="Processed" value={formatDate(event.processedAt ?? null)} />
         <Fact label="Replay" value={event.latestReplayState ?? "none"} />
         <Fact label="Replay processed" value={formatDate(event.latestReplayProcessedAt ?? null)} />
+      </div>
+    </article>
+  );
+}
+
+function LiveProviderRow({ room }: { room: AdminLiveRoom }) {
+  return (
+    <article className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-medium">{room.title}</p>
+          <p className="mt-1 truncate text-[var(--muted)]">{room.providerStreamId ?? room.provider}</p>
+        </div>
+        <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">
+          {room.state}
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2">
+        <Fact label="Provider" value={room.providerState} />
+        <Fact label="Playback URL" value={room.hasPlaybackUrl ? "present" : "none"} />
+        <Fact label="Stream key" value={room.hasHostStreamKey ? "redacted" : "none"} />
+      </div>
+    </article>
+  );
+}
+
+function MediaProviderRow({ asset }: { asset: AdminMediaAsset }) {
+  return (
+    <article className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-medium">{asset.provider}</p>
+          <p className="mt-1 truncate text-[var(--muted)]">{asset.providerAssetId}</p>
+        </div>
+        <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">
+          {asset.providerState}
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2">
+        <Fact label="Playable" value={asset.providerPlayable ? "yes" : "no"} />
+        <Fact label="Playback URL" value={asset.hasPlaybackUrl ? "present" : "none"} />
+        <Fact label="Checked" value={timestampLabel(asset.providerCheckedAt ?? null)} />
       </div>
     </article>
   );
