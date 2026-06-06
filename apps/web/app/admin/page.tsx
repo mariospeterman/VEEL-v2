@@ -70,6 +70,11 @@ import {
   type Event,
   type EventAccessPass
 } from "@/api-client";
+import {
+  updateOrganizationKybAction,
+  updateOrganizationMemberAction,
+  updateSupportPolicyAction
+} from "./actions";
 
 export default async function AdminPage() {
   const [
@@ -1039,39 +1044,94 @@ function ReportRow({ report }: { report: AdminComplianceReport }) {
 
 function OrganizationRow({ organization }: { organization: AdminOrganization }) {
   return (
-    <article className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm md:grid-cols-[1fr_120px_160px]">
-      <div className="min-w-0">
-        <p className="font-medium">{organization.name}</p>
-        <p className="mt-1 truncate text-[var(--muted)]">KYB {organization.kybState ?? "not_started"}</p>
+    <article className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+      <div className="grid gap-3 md:grid-cols-[1fr_120px_160px]">
+        <div className="min-w-0">
+          <p className="font-medium">{organization.name}</p>
+          <p className="mt-1 truncate text-[var(--muted)]">KYB {organization.kybState ?? "not_started"}</p>
+        </div>
+        <Fact label="State" value={organization.state} />
+        <Fact label="Finance" value="no custody" />
       </div>
-      <Fact label="State" value={organization.state} />
-      <Fact label="Finance" value="no custody" />
+      <form action={updateOrganizationKybAction} className="mt-3 grid gap-2 border-t border-[var(--line)] pt-3 sm:grid-cols-[150px_1fr_auto]">
+        <input name="organizationId" type="hidden" value={organization.id} />
+        <AdminSelect defaultValue={organization.kybState ?? "not_started"} label="KYB" name="kybState">
+          <option value="not_started">not started</option>
+          <option value="pending">pending</option>
+          <option value="verified">verified</option>
+          <option value="rejected">rejected</option>
+        </AdminSelect>
+        <AdminReasonInput placeholder="Reason for KYB change" />
+        <AdminSubmit label="Update KYB" />
+      </form>
     </article>
   );
 }
 
 function OrganizationMemberRow({ member }: { member: AdminOrganizationMember }) {
   return (
-    <article className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm md:grid-cols-[1fr_120px_160px]">
-      <div className="min-w-0">
-        <p className="font-medium">{member.role}</p>
-        <p className="mt-1 truncate text-[var(--muted)]">{member.userId}</p>
+    <article className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+      <div className="grid gap-3 md:grid-cols-[1fr_120px_160px]">
+        <div className="min-w-0">
+          <p className="font-medium">{member.role}</p>
+          <p className="mt-1 truncate text-[var(--muted)]">{member.userId}</p>
+        </div>
+        <Fact label="State" value={member.state} />
+        <Fact label="Social rank" value="not for sale" />
       </div>
-      <Fact label="State" value={member.state} />
-      <Fact label="Social rank" value="not for sale" />
+      <form action={updateOrganizationMemberAction} className="mt-3 grid gap-2 border-t border-[var(--line)] pt-3 sm:grid-cols-[130px_130px_1fr_auto]">
+        <input name="organizationId" type="hidden" value={member.organizationId} />
+        <input name="membershipId" type="hidden" value={member.id} />
+        <AdminSelect defaultValue={member.role} label="Role" name="role">
+          <option value="owner">owner</option>
+          <option value="admin">admin</option>
+          <option value="member">member</option>
+          <option value="viewer">viewer</option>
+        </AdminSelect>
+        <AdminSelect defaultValue={member.state} label="State" name="state">
+          <option value="invited">invited</option>
+          <option value="active">active</option>
+          <option value="suspended">suspended</option>
+          <option value="removed">removed</option>
+        </AdminSelect>
+        <AdminReasonInput placeholder="Reason for member change" />
+        <AdminSubmit label="Update member" />
+      </form>
     </article>
   );
 }
 
 function SupportPolicyRow({ policy }: { policy: AdminSupportPolicy }) {
   return (
-    <article className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm md:grid-cols-[1fr_130px_180px]">
-      <div className="min-w-0">
-        <p className="font-medium">{policy.slaTier}</p>
-        <p className="mt-1 truncate text-[var(--muted)]">{policy.organizationId}</p>
+    <article className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+      <div className="grid gap-3 md:grid-cols-[1fr_130px_180px]">
+        <div className="min-w-0">
+          <p className="font-medium">{policy.slaTier}</p>
+          <p className="mt-1 truncate text-[var(--muted)]">{policy.organizationId}</p>
+        </div>
+        <Fact label="State" value={policy.state} />
+        <Fact label="Boundary" value="software SLA only" />
       </div>
-      <Fact label="State" value={policy.state} />
-      <Fact label="Boundary" value="software SLA only" />
+      <form action={updateSupportPolicyAction} className="mt-3 grid gap-2 border-t border-[var(--line)] pt-3 sm:grid-cols-[150px_150px_150px_1fr_auto]">
+        <input name="supportPolicyId" type="hidden" value={policy.id} />
+        <AdminSelect defaultValue={policy.supportState} label="Support" name="supportState">
+          <option value="standard">standard</option>
+          <option value="priority">priority</option>
+          <option value="enterprise_review">enterprise review</option>
+        </AdminSelect>
+        <AdminSelect defaultValue={policy.slaTier} label="SLA" name="slaTier">
+          <option value="standard">standard</option>
+          <option value="priority">priority</option>
+          <option value="enterprise_review">enterprise review</option>
+        </AdminSelect>
+        <AdminSelect defaultValue={policy.state} label="State" name="state">
+          <option value="active">active</option>
+          <option value="paused">paused</option>
+          <option value="review_required">review required</option>
+        </AdminSelect>
+        <AdminReasonInput placeholder="Reason for support policy change" />
+        <AdminSubmit label="Update policy" />
+      </form>
     </article>
   );
 }
@@ -1246,6 +1306,57 @@ function Fact({ label, value }: { label: string; value: string }) {
       <p className="text-xs uppercase text-[var(--muted)]">{label}</p>
       <p className="mt-1 truncate font-medium">{value}</p>
     </div>
+  );
+}
+
+function AdminSelect({
+  children,
+  defaultValue,
+  label,
+  name
+}: {
+  children: ReactNode;
+  defaultValue: string;
+  label: string;
+  name: string;
+}) {
+  return (
+    <label className="grid min-w-0 gap-1">
+      <span className="text-xs uppercase text-[var(--muted)]">{label}</span>
+      <select
+        className="h-9 min-w-0 rounded border border-[var(--line)] bg-[var(--panel)] px-2 text-sm font-medium"
+        defaultValue={defaultValue}
+        name={name}
+      >
+        {children}
+      </select>
+    </label>
+  );
+}
+
+function AdminReasonInput({ placeholder }: { placeholder: string }) {
+  return (
+    <label className="grid min-w-0 gap-1">
+      <span className="text-xs uppercase text-[var(--muted)]">Reason</span>
+      <input
+        className="h-9 min-w-0 rounded border border-[var(--line)] bg-[var(--panel)] px-2 text-sm"
+        minLength={3}
+        name="reason"
+        placeholder={placeholder}
+        required
+      />
+    </label>
+  );
+}
+
+function AdminSubmit({ label }: { label: string }) {
+  return (
+    <button
+      className="self-end rounded border border-[var(--accent)] bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-white"
+      type="submit"
+    >
+      {label}
+    </button>
   );
 }
 

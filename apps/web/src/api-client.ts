@@ -71,6 +71,9 @@ export type AdminTierWaiver = components["schemas"]["AdminTierWaiver"];
 export type AdminOrganization = components["schemas"]["AdminOrganization"];
 export type AdminOrganizationMember = components["schemas"]["AdminOrganizationMember"];
 export type AdminFeatureFlag = components["schemas"]["AdminFeatureFlag"];
+export type AdminOrganizationKybActionRequest = components["schemas"]["AdminOrganizationKybActionRequest"];
+export type AdminOrganizationMemberActionRequest = components["schemas"]["AdminOrganizationMemberActionRequest"];
+export type AdminSupportPolicyActionRequest = components["schemas"]["AdminSupportPolicyActionRequest"];
 
 export type AdminPage<T> = {
   items: T[];
@@ -334,6 +337,43 @@ export async function getAdminFeatureFlags(): Promise<ApiResult<AdminPage<AdminF
   return getJson<AdminPage<AdminFeatureFlag>>("/v1/admin/feature-flags");
 }
 
+export async function updateAdminOrganizationKyb(
+  organizationId: string,
+  body: AdminOrganizationKybActionRequest,
+  idempotencyKey: string
+): Promise<ApiResult<AdminOrganization>> {
+  return patchJson<AdminOrganization>(
+    `/v1/admin/organizations/${encodeURIComponent(organizationId)}/kyb`,
+    body,
+    idempotencyKey
+  );
+}
+
+export async function updateAdminOrganizationMember(
+  organizationId: string,
+  membershipId: string,
+  body: AdminOrganizationMemberActionRequest,
+  idempotencyKey: string
+): Promise<ApiResult<AdminOrganizationMember>> {
+  return patchJson<AdminOrganizationMember>(
+    `/v1/admin/organizations/${encodeURIComponent(organizationId)}/members/${encodeURIComponent(membershipId)}`,
+    body,
+    idempotencyKey
+  );
+}
+
+export async function updateAdminSupportPolicy(
+  supportPolicyId: string,
+  body: AdminSupportPolicyActionRequest,
+  idempotencyKey: string
+): Promise<ApiResult<AdminSupportPolicy>> {
+  return patchJson<AdminSupportPolicy>(
+    `/v1/admin/support/policies/${encodeURIComponent(supportPolicyId)}`,
+    body,
+    idempotencyKey
+  );
+}
+
 async function getJson<T>(path: string): Promise<ApiResult<T>> {
   const env = parsePublicWebEnv(process.env);
   const url = new URL(path, env.NEXT_PUBLIC_API_BASE_URL);
@@ -408,4 +448,47 @@ async function getErrorMessage(response: Response) {
   }
 
   return response.statusText || "Request failed";
+}
+
+async function patchJson<T>(path: string, body: unknown, idempotencyKey: string): Promise<ApiResult<T>> {
+  const env = parsePublicWebEnv(process.env);
+  const url = new URL(path, env.NEXT_PUBLIC_API_BASE_URL);
+  const token = await getSupabaseAccessToken(env);
+  const headers = new Headers({
+    accept: "application/json",
+    "content-type": "application/json",
+    "idempotency-key": idempotencyKey
+  });
+
+  if (token) {
+    headers.set("authorization", `Bearer ${token}`);
+  }
+
+  try {
+    const response = await fetch(url, {
+      body: JSON.stringify(body),
+      cache: "no-store",
+      headers,
+      method: "PATCH"
+    });
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        message: await getErrorMessage(response)
+      };
+    }
+
+    return {
+      ok: true,
+      data: (await response.json()) as T
+    };
+  } catch {
+    return {
+      ok: false,
+      status: 503,
+      message: "API is unavailable"
+    };
+  }
 }
