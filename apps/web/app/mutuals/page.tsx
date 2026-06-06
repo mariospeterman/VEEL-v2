@@ -1,8 +1,8 @@
 import { appShellNavItems } from "@veel/ui";
-import { getTicketActivity, type TicketPage } from "@/api-client";
+import { getMutualsMatches, type MutualsMatchPage } from "@/api-client";
 
-export default async function TicketsPage() {
-  const ticketsResult = await getTicketActivity();
+export default async function MutualsPage() {
+  const matchesResult = await getMutualsMatches();
 
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
@@ -10,17 +10,17 @@ export default async function TicketsPage() {
 
       <section className="mx-auto grid w-full max-w-6xl gap-5 px-5 py-6">
         <div>
-          <p className="text-sm font-medium text-[var(--accent)]">Passes</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-normal">My passes</h1>
+          <p className="text-sm font-medium text-[var(--accent)]">Mutuals</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-normal">Mutuals</h1>
         </div>
 
-        {ticketsResult.ok ? (
-          <TicketGrid tickets={ticketsResult.data} />
+        {matchesResult.ok ? (
+          <MutualGrid matches={matchesResult.data} />
         ) : (
           <UnavailableState
-            message={ticketsResult.message}
-            status={ticketsResult.status}
-            title="Passes unavailable"
+            message={matchesResult.message}
+            status={matchesResult.status}
+            title="Mutuals unavailable"
           />
         )}
       </section>
@@ -28,14 +28,13 @@ export default async function TicketsPage() {
   );
 }
 
-function TicketGrid({ tickets }: { tickets: TicketPage }) {
-  if (tickets.items.length === 0) {
+function MutualGrid({ matches }: { matches: MutualsMatchPage }) {
+  if (matches.items.length === 0) {
     return (
       <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-5">
-        <h2 className="text-base font-semibold tracking-normal">No passes yet</h2>
+        <h2 className="text-base font-semibold tracking-normal">No Mutuals yet</h2>
         <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-          Backend-issued Event Access passes and QR tokens will appear here after confirmed
-          settlement or creator approval.
+          Active Mutuals appear only after both users explicitly show interest and backend safety checks pass.
         </p>
       </section>
     );
@@ -43,25 +42,21 @@ function TicketGrid({ tickets }: { tickets: TicketPage }) {
 
   return (
     <div className="grid gap-3 md:grid-cols-2">
-      {tickets.items.map((ticket) => (
-        <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-4" key={ticket.id}>
+      {matches.items.map((match) => (
+        <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-4" key={match.id}>
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <p className="font-medium">Event Access Pass</p>
-              <p className="mt-1 truncate text-sm text-[var(--muted)]">{ticket.eventId}</p>
+              <p className="font-medium">Mutual match</p>
+              <p className="mt-1 truncate text-sm text-[var(--muted)]">{match.conversationId ?? match.id}</p>
             </div>
             <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">
-              {ticket.state}
+              {match.state}
             </span>
           </div>
-          <div className="mt-4 rounded border border-[var(--line)] bg-[var(--background)] p-4 text-center">
-            <p className="text-xs uppercase text-[var(--muted)]">QR token</p>
-            <p className="mt-2 break-all font-mono text-sm">{ticket.qrToken}</p>
-          </div>
           <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
-            <Fact label="Pass" value={ticket.id} />
-            <Fact label="Payment" value={ticket.paymentIntentId ?? "free"} />
-            <Fact label="Check-in" value={ticket.checkedInAt ?? "not checked in"} />
+            <Fact label="Source" value={match.sourceContentId ?? "profile"} />
+            <Fact label="Stale" value={match.staleAt ?? "not scheduled"} />
+            <Fact label="Expires" value={match.expiresAt ?? "not scheduled"} />
           </div>
         </article>
       ))}

@@ -138,8 +138,8 @@ flowchart TD
   Bits["Bits/Media"] --> SwipeY["Swipe up/down next/previous"]
   Media["Normal media"] --> Left["Swipe left profile panel"]
   Media --> Right["Swipe right create/remix/reply"]
-  Dating["Dating mode"] --> DatingLeft["Left yes"]
-  Dating --> DatingRight["Right not interested"]
+  Mutuals["Mutuals mode"] --> MutualsLeft["Left interested"]
+  Mutuals --> MutualsRight["Right not interested"]
   Create["Create/editor"] --> Disabled["Global gestures disabled"]
 ```
 
@@ -191,7 +191,7 @@ Current implementation state:
 - `pnpm smoke` runs Playwright against the Next.js app shell and Home media card.
 - The smoke suite runs desktop Chromium and mobile Chromium projects from `tests/smoke`.
 - CI installs Chromium and runs the smoke suite after lint, typecheck, and unit tests.
-- `/`, `/age`, `/content/[contentId]`, `/live/[liveRoomId]`, `/profile`, `/profile/[handle]`, `/activity`, `/messages`, `/wallet`, `/subscriptions`, `/studio`, `/discover`, `/events/[eventId]`, `/tickets`, `/dating`, `/dating/matches`, `/admin`, and `/settings` read backend projections through the typed web API helper instead of local business-data fixtures.
+- `/`, `/age`, `/content/[contentId]`, `/live/[liveRoomId]`, `/profile`, `/profile/[handle]`, `/activity`, `/messages`, `/wallet`, `/subscriptions`, `/studio`, `/discover`, `/event-access/[eventId]`, `/passes`, `/mutuals/feed`, `/mutuals`, `/admin`, and `/settings` read backend projections through the typed web API helper instead of local business-data fixtures.
 - Settings reads session, age, wallet, feed preference, and notification preference projections from the API; feed/notification preference mutation remains backend-owned through explicit control actions.
 - Browser Supabase Realtime subscribes only to approved user-owned projection tables and invalidates typed API caches/server component projections. It must not use realtime payloads as payment, access, notification, messaging, or social truth.
 - Home/age/detail/profile/activity/messages/wallet/subscriptions/studio/discover/Event Access/Mutuals/admin/settings screens attach the current Supabase access token when present and render a fail-closed unavailable state on API/auth/provider errors.

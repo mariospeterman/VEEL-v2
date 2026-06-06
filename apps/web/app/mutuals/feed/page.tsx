@@ -1,8 +1,8 @@
 import { appShellNavItems } from "@veel/ui";
-import { getDatingFeed, type DatingFeedPage } from "@/api-client";
+import { getMutualsFeed, type MutualsFeedPage } from "@/api-client";
 
-export default async function DatingPage() {
-  const feedResult = await getDatingFeed();
+export default async function MutualsFeedPageRoute() {
+  const feedResult = await getMutualsFeed();
 
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
@@ -42,7 +42,7 @@ export default async function DatingPage() {
   );
 }
 
-function MutualsFeed({ feed }: { feed: DatingFeedPage }) {
+function MutualsFeed({ feed }: { feed: MutualsFeedPage }) {
   if (feed.items.length === 0) {
     return (
       <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-5">

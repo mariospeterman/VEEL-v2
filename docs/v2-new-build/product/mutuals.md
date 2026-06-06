@@ -48,11 +48,11 @@ Money can never buy access to people, visibility, matches, recommendations, or p
 ```text
 /mutuals                       planned app surface
 /mutuals/preferences           planned
-/mutuals/feed                  planned
-/mutuals/mutuals               planned
+/mutuals/feed                  canonical Mutuals feed
+/mutuals                       canonical Mutual list
 /messages?filter=mutuals       planned
 
-/app/dating compatibility paths  legacy compatibility alias only during migration
+/dating and /dating/matches    compatibility frontend redirects only during migration
 ```
 
 ## Current Implementation State
@@ -62,9 +62,11 @@ Money can never buy access to people, visibility, matches, recommendations, or p
 - The target schema names are `mutual_profiles`, `mutual_interests`, and `mutuals`.
 - Current migration tables named `dating_profiles`, `dating_swipes`, and `dating_matches` must be migrated before launch-facing copy ships.
 - Frontend projections must use Mutuals copy even while the backend compatibility aliases exist.
-- `/app/dating` and `/app/dating/matches` use typed API-backed projections
-  through `GET /v1/dating/feed` and `GET /v1/dating/matches`; they fail
-  closed when the API is unavailable instead of rendering fixture Mutuals data.
+- `/mutuals/feed` and `/mutuals` use typed API-backed projections through the
+  current compatibility API routes `GET /v1/dating/feed` and
+  `GET /v1/dating/matches`; they fail closed when the API is unavailable
+  instead of rendering fixture Mutuals data.
+- `/dating` and `/dating/matches` are frontend compatibility redirects only.
 - Admin safety should use Mutuals copy and must preserve legacy route aliases only as internal transition details.
 
 ## Backend Ownership

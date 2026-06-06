@@ -2,6 +2,15 @@
 
 Status: accepted
 Scope: seller reporting, crypto reporting readiness, VAT/MWST determinations, receipts, invoices, compliance ledger
+
+## Source-Of-Truth Boundaries
+
+- The blockchain is the source of payment truth.
+- The entitlement system is the source of access truth.
+- The compliance ledger is the source of reporting truth.
+- The accounting integration is the source of bookkeeping truth.
+
+The compliance system stores reporting facts and evidence. It must not become a custom accounting engine, a payment proof system, an access-granting system, a creator balance system, or a tax engine. VAT, DAC7, DAC8/CARF, marketplace reporting, and accounting exports must derive from settlement evidence, entitlement state, and append-only compliance-ledger entries.
 Last updated: 2026-06-05
 Source of truth: yes
 

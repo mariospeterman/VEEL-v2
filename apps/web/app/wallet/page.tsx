@@ -74,8 +74,8 @@ export default async function WalletPage() {
             <h2 className="mt-1 text-lg font-semibold tracking-normal">User-owned wallet funding</h2>
             <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
               Funding sessions are created by the backend for a linked wallet only after explicit
-              user action. Funding sessions do not unlock content, tickets, messages, memberships,
-              or support.
+              user action. Funding sessions do not unlock content, Event Access Passes, messages,
+              memberships, or support.
             </p>
             {primaryWallet ? (
               <div className="mt-4 grid gap-2 text-sm">

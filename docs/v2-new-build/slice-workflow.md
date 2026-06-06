@@ -131,8 +131,8 @@ Then code.
 12. User activity and wallet transactions.
 13. Creator profile and creator monetisation dashboard.
 14. Admin payments/unlocks/provider ops dashboard.
-15. Events/tickets.
-16. Dating mode.
+15. Event Access/Passes.
+16. Mutuals mode.
 17. AI/MCP assistant with scoped tools.
 
 Each slice must ship with tests and docs before the next slice starts.

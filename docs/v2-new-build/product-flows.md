@@ -295,14 +295,14 @@ Events are content-attached conversion flows.
 - backend grants ticket entitlement
 - QR/receipt generated from backend ticket record
 
-## Dating Flow
+## Mutuals Flow
 
-Dating is profile/settings-owned explicit mode.
+Mutuals is profile/settings-owned explicit mode.
 
-- creator enables Dating Mode in profile/settings
-- creator media shows a dating-active icon/badge when the creator is visible in Dating Mode
-- viewers only see/use dating actions if they also enabled Dating Mode and accepted dating conduct rules
-- dating feed only after opt-in
-- left/right gestures or visible Yes/Not interested buttons are active on eligible creator media only inside Dating Mode
-- match chat lives in Messages
+- creator enables Mutuals in profile/settings
+- creator media shows a Mutuals-active icon/badge when the creator is visible in Mutuals mode
+- viewers only see/use Mutuals actions if they also enabled Mutuals and accepted conduct rules
+- Mutuals feed is available only after opt-in
+- left/right gestures or visible Interested/Not interested buttons are active on eligible creator media only inside Mutuals mode
+- Mutual conversation lives in Messages
 - report/block/age gate required

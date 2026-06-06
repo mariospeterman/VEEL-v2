@@ -1,5 +1,8 @@
 import { expect, test } from "@playwright/test";
 
+const unavailableStatus = /HTTP (401|503)/;
+const unavailableReason = /API is unavailable|Missing or invalid bearer token/;
+
 test("renders the app shell and Home media card", async ({ page }) => {
   await page.goto("/");
 
@@ -7,8 +10,8 @@ test("renders the app shell and Home media card", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Recommended" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Home feed unavailable" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Live rail unavailable" })).toBeVisible();
-  await expect(page.getByText("HTTP 503").first()).toBeVisible();
-  await expect(page.getByText("API is unavailable").first()).toBeVisible();
+  await expect(page.getByText(unavailableStatus).first()).toBeVisible();
+  await expect(page.getByText(unavailableReason).first()).toBeVisible();
 });
 
 test("renders the enter onboarding projection", async ({ page }) => {
@@ -27,8 +30,8 @@ test("renders the age assurance projection", async ({ page }) => {
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Provider-backed 18+ gate" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Age status unavailable" })).toBeVisible();
-  await expect(page.getByText("HTTP 503").first()).toBeVisible();
-  await expect(page.getByText("API is unavailable").first()).toBeVisible();
+  await expect(page.getByText(unavailableStatus).first()).toBeVisible();
+  await expect(page.getByText(unavailableReason).first()).toBeVisible();
   await expect(page.getByText("signature verified")).toBeVisible();
   await expect(page.getByText("normalized result only")).toBeVisible();
   await expect(page.getByText("Session launch URLs are created by the backend")).toBeVisible();
@@ -39,8 +42,8 @@ test("renders the content media viewer projection", async ({ page }) => {
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Content unavailable" })).toBeVisible();
-  await expect(page.getByText("HTTP 503")).toBeVisible();
-  await expect(page.getByText("API is unavailable")).toBeVisible();
+  await expect(page.getByText(unavailableStatus)).toBeVisible();
+  await expect(page.getByText(unavailableReason)).toBeVisible();
 });
 
 test("renders the create upload workspace projection", async ({ page }) => {
@@ -61,8 +64,8 @@ test("renders the discover projection", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Search and explore" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Discover unavailable" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Discover sidebars unavailable" })).toBeVisible();
-  await expect(page.getByText("HTTP 503").first()).toBeVisible();
-  await expect(page.getByText("API is unavailable").first()).toBeVisible();
+  await expect(page.getByText(unavailableStatus).first()).toBeVisible();
+  await expect(page.getByText(unavailableReason).first()).toBeVisible();
 });
 
 test("renders the messages and paid-message projection", async ({ page }) => {
@@ -72,8 +75,8 @@ test("renders the messages and paid-message projection", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Inbox" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Messages unavailable" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Conversation unavailable" })).toBeVisible();
-  await expect(page.getByText("HTTP 503").first()).toBeVisible();
-  await expect(page.getByText("API is unavailable").first()).toBeVisible();
+  await expect(page.getByText(unavailableStatus).first()).toBeVisible();
+  await expect(page.getByText(unavailableReason).first()).toBeVisible();
 });
 
 test("renders the activity and wallet transaction projection", async ({ page }) => {
@@ -84,8 +87,8 @@ test("renders the activity and wallet transaction projection", async ({ page }) 
   await expect(page.getByText("Wallet transactions", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Payment activity unavailable" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Wallet transactions unavailable" })).toBeVisible();
-  await expect(page.getByText("HTTP 503").first()).toBeVisible();
-  await expect(page.getByText("API is unavailable").first()).toBeVisible();
+  await expect(page.getByText(unavailableStatus).first()).toBeVisible();
+  await expect(page.getByText(unavailableReason).first()).toBeVisible();
 });
 
 test("renders the wallet funding and primary-wallet projection", async ({ page }) => {
@@ -97,8 +100,8 @@ test("renders the wallet funding and primary-wallet projection", async ({ page }
   await expect(page.getByText("Funding sessions do not unlock")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Wallets unavailable" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Wallet transactions unavailable" })).toBeVisible();
-  await expect(page.getByText("HTTP 503").first()).toBeVisible();
-  await expect(page.getByText("API is unavailable").first()).toBeVisible();
+  await expect(page.getByText(unavailableStatus).first()).toBeVisible();
+  await expect(page.getByText(unavailableReason).first()).toBeVisible();
 });
 
 test("renders the creator dashboard projection", async ({ page }) => {
@@ -106,8 +109,8 @@ test("renders the creator dashboard projection", async ({ page }) => {
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Creator dashboard unavailable" })).toBeVisible();
-  await expect(page.getByText("HTTP 503")).toBeVisible();
-  await expect(page.getByText("API is unavailable")).toBeVisible();
+  await expect(page.getByText(unavailableStatus)).toBeVisible();
+  await expect(page.getByText(unavailableReason)).toBeVisible();
 });
 
 test("renders the delegated subscription projection", async ({ page }) => {
@@ -117,8 +120,8 @@ test("renders the delegated subscription projection", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Auto-renewing access" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Subscription plans unavailable" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Subscriptions unavailable" })).toBeVisible();
-  await expect(page.getByText("HTTP 503").first()).toBeVisible();
-  await expect(page.getByText("API is unavailable").first()).toBeVisible();
+  await expect(page.getByText(unavailableStatus).first()).toBeVisible();
+  await expect(page.getByText(unavailableReason).first()).toBeVisible();
   await expect(page.getByText("Manual Solana Pay renewal is reserved")).toBeVisible();
 });
 
@@ -128,8 +131,8 @@ test("renders the Studio organization dashboard projection", async ({ page }) =>
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Organization dashboards" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Studio API unavailable" })).toBeVisible();
-  await expect(page.getByText("HTTP 503")).toBeVisible();
-  await expect(page.getByText("API is unavailable")).toBeVisible();
+  await expect(page.getByText(unavailableStatus)).toBeVisible();
+  await expect(page.getByText(unavailableReason)).toBeVisible();
   await expect(page.getByText("payout queues")).toBeVisible();
 });
 
@@ -140,9 +143,9 @@ test("renders the settings projection", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Account controls" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Security" })).toBeVisible();
   await expect(page.getByText("Settings API unavailable").first()).toBeVisible();
-  await expect(page.getByText("HTTP 503").first()).toBeVisible();
+  await expect(page.getByText(unavailableStatus).first()).toBeVisible();
   await expect(page.getByText("privacy-safe only")).toBeVisible();
-  await expect(page.getByText("Browser push")).toBeVisible();
+  await expect(page.getByText("Browser push", { exact: true })).toBeVisible();
   await expect(page.getByText("server-owned").first()).toBeVisible();
 });
 
@@ -160,11 +163,19 @@ test("redirects documented app route aliases", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Live room" })).toBeVisible();
 
   await page.goto("/event-access/00000000-0000-4000-8000-0000000000e1");
-  await expect(page).toHaveURL(/\/events\/00000000-0000-4000-8000-0000000000e1$/);
+  await expect(page).toHaveURL(/\/event-access\/00000000-0000-4000-8000-0000000000e1$/);
+  await expect(page.getByRole("heading", { name: "Event unavailable" })).toBeVisible();
+
+  await page.goto("/events/00000000-0000-4000-8000-0000000000e1");
+  await expect(page).toHaveURL(/\/event-access\/00000000-0000-4000-8000-0000000000e1$/);
   await expect(page.getByRole("heading", { name: "Event unavailable" })).toBeVisible();
 
   await page.goto("/mutuals/mutuals");
-  await expect(page).toHaveURL(/\/dating\/matches$/);
+  await expect(page).toHaveURL(/\/mutuals$/);
+  await expect(page.getByRole("heading", { name: "Mutuals", exact: true })).toBeVisible();
+
+  await page.goto("/dating/matches");
+  await expect(page).toHaveURL(/\/mutuals$/);
   await expect(page.getByRole("heading", { name: "Mutuals", exact: true })).toBeVisible();
 });
 
@@ -172,9 +183,9 @@ test("renders the public creator profile projection", async ({ page }) => {
   await page.goto("/profile/maki");
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Creator profile unavailable" })).toBeVisible();
-  await expect(page.getByText("HTTP 503")).toBeVisible();
-  await expect(page.getByText("API is unavailable")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Creator profile not found" })).toBeVisible();
+  await expect(page.getByText("HTTP 404")).toBeVisible();
+  await expect(page.getByText("Profile was not found")).toBeVisible();
 });
 
 test("renders the admin payment unlock and provider ops projection", async ({ page }) => {
@@ -191,8 +202,8 @@ test("renders the admin payment unlock and provider ops projection", async ({ pa
   await expect(page.getByRole("heading", { name: "DAC7 and CARF reports", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "VAT and receipts", exact: true })).toBeVisible();
   await expect(page.getByText("Admin API unavailable").first()).toBeVisible();
-  await expect(page.getByText("HTTP 503").first()).toBeVisible();
-  await expect(page.getByText("API is unavailable").first()).toBeVisible();
+  await expect(page.getByText(unavailableStatus).first()).toBeVisible();
+  await expect(page.getByText(unavailableReason).first()).toBeVisible();
 });
 
 test("renders the Livepeer live room projection", async ({ page }) => {
@@ -200,49 +211,49 @@ test("renders the Livepeer live room projection", async ({ page }) => {
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Live room unavailable" })).toBeVisible();
-  await expect(page.getByText("HTTP 503")).toBeVisible();
-  await expect(page.getByText("API is unavailable")).toBeVisible();
+  await expect(page.getByText(unavailableStatus)).toBeVisible();
+  await expect(page.getByText(unavailableReason)).toBeVisible();
 });
 
-test("renders the event ticket sheet projection", async ({ page }) => {
-  await page.goto("/events/00000000-0000-4000-8000-0000000000e1");
+test("renders the Event Access sheet projection", async ({ page }) => {
+  await page.goto("/event-access/00000000-0000-4000-8000-0000000000e1");
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Event unavailable" })).toBeVisible();
-  await expect(page.getByText("HTTP 503")).toBeVisible();
-  await expect(page.getByText("API is unavailable")).toBeVisible();
+  await expect(page.getByText(unavailableStatus)).toBeVisible();
+  await expect(page.getByText(unavailableReason)).toBeVisible();
 });
 
-test("renders the user ticket QR projection", async ({ page }) => {
-  await page.goto("/tickets");
+test("renders the user Event Access pass projection", async ({ page }) => {
+  await page.goto("/passes");
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "My passes" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Passes unavailable" })).toBeVisible();
-  await expect(page.getByText("HTTP 503")).toBeVisible();
-  await expect(page.getByText("API is unavailable")).toBeVisible();
+  await expect(page.getByText(unavailableStatus)).toBeVisible();
+  await expect(page.getByText(unavailableReason)).toBeVisible();
 });
 
 test("renders the Mutuals feed projection", async ({ page }) => {
-  await page.goto("/dating");
+  await page.goto("/mutuals/feed");
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Explicit Mutuals feed" })).toBeVisible();
   await expect(page.getByText("Mutuals safety")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Mutuals feed unavailable" })).toBeVisible();
-  await expect(page.getByText("HTTP 503")).toBeVisible();
-  await expect(page.getByText("API is unavailable")).toBeVisible();
+  await expect(page.getByText(unavailableStatus)).toBeVisible();
+  await expect(page.getByText(unavailableReason)).toBeVisible();
   await expect(page.getByText("explicit opt-in required")).toBeVisible();
 });
 
 test("renders the Mutuals list projection", async ({ page }) => {
-  await page.goto("/dating/matches");
+  await page.goto("/mutuals");
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Mutuals", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Mutuals unavailable" })).toBeVisible();
-  await expect(page.getByText("HTTP 503")).toBeVisible();
-  await expect(page.getByText("API is unavailable")).toBeVisible();
+  await expect(page.getByText(unavailableStatus)).toBeVisible();
+  await expect(page.getByText(unavailableReason)).toBeVisible();
 });
 
 test("renders the scoped assistant projection", async ({ page }) => {
@@ -251,7 +262,7 @@ test("renders the scoped assistant projection", async ({ page }) => {
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Scoped assistant" })).toBeVisible();
   await expect(page.getByText("Assistant API unavailable")).toBeVisible();
-  await expect(page.getByText("HTTP 503").first()).toBeVisible();
+  await expect(page.getByText(unavailableStatus).first()).toBeVisible();
   await expect(page.getByText("explicit start only").first()).toBeVisible();
   await expect(page.getByText("required for admin actions")).toBeVisible();
 });

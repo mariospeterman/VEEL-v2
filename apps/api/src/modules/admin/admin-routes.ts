@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { SupabaseAuthVerifier } from "../session/types.js";
 import { AdminRepositoryConfigurationError } from "./admin-repository.js";
-import type { AdminRepository } from "./types.js";
+import type { AdminOrganizationKybActionRequest, AdminRepository } from "./types.js";
 
 interface RegisterAdminRoutesOptions {
   authVerifier: SupabaseAuthVerifier;
@@ -137,6 +137,52 @@ export async function registerAdminRoutes(
     const query = request.query as { cursor?: string };
     return reply.code(200).send(await options.adminRepository.listOrganizations(adminListInput(query)));
   });
+
+  app.patch("/v1/admin/organizations/:organizationId/kyb", async (request, reply) => {
+    const access = await requireAdminAccessWithUser(request, reply, options);
+    if (!access) return reply;
+
+    const idempotencyKey = request.headers["idempotency-key"];
+    if (!idempotencyKey || Array.isArray(idempotencyKey)) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: "Idempotency-Key header is required"
+      });
+    }
+
+    const { organizationId } = request.params as { organizationId?: string };
+    if (!organizationId) {
+      return reply.code(404).send({
+        code: "not_found",
+        message: "Organization was not found"
+      });
+    }
+
+    const body = request.body as Partial<AdminOrganizationKybActionRequest> | undefined;
+    const validationError = validateOrganizationKybAction(body);
+    if (validationError) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: validationError
+      });
+    }
+
+    const organization = await options.adminRepository.updateOrganizationKyb({
+      supabaseUserId: access.supabaseUserId,
+      organizationId,
+      body: body as AdminOrganizationKybActionRequest,
+      idempotencyKey
+    });
+
+    if (!organization) {
+      return reply.code(404).send({
+        code: "not_found",
+        message: "Organization was not found"
+      });
+    }
+
+    return reply.code(200).send(organization);
+  });
 }
 
 function adminListInput(query: { q?: string; cursor?: string }): { query?: string; cursor?: string } {
@@ -182,4 +228,67 @@ async function requireAdminAccess(
 
     throw error;
   }
+}
+
+async function requireAdminAccessWithUser(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  options: RegisterAdminRoutesOptions
+): Promise<{ supabaseUserId: string } | null> {
+  const verifiedSession = await verifyRequestSession(request, options.authVerifier);
+
+  if (!verifiedSession) {
+    reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
+    return null;
+  }
+
+  try {
+    const allowed = await options.adminRepository.hasAdminAccess(verifiedSession.supabaseUserId);
+
+    if (!allowed) {
+      reply.code(403).send({
+        code: "forbidden",
+        message: "Admin access is required"
+      });
+      return null;
+    }
+
+    return {
+      supabaseUserId: verifiedSession.supabaseUserId
+    };
+  } catch (error) {
+    if (error instanceof AdminRepositoryConfigurationError) {
+      request.log.warn({ error }, "Admin repository is not configured");
+      reply.code(403).send({
+        code: "forbidden",
+        message: "Admin access is not configured"
+      });
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+function validateOrganizationKybAction(
+  body: Partial<AdminOrganizationKybActionRequest> | undefined
+): string | null {
+  if (!body || typeof body !== "object") {
+    return "Request body is required";
+  }
+
+  if (
+    body.kybState !== "not_started" &&
+    body.kybState !== "pending" &&
+    body.kybState !== "verified" &&
+    body.kybState !== "rejected"
+  ) {
+    return "kybState is invalid";
+  }
+
+  if (!body.reason || body.reason.trim().length < 3 || body.reason.length > 500) {
+    return "reason must be 3-500 characters";
+  }
+
+  return null;
 }

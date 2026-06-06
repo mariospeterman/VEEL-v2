@@ -3640,6 +3640,9 @@ describe("buildApi", () => {
         async getDatingSafety() {
           throw new Error("not implemented");
         },
+        async updateOrganizationKyb() {
+          throw new Error("not implemented");
+        },
         ...unimplementedComplianceAdminMethods
       },
       aiRepository: fakeAiRepository()
@@ -3690,6 +3693,9 @@ describe("buildApi", () => {
         async getDatingSafety() {
           throw new Error("not implemented");
         },
+        async updateOrganizationKyb() {
+          throw new Error("not implemented");
+        },
         ...unimplementedComplianceAdminMethods
       },
       aiRepository: fakeAiRepository()
@@ -3736,6 +3742,9 @@ describe("buildApi", () => {
           throw new Error("not implemented");
         },
         async getDatingSafety() {
+          throw new Error("not implemented");
+        },
+        async updateOrganizationKyb() {
           throw new Error("not implemented");
         },
         ...unimplementedComplianceAdminMethods
@@ -3820,6 +3829,83 @@ describe("buildApi", () => {
       plan: "enterprise",
       kybState: "pending"
     });
+
+    await app.close();
+  });
+
+  it("updates organization KYB state through an audited admin mutation", async () => {
+    const calls: Array<Parameters<AdminRepository["updateOrganizationKyb"]>[0]> = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: {
+        ...fakeAdminRepository,
+        async updateOrganizationKyb(input) {
+          calls.push(input);
+          return {
+            id: input.organizationId,
+            name: "Veel Enterprise",
+            state: "active",
+            plan: "enterprise",
+            kybState: input.body.kybState,
+            createdAt: "2026-06-05T10:00:00.000Z"
+          };
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/admin/organizations/00000000-0000-4000-8000-000000000140/kyb",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "org-kyb-1"
+      },
+      payload: {
+        kybState: "verified",
+        reason: "KYB provider review completed"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      id: "00000000-0000-4000-8000-000000000140",
+      state: "active",
+      kybState: "verified"
+    });
+    expect(calls[0]).toMatchObject({
+      supabaseUserId: "00000000-0000-4000-8000-000000000001",
+      idempotencyKey: "org-kyb-1",
+      body: {
+        kybState: "verified",
+        reason: "KYB provider review completed"
+      }
+    });
+    expect(response.body).not.toMatch(/balance|withdraw|payout|escrow|privateKey|serviceRole/i);
+
+    await app.close();
+  });
+
+  it("rejects organization KYB updates without idempotency", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: fakeAdminRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/admin/organizations/00000000-0000-4000-8000-000000000140/kyb",
+      headers: {
+        authorization: "Bearer valid-token"
+      },
+      payload: {
+        kybState: "verified",
+        reason: "KYB provider review completed"
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
 
     await app.close();
   });
@@ -6395,6 +6481,16 @@ const fakeAdminRepository: AdminRepository = {
         }
       ],
       nextCursor: null
+    };
+  },
+  async updateOrganizationKyb(input) {
+    return {
+      id: input.organizationId,
+      name: "Veel Enterprise",
+      state: input.body.kybState === "verified" ? "active" : "pending_kyb",
+      plan: "enterprise",
+      kybState: input.body.kybState,
+      createdAt: "2026-06-05T10:00:00.000Z"
     };
   }
 };

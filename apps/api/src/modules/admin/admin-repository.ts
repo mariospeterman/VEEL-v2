@@ -263,6 +263,9 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
       },
       async listOrganizations() {
         throw new AdminRepositoryConfigurationError();
+      },
+      async updateOrganizationKyb() {
+        throw new AdminRepositoryConfigurationError();
       }
     };
   }
@@ -594,6 +597,79 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
       `;
 
       return page(rows, toOrganization);
+    },
+    async updateOrganizationKyb(input) {
+      const rows = await sql.begin(async (transaction) => {
+        const updatedRows = await transaction<OrganizationRow[]>`
+          with actor as (
+            select id
+            from users
+            where supabase_user_id = ${input.supabaseUserId}
+            limit 1
+          ),
+          current_org as (
+            select id, state, kyb_state
+            from organizations
+            where id = ${input.organizationId}
+            for update
+          ),
+          updated_org as (
+            update organizations o
+            set
+              kyb_state = ${input.body.kybState},
+              state = case
+                when o.state in ('suspended', 'archived') then o.state
+                when ${input.body.kybState} = 'verified' then 'active'
+                else 'pending_kyb'
+              end
+            from current_org co
+            where o.id = co.id
+            returning
+              o.id,
+              o.name,
+              o.state,
+              o.plan,
+              o.kyb_state,
+              o.created_at,
+              co.state as previous_state,
+              co.kyb_state as previous_kyb_state
+          ),
+          audit_insert as (
+            insert into audit_events (
+              id,
+              actor_user_id,
+              subject_type,
+              subject_id,
+              action,
+              metadata
+            )
+            select
+              gen_random_uuid(),
+              actor.id,
+              'organization',
+              updated_org.id,
+              'organization_kyb_updated',
+              jsonb_build_object(
+                'reason', ${input.body.reason},
+                'idempotencyKey', ${input.idempotencyKey},
+                'previousState', updated_org.previous_state,
+                'newState', updated_org.state,
+                'previousKybState', updated_org.previous_kyb_state,
+                'newKybState', updated_org.kyb_state
+              )
+            from updated_org
+            cross join actor
+            returning id
+          )
+          select id, name, state, plan, kyb_state, created_at
+          from updated_org
+          where exists (select 1 from audit_insert)
+        `;
+
+        return updatedRows;
+      });
+
+      return rows[0] ? toOrganization(rows[0]) : null;
     },
     async close() {
       await sql.end({ timeout: 5 });

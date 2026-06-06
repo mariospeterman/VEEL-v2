@@ -31,7 +31,7 @@ User
 Next.js PWA
   ├─ Landing, auth, age gate
   ├─ App shell: Home, Bits, Discover, Create, Messages, Profile
-  ├─ Explicit modes: Dating, Events, AI assistant
+  ├─ Explicit modes: Mutuals, Event Access, AI assistant
   ├─ TanStack Query: server state cache
   ├─ Zustand/local state: sheets, panels, gestures, playback UI
   └─ Wallet layer: embedded wallet + external Solana wallets
@@ -42,7 +42,7 @@ Fastify TypeScript API
   ├─ auth, profile, policy, roles
   ├─ payments, referrals, commissions, entitlements
   ├─ media, live, messages, engagement, safety
-  ├─ dating, events, AI/MCP, admin/ops
+  ├─ Mutuals, Event Access, AI/MCP, admin/ops
   └─ idempotency + append-only audit
         │
         ├────────────────────────────┬────────────────────────────┐
@@ -198,18 +198,18 @@ Creator earning / tax KYC:
   - no raw biometric/document storage in core DB unless legally required
 ```
 
-## Dating Mode Flow
+## Mutuals Mode Flow
 
 ```text
-User opts into Dating Mode
+User opts into Mutuals
   -> age gate required
   -> explicit consent and safety copy
-  -> profile/settings Dating Mode enabled
-  -> creator media shows dating-active affordance to eligible viewers
-  -> dating feed shows eligible creator media
-  -> Yes / Not interested actions create backend swipe events
-  -> mutual interest creates match
-  -> match opens conversation in Messages
+  -> profile/settings Mutuals enabled
+  -> creator media shows Mutuals-active affordance to eligible viewers
+  -> Mutuals feed shows eligible creator media
+  -> Interested / Not interested actions create backend interest events
+  -> mutual interest creates Mutual
+  -> Mutual opens conversation in Messages
   -> report/block removes visibility and audits safety event
 ```
 

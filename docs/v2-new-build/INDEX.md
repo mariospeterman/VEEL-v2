@@ -47,6 +47,7 @@ This folder is the canonical new-build pack. It is intentionally self-contained 
 | Frontend routes/screens/gestures | `route-map.md`, `native-ui-ux-screens.md`, frontend docs | Next routes encode route state only. |
 | Database shape | `packages/database/schema-blueprint.sql` until migrations exist | Migrations must be derived slice-by-slice from the blueprint. |
 | Money/access/referral/tax truth | `liability-compliance-audit.md`, `payments-and-monetisation.md`, `business-monetisation.md`, `noncustodial-money-compliance.md`, `compliance/dac7-dac8-vat-system.md`, OpenAPI | Backend owns final state; frontend is UX/cache only. |
+| Payment/access/reporting/bookkeeping truth | `business-monetisation.md`, `liability-compliance-audit.md`, `compliance/dac7-dac8-vat-system.md`, OpenAPI, schema | Blockchain = payment truth; entitlements = access truth; compliance ledger = reporting truth; accounting integration = bookkeeping truth. No duplicate authority. |
 | Provider boundaries | `providers/provider-map.md`, provider-specific docs, ADRs | Use official provider docs/SDKs first; adapters hide secrets. |
 | Security/compliance | compliance docs, `safety-admin-ai.md`, ADRs | Age, moderation, audit, and privacy rules block launch if incomplete. |
 | Admin/ops | `admin-operations-dashboard.md` | Every launch slice needs admin visibility where relevant. |

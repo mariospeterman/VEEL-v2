@@ -95,7 +95,7 @@ Before implementation starts, verify these source-of-truth files are present in 
 - `adr/0002-provider-decisions-2026.md` for launch provider defaults
 - `contracts-and-schema.md`, `packages/contracts/openapi.yaml`, and `packages/database/schema-blueprint.sql` for the first contract/schema draft
 - `diagrams.md` for render-safe full-platform diagrams
-- `product/dating-mode.md` and `product/events-ticketing.md` for dating and events
+- `product/mutuals.md` and `product/event-access.md` for Mutuals and Event Access
 - `recommendation-discovery.md`, `profile-activity-ranking.md`, and `engagement-strategy.md` for growth and social mechanics
 - `providers/provider-map.md`, `business-monetisation.md`, and compliance docs for provider and business boundaries
 
@@ -225,8 +225,8 @@ Core tables:
 - messages/conversations
 - live rooms/passes/replays
 - subscriptions
-- events/tickets
-- dating opt-in/swipes/matches
+- Event Access/Passes
+- Mutuals opt-in/interests/matches
 - admin audit/events
 - AI sessions/tool calls
 
@@ -322,8 +322,8 @@ Build each slice end-to-end before starting the next:
 12. User activity and wallet transactions.
 13. Creator profile and creator monetisation dashboard.
 14. Admin payments/unlocks/provider ops.
-15. Events/tickets.
-16. Dating mode.
+15. Event Access/Passes.
+16. Mutuals mode.
 17. AI/MCP scoped assistant.
 18. Notifications foundation.
 19. Studio/Enterprise organization dashboards.
@@ -334,6 +334,7 @@ Build each slice end-to-end before starting the next:
 24. Supabase Realtime projection publication and browser cache invalidation boundary.
 25. Creator onboarding readiness checklist.
 26. Studio/Enterprise RBAC permission projection.
+27. Admin organization KYB mutation workflow.
 
 Each slice must include:
 

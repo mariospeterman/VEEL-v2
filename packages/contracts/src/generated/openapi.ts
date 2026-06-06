@@ -1932,6 +1932,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/organizations/{organizationId}/kyb": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update organization KYB review state with audit trail */
+        patch: operations["updateAdminOrganizationKyb"];
+        trace?: never;
+    };
     "/v1/admin/feature-flags": {
         parameters: {
             query?: never;
@@ -3505,6 +3522,11 @@ export interface components {
             state: "verifying" | "processing" | "completed" | "rejected";
             reason: string;
         };
+        AdminOrganizationKybActionRequest: {
+            /** @enum {string} */
+            kybState: "not_started" | "pending" | "verified" | "rejected";
+            reason: string;
+        };
         AdminFeatureFlagPatchRequest: {
             value: {
                 [key: string]: unknown;
@@ -4465,6 +4487,15 @@ export interface components {
                 };
             };
         };
+        /** @description Admin organization */
+        AdminOrganization: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["AdminOrganization"];
+            };
+        };
         /** @description Admin organizations */
         AdminOrganizationPage: {
             headers: {
@@ -4539,6 +4570,7 @@ export interface components {
         ProviderEventId: string;
         SupportCaseId: string;
         DataRequestId: string;
+        OrganizationId: string;
         FeatureFlagKey: string;
         Slug: string;
         Handle: string;
@@ -4754,6 +4786,11 @@ export interface components {
         AdminDataRequestAction: {
             content: {
                 "application/json": components["schemas"]["AdminDataRequestActionRequest"];
+            };
+        };
+        AdminOrganizationKybAction: {
+            content: {
+                "application/json": components["schemas"]["AdminOrganizationKybActionRequest"];
             };
         };
         AdminFeatureFlagPatch: {
@@ -6745,6 +6782,25 @@ export interface operations {
         responses: {
             200: components["responses"]["AdminOrganizationPage"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    updateAdminOrganizationKyb: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["AdminOrganizationKybAction"];
+        responses: {
+            200: components["responses"]["AdminOrganization"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listAdminFeatureFlags: {

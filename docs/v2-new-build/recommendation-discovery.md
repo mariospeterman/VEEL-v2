@@ -50,8 +50,8 @@ Discover
 Profile
   creator-owned grid/tabs
 
-Dating Mode
-  explicit opt-in creator media only when both creator and viewer have Dating Mode enabled
+Mutuals Mode
+  explicit opt-in creator media only when both creator and viewer have Mutuals enabled
 ```
 
 ## Feed Modes
@@ -163,7 +163,7 @@ Creator Create/Edit:
 - optional content warning category
 - moderation can correct or override labels
 - repeated mislabeling can restrict monetisation/discovery
-- Dating Mode is not a Create/Edit field; creator profile/settings controls dating-active visibility on media
+- Mutuals is not a Create/Edit field; creator profile/settings controls Mutuals-active visibility on media
 
 NSFW states:
 

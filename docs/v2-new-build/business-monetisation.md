@@ -31,6 +31,18 @@ Money can never buy access to people, visibility, matches, recommendations, or p
 
 This is a hard architectural rule. It applies to Mutuals/Connections, creator monetisation, platform tiers, referrals, notifications, ranking, messaging, AI tools, and admin policy. Any slice that touches money, recommendations, Mutuals, profiles, messaging, notifications, or platform tiers must preserve this rule in contracts, backend policy, tests, and user-facing copy.
 
+## Source-Of-Truth Ownership Rule
+
+```text
+The blockchain is the source of payment truth.
+The entitlement system is the source of access truth.
+The compliance ledger is the source of reporting truth.
+The accounting integration is the source of bookkeeping truth.
+The platform must never create a second competing source of truth for the same responsibility.
+```
+
+Operational tables, caches, notifications, admin projections, receipts, exports, and dashboard aggregates must derive from those systems of record. They can improve supportability and UX, but they must not override settlement evidence, entitlement state, compliance-ledger entries, or accounting-system books.
+
 ## Business Model Summary
 
 Veel earns through:

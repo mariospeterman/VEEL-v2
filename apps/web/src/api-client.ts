@@ -34,9 +34,9 @@ export type NotificationPreferences = components["schemas"]["NotificationPrefere
 export type NotificationPushConfig = components["schemas"]["NotificationPushConfig"];
 export type AgeStatus = components["schemas"]["AgeStatus"];
 export type Event = components["schemas"]["Event"];
-export type TicketPage = components["schemas"]["TicketPage"];
-export type DatingFeedPage = components["schemas"]["DatingFeedPage"];
-export type DatingMatchPage = components["schemas"]["DatingMatchPage"];
+export type EventAccessPassPage = components["schemas"]["TicketPage"];
+export type MutualsFeedPage = components["schemas"]["DatingFeedPage"];
+export type MutualsMatchPage = components["schemas"]["DatingMatchPage"];
 export type AiCapabilities = components["schemas"]["AiCapabilities"];
 export type OrganizationDashboardPage = components["schemas"]["OrganizationDashboardPage"];
 export type AdminOpsSummary = components["schemas"]["AdminOpsSummary"];
@@ -151,16 +151,16 @@ export async function getEvent(eventId: string): Promise<ApiResult<Event>> {
   return getJson<Event>(`/v1/events/${encodeURIComponent(eventId)}`);
 }
 
-export async function getTicketActivity(): Promise<ApiResult<TicketPage>> {
-  return getJson<TicketPage>("/v1/activity/tickets");
+export async function getEventAccessPassActivity(): Promise<ApiResult<EventAccessPassPage>> {
+  return getJson<EventAccessPassPage>("/v1/activity/tickets");
 }
 
-export async function getDatingFeed(): Promise<ApiResult<DatingFeedPage>> {
-  return getJson<DatingFeedPage>("/v1/dating/feed");
+export async function getMutualsFeed(): Promise<ApiResult<MutualsFeedPage>> {
+  return getJson<MutualsFeedPage>("/v1/dating/feed");
 }
 
-export async function getDatingMatches(): Promise<ApiResult<DatingMatchPage>> {
-  return getJson<DatingMatchPage>("/v1/dating/matches");
+export async function getMutualsMatches(): Promise<ApiResult<MutualsMatchPage>> {
+  return getJson<MutualsMatchPage>("/v1/dating/matches");
 }
 
 export async function getAiCapabilities(): Promise<ApiResult<AiCapabilities>> {

@@ -52,10 +52,12 @@ Avoid launch-facing language:
 - Confirmed `event_ticket` compatibility settlement grants a backend Event Access Pass and QR record in the settlement transaction. Wallet approval or frontend redirect never grants access.
 - `GET /v1/activity/tickets` is the implemented compatibility activity path for current user Event Access records.
 - `POST /v1/tickets/{ticketId}/check-in` validates the backend-issued QR token server-side and idempotently moves an active pass to `checked_in`.
-- `/app/events/:id` and `/app/tickets` use typed API-backed frontend
-  projections for pass sheet and QR display. When the API is unavailable, both
-  routes fail closed instead of rendering fixture Event Access data.
-- Target route names are `/event-access` and `/passes`; compatibility ticket route names must be migrated before launch copy ships.
+- `/event-access/:id` and `/passes` are the canonical typed API-backed frontend
+  projections for Event Access sheets and Pass QR display. When the API is
+  unavailable, both routes fail closed instead of rendering fixture Event
+  Access data.
+- `/events/:id`, `/tickets`, and app-prefixed historical paths are compatibility
+  redirects only.
 
 ## Product Position
 
@@ -81,13 +83,14 @@ Noncustodial boundary:
 /event-access                  planned secondary surface
 /event-access/:id              planned
 /event-access/:id/passes       planned access sheet/page
-/passes                        planned My Passes
+/passes                        canonical My Passes
 /passes/:id                    planned pass detail / QR
+/event-access/:id              canonical Event Access sheet
 /admin/events                  planned admin ops
 /admin/event-access            planned admin access ops
 
-/app/events/:id                compatibility frontend path
-/app/tickets                   compatibility frontend path
+/events/:id                    compatibility frontend redirect
+/tickets                       compatibility frontend redirect
 /v1/events/{eventId}/tickets/intents compatibility API path
 /v1/tickets/:id/check-in       compatibility API path
 ```
