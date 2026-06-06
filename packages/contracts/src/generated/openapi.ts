@@ -3150,10 +3150,19 @@ export interface components {
             /** @enum {string} */
             state: "open" | "pending" | "resolved" | "none";
         };
+        OrganizationRolePermission: {
+            /** @enum {string} */
+            key: "manage_members" | "publish_team_content" | "view_consolidated_reporting" | "export_compliance" | "manage_support";
+            label: string;
+            allowed: boolean;
+            /** @enum {string} */
+            reason: "allowed" | "role_not_permitted" | "organization_not_active" | "membership_not_active" | "kyb_not_verified";
+        };
         OrganizationDashboard: {
             organization: components["schemas"]["OrganizationMembership"];
             governance: components["schemas"]["OrganizationGovernance"];
             capabilities: components["schemas"]["OrganizationCapabilities"];
+            rolePermissions: components["schemas"]["OrganizationRolePermission"][];
             /** @enum {string} */
             financeBoundary: "no_custody_no_payout_queue";
             notices: components["schemas"]["OrganizationNotice"][];

@@ -2880,13 +2880,35 @@ components:
         kind: { type: string, enum: [kyb_required, member_invite, compliance_review, support_review, none] }
         title: { type: string }
         state: { type: string, enum: [open, pending, resolved, none] }
+    OrganizationRolePermission:
+      type: object
+      required: [key, label, allowed, reason]
+      properties:
+        key:
+          type: string
+          enum: [manage_members, publish_team_content, view_consolidated_reporting, export_compliance, manage_support]
+        label: { type: string }
+        allowed: { type: boolean }
+        reason:
+          type: string
+          enum:
+            [
+              allowed,
+              role_not_permitted,
+              organization_not_active,
+              membership_not_active,
+              kyb_not_verified
+            ]
     OrganizationDashboard:
       type: object
-      required: [organization, governance, capabilities, financeBoundary, notices]
+      required: [organization, governance, capabilities, rolePermissions, financeBoundary, notices]
       properties:
         organization: { $ref: "#/components/schemas/OrganizationMembership" }
         governance: { $ref: "#/components/schemas/OrganizationGovernance" }
         capabilities: { $ref: "#/components/schemas/OrganizationCapabilities" }
+        rolePermissions:
+          type: array
+          items: { $ref: "#/components/schemas/OrganizationRolePermission" }
         financeBoundary: { type: string, enum: [no_custody_no_payout_queue] }
         notices:
           type: array

@@ -333,6 +333,7 @@ Build each slice end-to-end before starting the next:
 23. Web Push VAPID send-provider boundary.
 24. Supabase Realtime projection publication and browser cache invalidation boundary.
 25. Creator onboarding readiness checklist.
+26. Studio/Enterprise RBAC permission projection.
 
 Each slice must include:
 

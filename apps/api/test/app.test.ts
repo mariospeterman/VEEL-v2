@@ -2910,6 +2910,18 @@ describe("buildApi", () => {
             rbacEnabled: true,
             consolidatedReportingEnabled: true
           },
+          rolePermissions: expect.arrayContaining([
+            expect.objectContaining({
+              key: "manage_members",
+              allowed: true,
+              reason: "allowed"
+            }),
+            expect.objectContaining({
+              key: "export_compliance",
+              allowed: true,
+              reason: "allowed"
+            })
+          ]),
           financeBoundary: "no_custody_no_payout_queue"
         }
       ],
@@ -6610,6 +6622,38 @@ function organizationDashboardFixture(
       consolidatedReportingEnabled: true,
       complianceExportsEnabled: true
     },
+    rolePermissions: overrides.rolePermissions ?? [
+      {
+        key: "manage_members",
+        label: "Manage members",
+        allowed: true,
+        reason: "allowed"
+      },
+      {
+        key: "publish_team_content",
+        label: "Publish team content",
+        allowed: true,
+        reason: "allowed"
+      },
+      {
+        key: "view_consolidated_reporting",
+        label: "View consolidated reporting",
+        allowed: true,
+        reason: "allowed"
+      },
+      {
+        key: "export_compliance",
+        label: "Export compliance",
+        allowed: true,
+        reason: "allowed"
+      },
+      {
+        key: "manage_support",
+        label: "Manage support",
+        allowed: true,
+        reason: "allowed"
+      }
+    ],
     financeBoundary: overrides.financeBoundary ?? "no_custody_no_payout_queue",
     notices: overrides.notices ?? []
   };

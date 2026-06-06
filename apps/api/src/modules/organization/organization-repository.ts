@@ -153,7 +153,71 @@ function toDashboard(row: OrganizationDashboardRow): OrganizationDashboard {
       consolidatedReportingEnabled: row.state === "active",
       complianceExportsEnabled: row.state === "active" && kybState === "verified"
     },
+    rolePermissions: rolePermissions(row, kybState),
     financeBoundary: "no_custody_no_payout_queue",
     notices
+  };
+}
+
+function rolePermissions(
+  row: OrganizationDashboardRow,
+  kybState: OrganizationDashboard["organization"]["kybState"]
+): OrganizationDashboard["rolePermissions"] {
+  return [
+    permission(row, kybState, {
+      key: "manage_members",
+      label: "Manage members",
+      roles: ["owner", "admin"]
+    }),
+    permission(row, kybState, {
+      key: "publish_team_content",
+      label: "Publish team content",
+      roles: ["owner", "admin", "member"]
+    }),
+    permission(row, kybState, {
+      key: "view_consolidated_reporting",
+      label: "View consolidated reporting",
+      roles: ["owner", "admin", "member", "viewer"]
+    }),
+    permission(row, kybState, {
+      key: "export_compliance",
+      label: "Export compliance",
+      roles: ["owner", "admin"],
+      requiresKyb: true
+    }),
+    permission(row, kybState, {
+      key: "manage_support",
+      label: "Manage support",
+      roles: ["owner", "admin"]
+    })
+  ];
+}
+
+function permission(
+  row: OrganizationDashboardRow,
+  kybState: OrganizationDashboard["organization"]["kybState"],
+  policy: {
+    key: OrganizationDashboard["rolePermissions"][number]["key"];
+    label: string;
+    roles: OrganizationDashboard["organization"]["role"][];
+    requiresKyb?: boolean;
+  }
+): OrganizationDashboard["rolePermissions"][number] {
+  const reason =
+    row.membership_state !== "active"
+      ? "membership_not_active"
+      : row.state !== "active"
+        ? "organization_not_active"
+        : policy.requiresKyb && kybState !== "verified"
+          ? "kyb_not_verified"
+          : policy.roles.includes(row.role)
+            ? "allowed"
+            : "role_not_permitted";
+
+  return {
+    key: policy.key,
+    label: policy.label,
+    allowed: reason === "allowed",
+    reason
   };
 }

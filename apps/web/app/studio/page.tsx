@@ -98,6 +98,26 @@ function DashboardList({ dashboards }: { dashboards: ApiResult<OrganizationDashb
               ))}
             </div>
           ) : null}
+
+          <div className="mt-4 grid gap-2">
+            <h3 className="text-sm font-semibold tracking-normal">Role permissions</h3>
+            <div className="grid gap-2 md:grid-cols-2">
+              {dashboard.rolePermissions.map((permission) => (
+                <div
+                  className="flex min-h-14 items-center justify-between gap-3 rounded border border-[var(--line)] bg-[var(--background)] px-3 py-2 text-sm"
+                  key={permission.key}
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">{permission.label}</span>
+                    <span className="text-xs text-[var(--muted)]">{permission.reason}</span>
+                  </span>
+                  <span className="rounded bg-[var(--panel)] px-2 py-1 text-xs text-[var(--muted)]">
+                    {permission.allowed ? "allowed" : "blocked"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         </article>
       ))}
     </section>

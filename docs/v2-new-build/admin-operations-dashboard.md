@@ -111,7 +111,8 @@ The admin landing dashboard should show:
 - provider status summary
 - incident banner when provider or deploy health is degraded
 - notification projection, device health, and delivery queue health are visible through `GET /v1/admin/notifications/health`; the worker can send browser push through server-only VAPID Web Push configuration, and production ops must verify real VAPID delivery across target browsers before user-facing delivery claims
-- deeper Studio/Enterprise organization health, KYB/RBAC workflow actions, and contract/support status after the organization mutation slice lands
+- deeper Studio/Enterprise organization health, KYB workflow actions, contract/support status, and member mutation workflows after the organization mutation slice lands
+- current Studio dashboards expose backend-derived RBAC permission rows with denial reasons; the frontend must not infer organization authority from role labels alone
 
 ## Business Operations Modules
 

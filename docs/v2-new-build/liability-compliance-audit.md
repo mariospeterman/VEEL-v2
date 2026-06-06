@@ -56,7 +56,7 @@ Implementation consequences:
 | Mutuals/Connections | Compatibility backend route family and frontend projections exist. | Rename/migration from dating tables/routes, conduct UX, and hard social-money rule tests remain. |
 | Tiers | Free Verified, Veel Plus, Veel Studio, Enterprise are documented; organization member dashboards now expose software governance/readiness only. | Feature gates, admin overrides, and non-pay-to-win policy tests remain. |
 | Notifications | OpenAPI routes, RLS-backed notification/preference/device/delivery-attempt tables, Fastify account routes, worker delivery queue boundary, server-only VAPID Web Push send-provider boundary, browser service-worker enrollment UI, Supabase Realtime projection publication/cache invalidation boundary, backend tests, settings preference reads, and admin health visibility exist. | Real VAPID secrets, staging push-service verification across target browsers, and live Supabase Realtime staging verification remain. |
-| User/creator/studio/enterprise dashboards | User activity, creator onboarding/readiness, creator monetisation dashboard, member-scoped Studio/Enterprise dashboards, and admin ops read-only panels exist. | Full admin route-map breadth, organization mutation workflows, and support/KYB workflow depth remain. |
+| User/creator/studio/enterprise dashboards | User activity, creator onboarding/readiness, creator monetisation dashboard, member-scoped Studio/Enterprise dashboards with backend-derived RBAC permission rows, and admin ops read-only panels exist. | Full admin route-map breadth, organization mutation workflows, and support/KYB workflow depth remain. |
 
 ## Risk Matrix
 
@@ -127,7 +127,7 @@ Implementation consequences:
 1. Keep hard social-money rule in contracts, docs, tests, ranking, Mutuals, platform tier gates, and admin policy.
 2. Complete notification production rollout: real VAPID secrets, staging push-service verification across target browsers, and live Supabase Realtime staging verification with real RLS claims.
 3. Complete single creator onboarding/readiness flow and creator/studio dashboard expansion.
-4. Complete Studio/Enterprise organization dashboards and RBAC policy surfaces.
+4. Complete Studio/Enterprise organization mutation workflows and deeper KYB/support policy surfaces.
 5. Complete refund/dispute request workflow without custody or platform payout obligations.
 6. Complete provider launch approvals and staging fixtures for Solana settlement, delegated Membership renewals, Bunny, Livepeer, age/KYC, and embedded wallets.
 7. Complete compliance export/readiness workflows only after counsel/tax review.
