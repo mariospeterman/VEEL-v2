@@ -10,7 +10,7 @@ test("renders the app shell and Home media card", async ({ page }) => {
   await expect(page.getByText("128 likes")).toBeVisible();
   await expect(page.locator("article img")).toBeVisible();
   await expect(page.getByText("Friday live studio")).toBeVisible();
-  await expect(page.getByText("Livepeer")).toBeVisible();
+  await expect(page.getByText("Livepeer", { exact: true })).toBeVisible();
   await expect(page.getByText("pass_required")).toBeVisible();
 });
 
@@ -149,6 +149,10 @@ test("redirects documented app route aliases", async ({ page }) => {
   await expect(page).toHaveURL(/\/settings$/);
   await expect(page.getByRole("heading", { name: "Account controls" })).toBeVisible();
 
+  await page.goto("/app/stream/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10");
+  await expect(page).toHaveURL(/\/live\/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10$/);
+  await expect(page.getByRole("heading", { name: "Live room" })).toBeVisible();
+
   await page.goto("/event-access/00000000-0000-4000-8000-0000000000e1");
   await expect(page).toHaveURL(/\/events\/00000000-0000-4000-8000-0000000000e1$/);
   await expect(page.getByRole("heading", { name: "Studio meetup" })).toBeVisible();
@@ -186,6 +190,18 @@ test("renders the admin payment unlock and provider ops projection", async ({ pa
   await expect(page.getByText("R-2026-0001")).toBeVisible();
   await expect(page.getByText("payment.settlement")).toBeVisible();
   await expect(page.locator("span").getByText("processed", { exact: true })).toBeVisible();
+});
+
+test("renders the Livepeer live room projection", async ({ page }) => {
+  await page.goto("/live/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10");
+
+  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Live room" })).toBeVisible();
+  await expect(page.getByText("Friday live studio")).toBeVisible();
+  await expect(page.getByText("Livepeer").first()).toBeVisible();
+  await expect(page.getByText("pass_required").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pass options" })).toBeVisible();
+  await expect(page.getByText("backend-confirmed live pass settlement")).toBeVisible();
 });
 
 test("renders the event ticket sheet projection", async ({ page }) => {

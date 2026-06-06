@@ -49,7 +49,8 @@ Rules:
 | `/app/profile` | MVP | yes | yes | yes | profile | Own profile, wallet/activity/settings links. |
 | `/app/profile/:handle` | MVP | yes | yes | yes | profile | Public creator/user profile. |
 | `/app/media/:id` | MVP | yes | yes | yes | media | Viewport-locked media viewer. |
-| `/app/stream/:id` | Phase 2 | yes | yes | yes | live | Live room/replay viewer, pass/chat state. |
+| `/live/:id` | Phase 2 | yes | yes | yes | live | Live room/replay viewer, pass/chat state. |
+| `/app/stream/:id` | migration | yes | yes | yes | live | Compatibility alias until live routes replace stream routes. |
 | `/app/activity` | Phase 2 | yes | yes | yes | activity | Purchases, unlocks, support, passes, wallet, referrals, receipts. |
 | `/app/wallet` | MVP | yes | yes | yes | wallet | Wallet address, top-up, external link, receipts. |
 | `/app/settings` | MVP | yes | yes | yes | settings | Profile, security, sessions, feed, privacy, notifications. |
