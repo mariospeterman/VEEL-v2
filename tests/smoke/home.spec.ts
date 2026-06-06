@@ -233,8 +233,8 @@ test("renders the scoped assistant projection", async ({ page }) => {
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Scoped assistant" })).toBeVisible();
-  await expect(page.getByText("creator_helper")).toBeVisible();
-  await expect(page.getByText("draft_caption").first()).toBeVisible();
-  await expect(page.getByText("prepare_refund_decision", { exact: true })).toBeVisible();
+  await expect(page.getByText("Assistant API unavailable")).toBeVisible();
+  await expect(page.getByText("HTTP 503").first()).toBeVisible();
+  await expect(page.getByText("explicit start only").first()).toBeVisible();
   await expect(page.getByText("required for admin actions")).toBeVisible();
 });

@@ -195,7 +195,9 @@ Current implementation state:
 - Settings reads session, age, wallet, and feed preference projections from the API; feed preference mutation remains backend-owned through explicit feed-control actions.
 - Home/age/detail/profile/activity/messages/wallet/subscriptions/discover/Event Access/Mutuals/admin/settings screens attach the current Supabase access token when present and render a fail-closed unavailable state on API/auth/provider errors.
 - Current smoke coverage starts the web app only, so API-backed home/age/detail/profile/activity/messages/wallet/subscriptions/discover/Event Access/Mutuals/admin/settings smoke asserts the fail-closed API-unavailable state; API-backed happy-path browser coverage belongs in the combined app integration harness.
-- `/create` and `/assistant` are mutation-safe launch surfaces: they describe
-  backend-owned draft/upload and AI/MCP session boundaries without calling
-  mutation APIs on page load or rendering fixture record IDs, provider upload
-  URLs, AI session IDs, or tool-call result payloads.
+- `/create` is a mutation-safe launch surface: it describes backend-owned
+  draft/upload boundaries without calling mutation APIs on page load or
+  rendering fixture record IDs, provider upload URLs, or draft payloads.
+- `/assistant` reads `GET /v1/ai/capabilities` and does not create AI sessions,
+  execute tools, render AI session IDs, or expose tool-call result payloads on
+  page load.

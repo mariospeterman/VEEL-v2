@@ -2,6 +2,7 @@ import type { components } from "@veel/contracts";
 
 export type AiSession = components["schemas"]["AiSession"];
 export type AiSessionScope = components["schemas"]["AiSessionScope"];
+export type AiCapabilities = components["schemas"]["AiCapabilities"];
 export type AiToolCall = components["schemas"]["AiToolCall"];
 export type AiToolName = components["schemas"]["AiToolName"];
 export type CreateAiSessionRequest = components["schemas"]["CreateAiSessionRequest"];

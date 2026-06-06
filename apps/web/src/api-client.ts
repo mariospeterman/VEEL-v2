@@ -34,6 +34,7 @@ export type Event = components["schemas"]["Event"];
 export type TicketPage = components["schemas"]["TicketPage"];
 export type DatingFeedPage = components["schemas"]["DatingFeedPage"];
 export type DatingMatchPage = components["schemas"]["DatingMatchPage"];
+export type AiCapabilities = components["schemas"]["AiCapabilities"];
 export type AdminOpsSummary = components["schemas"]["AdminOpsSummary"];
 export type AdminPaymentIntent = components["schemas"]["AdminPaymentIntent"];
 export type AdminUnlock = components["schemas"]["AdminUnlock"];
@@ -143,6 +144,10 @@ export async function getDatingFeed(): Promise<ApiResult<DatingFeedPage>> {
 
 export async function getDatingMatches(): Promise<ApiResult<DatingMatchPage>> {
   return getJson<DatingMatchPage>("/v1/dating/matches");
+}
+
+export async function getAiCapabilities(): Promise<ApiResult<AiCapabilities>> {
+  return getJson<AiCapabilities>("/v1/ai/capabilities");
 }
 
 export async function getAdminOpsSummary(): Promise<ApiResult<AdminOpsSummary>> {

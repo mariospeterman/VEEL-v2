@@ -3189,6 +3189,51 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("returns AI capabilities without creating a session", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      adminRepository: fakeAdminRepository,
+      aiRepository: fakeAiRepository()
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/ai/capabilities",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      items: [
+        {
+          scope: "user_self_service",
+          canStartSession: true,
+          allowedTools: ["explain_app_state", "summarize_own_activity", "find_own_purchases"],
+          confirmationRequiredTools: []
+        },
+        {
+          scope: "creator_helper",
+          canStartSession: true,
+          allowedTools: expect.arrayContaining(["draft_caption", "prepare_event_copy"]),
+          confirmationRequiredTools: []
+        },
+        {
+          scope: "admin_ops",
+          canStartSession: true,
+          allowedTools: expect.arrayContaining(["prepare_refund_decision"]),
+          confirmationRequiredTools: expect.arrayContaining(["prepare_refund_decision"])
+        }
+      ]
+    });
+
+    await app.close();
+  });
+
   it("prepares confirmation-required admin AI tools without mutating admin state", async () => {
     const aiRepository = fakeAiRepository();
     const app = await buildApi({
@@ -3284,6 +3329,53 @@ describe("buildApi", () => {
     });
 
     expect(response.statusCode).toBe(403);
+
+    await app.close();
+  });
+
+  it("does not expose admin AI capabilities to non-staff users", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      adminRepository: {
+        async hasAdminAccess() {
+          return false;
+        },
+        async getOpsSummary() {
+          throw new Error("not implemented");
+        },
+        async listPaymentIntents() {
+          throw new Error("not implemented");
+        },
+        async listUnlocks() {
+          throw new Error("not implemented");
+        },
+        async listProviderEvents() {
+          throw new Error("not implemented");
+        },
+        async getDatingSafety() {
+          throw new Error("not implemented");
+        },
+        ...unimplementedComplianceAdminMethods
+      },
+      aiRepository: fakeAiRepository()
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/ai/capabilities",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().items.map((item: { scope: string }) => item.scope)).toEqual([
+      "user_self_service",
+      "creator_helper"
+    ]);
 
     await app.close();
   });

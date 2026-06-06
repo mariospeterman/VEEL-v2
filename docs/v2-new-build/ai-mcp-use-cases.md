@@ -129,6 +129,7 @@ Tool calls require:
 
 Launch implementation rules:
 
+- `GET /v1/ai/capabilities` exposes backend-derived scopes and tool allowlists without creating a session or executing a tool.
 - `POST /v1/ai/sessions` creates an expiring scoped session with backend-derived allowed tools.
 - `POST /v1/ai/sessions/:id/tool-calls` accepts only enumed tool names from OpenAPI.
 - Admin tools require an active staff membership check before execution.

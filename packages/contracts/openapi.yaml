@@ -956,6 +956,15 @@ paths:
         - $ref: "#/components/parameters/Cursor"
       responses:
         "200": { $ref: "#/components/responses/ActivityPage" }
+  /v1/ai/capabilities:
+    get:
+      operationId: getAiCapabilities
+      tags: [AI]
+      summary: Get permission-scoped AI/MCP capabilities
+      responses:
+        "200": { $ref: "#/components/responses/AiCapabilities" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /v1/ai/sessions:
     post:
       operationId: createAiSession
@@ -1524,6 +1533,7 @@ components:
     ActivityPage: { description: Activity page, content: { application/json: { schema: { $ref: "#/components/schemas/ActivityPage" } } } }
     WalletTransactionPage: { description: Wallet transactions, content: { application/json: { schema: { $ref: "#/components/schemas/WalletTransactionPage" } } } }
     AiSession: { description: AI session, content: { application/json: { schema: { $ref: "#/components/schemas/AiSession" } } } }
+    AiCapabilities: { description: AI capabilities, content: { application/json: { schema: { $ref: "#/components/schemas/AiCapabilities" } } } }
     AiToolCall: { description: AI tool call, content: { application/json: { schema: { $ref: "#/components/schemas/AiToolCall" } } } }
     AdminOpsSummary: { description: Admin ops summary, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOpsSummary" } } } }
     AdminUser: { description: Admin user, content: { application/json: { schema: { $ref: "#/components/schemas/AdminUser" } } } }
@@ -2523,6 +2533,25 @@ components:
           items: { $ref: "#/components/schemas/AiToolName" }
         createdAt: { type: string, format: date-time }
         expiresAt: { type: string, format: date-time }
+    AiCapability:
+      type: object
+      required: [scope, allowedTools, confirmationRequiredTools, canStartSession]
+      properties:
+        scope: { $ref: "#/components/schemas/AiSessionScope" }
+        allowedTools:
+          type: array
+          items: { $ref: "#/components/schemas/AiToolName" }
+        confirmationRequiredTools:
+          type: array
+          items: { $ref: "#/components/schemas/AiToolName" }
+        canStartSession: { type: boolean }
+    AiCapabilities:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AiCapability" }
     CreateAiToolCallRequest:
       type: object
       required: [toolName, input]

@@ -1,36 +1,9 @@
 import { appShellNavItems } from "@veel/ui";
+import { getAiCapabilities, type AiCapabilities, type ApiResult } from "@/api-client";
 
-const creatorTools = [
-  {
-    confirmation: "not_required",
-    input: "creator-provided context",
-    name: "draft_caption",
-    output: "Caption draft prepared from creator-provided context",
-    resource: "content",
-    state: "available"
-  },
-  {
-    confirmation: "not_required",
-    input: "creator-provided event details",
-    name: "prepare_event_copy",
-    output: "Event copy draft prepared for creator review",
-    resource: "event",
-    state: "available"
-  }
-];
+export default async function AssistantPage() {
+  const capabilities = await getAiCapabilities();
 
-const adminTools = [
-  {
-    confirmation: "required",
-    input: "safe payment/support context",
-    name: "prepare_refund_decision",
-    output: "Prepared decision only; no refund mutation without explicit admin confirmation",
-    resource: "payment",
-    state: "confirmation_required"
-  }
-];
-
-export default function AssistantPage() {
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-[var(--line)] px-5 py-4">
@@ -57,11 +30,7 @@ export default function AssistantPage() {
             <h1 className="mt-1 text-2xl font-semibold tracking-normal">Scoped assistant</h1>
           </div>
 
-          <div className="grid gap-3">
-            {[...creatorTools, ...adminTools].map((tool) => (
-              <ToolCard key={tool.name} tool={tool} />
-            ))}
-          </div>
+          <CapabilityList capabilities={capabilities} />
         </section>
 
         <aside className="grid content-start gap-3">
@@ -69,21 +38,16 @@ export default function AssistantPage() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-sm font-medium text-[var(--muted)]">Session</p>
-                <h2 className="mt-1 text-lg font-semibold tracking-normal">creator_helper</h2>
+                <h2 className="mt-1 text-lg font-semibold tracking-normal">explicit start only</h2>
               </div>
               <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-semibold text-[var(--accent-strong)]">
                 explicit start
               </span>
             </div>
             <div className="mt-4 grid gap-2">
-              {creatorTools.map((tool) => (
-                <span
-                  className="rounded border border-[var(--line)] bg-[var(--background)] px-3 py-2 text-sm"
-                  key={tool.name}
-                >
-                  {tool.name}
-                </span>
-              ))}
+              <Fact label="Read projection" value={capabilities.ok ? "ready" : `HTTP ${capabilities.status}`} />
+              <Fact label="Session mutation" value="POST /v1/ai/sessions" />
+              <Fact label="Tool mutation" value="explicit idempotent action" />
             </div>
           </div>
 
@@ -101,35 +65,49 @@ export default function AssistantPage() {
   );
 }
 
-function ToolCard({
-  tool
-}: {
-  tool: {
-    confirmation: string;
-    input: string;
-    name: string;
-    output: string;
-    resource: string;
-    state: string;
-  };
-}) {
+function CapabilityList({ capabilities }: { capabilities: ApiResult<AiCapabilities> }) {
+  if (!capabilities.ok) {
+    return <UnavailableState result={capabilities} />;
+  }
+
   return (
-    <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-medium">{tool.name}</p>
-          <p className="mt-1 text-sm text-[var(--muted)]">{tool.output}</p>
-        </div>
-        <span className="rounded bg-[var(--background)] px-2 py-1 text-xs text-[var(--muted)]">
-          {tool.confirmation}
-        </span>
-      </div>
+    <div className="grid gap-3">
+      {capabilities.data.items.map((capability) => (
+        <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-4" key={capability.scope}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-medium">{capability.scope}</p>
+              <p className="mt-1 text-sm text-[var(--muted)]">
+                {capability.allowedTools.length} backend-authorized tools
+              </p>
+            </div>
+            <span className="rounded bg-[var(--background)] px-2 py-1 text-xs text-[var(--muted)]">
+              {capability.canStartSession ? "available" : "blocked"}
+            </span>
+          </div>
+          <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
+            <Fact label="Tools" value={capability.allowedTools.join(", ")} />
+            <Fact label="Confirmation" value={capability.confirmationRequiredTools.join(", ") || "not required"} />
+            <Fact label="Session" value="explicit start" />
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function UnavailableState<T>({ result }: { result: Extract<ApiResult<T>, { ok: false }> }) {
+  return (
+    <div className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
+      <p className="font-medium">Assistant API unavailable</p>
+      <p className="mt-1 text-sm text-[var(--muted)]">HTTP {result.status}</p>
+      <p className="mt-1 text-sm text-[var(--muted)]">{result.message}</p>
       <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
-        <Fact label="State" value={tool.state} />
-        <Fact label="Input" value={tool.input} />
-        <Fact label="Resource" value={tool.resource} />
+        <Fact label="Session" value="explicit start only" />
+        <Fact label="Tool calls" value="disabled until API ready" />
+        <Fact label="Provider calls" value="disabled in launch slice" />
       </div>
-    </article>
+    </div>
   );
 }
 

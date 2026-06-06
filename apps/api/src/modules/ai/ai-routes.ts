@@ -5,6 +5,7 @@ import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js
 import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
 import { AiRepositoryConfigurationError } from "./ai-repository.js";
 import type {
+  AiCapabilities,
   AiRepository,
   AiSession,
   AiSessionScope,
@@ -58,6 +59,16 @@ export async function registerAiRoutes(
   app: FastifyInstance,
   options: RegisterAiRoutesOptions
 ): Promise<void> {
+  app.get("/v1/ai/capabilities", async (request, reply) => {
+    const access = await verifyAiAccess(request, options);
+    if (!access.ok) {
+      return reply.code(access.statusCode).send(access.body);
+    }
+
+    const adminAllowed = await options.adminRepository.hasAdminAccess(access.supabaseUserId);
+    return reply.send(buildCapabilities(adminAllowed));
+  });
+
   app.post("/v1/ai/sessions", async (request, reply) => {
     const access = await verifyAiAccess(request, options);
     if (!access.ok) {
@@ -258,6 +269,21 @@ function allowedToolsForScope(scope: AiSessionScope, requestedTools: AiToolName[
   }
 
   return requestedTools.filter((tool) => allowed.includes(tool));
+}
+
+function buildCapabilities(adminAllowed: boolean): AiCapabilities {
+  const scopes = Object.entries(toolScopes).filter(([scope]) => scope !== "admin_ops" || adminAllowed) as Array<
+    [AiSessionScope, AiToolName[]]
+  >;
+
+  return {
+    items: scopes.map(([scope, allowedTools]) => ({
+      scope,
+      allowedTools,
+      canStartSession: allowedTools.length > 0,
+      confirmationRequiredTools: allowedTools.filter((tool) => confirmationRequiredTools.has(tool))
+    }))
+  };
 }
 
 async function recordBlockedToolCall(input: {

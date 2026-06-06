@@ -1234,6 +1234,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/ai/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get permission-scoped AI/MCP capabilities */
+        get: operations["getAiCapabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ai/sessions": {
         parameters: {
             query?: never;
@@ -2789,6 +2806,15 @@ export interface components {
             /** Format: date-time */
             expiresAt: string;
         };
+        AiCapability: {
+            scope: components["schemas"]["AiSessionScope"];
+            allowedTools: components["schemas"]["AiToolName"][];
+            confirmationRequiredTools: components["schemas"]["AiToolName"][];
+            canStartSession: boolean;
+        };
+        AiCapabilities: {
+            items: components["schemas"]["AiCapability"][];
+        };
         CreateAiToolCallRequest: {
             toolName: components["schemas"]["AiToolName"];
             input: {
@@ -3755,6 +3781,15 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["AiSession"];
+            };
+        };
+        /** @description AI capabilities */
+        AiCapabilities: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["AiCapabilities"];
             };
         };
         /** @description AI tool call */
@@ -5639,6 +5674,20 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["ActivityPage"];
+        };
+    };
+    getAiCapabilities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AiCapabilities"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     createAiSession: {
