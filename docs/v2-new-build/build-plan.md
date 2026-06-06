@@ -328,6 +328,7 @@ Build each slice end-to-end before starting the next:
 18. Notifications foundation.
 19. Studio/Enterprise organization dashboards.
 20. Notification admin health and delivery observability.
+21. Notification delivery queue and worker boundary.
 
 Each slice must include:
 

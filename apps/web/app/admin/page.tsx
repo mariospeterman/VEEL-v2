@@ -176,8 +176,15 @@ function NotificationHealthPanel({
       <Fact label="Active devices" value={notificationHealth.data.activeDeviceCount.toString()} />
       <Fact label="Revoked devices" value={notificationHealth.data.revokedDeviceCount.toString()} />
       <Fact label="Push enabled" value={notificationHealth.data.pushEnabledPreferenceCount.toString()} />
+      <Fact label="Delivery queued" value={notificationHealth.data.queuedDeliveryCount.toString()} />
+      <Fact label="Delivery leased" value={notificationHealth.data.leasedDeliveryCount.toString()} />
+      <Fact label="Delivered" value={notificationHealth.data.deliveredDeliveryCount.toString()} />
+      <Fact label="Delivery failed" value={notificationHealth.data.failedDeliveryCount.toString()} />
+      <Fact label="Delivery skipped" value={notificationHealth.data.skippedDeliveryCount.toString()} />
+      <Fact label="Delivery revoked" value={notificationHealth.data.revokedDeliveryCount.toString()} />
       <Fact label="Latest notification" value={timestampLabel(notificationHealth.data.latestNotificationAt)} />
       <Fact label="Latest device seen" value={timestampLabel(notificationHealth.data.latestDeviceSeenAt)} />
+      <Fact label="Latest delivery" value={timestampLabel(notificationHealth.data.latestDeliveryAt)} />
     </div>
   );
 }

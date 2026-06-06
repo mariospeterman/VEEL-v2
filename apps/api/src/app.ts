@@ -182,7 +182,10 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   const referralRepository =
     options.referralRepository ?? createPostgresReferralRepository(app.config.DATABASE_URL);
   const notificationRepository =
-    options.notificationRepository ?? createPostgresNotificationRepository(app.config.DATABASE_URL);
+    options.notificationRepository ??
+    createPostgresNotificationRepository(app.config.DATABASE_URL, {
+      encryptionKey: app.config.NOTIFICATION_DEVICE_ENCRYPTION_KEY
+    });
   const organizationRepository =
     options.organizationRepository ?? createPostgresOrganizationRepository(app.config.DATABASE_URL);
   const subscriptionRepository =

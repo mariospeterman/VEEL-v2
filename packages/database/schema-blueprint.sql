@@ -1248,6 +1248,15 @@ create table notification_devices (
   endpoint_hash text not null,
   p256dh_hash text not null,
   auth_hash text not null,
+  endpoint_ciphertext text,
+  endpoint_iv text,
+  endpoint_tag text,
+  p256dh_ciphertext text,
+  p256dh_iv text,
+  p256dh_tag text,
+  auth_ciphertext text,
+  auth_iv text,
+  auth_tag text,
   user_agent text,
   state text not null default 'active',
   last_seen_at timestamptz,
@@ -1256,6 +1265,23 @@ create table notification_devices (
   updated_at timestamptz not null default now(),
   unique (provider, endpoint_hash),
   unique (user_id, idempotency_key)
+);
+
+create table notification_delivery_attempts (
+  id uuid primary key,
+  notification_id uuid not null references notifications(id),
+  device_id uuid not null references notification_devices(id),
+  user_id uuid not null references users(id),
+  provider text not null,
+  state text not null default 'queued',
+  failure_code text,
+  attempt_count integer not null default 0,
+  next_attempt_at timestamptz not null default now(),
+  leased_at timestamptz,
+  delivered_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (notification_id, device_id)
 );
 
 create table moderation_reviews (

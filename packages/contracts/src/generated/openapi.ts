@@ -3121,10 +3121,18 @@ export interface components {
             activeDeviceCount: number;
             revokedDeviceCount: number;
             pushEnabledPreferenceCount: number;
+            queuedDeliveryCount: number;
+            leasedDeliveryCount: number;
+            deliveredDeliveryCount: number;
+            failedDeliveryCount: number;
+            skippedDeliveryCount: number;
+            revokedDeliveryCount: number;
             /** Format: date-time */
             latestNotificationAt: string | null;
             /** Format: date-time */
             latestDeviceSeenAt: string | null;
+            /** Format: date-time */
+            latestDeliveryAt: string | null;
         };
         AdminStateCounts: {
             total: number;

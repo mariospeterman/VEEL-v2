@@ -39,11 +39,12 @@ Use Supabase Realtime selectively. Do not build a custom websocket server unless
 
 ## Current Notification Implementation State
 
-- The notification foundation includes OpenAPI routes, the notifications migration, RLS-protected notification/preference/device tables, a Fastify notification module, backend tests, and settings-page preference reads.
-- Web push device registration stores endpoint/key material as server-side hashes and returns only sanitized device projections.
-- Admin notification health counts are exposed through a staff-only sanitized projection.
-- Worker dispatch jobs, browser service-worker subscription UX, actual push delivery, and Realtime subscription wiring remain planned production gaps.
-- Until the push-delivery slice lands, user-facing notification copy may show server-owned preferences and account notification projections, but must not imply active browser push delivery.
+- The notification foundation includes OpenAPI routes, RLS-protected notification/preference/device tables, a Fastify notification module, backend tests, and settings-page preference reads.
+- Web push device registration stores hashes for lookup and optional encrypted endpoint/key material for server-only delivery. API/admin/frontend responses return only sanitized device projections.
+- Notification delivery attempts are queued and leased by the worker through `notification_delivery_attempts`; the delivery provider boundary records delivered, failed, and revoked outcomes without frontend truth.
+- Admin notification health counts are exposed through a staff-only sanitized projection, including delivery queue state counts.
+- Browser service-worker subscription UX, real VAPID/web-push provider configuration, and Realtime subscription wiring remain planned production gaps.
+- Until the browser enrollment/provider configuration slice lands, user-facing notification copy may show server-owned preferences and account notification projections, but must not imply active browser push delivery in unconfigured environments.
 
 ## Message Flow
 

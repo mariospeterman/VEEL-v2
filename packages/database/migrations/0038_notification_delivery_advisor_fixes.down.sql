@@ -1,0 +1,3 @@
+drop policy if exists notification_delivery_attempts_select_staff on notification_delivery_attempts;
+
+drop index if exists notification_delivery_attempts_device_idx;

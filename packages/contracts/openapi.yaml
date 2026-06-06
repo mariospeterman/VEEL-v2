@@ -2868,8 +2868,15 @@ components:
           activeDeviceCount,
           revokedDeviceCount,
           pushEnabledPreferenceCount,
+          queuedDeliveryCount,
+          leasedDeliveryCount,
+          deliveredDeliveryCount,
+          failedDeliveryCount,
+          skippedDeliveryCount,
+          revokedDeliveryCount,
           latestNotificationAt,
-          latestDeviceSeenAt
+          latestDeviceSeenAt,
+          latestDeliveryAt
         ]
       properties:
         unreadCount: { type: integer }
@@ -2878,8 +2885,15 @@ components:
         activeDeviceCount: { type: integer }
         revokedDeviceCount: { type: integer }
         pushEnabledPreferenceCount: { type: integer }
+        queuedDeliveryCount: { type: integer }
+        leasedDeliveryCount: { type: integer }
+        deliveredDeliveryCount: { type: integer }
+        failedDeliveryCount: { type: integer }
+        skippedDeliveryCount: { type: integer }
+        revokedDeliveryCount: { type: integer }
         latestNotificationAt: { type: string, format: date-time, nullable: true }
         latestDeviceSeenAt: { type: string, format: date-time, nullable: true }
+        latestDeliveryAt: { type: string, format: date-time, nullable: true }
     AdminStateCounts:
       type: object
       required: [total, pending, submitted, confirmed, failed]

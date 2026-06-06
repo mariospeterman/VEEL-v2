@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { encryptSecret, parseAes256GcmKey } from "@veel/config";
 import postgres from "postgres";
 import type {
   Notification,
@@ -13,6 +14,10 @@ export class NotificationRepositoryConfigurationError extends Error {
     super("DATABASE_URL_NOT_CONFIGURED");
     this.name = "NotificationRepositoryConfigurationError";
   }
+}
+
+interface NotificationRepositoryOptions {
+  encryptionKey?: string | undefined;
 }
 
 interface NotificationRow {
@@ -53,7 +58,10 @@ interface DeviceRow {
   last_seen_at: Date | null;
 }
 
-export function createPostgresNotificationRepository(databaseUrl?: string): NotificationRepository {
+export function createPostgresNotificationRepository(
+  databaseUrl?: string,
+  options: NotificationRepositoryOptions = {}
+): NotificationRepository {
   if (!databaseUrl) {
     return {
       async listNotifications() {
@@ -82,6 +90,7 @@ export function createPostgresNotificationRepository(databaseUrl?: string): Noti
     idle_timeout: 20,
     prepare: false
   });
+  const encryptionKey = parseAes256GcmKey(options.encryptionKey);
 
   return {
     async listNotifications(input) {
@@ -267,6 +276,9 @@ export function createPostgresNotificationRepository(databaseUrl?: string): Noti
       const endpointHash = sha256(input.body.endpoint);
       const p256dhHash = sha256(input.body.p256dh);
       const authHash = sha256(input.body.auth);
+      const encryptedEndpoint = encryptionKey ? encryptSecret(input.body.endpoint, encryptionKey) : null;
+      const encryptedP256dh = encryptionKey ? encryptSecret(input.body.p256dh, encryptionKey) : null;
+      const encryptedAuth = encryptionKey ? encryptSecret(input.body.auth, encryptionKey) : null;
       const rows = await sql<DeviceRow[]>`
         with target_user as (
           select id
@@ -283,6 +295,15 @@ export function createPostgresNotificationRepository(databaseUrl?: string): Noti
             endpoint_hash,
             p256dh_hash,
             auth_hash,
+            endpoint_ciphertext,
+            endpoint_iv,
+            endpoint_tag,
+            p256dh_ciphertext,
+            p256dh_iv,
+            p256dh_tag,
+            auth_ciphertext,
+            auth_iv,
+            auth_tag,
             user_agent,
             state,
             last_seen_at,
@@ -297,6 +318,15 @@ export function createPostgresNotificationRepository(databaseUrl?: string): Noti
             ${endpointHash},
             ${p256dhHash},
             ${authHash},
+            ${encryptedEndpoint?.ciphertext ?? null},
+            ${encryptedEndpoint?.iv ?? null},
+            ${encryptedEndpoint?.tag ?? null},
+            ${encryptedP256dh?.ciphertext ?? null},
+            ${encryptedP256dh?.iv ?? null},
+            ${encryptedP256dh?.tag ?? null},
+            ${encryptedAuth?.ciphertext ?? null},
+            ${encryptedAuth?.iv ?? null},
+            ${encryptedAuth?.tag ?? null},
             ${input.body.userAgent ?? null},
             'active',
             now(),
@@ -309,6 +339,15 @@ export function createPostgresNotificationRepository(databaseUrl?: string): Noti
             platform = excluded.platform,
             p256dh_hash = excluded.p256dh_hash,
             auth_hash = excluded.auth_hash,
+            endpoint_ciphertext = excluded.endpoint_ciphertext,
+            endpoint_iv = excluded.endpoint_iv,
+            endpoint_tag = excluded.endpoint_tag,
+            p256dh_ciphertext = excluded.p256dh_ciphertext,
+            p256dh_iv = excluded.p256dh_iv,
+            p256dh_tag = excluded.p256dh_tag,
+            auth_ciphertext = excluded.auth_ciphertext,
+            auth_iv = excluded.auth_iv,
+            auth_tag = excluded.auth_tag,
             user_agent = excluded.user_agent,
             state = 'active',
             last_seen_at = now(),

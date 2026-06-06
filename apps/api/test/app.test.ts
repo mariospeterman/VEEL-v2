@@ -3801,7 +3801,9 @@ describe("buildApi", () => {
     expect(notificationHealth.json()).toMatchObject({
       unreadCount: 2,
       activeDeviceCount: 1,
-      pushEnabledPreferenceCount: 1
+      pushEnabledPreferenceCount: 1,
+      queuedDeliveryCount: 2,
+      deliveredDeliveryCount: 7
     });
     expect(JSON.stringify(notificationHealth.json())).not.toMatch(/raw|payload|endpoint|auth|secret|privateKey|serviceRole/i);
     expect(payments.statusCode).toBe(200);
@@ -6059,8 +6061,15 @@ const fakeAdminRepository: AdminRepository = {
       activeDeviceCount: 1,
       revokedDeviceCount: 1,
       pushEnabledPreferenceCount: 1,
+      queuedDeliveryCount: 2,
+      leasedDeliveryCount: 0,
+      deliveredDeliveryCount: 7,
+      failedDeliveryCount: 1,
+      skippedDeliveryCount: 0,
+      revokedDeliveryCount: 0,
       latestNotificationAt: "2026-06-06T10:00:00.000Z",
-      latestDeviceSeenAt: "2026-06-06T10:01:00.000Z"
+      latestDeviceSeenAt: "2026-06-06T10:01:00.000Z",
+      latestDeliveryAt: "2026-06-06T10:02:00.000Z"
     };
   },
   async listPaymentIntents(input) {

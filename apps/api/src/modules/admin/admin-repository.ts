@@ -40,8 +40,15 @@ interface NotificationHealthRow {
   active_device_count: string | number;
   revoked_device_count: string | number;
   push_enabled_preference_count: string | number;
+  queued_delivery_count: string | number;
+  leased_delivery_count: string | number;
+  delivered_delivery_count: string | number;
+  failed_delivery_count: string | number;
+  skipped_delivery_count: string | number;
+  revoked_delivery_count: string | number;
   latest_notification_at: Date | null;
   latest_device_seen_at: Date | null;
+  latest_delivery_at: Date | null;
 }
 
 interface PaymentRow {
@@ -336,8 +343,15 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
           (select count(*) from notification_devices where state = 'active') as active_device_count,
           (select count(*) from notification_devices where state = 'revoked') as revoked_device_count,
           (select count(*) from notification_preferences where push_enabled) as push_enabled_preference_count,
+          (select count(*) from notification_delivery_attempts where state = 'queued') as queued_delivery_count,
+          (select count(*) from notification_delivery_attempts where state = 'leased') as leased_delivery_count,
+          (select count(*) from notification_delivery_attempts where state = 'delivered') as delivered_delivery_count,
+          (select count(*) from notification_delivery_attempts where state = 'failed') as failed_delivery_count,
+          (select count(*) from notification_delivery_attempts where state = 'skipped') as skipped_delivery_count,
+          (select count(*) from notification_delivery_attempts where state = 'revoked') as revoked_delivery_count,
           (select max(created_at) from notifications) as latest_notification_at,
-          (select max(last_seen_at) from notification_devices) as latest_device_seen_at
+          (select max(last_seen_at) from notification_devices) as latest_device_seen_at,
+          (select max(delivered_at) from notification_delivery_attempts) as latest_delivery_at
       `;
 
       return toNotificationHealth(rows[0]);
@@ -641,8 +655,15 @@ function toNotificationHealth(row: NotificationHealthRow | undefined): AdminNoti
     activeDeviceCount: Number(row?.active_device_count ?? 0),
     revokedDeviceCount: Number(row?.revoked_device_count ?? 0),
     pushEnabledPreferenceCount: Number(row?.push_enabled_preference_count ?? 0),
+    queuedDeliveryCount: Number(row?.queued_delivery_count ?? 0),
+    leasedDeliveryCount: Number(row?.leased_delivery_count ?? 0),
+    deliveredDeliveryCount: Number(row?.delivered_delivery_count ?? 0),
+    failedDeliveryCount: Number(row?.failed_delivery_count ?? 0),
+    skippedDeliveryCount: Number(row?.skipped_delivery_count ?? 0),
+    revokedDeliveryCount: Number(row?.revoked_delivery_count ?? 0),
     latestNotificationAt: row?.latest_notification_at?.toISOString() ?? null,
-    latestDeviceSeenAt: row?.latest_device_seen_at?.toISOString() ?? null
+    latestDeviceSeenAt: row?.latest_device_seen_at?.toISOString() ?? null,
+    latestDeliveryAt: row?.latest_delivery_at?.toISOString() ?? null
   };
 }
 

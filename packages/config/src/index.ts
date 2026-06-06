@@ -1,3 +1,4 @@
+import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { z } from "zod";
 
 export const nodeEnvSchema = z.enum(["development", "test", "production"]).default("development");
@@ -68,7 +69,8 @@ export const serverEnvSchema = z.object({
   PERSONA_API_KEY: z.string().optional(),
   PERSONA_WEBHOOK_SECRET: z.string().optional(),
   PERSONA_TEMPLATE_ID: z.string().optional(),
-  PERSONA_API_BASE_URL: z.string().url().default("https://api.withpersona.com")
+  PERSONA_API_BASE_URL: z.string().url().default("https://api.withpersona.com"),
+  NOTIFICATION_DEVICE_ENCRYPTION_KEY: z.string().optional()
 });
 
 export type PublicWebEnv = z.infer<typeof publicWebEnvSchema>;
@@ -77,3 +79,43 @@ export type ServerEnv = z.infer<typeof serverEnvSchema>;
 export const parsePublicWebEnv = (env: NodeJS.ProcessEnv): PublicWebEnv => publicWebEnvSchema.parse(env);
 
 export const parseServerEnv = (env: NodeJS.ProcessEnv): ServerEnv => serverEnvSchema.parse(env);
+
+export interface EncryptedSecret {
+  ciphertext: string;
+  iv: string;
+  tag: string;
+}
+
+export function parseAes256GcmKey(value?: string): Buffer | null {
+  if (!value) return null;
+
+  const normalized = value.trim();
+  const key = Buffer.from(normalized, normalized.includes("-") || normalized.includes("_") ? "base64url" : "base64");
+  if (key.length !== 32) {
+    throw new Error("NOTIFICATION_DEVICE_ENCRYPTION_KEY must be a 32-byte base64 or base64url value");
+  }
+
+  return key;
+}
+
+export function encryptSecret(value: string, key: Buffer): EncryptedSecret {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  const ciphertext = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
+
+  return {
+    ciphertext: ciphertext.toString("base64url"),
+    iv: iv.toString("base64url"),
+    tag: cipher.getAuthTag().toString("base64url")
+  };
+}
+
+export function decryptSecret(secret: EncryptedSecret, key: Buffer): string {
+  const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(secret.iv, "base64url"));
+  decipher.setAuthTag(Buffer.from(secret.tag, "base64url"));
+
+  return Buffer.concat([
+    decipher.update(Buffer.from(secret.ciphertext, "base64url")),
+    decipher.final()
+  ]).toString("utf8");
+}
