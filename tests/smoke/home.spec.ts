@@ -172,11 +172,9 @@ test("renders the admin payment unlock and provider ops projection", async ({ pa
   await expect(page.getByRole("heading", { name: "Compliance ledger", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "DAC7 and CARF reports", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "VAT and receipts", exact: true })).toBeVisible();
-  await expect(page.getByText("content_unlock").first()).toBeVisible();
-  await expect(page.getByText("event_access_pass").first()).toBeVisible();
-  await expect(page.getByText("R-2026-0001")).toBeVisible();
-  await expect(page.getByText("payment.settlement")).toBeVisible();
-  await expect(page.locator("span").getByText("processed", { exact: true })).toBeVisible();
+  await expect(page.getByText("Admin API unavailable").first()).toBeVisible();
+  await expect(page.getByText("HTTP 503").first()).toBeVisible();
+  await expect(page.getByText("API is unavailable").first()).toBeVisible();
 });
 
 test("renders the Livepeer live room projection", async ({ page }) => {

@@ -32,6 +32,19 @@ export type Event = components["schemas"]["Event"];
 export type TicketPage = components["schemas"]["TicketPage"];
 export type DatingFeedPage = components["schemas"]["DatingFeedPage"];
 export type DatingMatchPage = components["schemas"]["DatingMatchPage"];
+export type AdminOpsSummary = components["schemas"]["AdminOpsSummary"];
+export type AdminPaymentIntent = components["schemas"]["AdminPaymentIntent"];
+export type AdminUnlock = components["schemas"]["AdminUnlock"];
+export type AdminProviderEvent = components["schemas"]["AdminProviderEvent"];
+export type AdminComplianceLedgerEntry = components["schemas"]["AdminComplianceLedgerEntry"];
+export type AdminComplianceReport = components["schemas"]["AdminComplianceReport"];
+export type AdminVatDetermination = components["schemas"]["AdminVatDetermination"];
+export type AdminReceipt = components["schemas"]["AdminReceipt"];
+
+export type AdminPage<T> = {
+  items: T[];
+  nextCursor: string | null;
+};
 
 export type ApiResult<T> =
   | {
@@ -120,6 +133,42 @@ export async function getDatingFeed(): Promise<ApiResult<DatingFeedPage>> {
 
 export async function getDatingMatches(): Promise<ApiResult<DatingMatchPage>> {
   return getJson<DatingMatchPage>("/v1/dating/matches");
+}
+
+export async function getAdminOpsSummary(): Promise<ApiResult<AdminOpsSummary>> {
+  return getJson<AdminOpsSummary>("/v1/admin/ops/summary");
+}
+
+export async function getAdminPaymentIntents(): Promise<ApiResult<AdminPage<AdminPaymentIntent>>> {
+  return getJson<AdminPage<AdminPaymentIntent>>("/v1/admin/payments/intents");
+}
+
+export async function getAdminUnlocks(): Promise<ApiResult<AdminPage<AdminUnlock>>> {
+  return getJson<AdminPage<AdminUnlock>>("/v1/admin/unlocks");
+}
+
+export async function getAdminProviderEvents(): Promise<ApiResult<AdminPage<AdminProviderEvent>>> {
+  return getJson<AdminPage<AdminProviderEvent>>("/v1/admin/provider-events");
+}
+
+export async function getAdminComplianceLedger(): Promise<ApiResult<AdminPage<AdminComplianceLedgerEntry>>> {
+  return getJson<AdminPage<AdminComplianceLedgerEntry>>("/v1/admin/compliance/ledger");
+}
+
+export async function getAdminDac7Reports(): Promise<ApiResult<AdminPage<AdminComplianceReport>>> {
+  return getJson<AdminPage<AdminComplianceReport>>("/v1/admin/compliance/dac7/reports");
+}
+
+export async function getAdminCarfReports(): Promise<ApiResult<AdminPage<AdminComplianceReport>>> {
+  return getJson<AdminPage<AdminComplianceReport>>("/v1/admin/compliance/carf/reports");
+}
+
+export async function getAdminVatDeterminations(): Promise<ApiResult<AdminPage<AdminVatDetermination>>> {
+  return getJson<AdminPage<AdminVatDetermination>>("/v1/admin/compliance/vat/determinations");
+}
+
+export async function getAdminReceipts(): Promise<ApiResult<AdminPage<AdminReceipt>>> {
+  return getJson<AdminPage<AdminReceipt>>("/v1/admin/compliance/receipts");
 }
 
 async function getJson<T>(path: string): Promise<ApiResult<T>> {

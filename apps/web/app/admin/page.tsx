@@ -1,159 +1,49 @@
-import type { components } from "@veel/contracts";
 import type { ReactNode } from "react";
+import {
+  getAdminCarfReports,
+  getAdminComplianceLedger,
+  getAdminDac7Reports,
+  getAdminOpsSummary,
+  getAdminPaymentIntents,
+  getAdminProviderEvents,
+  getAdminReceipts,
+  getAdminUnlocks,
+  getAdminVatDeterminations,
+  type AdminComplianceLedgerEntry,
+  type AdminComplianceReport,
+  type AdminOpsSummary,
+  type AdminPage,
+  type AdminPaymentIntent,
+  type AdminProviderEvent,
+  type AdminReceipt,
+  type AdminUnlock,
+  type AdminVatDetermination,
+  type ApiResult
+} from "@/api-client";
 
-type AdminOpsSummary = components["schemas"]["AdminOpsSummary"];
-type AdminPaymentIntent = components["schemas"]["AdminPaymentIntent"];
-type AdminUnlock = components["schemas"]["AdminUnlock"];
-type AdminProviderEvent = components["schemas"]["AdminProviderEvent"];
-type AdminComplianceLedgerEntry = components["schemas"]["AdminComplianceLedgerEntry"];
-type AdminComplianceReport = components["schemas"]["AdminComplianceReport"];
-type AdminVatDetermination = components["schemas"]["AdminVatDetermination"];
-type AdminReceipt = components["schemas"]["AdminReceipt"];
+export default async function AdminPage() {
+  const [
+    summary,
+    payments,
+    unlocks,
+    providerEvents,
+    complianceLedger,
+    dac7Reports,
+    carfReports,
+    vatDeterminations,
+    receipts
+  ] = await Promise.all([
+    getAdminOpsSummary(),
+    getAdminPaymentIntents(),
+    getAdminUnlocks(),
+    getAdminProviderEvents(),
+    getAdminComplianceLedger(),
+    getAdminDac7Reports(),
+    getAdminCarfReports(),
+    getAdminVatDeterminations(),
+    getAdminReceipts()
+  ]);
 
-const summary: AdminOpsSummary = {
-  providerHealth: "ok",
-  queueHealth: "ok",
-  openReports: 0,
-  paymentCounts: { total: 2, pending: 1, submitted: 0, confirmed: 1, failed: 0 },
-  unlockCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 },
-  providerEventCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 }
-};
-
-const payments: AdminPaymentIntent[] = [
-  {
-    id: "00000000-0000-4000-8000-000000000050",
-    productType: "content_unlock",
-    amountMinor: 10000000,
-    currency: "SOL",
-    state: "confirmed",
-    userId: "00000000-0000-4000-8000-000000000011",
-    targetId: "00000000-0000-4000-8000-000000000040",
-    referenceAddress: "11111111111111111111111111111112",
-    submittedSignature: "4".repeat(88),
-    confirmedSignature: "5".repeat(88),
-    settlementAttemptCount: 1,
-    entitlementId: "00000000-0000-4000-8000-000000000090",
-    createdAt: "2026-06-04T20:00:00.000Z",
-    confirmedAt: "2026-06-04T20:01:00.000Z"
-  }
-];
-
-const unlocks: AdminUnlock[] = [
-  {
-    id: "00000000-0000-4000-8000-000000000090",
-    userId: "00000000-0000-4000-8000-000000000011",
-    targetType: "content",
-    targetId: "00000000-0000-4000-8000-000000000040",
-    productType: "content_unlock",
-    paymentIntentId: "00000000-0000-4000-8000-000000000050",
-    state: "active",
-    grantedAt: "2026-06-04T20:01:00.000Z",
-    expiresAt: null
-  }
-];
-
-const providerEvents: AdminProviderEvent[] = [
-  {
-    id: "00000000-0000-4000-8000-0000000000a0",
-    provider: "solana_rpc",
-    eventType: "payment.settlement",
-    state: "processed",
-    receivedAt: "2026-06-04T20:01:00.000Z",
-    processedAt: "2026-06-04T20:01:01.000Z"
-  }
-];
-
-const complianceLedger: AdminComplianceLedgerEntry[] = [
-  {
-    id: "00000000-0000-4000-8000-0000000000b0",
-    eventType: "payment_settled",
-    productType: "event_access_pass",
-    settlementModel: "user_to_creator_split",
-    sellerUserId: "00000000-0000-4000-8000-000000000010",
-    buyerUserId: "00000000-0000-4000-8000-000000000011",
-    paymentIntentId: "00000000-0000-4000-8000-000000000050",
-    entitlementId: "00000000-0000-4000-8000-000000000091",
-    receiptId: "00000000-0000-4000-8000-0000000000c0",
-    invoiceId: null,
-    grossAmountMinor: 10000000,
-    platformFeeMinor: 1000000,
-    creatorNetAmountMinor: 9000000,
-    taxAmountMinor: null,
-    currency: "SOL",
-    fiatCurrency: "USD",
-    fxRate: null,
-    sellerCountry: "CH",
-    buyerCountry: "DE",
-    sellerOfRecord: "creator",
-    vatStatus: "pending",
-    dac7Reportable: true,
-    carfReportable: false,
-    immutableHash: "hash",
-    createdAt: "2026-06-05T10:00:00.000Z"
-  }
-];
-
-const reports: AdminComplianceReport[] = [
-  {
-    id: "00000000-0000-4000-8000-0000000000d0",
-    reportType: "dac7",
-    reportingYear: 2026,
-    state: "draft",
-    lineCount: 0,
-    jurisdiction: "EU",
-    exportId: null,
-    carfReportingRequired: null,
-    createdAt: "2026-06-05T10:00:00.000Z",
-    exportedAt: null
-  },
-  {
-    id: "00000000-0000-4000-8000-0000000000d1",
-    reportType: "carf",
-    reportingYear: 2026,
-    state: "draft",
-    lineCount: 0,
-    jurisdiction: "EU",
-    exportId: null,
-    carfReportingRequired: false,
-    createdAt: "2026-06-05T10:00:00.000Z",
-    exportedAt: null
-  }
-];
-
-const vatDeterminations: AdminVatDetermination[] = [
-  {
-    id: "00000000-0000-4000-8000-0000000000e0",
-    productType: "event_access_pass",
-    sellerOfRecord: "creator",
-    buyerCountry: "DE",
-    sellerCountry: "CH",
-    buyerVatId: null,
-    viesStatus: "not_checked",
-    placeOfSupply: null,
-    vatStatus: "pending",
-    vatRateBps: null,
-    vatAmountMinor: null,
-    reviewState: "clear",
-    createdAt: "2026-06-05T10:00:00.000Z"
-  }
-];
-
-const receipts: AdminReceipt[] = [
-  {
-    id: "00000000-0000-4000-8000-0000000000c0",
-    receiptNumber: "R-2026-0001",
-    productType: "event_access_pass",
-    buyerUserId: "00000000-0000-4000-8000-000000000011",
-    sellerUserId: "00000000-0000-4000-8000-000000000010",
-    paymentIntentId: "00000000-0000-4000-8000-000000000050",
-    grossAmountMinor: 10000000,
-    currency: "SOL",
-    state: "issued",
-    issuedAt: "2026-06-05T10:00:00.000Z"
-  }
-];
-
-export default function AdminPage() {
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <nav className="mx-auto flex w-full max-w-7xl items-center justify-between border-b border-[var(--line)] px-5 py-4">
@@ -171,73 +61,175 @@ export default function AdminPage() {
             <p className="text-sm font-medium text-[var(--accent)]">Admin ops</p>
             <h1 className="mt-1 text-2xl font-semibold tracking-normal">Payments and unlocks</h1>
           </div>
-          <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-            <Metric label="Provider" value={summary.providerHealth} />
-            <Metric label="Queue" value={summary.queueHealth} />
-            <Metric label="Payments" value={summary.paymentCounts.total.toString()} />
-            <Metric label="Unlocks" value={summary.unlockCounts.total.toString()} />
-          </div>
+          <SummaryMetrics summary={summary} />
         </div>
 
         <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="grid content-start gap-4">
             <Panel title="Payments">
-              <div className="grid gap-2">
-                {payments.map((payment) => (
-                  <PaymentRow payment={payment} key={payment.id} />
-                ))}
-              </div>
+              <PageState result={payments} emptyLabel="No payment intents">
+                {(page) => (
+                  <div className="grid gap-2">
+                    {page.items.map((payment) => (
+                      <PaymentRow payment={payment} key={payment.id} />
+                    ))}
+                  </div>
+                )}
+              </PageState>
             </Panel>
 
             <Panel title="Unlocks">
-              <div className="grid gap-2">
-                {unlocks.map((unlock) => (
-                  <UnlockRow key={unlock.id} unlock={unlock} />
-                ))}
-              </div>
+              <PageState result={unlocks} emptyLabel="No unlock records">
+                {(page) => (
+                  <div className="grid gap-2">
+                    {page.items.map((unlock) => (
+                      <UnlockRow key={unlock.id} unlock={unlock} />
+                    ))}
+                  </div>
+                )}
+              </PageState>
             </Panel>
 
             <Panel title="Compliance ledger">
-              <div className="grid gap-2">
-                {complianceLedger.map((entry) => (
-                  <ComplianceRow entry={entry} key={entry.id} />
-                ))}
-              </div>
+              <PageState result={complianceLedger} emptyLabel="No compliance ledger entries">
+                {(page) => (
+                  <div className="grid gap-2">
+                    {page.items.map((entry) => (
+                      <ComplianceRow entry={entry} key={entry.id} />
+                    ))}
+                  </div>
+                )}
+              </PageState>
             </Panel>
 
             <Panel title="DAC7 and CARF reports">
-              <div className="grid gap-2">
-                {reports.map((report) => (
-                  <ReportRow key={report.id} report={report} />
-                ))}
-              </div>
+              <ReportPanel dac7Reports={dac7Reports} carfReports={carfReports} />
             </Panel>
           </div>
 
           <div className="grid content-start gap-4">
             <Panel title="Provider events">
-              <div className="grid gap-2">
-                {providerEvents.map((event) => (
-                  <ProviderEventRow event={event} key={event.id} />
-                ))}
-              </div>
+              <PageState result={providerEvents} emptyLabel="No provider events">
+                {(page) => (
+                  <div className="grid gap-2">
+                    {page.items.map((event) => (
+                      <ProviderEventRow event={event} key={event.id} />
+                    ))}
+                  </div>
+                )}
+              </PageState>
             </Panel>
 
             <Panel title="VAT and receipts">
-              <div className="grid gap-2">
-                {vatDeterminations.map((determination) => (
-                  <VatRow determination={determination} key={determination.id} />
-                ))}
-                {receipts.map((receipt) => (
-                  <ReceiptRow key={receipt.id} receipt={receipt} />
-                ))}
-              </div>
+              <VatReceiptPanel vatDeterminations={vatDeterminations} receipts={receipts} />
             </Panel>
           </div>
         </section>
       </section>
     </main>
   );
+}
+
+function SummaryMetrics({ summary }: { summary: ApiResult<AdminOpsSummary> }) {
+  if (!summary.ok) {
+    return (
+      <div className="rounded border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-sm">
+        <p className="text-xs uppercase text-[var(--muted)]">Ops summary</p>
+        <p className="mt-1 font-semibold tracking-normal">HTTP {summary.status}</p>
+        <p className="mt-1 text-xs text-[var(--muted)]">{summary.message}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+      <Metric label="Provider" value={summary.data.providerHealth} />
+      <Metric label="Queue" value={summary.data.queueHealth} />
+      <Metric label="Payments" value={summary.data.paymentCounts.total.toString()} />
+      <Metric label="Unlocks" value={summary.data.unlockCounts.total.toString()} />
+    </div>
+  );
+}
+
+function ReportPanel({
+  carfReports,
+  dac7Reports
+}: {
+  carfReports: ApiResult<AdminPage<AdminComplianceReport>>;
+  dac7Reports: ApiResult<AdminPage<AdminComplianceReport>>;
+}) {
+  if (!dac7Reports.ok) {
+    return <UnavailableState result={dac7Reports} />;
+  }
+
+  if (!carfReports.ok) {
+    return <UnavailableState result={carfReports} />;
+  }
+
+  const reports = [...dac7Reports.data.items, ...carfReports.data.items];
+
+  if (reports.length === 0) {
+    return <EmptyState label="No DAC7 or CARF reports" />;
+  }
+
+  return (
+    <div className="grid gap-2">
+      {reports.map((report) => (
+        <ReportRow key={report.id} report={report} />
+      ))}
+    </div>
+  );
+}
+
+function VatReceiptPanel({
+  receipts,
+  vatDeterminations
+}: {
+  receipts: ApiResult<AdminPage<AdminReceipt>>;
+  vatDeterminations: ApiResult<AdminPage<AdminVatDetermination>>;
+}) {
+  if (!vatDeterminations.ok) {
+    return <UnavailableState result={vatDeterminations} />;
+  }
+
+  if (!receipts.ok) {
+    return <UnavailableState result={receipts} />;
+  }
+
+  if (vatDeterminations.data.items.length === 0 && receipts.data.items.length === 0) {
+    return <EmptyState label="No VAT determinations or receipts" />;
+  }
+
+  return (
+    <div className="grid gap-2">
+      {vatDeterminations.data.items.map((determination) => (
+        <VatRow determination={determination} key={determination.id} />
+      ))}
+      {receipts.data.items.map((receipt) => (
+        <ReceiptRow key={receipt.id} receipt={receipt} />
+      ))}
+    </div>
+  );
+}
+
+function PageState<T>({
+  children,
+  emptyLabel,
+  result
+}: {
+  children: (page: AdminPage<T>) => ReactNode;
+  emptyLabel: string;
+  result: ApiResult<AdminPage<T>>;
+}) {
+  if (!result.ok) {
+    return <UnavailableState result={result} />;
+  }
+
+  if (result.data.items.length === 0) {
+    return <EmptyState label={emptyLabel} />;
+  }
+
+  return children(result.data);
 }
 
 function Panel({ children, title }: { children: ReactNode; title: string }) {
@@ -351,6 +343,24 @@ function ReceiptRow({ receipt }: { receipt: AdminReceipt }) {
         <Fact label="State" value={receipt.state} />
       </div>
     </article>
+  );
+}
+
+function EmptyState({ label }: { label: string }) {
+  return (
+    <div className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm text-[var(--muted)]">
+      {label}
+    </div>
+  );
+}
+
+function UnavailableState<T>({ result }: { result: Extract<ApiResult<T>, { ok: false }> }) {
+  return (
+    <div className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+      <p className="font-medium">Admin API unavailable</p>
+      <p className="mt-1 text-[var(--muted)]">HTTP {result.status}</p>
+      <p className="mt-1 text-[var(--muted)]">{result.message}</p>
+    </div>
   );
 }
 

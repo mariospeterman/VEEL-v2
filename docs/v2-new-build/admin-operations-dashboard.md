@@ -28,7 +28,11 @@ Current implementation state:
 - `GET /v1/admin/payments/intents` returns sanitized payment intent reconciliation rows with server-owned product, amount, state, reference address, submitted/confirmed signatures, settlement attempt count, and linked entitlement ID.
 - `GET /v1/admin/unlocks` returns sanitized entitlement rows for content unlock and access investigation.
 - `GET /v1/admin/provider-events` returns sanitized provider event status and timing only.
-- The `/admin` web surface is separate from normal user navigation and mirrors the read-only payment/unlock/provider ops projection for smoke coverage.
+- The `/admin` web surface is separate from normal user navigation and uses
+  typed API projections for ops summary, payment intents, unlocks, provider
+  events, compliance ledger, DAC7/CARF reports, VAT determinations, and receipts.
+  It fails closed per panel when the API or admin authorization is unavailable
+  and does not render fixture admin money, provider, tax, or receipt rows.
 - Event Access operations are inspectable through payment intent state, pass entitlement state, QR/check-in state, compliance ledger state, and provider event state; admin mutations remain deferred to their dedicated role-policy slices.
 - DAC7/DAC8/CARF/VAT readiness is surfaced through read-only compliance routes before export or filing workflows are enabled.
 - Admin reads require a valid session whose app user has an active staff membership in an operations, finance, support, creator-success, readonly-auditor, admin, or owner role.
