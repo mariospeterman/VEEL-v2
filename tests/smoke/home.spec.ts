@@ -144,6 +144,20 @@ test("renders the settings projection", async ({ page }) => {
   await expect(page.getByText("server-owned").first()).toBeVisible();
 });
 
+test("redirects documented app route aliases", async ({ page }) => {
+  await page.goto("/app/settings");
+  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page.getByRole("heading", { name: "Account controls" })).toBeVisible();
+
+  await page.goto("/event-access/00000000-0000-4000-8000-0000000000e1");
+  await expect(page).toHaveURL(/\/events\/00000000-0000-4000-8000-0000000000e1$/);
+  await expect(page.getByRole("heading", { name: "Studio meetup" })).toBeVisible();
+
+  await page.goto("/mutuals/mutuals");
+  await expect(page).toHaveURL(/\/dating\/matches$/);
+  await expect(page.getByRole("heading", { name: "Matches" })).toBeVisible();
+});
+
 test("renders the public creator profile projection", async ({ page }) => {
   await page.goto("/profile/maki");
 
