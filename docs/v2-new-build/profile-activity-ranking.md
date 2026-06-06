@@ -114,7 +114,7 @@ Categories:
 - referral shares
 - commissions
 - wallet transactions
-- dating matches/actions where user-visible
+- Mutuals/actions where user-visible
 - reports/safety actions where user-visible
 
 Activity must link to safe records:

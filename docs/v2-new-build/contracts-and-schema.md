@@ -56,13 +56,13 @@ They are intentionally broad enough to cover the full platform, but not final mi
 /referrals
 /subscriptions
 /events
-/dating
+/mutuals
 /activity
 /admin
 /webhooks
 ```
 
-The first contract skeleton is in `packages/contracts/openapi.yaml`. It intentionally includes dating, events, payments, live, media, engagement, and webhook paths so the first implementation is contract-led.
+The first contract skeleton is in `packages/contracts/openapi.yaml`. It intentionally includes Mutuals, events, payments, live, media, engagement, and webhook paths so the first implementation is contract-led.
 
 ## Schema Principles
 
@@ -70,7 +70,7 @@ The first contract skeleton is in `packages/contracts/openapi.yaml`. It intentio
 - all provider records include provider name, provider reference, normalized state, audit link
 - all sensitive provider payloads are either omitted or stored in restricted reconciliation tables
 - all admin mutations write audit events
-- all adult/content/dating/event state is explicit and queryable
+- all adult/content/Mutuals/event state is explicit and queryable
 
 ## Implementation Rule
 

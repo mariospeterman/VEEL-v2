@@ -3299,12 +3299,12 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("activates dating mode and returns the explicit dating feed", async () => {
+  it("activates Mutuals mode and returns the explicit Mutuals feed", async () => {
     const datingRepository: DatingRepository = {
       async activate(input) {
         expect(input).toMatchObject({
           supabaseUserId: "00000000-0000-4000-8000-000000000001",
-          consentVersion: "dating-consent-2026-06-04"
+          consentVersion: "mutuals-consent-2026-06-04"
         });
         return datingProfileFixture({ enabled: true });
       },
@@ -3341,23 +3341,23 @@ describe("buildApi", () => {
 
     const activateResponse = await app.inject({
       method: "POST",
-      url: "/v1/dating/activate",
+      url: "/v1/mutuals/activate",
       headers: {
         authorization: "Bearer valid-token",
-        "idempotency-key": "dating-activate-key"
+        "idempotency-key": "mutuals-activate-key"
       },
-      payload: { consentVersion: "dating-consent-2026-06-04" }
+      payload: { consentVersion: "mutuals-consent-2026-06-04" }
     });
     const feedResponse = await app.inject({
       method: "GET",
-      url: "/v1/dating/feed",
+      url: "/v1/mutuals/feed",
       headers: { authorization: "Bearer valid-token" }
     });
 
     expect(activateResponse.statusCode).toBe(200);
     expect(activateResponse.json()).toMatchObject({
       enabled: true,
-      consentVersion: "dating-consent-2026-06-04",
+      consentVersion: "mutuals-consent-2026-06-04",
       activeMatchLimit: 10
     });
     expect(feedResponse.statusCode).toBe(200);
@@ -3365,7 +3365,7 @@ describe("buildApi", () => {
       items: [
         {
           handle: "maki",
-          title: "Dating mode profile card",
+          title: "Mutuals profile card",
           mediaKind: "image"
         }
       ],
@@ -3375,7 +3375,7 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("creates a mutual dating match from backend-owned swipe state", async () => {
+  it("creates a Mutual from backend-owned interest state", async () => {
     const match = datingMatchFixture();
     const datingRepository: DatingRepository = {
       async activate() {
@@ -3390,7 +3390,7 @@ describe("buildApi", () => {
       async createSwipe(input) {
         expect(input).toMatchObject({
           supabaseUserId: "00000000-0000-4000-8000-000000000001",
-          idempotencyKey: "dating-swipe-key",
+          idempotencyKey: "mutuals-interest-key",
           body: {
             targetUserId: "00000000-0000-4000-8000-000000000011",
             contentId: "00000000-0000-4000-8000-000000000040",
@@ -3426,10 +3426,10 @@ describe("buildApi", () => {
 
     const swipeResponse = await app.inject({
       method: "POST",
-      url: "/v1/dating/swipes",
+      url: "/v1/mutuals/interests",
       headers: {
         authorization: "Bearer valid-token",
-        "idempotency-key": "dating-swipe-key"
+        "idempotency-key": "mutuals-interest-key"
       },
       payload: {
         targetUserId: "00000000-0000-4000-8000-000000000011",
@@ -3439,15 +3439,15 @@ describe("buildApi", () => {
     });
     const matchesResponse = await app.inject({
       method: "GET",
-      url: "/v1/dating/matches",
+      url: "/v1/mutuals",
       headers: { authorization: "Bearer valid-token" }
     });
     const archiveResponse = await app.inject({
       method: "PATCH",
-      url: `/v1/dating/matches/${match.id}/archive`,
+      url: `/v1/mutuals/${match.id}/archive`,
       headers: {
         authorization: "Bearer valid-token",
-        "idempotency-key": "dating-archive-key"
+        "idempotency-key": "mutuals-archive-key"
       }
     });
 
@@ -3461,6 +3461,57 @@ describe("buildApi", () => {
     expect(matchesResponse.json()).toMatchObject({ items: [match], nextCursor: null });
     expect(archiveResponse.statusCode).toBe(200);
     expect(archiveResponse.json()).toMatchObject({ state: "archived" });
+
+    await app.close();
+  });
+
+  it("keeps deprecated dating aliases as Mutuals compatibility routes", async () => {
+    const datingRepository: DatingRepository = {
+      async activate() {
+        throw new Error("not implemented");
+      },
+      async updatePreferences() {
+        throw new Error("not implemented");
+      },
+      async listFeed() {
+        return {
+          items: [datingFeedItemFixture()],
+          nextCursor: null
+        };
+      },
+      async createSwipe() {
+        throw new Error("not implemented");
+      },
+      async listMatches() {
+        return { items: [datingMatchFixture()], nextCursor: null };
+      },
+      async archiveMatch() {
+        throw new Error("not implemented");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      datingRepository
+    });
+    await app.ready();
+
+    const legacyFeedResponse = await app.inject({
+      method: "GET",
+      url: "/v1/dating/feed",
+      headers: { authorization: "Bearer valid-token" }
+    });
+    const legacyMatchesResponse = await app.inject({
+      method: "GET",
+      url: "/v1/dating/matches",
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(legacyFeedResponse.statusCode).toBe(200);
+    expect(legacyFeedResponse.json()).toMatchObject({ items: [{ title: "Mutuals profile card" }] });
+    expect(legacyMatchesResponse.statusCode).toBe(200);
+    expect(legacyMatchesResponse.json()).toMatchObject({ items: [{ state: "active" }] });
 
     await app.close();
   });
@@ -7880,7 +7931,7 @@ const fakeAdminRepository: AdminRepository = {
 function datingProfileFixture(overrides: Partial<Awaited<ReturnType<DatingRepository["activate"]>>> = {}) {
   return {
     enabled: overrides.enabled ?? true,
-    consentVersion: overrides.consentVersion ?? "dating-consent-2026-06-04",
+    consentVersion: overrides.consentVersion ?? "mutuals-consent-2026-06-04",
     activeMatchLimit: overrides.activeMatchLimit ?? 10,
     visibleOnMedia: overrides.visibleOnMedia ?? true,
     safetyState: overrides.safetyState ?? ("clear" as const),
@@ -7896,9 +7947,9 @@ function datingFeedItemFixture() {
     handle: "maki",
     displayName: "Maki",
     avatarUrl: null,
-    title: "Dating mode profile card",
+    title: "Mutuals profile card",
     mediaKind: "image" as const,
-    posterUrl: "https://media.example.test/dating.jpg",
+    posterUrl: "https://media.example.test/mutuals.jpg",
     createdAt: "2026-06-04T22:31:00.000Z"
   };
 }

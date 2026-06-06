@@ -58,14 +58,19 @@ Money can never buy access to people, visibility, matches, recommendations, or p
 ## Current Implementation State
 
 - The current backend exposes the pre-rename dating route family as the implemented compatibility surface.
-- The target route family is Mutuals.
+- The backend now exposes canonical Mutuals API aliases:
+  `POST /v1/mutuals/activate`, `PATCH /v1/mutuals/preferences`,
+  `GET /v1/mutuals/feed`, `POST /v1/mutuals/interests`,
+  `GET /v1/mutuals`, and `PATCH /v1/mutuals/:id/archive`.
+- The pre-rename API family, including `GET /v1/dating/feed` and
+  `GET /v1/dating/matches`, remains a deprecated compatibility alias only
+  during migration and must not be used by launch-facing frontend calls.
 - The target schema names are `mutual_profiles`, `mutual_interests`, and `mutuals`.
 - Current migration tables named `dating_profiles`, `dating_swipes`, and `dating_matches` must be migrated before launch-facing copy ships.
 - Frontend projections must use Mutuals copy even while the backend compatibility aliases exist.
 - `/mutuals/feed` and `/mutuals` use typed API-backed projections through the
-  current compatibility API routes `GET /v1/dating/feed` and
-  `GET /v1/dating/matches`; they fail closed when the API is unavailable
-  instead of rendering fixture Mutuals data.
+  canonical API routes `GET /v1/mutuals/feed` and `GET /v1/mutuals`; they fail
+  closed when the API is unavailable instead of rendering fixture Mutuals data.
 - `/dating` and `/dating/matches` are frontend compatibility redirects only.
 - Admin safety should use Mutuals copy and must preserve legacy route aliases only as internal transition details.
 

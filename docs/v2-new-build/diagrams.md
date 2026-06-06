@@ -184,7 +184,7 @@ Creator opens live room
 ## Age And KYC Waterfall
 
 ```text
-Age gate for protected app/media/dating/messages/wallet:
+Age gate for protected app/media/Mutuals/messages/wallet:
   1. Reusable age credential when supported
   2. Age estimation provider
   3. Database / non-document provider check where supported
@@ -235,7 +235,7 @@ Admin surface
   ├─ payments, unlocks, referrals, commissions
   ├─ live rooms, media providers, provider webhooks
   ├─ age/KYC states and safety decisions
-  ├─ dating moderation and event operations
+  ├─ Mutuals moderation and event operations
   └─ audit logs, queues, health, incidents
 
 AI/MCP

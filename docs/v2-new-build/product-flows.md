@@ -146,7 +146,7 @@ Create MVP is intentionally raw and simple:
 4. Label and attach:
    - required NSFW/adult/sensitive label
    - optional event toggle
-   - no dating toggle; Dating Mode is enabled from profile/settings and appears on eligible creator media automatically
+   - no per-post Mutuals toggle; Mutuals mode is enabled from profile/settings and appears on eligible creator media automatically
 5. Monetisation:
    - free
    - teaser + content unlock

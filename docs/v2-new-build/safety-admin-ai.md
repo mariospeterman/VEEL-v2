@@ -27,7 +27,7 @@ Safety is not a UI feature; it is a backend policy layer.
 Required:
 
 - adult-content compliance policy before launch
-- age gate before protected app/media/dating/messaging/wallet actions
+- age gate before protected app/media/Mutuals/messaging/wallet actions
 - report/block on content, profiles, messages, live rooms
 - moderation states for content/live/messages
 - creator verification, consent, recordkeeping, and takedown workflows for adult content

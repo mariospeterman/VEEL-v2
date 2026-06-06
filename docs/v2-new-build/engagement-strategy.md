@@ -42,10 +42,10 @@ Rules:
 - keep report/block/access controls visible
 - do not hide payment or subscription terms behind engagement UI
 - do not use misleading scarcity or manipulative countdowns
-- keep dating notifications low-pressure
-- give users control over push notifications and dating mode
+- keep Mutuals notifications low-pressure
+- give users control over push notifications and Mutuals mode
 - track safety and wellbeing metrics, not only watch time
-- age-gate before adult/protected/dating/payment areas
+- age-gate before adult/protected/Mutuals/payment areas
 
 ## Engagement Map
 
@@ -67,7 +67,7 @@ Rules:
 | Live pass | `payment_intents`, `live_access_grants` | Pending only | Room access update | Access | Pass controls playback/chat. |
 | Event interest | `event_interests` | Yes | Optional | None | Purchase still explicit. |
 | Ticket purchase | `payment_intents`, `ticket_entitlements` | Pending only | Ticket event | Access/ticket | Backend QR/receipt after confirm. |
-| Dating yes/no | `dating_swipes` | Yes | Match only after backend state | Match | Only inside Dating Mode. |
+| Mutuals interested/not interested | `dating_swipes` compatibility table, target `mutual_interests` | Yes | Mutual only after backend state | Mutual | Only inside explicit Mutuals mode. |
 
 ## Social Graph
 

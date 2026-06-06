@@ -33,7 +33,7 @@ This document freezes the default infrastructure choices for the greenfield repo
 | Tracing | OpenTelemetry | Managed collector/vendor | Needed for provider calls, payment confirmation latency, media jobs, and webhook lag. |
 | Logs | Structured redacted JSON logs | Centralized log vendor | Never log secrets, raw PII, signed media URLs, raw provider payloads, or wallet private data. |
 | Email | Resend or equivalent transactional provider | Dedicated deliverability provider | Magic links, receipts, age/KYC status, admin operations, and safety notices need reliable delivery. |
-| Push | Web Push + FCM/APNs path | Dedicated notification service | PWA notifications for messages, live reminders, tickets, dating matches, and safety states. |
+| Push | Web Push + FCM/APNs path | Dedicated notification service | PWA notifications for messages, live reminders, Event Access Passes, Mutuals, and safety states. |
 | Feature flags | Backend config table + env defaults | LaunchDarkly-style provider later | Admin can override policy safely without deploying; flags must be audited. |
 | Geocoding | Hosted OSM/Nominatim-compatible provider | Dedicated maps provider if needed | Cost-efficient event location UX with server caching and attribution. |
 
@@ -147,7 +147,7 @@ Allowed launch notifications:
 - payment completed/failed/retry needed
 - ticket receipt/check-in reminder
 - referral commission state change
-- dating match and one first-reply nudge
+- new Mutual and one first-reply nudge
 - safety/report/admin decision
 
 Disallowed launch notifications:

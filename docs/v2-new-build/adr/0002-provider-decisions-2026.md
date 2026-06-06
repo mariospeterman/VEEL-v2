@@ -315,7 +315,7 @@ Create/Edit must include:
 - creator-selected NSFW/adult label
 - content warning category
 - paid/free/teaser access state
-- optional event attachment only, not per-media Dating Mode settings
+- optional event attachment only, not per-media Mutuals mode settings
 - event fields: date/time, ticket amount/capacity, public sale or private request-to-join, digital live stream or physical location
 - event type is `digital_live_stream` or `physical`
 - map/location UX: browser geolocation with permission, manual place/street search, OSM-backed geocoding with production-safe caching/rate limits

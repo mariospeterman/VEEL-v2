@@ -30,7 +30,7 @@ tags:
   - name: Subscriptions
   - name: Events
   - name: Tickets
-  - name: Dating
+  - name: Mutuals
   - name: Activity
   - name: AI
   - name: Admin
@@ -956,11 +956,73 @@ paths:
         $ref: "#/components/requestBodies/CheckInTicket"
       responses:
         "200": { $ref: "#/components/responses/Ticket" }
+  /v1/mutuals/activate:
+    post:
+      operationId: activateMutualsMode
+      tags: [Mutuals]
+      summary: Activate explicit Mutuals mode after consent and safety checks
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/ActivateDating"
+      responses:
+        "200": { $ref: "#/components/responses/DatingProfile" }
+  /v1/mutuals/preferences:
+    patch:
+      operationId: updateMutualsPreferences
+      tags: [Mutuals]
+      summary: Update Mutuals preferences and safety limits
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/UpdateDatingPreferences"
+      responses:
+        "200": { $ref: "#/components/responses/DatingProfile" }
+  /v1/mutuals/interests:
+    post:
+      operationId: createMutualsInterest
+      tags: [Mutuals]
+      summary: Record explicit Mutuals interest or not-interested action
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/DatingSwipe"
+      responses:
+        "200": { $ref: "#/components/responses/DatingSwipeResult" }
+  /v1/mutuals/feed:
+    get:
+      operationId: getMutualsFeed
+      tags: [Mutuals]
+      summary: List explicit Mutuals-eligible creator media
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/DatingFeedPage" }
+  /v1/mutuals:
+    get:
+      operationId: listMutuals
+      tags: [Mutuals]
+      summary: List active/stale Mutuals
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/DatingMatchPage" }
+  /v1/mutuals/{matchId}/archive:
+    patch:
+      operationId: archiveMutual
+      tags: [Mutuals]
+      summary: Archive a Mutual to free active-Mutual capacity
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "200": { $ref: "#/components/responses/DatingMatch" }
   /v1/dating/activate:
     post:
       operationId: activateDatingMode
-      tags: [Dating]
-      summary: Activate explicit Dating Mode after consent and safety checks
+      tags: [Mutuals]
+      deprecated: true
+      summary: Compatibility alias for activating Mutuals mode
       parameters:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       requestBody:
@@ -970,8 +1032,9 @@ paths:
   /v1/dating/preferences:
     patch:
       operationId: updateDatingPreferences
-      tags: [Dating]
-      summary: Update Dating Mode preferences and safety limits
+      tags: [Mutuals]
+      deprecated: true
+      summary: Compatibility alias for updating Mutuals preferences
       parameters:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       requestBody:
@@ -981,8 +1044,9 @@ paths:
   /v1/dating/swipes:
     post:
       operationId: createDatingSwipe
-      tags: [Dating]
-      summary: Record explicit Dating Mode swipe/action
+      tags: [Mutuals]
+      deprecated: true
+      summary: Compatibility alias for recording Mutuals interest actions
       parameters:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       requestBody:
@@ -992,8 +1056,9 @@ paths:
   /v1/dating/feed:
     get:
       operationId: getDatingFeed
-      tags: [Dating]
-      summary: List explicit Dating Mode eligible creator media
+      tags: [Mutuals]
+      deprecated: true
+      summary: Compatibility alias for the Mutuals feed
       parameters:
         - $ref: "#/components/parameters/Cursor"
       responses:
@@ -1001,8 +1066,9 @@ paths:
   /v1/dating/matches:
     get:
       operationId: listDatingMatches
-      tags: [Dating]
-      summary: List active/stale Dating Mode matches
+      tags: [Mutuals]
+      deprecated: true
+      summary: Compatibility alias for listing Mutuals
       parameters:
         - $ref: "#/components/parameters/Cursor"
       responses:
@@ -1010,8 +1076,9 @@ paths:
   /v1/dating/matches/{matchId}/archive:
     patch:
       operationId: archiveDatingMatch
-      tags: [Dating]
-      summary: Archive a dating match to free active-match capacity
+      tags: [Mutuals]
+      deprecated: true
+      summary: Compatibility alias for archiving a Mutual
       parameters:
         - $ref: "#/components/parameters/MatchId"
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
@@ -1767,11 +1834,11 @@ components:
     TicketRequest: { description: Ticket request, content: { application/json: { schema: { $ref: "#/components/schemas/TicketRequest" } } } }
     Ticket: { description: Ticket, content: { application/json: { schema: { $ref: "#/components/schemas/Ticket" } } } }
     TicketPage: { description: Tickets, content: { application/json: { schema: { $ref: "#/components/schemas/TicketPage" } } } }
-    DatingProfile: { description: Dating profile, content: { application/json: { schema: { $ref: "#/components/schemas/DatingProfile" } } } }
-    DatingFeedPage: { description: Dating feed, content: { application/json: { schema: { $ref: "#/components/schemas/DatingFeedPage" } } } }
-    DatingSwipeResult: { description: Dating action result, content: { application/json: { schema: { $ref: "#/components/schemas/DatingSwipeResult" } } } }
-    DatingMatchPage: { description: Dating matches, content: { application/json: { schema: { $ref: "#/components/schemas/DatingMatchPage" } } } }
-    DatingMatch: { description: Dating match, content: { application/json: { schema: { $ref: "#/components/schemas/DatingMatch" } } } }
+    DatingProfile: { description: Mutuals profile, content: { application/json: { schema: { $ref: "#/components/schemas/DatingProfile" } } } }
+    DatingFeedPage: { description: Mutuals feed, content: { application/json: { schema: { $ref: "#/components/schemas/DatingFeedPage" } } } }
+    DatingSwipeResult: { description: Mutuals interest action result, content: { application/json: { schema: { $ref: "#/components/schemas/DatingSwipeResult" } } } }
+    DatingMatchPage: { description: Mutuals, content: { application/json: { schema: { $ref: "#/components/schemas/DatingMatchPage" } } } }
+    DatingMatch: { description: Mutual, content: { application/json: { schema: { $ref: "#/components/schemas/DatingMatch" } } } }
     ActivityPage: { description: Activity page, content: { application/json: { schema: { $ref: "#/components/schemas/ActivityPage" } } } }
     WalletTransactionPage: { description: Wallet transactions, content: { application/json: { schema: { $ref: "#/components/schemas/WalletTransactionPage" } } } }
     AiSession: { description: AI session, content: { application/json: { schema: { $ref: "#/components/schemas/AiSession" } } } }

@@ -168,11 +168,11 @@ export async function getEventAccessPassActivity(): Promise<ApiResult<EventAcces
 }
 
 export async function getMutualsFeed(): Promise<ApiResult<MutualsFeedPage>> {
-  return getJson<MutualsFeedPage>("/v1/dating/feed");
+  return getJson<MutualsFeedPage>("/v1/mutuals/feed");
 }
 
 export async function getMutualsMatches(): Promise<ApiResult<MutualsMatchPage>> {
-  return getJson<MutualsMatchPage>("/v1/dating/matches");
+  return getJson<MutualsMatchPage>("/v1/mutuals");
 }
 
 export async function getAiCapabilities(): Promise<ApiResult<AiCapabilities>> {

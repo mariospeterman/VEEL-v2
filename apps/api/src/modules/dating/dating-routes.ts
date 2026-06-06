@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AgeRepository } from "../age/types.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
@@ -27,7 +27,7 @@ export async function registerDatingRoutes(
   app: FastifyInstance,
   options: RegisterDatingRoutesOptions
 ): Promise<void> {
-  app.post("/v1/dating/activate", async (request, reply) => {
+  const activate = async (request: FastifyRequest, reply: FastifyReply) => {
     const access = await verifyDatingAccess(request, options);
 
     if (!access.ok) {
@@ -54,15 +54,15 @@ export async function registerDatingRoutes(
       return reply.code(200).send(profile);
     } catch (error) {
       if (error instanceof DatingRepositoryConfigurationError) {
-        request.log.warn({ error }, "Dating activation failed");
-        return reply.code(503).send(serviceUnavailableResponse("Dating mode is not configured"));
+        request.log.warn({ error }, "Mutuals activation failed");
+        return reply.code(503).send(serviceUnavailableResponse("Mutuals mode is not configured"));
       }
 
       throw error;
     }
-  });
+  };
 
-  app.patch("/v1/dating/preferences", async (request, reply) => {
+  const updatePreferences = async (request: FastifyRequest, reply: FastifyReply) => {
     const access = await verifyDatingAccess(request, options);
 
     if (!access.ok) {
@@ -87,21 +87,21 @@ export async function registerDatingRoutes(
       });
 
       if (!profile) {
-        return reply.code(404).send(notFoundResponse("Dating profile was not found"));
+        return reply.code(404).send(notFoundResponse("Mutuals profile was not found"));
       }
 
       return reply.code(200).send(profile);
     } catch (error) {
       if (error instanceof DatingRepositoryConfigurationError) {
-        request.log.warn({ error }, "Dating preference update failed");
-        return reply.code(503).send(serviceUnavailableResponse("Dating mode is not configured"));
+        request.log.warn({ error }, "Mutuals preference update failed");
+        return reply.code(503).send(serviceUnavailableResponse("Mutuals mode is not configured"));
       }
 
       throw error;
     }
-  });
+  };
 
-  app.get("/v1/dating/feed", async (request, reply) => {
+  const listFeed = async (request: FastifyRequest, reply: FastifyReply) => {
     const access = await verifyDatingAccess(request, options);
 
     if (!access.ok) {
@@ -119,22 +119,22 @@ export async function registerDatingRoutes(
       if (!page) {
         return reply.code(403).send({
           code: "forbidden",
-          message: "Dating Mode must be active before viewing the dating feed"
+          message: "Mutuals mode must be active before viewing the Mutuals feed"
         });
       }
 
       return reply.code(200).send(page);
     } catch (error) {
       if (error instanceof DatingRepositoryConfigurationError) {
-        request.log.warn({ error }, "Dating feed failed");
-        return reply.code(503).send(serviceUnavailableResponse("Dating mode is not configured"));
+        request.log.warn({ error }, "Mutuals feed failed");
+        return reply.code(503).send(serviceUnavailableResponse("Mutuals mode is not configured"));
       }
 
       throw error;
     }
-  });
+  };
 
-  app.post("/v1/dating/swipes", async (request, reply) => {
+  const createInterest = async (request: FastifyRequest, reply: FastifyReply) => {
     const access = await verifyDatingAccess(request, options);
 
     if (!access.ok) {
@@ -164,7 +164,7 @@ export async function registerDatingRoutes(
       });
 
       if (!result) {
-        return reply.code(404).send(notFoundResponse("Dating target was not found"));
+        return reply.code(404).send(notFoundResponse("Mutuals target was not found"));
       }
 
       return reply.code(200).send(result);
@@ -174,15 +174,15 @@ export async function registerDatingRoutes(
       }
 
       if (error instanceof DatingRepositoryConfigurationError) {
-        request.log.warn({ error }, "Dating swipe failed");
-        return reply.code(503).send(serviceUnavailableResponse("Dating mode is not configured"));
+        request.log.warn({ error }, "Mutuals interest failed");
+        return reply.code(503).send(serviceUnavailableResponse("Mutuals mode is not configured"));
       }
 
       throw error;
     }
-  });
+  };
 
-  app.get("/v1/dating/matches", async (request, reply) => {
+  const listMatches = async (request: FastifyRequest, reply: FastifyReply) => {
     const access = await verifyDatingAccess(request, options);
 
     if (!access.ok) {
@@ -197,9 +197,9 @@ export async function registerDatingRoutes(
     });
 
     return reply.code(200).send(page);
-  });
+  };
 
-  app.patch("/v1/dating/matches/:matchId/archive", async (request, reply) => {
+  const archiveMatch = async (request: FastifyRequest, reply: FastifyReply) => {
     const access = await verifyDatingAccess(request, options);
 
     if (!access.ok) {
@@ -217,11 +217,35 @@ export async function registerDatingRoutes(
     });
 
     if (!match) {
-      return reply.code(404).send(notFoundResponse("Dating match was not found"));
+      return reply.code(404).send(notFoundResponse("Mutual was not found"));
     }
 
     return reply.code(200).send(match);
-  });
+  };
+
+  for (const routePath of ["/v1/mutuals/activate", "/v1/dating/activate"]) {
+    app.post(routePath, activate);
+  }
+
+  for (const routePath of ["/v1/mutuals/preferences", "/v1/dating/preferences"]) {
+    app.patch(routePath, updatePreferences);
+  }
+
+  for (const routePath of ["/v1/mutuals/feed", "/v1/dating/feed"]) {
+    app.get(routePath, listFeed);
+  }
+
+  for (const routePath of ["/v1/mutuals/interests", "/v1/dating/swipes"]) {
+    app.post(routePath, createInterest);
+  }
+
+  for (const routePath of ["/v1/mutuals", "/v1/dating/matches"]) {
+    app.get(routePath, listMatches);
+  }
+
+  for (const routePath of ["/v1/mutuals/:matchId/archive", "/v1/dating/matches/:matchId/archive"]) {
+    app.patch(routePath, archiveMatch);
+  }
 }
 
 type DatingAccessResult =
@@ -263,7 +287,7 @@ async function verifyDatingAccess(
       statusCode: 403,
       body: {
         code: "forbidden",
-        message: "Dating Mode requires profile and age verification"
+        message: "Mutuals mode requires profile and age verification"
       }
     };
   }

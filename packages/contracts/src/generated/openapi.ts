@@ -1185,6 +1185,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/mutuals/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate explicit Mutuals mode after consent and safety checks */
+        post: operations["activateMutualsMode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mutuals/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Mutuals preferences and safety limits */
+        patch: operations["updateMutualsPreferences"];
+        trace?: never;
+    };
+    "/v1/mutuals/interests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record explicit Mutuals interest or not-interested action */
+        post: operations["createMutualsInterest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mutuals/feed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List explicit Mutuals-eligible creator media */
+        get: operations["getMutualsFeed"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mutuals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List active/stale Mutuals */
+        get: operations["listMutuals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mutuals/{matchId}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Archive a Mutual to free active-Mutual capacity */
+        patch: operations["archiveMutual"];
+        trace?: never;
+    };
     "/v1/dating/activate": {
         parameters: {
             query?: never;
@@ -1194,7 +1296,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Activate explicit Dating Mode after consent and safety checks */
+        /**
+         * Compatibility alias for activating Mutuals mode
+         * @deprecated
+         */
         post: operations["activateDatingMode"];
         delete?: never;
         options?: never;
@@ -1215,7 +1320,10 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Update Dating Mode preferences and safety limits */
+        /**
+         * Compatibility alias for updating Mutuals preferences
+         * @deprecated
+         */
         patch: operations["updateDatingPreferences"];
         trace?: never;
     };
@@ -1228,7 +1336,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Record explicit Dating Mode swipe/action */
+        /**
+         * Compatibility alias for recording Mutuals interest actions
+         * @deprecated
+         */
         post: operations["createDatingSwipe"];
         delete?: never;
         options?: never;
@@ -1243,7 +1354,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List explicit Dating Mode eligible creator media */
+        /**
+         * Compatibility alias for the Mutuals feed
+         * @deprecated
+         */
         get: operations["getDatingFeed"];
         put?: never;
         post?: never;
@@ -1260,7 +1374,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List active/stale Dating Mode matches */
+        /**
+         * Compatibility alias for listing Mutuals
+         * @deprecated
+         */
         get: operations["listDatingMatches"];
         put?: never;
         post?: never;
@@ -1283,7 +1400,10 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Archive a dating match to free active-match capacity */
+        /**
+         * Compatibility alias for archiving a Mutual
+         * @deprecated
+         */
         patch: operations["archiveDatingMatch"];
         trace?: never;
     };
@@ -4423,7 +4543,7 @@ export interface components {
                 "application/json": components["schemas"]["TicketPage"];
             };
         };
-        /** @description Dating profile */
+        /** @description Mutuals profile */
         DatingProfile: {
             headers: {
                 [name: string]: unknown;
@@ -4432,7 +4552,7 @@ export interface components {
                 "application/json": components["schemas"]["DatingProfile"];
             };
         };
-        /** @description Dating feed */
+        /** @description Mutuals feed */
         DatingFeedPage: {
             headers: {
                 [name: string]: unknown;
@@ -4441,7 +4561,7 @@ export interface components {
                 "application/json": components["schemas"]["DatingFeedPage"];
             };
         };
-        /** @description Dating action result */
+        /** @description Mutuals interest action result */
         DatingSwipeResult: {
             headers: {
                 [name: string]: unknown;
@@ -4450,7 +4570,7 @@ export interface components {
                 "application/json": components["schemas"]["DatingSwipeResult"];
             };
         };
-        /** @description Dating matches */
+        /** @description Mutuals */
         DatingMatchPage: {
             headers: {
                 [name: string]: unknown;
@@ -4459,7 +4579,7 @@ export interface components {
                 "application/json": components["schemas"]["DatingMatchPage"];
             };
         };
-        /** @description Dating match */
+        /** @description Mutual */
         DatingMatch: {
             headers: {
                 [name: string]: unknown;
@@ -6516,6 +6636,96 @@ export interface operations {
         requestBody: components["requestBodies"]["CheckInTicket"];
         responses: {
             200: components["responses"]["Ticket"];
+        };
+    };
+    activateMutualsMode: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["ActivateDating"];
+        responses: {
+            200: components["responses"]["DatingProfile"];
+        };
+    };
+    updateMutualsPreferences: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["UpdateDatingPreferences"];
+        responses: {
+            200: components["responses"]["DatingProfile"];
+        };
+    };
+    createMutualsInterest: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["DatingSwipe"];
+        responses: {
+            200: components["responses"]["DatingSwipeResult"];
+        };
+    };
+    getMutualsFeed: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["DatingFeedPage"];
+        };
+    };
+    listMutuals: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["DatingMatchPage"];
+        };
+    };
+    archiveMutual: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                matchId: components["parameters"]["MatchId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["DatingMatch"];
         };
     };
     activateDatingMode: {
