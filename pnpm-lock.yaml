@@ -139,6 +139,9 @@ importers:
       '@veel/config':
         specifier: workspace:*
         version: link:../../packages/config
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
     devDependencies:
       tsx:
         specifier: ^4.20.6

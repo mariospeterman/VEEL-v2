@@ -36,6 +36,7 @@ Current implementation state:
 - `GET /v1/profiles/me/creator-dashboard` exposes creator monetisation readiness, product toggles, confirmed earning records, platform fees, referral commissions, and recent payment activity from backend tables only.
 - Admin reconciliation is available through role-gated read-only projections for payment intents, unlock entitlements, provider events, and operations counts. These projections never expose raw provider payloads, provider secrets, private keys, or frontend-computed payment truth.
 - Membership/platform plan authorizations and recurring collection state are backend-owned. The primary path is auto-renewing Solana delegated subscriptions: the user authorizes bounded token collection once, backend/worker collection runs each period until cancellation/revocation, and access changes only after verified authorization or collection evidence.
+- The worker owns the renewal tick: it leases due delegated subscriptions from `subscriptions_next_collection_idx`, records a `subscription_collections` row, calls the provider collection boundary, and advances access only after confirmed collection evidence. Failed collections enter retry/grace state; verified delegation revocation closes renewal state instead of creating debt or a frontend-granted access claim.
 
 Official references checked:
 

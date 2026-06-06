@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@veel/config": "workspace:*"
+    "@veel/config": "workspace:*",
+    "postgres": "^3.4.9"
   },
   "devDependencies": {
     "tsx": "^4.20.6"
