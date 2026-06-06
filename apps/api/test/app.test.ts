@@ -2677,7 +2677,7 @@ describe("buildApi", () => {
       url: "/v1/notifications/preferences",
       headers: {
         authorization: "Bearer valid-token",
-        "idempotency-key": "notification-prefs-1"
+        "idempotency-key": "pref"
       },
       payload: {
         pushEnabled: false,
@@ -2689,7 +2689,7 @@ describe("buildApi", () => {
       url: "/v1/notifications/devices",
       headers: {
         authorization: "Bearer valid-token",
-        "idempotency-key": "notification-device-1"
+        "idempotency-key": "dev"
       },
       payload: {
         provider: "web_push",
@@ -2705,7 +2705,7 @@ describe("buildApi", () => {
       url: "/v1/notifications/00000000-0000-4000-8000-000000000090/read",
       headers: {
         authorization: "Bearer valid-token",
-        "idempotency-key": "notification-read-1"
+        "idempotency-key": "read"
       }
     });
     const deleteResponse = await app.inject({
@@ -2713,7 +2713,7 @@ describe("buildApi", () => {
       url: "/v1/notifications/devices/00000000-0000-4000-8000-000000000091",
       headers: {
         authorization: "Bearer valid-token",
-        "idempotency-key": "notification-device-delete-1"
+        "idempotency-key": "del"
       }
     });
 
@@ -2765,7 +2765,7 @@ describe("buildApi", () => {
             pushEnabled: false,
             liveEnabled: false
           },
-          idempotencyKey: "notification-prefs-1"
+          idempotencyKey: "pref"
         }
       },
       {
@@ -2780,7 +2780,7 @@ describe("buildApi", () => {
             auth: "browser-auth-secret",
             userAgent: "Veel smoke"
           },
-          idempotencyKey: "notification-device-1"
+          idempotencyKey: "dev"
         }
       },
       {
@@ -2788,7 +2788,7 @@ describe("buildApi", () => {
         input: {
           supabaseUserId: "00000000-0000-4000-8000-000000000001",
           notificationId: "00000000-0000-4000-8000-000000000090",
-          idempotencyKey: "notification-read-1"
+          idempotencyKey: "read"
         }
       },
       {
@@ -2796,7 +2796,7 @@ describe("buildApi", () => {
         input: {
           supabaseUserId: "00000000-0000-4000-8000-000000000001",
           notificationDeviceId: "00000000-0000-4000-8000-000000000091",
-          idempotencyKey: "notification-device-delete-1"
+          idempotencyKey: "del"
         }
       }
     ]);

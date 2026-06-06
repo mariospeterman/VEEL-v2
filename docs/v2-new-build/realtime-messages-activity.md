@@ -39,7 +39,7 @@ Use Supabase Realtime selectively. Do not build a custom websocket server unless
 
 ## Current Notification Implementation State
 
-- The notification foundation includes OpenAPI routes, `0034_notifications_foundation`, RLS-protected notification/preference/device tables, a Fastify notification module, backend tests, and settings-page preference reads.
+- The notification foundation includes OpenAPI routes, the notifications migration, RLS-protected notification/preference/device tables, a Fastify notification module, backend tests, and settings-page preference reads.
 - Web push device registration stores endpoint/key material as server-side hashes and returns only sanitized device projections.
 - Worker dispatch jobs, browser service-worker subscription UX, actual push delivery, Realtime subscription wiring, and admin delivery-health views remain planned production gaps.
 - Until the push-delivery slice lands, user-facing notification copy may show server-owned preferences and account notification projections, but must not imply active browser push delivery.
