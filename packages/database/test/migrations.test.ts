@@ -495,6 +495,20 @@ describe("database migrations", () => {
     expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role|creator_balance|withdrawal|escrow|payment_proof|automatic_refund|platform_balance/i);
   });
 
+  it("adds admin data request and feature flag surfaces with RLS boundaries", () => {
+    const sql = readMigration("0044_admin_data_request_feature_flag_surfaces.sql");
+
+    expect(sql).toContain("create table data_requests");
+    expect(sql).toContain("create table feature_flags");
+    expect(sql).toContain("sanitized_identity_minimized_no_raw_exports");
+    expect(sql).toContain("software_policy_only_no_payment_access_or_social_priority");
+    expect(sql).toContain("alter table data_requests enable row level security");
+    expect(sql).toContain("alter table feature_flags enable row level security");
+    expect(sql).toContain("data_requests_select_self_or_staff");
+    expect(sql).toContain("feature_flags_staff_select");
+    expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role|creator_balance|withdrawal|escrow|payment_proof|recommendation_boost|visibility_boost|message_priority|mutuals_boost/i);
+  });
+
   it("adds only user-owned projections to the Supabase realtime publication", () => {
     const sql = readMigration("0039_realtime_projection_publication.sql");
 

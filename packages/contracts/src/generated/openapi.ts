@@ -3530,10 +3530,20 @@ export interface components {
         AdminDataRequest: {
             /** Format: uuid */
             id: string;
+            /** Format: uuid */
+            requesterUserId: string;
             /** @enum {string} */
             type: "export" | "delete";
             /** @enum {string} */
             state: "requested" | "verifying" | "processing" | "completed" | "rejected";
+            /** @enum {string} */
+            privacyBoundary: "sanitized_identity_minimized_no_raw_exports";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string | null;
+            /** Format: date-time */
+            completedAt?: string | null;
         };
         AdminDatingSafety: {
             openReports: number;
@@ -3736,6 +3746,12 @@ export interface components {
             value: {
                 [key: string]: unknown;
             };
+            /** @enum {string} */
+            category: "feature" | "provider" | "compliance" | "safety" | "admin_policy";
+            /** @enum {string} */
+            policyBoundary: "software_policy_only_no_payment_access_or_social_priority";
+            /** @enum {string} */
+            state: "active" | "paused" | "archived";
             /** Format: date-time */
             updatedAt: string;
         };
@@ -3792,6 +3808,8 @@ export interface components {
             value: {
                 [key: string]: unknown;
             };
+            /** @enum {string} */
+            state: "active" | "paused" | "archived";
             reason: string;
         };
         AuditEvent: {
@@ -7056,7 +7074,9 @@ export interface operations {
         requestBody: components["requestBodies"]["AdminDataRequestAction"];
         responses: {
             200: components["responses"]["AdminDataRequest"];
+            400: components["responses"]["ValidationFailed"];
             403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listAdminEvents: {
@@ -7338,7 +7358,9 @@ export interface operations {
         requestBody: components["requestBodies"]["AdminFeatureFlagPatch"];
         responses: {
             200: components["responses"]["AdminFeatureFlag"];
+            400: components["responses"]["ValidationFailed"];
             403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     receiveMediaWebhook: {

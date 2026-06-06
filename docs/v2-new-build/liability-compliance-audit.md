@@ -68,7 +68,7 @@ Veel records evidence, state transitions, reporting facts, exports, and accounti
 | Mutuals/Connections | Compatibility backend route family and frontend projections exist. | Rename/migration from dating tables/routes, conduct UX, and hard social-money rule tests remain. |
 | Tiers | Free Verified, Veel Plus, Veel Studio, Enterprise are documented; organization member dashboards now expose software governance/readiness only. | Feature gates, admin overrides, and non-pay-to-win policy tests remain. |
 | Notifications | OpenAPI routes, RLS-backed notification/preference/device/delivery-attempt tables, Fastify account routes, worker delivery queue boundary, server-only VAPID Web Push send-provider boundary, browser service-worker enrollment UI, Supabase Realtime projection publication/cache invalidation boundary, backend tests, settings preference reads, and admin health visibility exist. | Real VAPID secrets, staging push-service verification across target browsers, and live Supabase Realtime staging verification remain. |
-| User/creator/studio/enterprise dashboards | User activity, creator onboarding/readiness, creator monetisation dashboard, member-scoped Studio/Enterprise dashboards with backend-derived RBAC permission rows, admin organization KYB mutation, audited admin organization member role/state mutation, audited support case/support policy surfaces, and admin ops panels exist. | Full admin route-map breadth and deeper provider-backed KYB workflow depth remain. |
+| User/creator/studio/enterprise/admin dashboards | User activity, creator onboarding/readiness, creator monetisation dashboard, member-scoped Studio/Enterprise dashboards with backend-derived RBAC permission rows, admin organization KYB mutation, audited admin organization member role/state mutation, audited support case/support policy surfaces, refund/dispute review, privacy data request lifecycle, feature flag policy controls, and admin ops panels exist. | Remaining admin route-map breadth, feature-gate enforcement depth, and deeper provider-backed KYB workflow depth remain. |
 
 ## Risk Matrix
 
@@ -98,6 +98,8 @@ Veel records evidence, state transitions, reporting facts, exports, and accounti
 - Notification events must be backend-derived from existing business state; browser push is delivery only.
 - Studio and Enterprise dashboards must be organization-scoped software/admin surfaces, not financial custody or payout surfaces.
 - Refund workflows are modeled as request, creator/admin review, optional creator-initiated refund transaction, entitlement revocation/replacement where policy allows, and audit evidence. The current implementation covers request/review/audit state only; it must not be used as payment truth, access truth, reporting truth, or bookkeeping truth.
+- Data request workflows are privacy lifecycle records only; export/deletion execution requires separate policy-approved workers and identity-minimized projections.
+- Feature flags are audited software policy controls only; they cannot override payment truth, entitlement access truth, compliance reporting truth, accounting bookkeeping truth, or the hard social-money rule.
 
 ## Compliance Improvements
 

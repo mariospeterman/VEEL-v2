@@ -3,6 +3,8 @@ import {
   getAdminCarfReports,
   getAdminComplianceLedger,
   getAdminDac7Reports,
+  getAdminDataRequests,
+  getAdminFeatureFlags,
   getAdminNotificationHealth,
   getAdminOpsSummary,
   getAdminOrganizationMembers,
@@ -17,6 +19,8 @@ import {
   getAdminVatDeterminations,
   type AdminComplianceLedgerEntry,
   type AdminComplianceReport,
+  type AdminDataRequest,
+  type AdminFeatureFlag,
   type AdminNotificationHealth,
   type AdminOpsSummary,
   type AdminOrganization,
@@ -49,7 +53,9 @@ export default async function AdminPage() {
     organizationMembers,
     supportCases,
     supportPolicies,
-    refundDisputes
+    refundDisputes,
+    dataRequests,
+    featureFlags
   ] = await Promise.all([
     getAdminOpsSummary(),
     getAdminPaymentIntents(),
@@ -65,7 +71,9 @@ export default async function AdminPage() {
     getAdminOrganizationMembers("00000000-0000-4000-8000-000000000140"),
     getAdminSupportCases(),
     getAdminSupportPolicies(),
-    getAdminRefundDisputes()
+    getAdminRefundDisputes(),
+    getAdminDataRequests(),
+    getAdminFeatureFlags()
   ]);
 
   return (
@@ -149,6 +157,18 @@ export default async function AdminPage() {
                 )}
               </PageState>
             </Panel>
+
+            <Panel title="Data requests">
+              <PageState result={dataRequests} emptyLabel="No data requests">
+                {(page) => (
+                  <div className="grid gap-2">
+                    {page.items.map((request) => (
+                      <DataRequestRow key={request.id} request={request} />
+                    ))}
+                  </div>
+                )}
+              </PageState>
+            </Panel>
           </div>
 
           <div className="grid content-start gap-4">
@@ -170,6 +190,18 @@ export default async function AdminPage() {
 
             <Panel title="VAT and receipts">
               <VatReceiptPanel vatDeterminations={vatDeterminations} receipts={receipts} />
+            </Panel>
+
+            <Panel title="Feature flags">
+              <PageState result={featureFlags} emptyLabel="No feature flags">
+                {(page) => (
+                  <div className="grid gap-2">
+                    {page.items.map((flag) => (
+                      <FeatureFlagRow flag={flag} key={flag.key} />
+                    ))}
+                  </div>
+                )}
+              </PageState>
             </Panel>
           </div>
         </section>
@@ -523,6 +555,38 @@ function RefundDisputeRow({ dispute }: { dispute: AdminRefundDispute }) {
       </div>
       <Fact label="State" value={dispute.state} />
       <Fact label="Boundary" value="no custody" />
+    </article>
+  );
+}
+
+function DataRequestRow({ request }: { request: AdminDataRequest }) {
+  return (
+    <article className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm md:grid-cols-[1fr_130px_190px]">
+      <div className="min-w-0">
+        <p className="font-medium">{request.type}</p>
+        <p className="mt-1 truncate text-[var(--muted)]">{request.requesterUserId}</p>
+      </div>
+      <Fact label="State" value={request.state} />
+      <Fact label="Boundary" value="minimized" />
+    </article>
+  );
+}
+
+function FeatureFlagRow({ flag }: { flag: AdminFeatureFlag }) {
+  return (
+    <article className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-medium">{flag.key}</p>
+          <p className="mt-1 truncate text-[var(--muted)]">{flag.category}</p>
+        </div>
+        <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">
+          {flag.state}
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2">
+        <Fact label="Boundary" value="software policy" />
+      </div>
     </article>
   );
 }

@@ -1334,13 +1334,26 @@ create table refunds_and_disputes (
   resolved_at timestamptz
 );
 
-create table data_subject_requests (
+create table data_requests (
   id uuid primary key,
-  user_id uuid not null references users(id),
-  request_type text not null,
-  state text not null default 'submitted',
-  requested_at timestamptz not null default now(),
+  requester_user_id uuid not null references users(id),
+  type text not null,
+  state text not null default 'requested',
+  reason text,
+  privacy_boundary text not null default 'sanitized_identity_minimized_no_raw_exports',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz,
   completed_at timestamptz
+);
+
+create table feature_flags (
+  key text primary key,
+  value jsonb not null default '{}'::jsonb,
+  category text not null default 'feature',
+  policy_boundary text not null default 'software_policy_only_no_payment_access_or_social_priority',
+  state text not null default 'active',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create table support_cases (

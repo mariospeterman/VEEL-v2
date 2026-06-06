@@ -2,7 +2,9 @@ import postgres from "postgres";
 import type {
   AdminComplianceLedgerEntry,
   AdminComplianceReport,
+  AdminDataRequest,
   AdminDatingSafety,
+  AdminFeatureFlag,
   AdminInvoice,
   AdminNotificationHealth,
   AdminOpsSummary,
@@ -142,6 +144,17 @@ interface RefundDisputeRow {
   resolved_at: Date | null;
 }
 
+interface DataRequestRow {
+  id: string;
+  requester_user_id: string;
+  type: AdminDataRequest["type"];
+  state: AdminDataRequest["state"];
+  privacy_boundary: AdminDataRequest["privacyBoundary"];
+  created_at: Date;
+  updated_at: Date | null;
+  completed_at: Date | null;
+}
+
 interface ComplianceLedgerRow {
   id: string;
   event_type: AdminComplianceLedgerEntry["eventType"];
@@ -273,6 +286,15 @@ interface OrganizationMemberRow {
   updated_at: Date | null;
 }
 
+interface FeatureFlagRow {
+  key: string;
+  value: AdminFeatureFlag["value"];
+  category: AdminFeatureFlag["category"];
+  policy_boundary: AdminFeatureFlag["policyBoundary"];
+  state: AdminFeatureFlag["state"];
+  updated_at: Date;
+}
+
 interface LockedOrganizationMemberRow extends OrganizationMemberRow {
   active_owner_count: string | number;
 }
@@ -318,6 +340,12 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
       async updateRefundDispute() {
         throw new AdminRepositoryConfigurationError();
       },
+      async listDataRequests() {
+        throw new AdminRepositoryConfigurationError();
+      },
+      async updateDataRequest() {
+        throw new AdminRepositoryConfigurationError();
+      },
       async getDatingSafety() {
         throw new AdminRepositoryConfigurationError();
       },
@@ -358,6 +386,12 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
         throw new AdminRepositoryConfigurationError();
       },
       async updateOrganizationMember() {
+        throw new AdminRepositoryConfigurationError();
+      },
+      async listFeatureFlags() {
+        throw new AdminRepositoryConfigurationError();
+      },
+      async updateFeatureFlag() {
         throw new AdminRepositoryConfigurationError();
       }
     };
@@ -852,6 +886,108 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
 
       return rows[0] ? toRefundDispute(rows[0]) : null;
     },
+    async listDataRequests(input) {
+      const rows = await sql<DataRequestRow[]>`
+        select
+          id,
+          requester_user_id,
+          type,
+          state,
+          privacy_boundary,
+          created_at,
+          updated_at,
+          completed_at
+        from data_requests
+        where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
+        order by created_at desc
+        limit ${pageSize + 1}
+      `;
+
+      return page(rows, toDataRequest);
+    },
+    async updateDataRequest(input) {
+      const rows = await sql.begin(async (transaction) => {
+        const updatedRows = await transaction<DataRequestRow[]>`
+          with actor as (
+            select id
+            from users
+            where supabase_user_id = ${input.supabaseUserId}
+            limit 1
+          ),
+          current_request as (
+            select id, state
+            from data_requests
+            where id = ${input.dataRequestId}
+            for update
+          ),
+          updated_request as (
+            update data_requests dr
+            set
+              state = ${input.body.state},
+              reason = ${input.body.reason},
+              updated_at = now(),
+              completed_at = case
+                when ${input.body.state} in ('completed', 'rejected') then coalesce(dr.completed_at, now())
+                else null
+              end
+            from current_request cr
+            where dr.id = cr.id
+            returning
+              dr.id,
+              dr.requester_user_id,
+              dr.type,
+              dr.state,
+              dr.privacy_boundary,
+              dr.created_at,
+              dr.updated_at,
+              dr.completed_at,
+              cr.state as previous_state
+          ),
+          audit_insert as (
+            insert into audit_events (
+              id,
+              actor_user_id,
+              subject_type,
+              subject_id,
+              action,
+              metadata
+            )
+            select
+              gen_random_uuid(),
+              actor.id,
+              'data_request',
+              updated_request.id,
+              'data_request_updated',
+              jsonb_build_object(
+                'reason', ${input.body.reason},
+                'idempotencyKey', ${input.idempotencyKey},
+                'requesterUserId', updated_request.requester_user_id,
+                'previousState', updated_request.previous_state,
+                'newState', updated_request.state,
+                'privacyBoundary', updated_request.privacy_boundary
+              )
+            from updated_request
+            cross join actor
+            returning id
+          )
+          select
+            id,
+            requester_user_id,
+            type,
+            state,
+            privacy_boundary,
+            created_at,
+            updated_at,
+            completed_at
+          from updated_request
+          where exists (select 1 from audit_insert)
+        `;
+
+        return updatedRows;
+      });
+
+      return rows[0] ? toDataRequest(rows[0]) : null;
+    },
     async getDatingSafety() {
       const rows = await sql<{
         open_reports: string | number;
@@ -1241,6 +1377,91 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
 
       return rows[0] ? toOrganizationMember(rows[0]) : null;
     },
+    async listFeatureFlags() {
+      const rows = await sql<FeatureFlagRow[]>`
+        select key, value, category, policy_boundary, state, updated_at
+        from feature_flags
+        order by updated_at desc, key asc
+        limit ${pageSize}
+      `;
+
+      return {
+        items: rows.map(toFeatureFlag),
+        nextCursor: null
+      };
+    },
+    async updateFeatureFlag(input) {
+      const rows = await sql.begin(async (transaction) => {
+        const updatedRows = await transaction<FeatureFlagRow[]>`
+          with actor as (
+            select id
+            from users
+            where supabase_user_id = ${input.supabaseUserId}
+            limit 1
+          ),
+          current_flag as (
+            select key, value, state, policy_boundary
+            from feature_flags
+            where key = ${input.featureFlagKey}
+            for update
+          ),
+          updated_flag as (
+            update feature_flags ff
+            set
+              value = ${JSON.stringify(input.body.value)}::jsonb,
+              state = ${input.body.state},
+              updated_at = now()
+            from current_flag cf
+            where ff.key = cf.key
+            returning
+              ff.key,
+              ff.value,
+              ff.category,
+              ff.policy_boundary,
+              ff.state,
+              ff.updated_at,
+              cf.value as previous_value,
+              cf.state as previous_state
+          ),
+          audit_insert as (
+            insert into audit_events (
+              id,
+              actor_user_id,
+              subject_type,
+              subject_id,
+              action,
+              metadata
+            )
+            select
+              gen_random_uuid(),
+              actor.id,
+              'feature_flag',
+              null,
+              'feature_flag_updated',
+              jsonb_build_object(
+                'featureFlagKey', updated_flag.key,
+                'reason', ${input.body.reason},
+                'idempotencyKey', ${input.idempotencyKey},
+                'previousValue', updated_flag.previous_value,
+                'newValue', updated_flag.value,
+                'previousState', updated_flag.previous_state,
+                'newState', updated_flag.state,
+                'policyBoundary', updated_flag.policy_boundary
+              )
+            from updated_flag
+            cross join actor
+            returning id
+          )
+          select key, value, category, policy_boundary, state, updated_at
+          from updated_flag
+          where exists (select 1 from audit_insert)
+        `;
+
+        return updatedRows;
+      });
+
+      return rows[0] ? toFeatureFlag(rows[0]) : null;
+    },
     async close() {
       await sql.end({ timeout: 5 });
     }
@@ -1405,6 +1626,19 @@ function toRefundDispute(row: RefundDisputeRow): AdminRefundDispute {
   };
 }
 
+function toDataRequest(row: DataRequestRow): AdminDataRequest {
+  return {
+    id: row.id,
+    requesterUserId: row.requester_user_id,
+    type: row.type,
+    state: row.state,
+    privacyBoundary: row.privacy_boundary,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at?.toISOString() ?? null,
+    completedAt: row.completed_at?.toISOString() ?? null
+  };
+}
+
 function toComplianceLedgerEntry(row: ComplianceLedgerRow): AdminComplianceLedgerEntry {
   return {
     id: row.id,
@@ -1557,6 +1791,17 @@ function toOrganizationMember(row: OrganizationMemberRow): AdminOrganizationMemb
     joinedAt: row.joined_at?.toISOString() ?? null,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at?.toISOString() ?? null
+  };
+}
+
+function toFeatureFlag(row: FeatureFlagRow): AdminFeatureFlag {
+  return {
+    key: row.key,
+    value: row.value,
+    category: row.category,
+    policyBoundary: row.policy_boundary,
+    state: row.state,
+    updatedAt: row.updated_at.toISOString()
   };
 }
 

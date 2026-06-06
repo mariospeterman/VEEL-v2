@@ -30,10 +30,13 @@ Current implementation state:
 - `GET /v1/admin/provider-events` returns sanitized provider event status and timing only.
 - `GET /v1/refunds/requests` and `POST /v1/refunds/requests` let authenticated, age-verified users open refund, dispute, or access-issue review requests for their own payment intents. These routes create review/audit state only and never execute refunds, reverse settlements, create balances, create payout queues, or override blockchain payment truth.
 - `GET /v1/admin/refunds/disputes` and `PATCH /v1/admin/refunds/disputes/{refundDisputeId}` expose sanitized refund/dispute review state to staff. Admin updates require `Idempotency-Key`, write `audit_events`, and may only change review state/resolution; creator/admin refund execution and entitlement revocation/replacement remain separate policy-approved slices.
+- `GET /v1/admin/data-requests` and `PATCH /v1/admin/data-requests/{dataRequestId}` expose the privacy request lifecycle to staff. Rows are sanitized lifecycle records only, user-visible through owner/staff RLS, and carry the `sanitized_identity_minimized_no_raw_exports` boundary. Admin updates require `Idempotency-Key`, reason text, and audit events.
+- `GET /v1/admin/feature-flags` and `PATCH /v1/admin/feature-flags/{featureFlagKey}` expose software policy controls to staff. Feature flags are audited software controls only and carry the `software_policy_only_no_payment_access_or_social_priority` boundary; they must never become payment truth, access truth, reporting truth, bookkeeping truth, recommendation priority, Mutuals treatment, visibility boost, or message priority.
 - The `/admin` web surface is separate from normal user navigation and uses
   typed API projections for ops summary, payment intents, unlocks, provider
   events, compliance ledger, DAC7/CARF reports, VAT determinations, receipts,
-  support policy, and refund/dispute review.
+  support policy, refund/dispute review, data request lifecycle, and feature
+  flag policy controls.
   It fails closed per panel when the API or admin authorization is unavailable
   and does not render fixture admin money, provider, tax, or receipt rows.
 - Event Access operations are inspectable through payment intent state, pass entitlement state, QR/check-in state, compliance ledger state, and provider event state; admin mutations remain deferred to their dedicated role-policy slices.
@@ -119,6 +122,8 @@ The admin landing dashboard should show:
 - `GET /v1/admin/organizations/{organizationId}/members` and `PATCH /v1/admin/organizations/{organizationId}/members/{membershipId}` expose the admin organization member governance workflow. Member mutations are role/state changes only, require `Idempotency-Key`, preserve at least one active owner, and write `audit_events`; they never create balances, payout queues, payment truth, recommendation priority, Mutuals preference, or preferential social treatment.
 - `GET /v1/admin/support/cases`, `PATCH /v1/admin/support/cases/{supportCaseId}`, `GET /v1/admin/support/policies`, and `PATCH /v1/admin/support/policies/{supportPolicyId}` expose the support queue and organization support policy workflow. Support policy mutations require `Idempotency-Key`, write `audit_events`, and may only change software SLA/admin handling state; support priority must never buy people access, visibility, recommendation rank, Mutuals treatment, or message priority.
 - `GET /v1/admin/refunds/disputes` and `PATCH /v1/admin/refunds/disputes/{refundDisputeId}` expose the refund/dispute review queue. They are support/compliance/finance visibility and decision records only. They do not mutate payment truth, do not move funds, and do not create bookkeeping facts; any future creator-initiated refund transaction evidence must be reconciled through blockchain settlement evidence and compliance ledger corrections.
+- `GET /v1/admin/data-requests` and `PATCH /v1/admin/data-requests/{dataRequestId}` expose privacy request lifecycle management. Data request state is compliance/support workflow state only; exports or deletion execution require separate policy-approved workers and must not expose raw PII through the admin API.
+- `GET /v1/admin/feature-flags` and `PATCH /v1/admin/feature-flags/{featureFlagKey}` expose audited feature policy controls. Feature flags can pause or enable software behavior after policy approval, but cannot override the source-of-truth split between blockchain payments, entitlement access, compliance reporting, and accounting bookkeeping.
 - current Studio dashboards expose backend-derived RBAC permission rows with denial reasons; the frontend must not infer organization authority from role labels alone
 
 ## Business Operations Modules
@@ -156,6 +161,8 @@ Compliance:
 - DAC7 report preparation by reporting year, seller, due-diligence status, line count, export state, and correction state
 - DAC8/CARF readiness behind `carf_reporting_required = false` until counsel enables reporting
 - VAT/MWST determinations by seller-of-record, buyer/seller country, B2B/B2C/VIES state, rate, amount, and review status
+- privacy request lifecycle state with identity-minimized admin projections
+- audited feature policy controls for compliance and provider rollout gates
 - user-visible receipts and access receipts
 - formal VAT invoices and platform fee statements
 - tax adjustments and correction entries

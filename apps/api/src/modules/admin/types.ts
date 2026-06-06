@@ -14,11 +14,13 @@ export type AdminInvoice = components["schemas"]["AdminInvoice"];
 export type AdminSupportCase = components["schemas"]["AdminSupportCase"];
 export type AdminSupportPolicy = components["schemas"]["AdminSupportPolicy"];
 export type AdminRefundDispute = components["schemas"]["AdminRefundDispute"];
+export type AdminDataRequest = components["schemas"]["AdminDataRequest"];
 export type AdminReferralProgram = components["schemas"]["AdminReferralProgram"];
 export type AdminPartnerCampaign = components["schemas"]["AdminPartnerCampaign"];
 export type AdminTierWaiver = components["schemas"]["AdminTierWaiver"];
 export type AdminOrganization = components["schemas"]["AdminOrganization"];
 export type AdminOrganizationMember = components["schemas"]["AdminOrganizationMember"];
+export type AdminFeatureFlag = components["schemas"]["AdminFeatureFlag"];
 export type AdminOrganizationKybActionRequest =
   components["schemas"]["AdminOrganizationKybActionRequest"];
 export type AdminOrganizationMemberActionRequest =
@@ -28,6 +30,10 @@ export type AdminSupportPolicyActionRequest =
   components["schemas"]["AdminSupportPolicyActionRequest"];
 export type AdminRefundDisputeActionRequest =
   components["schemas"]["AdminRefundDisputeActionRequest"];
+export type AdminDataRequestActionRequest =
+  components["schemas"]["AdminDataRequestActionRequest"];
+export type AdminFeatureFlagPatchRequest =
+  components["schemas"]["AdminFeatureFlagPatchRequest"];
 
 export interface AdminPage<Item> {
   items: Item[];
@@ -62,6 +68,13 @@ export interface AdminRepository {
     body: AdminRefundDisputeActionRequest;
     idempotencyKey: string;
   }): Promise<AdminRefundDispute | null>;
+  listDataRequests(input: { cursor?: string }): Promise<AdminPage<AdminDataRequest>>;
+  updateDataRequest(input: {
+    supabaseUserId: string;
+    dataRequestId: string;
+    body: AdminDataRequestActionRequest;
+    idempotencyKey: string;
+  }): Promise<AdminDataRequest | null>;
   getDatingSafety(): Promise<AdminDatingSafety>;
   listComplianceLedger(input: { cursor?: string }): Promise<AdminPage<AdminComplianceLedgerEntry>>;
   listDac7Reports(input: { cursor?: string }): Promise<AdminPage<AdminComplianceReport>>;
@@ -90,5 +103,12 @@ export interface AdminRepository {
     body: AdminOrganizationMemberActionRequest;
     idempotencyKey: string;
   }): Promise<AdminOrganizationMember | null>;
+  listFeatureFlags(): Promise<AdminPage<AdminFeatureFlag>>;
+  updateFeatureFlag(input: {
+    supabaseUserId: string;
+    featureFlagKey: string;
+    body: AdminFeatureFlagPatchRequest;
+    idempotencyKey: string;
+  }): Promise<AdminFeatureFlag | null>;
   close?(): Promise<void>;
 }

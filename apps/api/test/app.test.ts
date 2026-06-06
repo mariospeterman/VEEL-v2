@@ -3657,6 +3657,18 @@ describe("buildApi", () => {
         async updateRefundDispute() {
           throw new Error("not implemented");
         },
+        async listDataRequests() {
+          throw new Error("not implemented");
+        },
+        async updateDataRequest() {
+          throw new Error("not implemented");
+        },
+        async listFeatureFlags() {
+          throw new Error("not implemented");
+        },
+        async updateFeatureFlag() {
+          throw new Error("not implemented");
+        },
         async getDatingSafety() {
           throw new Error("not implemented");
         },
@@ -3734,6 +3746,18 @@ describe("buildApi", () => {
         async updateRefundDispute() {
           throw new Error("not implemented");
         },
+        async listDataRequests() {
+          throw new Error("not implemented");
+        },
+        async updateDataRequest() {
+          throw new Error("not implemented");
+        },
+        async listFeatureFlags() {
+          throw new Error("not implemented");
+        },
+        async updateFeatureFlag() {
+          throw new Error("not implemented");
+        },
         async getDatingSafety() {
           throw new Error("not implemented");
         },
@@ -3807,6 +3831,18 @@ describe("buildApi", () => {
           throw new Error("not implemented");
         },
         async updateRefundDispute() {
+          throw new Error("not implemented");
+        },
+        async listDataRequests() {
+          throw new Error("not implemented");
+        },
+        async updateDataRequest() {
+          throw new Error("not implemented");
+        },
+        async listFeatureFlags() {
+          throw new Error("not implemented");
+        },
+        async updateFeatureFlag() {
           throw new Error("not implemented");
         },
         async getDatingSafety() {
@@ -4198,6 +4234,132 @@ describe("buildApi", () => {
       payload: {
         state: "reviewing",
         resolution: "Review opened",
+        reason: "Missing idempotency should fail"
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: "validation_failed"
+    });
+
+    await app.close();
+  });
+
+  it("returns sanitized admin data request and feature flag projections", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: fakeAdminRepository
+    });
+    await app.ready();
+
+    const headers = { authorization: "Bearer valid-token" };
+    const [dataRequests, featureFlags] = await Promise.all([
+      app.inject({ method: "GET", url: "/v1/admin/data-requests", headers }),
+      app.inject({ method: "GET", url: "/v1/admin/feature-flags", headers })
+    ]);
+
+    expect(dataRequests.statusCode).toBe(200);
+    expect(dataRequests.json().items[0]).toMatchObject({
+      type: "export",
+      privacyBoundary: "sanitized_identity_minimized_no_raw_exports"
+    });
+    expect(featureFlags.statusCode).toBe(200);
+    expect(featureFlags.json().items[0]).toMatchObject({
+      key: "compliance.carf_exports",
+      policyBoundary: "software_policy_only_no_payment_access_or_social_priority",
+      state: "paused"
+    });
+    expect(`${dataRequests.body}${featureFlags.body}`).not.toMatch(
+      /rawPayload|providerPayload|identityDocument|secret|privateKey|serviceRole|creatorBalance|withdraw|payoutQueue|escrow|paymentProof|recommendationBoost|visibilityBoost|messagePriority|mutualsBoost/i
+    );
+
+    await app.close();
+  });
+
+  it("updates data requests and feature flags through audited admin mutations", async () => {
+    const dataRequestCalls: Array<Parameters<AdminRepository["updateDataRequest"]>[0]> = [];
+    const featureFlagCalls: Array<Parameters<AdminRepository["updateFeatureFlag"]>[0]> = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: {
+        ...fakeAdminRepository,
+        async updateDataRequest(input) {
+          dataRequestCalls.push(input);
+          return fakeAdminRepository.updateDataRequest(input);
+        },
+        async updateFeatureFlag(input) {
+          featureFlagCalls.push(input);
+          return fakeAdminRepository.updateFeatureFlag(input);
+        }
+      }
+    });
+    await app.ready();
+
+    const dataRequest = await app.inject({
+      method: "PATCH",
+      url: "/v1/admin/data-requests/00000000-0000-4000-8000-000000000170",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "data-request-1"
+      },
+      payload: {
+        state: "processing",
+        reason: "Identity verified; export job can be prepared"
+      }
+    });
+    const featureFlag = await app.inject({
+      method: "PATCH",
+      url: "/v1/admin/feature-flags/compliance.carf_exports",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "feature-flag-1"
+      },
+      payload: {
+        value: { enabled: false },
+        state: "paused",
+        reason: "Counsel review is still required before export"
+      }
+    });
+
+    expect(dataRequest.statusCode).toBe(200);
+    expect(dataRequest.json()).toMatchObject({
+      id: "00000000-0000-4000-8000-000000000170",
+      state: "processing",
+      privacyBoundary: "sanitized_identity_minimized_no_raw_exports"
+    });
+    expect(featureFlag.statusCode).toBe(200);
+    expect(featureFlag.json()).toMatchObject({
+      key: "compliance.carf_exports",
+      policyBoundary: "software_policy_only_no_payment_access_or_social_priority"
+    });
+    expect(dataRequestCalls[0]).toMatchObject({
+      idempotencyKey: "data-request-1"
+    });
+    expect(featureFlagCalls[0]).toMatchObject({
+      idempotencyKey: "feature-flag-1",
+      featureFlagKey: "compliance.carf_exports"
+    });
+
+    await app.close();
+  });
+
+  it("rejects feature flag updates without idempotency", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: fakeAdminRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/admin/feature-flags/compliance.carf_exports",
+      headers: {
+        authorization: "Bearer valid-token"
+      },
+      payload: {
+        value: { enabled: false },
+        state: "paused",
         reason: "Missing idempotency should fail"
       }
     });
@@ -6982,6 +7144,38 @@ const fakeAdminRepository: AdminRepository = {
           : null
     };
   },
+  async listDataRequests() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-000000000170",
+          requesterUserId: "00000000-0000-4000-8000-000000000011",
+          type: "export",
+          state: "requested",
+          privacyBoundary: "sanitized_identity_minimized_no_raw_exports",
+          createdAt: "2026-06-06T12:00:00.000Z",
+          updatedAt: null,
+          completedAt: null
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async updateDataRequest(input) {
+    return {
+      id: input.dataRequestId,
+      requesterUserId: "00000000-0000-4000-8000-000000000011",
+      type: "export",
+      state: input.body.state,
+      privacyBoundary: "sanitized_identity_minimized_no_raw_exports",
+      createdAt: "2026-06-06T12:00:00.000Z",
+      updatedAt: "2026-06-06T12:30:00.000Z",
+      completedAt:
+        input.body.state === "completed" || input.body.state === "rejected"
+          ? "2026-06-06T12:30:00.000Z"
+          : null
+    };
+  },
   async getDatingSafety() {
     return {
       openReports: 0,
@@ -7221,6 +7415,31 @@ const fakeAdminRepository: AdminRepository = {
       joinedAt: input.body.state === "active" ? "2026-06-05T10:00:00.000Z" : null,
       createdAt: "2026-06-05T10:00:00.000Z",
       updatedAt: "2026-06-06T12:30:00.000Z"
+    };
+  },
+  async listFeatureFlags() {
+    return {
+      items: [
+        {
+          key: "compliance.carf_exports",
+          value: { enabled: false },
+          category: "compliance",
+          policyBoundary: "software_policy_only_no_payment_access_or_social_priority",
+          state: "paused",
+          updatedAt: "2026-06-06T12:00:00.000Z"
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async updateFeatureFlag(input) {
+    return {
+      key: input.featureFlagKey,
+      value: input.body.value,
+      category: "compliance",
+      policyBoundary: "software_policy_only_no_payment_access_or_social_priority",
+      state: input.body.state,
+      updatedAt: "2026-06-06T12:45:00.000Z"
     };
   }
 };

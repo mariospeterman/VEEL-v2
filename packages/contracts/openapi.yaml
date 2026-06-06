@@ -1338,7 +1338,9 @@ paths:
         $ref: "#/components/requestBodies/AdminDataRequestAction"
       responses:
         "200": { $ref: "#/components/responses/AdminDataRequest" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /v1/admin/events:
     get:
       operationId: listAdminEvents
@@ -1529,7 +1531,9 @@ paths:
         $ref: "#/components/requestBodies/AdminFeatureFlagPatch"
       responses:
         "200": { $ref: "#/components/responses/AdminFeatureFlag" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /v1/webhooks/media/{provider}:
     post:
       operationId: receiveMediaWebhook
@@ -3250,11 +3254,16 @@ components:
         resolvedAt: { type: string, format: date-time, nullable: true }
     AdminDataRequest:
       type: object
-      required: [id, type, state]
+      required: [id, requesterUserId, type, state, privacyBoundary, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
+        requesterUserId: { type: string, format: uuid }
         type: { type: string, enum: [export, delete] }
         state: { type: string, enum: [requested, verifying, processing, completed, rejected] }
+        privacyBoundary: { type: string, enum: [sanitized_identity_minimized_no_raw_exports] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
     AdminDatingSafety:
       type: object
       required: [openReports, activeMatches, staleMatches]
@@ -3406,10 +3415,13 @@ components:
         updatedAt: { type: string, format: date-time, nullable: true }
     AdminFeatureFlag:
       type: object
-      required: [key, value, updatedAt]
+      required: [key, value, category, policyBoundary, state, updatedAt]
       properties:
         key: { type: string }
         value: { type: object, additionalProperties: true }
+        category: { type: string, enum: [feature, provider, compliance, safety, admin_policy] }
+        policyBoundary: { type: string, enum: [software_policy_only_no_payment_access_or_social_priority] }
+        state: { type: string, enum: [active, paused, archived] }
         updatedAt: { type: string, format: date-time }
     AdminReasonRequest:
       type: object
@@ -3470,9 +3482,10 @@ components:
         reason: { type: string, minLength: 3, maxLength: 500 }
     AdminFeatureFlagPatchRequest:
       type: object
-      required: [value, reason]
+      required: [value, state, reason]
       properties:
         value: { type: object, additionalProperties: true }
+        state: { type: string, enum: [active, paused, archived] }
         reason: { type: string, minLength: 3, maxLength: 500 }
     AuditEvent:
       type: object

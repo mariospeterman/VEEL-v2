@@ -47,12 +47,14 @@ export type AdminProviderEvent = components["schemas"]["AdminProviderEvent"];
 export type AdminSupportCase = components["schemas"]["AdminSupportCase"];
 export type AdminSupportPolicy = components["schemas"]["AdminSupportPolicy"];
 export type AdminRefundDispute = components["schemas"]["AdminRefundDispute"];
+export type AdminDataRequest = components["schemas"]["AdminDataRequest"];
 export type AdminComplianceLedgerEntry = components["schemas"]["AdminComplianceLedgerEntry"];
 export type AdminComplianceReport = components["schemas"]["AdminComplianceReport"];
 export type AdminVatDetermination = components["schemas"]["AdminVatDetermination"];
 export type AdminReceipt = components["schemas"]["AdminReceipt"];
 export type AdminOrganization = components["schemas"]["AdminOrganization"];
 export type AdminOrganizationMember = components["schemas"]["AdminOrganizationMember"];
+export type AdminFeatureFlag = components["schemas"]["AdminFeatureFlag"];
 
 export type AdminPage<T> = {
   items: T[];
@@ -208,6 +210,10 @@ export async function getAdminRefundDisputes(): Promise<ApiResult<AdminPage<Admi
   return getJson<AdminPage<AdminRefundDispute>>("/v1/admin/refunds/disputes");
 }
 
+export async function getAdminDataRequests(): Promise<ApiResult<AdminPage<AdminDataRequest>>> {
+  return getJson<AdminPage<AdminDataRequest>>("/v1/admin/data-requests");
+}
+
 export async function getAdminComplianceLedger(): Promise<ApiResult<AdminPage<AdminComplianceLedgerEntry>>> {
   return getJson<AdminPage<AdminComplianceLedgerEntry>>("/v1/admin/compliance/ledger");
 }
@@ -238,6 +244,10 @@ export async function getAdminOrganizationMembers(
   return getJson<AdminPage<AdminOrganizationMember>>(
     `/v1/admin/organizations/${encodeURIComponent(organizationId)}/members`
   );
+}
+
+export async function getAdminFeatureFlags(): Promise<ApiResult<AdminPage<AdminFeatureFlag>>> {
+  return getJson<AdminPage<AdminFeatureFlag>>("/v1/admin/feature-flags");
 }
 
 async function getJson<T>(path: string): Promise<ApiResult<T>> {

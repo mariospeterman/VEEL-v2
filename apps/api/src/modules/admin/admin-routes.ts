@@ -8,6 +8,8 @@ import {
 import type {
   AdminOrganizationKybActionRequest,
   AdminOrganizationMemberActionRequest,
+  AdminDataRequestActionRequest,
+  AdminFeatureFlagPatchRequest,
   AdminRefundDisputeActionRequest,
   AdminRepository,
   AdminSupportCaseActionRequest,
@@ -221,6 +223,60 @@ export async function registerAdminRoutes(
     }
 
     return reply.code(200).send(dispute);
+  });
+
+  app.get("/v1/admin/data-requests", async (request, reply) => {
+    const allowed = await requireAdminAccess(request, reply, options);
+    if (!allowed) return reply;
+
+    const query = request.query as { cursor?: string };
+    return reply.code(200).send(await options.adminRepository.listDataRequests(adminListInput(query)));
+  });
+
+  app.patch("/v1/admin/data-requests/:dataRequestId", async (request, reply) => {
+    const access = await requireAdminAccessWithUser(request, reply, options);
+    if (!access) return reply;
+
+    const idempotencyKey = request.headers["idempotency-key"];
+    if (!idempotencyKey || Array.isArray(idempotencyKey)) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: "Idempotency-Key header is required"
+      });
+    }
+
+    const { dataRequestId } = request.params as { dataRequestId?: string };
+    if (!dataRequestId) {
+      return reply.code(404).send({
+        code: "not_found",
+        message: "Data request was not found"
+      });
+    }
+
+    const body = request.body as Partial<AdminDataRequestActionRequest> | undefined;
+    const validationError = validateDataRequestAction(body);
+    if (validationError) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: validationError
+      });
+    }
+
+    const dataRequest = await options.adminRepository.updateDataRequest({
+      supabaseUserId: access.supabaseUserId,
+      dataRequestId,
+      body: body as AdminDataRequestActionRequest,
+      idempotencyKey
+    });
+
+    if (!dataRequest) {
+      return reply.code(404).send({
+        code: "not_found",
+        message: "Data request was not found"
+      });
+    }
+
+    return reply.code(200).send(dataRequest);
   });
 
   app.get("/v1/admin/dating/safety", async (request, reply) => {
@@ -437,6 +493,59 @@ export async function registerAdminRoutes(
       throw error;
     }
   });
+
+  app.get("/v1/admin/feature-flags", async (request, reply) => {
+    const allowed = await requireAdminAccess(request, reply, options);
+    if (!allowed) return reply;
+
+    return reply.code(200).send(await options.adminRepository.listFeatureFlags());
+  });
+
+  app.patch("/v1/admin/feature-flags/:featureFlagKey", async (request, reply) => {
+    const access = await requireAdminAccessWithUser(request, reply, options);
+    if (!access) return reply;
+
+    const idempotencyKey = request.headers["idempotency-key"];
+    if (!idempotencyKey || Array.isArray(idempotencyKey)) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: "Idempotency-Key header is required"
+      });
+    }
+
+    const { featureFlagKey } = request.params as { featureFlagKey?: string };
+    if (!featureFlagKey) {
+      return reply.code(404).send({
+        code: "not_found",
+        message: "Feature flag was not found"
+      });
+    }
+
+    const body = request.body as Partial<AdminFeatureFlagPatchRequest> | undefined;
+    const validationError = validateFeatureFlagPatch(body);
+    if (validationError) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: validationError
+      });
+    }
+
+    const featureFlag = await options.adminRepository.updateFeatureFlag({
+      supabaseUserId: access.supabaseUserId,
+      featureFlagKey,
+      body: body as AdminFeatureFlagPatchRequest,
+      idempotencyKey
+    });
+
+    if (!featureFlag) {
+      return reply.code(404).send({
+        code: "not_found",
+        message: "Feature flag was not found"
+      });
+    }
+
+    return reply.code(200).send(featureFlag);
+  });
 }
 
 function adminListInput(query: { q?: string; cursor?: string }): { query?: string; cursor?: string } {
@@ -622,6 +731,51 @@ function validateRefundDisputeAction(
 
   if (!body.resolution || body.resolution.trim().length < 3 || body.resolution.length > 1000) {
     return "resolution must be 3-1000 characters";
+  }
+
+  if (!body.reason || body.reason.trim().length < 3 || body.reason.length > 500) {
+    return "reason must be 3-500 characters";
+  }
+
+  return null;
+}
+
+function validateDataRequestAction(
+  body: Partial<AdminDataRequestActionRequest> | undefined
+): string | null {
+  if (!body || typeof body !== "object") {
+    return "Request body is required";
+  }
+
+  if (
+    body.state !== "verifying" &&
+    body.state !== "processing" &&
+    body.state !== "completed" &&
+    body.state !== "rejected"
+  ) {
+    return "state is invalid";
+  }
+
+  if (!body.reason || body.reason.trim().length < 3 || body.reason.length > 500) {
+    return "reason must be 3-500 characters";
+  }
+
+  return null;
+}
+
+function validateFeatureFlagPatch(
+  body: Partial<AdminFeatureFlagPatchRequest> | undefined
+): string | null {
+  if (!body || typeof body !== "object") {
+    return "Request body is required";
+  }
+
+  if (!body.value || typeof body.value !== "object" || Array.isArray(body.value)) {
+    return "value must be an object";
+  }
+
+  if (body.state !== "active" && body.state !== "paused" && body.state !== "archived") {
+    return "state is invalid";
   }
 
   if (!body.reason || body.reason.trim().length < 3 || body.reason.length > 500) {
