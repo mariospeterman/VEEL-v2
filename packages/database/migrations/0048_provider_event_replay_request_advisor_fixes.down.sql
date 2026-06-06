@@ -1,0 +1,1 @@
+drop index if exists provider_event_replay_requests_requested_by_user_idx;

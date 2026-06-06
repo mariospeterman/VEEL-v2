@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildWorkerRuntime, runNotificationDeliveryTick, runSubscriptionCollectionTick } from "../src/index";
+import {
+  buildWorkerRuntime,
+  runNotificationDeliveryTick,
+  runProviderEventReplayTick,
+  runSubscriptionCollectionTick
+} from "../src/index";
 import type {
   DueNotificationDelivery,
   NotificationDeliveryOutcome,
@@ -7,6 +12,12 @@ import type {
   NotificationDeliveryRepository
 } from "../src/notification-delivery";
 import { createWebPushNotificationDeliveryProvider } from "../src/notification-delivery";
+import type {
+  ProviderEventReplayAdapter,
+  ProviderEventReplayOutcome,
+  ProviderEventReplayRepository,
+  QueuedProviderEventReplay
+} from "../src/provider-event-replay";
 import type {
   DueSubscriptionCollection,
   SubscriptionCollectionOutcome,
@@ -32,7 +43,12 @@ describe("buildWorkerRuntime", () => {
 
     expect(runtime).toMatchObject({
       name: "veel-worker",
-      queues: ["subscription-authorizations", "subscription-collections", "notification-deliveries"],
+      queues: [
+        "subscription-authorizations",
+        "subscription-collections",
+        "notification-deliveries",
+        "provider-event-replays"
+      ],
       schedules: [
         {
           name: "subscription-collections",
@@ -43,6 +59,11 @@ describe("buildWorkerRuntime", () => {
           name: "notification-deliveries",
           cadence: "every_minute",
           sourceIndex: "notification_delivery_attempts_state_next_idx"
+        },
+        {
+          name: "provider-event-replays",
+          cadence: "operator_requested",
+          sourceIndex: "provider_event_replay_requests_state_created_idx"
         }
       ]
     });
@@ -301,6 +322,61 @@ describe("runSubscriptionCollectionTick", () => {
   });
 });
 
+describe("runProviderEventReplayTick", () => {
+  it("leases queued provider event replay requests through the worker adapter boundary", async () => {
+    const repository = fakeProviderEventReplayRepository({
+      requests: [providerEventReplayFixture()]
+    });
+    const adapter = fakeProviderEventReplayAdapter({ state: "replayed" });
+
+    const result = await runProviderEventReplayTick({
+      repository,
+      adapter,
+      now: new Date("2026-06-06T00:00:00.000Z")
+    });
+
+    expect(result).toEqual({
+      leased: 1,
+      replayed: 1,
+      failed: 0
+    });
+    expect(adapter.inputs).toMatchObject([
+      {
+        replayRequestId: "replay-request-1",
+        provider: "helius"
+      }
+    ]);
+    expect(repository.outcomes[0]).toMatchObject({
+      replayRequestId: "replay-request-1",
+      providerEventId: "00000000-0000-4000-8000-000000000050",
+      outcome: { state: "replayed" }
+    });
+  });
+
+  it("fails closed when no provider replay adapter is configured", async () => {
+    const repository = fakeProviderEventReplayRepository({
+      requests: [providerEventReplayFixture()]
+    });
+
+    const result = await runProviderEventReplayTick({
+      repository,
+      now: new Date("2026-06-06T00:00:00.000Z")
+    });
+
+    expect(result).toEqual({
+      leased: 1,
+      replayed: 0,
+      failed: 1
+    });
+    expect(repository.outcomes[0]).toMatchObject({
+      outcome: {
+        state: "failed",
+        failureCode: "provider_event_replay_adapter_not_configured"
+      }
+    });
+  });
+});
+
 function dueCollectionFixture(
   overrides: Partial<DueSubscriptionCollection> = {}
 ): DueSubscriptionCollection {
@@ -425,6 +501,58 @@ function fakeNotificationDeliveryRepository(input: {
       return input.deliveries ?? [];
     },
     async recordDeliveryOutcome(outcome) {
+      outcomes.push(outcome);
+    }
+  };
+}
+
+function providerEventReplayFixture(
+  overrides: Partial<QueuedProviderEventReplay> = {}
+): QueuedProviderEventReplay {
+  return {
+    replayRequestId: overrides.replayRequestId ?? "replay-request-1",
+    providerEventId: overrides.providerEventId ?? "00000000-0000-4000-8000-000000000050",
+    provider: overrides.provider ?? "helius",
+    eventType: overrides.eventType ?? "payment.confirmed"
+  };
+}
+
+function fakeProviderEventReplayAdapter(
+  outcome: ProviderEventReplayOutcome
+): ProviderEventReplayAdapter & { inputs: QueuedProviderEventReplay[] } {
+  const inputs: QueuedProviderEventReplay[] = [];
+
+  return {
+    inputs,
+    async replay(input) {
+      inputs.push(input);
+
+      return outcome;
+    }
+  };
+}
+
+function fakeProviderEventReplayRepository(input: {
+  requests?: QueuedProviderEventReplay[];
+}): ProviderEventReplayRepository & {
+  outcomes: Array<{
+    replayRequestId: string;
+    providerEventId: string;
+    outcome: ProviderEventReplayOutcome;
+  }>;
+} {
+  const outcomes: Array<{
+    replayRequestId: string;
+    providerEventId: string;
+    outcome: ProviderEventReplayOutcome;
+  }> = [];
+
+  return {
+    outcomes,
+    async leaseQueuedReplayRequests() {
+      return input.requests ?? [];
+    },
+    async recordReplayOutcome(outcome) {
       outcomes.push(outcome);
     }
   };

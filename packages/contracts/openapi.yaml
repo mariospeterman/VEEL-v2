@@ -3274,6 +3274,9 @@ components:
         state: { type: string, enum: [received, processed, failed, replayed, ignored] }
         receivedAt: { type: string, format: date-time }
         processedAt: { type: string, format: date-time, nullable: true }
+        latestReplayState: { type: string, enum: [queued, processing, replayed, failed, cancelled], nullable: true }
+        latestReplayRequestedAt: { type: string, format: date-time, nullable: true }
+        latestReplayProcessedAt: { type: string, format: date-time, nullable: true }
     AdminSupportCase:
       type: object
       required: [id, category, state, priority, subjectType, createdAt]

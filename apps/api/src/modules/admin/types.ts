@@ -41,6 +41,7 @@ export type AdminFeatureFlagPatchRequest =
 export type AdminModerationActionRequest =
   components["schemas"]["AdminModerationActionRequest"];
 export type AdminReportActionRequest = components["schemas"]["AdminReportActionRequest"];
+export type AdminReasonRequest = components["schemas"]["AdminReasonRequest"];
 export type Event = components["schemas"]["Event"];
 export type EventTicketType = components["schemas"]["EventTicketType"];
 export type Ticket = components["schemas"]["Ticket"];
@@ -73,6 +74,12 @@ export interface AdminRepository {
   listPaymentIntents(input: { query?: string; cursor?: string }): Promise<AdminPage<AdminPaymentIntent>>;
   listUnlocks(input: { query?: string; cursor?: string }): Promise<AdminPage<AdminUnlock>>;
   listProviderEvents(input: { cursor?: string }): Promise<AdminPage<AdminProviderEvent>>;
+  enqueueProviderEventReplay(input: {
+    supabaseUserId: string;
+    providerEventId: string;
+    body: AdminReasonRequest;
+    idempotencyKey: string;
+  }): Promise<boolean>;
   listAuditEvents(input: { cursor?: string }): Promise<AdminPage<AuditEvent>>;
   listSupportCases(input: { cursor?: string }): Promise<AdminPage<AdminSupportCase>>;
   updateSupportCase(input: {

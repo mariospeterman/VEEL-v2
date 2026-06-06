@@ -12,6 +12,7 @@ import type {
   AdminDataRequestActionRequest,
   AdminFeatureFlagPatchRequest,
   AdminRefundDisputeActionRequest,
+  AdminReasonRequest,
   AdminReportActionRequest,
   AdminRepository,
   AdminSupportCaseActionRequest,
@@ -202,6 +203,45 @@ export async function registerAdminRoutes(
 
     const query = request.query as { cursor?: string };
     return reply.code(200).send(await options.adminRepository.listProviderEvents(adminListInput(query)));
+  });
+
+  app.post("/v1/admin/provider-events/:providerEventId/replay", async (request, reply) => {
+    const access = await requireAdminAccessWithUser(request, reply, options);
+    if (!access) return reply;
+
+    const idempotencyKey = request.headers["idempotency-key"];
+    if (!idempotencyKey || Array.isArray(idempotencyKey)) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: "Idempotency-Key header is required"
+      });
+    }
+
+    const body = request.body as Partial<AdminReasonRequest> | undefined;
+    const validationError = validateAdminReason(body);
+    if (validationError) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: validationError
+      });
+    }
+
+    const providerEventId = (request.params as { providerEventId?: string }).providerEventId ?? "";
+    const queued = await options.adminRepository.enqueueProviderEventReplay({
+      supabaseUserId: access.supabaseUserId,
+      providerEventId,
+      body: body as AdminReasonRequest,
+      idempotencyKey
+    });
+
+    if (!queued) {
+      return reply.code(404).send({
+        code: "not_found",
+        message: "Provider event was not found"
+      });
+    }
+
+    return reply.code(202).send();
   });
 
   app.get("/v1/admin/audit", async (request, reply) => {
@@ -820,6 +860,18 @@ function validateOrganizationKybAction(
     body.kybState !== "rejected"
   ) {
     return "kybState is invalid";
+  }
+
+  if (!body.reason || body.reason.trim().length < 3 || body.reason.length > 500) {
+    return "reason must be 3-500 characters";
+  }
+
+  return null;
+}
+
+function validateAdminReason(body: Partial<AdminReasonRequest> | undefined): string | null {
+  if (!body || typeof body !== "object") {
+    return "Request body is required";
   }
 
   if (!body.reason || body.reason.trim().length < 3 || body.reason.length > 500) {

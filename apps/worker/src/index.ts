@@ -9,6 +9,14 @@ import {
   type ProcessNotificationDeliveriesResult
 } from "./notification-delivery.js";
 import {
+  createPostgresProviderEventReplayRepository,
+  createUnconfiguredProviderEventReplayAdapter,
+  processProviderEventReplays,
+  type ProcessProviderEventReplaysResult,
+  type ProviderEventReplayAdapter,
+  type ProviderEventReplayRepository
+} from "./provider-event-replay.js";
+import {
   createPostgresSubscriptionCollectionRepository,
   createUnconfiguredSubscriptionCollectionProvider,
   processDueSubscriptionCollections,
@@ -23,7 +31,12 @@ export const buildWorkerRuntime = () => {
   return {
     name: "veel-worker",
     environment: config.NODE_ENV,
-    queues: ["subscription-authorizations", "subscription-collections", "notification-deliveries"],
+    queues: [
+      "subscription-authorizations",
+      "subscription-collections",
+      "notification-deliveries",
+      "provider-event-replays"
+    ],
     schedules: [
       {
         name: "subscription-collections",
@@ -34,6 +47,11 @@ export const buildWorkerRuntime = () => {
         name: "notification-deliveries",
         cadence: "every_minute",
         sourceIndex: "notification_delivery_attempts_state_next_idx"
+      },
+      {
+        name: "provider-event-replays",
+        cadence: "operator_requested",
+        sourceIndex: "provider_event_replay_requests_state_created_idx"
       }
     ]
   };
@@ -91,6 +109,30 @@ export async function runSubscriptionCollectionTick(input: {
     return await processDueSubscriptionCollections({
       repository,
       provider,
+      ...(input.now ? { now: input.now } : {}),
+      ...(input.limit ? { limit: input.limit } : {})
+    });
+  } finally {
+    if (!input.repository) {
+      await repository.close?.();
+    }
+  }
+}
+
+export async function runProviderEventReplayTick(input: {
+  repository?: ProviderEventReplayRepository;
+  adapter?: ProviderEventReplayAdapter;
+  now?: Date;
+  limit?: number;
+} = {}): Promise<ProcessProviderEventReplaysResult> {
+  const config = parseServerEnv(process.env);
+  const repository = input.repository ?? createPostgresProviderEventReplayRepository(config.DATABASE_URL);
+  const adapter = input.adapter ?? createUnconfiguredProviderEventReplayAdapter();
+
+  try {
+    return await processProviderEventReplays({
+      repository,
+      adapter,
       ...(input.now ? { now: input.now } : {}),
       ...(input.limit ? { limit: input.limit } : {})
     });

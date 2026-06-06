@@ -1175,6 +1175,31 @@ create table provider_events (
 create index provider_events_received_at_idx
   on provider_events (received_at desc);
 
+create table provider_event_replay_requests (
+  id uuid primary key,
+  provider_event_id uuid not null references provider_events(id) on delete cascade,
+  requested_by_user_id uuid references users(id),
+  idempotency_key text not null,
+  reason text not null,
+  state text not null default 'queued',
+  attempt_count integer not null default 0,
+  leased_at timestamptz,
+  processed_at timestamptz,
+  failure_code text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (provider_event_id, idempotency_key)
+);
+
+create index provider_event_replay_requests_state_created_idx
+  on provider_event_replay_requests (state, created_at asc);
+
+create index provider_event_replay_requests_provider_event_idx
+  on provider_event_replay_requests (provider_event_id, created_at desc);
+
+create index provider_event_replay_requests_requested_by_user_idx
+  on provider_event_replay_requests (requested_by_user_id);
+
 create table provider_webhook_receipts (
   id uuid primary key,
   provider text not null,

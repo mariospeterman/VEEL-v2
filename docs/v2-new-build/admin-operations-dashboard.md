@@ -27,7 +27,8 @@ Current implementation state:
 - `GET /v1/admin/ops/summary` returns role-gated payment, unlock, provider event, report, provider health, and queue health counts.
 - `GET /v1/admin/payments/intents` returns sanitized payment intent reconciliation rows with server-owned product, amount, state, reference address, submitted/confirmed signatures, settlement attempt count, and linked entitlement ID.
 - `GET /v1/admin/unlocks` returns sanitized entitlement rows for content unlock and access investigation.
-- `GET /v1/admin/provider-events` returns sanitized provider event status and timing only.
+- `GET /v1/admin/provider-events` returns sanitized provider event status, timing, and latest replay-request state only.
+- `POST /v1/admin/provider-events/{providerEventId}/replay` enqueues an audited, idempotent replay request for the worker boundary. It requires `Idempotency-Key` and reason text, writes `provider_event_replay_requests` plus `audit_events`, and returns `202` only after queueing. It does not expose raw provider payloads and does not mark provider truth as replayed by itself.
 - `GET /v1/admin/audit` returns sanitized audit event id, subject type, action, and timestamp only. It intentionally omits `metadata`, raw provider payloads, reasons, idempotency keys, PII, wallet evidence, and secrets.
 - `GET /v1/admin/users`, `GET /v1/admin/users/{userId}`, `GET /v1/admin/content`, `PATCH /v1/admin/content/{contentId}/moderation`, `GET /v1/admin/reports`, and `PATCH /v1/admin/reports/{reportId}` expose the first user/content/report moderation queue. Reads are sanitized and omit email, phone, raw identity records, provider payloads, report metadata, and secrets. Mutations require `Idempotency-Key`, reason text, and write `audit_events`.
 - `GET /v1/admin/events` and `GET /v1/admin/tickets` expose read-only Event Access operations projections using the same sanitized Event and Event Access Pass schemas as user-facing routes. They do not expose stream keys, raw QR hashes, provider payloads, balances, or payout state.
@@ -131,7 +132,7 @@ The admin landing dashboard should show:
 - `GET /v1/admin/compliance/carf/reports` requires the `compliance.carf_exports` flag to be `active` with `value.enabled = true`. A paused/missing flag returns a fail-closed `403` and does not call CARF report storage.
 - `GET /v1/admin/audit` exposes a narrow read-only audit log projection for operations review. Audit metadata remains backend-only until a narrower resource-specific contract is approved.
 - `GET /v1/admin/users`, `GET /v1/admin/content`, and `GET /v1/admin/reports` expose the current moderation queue without raw PII/provider payloads. `PATCH /v1/admin/content/{contentId}/moderation` and `PATCH /v1/admin/reports/{reportId}` are audited state transitions only; they do not create social rank, paid visibility, or payment/access facts.
-- `GET /v1/admin/events` and `GET /v1/admin/tickets` expose read-only Event Access ops state. Provider-event replay remains planned until a dedicated worker/adapter replay boundary exists; a UI/admin state flip must not masquerade as provider replay.
+- `GET /v1/admin/events` and `GET /v1/admin/tickets` expose read-only Event Access ops state. Provider-event replay requests now go through the worker replay boundary; provider-specific replay adapters remain launch-gated and a UI/admin state flip must never masquerade as provider replay.
 - current Studio dashboards expose backend-derived RBAC permission rows with denial reasons; the frontend must not infer organization authority from role labels alone
 
 ## Business Operations Modules

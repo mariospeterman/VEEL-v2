@@ -1,0 +1,2 @@
+create index provider_event_replay_requests_requested_by_user_idx
+  on provider_event_replay_requests (requested_by_user_id);

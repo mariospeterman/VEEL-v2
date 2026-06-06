@@ -642,6 +642,8 @@ function ProviderEventRow({ event }: { event: AdminProviderEvent }) {
       <div className="mt-3 grid gap-2">
         <Fact label="Received" value={formatDate(event.receivedAt)} />
         <Fact label="Processed" value={formatDate(event.processedAt ?? null)} />
+        <Fact label="Replay" value={event.latestReplayState ?? "none"} />
+        <Fact label="Replay processed" value={formatDate(event.latestReplayProcessedAt ?? null)} />
       </div>
     </article>
   );

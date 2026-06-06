@@ -1,0 +1,4 @@
+drop policy if exists provider_event_replay_requests_staff_select on provider_event_replay_requests;
+drop index if exists provider_event_replay_requests_provider_event_idx;
+drop index if exists provider_event_replay_requests_state_created_idx;
+drop table if exists provider_event_replay_requests;

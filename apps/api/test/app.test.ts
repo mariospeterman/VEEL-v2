@@ -3708,6 +3708,9 @@ describe("buildApi", () => {
         async listProviderEvents() {
           throw new Error("not implemented");
         },
+        async enqueueProviderEventReplay() {
+          throw new Error("not implemented");
+        },
         async listAuditEvents() {
           throw new Error("not implemented");
         },
@@ -3824,6 +3827,9 @@ describe("buildApi", () => {
         async listProviderEvents() {
           throw new Error("not implemented");
         },
+        async enqueueProviderEventReplay() {
+          throw new Error("not implemented");
+        },
         async listAuditEvents() {
           throw new Error("not implemented");
         },
@@ -3936,6 +3942,9 @@ describe("buildApi", () => {
           throw new Error("not implemented");
         },
         async listProviderEvents() {
+          throw new Error("not implemented");
+        },
+        async enqueueProviderEventReplay() {
           throw new Error("not implemented");
         },
         async listAuditEvents() {
@@ -5001,9 +5010,23 @@ describe("buildApi", () => {
     expect(providerEvents.json().items[0]).toMatchObject({
       provider: "solana_rpc",
       eventType: "payment.settlement",
-      state: "processed"
+      state: "processed",
+      latestReplayState: "queued",
+      latestReplayProcessedAt: null
     });
     expect(JSON.stringify(providerEvents.json())).not.toMatch(/raw|payload|secret|streamKey/i);
+
+    const replayResponse = await app.inject({
+      method: "POST",
+      url: "/v1/admin/provider-events/00000000-0000-4000-8000-0000000000a0/replay",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "provider-event-replay-key"
+      },
+      payload: { reason: "retry normalized settlement event after provider outage" }
+    });
+
+    expect(replayResponse.statusCode).toBe(202);
 
     await app.close();
   });
@@ -7449,11 +7472,17 @@ const fakeAdminRepository: AdminRepository = {
           eventType: "payment.settlement",
           state: "processed",
           receivedAt: "2026-06-04T20:01:00.000Z",
-          processedAt: "2026-06-04T20:01:01.000Z"
+          processedAt: "2026-06-04T20:01:01.000Z",
+          latestReplayState: "queued",
+          latestReplayRequestedAt: "2026-06-04T20:02:00.000Z",
+          latestReplayProcessedAt: null
         }
       ],
       nextCursor: null
     };
+  },
+  async enqueueProviderEventReplay(input) {
+    return input.providerEventId === "00000000-0000-4000-8000-0000000000a0";
   },
   async listAuditEvents() {
     return {

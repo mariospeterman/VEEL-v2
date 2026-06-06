@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 import type {
   AdminComplianceLedgerEntry,
@@ -138,6 +139,9 @@ interface ProviderEventRow {
   normalized_state: AdminProviderEvent["state"];
   received_at: Date;
   processed_at: Date | null;
+  latest_replay_state: AdminProviderEvent["latestReplayState"];
+  latest_replay_requested_at: Date | null;
+  latest_replay_processed_at: Date | null;
 }
 
 interface AuditEventRow {
@@ -423,6 +427,9 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
         throw new AdminRepositoryConfigurationError();
       },
       async listProviderEvents() {
+        throw new AdminRepositoryConfigurationError();
+      },
+      async enqueueProviderEventReplay() {
         throw new AdminRepositoryConfigurationError();
       },
       async listAuditEvents() {
@@ -910,14 +917,94 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
     },
     async listProviderEvents(input) {
       const rows = await sql<ProviderEventRow[]>`
-        select id, provider, event_type, normalized_state, received_at, processed_at
-        from provider_events
-        where (${input.cursor ?? null}::timestamptz is null or received_at < ${input.cursor ?? null}::timestamptz)
-        order by received_at desc
+        select
+          pe.id,
+          pe.provider,
+          pe.event_type,
+          pe.normalized_state,
+          pe.received_at,
+          pe.processed_at,
+          replay.state as latest_replay_state,
+          replay.created_at as latest_replay_requested_at,
+          replay.processed_at as latest_replay_processed_at
+        from provider_events pe
+        left join lateral (
+          select state, created_at, processed_at
+          from provider_event_replay_requests perr
+          where perr.provider_event_id = pe.id
+          order by perr.created_at desc
+          limit 1
+        ) replay on true
+        where (${input.cursor ?? null}::timestamptz is null or pe.received_at < ${input.cursor ?? null}::timestamptz)
+        order by pe.received_at desc
         limit ${pageSize + 1}
       `;
 
       return page(rows, toProviderEvent);
+    },
+    async enqueueProviderEventReplay(input) {
+      const replayRequestId = randomUUID();
+      const auditEventId = randomUUID();
+      const reason = input.body.reason.trim();
+      const rows = await sql<{ provider_event_exists: boolean }[]>`
+        with actor as (
+          select id
+          from users
+          where supabase_user_id = ${input.supabaseUserId}::uuid
+        ),
+        target as (
+          select id
+          from provider_events
+          where id = ${input.providerEventId}::uuid
+        ),
+        inserted as (
+          insert into provider_event_replay_requests (
+            id,
+            provider_event_id,
+            requested_by_user_id,
+            idempotency_key,
+            reason,
+            state
+          )
+          select
+            ${replayRequestId},
+            target.id,
+            actor.id,
+            ${input.idempotencyKey},
+            ${reason},
+            'queued'
+          from target
+          left join actor on true
+          on conflict (provider_event_id, idempotency_key) do nothing
+          returning id, provider_event_id, requested_by_user_id
+        ),
+        audit_insert as (
+          insert into audit_events (
+            id,
+            actor_user_id,
+            subject_type,
+            subject_id,
+            action,
+            metadata
+          )
+          select
+            ${auditEventId},
+            inserted.requested_by_user_id,
+            'provider_event',
+            inserted.provider_event_id,
+            'provider_event.replay_requested',
+            jsonb_build_object(
+              'replayRequestId', inserted.id,
+              'reason', ${reason},
+              'boundary', 'worker_replay_enqueue_only'
+            )
+          from inserted
+          returning id
+        )
+        select exists(select 1 from target) as provider_event_exists
+      `;
+
+      return rows[0]?.provider_event_exists ?? false;
     },
     async listAuditEvents(input) {
       const rows = await sql<AuditEventRow[]>`
@@ -2073,7 +2160,10 @@ function toProviderEvent(row: ProviderEventRow): AdminProviderEvent {
     eventType: row.event_type,
     state: row.normalized_state,
     receivedAt: row.received_at.toISOString(),
-    processedAt: row.processed_at?.toISOString() ?? null
+    processedAt: row.processed_at?.toISOString() ?? null,
+    latestReplayState: row.latest_replay_state ?? null,
+    latestReplayRequestedAt: row.latest_replay_requested_at?.toISOString() ?? null,
+    latestReplayProcessedAt: row.latest_replay_processed_at?.toISOString() ?? null
   };
 }
 

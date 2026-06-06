@@ -3578,6 +3578,12 @@ export interface components {
             receivedAt: string;
             /** Format: date-time */
             processedAt?: string | null;
+            /** @enum {string|null} */
+            latestReplayState?: "queued" | "processing" | "replayed" | "failed" | "cancelled" | null;
+            /** Format: date-time */
+            latestReplayRequestedAt?: string | null;
+            /** Format: date-time */
+            latestReplayProcessedAt?: string | null;
         };
         AdminSupportCase: {
             /** Format: uuid */
