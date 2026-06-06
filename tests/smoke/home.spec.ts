@@ -14,6 +14,26 @@ test("renders the app shell and Home media card", async ({ page }) => {
   await expect(page.getByText("pass_required")).toBeVisible();
 });
 
+test("renders the enter onboarding projection", async ({ page }) => {
+  await page.goto("/enter");
+
+  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Identity, wallet, then age gate." })).toBeVisible();
+  await expect(page.getByText("Email or passkey")).toBeVisible();
+  await expect(page.getByText("External Solana wallet")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Continue" })).toHaveAttribute("href", "/age");
+});
+
+test("renders the age assurance projection", async ({ page }) => {
+  await page.goto("/age");
+
+  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Provider-backed 18+ gate" })).toBeVisible();
+  await expect(page.getByText("signature verified")).toBeVisible();
+  await expect(page.getByText("normalized result only")).toBeVisible();
+  await expect(page.getByText("server-owned")).toBeVisible();
+});
+
 test("renders the content media viewer projection", async ({ page }) => {
   await page.goto("/content/00000000-0000-4000-8000-000000000040");
 
