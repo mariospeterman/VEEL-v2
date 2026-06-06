@@ -18,15 +18,15 @@ export default async function HomePage() {
   const featuredLiveRoom = discover.ok ? (discover.data.liveRooms[0] ?? null) : null;
 
   return (
-    <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-      <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-[var(--line)] px-5 py-4">
+    <main className="min-h-screen bg-(--background) text-(--foreground)">
+      <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-(--line) px-5 py-4">
         <a className="text-lg font-semibold tracking-normal" href="/">
           VEEL
         </a>
         <div className="flex gap-1">
           {appShellNavItems.map((item) => (
             <a
-              className="rounded px-3 py-2 text-sm text-[var(--muted)] transition hover:bg-[var(--panel)] hover:text-[var(--foreground)]"
+              className="rounded px-3 py-2 text-sm text-(--muted) transition hover:bg-(--panel) hover:text-(--foreground)"
               href={item.href}
               key={item.href}
             >
@@ -40,10 +40,10 @@ export default async function HomePage() {
         <div className="grid gap-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-[var(--accent)]">Home</p>
+              <p className="text-sm font-medium text-(--accent)">Home</p>
               <h1 className="mt-1 text-2xl font-semibold tracking-normal">Recommended</h1>
             </div>
-            <div className="rounded border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-sm text-[var(--muted)]">
+            <div className="rounded border border-(--line) bg-(--panel) px-3 py-2 text-sm text-(--muted)">
               SFW
             </div>
           </div>
@@ -60,8 +60,8 @@ export default async function HomePage() {
         </div>
 
         <aside className="grid content-start gap-3">
-          <div className="border-b border-[var(--line)] pb-3">
-            <p className="text-sm font-medium text-[var(--muted)]">Live rail</p>
+          <div className="border-b border-(--line) pb-3">
+            <p className="text-sm font-medium text-(--muted)">Live rail</p>
           </div>
           {discover.ok ? (
             featuredLiveRoom ? (
@@ -82,18 +82,18 @@ function LiveRoomRailCard({ room }: { room: LiveRoom }) {
   const lowestPass = room.passOptions[0];
 
   return (
-    <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
+    <article className="rounded border border-(--line) bg-(--panel) p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{room.title}</p>
-          <p className="text-sm text-[var(--muted)]">@{room.creator.handle}</p>
+          <p className="text-sm text-(--muted)">@{room.creator.handle}</p>
         </div>
         <span className="rounded bg-[#fee2e2] px-2 py-1 text-xs font-semibold text-[#991b1b]">
           {room.state}
         </span>
       </div>
 
-      <div className="mt-4 aspect-video rounded border border-[var(--line)] bg-[#101827] p-3 text-sm text-white">
+      <div className="mt-4 aspect-video rounded border border-(--line) bg-[#101827] p-3 text-sm text-white">
         <div className="flex h-full flex-col justify-between">
           <span className="w-fit rounded bg-white/10 px-2 py-1 text-xs">Livepeer</span>
           <div>
@@ -107,11 +107,11 @@ function LiveRoomRailCard({ room }: { room: LiveRoom }) {
 
       <div className="mt-4 grid gap-2 text-sm">
         <div className="flex justify-between gap-3">
-          <span className="text-[var(--muted)]">Pass</span>
+          <span className="text-(--muted)">Pass</span>
           <span>{lowestPass ? `${lowestPass.amountMinor.toLocaleString()} ${lowestPass.currency}` : "closed"}</span>
         </div>
         <div className="flex justify-between gap-3">
-          <span className="text-[var(--muted)]">Chat</span>
+          <span className="text-(--muted)">Chat</span>
           <span>{room.chat.accessState}</span>
         </div>
       </div>
@@ -121,7 +121,7 @@ function LiveRoomRailCard({ room }: { room: LiveRoom }) {
 
 function MediaCard({ item }: { item: ContentItem }) {
   return (
-    <article className="overflow-hidden rounded border border-[var(--line)] bg-[var(--panel)]">
+    <article className="overflow-hidden rounded border border-(--line) bg-(--panel)">
       <div className="relative aspect-[16/10] bg-[#111827]">
         {item.posterUrl ? (
           <img
@@ -130,7 +130,7 @@ function MediaCard({ item }: { item: ContentItem }) {
             src={item.posterUrl}
           />
         ) : null}
-        <div className="absolute left-3 top-3 rounded bg-[var(--background)]/85 px-2 py-1 text-xs font-medium text-[var(--foreground)]">
+        <div className="absolute left-3 top-3 rounded bg-(--background)/85 px-2 py-1 text-xs font-medium text-(--foreground)">
           {item.mediaType.toUpperCase()}
         </div>
       </div>
@@ -139,16 +139,16 @@ function MediaCard({ item }: { item: ContentItem }) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">{item.creator.displayName}</p>
-            <p className="text-sm text-[var(--muted)]">@{item.creator.handle}</p>
+            <p className="text-sm text-(--muted)">@{item.creator.handle}</p>
           </div>
-          <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">
+          <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-medium text-(--accent-strong)">
             {item.accessState}
           </span>
         </div>
 
-        {item.caption ? <p className="text-sm leading-6 text-[var(--foreground)]">{item.caption}</p> : null}
+        {item.caption ? <p className="text-sm leading-6 text-(--foreground)">{item.caption}</p> : null}
 
-        <div className="flex items-center gap-4 border-t border-[var(--line)] pt-3 text-sm text-[var(--muted)]">
+        <div className="flex items-center gap-4 border-t border-(--line) pt-3 text-sm text-(--muted)">
           <span>{item.engagement.likeCount.toLocaleString()} likes</span>
           <span>{item.engagement.commentCount.toLocaleString()} comments</span>
         </div>
@@ -159,7 +159,7 @@ function MediaCard({ item }: { item: ContentItem }) {
 
 function EmptyState({ label }: { label: string }) {
   return (
-    <div className="rounded border border-[var(--line)] bg-[var(--panel)] p-4 text-sm text-[var(--muted)]">
+    <div className="rounded border border-(--line) bg-(--panel) p-4 text-sm text-(--muted)">
       {label}
     </div>
   );
@@ -177,10 +177,10 @@ function UnavailableState({
   }
 
   return (
-    <div className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
-      <p className="text-sm font-medium text-[var(--accent)]">HTTP {result.status}</p>
+    <div className="rounded border border-(--line) bg-(--panel) p-4">
+      <p className="text-sm font-medium text-(--accent)">HTTP {result.status}</p>
       <h2 className="mt-2 text-base font-semibold tracking-normal">{title}</h2>
-      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{result.message}</p>
+      <p className="mt-2 text-sm leading-6 text-(--muted)">{result.message}</p>
     </div>
   );
 }

@@ -15,13 +15,13 @@ import {
 
 export function ProviderEventRow({ event }: { event: AdminProviderEvent }) {
   return (
-    <article className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+    <article className="rounded border border-(--line) bg-(--background) p-3 text-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-medium">{event.provider}</p>
-          <p className="mt-1 truncate text-[var(--muted)]">{event.eventType}</p>
+          <p className="mt-1 truncate text-(--muted)">{event.eventType}</p>
         </div>
-        <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">
+        <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-medium text-(--accent-strong)">
           {event.state}
         </span>
       </div>
@@ -37,13 +37,13 @@ export function ProviderEventRow({ event }: { event: AdminProviderEvent }) {
 
 export function LiveProviderRow({ room }: { room: AdminLiveRoom }) {
   return (
-    <article className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+    <article className="rounded border border-(--line) bg-(--background) p-3 text-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-medium">{room.title}</p>
-          <p className="mt-1 truncate text-[var(--muted)]">{room.providerStreamId ?? room.provider}</p>
+          <p className="mt-1 truncate text-(--muted)">{room.providerStreamId ?? room.provider}</p>
         </div>
-        <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">
+        <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-medium text-(--accent-strong)">
           {room.state}
         </span>
       </div>
@@ -58,13 +58,13 @@ export function LiveProviderRow({ room }: { room: AdminLiveRoom }) {
 
 export function MediaProviderRow({ asset }: { asset: AdminMediaAsset }) {
   return (
-    <article className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+    <article className="rounded border border-(--line) bg-(--background) p-3 text-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-medium">{asset.provider}</p>
-          <p className="mt-1 truncate text-[var(--muted)]">{asset.providerAssetId}</p>
+          <p className="mt-1 truncate text-(--muted)">{asset.providerAssetId}</p>
         </div>
-        <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">
+        <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-medium text-(--accent-strong)">
           {asset.providerState}
         </span>
       </div>
@@ -79,13 +79,13 @@ export function MediaProviderRow({ asset }: { asset: AdminMediaAsset }) {
 
 export function AgeCheckRow({ check }: { check: AdminAgeCheck }) {
   return (
-    <article className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+    <article className="rounded border border-(--line) bg-(--background) p-3 text-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-medium">Age assurance</p>
-          <p className="mt-1 truncate text-[var(--muted)]">{check.provider}</p>
+          <p className="mt-1 truncate text-(--muted)">{check.provider}</p>
         </div>
-        <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">
+        <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-medium text-(--accent-strong)">
           {check.state}
         </span>
       </div>
@@ -100,13 +100,13 @@ export function AgeCheckRow({ check }: { check: AdminAgeCheck }) {
 
 export function IdentityCheckRow({ check }: { check: AdminIdentityCheck }) {
   return (
-    <article className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+    <article className="rounded border border-(--line) bg-(--background) p-3 text-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-medium">{check.verificationType.toUpperCase()}</p>
-          <p className="mt-1 truncate text-[var(--muted)]">{check.provider}</p>
+          <p className="mt-1 truncate text-(--muted)">{check.provider}</p>
         </div>
-        <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">
+        <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-medium text-(--accent-strong)">
           {check.state}
         </span>
       </div>
@@ -121,13 +121,13 @@ export function IdentityCheckRow({ check }: { check: AdminIdentityCheck }) {
 
 export function AiSessionRow({ session }: { session: AdminAiSession }) {
   return (
-    <article className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+    <article className="rounded border border-(--line) bg-(--background) p-3 text-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-medium">{session.scope}</p>
-          <p className="mt-1 truncate text-[var(--muted)]">{session.actorUserId}</p>
+          <p className="mt-1 truncate text-(--muted)">{session.actorUserId}</p>
         </div>
-        <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">
+        <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-medium text-(--accent-strong)">
           {session.state}
         </span>
       </div>
@@ -141,13 +141,13 @@ export function AiSessionRow({ session }: { session: AdminAiSession }) {
 
 export function AiToolCallRow({ toolCall }: { toolCall: AdminAiToolCall }) {
   return (
-    <article className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+    <article className="rounded border border-(--line) bg-(--background) p-3 text-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-medium">{toolCall.toolName}</p>
-          <p className="mt-1 truncate text-[var(--muted)]">{toolCall.inputSummary}</p>
+          <p className="mt-1 truncate text-(--muted)">{toolCall.inputSummary}</p>
         </div>
-        <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">
+        <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-medium text-(--accent-strong)">
           {toolCall.state}
         </span>
       </div>

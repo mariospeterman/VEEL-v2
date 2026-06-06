@@ -17,15 +17,15 @@ export default async function SubscriptionsPage() {
   const currentSubscription = subscriptions.ok ? (subscriptions.data.items[0] ?? null) : null;
 
   return (
-    <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+    <main className="min-h-screen bg-(--background) text-(--foreground)">
       <AppNav />
 
       <section className="mx-auto grid w-full max-w-6xl gap-6 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <section className="grid content-start gap-5">
           <div>
-            <p className="text-sm font-medium text-[var(--accent)]">Subscriptions</p>
+            <p className="text-sm font-medium text-(--accent)">Subscriptions</p>
             <h1 className="mt-1 text-2xl font-semibold tracking-normal">Auto-renewing access</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-(--muted)">
               Delegated Solana subscriptions authorize bounded USDC collection once, then renew
               through backend collection until cancelled in Veel or revoked in the wallet.
             </p>
@@ -46,7 +46,7 @@ export default async function SubscriptionsPage() {
         </section>
 
         <aside className="grid content-start gap-3">
-          <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
+          <section className="rounded border border-(--line) bg-(--panel) p-4">
             <p className="text-sm font-medium">Current subscription</p>
             {subscriptions.ok ? (
               currentSubscription ? (
@@ -59,9 +59,9 @@ export default async function SubscriptionsPage() {
             )}
           </section>
 
-          <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
+          <section className="rounded border border-(--line) bg-(--panel) p-4">
             <p className="text-sm font-medium">Recovery path</p>
-            <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
+            <p className="mt-3 text-sm leading-6 text-(--muted)">
               Manual Solana Pay renewal is reserved for failed delegated setup or collection. It is
               not the normal product path and does not replace backend settlement verification.
             </p>
@@ -85,15 +85,15 @@ function SubscriptionSummary({ subscription }: { subscription: Subscription }) {
 
 function PlanRow({ plan }: { plan: SubscriptionPlan }) {
   return (
-    <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
+    <article className="rounded border border-(--line) bg-(--panel) p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="font-medium">{plan.label}</p>
-          <p className="mt-1 text-sm text-[var(--muted)]">
+          <p className="mt-1 text-sm text-(--muted)">
             {formatAmount(plan.amountMinor, plan.currency)} every {plan.periodDays} days
           </p>
         </div>
-        <span className="rounded bg-[var(--background)] px-2 py-1 text-xs text-[var(--muted)]">
+        <span className="rounded bg-(--background) px-2 py-1 text-xs text-(--muted)">
           {plan.providerState}
         </span>
       </div>
@@ -108,7 +108,7 @@ function PlanRow({ plan }: { plan: SubscriptionPlan }) {
 
 function EmptyState({ label }: { label: string }) {
   return (
-    <div className="rounded border border-[var(--line)] bg-[var(--background)] p-4 text-sm text-[var(--muted)]">
+    <div className="rounded border border-(--line) bg-(--background) p-4 text-sm text-(--muted)">
       {label}
     </div>
   );
@@ -126,10 +126,10 @@ function UnavailableState({
   }
 
   return (
-    <div className="mt-4 rounded border border-[var(--line)] bg-[var(--background)] p-4">
-      <p className="text-sm font-medium text-[var(--accent)]">HTTP {result.status}</p>
+    <div className="mt-4 rounded border border-(--line) bg-(--background) p-4">
+      <p className="text-sm font-medium text-(--accent)">HTTP {result.status}</p>
       <h2 className="mt-2 text-base font-semibold tracking-normal">{title}</h2>
-      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{result.message}</p>
+      <p className="mt-2 text-sm leading-6 text-(--muted)">{result.message}</p>
     </div>
   );
 }
@@ -137,7 +137,7 @@ function UnavailableState({
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-xs uppercase text-[var(--muted)]">{label}</dt>
+      <dt className="text-xs uppercase text-(--muted)">{label}</dt>
       <dd className="mt-1 break-words font-medium">{value}</dd>
     </div>
   );
@@ -145,14 +145,14 @@ function Fact({ label, value }: { label: string; value: string }) {
 
 function AppNav() {
   return (
-    <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-[var(--line)] px-5 py-4">
+    <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-(--line) px-5 py-4">
       <a className="text-lg font-semibold tracking-normal" href="/">
         VEEL
       </a>
       <div className="flex flex-wrap justify-end gap-1">
         {appShellNavItems.map((item) => (
           <a
-            className="rounded px-3 py-2 text-sm text-[var(--muted)] transition hover:bg-[var(--panel)] hover:text-[var(--foreground)]"
+            className="rounded px-3 py-2 text-sm text-(--muted) transition hover:bg-(--panel) hover:text-(--foreground)"
             href={item.href}
             key={item.href}
           >

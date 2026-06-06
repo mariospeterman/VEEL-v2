@@ -92,14 +92,14 @@ export function NotificationEnrollment({
   }
 
   return (
-    <div className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+    <div className="grid gap-3 rounded border border-(--line) bg-(--background) p-3 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="font-medium">Browser push</p>
-          <p className="mt-1 text-[var(--muted)]">{message ?? statusMessage(state, supported)}</p>
+          <p className="mt-1 text-(--muted)">{message ?? statusMessage(state, supported)}</p>
         </div>
         <button
-          className="rounded bg-[var(--foreground)] px-3 py-2 text-sm font-medium text-[var(--background)] disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded bg-(--foreground) px-3 py-2 text-sm font-medium text-(--background) disabled:cursor-not-allowed disabled:opacity-50"
           disabled={state === "working"}
           onClick={enablePush}
           type="button"
@@ -113,10 +113,10 @@ export function NotificationEnrollment({
 
 function EnrollmentStatus({ message, state }: { message: string; state: EnrollmentState }) {
   return (
-    <div className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+    <div className="rounded border border-(--line) bg-(--background) p-3 text-sm">
       <p className="font-medium">Browser push</p>
-      <p className="mt-1 text-[var(--muted)]">{stateLabel(state)}</p>
-      <p className="mt-1 text-[var(--muted)]">{message}</p>
+      <p className="mt-1 text-(--muted)">{stateLabel(state)}</p>
+      <p className="mt-1 text-(--muted)">{message}</p>
     </div>
   );
 }

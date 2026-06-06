@@ -17,15 +17,15 @@ export default async function MessagesPage() {
     : null;
 
   return (
-    <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-      <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-[var(--line)] px-5 py-4">
+    <main className="min-h-screen bg-(--background) text-(--foreground)">
+      <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-(--line) px-5 py-4">
         <a className="text-lg font-semibold tracking-normal" href="/">
           VEEL
         </a>
         <div className="flex gap-1">
           {appShellNavItems.map((item) => (
             <a
-              className="rounded px-3 py-2 text-sm text-[var(--muted)] transition hover:bg-[var(--panel)] hover:text-[var(--foreground)]"
+              className="rounded px-3 py-2 text-sm text-(--muted) transition hover:bg-(--panel) hover:text-(--foreground)"
               href={item.href}
               key={item.href}
             >
@@ -36,9 +36,9 @@ export default async function MessagesPage() {
       </nav>
 
       <section className="mx-auto grid w-full max-w-6xl gap-5 px-5 py-6 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <aside className="rounded border border-[var(--line)] bg-[var(--panel)]">
-          <div className="border-b border-[var(--line)] p-4">
-            <p className="text-sm font-medium text-[var(--accent)]">Messages</p>
+        <aside className="rounded border border-(--line) bg-(--panel)">
+          <div className="border-b border-(--line) p-4">
+            <p className="text-sm font-medium text-(--accent)">Messages</p>
             <h1 className="mt-1 text-2xl font-semibold tracking-normal">Inbox</h1>
           </div>
           {conversations.ok ? (
@@ -58,12 +58,12 @@ export default async function MessagesPage() {
           )}
         </aside>
 
-        <section className="rounded border border-[var(--line)] bg-[var(--panel)]">
+        <section className="rounded border border-(--line) bg-(--panel)">
           {selectedConversation ? (
             <>
-              <div className="border-b border-[var(--line)] p-4">
+              <div className="border-b border-(--line) p-4">
                 <h2 className="text-lg font-semibold tracking-normal">{selectedConversation.title}</h2>
-                <p className="mt-1 text-sm capitalize text-[var(--muted)]">
+                <p className="mt-1 text-sm capitalize text-(--muted)">
                   {selectedConversation.type} conversation
                 </p>
               </div>
@@ -104,22 +104,22 @@ function ConversationRow({
 }) {
   return (
     <article
-      className={`grid gap-1 border-b border-[var(--line)] p-4 ${
-        isSelected ? "bg-[var(--accent-soft)]" : ""
+      className={`grid gap-1 border-b border-(--line) p-4 ${
+        isSelected ? "bg-(--accent-soft)" : ""
       }`}
     >
       <div className="flex items-center justify-between gap-3">
         <p className="font-medium">{conversation.title}</p>
         {conversation.unreadCount > 0 ? (
-          <span className="rounded bg-[var(--background)] px-2 py-1 text-xs font-semibold text-[var(--accent-strong)]">
+          <span className="rounded bg-(--background) px-2 py-1 text-xs font-semibold text-(--accent-strong)">
             {conversation.unreadCount}
           </span>
         ) : null}
       </div>
       {conversation.lastMessage ? (
-        <p className="truncate text-sm text-[var(--muted)]">{conversation.lastMessage.body}</p>
+        <p className="truncate text-sm text-(--muted)">{conversation.lastMessage.body}</p>
       ) : (
-        <p className="text-sm text-[var(--muted)]">No messages yet</p>
+        <p className="text-sm text-(--muted)">No messages yet</p>
       )}
     </article>
   );
@@ -127,10 +127,10 @@ function ConversationRow({
 
 function MessageBubble({ message }: { message: Message }) {
   return (
-    <article className="max-w-[640px] rounded border border-[var(--line)] bg-[var(--background)] p-3">
+    <article className="max-w-[640px] rounded border border-(--line) bg-(--background) p-3">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-medium">{message.sender.displayName}</p>
-        <span className="rounded bg-[var(--panel)] px-2 py-1 text-xs text-[var(--muted)]">
+        <span className="rounded bg-(--panel) px-2 py-1 text-xs text-(--muted)">
           {message.deliveryState}
         </span>
       </div>
@@ -141,7 +141,7 @@ function MessageBubble({ message }: { message: Message }) {
 
 function EmptyState({ label }: { label: string }) {
   return (
-    <div className="rounded border border-[var(--line)] bg-[var(--background)] p-4 text-sm text-[var(--muted)]">
+    <div className="rounded border border-(--line) bg-(--background) p-4 text-sm text-(--muted)">
       {label}
     </div>
   );
@@ -159,10 +159,10 @@ function UnavailableState({
   }
 
   return (
-    <div className="rounded border border-[var(--line)] bg-[var(--background)] p-4">
-      <p className="text-sm font-medium text-[var(--accent)]">HTTP {result.status}</p>
+    <div className="rounded border border-(--line) bg-(--background) p-4">
+      <p className="text-sm font-medium text-(--accent)">HTTP {result.status}</p>
       <h2 className="mt-2 text-base font-semibold tracking-normal">{title}</h2>
-      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{result.message}</p>
+      <p className="mt-2 text-sm leading-6 text-(--muted)">{result.message}</p>
     </div>
   );
 }

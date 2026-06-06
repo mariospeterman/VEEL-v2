@@ -133,12 +133,12 @@ export default async function AdminPage() {
   ]);
 
   return (
-    <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-      <nav className="mx-auto flex w-full max-w-7xl items-center justify-between border-b border-[var(--line)] px-5 py-4">
+    <main className="min-h-screen bg-(--background) text-(--foreground)">
+      <nav className="mx-auto flex w-full max-w-7xl items-center justify-between border-b border-(--line) px-5 py-4">
         <a className="text-lg font-semibold tracking-normal" href="/">
           VEEL
         </a>
-        <div className="rounded border border-[var(--line)] px-3 py-1 text-xs font-medium text-[var(--muted)]">
+        <div className="rounded border border-(--line) px-3 py-1 text-xs font-medium text-(--muted)">
           Admin
         </div>
       </nav>
@@ -146,7 +146,7 @@ export default async function AdminPage() {
       <section className="mx-auto grid w-full max-w-7xl gap-5 px-5 py-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-sm font-medium text-[var(--accent)]">Admin ops</p>
+            <p className="text-sm font-medium text-(--accent)">Admin ops</p>
             <h1 className="mt-1 text-2xl font-semibold tracking-normal">Payments and unlocks</h1>
           </div>
           <SummaryMetrics summary={summary} />

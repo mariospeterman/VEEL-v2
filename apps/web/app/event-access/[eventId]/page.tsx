@@ -10,7 +10,7 @@ export default async function EventPage({
   const eventResult = await getEvent(eventId);
 
   return (
-    <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+    <main className="min-h-screen bg-(--background) text-(--foreground)">
       <AppNav />
 
       <section className="mx-auto grid w-full max-w-6xl gap-5 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -35,24 +35,24 @@ function EventBody({ event }: { event: Event }) {
   return (
     <section className="grid content-start gap-5">
       <div>
-        <p className="text-sm font-medium text-[var(--accent)]">Event Access</p>
+        <p className="text-sm font-medium text-(--accent)">Event Access</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-normal">{event.title}</h1>
-        <p className="mt-2 text-sm text-[var(--muted)]">
+        <p className="mt-2 text-sm text-(--muted)">
           {event.description ?? "Backend-owned Event Access pass inventory."}
         </p>
       </div>
 
-      <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
+      <section className="rounded border border-(--line) bg-(--panel) p-4">
         <h2 className="text-base font-semibold tracking-normal">Access pass sheet</h2>
         <div className="mt-4 grid gap-3">
           {event.ticketTypes.map((ticketType) => (
-            <article className="rounded border border-[var(--line)] bg-[var(--background)] p-4" key={ticketType.id}>
+            <article className="rounded border border-(--line) bg-(--background) p-4" key={ticketType.id}>
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="font-medium">{ticketType.label}</p>
-                  <p className="mt-1 text-sm text-[var(--muted)]">{ticketType.remaining} remaining</p>
+                  <p className="mt-1 text-sm text-(--muted)">{ticketType.remaining} remaining</p>
                 </div>
-                <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">
+                <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-medium text-(--accent-strong)">
                   {ticketType.state}
                 </span>
               </div>
@@ -64,7 +64,7 @@ function EventBody({ event }: { event: Event }) {
             </article>
           ))}
           {event.ticketTypes.length === 0 ? (
-            <p className="rounded border border-[var(--line)] bg-[var(--background)] p-4 text-sm text-[var(--muted)]">
+            <p className="rounded border border-(--line) bg-(--background) p-4 text-sm text-(--muted)">
               No active pass types are available.
             </p>
           ) : null}
@@ -77,7 +77,7 @@ function EventBody({ event }: { event: Event }) {
 function EventState({ event }: { event: Event }) {
   return (
     <aside className="grid content-start gap-3">
-      <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
+      <section className="rounded border border-(--line) bg-(--panel) p-4">
         <p className="text-sm font-medium">Event Access state</p>
         <div className="mt-4 grid gap-3 text-sm">
           <Fact label="Status" value={event.state} />
@@ -86,9 +86,9 @@ function EventState({ event }: { event: Event }) {
         </div>
       </section>
 
-      <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
+      <section className="rounded border border-(--line) bg-(--panel) p-4">
         <p className="text-sm font-medium">Settlement boundary</p>
-        <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
+        <p className="mt-3 text-sm leading-6 text-(--muted)">
           Pass intents and QR/check-in state are created by the backend after age, profile,
           wallet, inventory, and settlement checks.
         </p>
@@ -99,14 +99,14 @@ function EventState({ event }: { event: Event }) {
 
 function AppNav() {
   return (
-    <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-[var(--line)] px-5 py-4">
+    <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-(--line) px-5 py-4">
       <a className="text-lg font-semibold tracking-normal" href="/">
         VEEL
       </a>
       <div className="flex gap-1">
         {appShellNavItems.map((item) => (
           <a
-            className="rounded px-3 py-2 text-sm text-[var(--muted)] transition hover:bg-[var(--panel)] hover:text-[var(--foreground)]"
+            className="rounded px-3 py-2 text-sm text-(--muted) transition hover:bg-(--panel) hover:text-(--foreground)"
             href={item.href}
             key={item.href}
           >
@@ -121,7 +121,7 @@ function AppNav() {
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <p className="text-xs uppercase text-[var(--muted)]">{label}</p>
+      <p className="text-xs uppercase text-(--muted)">{label}</p>
       <p className="mt-1 truncate font-medium">{value}</p>
     </div>
   );
@@ -137,11 +137,11 @@ function UnavailableState({
   title: string;
 }) {
   return (
-    <section className="grid min-h-[68vh] content-center rounded border border-[var(--line)] bg-[var(--panel)] p-6 lg:col-span-2">
+    <section className="grid min-h-[68vh] content-center rounded border border-(--line) bg-(--panel) p-6 lg:col-span-2">
       <div className="max-w-xl">
-        <p className="text-sm font-medium text-[var(--accent)]">HTTP {status}</p>
+        <p className="text-sm font-medium text-(--accent)">HTTP {status}</p>
         <h1 className="mt-2 text-2xl font-semibold tracking-normal">{title}</h1>
-        <p className="mt-3 text-sm leading-6 text-[var(--muted)]">{message}</p>
+        <p className="mt-3 text-sm leading-6 text-(--muted)">{message}</p>
       </div>
     </section>
   );

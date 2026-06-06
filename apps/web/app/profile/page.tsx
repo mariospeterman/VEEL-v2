@@ -14,7 +14,7 @@ export default async function ProfilePage() {
   ]);
 
   return (
-    <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+    <main className="min-h-screen bg-(--background) text-(--foreground)">
       <AppNav />
 
       {dashboardResult.ok ? (
@@ -34,14 +34,14 @@ export default async function ProfilePage() {
 
 function AppNav() {
   return (
-    <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-[var(--line)] px-5 py-4">
+    <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-(--line) px-5 py-4">
       <a className="text-lg font-semibold tracking-normal" href="/">
         VEEL
       </a>
       <div className="flex gap-1">
         {appShellNavItems.map((item) => (
           <a
-            className="rounded px-3 py-2 text-sm text-[var(--muted)] transition hover:bg-[var(--panel)] hover:text-[var(--foreground)]"
+            className="rounded px-3 py-2 text-sm text-(--muted) transition hover:bg-(--panel) hover:text-(--foreground)"
             href={item.href}
             key={item.href}
           >
@@ -64,9 +64,9 @@ function DashboardView({
     <section className="mx-auto grid w-full max-w-6xl gap-6 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_340px]">
       <section className="grid content-start gap-5">
         <div>
-          <p className="text-sm font-medium text-[var(--accent)]">Creator dashboard</p>
+          <p className="text-sm font-medium text-(--accent)">Creator dashboard</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-normal">{dashboard.creator.displayName}</h1>
-          <p className="mt-2 text-sm text-[var(--muted)]">@{dashboard.creator.handle}</p>
+          <p className="mt-2 text-sm text-(--muted)">@{dashboard.creator.handle}</p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
@@ -87,7 +87,7 @@ function DashboardView({
       <aside className="grid content-start gap-3">
         {onboarding.ok ? <CreatorSetup onboarding={onboarding.data} /> : null}
 
-        <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
+        <section className="rounded border border-(--line) bg-(--panel) p-4">
           <p className="text-sm font-medium">Monetisation readiness</p>
           <div className="mt-4 grid gap-3 text-sm">
             <Fact label="Earnings" value={dashboard.readiness.earningState} />
@@ -99,12 +99,12 @@ function DashboardView({
           </div>
         </section>
 
-        <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
+        <section className="rounded border border-(--line) bg-(--panel) p-4">
           <p className="text-sm font-medium">Blocked reasons</p>
           <div className="mt-3 grid gap-2">
             {dashboard.readiness.blockedReasons.map((reason) => (
               <span
-                className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs text-[var(--accent-strong)]"
+                className="rounded bg-(--accent-soft) px-2 py-1 text-xs text-(--accent-strong)"
                 key={reason}
               >
                 {reason}
@@ -128,9 +128,9 @@ function OnboardingOnlyView({
     <section className="mx-auto grid w-full max-w-6xl gap-6 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_340px]">
       <section className="grid content-start gap-5">
         <div>
-          <p className="text-sm font-medium text-[var(--accent)]">Become Creator</p>
+          <p className="text-sm font-medium text-(--accent)">Become Creator</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-normal">Creator setup</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-(--muted)">
             Complete the backend-owned readiness checks before monetisation views and creator
             products become available.
           </p>
@@ -147,15 +147,15 @@ function OnboardingOnlyView({
 
 function CreatorSetup({ onboarding }: { onboarding: CreatorOnboarding }) {
   return (
-    <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
+    <section className="rounded border border-(--line) bg-(--panel) p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-medium">Become Creator</p>
-          <p className="mt-1 text-xs text-[var(--muted)]">
+          <p className="mt-1 text-xs text-(--muted)">
             State: {onboarding.state} / {onboarding.readinessScore}%
           </p>
         </div>
-        <span className="rounded bg-[var(--background)] px-2 py-1 text-xs text-[var(--muted)]">
+        <span className="rounded bg-(--background) px-2 py-1 text-xs text-(--muted)">
           {onboarding.canStartEarning ? "ready" : "setup"}
         </span>
       </div>
@@ -163,15 +163,15 @@ function CreatorSetup({ onboarding }: { onboarding: CreatorOnboarding }) {
       <div className="mt-4 grid gap-2">
         {onboarding.steps.map((step) => (
           <a
-            className="flex min-h-12 items-center justify-between gap-3 rounded border border-[var(--line)] bg-[var(--background)] px-3 py-2 text-sm"
+            className="flex min-h-12 items-center justify-between gap-3 rounded border border-(--line) bg-(--background) px-3 py-2 text-sm"
             href={step.actionHref ?? "#"}
             key={step.key}
           >
             <span>
               <span className="block font-medium">{step.label}</span>
-              <span className="text-xs text-[var(--muted)]">{step.required ? "required" : "optional"}</span>
+              <span className="text-xs text-(--muted)">{step.required ? "required" : "optional"}</span>
             </span>
-            <span className="rounded bg-[var(--panel)] px-2 py-1 text-xs text-[var(--muted)]">
+            <span className="rounded bg-(--panel) px-2 py-1 text-xs text-(--muted)">
               {step.state}
             </span>
           </a>
@@ -183,8 +183,8 @@ function CreatorSetup({ onboarding }: { onboarding: CreatorOnboarding }) {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
-      <p className="text-xs uppercase text-[var(--muted)]">{label}</p>
+    <div className="rounded border border-(--line) bg-(--panel) p-4">
+      <p className="text-xs uppercase text-(--muted)">{label}</p>
       <p className="mt-2 text-xl font-semibold tracking-normal">{value}</p>
     </div>
   );
@@ -192,13 +192,13 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 function ProductRow({ product }: { product: CreatorDashboard["products"][number] }) {
   return (
-    <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
+    <article className="rounded border border-(--line) bg-(--panel) p-4">
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="font-medium">{product.productType}</p>
-          <p className="mt-1 text-sm text-[var(--muted)]">{product.confirmedPaymentCount} confirmed payments</p>
+          <p className="mt-1 text-sm text-(--muted)">{product.confirmedPaymentCount} confirmed payments</p>
         </div>
-        <span className="rounded bg-[var(--background)] px-2 py-1 text-xs text-[var(--muted)]">
+        <span className="rounded bg-(--background) px-2 py-1 text-xs text-(--muted)">
           {product.enabled ? "enabled" : "disabled"}
         </span>
       </div>
@@ -210,7 +210,7 @@ function ProductRow({ product }: { product: CreatorDashboard["products"][number]
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs uppercase text-[var(--muted)]">{label}</p>
+      <p className="text-xs uppercase text-(--muted)">{label}</p>
       <p className="mt-1 font-medium">{value}</p>
     </div>
   );
@@ -231,10 +231,10 @@ function UnavailableState({
 }) {
   return (
     <section className="mx-auto grid min-h-[calc(100vh-73px)] w-full max-w-6xl content-center px-5 py-6">
-      <div className="rounded border border-[var(--line)] bg-[var(--panel)] p-6">
-        <p className="text-sm font-medium text-[var(--accent)]">HTTP {status}</p>
+      <div className="rounded border border-(--line) bg-(--panel) p-6">
+        <p className="text-sm font-medium text-(--accent)">HTTP {status}</p>
         <h1 className="mt-2 text-2xl font-semibold tracking-normal">{title}</h1>
-        <p className="mt-3 text-sm leading-6 text-[var(--muted)]">{message}</p>
+        <p className="mt-3 text-sm leading-6 text-(--muted)">{message}</p>
       </div>
     </section>
   );
@@ -252,10 +252,10 @@ function UnavailablePanel({
   }
 
   return (
-    <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
-      <p className="text-sm font-medium text-[var(--accent)]">HTTP {result.status}</p>
+    <section className="rounded border border-(--line) bg-(--panel) p-4">
+      <p className="text-sm font-medium text-(--accent)">HTTP {result.status}</p>
       <h2 className="mt-2 text-base font-semibold tracking-normal">{title}</h2>
-      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{result.message}</p>
+      <p className="mt-2 text-sm leading-6 text-(--muted)">{result.message}</p>
     </section>
   );
 }

@@ -28,14 +28,14 @@ export default async function SettingsPage() {
   ]);
 
   return (
-    <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+    <main className="min-h-screen bg-(--background) text-(--foreground)">
       <AppNav />
 
       <section className="mx-auto grid w-full max-w-6xl gap-5 px-5 py-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="grid content-start gap-2 border-b border-[var(--line)] pb-4 lg:border-b-0 lg:border-r lg:pr-5">
+        <aside className="grid content-start gap-2 border-b border-(--line) pb-4 lg:border-b-0 lg:border-r lg:pr-5">
           {["Profile", "Security", "Feed", "Privacy", "Notifications"].map((item) => (
             <a
-              className="rounded px-3 py-2 text-sm font-medium text-[var(--muted)] transition hover:bg-[var(--panel)] hover:text-[var(--foreground)]"
+              className="rounded px-3 py-2 text-sm font-medium text-(--muted) transition hover:bg-(--panel) hover:text-(--foreground)"
               href={`#${item.toLowerCase()}`}
               key={item}
             >
@@ -46,7 +46,7 @@ export default async function SettingsPage() {
 
         <section className="grid content-start gap-5">
           <header>
-            <p className="text-sm font-medium text-[var(--accent)]">Settings</p>
+            <p className="text-sm font-medium text-(--accent)">Settings</p>
             <h1 className="mt-1 text-2xl font-semibold tracking-normal">Account controls</h1>
           </header>
 
@@ -172,14 +172,14 @@ function SecurityFacts({
 
 function AppNav() {
   return (
-    <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-[var(--line)] px-5 py-4">
+    <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-(--line) px-5 py-4">
       <a className="text-lg font-semibold tracking-normal" href="/">
         VEEL
       </a>
       <div className="flex gap-1 overflow-x-auto">
         {appShellNavItems.map((item) => (
           <a
-            className="rounded px-3 py-2 text-sm text-[var(--muted)] transition hover:bg-[var(--panel)] hover:text-[var(--foreground)]"
+            className="rounded px-3 py-2 text-sm text-(--muted) transition hover:bg-(--panel) hover:text-(--foreground)"
             href={item.href}
             key={item.href}
           >
@@ -201,10 +201,10 @@ function SettingsGroup({
   title: string;
 }) {
   return (
-    <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4" id={id}>
+    <section className="rounded border border-(--line) bg-(--panel) p-4" id={id}>
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-base font-semibold tracking-normal">{title}</h2>
-        <span className="rounded bg-[var(--background)] px-2 py-1 text-xs text-[var(--muted)]">server-owned</span>
+        <span className="rounded bg-(--background) px-2 py-1 text-xs text-(--muted)">server-owned</span>
       </div>
       {children}
     </section>
@@ -214,7 +214,7 @@ function SettingsGroup({
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <p className="text-xs uppercase text-[var(--muted)]">{label}</p>
+      <p className="text-xs uppercase text-(--muted)">{label}</p>
       <p className="mt-1 truncate font-medium">{value}</p>
     </div>
   );
@@ -222,10 +222,10 @@ function Fact({ label, value }: { label: string; value: string }) {
 
 function UnavailableState<T>({ result }: { result: Extract<ApiResult<T>, { ok: false }> }) {
   return (
-    <div className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+    <div className="rounded border border-(--line) bg-(--background) p-3 text-sm">
       <p className="font-medium">Settings API unavailable</p>
-      <p className="mt-1 text-[var(--muted)]">HTTP {result.status}</p>
-      <p className="mt-1 text-[var(--muted)]">{result.message}</p>
+      <p className="mt-1 text-(--muted)">HTTP {result.status}</p>
+      <p className="mt-1 text-(--muted)">{result.message}</p>
     </div>
   );
 }

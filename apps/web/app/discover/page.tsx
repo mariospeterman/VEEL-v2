@@ -16,15 +16,15 @@ export default async function DiscoverPageView({
   const featured = discover.ok ? (discover.data.content[0] ?? null) : null;
 
   return (
-    <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-      <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-[var(--line)] px-5 py-4">
+    <main className="min-h-screen bg-(--background) text-(--foreground)">
+      <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-(--line) px-5 py-4">
         <a className="text-lg font-semibold tracking-normal" href="/">
           VEEL
         </a>
         <div className="flex gap-1">
           {appShellNavItems.map((item) => (
             <a
-              className="rounded px-3 py-2 text-sm text-[var(--muted)] transition hover:bg-[var(--panel)] hover:text-[var(--foreground)]"
+              className="rounded px-3 py-2 text-sm text-(--muted) transition hover:bg-(--panel) hover:text-(--foreground)"
               href={item.href}
               key={item.href}
             >
@@ -38,10 +38,10 @@ export default async function DiscoverPageView({
         <div className="grid min-h-0 gap-4">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="text-sm font-medium text-[var(--accent)]">Discover</p>
+              <p className="text-sm font-medium text-(--accent)">Discover</p>
               <h1 className="mt-1 text-2xl font-semibold tracking-normal">Search and explore</h1>
             </div>
-            <div className="hidden rounded border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-sm text-[var(--muted)] sm:block">
+            <div className="hidden rounded border border-(--line) bg-(--panel) px-3 py-2 text-sm text-(--muted) sm:block">
               /v1/discover/search
             </div>
           </div>
@@ -61,12 +61,12 @@ export default async function DiscoverPageView({
           {discover.ok ? (
             <>
               <section className="grid gap-2">
-                <h2 className="text-sm font-semibold tracking-normal text-[var(--muted)]">Hashtags</h2>
+                <h2 className="text-sm font-semibold tracking-normal text-(--muted)">Hashtags</h2>
                 <div className="flex flex-wrap gap-2">
                   {discover.data.hashtags.length > 0 ? (
                     discover.data.hashtags.map((hashtag) => (
                       <a
-                        className="rounded border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-sm"
+                        className="rounded border border-(--line) bg-(--panel) px-3 py-2 text-sm"
                         href={`/discover?q=${encodeURIComponent(hashtag.slug)}`}
                         key={hashtag.slug}
                       >
@@ -80,12 +80,12 @@ export default async function DiscoverPageView({
               </section>
 
               <section className="grid gap-2">
-                <h2 className="text-sm font-semibold tracking-normal text-[var(--muted)]">Creators</h2>
+                <h2 className="text-sm font-semibold tracking-normal text-(--muted)">Creators</h2>
                 {discover.data.creators.length > 0 ? (
                   discover.data.creators.map((creator) => (
-                    <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-4" key={creator.id}>
+                    <article className="rounded border border-(--line) bg-(--panel) p-4" key={creator.id}>
                       <p className="font-medium">{creator.displayName}</p>
-                      <p className="text-sm text-[var(--muted)]">@{creator.handle}</p>
+                      <p className="text-sm text-(--muted)">@{creator.handle}</p>
                     </article>
                   ))
                 ) : (
@@ -94,22 +94,22 @@ export default async function DiscoverPageView({
               </section>
 
               <section className="grid gap-2">
-                <h2 className="text-sm font-semibold tracking-normal text-[var(--muted)]">Events and live</h2>
+                <h2 className="text-sm font-semibold tracking-normal text-(--muted)">Events and live</h2>
                 {discover.data.events.map((event) => (
-                  <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-4" key={event.id}>
+                  <article className="rounded border border-(--line) bg-(--panel) p-4" key={event.id}>
                     <p className="font-medium">{event.title}</p>
-                    <p className="mt-1 text-sm text-[var(--muted)]">{event.accessRule}</p>
+                    <p className="mt-1 text-sm text-(--muted)">{event.accessRule}</p>
                   </article>
                 ))}
                 {discover.data.liveRooms.map((room) => (
-                  <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-4" key={room.id}>
+                  <article className="rounded border border-(--line) bg-(--panel) p-4" key={room.id}>
                     <div className="flex items-center justify-between gap-3">
                       <p className="font-medium">{room.title}</p>
                       <span className="rounded bg-[#fee2e2] px-2 py-1 text-xs font-semibold text-[#991b1b]">
                         {room.state}
                       </span>
                     </div>
-                    <p className="mt-1 text-sm text-[var(--muted)]">{room.accessState}</p>
+                    <p className="mt-1 text-sm text-(--muted)">{room.accessState}</p>
                   </article>
                 ))}
                 {discover.data.events.length === 0 && discover.data.liveRooms.length === 0 ? (
@@ -128,20 +128,20 @@ export default async function DiscoverPageView({
 
 function FeaturedDiscoverCard({ item }: { item: ContentItem }) {
   return (
-    <article className="grid min-h-0 overflow-hidden rounded border border-[var(--line)] bg-[var(--panel)] lg:grid-cols-[minmax(0,1fr)_300px]">
+    <article className="grid min-h-0 overflow-hidden rounded border border-(--line) bg-(--panel) lg:grid-cols-[minmax(0,1fr)_300px]">
       <div className="relative min-h-[420px] bg-[#111827]">
         {item.posterUrl ? <img alt="" className="h-full w-full object-cover" src={item.posterUrl} /> : null}
-        <span className="absolute left-3 top-3 rounded bg-[var(--background)]/85 px-2 py-1 text-xs font-medium">
+        <span className="absolute left-3 top-3 rounded bg-(--background)/85 px-2 py-1 text-xs font-medium">
           {item.mediaType.toUpperCase()}
         </span>
       </div>
       <div className="grid content-between gap-4 p-4">
         <div>
-          <p className="text-sm font-medium text-[var(--muted)]">@{item.creator.handle}</p>
+          <p className="text-sm font-medium text-(--muted)">@{item.creator.handle}</p>
           <h2 className="mt-2 text-xl font-semibold tracking-normal">{item.creator.displayName}</h2>
           {item.caption ? <p className="mt-4 text-sm leading-6">{item.caption}</p> : null}
         </div>
-        <div className="grid gap-2 border-t border-[var(--line)] pt-4 text-sm text-[var(--muted)]">
+        <div className="grid gap-2 border-t border-(--line) pt-4 text-sm text-(--muted)">
           <div className="flex justify-between gap-3">
             <span>Access</span>
             <span>{item.accessState}</span>
@@ -158,7 +158,7 @@ function FeaturedDiscoverCard({ item }: { item: ContentItem }) {
 
 function EmptyState({ label }: { label: string }) {
   return (
-    <div className="rounded border border-[var(--line)] bg-[var(--panel)] p-4 text-sm text-[var(--muted)]">
+    <div className="rounded border border-(--line) bg-(--panel) p-4 text-sm text-(--muted)">
       {label}
     </div>
   );
@@ -176,10 +176,10 @@ function UnavailableState({
   }
 
   return (
-    <div className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
-      <p className="text-sm font-medium text-[var(--accent)]">HTTP {result.status}</p>
+    <div className="rounded border border-(--line) bg-(--panel) p-4">
+      <p className="text-sm font-medium text-(--accent)">HTTP {result.status}</p>
       <h2 className="mt-2 text-base font-semibold tracking-normal">{title}</h2>
-      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{result.message}</p>
+      <p className="mt-2 text-sm leading-6 text-(--muted)">{result.message}</p>
     </div>
   );
 }

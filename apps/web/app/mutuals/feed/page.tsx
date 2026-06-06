@@ -5,13 +5,13 @@ export default async function MutualsFeedPageRoute() {
   const feedResult = await getMutualsFeed();
 
   return (
-    <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+    <main className="min-h-screen bg-(--background) text-(--foreground)">
       <AppNav />
 
       <section className="mx-auto grid w-full max-w-6xl gap-5 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <section className="grid content-start gap-5">
           <div>
-            <p className="text-sm font-medium text-[var(--accent)]">Mutuals</p>
+            <p className="text-sm font-medium text-(--accent)">Mutuals</p>
             <h1 className="mt-1 text-2xl font-semibold tracking-normal">Explicit Mutuals feed</h1>
           </div>
 
@@ -27,7 +27,7 @@ export default async function MutualsFeedPageRoute() {
         </section>
 
         <aside className="grid content-start gap-3">
-          <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
+          <section className="rounded border border-(--line) bg-(--panel) p-4">
             <p className="text-sm font-medium">Mutuals safety</p>
             <div className="mt-4 grid gap-3 text-sm">
               <Fact label="Access" value="profile and age verified" />
@@ -45,9 +45,9 @@ export default async function MutualsFeedPageRoute() {
 function MutualsFeed({ feed }: { feed: MutualsFeedPage }) {
   if (feed.items.length === 0) {
     return (
-      <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-5">
+      <section className="rounded border border-(--line) bg-(--panel) p-5">
         <h2 className="text-base font-semibold tracking-normal">No Mutuals media yet</h2>
-        <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+        <p className="mt-2 text-sm leading-6 text-(--muted)">
           Eligible media appears here only when both safety and Mutuals visibility rules pass.
         </p>
       </section>
@@ -57,20 +57,20 @@ function MutualsFeed({ feed }: { feed: MutualsFeedPage }) {
   return (
     <>
       {feed.items.map((item) => (
-        <article className="overflow-hidden rounded border border-[var(--line)] bg-[var(--panel)]" key={item.contentId}>
+        <article className="overflow-hidden rounded border border-(--line) bg-(--panel)" key={item.contentId}>
           {item.posterUrl ? (
             <img alt="" className="aspect-[16/10] w-full object-cover" src={item.posterUrl} />
           ) : null}
           <div className="grid gap-4 p-4">
             <div>
-              <p className="text-sm text-[var(--muted)]">@{item.handle}</p>
+              <p className="text-sm text-(--muted)">@{item.handle}</p>
               <h2 className="mt-1 text-lg font-semibold tracking-normal">{item.title}</h2>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <button className="rounded border border-[var(--line)] px-3 py-2 text-sm font-medium" type="button">
+              <button className="rounded border border-(--line) px-3 py-2 text-sm font-medium" type="button">
                 Not interested
               </button>
-              <button className="rounded bg-[var(--accent)] px-3 py-2 text-sm font-medium text-white" type="button">
+              <button className="rounded bg-(--accent) px-3 py-2 text-sm font-medium text-white" type="button">
                 Interested
               </button>
             </div>
@@ -83,14 +83,14 @@ function MutualsFeed({ feed }: { feed: MutualsFeedPage }) {
 
 function AppNav() {
   return (
-    <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-[var(--line)] px-5 py-4">
+    <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-(--line) px-5 py-4">
       <a className="text-lg font-semibold tracking-normal" href="/">
         VEEL
       </a>
       <div className="flex gap-1">
         {appShellNavItems.map((item) => (
           <a
-            className="rounded px-3 py-2 text-sm text-[var(--muted)] transition hover:bg-[var(--panel)] hover:text-[var(--foreground)]"
+            className="rounded px-3 py-2 text-sm text-(--muted) transition hover:bg-(--panel) hover:text-(--foreground)"
             href={item.href}
             key={item.href}
           >
@@ -105,7 +105,7 @@ function AppNav() {
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <p className="text-xs uppercase text-[var(--muted)]">{label}</p>
+      <p className="text-xs uppercase text-(--muted)">{label}</p>
       <p className="mt-1 truncate font-medium">{value}</p>
     </div>
   );
@@ -121,10 +121,10 @@ function UnavailableState({
   title: string;
 }) {
   return (
-    <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-5">
-      <p className="text-sm font-medium text-[var(--accent)]">HTTP {status}</p>
+    <section className="rounded border border-(--line) bg-(--panel) p-5">
+      <p className="text-sm font-medium text-(--accent)">HTTP {status}</p>
       <h2 className="mt-2 text-base font-semibold tracking-normal">{title}</h2>
-      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{message}</p>
+      <p className="mt-2 text-sm leading-6 text-(--muted)">{message}</p>
     </section>
   );
 }

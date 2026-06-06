@@ -95,10 +95,10 @@ export function EventAccessPanel({
 export function SummaryMetrics({ summary }: { summary: ApiResult<AdminOpsSummary> }) {
   if (!summary.ok) {
     return (
-      <div className="rounded border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-sm">
-        <p className="text-xs uppercase text-[var(--muted)]">Ops summary</p>
+      <div className="rounded border border-(--line) bg-(--panel) px-3 py-2 text-sm">
+        <p className="text-xs uppercase text-(--muted)">Ops summary</p>
         <p className="mt-1 font-semibold tracking-normal">HTTP {summary.status}</p>
-        <p className="mt-1 text-xs text-[var(--muted)]">{summary.message}</p>
+        <p className="mt-1 text-xs text-(--muted)">{summary.message}</p>
       </div>
     );
   }

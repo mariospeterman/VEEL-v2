@@ -19,15 +19,15 @@ export default async function WalletPage() {
     : null;
 
   return (
-    <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-      <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-[var(--line)] px-5 py-4">
+    <main className="min-h-screen bg-(--background) text-(--foreground)">
+      <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-(--line) px-5 py-4">
         <a className="text-lg font-semibold tracking-normal" href="/">
           VEEL
         </a>
         <div className="flex gap-1">
           {appShellNavItems.map((item) => (
             <a
-              className="rounded px-3 py-2 text-sm text-[var(--muted)] transition hover:bg-[var(--panel)] hover:text-[var(--foreground)]"
+              className="rounded px-3 py-2 text-sm text-(--muted) transition hover:bg-(--panel) hover:text-(--foreground)"
               href={item.href}
               key={item.href}
             >
@@ -41,10 +41,10 @@ export default async function WalletPage() {
         <section className="grid min-h-0 content-start gap-4 overflow-hidden">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="text-sm font-medium text-[var(--accent)]">Wallet</p>
+              <p className="text-sm font-medium text-(--accent)">Wallet</p>
               <h1 className="mt-1 text-2xl font-semibold tracking-normal">Funding and receipts</h1>
             </div>
-            <span className="hidden rounded border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-sm text-[var(--muted)] sm:block">
+            <span className="hidden rounded border border-(--line) bg-(--panel) px-3 py-2 text-sm text-(--muted) sm:block">
               /v1/wallets
             </span>
           </div>
@@ -69,10 +69,10 @@ export default async function WalletPage() {
         </section>
 
         <aside className="grid min-h-0 content-start gap-4 overflow-hidden">
-          <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
-            <p className="text-sm font-medium text-[var(--muted)]">Top up</p>
+          <section className="rounded border border-(--line) bg-(--panel) p-4">
+            <p className="text-sm font-medium text-(--muted)">Top up</p>
             <h2 className="mt-1 text-lg font-semibold tracking-normal">User-owned wallet funding</h2>
-            <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
+            <p className="mt-3 text-sm leading-6 text-(--muted)">
               Funding sessions are created by the backend for a linked wallet only after explicit
               user action. Funding sessions do not unlock content, Event Access Passes, messages,
               memberships, or support.
@@ -87,8 +87,8 @@ export default async function WalletPage() {
           </section>
 
           <section className="grid gap-3 overflow-hidden">
-            <div className="border-b border-[var(--line)] pb-3">
-              <p className="text-sm font-medium text-[var(--muted)]">Recent wallet transactions</p>
+            <div className="border-b border-(--line) pb-3">
+              <p className="text-sm font-medium text-(--muted)">Recent wallet transactions</p>
             </div>
             {walletTransactions.ok ? (
               walletTransactions.data.items.length > 0 ? (
@@ -110,13 +110,13 @@ export default async function WalletPage() {
 
 function PrimaryWalletCard({ wallet }: { wallet: Wallet }) {
   return (
-    <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-5">
+    <article className="rounded border border-(--line) bg-(--panel) p-5">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-sm text-[var(--muted)]">Primary wallet</p>
+          <p className="text-sm text-(--muted)">Primary wallet</p>
           <p className="mt-2 truncate text-xl font-semibold tracking-normal">{wallet.address}</p>
         </div>
-        <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-semibold text-[var(--accent-strong)]">
+        <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-semibold text-(--accent-strong)">
           primary
         </span>
       </div>
@@ -131,13 +131,13 @@ function PrimaryWalletCard({ wallet }: { wallet: Wallet }) {
 
 function WalletRow({ wallet }: { wallet: Wallet }) {
   return (
-    <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
+    <article className="rounded border border-(--line) bg-(--panel) p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-medium">{wallet.provider}</p>
-          <p className="mt-1 truncate text-sm text-[var(--muted)]">{wallet.address}</p>
+          <p className="mt-1 truncate text-sm text-(--muted)">{wallet.address}</p>
         </div>
-        <span className="rounded bg-[var(--background)] px-2 py-1 text-xs text-[var(--muted)]">
+        <span className="rounded bg-(--background) px-2 py-1 text-xs text-(--muted)">
           {wallet.isPrimary ? "primary" : "linked"}
         </span>
       </div>
@@ -147,13 +147,13 @@ function WalletRow({ wallet }: { wallet: Wallet }) {
 
 function TransactionRow({ transaction }: { transaction: WalletTransaction }) {
   return (
-    <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
+    <article className="rounded border border-(--line) bg-(--panel) p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-medium">{transaction.direction}</p>
-          <p className="mt-1 text-sm text-[var(--muted)]">{transaction.source}</p>
+          <p className="mt-1 text-sm text-(--muted)">{transaction.source}</p>
         </div>
-        <span className="rounded bg-[var(--background)] px-2 py-1 text-xs text-[var(--muted)]">
+        <span className="rounded bg-(--background) px-2 py-1 text-xs text-(--muted)">
           {transaction.state}
         </span>
       </div>
@@ -167,7 +167,7 @@ function TransactionRow({ transaction }: { transaction: WalletTransaction }) {
 
 function EmptyState({ label }: { label: string }) {
   return (
-    <div className="rounded border border-[var(--line)] bg-[var(--panel)] p-4 text-sm text-[var(--muted)]">
+    <div className="rounded border border-(--line) bg-(--panel) p-4 text-sm text-(--muted)">
       {label}
     </div>
   );
@@ -185,10 +185,10 @@ function UnavailableState({
   }
 
   return (
-    <div className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
-      <p className="text-sm font-medium text-[var(--accent)]">HTTP {result.status}</p>
+    <div className="rounded border border-(--line) bg-(--panel) p-4">
+      <p className="text-sm font-medium text-(--accent)">HTTP {result.status}</p>
       <h2 className="mt-2 text-base font-semibold tracking-normal">{title}</h2>
-      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{result.message}</p>
+      <p className="mt-2 text-sm leading-6 text-(--muted)">{result.message}</p>
     </div>
   );
 }
@@ -196,7 +196,7 @@ function UnavailableState({
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <p className="text-xs uppercase text-[var(--muted)]">{label}</p>
+      <p className="text-xs uppercase text-(--muted)">{label}</p>
       <p className="mt-1 truncate font-medium">{value}</p>
     </div>
   );

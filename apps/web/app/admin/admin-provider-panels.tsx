@@ -56,12 +56,12 @@ export function MutualsSafetyPanel({ mutualsSafety }: { mutualsSafety: ApiResult
 
   return (
     <div className="grid gap-2">
-      <article className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm md:grid-cols-3">
+      <article className="grid gap-3 rounded border border-(--line) bg-(--background) p-3 text-sm md:grid-cols-3">
         <Fact label="Open reports" value={mutualsSafety.data.openReports.toString()} />
         <Fact label="Active Mutuals" value={mutualsSafety.data.activeMutuals.toString()} />
         <Fact label="Stale Mutuals" value={mutualsSafety.data.staleMutuals.toString()} />
       </article>
-      <div className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm text-[var(--muted)]">
+      <div className="rounded border border-(--line) bg-(--background) p-3 text-sm text-(--muted)">
         Money never buys people, visibility, Mutuals, or social priority.
       </div>
     </div>
