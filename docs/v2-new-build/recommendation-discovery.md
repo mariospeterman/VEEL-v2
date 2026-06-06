@@ -25,10 +25,12 @@ Veel should feel like a premium social video app, but recommendation quality mus
 Current implementation state:
 
 - `GET /v1/content/feed` is implemented as the first protected Home read model.
+- `GET /v1/discover/search`, `/hashtags`, `/hashtags/{slug}`, `/creators`, `/events`, and `/live` are implemented as protected Discover read models.
 - The route requires authenticated app readiness server-side: profile, verified age state, and wallet readiness.
+- Captions are parsed server-side for normalized hashtags. Frontend does not submit trusted hashtag state.
 - The first read query returns approved public `content_items` joined to creator profiles and the first media poster only.
 - Playback URLs, paid entitlement state, provider media tokens, personalized ranking, and hidden/blocked creator filters are deferred to their owning slices.
-- The web Home surface renders one contract-shaped media card and keeps playback in `not_ready` state until the media/provider slice owns it.
+- The web Home and Discover surfaces render contract-shaped media/discovery projections and keep raw provider payloads out of the browser.
 
 ## Feed Surfaces
 

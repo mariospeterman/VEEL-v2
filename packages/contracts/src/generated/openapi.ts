@@ -4478,6 +4478,8 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["DiscoverPage"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     listDiscoverHashtags: {
@@ -4493,6 +4495,8 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["HashtagPage"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     getDiscoverHashtag: {
@@ -4509,6 +4513,8 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["DiscoverPage"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     listDiscoverCreators: {
@@ -4524,6 +4530,8 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["CreatorPage"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     listDiscoverEvents: {
@@ -4539,6 +4547,8 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["EventPage"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     listDiscoverLive: {
@@ -4553,6 +4563,8 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["LiveRoomPage"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     updateFeedPreferences: {

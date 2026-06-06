@@ -44,6 +44,18 @@ test("renders the create upload workspace projection", async ({ page }) => {
   await expect(page.locator("span").getByText("explicit", { exact: true })).toBeVisible();
 });
 
+test("renders the discover projection", async ({ page }) => {
+  await page.goto("/discover");
+
+  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Search and explore" })).toBeVisible();
+  await expect(page.getByText("Studio lighting test #studio")).toBeVisible();
+  await expect(page.getByRole("link", { name: "#studio" })).toBeVisible();
+  await expect(page.getByText("Studio meetup")).toBeVisible();
+  await expect(page.getByText("Friday live studio")).toBeVisible();
+  await expect(page.getByText("pass_required")).toBeVisible();
+});
+
 test("renders the messages and paid-message projection", async ({ page }) => {
   await page.goto("/messages");
 

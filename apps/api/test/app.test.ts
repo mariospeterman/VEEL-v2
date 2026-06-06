@@ -47,6 +47,7 @@ import type {
 import type { Message, MessageRepository } from "../src/modules/message/types";
 import type { EventRepository } from "../src/modules/event/types";
 import type { DatingRepository } from "../src/modules/dating/types";
+import type { DiscoverRepository } from "../src/modules/discover/types";
 import type { EngagementRepository } from "../src/modules/engagement/types";
 import type {
   Subscription,
@@ -869,6 +870,116 @@ describe("buildApi", () => {
     });
 
     expect(response.statusCode).toBe(403);
+
+    await app.close();
+  });
+
+  it("returns protected Discover results for an app-ready user", async () => {
+    const discoverRepository: DiscoverRepository = {
+      async search(input) {
+        expect(input).toEqual({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          query: "studio",
+          cursor: undefined,
+          limit: 12
+        });
+
+        return {
+          content: [homeFeedItem],
+          creators: [homeFeedItem.creator],
+          hashtags: [{ slug: "studio", displayName: "#studio", state: "active" }],
+          events: [eventFixture()],
+          liveRooms: [liveRoomFixture({ state: "live", hasPass: false })],
+          nextCursor: null
+        };
+      },
+      async listHashtags() {
+        throw new Error("not implemented");
+      },
+      async getHashtag() {
+        throw new Error("not implemented");
+      },
+      async listCreators() {
+        throw new Error("not implemented");
+      },
+      async listEvents() {
+        throw new Error("not implemented");
+      },
+      async listLive() {
+        throw new Error("not implemented");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      discoverRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/discover/search?q=studio",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      content: [homeFeedItem],
+      creators: [homeFeedItem.creator],
+      hashtags: [{ slug: "studio", displayName: "#studio", state: "active" }],
+      events: [eventFixture()],
+      liveRooms: [{ title: "Live room", accessState: "pass_required" }],
+      nextCursor: null
+    });
+
+    await app.close();
+  });
+
+  it("blocks Discover before app readiness", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: requiredAgeRepository,
+      walletRepository: walletRepositoryWithWallet
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/discover/search?q=studio",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({
+      code: "forbidden"
+    });
 
     await app.close();
   });

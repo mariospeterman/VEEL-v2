@@ -163,6 +163,27 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
         throw new ContentRepositoryConfigurationError();
       }
 
+      const hashtags = extractHashtagSlugs(input.caption);
+      if (hashtags.length > 0) {
+        await sql.begin(async (transaction) => {
+          for (const slug of hashtags) {
+            const displayName = `#${slug}`;
+            await transaction`
+              insert into hashtags (id, slug, display_name)
+              values (${randomUUID()}, ${slug}, ${displayName})
+              on conflict (slug) do nothing
+            `;
+            await transaction`
+              insert into content_hashtags (content_item_id, hashtag_id, source)
+              select ${row.id}, id, 'caption'
+              from hashtags
+              where slug = ${slug}
+              on conflict (content_item_id, hashtag_id) do nothing
+            `;
+          }
+        });
+      }
+
       return toContentItem(row, null);
     },
     async createMediaAsset(input) {
@@ -662,6 +683,24 @@ function accessStateForRule(row: {
   }
 
   return "locked";
+}
+
+function extractHashtagSlugs(caption: string | null | undefined): string[] {
+  if (!caption) {
+    return [];
+  }
+
+  const slugs = new Set<string>();
+  const matches = caption.matchAll(/(^|[\s([{"'])#([A-Za-z0-9_]{1,64})/g);
+
+  for (const match of matches) {
+    const slug = match[2]?.toLowerCase();
+    if (slug && /^[a-z0-9][a-z0-9_]{0,63}$/.test(slug)) {
+      slugs.add(slug);
+    }
+  }
+
+  return [...slugs].slice(0, 20);
 }
 
 function toEntitlement(row: {

@@ -22,6 +22,9 @@ import type { ContentRepository, MediaUploadProviderAdapter } from "./modules/co
 import { createPostgresDatingRepository } from "./modules/dating/dating-repository.js";
 import { registerDatingRoutes } from "./modules/dating/dating-routes.js";
 import type { DatingRepository } from "./modules/dating/types.js";
+import { createPostgresDiscoverRepository } from "./modules/discover/discover-repository.js";
+import { registerDiscoverRoutes } from "./modules/discover/discover-routes.js";
+import type { DiscoverRepository } from "./modules/discover/types.js";
 import { createPostgresEventRepository } from "./modules/event/event-repository.js";
 import { registerEventRoutes } from "./modules/event/event-routes.js";
 import type { EventRepository } from "./modules/event/types.js";
@@ -77,6 +80,7 @@ export interface BuildApiOptions {
   ageProviderWaterfall?: AgeProviderWaterfall;
   contentRepository?: ContentRepository;
   datingRepository?: DatingRepository;
+  discoverRepository?: DiscoverRepository;
   eventRepository?: EventRepository;
   engagementRepository?: EngagementRepository;
   mediaUploadProvider?: MediaUploadProviderAdapter;
@@ -134,6 +138,8 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     options.contentRepository ?? createPostgresContentRepository(app.config.DATABASE_URL);
   const datingRepository =
     options.datingRepository ?? createPostgresDatingRepository(app.config.DATABASE_URL);
+  const discoverRepository =
+    options.discoverRepository ?? createPostgresDiscoverRepository(app.config.DATABASE_URL);
   const eventRepository =
     options.eventRepository ?? createPostgresEventRepository(app.config.DATABASE_URL);
   const engagementRepository =
@@ -194,6 +200,11 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   if (datingRepository.close) {
     app.addHook("onClose", async () => {
       await datingRepository.close?.();
+    });
+  }
+  if (discoverRepository.close) {
+    app.addHook("onClose", async () => {
+      await discoverRepository.close?.();
     });
   }
   if (eventRepository.close) {
@@ -277,6 +288,13 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     walletRepository,
     contentRepository,
     mediaUploadProvider
+  });
+  await registerDiscoverRoutes(app, {
+    authVerifier,
+    sessionRepository,
+    ageRepository,
+    walletRepository,
+    discoverRepository
   });
   await registerEventRoutes(app, {
     authVerifier,
