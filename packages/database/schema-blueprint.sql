@@ -1341,14 +1341,29 @@ create table data_subject_requests (
 
 create table support_cases (
   id uuid primary key,
+  organization_id uuid references organizations(id),
   requester_user_id uuid references users(id),
   assigned_staff_user_id uuid references users(id),
-  subject_type text,
+  subject_type text not null default 'none',
   subject_id uuid,
   category text not null,
   state text not null default 'open',
+  priority text not null default 'standard',
   created_at timestamptz not null default now(),
+  updated_at timestamptz,
   closed_at timestamptz
+);
+
+create table organization_support_policies (
+  id uuid primary key,
+  organization_id uuid not null references organizations(id) unique,
+  support_state text not null default 'standard',
+  sla_tier text not null default 'standard',
+  state text not null default 'review_required',
+  policy_reason text,
+  money_boundary text not null default 'software_sla_only_no_social_priority',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create table admin_action_records (

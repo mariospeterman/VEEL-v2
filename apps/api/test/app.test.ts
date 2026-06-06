@@ -3638,6 +3638,18 @@ describe("buildApi", () => {
         async listProviderEvents() {
           throw new Error("not implemented");
         },
+        async listSupportCases() {
+          throw new Error("not implemented");
+        },
+        async updateSupportCase() {
+          throw new Error("not implemented");
+        },
+        async listSupportPolicies() {
+          throw new Error("not implemented");
+        },
+        async updateSupportPolicy() {
+          throw new Error("not implemented");
+        },
         async getDatingSafety() {
           throw new Error("not implemented");
         },
@@ -3697,6 +3709,18 @@ describe("buildApi", () => {
         async listProviderEvents() {
           throw new Error("not implemented");
         },
+        async listSupportCases() {
+          throw new Error("not implemented");
+        },
+        async updateSupportCase() {
+          throw new Error("not implemented");
+        },
+        async listSupportPolicies() {
+          throw new Error("not implemented");
+        },
+        async updateSupportPolicy() {
+          throw new Error("not implemented");
+        },
         async getDatingSafety() {
           throw new Error("not implemented");
         },
@@ -3752,6 +3776,18 @@ describe("buildApi", () => {
           throw new Error("not implemented");
         },
         async listProviderEvents() {
+          throw new Error("not implemented");
+        },
+        async listSupportCases() {
+          throw new Error("not implemented");
+        },
+        async updateSupportCase() {
+          throw new Error("not implemented");
+        },
+        async listSupportPolicies() {
+          throw new Error("not implemented");
+        },
+        async updateSupportPolicy() {
           throw new Error("not implemented");
         },
         async getDatingSafety() {
@@ -3848,6 +3884,135 @@ describe("buildApi", () => {
       plan: "enterprise",
       kybState: "pending"
     });
+
+    await app.close();
+  });
+
+  it("returns sanitized admin support case and policy projections", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: fakeAdminRepository
+    });
+    await app.ready();
+
+    const headers = { authorization: "Bearer valid-token" };
+    const [supportCases, supportPolicies] = await Promise.all([
+      app.inject({ method: "GET", url: "/v1/admin/support/cases", headers }),
+      app.inject({ method: "GET", url: "/v1/admin/support/policies", headers })
+    ]);
+
+    expect(supportCases.statusCode).toBe(200);
+    expect(supportCases.json().items[0]).toMatchObject({
+      category: "organization",
+      priority: "enterprise_review",
+      subjectType: "organization"
+    });
+    expect(supportPolicies.statusCode).toBe(200);
+    expect(supportPolicies.json().items[0]).toMatchObject({
+      supportState: "enterprise_review",
+      moneyBoundary: "software_sla_only_no_social_priority"
+    });
+    expect(`${supportCases.body}${supportPolicies.body}`).not.toMatch(
+      /raw|payload|secret|privateKey|serviceRole|balance|withdraw|payout|escrow|recommendation|visibility|messagePriority/i
+    );
+
+    await app.close();
+  });
+
+  it("updates support cases and support policies through audited admin mutations", async () => {
+    const supportCaseCalls: Array<Parameters<AdminRepository["updateSupportCase"]>[0]> = [];
+    const supportPolicyCalls: Array<Parameters<AdminRepository["updateSupportPolicy"]>[0]> = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: {
+        ...fakeAdminRepository,
+        async updateSupportCase(input) {
+          supportCaseCalls.push(input);
+          return fakeAdminRepository.updateSupportCase(input);
+        },
+        async updateSupportPolicy(input) {
+          supportPolicyCalls.push(input);
+          return fakeAdminRepository.updateSupportPolicy(input);
+        }
+      }
+    });
+    await app.ready();
+
+    const supportCase = await app.inject({
+      method: "PATCH",
+      url: "/v1/admin/support/cases/00000000-0000-4000-8000-000000000150",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "support-case-1"
+      },
+      payload: {
+        state: "pending_internal",
+        reason: "KYB evidence requires internal support review"
+      }
+    });
+    const supportPolicy = await app.inject({
+      method: "PATCH",
+      url: "/v1/admin/support/policies/00000000-0000-4000-8000-000000000151",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "support-policy-1"
+      },
+      payload: {
+        supportState: "priority",
+        slaTier: "priority",
+        state: "active",
+        reason: "Enterprise contract reviewed; software SLA only"
+      }
+    });
+
+    expect(supportCase.statusCode).toBe(200);
+    expect(supportCase.json()).toMatchObject({
+      id: "00000000-0000-4000-8000-000000000150",
+      state: "pending_internal"
+    });
+    expect(supportPolicy.statusCode).toBe(200);
+    expect(supportPolicy.json()).toMatchObject({
+      id: "00000000-0000-4000-8000-000000000151",
+      supportState: "priority",
+      moneyBoundary: "software_sla_only_no_social_priority"
+    });
+    expect(supportCaseCalls[0]).toMatchObject({
+      supabaseUserId: "00000000-0000-4000-8000-000000000001",
+      idempotencyKey: "support-case-1"
+    });
+    expect(supportPolicyCalls[0]).toMatchObject({
+      supabaseUserId: "00000000-0000-4000-8000-000000000001",
+      idempotencyKey: "support-policy-1"
+    });
+    expect(`${supportCase.body}${supportPolicy.body}`).not.toMatch(
+      /balance|withdraw|payout|escrow|privateKey|serviceRole|recommendation|visibility|messagePriority/i
+    );
+
+    await app.close();
+  });
+
+  it("rejects support policy updates without idempotency", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: fakeAdminRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/admin/support/policies/00000000-0000-4000-8000-000000000151",
+      headers: {
+        authorization: "Bearer valid-token"
+      },
+      payload: {
+        supportState: "priority",
+        slaTier: "priority",
+        state: "active",
+        reason: "Missing idempotency should fail"
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
 
     await app.close();
   });
@@ -6451,6 +6616,74 @@ const fakeAdminRepository: AdminRepository = {
         }
       ],
       nextCursor: null
+    };
+  },
+  async listSupportCases() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-000000000150",
+          organizationId: "00000000-0000-4000-8000-000000000140",
+          requesterUserId: "00000000-0000-4000-8000-000000000011",
+          assignedStaffUserId: null,
+          category: "organization",
+          state: "open",
+          priority: "enterprise_review",
+          subjectType: "organization",
+          subjectId: "00000000-0000-4000-8000-000000000140",
+          createdAt: "2026-06-06T09:00:00.000Z",
+          updatedAt: null,
+          closedAt: null
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async updateSupportCase(input) {
+    return {
+      id: input.supportCaseId,
+      organizationId: "00000000-0000-4000-8000-000000000140",
+      requesterUserId: "00000000-0000-4000-8000-000000000011",
+      assignedStaffUserId: "00000000-0000-4000-8000-000000000001",
+      category: "organization",
+      state: input.body.state,
+      priority: "enterprise_review",
+      subjectType: "organization",
+      subjectId: "00000000-0000-4000-8000-000000000140",
+      createdAt: "2026-06-06T09:00:00.000Z",
+      updatedAt: "2026-06-06T10:00:00.000Z",
+      closedAt: input.body.state === "resolved" || input.body.state === "closed" ? "2026-06-06T10:00:00.000Z" : null
+    };
+  },
+  async listSupportPolicies() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-000000000151",
+          organizationId: "00000000-0000-4000-8000-000000000140",
+          supportState: "enterprise_review",
+          slaTier: "enterprise_review",
+          state: "review_required",
+          policyReason: "KYB pending",
+          moneyBoundary: "software_sla_only_no_social_priority",
+          createdAt: "2026-06-06T09:00:00.000Z",
+          updatedAt: "2026-06-06T09:00:00.000Z"
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async updateSupportPolicy(input) {
+    return {
+      id: input.supportPolicyId,
+      organizationId: "00000000-0000-4000-8000-000000000140",
+      supportState: input.body.supportState,
+      slaTier: input.body.slaTier,
+      state: input.body.state,
+      policyReason: input.body.reason,
+      moneyBoundary: "software_sla_only_no_social_priority",
+      createdAt: "2026-06-06T09:00:00.000Z",
+      updatedAt: "2026-06-06T10:30:00.000Z"
     };
   },
   async getDatingSafety() {

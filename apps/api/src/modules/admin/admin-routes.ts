@@ -8,7 +8,9 @@ import {
 import type {
   AdminOrganizationKybActionRequest,
   AdminOrganizationMemberActionRequest,
-  AdminRepository
+  AdminRepository,
+  AdminSupportCaseActionRequest,
+  AdminSupportPolicyActionRequest
 } from "./types.js";
 
 interface RegisterAdminRoutesOptions {
@@ -56,6 +58,114 @@ export async function registerAdminRoutes(
 
     const query = request.query as { cursor?: string };
     return reply.code(200).send(await options.adminRepository.listProviderEvents(adminListInput(query)));
+  });
+
+  app.get("/v1/admin/support/cases", async (request, reply) => {
+    const allowed = await requireAdminAccess(request, reply, options);
+    if (!allowed) return reply;
+
+    const query = request.query as { cursor?: string };
+    return reply.code(200).send(await options.adminRepository.listSupportCases(adminListInput(query)));
+  });
+
+  app.patch("/v1/admin/support/cases/:supportCaseId", async (request, reply) => {
+    const access = await requireAdminAccessWithUser(request, reply, options);
+    if (!access) return reply;
+
+    const idempotencyKey = request.headers["idempotency-key"];
+    if (!idempotencyKey || Array.isArray(idempotencyKey)) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: "Idempotency-Key header is required"
+      });
+    }
+
+    const { supportCaseId } = request.params as { supportCaseId?: string };
+    if (!supportCaseId) {
+      return reply.code(404).send({
+        code: "not_found",
+        message: "Support case was not found"
+      });
+    }
+
+    const body = request.body as Partial<AdminSupportCaseActionRequest> | undefined;
+    const validationError = validateSupportCaseAction(body);
+    if (validationError) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: validationError
+      });
+    }
+
+    const supportCase = await options.adminRepository.updateSupportCase({
+      supabaseUserId: access.supabaseUserId,
+      supportCaseId,
+      body: body as AdminSupportCaseActionRequest,
+      idempotencyKey
+    });
+
+    if (!supportCase) {
+      return reply.code(404).send({
+        code: "not_found",
+        message: "Support case was not found"
+      });
+    }
+
+    return reply.code(200).send(supportCase);
+  });
+
+  app.get("/v1/admin/support/policies", async (request, reply) => {
+    const allowed = await requireAdminAccess(request, reply, options);
+    if (!allowed) return reply;
+
+    const query = request.query as { cursor?: string };
+    return reply.code(200).send(await options.adminRepository.listSupportPolicies(adminListInput(query)));
+  });
+
+  app.patch("/v1/admin/support/policies/:supportPolicyId", async (request, reply) => {
+    const access = await requireAdminAccessWithUser(request, reply, options);
+    if (!access) return reply;
+
+    const idempotencyKey = request.headers["idempotency-key"];
+    if (!idempotencyKey || Array.isArray(idempotencyKey)) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: "Idempotency-Key header is required"
+      });
+    }
+
+    const { supportPolicyId } = request.params as { supportPolicyId?: string };
+    if (!supportPolicyId) {
+      return reply.code(404).send({
+        code: "not_found",
+        message: "Support policy was not found"
+      });
+    }
+
+    const body = request.body as Partial<AdminSupportPolicyActionRequest> | undefined;
+    const validationError = validateSupportPolicyAction(body);
+    if (validationError) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: validationError
+      });
+    }
+
+    const supportPolicy = await options.adminRepository.updateSupportPolicy({
+      supabaseUserId: access.supabaseUserId,
+      supportPolicyId,
+      body: body as AdminSupportPolicyActionRequest,
+      idempotencyKey
+    });
+
+    if (!supportPolicy) {
+      return reply.code(404).send({
+        code: "not_found",
+        message: "Support policy was not found"
+      });
+    }
+
+    return reply.code(200).send(supportPolicy);
   });
 
   app.get("/v1/admin/dating/safety", async (request, reply) => {
@@ -373,6 +483,60 @@ function validateOrganizationKybAction(
     body.kybState !== "rejected"
   ) {
     return "kybState is invalid";
+  }
+
+  if (!body.reason || body.reason.trim().length < 3 || body.reason.length > 500) {
+    return "reason must be 3-500 characters";
+  }
+
+  return null;
+}
+
+function validateSupportCaseAction(
+  body: Partial<AdminSupportCaseActionRequest> | undefined
+): string | null {
+  if (!body || typeof body !== "object") {
+    return "Request body is required";
+  }
+
+  if (
+    body.state !== "open" &&
+    body.state !== "pending_user" &&
+    body.state !== "pending_internal" &&
+    body.state !== "resolved" &&
+    body.state !== "closed"
+  ) {
+    return "state is invalid";
+  }
+
+  if (!body.reason || body.reason.trim().length < 3 || body.reason.length > 500) {
+    return "reason must be 3-500 characters";
+  }
+
+  return null;
+}
+
+function validateSupportPolicyAction(
+  body: Partial<AdminSupportPolicyActionRequest> | undefined
+): string | null {
+  if (!body || typeof body !== "object") {
+    return "Request body is required";
+  }
+
+  if (
+    body.supportState !== "standard" &&
+    body.supportState !== "priority" &&
+    body.supportState !== "enterprise_review"
+  ) {
+    return "supportState is invalid";
+  }
+
+  if (body.slaTier !== "standard" && body.slaTier !== "priority" && body.slaTier !== "enterprise_review") {
+    return "slaTier is invalid";
+  }
+
+  if (body.state !== "active" && body.state !== "paused" && body.state !== "review_required") {
+    return "state is invalid";
   }
 
   if (!body.reason || body.reason.trim().length < 3 || body.reason.length > 500) {

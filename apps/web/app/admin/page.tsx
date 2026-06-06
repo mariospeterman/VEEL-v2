@@ -10,6 +10,8 @@ import {
   getAdminPaymentIntents,
   getAdminProviderEvents,
   getAdminReceipts,
+  getAdminSupportCases,
+  getAdminSupportPolicies,
   getAdminUnlocks,
   getAdminVatDeterminations,
   type AdminComplianceLedgerEntry,
@@ -22,6 +24,8 @@ import {
   type AdminPaymentIntent,
   type AdminProviderEvent,
   type AdminReceipt,
+  type AdminSupportCase,
+  type AdminSupportPolicy,
   type AdminUnlock,
   type AdminVatDetermination,
   type ApiResult
@@ -40,7 +44,9 @@ export default async function AdminPage() {
     vatDeterminations,
     receipts,
     organizations,
-    organizationMembers
+    organizationMembers,
+    supportCases,
+    supportPolicies
   ] = await Promise.all([
     getAdminOpsSummary(),
     getAdminPaymentIntents(),
@@ -53,7 +59,9 @@ export default async function AdminPage() {
     getAdminVatDeterminations(),
     getAdminReceipts(),
     getAdminOrganizations(),
-    getAdminOrganizationMembers("00000000-0000-4000-8000-000000000140")
+    getAdminOrganizationMembers("00000000-0000-4000-8000-000000000140"),
+    getAdminSupportCases(),
+    getAdminSupportPolicies()
   ]);
 
   return (
@@ -121,6 +129,10 @@ export default async function AdminPage() {
             <Panel title="Organizations and KYB">
               <OrganizationPanel organizations={organizations} organizationMembers={organizationMembers} />
             </Panel>
+
+            <Panel title="Support policy">
+              <SupportPanel supportCases={supportCases} supportPolicies={supportPolicies} />
+            </Panel>
           </div>
 
           <div className="grid content-start gap-4">
@@ -176,6 +188,37 @@ function OrganizationPanel({
       ))}
       {organizationMembers.data.items.map((member) => (
         <OrganizationMemberRow key={member.id} member={member} />
+      ))}
+    </div>
+  );
+}
+
+function SupportPanel({
+  supportCases,
+  supportPolicies
+}: {
+  supportCases: ApiResult<AdminPage<AdminSupportCase>>;
+  supportPolicies: ApiResult<AdminPage<AdminSupportPolicy>>;
+}) {
+  if (!supportCases.ok) {
+    return <UnavailableState result={supportCases} />;
+  }
+
+  if (!supportPolicies.ok) {
+    return <UnavailableState result={supportPolicies} />;
+  }
+
+  if (supportCases.data.items.length === 0 && supportPolicies.data.items.length === 0) {
+    return <EmptyState label="No support cases or policies" />;
+  }
+
+  return (
+    <div className="grid gap-2">
+      {supportPolicies.data.items.map((policy) => (
+        <SupportPolicyRow key={policy.id} policy={policy} />
+      ))}
+      {supportCases.data.items.map((supportCase) => (
+        <SupportCaseRow key={supportCase.id} supportCase={supportCase} />
       ))}
     </div>
   );
@@ -425,6 +468,32 @@ function OrganizationMemberRow({ member }: { member: AdminOrganizationMember }) 
       </div>
       <Fact label="State" value={member.state} />
       <Fact label="Social rank" value="not for sale" />
+    </article>
+  );
+}
+
+function SupportPolicyRow({ policy }: { policy: AdminSupportPolicy }) {
+  return (
+    <article className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm md:grid-cols-[1fr_130px_180px]">
+      <div className="min-w-0">
+        <p className="font-medium">{policy.slaTier}</p>
+        <p className="mt-1 truncate text-[var(--muted)]">{policy.organizationId}</p>
+      </div>
+      <Fact label="State" value={policy.state} />
+      <Fact label="Boundary" value="software SLA only" />
+    </article>
+  );
+}
+
+function SupportCaseRow({ supportCase }: { supportCase: AdminSupportCase }) {
+  return (
+    <article className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm md:grid-cols-[1fr_130px_180px]">
+      <div className="min-w-0">
+        <p className="font-medium">{supportCase.category}</p>
+        <p className="mt-1 truncate text-[var(--muted)]">{supportCase.subjectType}</p>
+      </div>
+      <Fact label="State" value={supportCase.state} />
+      <Fact label="Priority" value={supportCase.priority} />
     </article>
   );
 }

@@ -464,6 +464,27 @@ describe("database migrations", () => {
     expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role|creator_balance|withdraw|payout_queue|escrow|payment_proof/i);
   });
 
+  it("adds support case and organization support policy tables with RLS and social-money boundary", () => {
+    const sql = readMigration("0041_support_case_policy_surface.sql");
+
+    expect(sql).toContain("create table support_cases");
+    expect(sql).toContain("create table organization_support_policies");
+    expect(sql).toContain("software_sla_only_no_social_priority");
+    expect(sql).toContain("alter table support_cases enable row level security");
+    expect(sql).toContain("alter table organization_support_policies enable row level security");
+    expect(sql).toContain("support_cases_staff_select");
+    expect(sql).toContain("organization_support_policies_staff_select");
+    expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role|creator_balance|withdraw|payout_queue|escrow|payment_proof|recommendation_boost|visibility_boost|message_priority/i);
+  });
+
+  it("covers support case foreign keys reported by the Supabase performance advisor", () => {
+    const sql = readMigration("0042_support_case_advisor_fixes.sql");
+
+    expect(sql).toContain("support_cases_requester_user_idx");
+    expect(sql).toContain("support_cases_assigned_staff_user_idx");
+    expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role|creator_balance|withdraw|payout_queue|escrow|payment_proof|recommendation_boost|visibility_boost|message_priority/i);
+  });
+
   it("adds only user-owned projections to the Supabase realtime publication", () => {
     const sql = readMigration("0039_realtime_projection_publication.sql");
 

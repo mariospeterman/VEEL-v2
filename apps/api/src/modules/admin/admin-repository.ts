@@ -14,6 +14,8 @@ import type {
   AdminReceipt,
   AdminRepository,
   AdminReferralProgram,
+  AdminSupportCase,
+  AdminSupportPolicy,
   AdminTierWaiver,
   AdminVatDetermination,
   AdminUnlock
@@ -95,6 +97,33 @@ interface ProviderEventRow {
   normalized_state: AdminProviderEvent["state"];
   received_at: Date;
   processed_at: Date | null;
+}
+
+interface SupportCaseRow {
+  id: string;
+  organization_id: string | null;
+  requester_user_id: string | null;
+  assigned_staff_user_id: string | null;
+  subject_type: string;
+  subject_id: string | null;
+  category: AdminSupportCase["category"];
+  state: AdminSupportCase["state"];
+  priority: AdminSupportCase["priority"];
+  created_at: Date;
+  updated_at: Date | null;
+  closed_at: Date | null;
+}
+
+interface SupportPolicyRow {
+  id: string;
+  organization_id: string;
+  support_state: AdminSupportPolicy["supportState"];
+  sla_tier: AdminSupportPolicy["slaTier"];
+  state: AdminSupportPolicy["state"];
+  policy_reason: string | null;
+  money_boundary: AdminSupportPolicy["moneyBoundary"];
+  created_at: Date;
+  updated_at: Date;
 }
 
 interface ComplianceLedgerRow {
@@ -253,6 +282,18 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
         throw new AdminRepositoryConfigurationError();
       },
       async listProviderEvents() {
+        throw new AdminRepositoryConfigurationError();
+      },
+      async listSupportCases() {
+        throw new AdminRepositoryConfigurationError();
+      },
+      async updateSupportCase() {
+        throw new AdminRepositoryConfigurationError();
+      },
+      async listSupportPolicies() {
+        throw new AdminRepositoryConfigurationError();
+      },
+      async updateSupportPolicy() {
         throw new AdminRepositoryConfigurationError();
       },
       async getDatingSafety() {
@@ -449,6 +490,227 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
       `;
 
       return page(rows, toProviderEvent);
+    },
+    async listSupportCases(input) {
+      const rows = await sql<SupportCaseRow[]>`
+        select
+          id,
+          organization_id,
+          requester_user_id,
+          assigned_staff_user_id,
+          subject_type,
+          subject_id,
+          category,
+          state,
+          priority,
+          created_at,
+          updated_at,
+          closed_at
+        from support_cases
+        where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
+        order by created_at desc
+        limit ${pageSize + 1}
+      `;
+
+      return page(rows, toSupportCase);
+    },
+    async updateSupportCase(input) {
+      const rows = await sql.begin(async (transaction) => {
+        const updatedRows = await transaction<SupportCaseRow[]>`
+          with actor as (
+            select id
+            from users
+            where supabase_user_id = ${input.supabaseUserId}
+            limit 1
+          ),
+          current_case as (
+            select id, state
+            from support_cases
+            where id = ${input.supportCaseId}
+            for update
+          ),
+          updated_case as (
+            update support_cases sc
+            set
+              state = ${input.body.state},
+              updated_at = now(),
+              closed_at = case
+                when ${input.body.state} in ('resolved', 'closed') then coalesce(sc.closed_at, now())
+                else null
+              end
+            from current_case cc
+            where sc.id = cc.id
+            returning
+              sc.id,
+              sc.organization_id,
+              sc.requester_user_id,
+              sc.assigned_staff_user_id,
+              sc.subject_type,
+              sc.subject_id,
+              sc.category,
+              sc.state,
+              sc.priority,
+              sc.created_at,
+              sc.updated_at,
+              sc.closed_at,
+              cc.state as previous_state
+          ),
+          audit_insert as (
+            insert into audit_events (
+              id,
+              actor_user_id,
+              subject_type,
+              subject_id,
+              action,
+              metadata
+            )
+            select
+              gen_random_uuid(),
+              actor.id,
+              'support_case',
+              updated_case.id,
+              'support_case_updated',
+              jsonb_build_object(
+                'reason', ${input.body.reason},
+                'idempotencyKey', ${input.idempotencyKey},
+                'previousState', updated_case.previous_state,
+                'newState', updated_case.state,
+                'organizationId', updated_case.organization_id
+              )
+            from updated_case
+            cross join actor
+            returning id
+          )
+          select
+            id,
+            organization_id,
+            requester_user_id,
+            assigned_staff_user_id,
+            subject_type,
+            subject_id,
+            category,
+            state,
+            priority,
+            created_at,
+            updated_at,
+            closed_at
+          from updated_case
+          where exists (select 1 from audit_insert)
+        `;
+
+        return updatedRows;
+      });
+
+      return rows[0] ? toSupportCase(rows[0]) : null;
+    },
+    async listSupportPolicies(input) {
+      const rows = await sql<SupportPolicyRow[]>`
+        select
+          id,
+          organization_id,
+          support_state,
+          sla_tier,
+          state,
+          policy_reason,
+          money_boundary,
+          created_at,
+          updated_at
+        from organization_support_policies
+        where (${input.cursor ?? null}::timestamptz is null or updated_at < ${input.cursor ?? null}::timestamptz)
+        order by updated_at desc
+        limit ${pageSize + 1}
+      `;
+
+      return page(rows, toSupportPolicy);
+    },
+    async updateSupportPolicy(input) {
+      const rows = await sql.begin(async (transaction) => {
+        const updatedRows = await transaction<SupportPolicyRow[]>`
+          with actor as (
+            select id
+            from users
+            where supabase_user_id = ${input.supabaseUserId}
+            limit 1
+          ),
+          current_policy as (
+            select id, support_state, sla_tier, state
+            from organization_support_policies
+            where id = ${input.supportPolicyId}
+            for update
+          ),
+          updated_policy as (
+            update organization_support_policies osp
+            set
+              support_state = ${input.body.supportState},
+              sla_tier = ${input.body.slaTier},
+              state = ${input.body.state},
+              policy_reason = ${input.body.reason},
+              updated_at = now()
+            from current_policy cp
+            where osp.id = cp.id
+            returning
+              osp.id,
+              osp.organization_id,
+              osp.support_state,
+              osp.sla_tier,
+              osp.state,
+              osp.policy_reason,
+              osp.money_boundary,
+              osp.created_at,
+              osp.updated_at,
+              cp.support_state as previous_support_state,
+              cp.sla_tier as previous_sla_tier,
+              cp.state as previous_state
+          ),
+          audit_insert as (
+            insert into audit_events (
+              id,
+              actor_user_id,
+              subject_type,
+              subject_id,
+              action,
+              metadata
+            )
+            select
+              gen_random_uuid(),
+              actor.id,
+              'organization_support_policy',
+              updated_policy.id,
+              'organization_support_policy_updated',
+              jsonb_build_object(
+                'reason', ${input.body.reason},
+                'idempotencyKey', ${input.idempotencyKey},
+                'organizationId', updated_policy.organization_id,
+                'previousSupportState', updated_policy.previous_support_state,
+                'newSupportState', updated_policy.support_state,
+                'previousSlaTier', updated_policy.previous_sla_tier,
+                'newSlaTier', updated_policy.sla_tier,
+                'previousState', updated_policy.previous_state,
+                'newState', updated_policy.state,
+                'moneyBoundary', updated_policy.money_boundary
+              )
+            from updated_policy
+            cross join actor
+            returning id
+          )
+          select
+            id,
+            organization_id,
+            support_state,
+            sla_tier,
+            state,
+            policy_reason,
+            money_boundary,
+            created_at,
+            updated_at
+          from updated_policy
+          where exists (select 1 from audit_insert)
+        `;
+
+        return updatedRows;
+      });
+
+      return rows[0] ? toSupportPolicy(rows[0]) : null;
     },
     async getDatingSafety() {
       const rows = await sql<{
@@ -952,6 +1214,37 @@ function toProviderEvent(row: ProviderEventRow): AdminProviderEvent {
     state: row.normalized_state,
     receivedAt: row.received_at.toISOString(),
     processedAt: row.processed_at?.toISOString() ?? null
+  };
+}
+
+function toSupportCase(row: SupportCaseRow): AdminSupportCase {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    requesterUserId: row.requester_user_id,
+    assignedStaffUserId: row.assigned_staff_user_id,
+    category: row.category,
+    state: row.state,
+    priority: row.priority,
+    subjectType: row.subject_type,
+    subjectId: row.subject_id,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at?.toISOString() ?? null,
+    closedAt: row.closed_at?.toISOString() ?? null
+  };
+}
+
+function toSupportPolicy(row: SupportPolicyRow): AdminSupportPolicy {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    supportState: row.support_state,
+    slaTier: row.sla_tier,
+    state: row.state,
+    policyReason: row.policy_reason,
+    moneyBoundary: row.money_boundary,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString()
   };
 }
 

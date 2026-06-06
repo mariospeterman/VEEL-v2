@@ -1650,7 +1650,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Support case queue */
+        /** Sanitized support case queue */
         get: operations["listAdminSupportCases"];
         put?: never;
         post?: never;
@@ -1675,6 +1675,40 @@ export interface paths {
         head?: never;
         /** Update support case state */
         patch: operations["updateAdminSupportCase"];
+        trace?: never;
+    };
+    "/v1/admin/support/policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Organization support SLA and policy list */
+        get: operations["listAdminSupportPolicies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/support/policies/{supportPolicyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update organization support policy with audit trail */
+        patch: operations["updateAdminSupportPolicy"];
         trace?: never;
     };
     "/v1/admin/data-requests": {
@@ -3337,9 +3371,46 @@ export interface components {
         AdminSupportCase: {
             /** Format: uuid */
             id: string;
+            /** Format: uuid */
+            organizationId?: string | null;
+            /** Format: uuid */
+            requesterUserId?: string | null;
+            /** Format: uuid */
+            assignedStaffUserId?: string | null;
+            /** @enum {string} */
+            category: "account" | "payment" | "access" | "safety" | "compliance" | "organization" | "technical";
             /** @enum {string} */
             state: "open" | "pending_user" | "pending_internal" | "resolved" | "closed";
+            /** @enum {string} */
+            priority: "standard" | "priority" | "enterprise_review";
             subjectType: string;
+            /** Format: uuid */
+            subjectId?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt?: string | null;
+            /** Format: date-time */
+            closedAt?: string | null;
+        };
+        AdminSupportPolicy: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** @enum {string} */
+            supportState: "standard" | "priority" | "enterprise_review";
+            /** @enum {string} */
+            slaTier: "standard" | "priority" | "enterprise_review";
+            /** @enum {string} */
+            state: "active" | "paused" | "review_required";
+            policyReason?: string | null;
+            /** @enum {string} */
+            moneyBoundary: "software_sla_only_no_social_priority";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
         };
         AdminDataRequest: {
             /** Format: uuid */
@@ -3569,6 +3640,15 @@ export interface components {
         AdminSupportCaseActionRequest: {
             /** @enum {string} */
             state: "open" | "pending_user" | "pending_internal" | "resolved" | "closed";
+            reason: string;
+        };
+        AdminSupportPolicyActionRequest: {
+            /** @enum {string} */
+            supportState: "standard" | "priority" | "enterprise_review";
+            /** @enum {string} */
+            slaTier: "standard" | "priority" | "enterprise_review";
+            /** @enum {string} */
+            state: "active" | "paused" | "review_required";
             reason: string;
         };
         AdminDataRequestActionRequest: {
@@ -4422,6 +4502,27 @@ export interface components {
                 };
             };
         };
+        /** @description Admin support policy */
+        AdminSupportPolicy: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["AdminSupportPolicy"];
+            };
+        };
+        /** @description Admin support policies */
+        AdminSupportPolicyPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    items: components["schemas"]["AdminSupportPolicy"][];
+                    nextCursor?: string | null;
+                };
+            };
+        };
         /** @description Admin data request */
         AdminDataRequest: {
             headers: {
@@ -4651,6 +4752,7 @@ export interface components {
         ReportId: string;
         ProviderEventId: string;
         SupportCaseId: string;
+        SupportPolicyId: string;
         DataRequestId: string;
         OrganizationId: string;
         MembershipId: string;
@@ -4864,6 +4966,11 @@ export interface components {
         AdminSupportCaseAction: {
             content: {
                 "application/json": components["schemas"]["AdminSupportCaseActionRequest"];
+            };
+        };
+        AdminSupportPolicyAction: {
+            content: {
+                "application/json": components["schemas"]["AdminSupportPolicyActionRequest"];
             };
         };
         AdminDataRequestAction: {
@@ -6644,6 +6751,41 @@ export interface operations {
         responses: {
             200: components["responses"]["AdminSupportCase"];
             403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listAdminSupportPolicies: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminSupportPolicyPage"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    updateAdminSupportPolicy: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                supportPolicyId: components["parameters"]["SupportPolicyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["AdminSupportPolicyAction"];
+        responses: {
+            200: components["responses"]["AdminSupportPolicy"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listAdminDataRequests: {

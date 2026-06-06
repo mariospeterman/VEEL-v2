@@ -1224,7 +1224,7 @@ paths:
     get:
       operationId: listAdminSupportCases
       tags: [Admin]
-      summary: Support case queue
+      summary: Sanitized support case queue
       parameters:
         - $ref: "#/components/parameters/Cursor"
       responses:
@@ -1243,6 +1243,31 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/AdminSupportCase" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /v1/admin/support/policies:
+    get:
+      operationId: listAdminSupportPolicies
+      tags: [Admin]
+      summary: Organization support SLA and policy list
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminSupportPolicyPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/support/policies/{supportPolicyId}:
+    patch:
+      operationId: updateAdminSupportPolicy
+      tags: [Admin]
+      summary: Update organization support policy with audit trail
+      parameters:
+        - $ref: "#/components/parameters/SupportPolicyId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/AdminSupportPolicyAction"
+      responses:
+        "200": { $ref: "#/components/responses/AdminSupportPolicy" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /v1/admin/data-requests:
     get:
       operationId: listAdminDataRequests
@@ -1546,6 +1571,7 @@ components:
     ReportId: { name: reportId, in: path, required: true, schema: { type: string, format: uuid } }
     ProviderEventId: { name: providerEventId, in: path, required: true, schema: { type: string, format: uuid } }
     SupportCaseId: { name: supportCaseId, in: path, required: true, schema: { type: string, format: uuid } }
+    SupportPolicyId: { name: supportPolicyId, in: path, required: true, schema: { type: string, format: uuid } }
     DataRequestId: { name: dataRequestId, in: path, required: true, schema: { type: string, format: uuid } }
     OrganizationId: { name: organizationId, in: path, required: true, schema: { type: string, format: uuid } }
     MembershipId: { name: membershipId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1604,6 +1630,7 @@ components:
     AdminModerationAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminModerationActionRequest" } } } }
     AdminReportAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminReportActionRequest" } } } }
     AdminSupportCaseAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminSupportCaseActionRequest" } } } }
+    AdminSupportPolicyAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminSupportPolicyActionRequest" } } } }
     AdminDataRequestAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminDataRequestActionRequest" } } } }
     AdminOrganizationKybAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOrganizationKybActionRequest" } } } }
     AdminOrganizationMemberAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOrganizationMemberActionRequest" } } } }
@@ -1707,6 +1734,8 @@ components:
     AdminProviderEventPage: { description: Admin provider events, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminProviderEvent" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminSupportCase: { description: Admin support case, content: { application/json: { schema: { $ref: "#/components/schemas/AdminSupportCase" } } } }
     AdminSupportCasePage: { description: Admin support cases, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminSupportCase" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminSupportPolicy: { description: Admin support policy, content: { application/json: { schema: { $ref: "#/components/schemas/AdminSupportPolicy" } } } }
+    AdminSupportPolicyPage: { description: Admin support policies, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminSupportPolicy" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminDataRequest: { description: Admin data request, content: { application/json: { schema: { $ref: "#/components/schemas/AdminDataRequest" } } } }
     AdminDataRequestPage: { description: Admin data requests, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminDataRequest" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminDatingSafety: { description: Admin dating safety, content: { application/json: { schema: { $ref: "#/components/schemas/AdminDatingSafety" } } } }
@@ -3086,11 +3115,33 @@ components:
         processedAt: { type: string, format: date-time, nullable: true }
     AdminSupportCase:
       type: object
-      required: [id, state, subjectType]
+      required: [id, category, state, priority, subjectType, createdAt]
       properties:
         id: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid, nullable: true }
+        requesterUserId: { type: string, format: uuid, nullable: true }
+        assignedStaffUserId: { type: string, format: uuid, nullable: true }
+        category: { type: string, enum: [account, payment, access, safety, compliance, organization, technical] }
         state: { type: string, enum: [open, pending_user, pending_internal, resolved, closed] }
+        priority: { type: string, enum: [standard, priority, enterprise_review] }
         subjectType: { type: string }
+        subjectId: { type: string, format: uuid, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time, nullable: true }
+        closedAt: { type: string, format: date-time, nullable: true }
+    AdminSupportPolicy:
+      type: object
+      required: [id, organizationId, supportState, slaTier, state, moneyBoundary, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        supportState: { type: string, enum: [standard, priority, enterprise_review] }
+        slaTier: { type: string, enum: [standard, priority, enterprise_review] }
+        state: { type: string, enum: [active, paused, review_required] }
+        policyReason: { type: string, nullable: true }
+        moneyBoundary: { type: string, enum: [software_sla_only_no_social_priority] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     AdminDataRequest:
       type: object
       required: [id, type, state]
@@ -3276,6 +3327,14 @@ components:
       required: [state, reason]
       properties:
         state: { type: string, enum: [open, pending_user, pending_internal, resolved, closed] }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+    AdminSupportPolicyActionRequest:
+      type: object
+      required: [supportState, slaTier, state, reason]
+      properties:
+        supportState: { type: string, enum: [standard, priority, enterprise_review] }
+        slaTier: { type: string, enum: [standard, priority, enterprise_review] }
+        state: { type: string, enum: [active, paused, review_required] }
         reason: { type: string, minLength: 3, maxLength: 500 }
     AdminDataRequestActionRequest:
       type: object

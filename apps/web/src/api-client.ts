@@ -44,6 +44,8 @@ export type AdminNotificationHealth = components["schemas"]["AdminNotificationHe
 export type AdminPaymentIntent = components["schemas"]["AdminPaymentIntent"];
 export type AdminUnlock = components["schemas"]["AdminUnlock"];
 export type AdminProviderEvent = components["schemas"]["AdminProviderEvent"];
+export type AdminSupportCase = components["schemas"]["AdminSupportCase"];
+export type AdminSupportPolicy = components["schemas"]["AdminSupportPolicy"];
 export type AdminComplianceLedgerEntry = components["schemas"]["AdminComplianceLedgerEntry"];
 export type AdminComplianceReport = components["schemas"]["AdminComplianceReport"];
 export type AdminVatDetermination = components["schemas"]["AdminVatDetermination"];
@@ -191,6 +193,14 @@ export async function getAdminUnlocks(): Promise<ApiResult<AdminPage<AdminUnlock
 
 export async function getAdminProviderEvents(): Promise<ApiResult<AdminPage<AdminProviderEvent>>> {
   return getJson<AdminPage<AdminProviderEvent>>("/v1/admin/provider-events");
+}
+
+export async function getAdminSupportCases(): Promise<ApiResult<AdminPage<AdminSupportCase>>> {
+  return getJson<AdminPage<AdminSupportCase>>("/v1/admin/support/cases");
+}
+
+export async function getAdminSupportPolicies(): Promise<ApiResult<AdminPage<AdminSupportPolicy>>> {
+  return getJson<AdminPage<AdminSupportPolicy>>("/v1/admin/support/policies");
 }
 
 export async function getAdminComplianceLedger(): Promise<ApiResult<AdminPage<AdminComplianceLedgerEntry>>> {

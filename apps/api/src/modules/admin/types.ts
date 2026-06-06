@@ -11,6 +11,8 @@ export type AdminComplianceReport = components["schemas"]["AdminComplianceReport
 export type AdminVatDetermination = components["schemas"]["AdminVatDetermination"];
 export type AdminReceipt = components["schemas"]["AdminReceipt"];
 export type AdminInvoice = components["schemas"]["AdminInvoice"];
+export type AdminSupportCase = components["schemas"]["AdminSupportCase"];
+export type AdminSupportPolicy = components["schemas"]["AdminSupportPolicy"];
 export type AdminReferralProgram = components["schemas"]["AdminReferralProgram"];
 export type AdminPartnerCampaign = components["schemas"]["AdminPartnerCampaign"];
 export type AdminTierWaiver = components["schemas"]["AdminTierWaiver"];
@@ -20,6 +22,9 @@ export type AdminOrganizationKybActionRequest =
   components["schemas"]["AdminOrganizationKybActionRequest"];
 export type AdminOrganizationMemberActionRequest =
   components["schemas"]["AdminOrganizationMemberActionRequest"];
+export type AdminSupportCaseActionRequest = components["schemas"]["AdminSupportCaseActionRequest"];
+export type AdminSupportPolicyActionRequest =
+  components["schemas"]["AdminSupportPolicyActionRequest"];
 
 export interface AdminPage<Item> {
   items: Item[];
@@ -33,6 +38,20 @@ export interface AdminRepository {
   listPaymentIntents(input: { query?: string; cursor?: string }): Promise<AdminPage<AdminPaymentIntent>>;
   listUnlocks(input: { query?: string; cursor?: string }): Promise<AdminPage<AdminUnlock>>;
   listProviderEvents(input: { cursor?: string }): Promise<AdminPage<AdminProviderEvent>>;
+  listSupportCases(input: { cursor?: string }): Promise<AdminPage<AdminSupportCase>>;
+  updateSupportCase(input: {
+    supabaseUserId: string;
+    supportCaseId: string;
+    body: AdminSupportCaseActionRequest;
+    idempotencyKey: string;
+  }): Promise<AdminSupportCase | null>;
+  listSupportPolicies(input: { cursor?: string }): Promise<AdminPage<AdminSupportPolicy>>;
+  updateSupportPolicy(input: {
+    supabaseUserId: string;
+    supportPolicyId: string;
+    body: AdminSupportPolicyActionRequest;
+    idempotencyKey: string;
+  }): Promise<AdminSupportPolicy | null>;
   getDatingSafety(): Promise<AdminDatingSafety>;
   listComplianceLedger(input: { cursor?: string }): Promise<AdminPage<AdminComplianceLedgerEntry>>;
   listDac7Reports(input: { cursor?: string }): Promise<AdminPage<AdminComplianceReport>>;
