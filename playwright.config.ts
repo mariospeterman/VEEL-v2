@@ -13,7 +13,7 @@ export default defineConfig({
     trace: "on-first-retry"
   },
   webServer: {
-    command: "pnpm --filter @veel/web dev --hostname 127.0.0.1",
+    command: "node scripts/run-local-tool.mjs web-dev",
     url: "http://127.0.0.1:3000",
     reuseExistingServer: !process.env.CI,
     timeout: 60_000

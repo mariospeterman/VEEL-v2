@@ -9,9 +9,9 @@
     "contracts:generate": "pnpm --filter @veel/contracts generate",
     "database:check": "pnpm --filter @veel/database check",
     "lint": "eslint .",
-    "smoke": "playwright test",
+    "smoke": "node scripts/run-local-tool.mjs playwright test",
     "typecheck": "pnpm -r typecheck",
-    "test": "vitest run"
+    "test": "node scripts/run-local-tool.mjs vitest run"
   },
   "engines": {
     "node": ">=22"
