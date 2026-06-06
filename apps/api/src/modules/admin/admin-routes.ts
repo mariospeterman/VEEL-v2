@@ -536,13 +536,7 @@ export async function registerAdminRoutes(
     const allowed = await requireAdminAccess(request, reply, options);
     if (!allowed) return reply;
 
-    const safety = await options.adminRepository.getDatingSafety();
-    return reply.code(200).send({
-      openReports: safety.openReports,
-      activeMutuals: safety.activeMatches,
-      staleMutuals: safety.staleMatches,
-      socialMoneyBoundary: "money_never_buys_people_visibility_matches_or_social_priority"
-    });
+    return reply.code(200).send(await options.adminRepository.getMutualsSafety());
   }
 
   app.get("/v1/admin/mutuals/safety", getMutualsSafety);
@@ -551,7 +545,12 @@ export async function registerAdminRoutes(
     const allowed = await requireAdminAccess(request, reply, options);
     if (!allowed) return reply;
 
-    return reply.code(200).send(await options.adminRepository.getDatingSafety());
+    const safety = await options.adminRepository.getMutualsSafety();
+    return reply.code(200).send({
+      openReports: safety.openReports,
+      activeMatches: safety.activeMutuals,
+      staleMatches: safety.staleMutuals
+    });
   });
 
   app.get("/v1/admin/compliance/ledger", async (request, reply) => {

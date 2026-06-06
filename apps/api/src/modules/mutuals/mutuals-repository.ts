@@ -1,50 +1,50 @@
 import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 import type {
-  DatingFeedItem,
-  DatingMatch,
-  DatingProfile,
-  DatingRepository,
-  DatingSwipeResult
+  MutualsFeedItem,
+  Mutual,
+  MutualsProfile,
+  MutualsRepository,
+  MutualsInterestResult
 } from "./types.js";
 
-export class DatingRepositoryConfigurationError extends Error {
+export class MutualsRepositoryConfigurationError extends Error {
   constructor() {
     super("DATABASE_URL_NOT_CONFIGURED");
-    this.name = "DatingRepositoryConfigurationError";
+    this.name = "MutualsRepositoryConfigurationError";
   }
 }
 
-export class DatingIdempotencyConflictError extends Error {
+export class MutualsIdempotencyConflictError extends Error {
   constructor() {
-    super("DATING_IDEMPOTENCY_CONFLICT");
-    this.name = "DatingIdempotencyConflictError";
+    super("MUTUALS_IDEMPOTENCY_CONFLICT");
+    this.name = "MutualsIdempotencyConflictError";
   }
 }
 
-interface DatingProfileRow {
+interface MutualsProfileRow {
   enabled: boolean;
   consent_version: string | null;
   active_match_limit: number;
   visible_on_media: boolean;
-  safety_state: DatingProfile["safetyState"];
+  safety_state: MutualsProfile["safetyState"];
   created_at: Date;
   updated_at: Date;
 }
 
-interface DatingFeedRow {
+interface MutualsFeedRow {
   content_id: string;
   creator_user_id: string;
   handle: string;
   display_name: string;
   avatar_url: string | null;
   title: string;
-  media_kind: DatingFeedItem["mediaKind"];
+  media_kind: MutualsFeedItem["mediaKind"];
   poster_url: string | null;
   created_at: Date;
 }
 
-interface DatingSwipeResultRow {
+interface MutualsInterestResultRow {
   swipe_id: string;
   swipe_idempotency_key: string;
   request_hash: string;
@@ -53,44 +53,44 @@ interface DatingSwipeResultRow {
   match_user_b_id: string | null;
   match_source_content_item_id: string | null;
   match_conversation_id: string | null;
-  match_state: DatingMatch["state"] | null;
+  match_state: Mutual["state"] | null;
   match_stale_at: Date | null;
   match_expires_at: Date | null;
   match_created_at: Date | null;
 }
 
-interface DatingMatchRow {
+interface MutualRow {
   id: string;
   user_a_id: string;
   user_b_id: string;
   source_content_item_id: string | null;
   conversation_id: string | null;
-  state: DatingMatch["state"];
+  state: Mutual["state"];
   stale_at: Date | null;
   expires_at: Date | null;
   created_at: Date;
 }
 
-export function createPostgresDatingRepository(databaseUrl?: string): DatingRepository {
+export function createPostgresMutualsRepository(databaseUrl?: string): MutualsRepository {
   if (!databaseUrl) {
     return {
       async activate() {
-        throw new DatingRepositoryConfigurationError();
+        throw new MutualsRepositoryConfigurationError();
       },
       async updatePreferences() {
-        throw new DatingRepositoryConfigurationError();
+        throw new MutualsRepositoryConfigurationError();
       },
       async listFeed() {
-        throw new DatingRepositoryConfigurationError();
+        throw new MutualsRepositoryConfigurationError();
       },
-      async createSwipe() {
-        throw new DatingRepositoryConfigurationError();
+      async createInterest() {
+        throw new MutualsRepositoryConfigurationError();
       },
-      async listMatches() {
-        throw new DatingRepositoryConfigurationError();
+      async listMutuals() {
+        throw new MutualsRepositoryConfigurationError();
       },
-      async archiveMatch() {
-        throw new DatingRepositoryConfigurationError();
+      async archiveMutual() {
+        throw new MutualsRepositoryConfigurationError();
       }
     };
   }
@@ -103,7 +103,7 @@ export function createPostgresDatingRepository(databaseUrl?: string): DatingRepo
 
   return {
     async activate(input) {
-      const rows = await sql<DatingProfileRow[]>`
+      const rows = await sql<MutualsProfileRow[]>`
         with actor as (
           select id
           from users
@@ -132,10 +132,10 @@ export function createPostgresDatingRepository(databaseUrl?: string): DatingRepo
         returning *
       `;
 
-      return toDatingProfile(rows[0]);
+      return toMutualsProfile(rows[0]);
     },
     async updatePreferences(input) {
-      const rows = await sql<DatingProfileRow[]>`
+      const rows = await sql<MutualsProfileRow[]>`
         with actor as (
           select id
           from users
@@ -152,10 +152,10 @@ export function createPostgresDatingRepository(databaseUrl?: string): DatingRepo
         returning dp.*
       `;
 
-      return rows[0] ? toDatingProfile(rows[0]) : null;
+      return rows[0] ? toMutualsProfile(rows[0]) : null;
     },
     async listFeed(input) {
-      const rows = await sql<DatingFeedRow[]>`
+      const rows = await sql<MutualsFeedRow[]>`
         with actor as (
           select u.id
           from users u
@@ -200,7 +200,7 @@ export function createPostgresDatingRepository(databaseUrl?: string): DatingRepo
       `;
 
       if (rows.length === 0) {
-        const active = await hasActiveDatingProfile(sql, input.supabaseUserId);
+        const active = await hasActiveMutualsProfile(sql, input.supabaseUserId);
         if (!active) return null;
       }
 
@@ -208,13 +208,13 @@ export function createPostgresDatingRepository(databaseUrl?: string): DatingRepo
       const extraRow = rows[input.limit];
 
       return {
-        items: pageRows.map(toDatingFeedItem),
+        items: pageRows.map(toMutualsFeedItem),
         nextCursor: extraRow ? extraRow.created_at.toISOString() : null
       };
     },
-    async createSwipe(input) {
+    async createInterest(input) {
       const conversationId = randomUUID();
-      const rows = await sql<DatingSwipeResultRow[]>`
+      const rows = await sql<MutualsInterestResultRow[]>`
         with actor as (
           select u.id
           from users u
@@ -352,13 +352,13 @@ export function createPostgresDatingRepository(databaseUrl?: string): DatingRepo
 
       if (!row) return null;
       if (row.swipe_idempotency_key === input.idempotencyKey && row.request_hash !== input.requestHash) {
-        throw new DatingIdempotencyConflictError();
+        throw new MutualsIdempotencyConflictError();
       }
 
-      return toSwipeResult(row);
+      return toInterestResult(row);
     },
-    async listMatches(input) {
-      const rows = await sql<DatingMatchRow[]>`
+    async listMutuals(input) {
+      const rows = await sql<MutualRow[]>`
         with actor as (
           select id
           from users
@@ -387,12 +387,12 @@ export function createPostgresDatingRepository(databaseUrl?: string): DatingRepo
       const extraRow = rows[input.limit];
 
       return {
-        items: pageRows.map(toDatingMatch),
+        items: pageRows.map(toMutual),
         nextCursor: extraRow ? extraRow.created_at.toISOString() : null
       };
     },
-    async archiveMatch(input) {
-      const rows = await sql<DatingMatchRow[]>`
+    async archiveMutual(input) {
+      const rows = await sql<MutualRow[]>`
         with actor as (
           select id
           from users
@@ -419,7 +419,7 @@ export function createPostgresDatingRepository(databaseUrl?: string): DatingRepo
           created_at
       `;
 
-      return rows[0] ? toDatingMatch(rows[0]) : null;
+      return rows[0] ? toMutual(rows[0]) : null;
     },
     async close() {
       await sql.end({ timeout: 5 });
@@ -427,7 +427,7 @@ export function createPostgresDatingRepository(databaseUrl?: string): DatingRepo
   };
 }
 
-async function hasActiveDatingProfile(sql: postgres.Sql, supabaseUserId: string): Promise<boolean> {
+async function hasActiveMutualsProfile(sql: postgres.Sql, supabaseUserId: string): Promise<boolean> {
   const rows = await sql<{ exists: boolean }[]>`
     select exists (
       select 1
@@ -441,8 +441,8 @@ async function hasActiveDatingProfile(sql: postgres.Sql, supabaseUserId: string)
   return rows[0]?.exists ?? false;
 }
 
-function toDatingProfile(row: DatingProfileRow | undefined): DatingProfile {
-  if (!row) throw new DatingRepositoryConfigurationError();
+function toMutualsProfile(row: MutualsProfileRow | undefined): MutualsProfile {
+  if (!row) throw new MutualsRepositoryConfigurationError();
 
   return {
     enabled: row.enabled,
@@ -455,7 +455,7 @@ function toDatingProfile(row: DatingProfileRow | undefined): DatingProfile {
   };
 }
 
-function toDatingFeedItem(row: DatingFeedRow): DatingFeedItem {
+function toMutualsFeedItem(row: MutualsFeedRow): MutualsFeedItem {
   return {
     contentId: row.content_id,
     creatorUserId: row.creator_user_id,
@@ -469,9 +469,9 @@ function toDatingFeedItem(row: DatingFeedRow): DatingFeedItem {
   };
 }
 
-function toSwipeResult(row: DatingSwipeResultRow): DatingSwipeResult {
+function toInterestResult(row: MutualsInterestResultRow): MutualsInterestResult {
   const match = row.match_id
-    ? toDatingMatch({
+    ? toMutual({
         id: row.match_id,
         user_a_id: row.match_user_a_id ?? "",
         user_b_id: row.match_user_b_id ?? "",
@@ -492,7 +492,7 @@ function toSwipeResult(row: DatingSwipeResultRow): DatingSwipeResult {
   };
 }
 
-function toDatingMatch(row: DatingMatchRow): DatingMatch {
+function toMutual(row: MutualRow): Mutual {
   return {
     id: row.id,
     userAId: row.user_a_id,

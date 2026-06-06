@@ -8,7 +8,7 @@ import type {
   AdminComplianceReport,
   AdminContentItem,
   AdminDataRequest,
-  AdminDatingSafety,
+  AdminMutualsSafety,
   AdminFeatureFlag,
   AdminInvoice,
   AdminLiveRoom,
@@ -579,7 +579,7 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
       async listAiToolCalls() {
         throw new AdminRepositoryConfigurationError();
       },
-      async getDatingSafety() {
+      async getMutualsSafety() {
         throw new AdminRepositoryConfigurationError();
       },
       async listComplianceLedger() {
@@ -1787,7 +1787,7 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
 
       return page(rows, toAiToolCall);
     },
-    async getDatingSafety() {
+    async getMutualsSafety() {
       const rows = await sql<{
         open_reports: string | number;
         active_matches: string | number;
@@ -1803,9 +1803,10 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
 
       return {
         openReports: Number(row?.open_reports ?? 0),
-        activeMatches: Number(row?.active_matches ?? 0),
-        staleMatches: Number(row?.stale_matches ?? 0)
-      } satisfies AdminDatingSafety;
+        activeMutuals: Number(row?.active_matches ?? 0),
+        staleMutuals: Number(row?.stale_matches ?? 0),
+        socialMoneyBoundary: "money_never_buys_people_visibility_matches_or_social_priority"
+      } satisfies AdminMutualsSafety;
     },
     async listComplianceLedger(input) {
       const rows = await sql<ComplianceLedgerRow[]>`

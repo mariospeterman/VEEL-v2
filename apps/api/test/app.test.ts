@@ -62,7 +62,7 @@ import type {
   OrganizationRepository
 } from "../src/modules/organization/types";
 import type { EventRepository } from "../src/modules/event/types";
-import type { DatingRepository } from "../src/modules/dating/types";
+import type { MutualsRepository } from "../src/modules/mutuals/types";
 import type { DiscoverRepository } from "../src/modules/discover/types";
 import type { EngagementRepository } from "../src/modules/engagement/types";
 import type {
@@ -3306,13 +3306,13 @@ describe("buildApi", () => {
   });
 
   it("activates Mutuals mode and returns the explicit Mutuals feed", async () => {
-    const datingRepository: DatingRepository = {
+    const mutualsRepository: MutualsRepository = {
       async activate(input) {
         expect(input).toMatchObject({
           supabaseUserId: "00000000-0000-4000-8000-000000000001",
           consentVersion: "mutuals-consent-2026-06-04"
         });
-        return datingProfileFixture({ enabled: true });
+        return mutualsProfileFixture({ enabled: true });
       },
       async updatePreferences() {
         throw new Error("not implemented");
@@ -3323,17 +3323,17 @@ describe("buildApi", () => {
           limit: 20
         });
         return {
-          items: [datingFeedItemFixture()],
+          items: [mutualsFeedItemFixture()],
           nextCursor: null
         };
       },
-      async createSwipe() {
+      async createInterest() {
         throw new Error("not implemented");
       },
-      async listMatches() {
+      async listMutuals() {
         throw new Error("not implemented");
       },
-      async archiveMatch() {
+      async archiveMutual() {
         throw new Error("not implemented");
       }
     };
@@ -3341,7 +3341,7 @@ describe("buildApi", () => {
       authVerifier: fakeAuthVerifier,
       sessionRepository: appReadySessionRepository,
       ageRepository: verifiedAgeRepository,
-      datingRepository
+      mutualsRepository
     });
     await app.ready();
 
@@ -3382,8 +3382,8 @@ describe("buildApi", () => {
   });
 
   it("creates a Mutual from backend-owned interest state", async () => {
-    const match = datingMatchFixture();
-    const datingRepository: DatingRepository = {
+    const match = mutualFixture();
+    const mutualsRepository: MutualsRepository = {
       async activate() {
         throw new Error("not implemented");
       },
@@ -3393,7 +3393,7 @@ describe("buildApi", () => {
       async listFeed() {
         throw new Error("not implemented");
       },
-      async createSwipe(input) {
+      async createInterest(input) {
         expect(input).toMatchObject({
           supabaseUserId: "00000000-0000-4000-8000-000000000001",
           idempotencyKey: "mutuals-interest-key",
@@ -3410,14 +3410,14 @@ describe("buildApi", () => {
           match
         };
       },
-      async listMatches(input) {
+      async listMutuals(input) {
         expect(input).toMatchObject({
           supabaseUserId: "00000000-0000-4000-8000-000000000001",
           limit: 20
         });
         return { items: [match], nextCursor: null };
       },
-      async archiveMatch(input) {
+      async archiveMutual(input) {
         expect(input).toMatchObject({ matchId: match.id });
         return { ...match, state: "archived" };
       }
@@ -3426,7 +3426,7 @@ describe("buildApi", () => {
       authVerifier: fakeAuthVerifier,
       sessionRepository: appReadySessionRepository,
       ageRepository: verifiedAgeRepository,
-      datingRepository
+      mutualsRepository
     });
     await app.ready();
 
@@ -3472,7 +3472,7 @@ describe("buildApi", () => {
   });
 
   it("keeps deprecated dating aliases as Mutuals compatibility routes", async () => {
-    const datingRepository: DatingRepository = {
+    const mutualsRepository: MutualsRepository = {
       async activate() {
         throw new Error("not implemented");
       },
@@ -3481,17 +3481,17 @@ describe("buildApi", () => {
       },
       async listFeed() {
         return {
-          items: [datingFeedItemFixture()],
+          items: [mutualsFeedItemFixture()],
           nextCursor: null
         };
       },
-      async createSwipe() {
+      async createInterest() {
         throw new Error("not implemented");
       },
-      async listMatches() {
-        return { items: [datingMatchFixture()], nextCursor: null };
+      async listMutuals() {
+        return { items: [mutualFixture()], nextCursor: null };
       },
-      async archiveMatch() {
+      async archiveMutual() {
         throw new Error("not implemented");
       }
     };
@@ -3499,7 +3499,7 @@ describe("buildApi", () => {
       authVerifier: fakeAuthVerifier,
       sessionRepository: appReadySessionRepository,
       ageRepository: verifiedAgeRepository,
-      datingRepository
+      mutualsRepository
     });
     await app.ready();
 
@@ -3774,7 +3774,7 @@ describe("buildApi", () => {
         async listAiToolCalls() {
           throw new Error("not implemented");
         },
-        async getDatingSafety() {
+        async getMutualsSafety() {
           throw new Error("not implemented");
         },
         async updateOrganizationKyb() {
@@ -3911,7 +3911,7 @@ describe("buildApi", () => {
         async listAiToolCalls() {
           throw new Error("not implemented");
         },
-        async getDatingSafety() {
+        async getMutualsSafety() {
           throw new Error("not implemented");
         },
         async updateOrganizationKyb() {
@@ -4046,7 +4046,7 @@ describe("buildApi", () => {
         async listAiToolCalls() {
           throw new Error("not implemented");
         },
-        async getDatingSafety() {
+        async getMutualsSafety() {
           throw new Error("not implemented");
         },
         async updateOrganizationKyb() {
@@ -5024,7 +5024,7 @@ describe("buildApi", () => {
       aiSessions,
       aiToolCalls,
       mutualsSafety,
-      datingSafety
+      legacyDatingSafety
     ] = await Promise.all([
       app.inject({
         method: "GET",
@@ -5193,8 +5193,8 @@ describe("buildApi", () => {
       staleMutuals: 0,
       socialMoneyBoundary: "money_never_buys_people_visibility_matches_or_social_priority"
     });
-    expect(datingSafety.statusCode).toBe(200);
-    expect(datingSafety.json()).toEqual({
+    expect(legacyDatingSafety.statusCode).toBe(200);
+    expect(legacyDatingSafety.json()).toEqual({
       openReports: 0,
       activeMatches: 1,
       staleMatches: 0
@@ -8002,11 +8002,12 @@ const fakeAdminRepository: AdminRepository = {
       nextCursor: null
     };
   },
-  async getDatingSafety() {
+  async getMutualsSafety() {
     return {
       openReports: 0,
-      activeMatches: 1,
-      staleMatches: 0
+      activeMutuals: 1,
+      staleMutuals: 0,
+      socialMoneyBoundary: "money_never_buys_people_visibility_matches_or_social_priority"
     };
   },
   async listComplianceLedger() {
@@ -8270,7 +8271,7 @@ const fakeAdminRepository: AdminRepository = {
   }
 };
 
-function datingProfileFixture(overrides: Partial<Awaited<ReturnType<DatingRepository["activate"]>>> = {}) {
+function mutualsProfileFixture(overrides: Partial<Awaited<ReturnType<MutualsRepository["activate"]>>> = {}) {
   return {
     enabled: overrides.enabled ?? true,
     consentVersion: overrides.consentVersion ?? "mutuals-consent-2026-06-04",
@@ -8282,7 +8283,7 @@ function datingProfileFixture(overrides: Partial<Awaited<ReturnType<DatingReposi
   };
 }
 
-function datingFeedItemFixture() {
+function mutualsFeedItemFixture() {
   return {
     contentId: "00000000-0000-4000-8000-000000000040",
     creatorUserId: "00000000-0000-4000-8000-000000000011",
@@ -8296,7 +8297,7 @@ function datingFeedItemFixture() {
   };
 }
 
-function datingMatchFixture() {
+function mutualFixture() {
   return {
     id: "00000000-0000-4000-8000-0000000000d2",
     userAId: "00000000-0000-4000-8000-000000000001",

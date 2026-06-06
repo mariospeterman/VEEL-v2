@@ -20,9 +20,9 @@ import { createPostgresContentRepository } from "./modules/content/content-repos
 import { registerContentRoutes } from "./modules/content/content-routes.js";
 import { createBunnyStreamUploadAdapter } from "./modules/content/media-upload-adapter.js";
 import type { ContentRepository, MediaUploadProviderAdapter } from "./modules/content/types.js";
-import { createPostgresDatingRepository } from "./modules/dating/dating-repository.js";
-import { registerDatingRoutes } from "./modules/dating/dating-routes.js";
-import type { DatingRepository } from "./modules/dating/types.js";
+import { createPostgresMutualsRepository } from "./modules/mutuals/mutuals-repository.js";
+import { registerMutualsRoutes } from "./modules/mutuals/mutuals-routes.js";
+import type { MutualsRepository } from "./modules/mutuals/types.js";
 import { createPostgresDiscoverRepository } from "./modules/discover/discover-repository.js";
 import { registerDiscoverRoutes } from "./modules/discover/discover-routes.js";
 import type { DiscoverRepository } from "./modules/discover/types.js";
@@ -90,7 +90,7 @@ export interface BuildApiOptions {
   ageRepository?: AgeRepository;
   ageProviderWaterfall?: AgeProviderWaterfall;
   contentRepository?: ContentRepository;
-  datingRepository?: DatingRepository;
+  mutualsRepository?: MutualsRepository;
   discoverRepository?: DiscoverRepository;
   eventRepository?: EventRepository;
   engagementRepository?: EngagementRepository;
@@ -159,8 +159,8 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     options.profileRepository ?? createPostgresProfileRepository(app.config.DATABASE_URL);
   const contentRepository =
     options.contentRepository ?? createPostgresContentRepository(app.config.DATABASE_URL);
-  const datingRepository =
-    options.datingRepository ?? createPostgresDatingRepository(app.config.DATABASE_URL);
+  const mutualsRepository =
+    options.mutualsRepository ?? createPostgresMutualsRepository(app.config.DATABASE_URL);
   const discoverRepository =
     options.discoverRepository ?? createPostgresDiscoverRepository(app.config.DATABASE_URL);
   const eventRepository =
@@ -230,9 +230,9 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
       await contentRepository.close?.();
     });
   }
-  if (datingRepository.close) {
+  if (mutualsRepository.close) {
     app.addHook("onClose", async () => {
-      await datingRepository.close?.();
+      await mutualsRepository.close?.();
     });
   }
   if (discoverRepository.close) {
@@ -353,11 +353,11 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     paymentRepository,
     eventRepository
   });
-  await registerDatingRoutes(app, {
+  await registerMutualsRoutes(app, {
     authVerifier,
     sessionRepository,
     ageRepository,
-    datingRepository
+    mutualsRepository
   });
   await registerEngagementRoutes(app, {
     authVerifier,

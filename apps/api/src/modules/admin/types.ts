@@ -9,7 +9,7 @@ export type AdminUnlock = components["schemas"]["AdminUnlock"];
 export type AdminProviderEvent = components["schemas"]["AdminProviderEvent"];
 export type AdminReport = components["schemas"]["AdminReport"];
 export type AdminUser = components["schemas"]["AdminUser"];
-export type AdminDatingSafety = components["schemas"]["AdminDatingSafety"];
+export type AdminMutualsSafety = components["schemas"]["AdminMutualsSafety"];
 export type AdminComplianceLedgerEntry = components["schemas"]["AdminComplianceLedgerEntry"];
 export type AdminComplianceReport = components["schemas"]["AdminComplianceReport"];
 export type AdminVatDetermination = components["schemas"]["AdminVatDetermination"];
@@ -123,7 +123,7 @@ export interface AdminRepository {
   listIdentityChecks(input: { cursor?: string }): Promise<AdminPage<AdminIdentityCheck>>;
   listAiSessions(input: { cursor?: string }): Promise<AdminPage<AdminAiSession>>;
   listAiToolCalls(input: { cursor?: string }): Promise<AdminPage<AdminAiToolCall>>;
-  getDatingSafety(): Promise<AdminDatingSafety>;
+  getMutualsSafety(): Promise<AdminMutualsSafety>;
   listComplianceLedger(input: { cursor?: string }): Promise<AdminPage<AdminComplianceLedgerEntry>>;
   listDac7Reports(input: { cursor?: string }): Promise<AdminPage<AdminComplianceReport>>;
   listCarfReports(input: { cursor?: string }): Promise<AdminPage<AdminComplianceReport>>;

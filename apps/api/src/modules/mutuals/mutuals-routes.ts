@@ -4,31 +4,31 @@ import type { AgeRepository } from "../age/types.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
 import {
-  DatingIdempotencyConflictError,
-  DatingRepositoryConfigurationError
-} from "./dating-repository.js";
+  MutualsIdempotencyConflictError,
+  MutualsRepositoryConfigurationError
+} from "./mutuals-repository.js";
 import type {
-  ActivateDatingRequest,
-  DatingRepository,
-  DatingSwipeRequest,
-  UpdateDatingPreferencesRequest
+  ActivateMutualsRequest,
+  MutualsRepository,
+  MutualsInterestRequest,
+  UpdateMutualsPreferencesRequest
 } from "./types.js";
 
-interface RegisterDatingRoutesOptions {
+interface RegisterMutualsRoutesOptions {
   authVerifier: SupabaseAuthVerifier;
   sessionRepository: SessionRepository;
   ageRepository: AgeRepository;
-  datingRepository: DatingRepository;
+  mutualsRepository: MutualsRepository;
 }
 
 const defaultLimit = 20;
 
-export async function registerDatingRoutes(
+export async function registerMutualsRoutes(
   app: FastifyInstance,
-  options: RegisterDatingRoutesOptions
+  options: RegisterMutualsRoutesOptions
 ): Promise<void> {
   const activate = async (request: FastifyRequest, reply: FastifyReply) => {
-    const access = await verifyDatingAccess(request, options);
+    const access = await verifyMutualsAccess(request, options);
 
     if (!access.ok) {
       return reply.code(access.statusCode).send(access.body);
@@ -38,7 +38,7 @@ export async function registerDatingRoutes(
       return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
     }
 
-    const body = request.body as Partial<ActivateDatingRequest> | undefined;
+    const body = request.body as Partial<ActivateMutualsRequest> | undefined;
 
     if (!body?.consentVersion || body.consentVersion.trim().length < 3) {
       return reply.code(400).send(validationResponse("consentVersion is required"));
@@ -46,14 +46,14 @@ export async function registerDatingRoutes(
 
     try {
       await options.sessionRepository.ensureUserForSupabaseId(access.supabaseUserId);
-      const profile = await options.datingRepository.activate({
+      const profile = await options.mutualsRepository.activate({
         supabaseUserId: access.supabaseUserId,
         consentVersion: body.consentVersion.trim()
       });
 
       return reply.code(200).send(profile);
     } catch (error) {
-      if (error instanceof DatingRepositoryConfigurationError) {
+      if (error instanceof MutualsRepositoryConfigurationError) {
         request.log.warn({ error }, "Mutuals activation failed");
         return reply.code(503).send(serviceUnavailableResponse("Mutuals mode is not configured"));
       }
@@ -63,7 +63,7 @@ export async function registerDatingRoutes(
   };
 
   const updatePreferences = async (request: FastifyRequest, reply: FastifyReply) => {
-    const access = await verifyDatingAccess(request, options);
+    const access = await verifyMutualsAccess(request, options);
 
     if (!access.ok) {
       return reply.code(access.statusCode).send(access.body);
@@ -73,7 +73,7 @@ export async function registerDatingRoutes(
       return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
     }
 
-    const body = request.body as Partial<UpdateDatingPreferencesRequest> | undefined;
+    const body = request.body as Partial<UpdateMutualsPreferencesRequest> | undefined;
     const validationError = validatePreferences(body);
 
     if (validationError) {
@@ -81,9 +81,9 @@ export async function registerDatingRoutes(
     }
 
     try {
-      const profile = await options.datingRepository.updatePreferences({
+      const profile = await options.mutualsRepository.updatePreferences({
         supabaseUserId: access.supabaseUserId,
-        body: body as UpdateDatingPreferencesRequest
+        body: body as UpdateMutualsPreferencesRequest
       });
 
       if (!profile) {
@@ -92,7 +92,7 @@ export async function registerDatingRoutes(
 
       return reply.code(200).send(profile);
     } catch (error) {
-      if (error instanceof DatingRepositoryConfigurationError) {
+      if (error instanceof MutualsRepositoryConfigurationError) {
         request.log.warn({ error }, "Mutuals preference update failed");
         return reply.code(503).send(serviceUnavailableResponse("Mutuals mode is not configured"));
       }
@@ -102,7 +102,7 @@ export async function registerDatingRoutes(
   };
 
   const listFeed = async (request: FastifyRequest, reply: FastifyReply) => {
-    const access = await verifyDatingAccess(request, options);
+    const access = await verifyMutualsAccess(request, options);
 
     if (!access.ok) {
       return reply.code(access.statusCode).send(access.body);
@@ -110,7 +110,7 @@ export async function registerDatingRoutes(
 
     try {
       const query = request.query as { cursor?: string };
-      const page = await options.datingRepository.listFeed({
+      const page = await options.mutualsRepository.listFeed({
         supabaseUserId: access.supabaseUserId,
         limit: defaultLimit,
         ...(query.cursor ? { cursor: query.cursor } : {})
@@ -125,7 +125,7 @@ export async function registerDatingRoutes(
 
       return reply.code(200).send(page);
     } catch (error) {
-      if (error instanceof DatingRepositoryConfigurationError) {
+      if (error instanceof MutualsRepositoryConfigurationError) {
         request.log.warn({ error }, "Mutuals feed failed");
         return reply.code(503).send(serviceUnavailableResponse("Mutuals mode is not configured"));
       }
@@ -135,7 +135,7 @@ export async function registerDatingRoutes(
   };
 
   const createInterest = async (request: FastifyRequest, reply: FastifyReply) => {
-    const access = await verifyDatingAccess(request, options);
+    const access = await verifyMutualsAccess(request, options);
 
     if (!access.ok) {
       return reply.code(access.statusCode).send(access.body);
@@ -147,20 +147,20 @@ export async function registerDatingRoutes(
       return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
     }
 
-    const body = request.body as Partial<DatingSwipeRequest> | undefined;
-    const validationError = validateSwipe(body);
+    const body = request.body as Partial<MutualsInterestRequest> | undefined;
+    const validationError = validateInterest(body);
 
     if (validationError) {
       return reply.code(400).send(validationResponse(validationError));
     }
 
     try {
-      const swipeBody = body as DatingSwipeRequest;
-      const result = await options.datingRepository.createSwipe({
+      const interestBody = body as MutualsInterestRequest;
+      const result = await options.mutualsRepository.createInterest({
         supabaseUserId: access.supabaseUserId,
         idempotencyKey,
-        requestHash: hashJson(swipeBody),
-        body: swipeBody
+        requestHash: hashJson(interestBody),
+        body: interestBody
       });
 
       if (!result) {
@@ -169,11 +169,11 @@ export async function registerDatingRoutes(
 
       return reply.code(200).send(result);
     } catch (error) {
-      if (error instanceof DatingIdempotencyConflictError) {
+      if (error instanceof MutualsIdempotencyConflictError) {
         return reply.code(409).send(conflictResponse("Idempotency key was already used"));
       }
 
-      if (error instanceof DatingRepositoryConfigurationError) {
+      if (error instanceof MutualsRepositoryConfigurationError) {
         request.log.warn({ error }, "Mutuals interest failed");
         return reply.code(503).send(serviceUnavailableResponse("Mutuals mode is not configured"));
       }
@@ -182,15 +182,15 @@ export async function registerDatingRoutes(
     }
   };
 
-  const listMatches = async (request: FastifyRequest, reply: FastifyReply) => {
-    const access = await verifyDatingAccess(request, options);
+  const listMutuals = async (request: FastifyRequest, reply: FastifyReply) => {
+    const access = await verifyMutualsAccess(request, options);
 
     if (!access.ok) {
       return reply.code(access.statusCode).send(access.body);
     }
 
     const query = request.query as { cursor?: string };
-    const page = await options.datingRepository.listMatches({
+    const page = await options.mutualsRepository.listMutuals({
       supabaseUserId: access.supabaseUserId,
       limit: defaultLimit,
       ...(query.cursor ? { cursor: query.cursor } : {})
@@ -199,8 +199,8 @@ export async function registerDatingRoutes(
     return reply.code(200).send(page);
   };
 
-  const archiveMatch = async (request: FastifyRequest, reply: FastifyReply) => {
-    const access = await verifyDatingAccess(request, options);
+  const archiveMutual = async (request: FastifyRequest, reply: FastifyReply) => {
+    const access = await verifyMutualsAccess(request, options);
 
     if (!access.ok) {
       return reply.code(access.statusCode).send(access.body);
@@ -211,16 +211,16 @@ export async function registerDatingRoutes(
     }
 
     const matchId = (request.params as { matchId?: string }).matchId ?? "";
-    const match = await options.datingRepository.archiveMatch({
+    const mutual = await options.mutualsRepository.archiveMutual({
       supabaseUserId: access.supabaseUserId,
       matchId
     });
 
-    if (!match) {
+    if (!mutual) {
       return reply.code(404).send(notFoundResponse("Mutual was not found"));
     }
 
-    return reply.code(200).send(match);
+    return reply.code(200).send(mutual);
   };
 
   for (const routePath of ["/v1/mutuals/activate", "/v1/dating/activate"]) {
@@ -240,15 +240,15 @@ export async function registerDatingRoutes(
   }
 
   for (const routePath of ["/v1/mutuals", "/v1/dating/matches"]) {
-    app.get(routePath, listMatches);
+    app.get(routePath, listMutuals);
   }
 
   for (const routePath of ["/v1/mutuals/:matchId/archive", "/v1/dating/matches/:matchId/archive"]) {
-    app.patch(routePath, archiveMatch);
+    app.patch(routePath, archiveMutual);
   }
 }
 
-type DatingAccessResult =
+type MutualsAccessResult =
   | {
       ok: true;
       supabaseUserId: string;
@@ -262,10 +262,10 @@ type DatingAccessResult =
       };
     };
 
-async function verifyDatingAccess(
+async function verifyMutualsAccess(
   request: FastifyRequest,
-  options: RegisterDatingRoutesOptions
-): Promise<DatingAccessResult> {
+  options: RegisterMutualsRoutesOptions
+): Promise<MutualsAccessResult> {
   const verifiedSession = await verifyRequestSession(request, options.authVerifier);
 
   if (!verifiedSession) {
@@ -298,7 +298,7 @@ async function verifyDatingAccess(
   };
 }
 
-function validatePreferences(body: Partial<UpdateDatingPreferencesRequest> | undefined): string | null {
+function validatePreferences(body: Partial<UpdateMutualsPreferencesRequest> | undefined): string | null {
   if (!body || typeof body !== "object") {
     return "Request body is required";
   }
@@ -313,7 +313,7 @@ function validatePreferences(body: Partial<UpdateDatingPreferencesRequest> | und
   return null;
 }
 
-function validateSwipe(body: Partial<DatingSwipeRequest> | undefined): string | null {
+function validateInterest(body: Partial<MutualsInterestRequest> | undefined): string | null {
   if (!body?.targetUserId) {
     return "targetUserId is required";
   }
