@@ -30,6 +30,17 @@ export async function registerEngagementRoutes(
   app: FastifyInstance,
   options: RegisterEngagementRoutesOptions
 ): Promise<void> {
+  app.get("/v1/feed/preferences", async (request, reply) => {
+    const access = await verifyEngagementAccess(request, options);
+    if (!access.ok) return reply.code(access.statusCode).send(access.body);
+
+    return repositoryReply(request, reply, async () =>
+      options.engagementRepository.getFeedPreferences({
+        supabaseUserId: access.supabaseUserId
+      })
+    );
+  });
+
   app.patch("/v1/feed/preferences", async (request, reply) => {
     const access = await verifyEngagementAccess(request, options);
     if (!access.ok) return reply.code(access.statusCode).send(access.body);

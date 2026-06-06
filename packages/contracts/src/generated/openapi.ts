@@ -351,7 +351,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Get viewer feed preferences */
+        get: operations["getFeedPreferences"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4648,6 +4649,20 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["LiveRoomPage"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getFeedPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["FeedPreferences"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
         };

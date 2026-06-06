@@ -123,6 +123,7 @@ Comment:
 
 Launch implementation rules:
 
+- `GET /v1/feed/preferences` exposes the viewer-safe read projection for settings and client cache.
 - `PATCH /v1/feed/preferences` owns default mode and NSFW/SFW preference server-side.
 - `POST /v1/feed/reset` clears backend-owned recommendation hides and writes an audit event.
 - `POST /v1/feed/hide-creator` and `POST /v1/feed/hide-topic` write private viewer controls that feed ranking must honor before scoring.

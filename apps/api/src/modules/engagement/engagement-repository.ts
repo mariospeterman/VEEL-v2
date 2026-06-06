@@ -64,6 +64,9 @@ interface ReportRow {
 export function createPostgresEngagementRepository(databaseUrl?: string): EngagementRepository {
   if (!databaseUrl) {
     return {
+      async getFeedPreferences() {
+        throw new EngagementRepositoryConfigurationError();
+      },
       async updateFeedPreferences() {
         throw new EngagementRepositoryConfigurationError();
       },
@@ -107,6 +110,35 @@ export function createPostgresEngagementRepository(databaseUrl?: string): Engage
   });
 
   return {
+    async getFeedPreferences(input) {
+      const rows = await sql<PreferencesRow[]>`
+        with actor as (
+          select id as user_id
+          from users
+          where supabase_user_id = ${input.supabaseUserId}
+          limit 1
+        ),
+        preferences as (
+          select
+            actor.user_id,
+            coalesce(vfp.default_feed_mode, 'recommended') as default_feed_mode,
+            coalesce(vfp.nsfw_preference, 'recommended') as nsfw_preference
+          from actor
+          left join viewer_feed_preferences vfp on vfp.user_id = actor.user_id
+        )
+        select
+          preferences.default_feed_mode,
+          preferences.nsfw_preference,
+          coalesce(array_agg(distinct vhc.creator_user_id::text) filter (where vhc.creator_user_id is not null), array[]::text[]) as hidden_creator_ids,
+          coalesce(array_agg(distinct vht.topic) filter (where vht.topic is not null), array[]::text[]) as hidden_topics
+        from preferences
+        left join viewer_hidden_creators vhc on vhc.user_id = preferences.user_id
+        left join viewer_hidden_topics vht on vht.user_id = preferences.user_id
+        group by preferences.user_id, preferences.default_feed_mode, preferences.nsfw_preference
+      `;
+
+      return toPreferences(rows[0]);
+    },
     async updateFeedPreferences(input) {
       const rows = await sql<PreferencesRow[]>`
         with actor as (

@@ -2,10 +2,12 @@ import { appShellNavItems } from "@veel/ui";
 import type { ReactNode } from "react";
 import {
   getAgeStatus,
+  getFeedPreferences,
   getSession,
   getWallets,
   type AgeStatus,
   type ApiResult,
+  type FeedPreferences,
   type SessionState,
   type WalletList
 } from "@/api-client";
@@ -18,7 +20,12 @@ const notificationRows = [
 ];
 
 export default async function SettingsPage() {
-  const [session, ageStatus, wallets] = await Promise.all([getSession(), getAgeStatus(), getWallets()]);
+  const [session, ageStatus, wallets, feedPreferences] = await Promise.all([
+    getSession(),
+    getAgeStatus(),
+    getWallets(),
+    getFeedPreferences()
+  ]);
 
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
@@ -52,11 +59,7 @@ export default async function SettingsPage() {
           </SettingsGroup>
 
           <SettingsGroup id="feed" title="Feed">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Fact label="Default mode" value="server mutation only" />
-              <Fact label="Hidden creators" value="backend-owned" />
-              <Fact label="Hidden topics" value="backend-owned" />
-            </div>
+            <FeedFacts feedPreferences={feedPreferences} />
           </SettingsGroup>
 
           <SettingsGroup id="privacy" title="Privacy">
@@ -78,6 +81,21 @@ export default async function SettingsPage() {
         </section>
       </section>
     </main>
+  );
+}
+
+function FeedFacts({ feedPreferences }: { feedPreferences: ApiResult<FeedPreferences> }) {
+  if (!feedPreferences.ok) {
+    return <UnavailableState result={feedPreferences} />;
+  }
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-3">
+      <Fact label="Default mode" value={feedPreferences.data.defaultMode} />
+      <Fact label="NSFW preference" value={feedPreferences.data.nsfwPreference} />
+      <Fact label="Hidden creators" value={String(feedPreferences.data.hiddenCreatorIds?.length ?? 0)} />
+      <Fact label="Hidden topics" value={String(feedPreferences.data.hiddenTopics?.length ?? 0)} />
+    </div>
   );
 }
 

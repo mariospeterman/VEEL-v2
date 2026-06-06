@@ -15,6 +15,7 @@ export type ShareResult = components["schemas"]["ShareResult"];
 export type UpdateFeedPreferencesRequest = components["schemas"]["UpdateFeedPreferencesRequest"];
 
 export interface EngagementRepository {
+  getFeedPreferences(input: { supabaseUserId: string }): Promise<FeedPreferences>;
   updateFeedPreferences(input: {
     supabaseUserId: string;
     body: UpdateFeedPreferencesRequest;

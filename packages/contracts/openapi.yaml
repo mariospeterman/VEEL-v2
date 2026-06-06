@@ -265,6 +265,14 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /v1/feed/preferences:
+    get:
+      operationId: getFeedPreferences
+      tags: [Feed]
+      summary: Get viewer feed preferences
+      responses:
+        "200": { $ref: "#/components/responses/FeedPreferences" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
     patch:
       operationId: updateFeedPreferences
       tags: [Feed]

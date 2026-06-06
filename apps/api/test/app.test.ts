@@ -4530,6 +4530,9 @@ describe("buildApi", () => {
       sessionRepository: appReadySessionRepository,
       ageRepository: verifiedAgeRepository,
       engagementRepository: fakeEngagementRepository({
+        async onGetFeedPreferences(input) {
+          calls.push({ kind: "read_preferences", input });
+        },
         async onUpdateFeedPreferences(input) {
           calls.push({ kind: "preferences", input });
         },
@@ -4543,6 +4546,13 @@ describe("buildApi", () => {
     });
     await app.ready();
 
+    const readResponse = await app.inject({
+      method: "GET",
+      url: "/v1/feed/preferences",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
     const preferencesResponse = await app.inject({
       method: "PATCH",
       url: "/v1/feed/preferences",
@@ -4578,10 +4588,21 @@ describe("buildApi", () => {
       }
     });
 
+    expect(readResponse.statusCode).toBe(200);
+    expect(readResponse.json()).toMatchObject({
+      defaultMode: "recommended",
+      nsfwPreference: "recommended"
+    });
     expect(preferencesResponse.statusCode).toBe(200);
     expect(hideCreatorResponse.statusCode).toBe(200);
     expect(hideTopicResponse.statusCode).toBe(200);
     expect(calls).toMatchObject([
+      {
+        kind: "read_preferences",
+        input: {
+          supabaseUserId: "00000000-0000-4000-8000-000000000001"
+        }
+      },
       {
         kind: "preferences",
         input: {
@@ -5339,6 +5360,7 @@ const fakeUnconfirmedSettlementVerifier: PaymentSettlementVerifier = {
 
 function fakeEngagementRepository(
   overrides: Partial<{
+    onGetFeedPreferences: EngagementCallback<"getFeedPreferences">;
     onUpdateFeedPreferences: EngagementCallback<"updateFeedPreferences">;
     onResetFeedRecommendations: EngagementCallback<"resetFeedRecommendations">;
     onHideCreator: EngagementCallback<"hideCreator">;
@@ -5353,6 +5375,15 @@ function fakeEngagementRepository(
   }> = {}
 ): EngagementRepository {
   return {
+    async getFeedPreferences(input) {
+      await overrides.onGetFeedPreferences?.(input);
+      return {
+        defaultMode: "recommended",
+        nsfwPreference: "recommended",
+        hiddenCreatorIds: [],
+        hiddenTopics: []
+      };
+    },
     async updateFeedPreferences(input) {
       await overrides.onUpdateFeedPreferences?.(input);
       return {
