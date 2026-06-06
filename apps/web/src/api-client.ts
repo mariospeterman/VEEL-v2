@@ -30,6 +30,8 @@ export type FeedPage = components["schemas"]["FeedPage"];
 export type AgeStatus = components["schemas"]["AgeStatus"];
 export type Event = components["schemas"]["Event"];
 export type TicketPage = components["schemas"]["TicketPage"];
+export type DatingFeedPage = components["schemas"]["DatingFeedPage"];
+export type DatingMatchPage = components["schemas"]["DatingMatchPage"];
 
 export type ApiResult<T> =
   | {
@@ -110,6 +112,14 @@ export async function getEvent(eventId: string): Promise<ApiResult<Event>> {
 
 export async function getTicketActivity(): Promise<ApiResult<TicketPage>> {
   return getJson<TicketPage>("/v1/activity/tickets");
+}
+
+export async function getDatingFeed(): Promise<ApiResult<DatingFeedPage>> {
+  return getJson<DatingFeedPage>("/v1/dating/feed");
+}
+
+export async function getDatingMatches(): Promise<ApiResult<DatingMatchPage>> {
+  return getJson<DatingMatchPage>("/v1/dating/matches");
 }
 
 async function getJson<T>(path: string): Promise<ApiResult<T>> {

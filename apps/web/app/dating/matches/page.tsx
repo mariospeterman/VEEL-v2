@@ -1,23 +1,9 @@
-import type { components } from "@veel/contracts";
 import { appShellNavItems } from "@veel/ui";
+import { getDatingMatches, type DatingMatchPage } from "@/api-client";
 
-type DatingMatch = components["schemas"]["DatingMatch"];
+export default async function DatingMatchesPage() {
+  const matchesResult = await getDatingMatches();
 
-const matches: DatingMatch[] = [
-  {
-    id: "00000000-0000-4000-8000-0000000000d2",
-    userAId: "00000000-0000-4000-8000-000000000001",
-    userBId: "00000000-0000-4000-8000-000000000011",
-    sourceContentId: "00000000-0000-4000-8000-000000000040",
-    conversationId: "00000000-0000-4000-8000-0000000000d3",
-    state: "active",
-    staleAt: "2026-06-11T22:31:00.000Z",
-    expiresAt: "2026-07-04T22:31:00.000Z",
-    createdAt: "2026-06-04T22:31:00.000Z"
-  }
-];
-
-export default function DatingMatchesPage() {
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <AppNav />
@@ -28,28 +14,53 @@ export default function DatingMatchesPage() {
           <h1 className="mt-1 text-2xl font-semibold tracking-normal">Mutuals</h1>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          {matches.map((match) => (
-            <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-4" key={match.id}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="font-medium">Mutual match</p>
-                  <p className="mt-1 truncate text-sm text-[var(--muted)]">{match.conversationId}</p>
-                </div>
-                <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">
-                  {match.state}
-                </span>
-              </div>
-              <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
-                <Fact label="Source" value={match.sourceContentId ?? "profile"} />
-                <Fact label="Stale" value={match.staleAt ?? "not scheduled"} />
-                <Fact label="Expires" value={match.expiresAt ?? "not scheduled"} />
-              </div>
-            </article>
-          ))}
-        </div>
+        {matchesResult.ok ? (
+          <MatchGrid matches={matchesResult.data} />
+        ) : (
+          <UnavailableState
+            message={matchesResult.message}
+            status={matchesResult.status}
+            title="Mutuals unavailable"
+          />
+        )}
       </section>
     </main>
+  );
+}
+
+function MatchGrid({ matches }: { matches: DatingMatchPage }) {
+  if (matches.items.length === 0) {
+    return (
+      <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-5">
+        <h2 className="text-base font-semibold tracking-normal">No Mutuals yet</h2>
+        <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+          Active Mutuals appear only after both users explicitly show interest and backend safety checks pass.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      {matches.items.map((match) => (
+        <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-4" key={match.id}>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="font-medium">Mutual match</p>
+              <p className="mt-1 truncate text-sm text-[var(--muted)]">{match.conversationId ?? match.id}</p>
+            </div>
+            <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">
+              {match.state}
+            </span>
+          </div>
+          <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
+            <Fact label="Source" value={match.sourceContentId ?? "profile"} />
+            <Fact label="Stale" value={match.staleAt ?? "not scheduled"} />
+            <Fact label="Expires" value={match.expiresAt ?? "not scheduled"} />
+          </div>
+        </article>
+      ))}
+    </div>
   );
 }
 
@@ -80,5 +91,23 @@ function Fact({ label, value }: { label: string; value: string }) {
       <p className="text-xs uppercase text-[var(--muted)]">{label}</p>
       <p className="mt-1 truncate font-medium">{value}</p>
     </div>
+  );
+}
+
+function UnavailableState({
+  message,
+  status,
+  title
+}: {
+  message: string;
+  status: number;
+  title: string;
+}) {
+  return (
+    <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-5">
+      <p className="text-sm font-medium text-[var(--accent)]">HTTP {status}</p>
+      <h2 className="mt-2 text-base font-semibold tracking-normal">{title}</h2>
+      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{message}</p>
+    </section>
   );
 }
