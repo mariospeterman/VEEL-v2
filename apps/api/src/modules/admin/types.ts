@@ -15,8 +15,11 @@ export type AdminReferralProgram = components["schemas"]["AdminReferralProgram"]
 export type AdminPartnerCampaign = components["schemas"]["AdminPartnerCampaign"];
 export type AdminTierWaiver = components["schemas"]["AdminTierWaiver"];
 export type AdminOrganization = components["schemas"]["AdminOrganization"];
+export type AdminOrganizationMember = components["schemas"]["AdminOrganizationMember"];
 export type AdminOrganizationKybActionRequest =
   components["schemas"]["AdminOrganizationKybActionRequest"];
+export type AdminOrganizationMemberActionRequest =
+  components["schemas"]["AdminOrganizationMemberActionRequest"];
 
 export interface AdminPage<Item> {
   items: Item[];
@@ -47,5 +50,16 @@ export interface AdminRepository {
     body: AdminOrganizationKybActionRequest;
     idempotencyKey: string;
   }): Promise<AdminOrganization | null>;
+  listOrganizationMembers(input: {
+    organizationId: string;
+    cursor?: string;
+  }): Promise<AdminPage<AdminOrganizationMember>>;
+  updateOrganizationMember(input: {
+    supabaseUserId: string;
+    organizationId: string;
+    membershipId: string;
+    body: AdminOrganizationMemberActionRequest;
+    idempotencyKey: string;
+  }): Promise<AdminOrganizationMember | null>;
   close?(): Promise<void>;
 }

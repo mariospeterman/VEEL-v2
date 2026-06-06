@@ -1949,6 +1949,40 @@ export interface paths {
         patch: operations["updateAdminOrganizationKyb"];
         trace?: never;
     };
+    "/v1/admin/organizations/{organizationId}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Organization member governance list */
+        get: operations["listAdminOrganizationMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/organizations/{organizationId}/members/{membershipId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update organization member role or state with audit trail */
+        patch: operations["updateAdminOrganizationMember"];
+        trace?: never;
+    };
     "/v1/admin/feature-flags": {
         parameters: {
             query?: never;
@@ -3491,6 +3525,26 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        AdminOrganizationMember: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            userId: string;
+            /** @enum {string} */
+            role: "owner" | "admin" | "member" | "viewer";
+            /** @enum {string} */
+            state: "invited" | "active" | "suspended" | "removed";
+            /** Format: uuid */
+            invitedByUserId?: string | null;
+            /** Format: date-time */
+            joinedAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt?: string | null;
+        };
         AdminFeatureFlag: {
             key: string;
             value: {
@@ -3525,6 +3579,13 @@ export interface components {
         AdminOrganizationKybActionRequest: {
             /** @enum {string} */
             kybState: "not_started" | "pending" | "verified" | "rejected";
+            reason: string;
+        };
+        AdminOrganizationMemberActionRequest: {
+            /** @enum {string} */
+            role: "owner" | "admin" | "member" | "viewer";
+            /** @enum {string} */
+            state: "invited" | "active" | "suspended" | "removed";
             reason: string;
         };
         AdminFeatureFlagPatchRequest: {
@@ -4508,6 +4569,27 @@ export interface components {
                 };
             };
         };
+        /** @description Admin organization member */
+        AdminOrganizationMember: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["AdminOrganizationMember"];
+            };
+        };
+        /** @description Admin organization members */
+        AdminOrganizationMemberPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    items: components["schemas"]["AdminOrganizationMember"][];
+                    nextCursor?: string | null;
+                };
+            };
+        };
         /** @description Admin feature flag */
         AdminFeatureFlag: {
             headers: {
@@ -4571,6 +4653,7 @@ export interface components {
         SupportCaseId: string;
         DataRequestId: string;
         OrganizationId: string;
+        MembershipId: string;
         FeatureFlagKey: string;
         Slug: string;
         Handle: string;
@@ -4791,6 +4874,11 @@ export interface components {
         AdminOrganizationKybAction: {
             content: {
                 "application/json": components["schemas"]["AdminOrganizationKybActionRequest"];
+            };
+        };
+        AdminOrganizationMemberAction: {
+            content: {
+                "application/json": components["schemas"]["AdminOrganizationMemberActionRequest"];
             };
         };
         AdminFeatureFlagPatch: {
@@ -6801,6 +6889,45 @@ export interface operations {
             200: components["responses"]["AdminOrganization"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    listAdminOrganizationMembers: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminOrganizationMemberPage"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateAdminOrganizationMember: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+                membershipId: components["parameters"]["MembershipId"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["AdminOrganizationMemberAction"];
+        responses: {
+            200: components["responses"]["AdminOrganizationMember"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     listAdminFeatureFlags: {

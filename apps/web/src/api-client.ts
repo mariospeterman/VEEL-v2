@@ -48,6 +48,8 @@ export type AdminComplianceLedgerEntry = components["schemas"]["AdminComplianceL
 export type AdminComplianceReport = components["schemas"]["AdminComplianceReport"];
 export type AdminVatDetermination = components["schemas"]["AdminVatDetermination"];
 export type AdminReceipt = components["schemas"]["AdminReceipt"];
+export type AdminOrganization = components["schemas"]["AdminOrganization"];
+export type AdminOrganizationMember = components["schemas"]["AdminOrganizationMember"];
 
 export type AdminPage<T> = {
   items: T[];
@@ -209,6 +211,18 @@ export async function getAdminVatDeterminations(): Promise<ApiResult<AdminPage<A
 
 export async function getAdminReceipts(): Promise<ApiResult<AdminPage<AdminReceipt>>> {
   return getJson<AdminPage<AdminReceipt>>("/v1/admin/compliance/receipts");
+}
+
+export async function getAdminOrganizations(): Promise<ApiResult<AdminPage<AdminOrganization>>> {
+  return getJson<AdminPage<AdminOrganization>>("/v1/admin/organizations");
+}
+
+export async function getAdminOrganizationMembers(
+  organizationId: string
+): Promise<ApiResult<AdminPage<AdminOrganizationMember>>> {
+  return getJson<AdminPage<AdminOrganizationMember>>(
+    `/v1/admin/organizations/${encodeURIComponent(organizationId)}/members`
+  );
 }
 
 async function getJson<T>(path: string): Promise<ApiResult<T>> {

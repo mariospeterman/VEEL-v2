@@ -1,0 +1,2 @@
+drop index if exists organization_memberships_recent_updates_idx;
+drop index if exists organization_memberships_admin_lookup_idx;

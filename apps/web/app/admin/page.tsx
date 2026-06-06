@@ -5,6 +5,8 @@ import {
   getAdminDac7Reports,
   getAdminNotificationHealth,
   getAdminOpsSummary,
+  getAdminOrganizationMembers,
+  getAdminOrganizations,
   getAdminPaymentIntents,
   getAdminProviderEvents,
   getAdminReceipts,
@@ -14,6 +16,8 @@ import {
   type AdminComplianceReport,
   type AdminNotificationHealth,
   type AdminOpsSummary,
+  type AdminOrganization,
+  type AdminOrganizationMember,
   type AdminPage,
   type AdminPaymentIntent,
   type AdminProviderEvent,
@@ -34,7 +38,9 @@ export default async function AdminPage() {
     dac7Reports,
     carfReports,
     vatDeterminations,
-    receipts
+    receipts,
+    organizations,
+    organizationMembers
   ] = await Promise.all([
     getAdminOpsSummary(),
     getAdminPaymentIntents(),
@@ -45,7 +51,9 @@ export default async function AdminPage() {
     getAdminDac7Reports(),
     getAdminCarfReports(),
     getAdminVatDeterminations(),
-    getAdminReceipts()
+    getAdminReceipts(),
+    getAdminOrganizations(),
+    getAdminOrganizationMembers("00000000-0000-4000-8000-000000000140")
   ]);
 
   return (
@@ -109,6 +117,10 @@ export default async function AdminPage() {
             <Panel title="DAC7 and CARF reports">
               <ReportPanel dac7Reports={dac7Reports} carfReports={carfReports} />
             </Panel>
+
+            <Panel title="Organizations and KYB">
+              <OrganizationPanel organizations={organizations} organizationMembers={organizationMembers} />
+            </Panel>
           </div>
 
           <div className="grid content-start gap-4">
@@ -135,6 +147,37 @@ export default async function AdminPage() {
         </section>
       </section>
     </main>
+  );
+}
+
+function OrganizationPanel({
+  organizationMembers,
+  organizations
+}: {
+  organizationMembers: ApiResult<AdminPage<AdminOrganizationMember>>;
+  organizations: ApiResult<AdminPage<AdminOrganization>>;
+}) {
+  if (!organizations.ok) {
+    return <UnavailableState result={organizations} />;
+  }
+
+  if (!organizationMembers.ok) {
+    return <UnavailableState result={organizationMembers} />;
+  }
+
+  if (organizations.data.items.length === 0 && organizationMembers.data.items.length === 0) {
+    return <EmptyState label="No organizations or members" />;
+  }
+
+  return (
+    <div className="grid gap-2">
+      {organizations.data.items.map((organization) => (
+        <OrganizationRow key={organization.id} organization={organization} />
+      ))}
+      {organizationMembers.data.items.map((member) => (
+        <OrganizationMemberRow key={member.id} member={member} />
+      ))}
+    </div>
   );
 }
 
@@ -356,6 +399,32 @@ function ReportRow({ report }: { report: AdminComplianceReport }) {
       </div>
       <Fact label="State" value={report.state} />
       <Fact label="Lines" value={report.lineCount.toString()} />
+    </article>
+  );
+}
+
+function OrganizationRow({ organization }: { organization: AdminOrganization }) {
+  return (
+    <article className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm md:grid-cols-[1fr_120px_160px]">
+      <div className="min-w-0">
+        <p className="font-medium">{organization.name}</p>
+        <p className="mt-1 truncate text-[var(--muted)]">KYB {organization.kybState ?? "not_started"}</p>
+      </div>
+      <Fact label="State" value={organization.state} />
+      <Fact label="Finance" value="no custody" />
+    </article>
+  );
+}
+
+function OrganizationMemberRow({ member }: { member: AdminOrganizationMember }) {
+  return (
+    <article className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm md:grid-cols-[1fr_120px_160px]">
+      <div className="min-w-0">
+        <p className="font-medium">{member.role}</p>
+        <p className="mt-1 truncate text-[var(--muted)]">{member.userId}</p>
+      </div>
+      <Fact label="State" value={member.state} />
+      <Fact label="Social rank" value="not for sale" />
     </article>
   );
 }

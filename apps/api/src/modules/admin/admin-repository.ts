@@ -7,6 +7,7 @@ import type {
   AdminNotificationHealth,
   AdminOpsSummary,
   AdminOrganization,
+  AdminOrganizationMember,
   AdminPartnerCampaign,
   AdminPaymentIntent,
   AdminProviderEvent,
@@ -22,6 +23,13 @@ export class AdminRepositoryConfigurationError extends Error {
   constructor() {
     super("DATABASE_URL_NOT_CONFIGURED");
     this.name = "AdminRepositoryConfigurationError";
+  }
+}
+
+export class AdminRepositoryStateConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AdminRepositoryStateConflictError";
   }
 }
 
@@ -208,6 +216,22 @@ interface OrganizationRow {
   created_at: Date;
 }
 
+interface OrganizationMemberRow {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  role: AdminOrganizationMember["role"];
+  state: AdminOrganizationMember["state"];
+  invited_by_user_id: string | null;
+  joined_at: Date | null;
+  created_at: Date;
+  updated_at: Date | null;
+}
+
+interface LockedOrganizationMemberRow extends OrganizationMemberRow {
+  active_owner_count: string | number;
+}
+
 const pageSize = 50;
 
 export function createPostgresAdminRepository(databaseUrl?: string): AdminRepository {
@@ -265,6 +289,12 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
         throw new AdminRepositoryConfigurationError();
       },
       async updateOrganizationKyb() {
+        throw new AdminRepositoryConfigurationError();
+      },
+      async listOrganizationMembers() {
+        throw new AdminRepositoryConfigurationError();
+      },
+      async updateOrganizationMember() {
         throw new AdminRepositoryConfigurationError();
       }
     };
@@ -671,6 +701,144 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
 
       return rows[0] ? toOrganization(rows[0]) : null;
     },
+    async listOrganizationMembers(input) {
+      const rows = await sql<OrganizationMemberRow[]>`
+        select
+          id,
+          organization_id,
+          user_id,
+          role,
+          state,
+          invited_by_user_id,
+          joined_at,
+          created_at,
+          updated_at
+        from organization_memberships
+        where organization_id = ${input.organizationId}
+          and (${input.cursor ?? null}::timestamptz is null or coalesce(updated_at, created_at) < ${input.cursor ?? null}::timestamptz)
+        order by coalesce(updated_at, created_at) desc, created_at desc
+        limit ${pageSize + 1}
+      `;
+
+      return page(rows, toOrganizationMember);
+    },
+    async updateOrganizationMember(input) {
+      const rows: OrganizationMemberRow[] = await sql.begin(async (transaction) => {
+        const lockedRows = await transaction<LockedOrganizationMemberRow[]>`
+          select
+            om.id,
+            om.organization_id,
+            om.user_id,
+            om.role,
+            om.state,
+            om.invited_by_user_id,
+            om.joined_at,
+            om.created_at,
+            om.updated_at,
+            (
+              select count(*)::int
+              from organization_memberships owner_membership
+              where owner_membership.organization_id = om.organization_id
+                and owner_membership.role = 'owner'
+                and owner_membership.state = 'active'
+            ) as active_owner_count
+          from organization_memberships om
+          where om.organization_id = ${input.organizationId}
+            and om.id = ${input.membershipId}
+          for update
+        `;
+        const locked = lockedRows[0];
+
+        if (!locked) {
+          return [] as OrganizationMemberRow[];
+        }
+
+        const wouldRemoveActiveOwner =
+          locked.role === "owner" &&
+          locked.state === "active" &&
+          (input.body.role !== "owner" || input.body.state !== "active");
+
+        if (wouldRemoveActiveOwner && Number(locked.active_owner_count) <= 1) {
+          throw new AdminRepositoryStateConflictError("At least one active organization owner is required");
+        }
+
+        const updatedRows = await transaction<OrganizationMemberRow[]>`
+          with actor as (
+            select id
+            from users
+            where supabase_user_id = ${input.supabaseUserId}
+            limit 1
+          ),
+          updated_membership as (
+            update organization_memberships
+            set
+              role = ${input.body.role},
+              state = ${input.body.state},
+              joined_at = case
+                when ${input.body.state} = 'active' and joined_at is null then now()
+                else joined_at
+              end,
+              updated_at = now()
+            where organization_id = ${input.organizationId}
+              and id = ${input.membershipId}
+            returning
+              id,
+              organization_id,
+              user_id,
+              role,
+              state,
+              invited_by_user_id,
+              joined_at,
+              created_at,
+              updated_at
+          ),
+          audit_insert as (
+            insert into audit_events (
+              id,
+              actor_user_id,
+              subject_type,
+              subject_id,
+              action,
+              metadata
+            )
+            select
+              gen_random_uuid(),
+              actor.id,
+              'organization_membership',
+              updated_membership.id,
+              'organization_member_updated',
+              jsonb_build_object(
+                'organizationId', updated_membership.organization_id,
+                'reason', ${input.body.reason},
+                'idempotencyKey', ${input.idempotencyKey},
+                'previousRole', ${locked.role},
+                'newRole', updated_membership.role,
+                'previousState', ${locked.state},
+                'newState', updated_membership.state
+              )
+            from updated_membership
+            cross join actor
+            returning id
+          )
+          select
+            id,
+            organization_id,
+            user_id,
+            role,
+            state,
+            invited_by_user_id,
+            joined_at,
+            created_at,
+            updated_at
+          from updated_membership
+          where exists (select 1 from audit_insert)
+        `;
+
+        return updatedRows;
+      });
+
+      return rows[0] ? toOrganizationMember(rows[0]) : null;
+    },
     async close() {
       await sql.end({ timeout: 5 });
     }
@@ -925,6 +1093,20 @@ function toOrganization(row: OrganizationRow): AdminOrganization {
     plan: row.plan,
     ...(row.kyb_state ? { kybState: row.kyb_state } : {}),
     createdAt: row.created_at.toISOString()
+  };
+}
+
+function toOrganizationMember(row: OrganizationMemberRow): AdminOrganizationMember {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    userId: row.user_id,
+    role: row.role,
+    state: row.state,
+    invitedByUserId: row.invited_by_user_id,
+    joinedAt: row.joined_at?.toISOString() ?? null,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at?.toISOString() ?? null
   };
 }
 

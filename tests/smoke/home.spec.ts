@@ -203,6 +203,7 @@ test("renders the admin payment unlock and provider ops projection", async ({ pa
   await expect(page.getByRole("heading", { name: "Provider events", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Compliance ledger", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "DAC7 and CARF reports", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Organizations and KYB", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "VAT and receipts", exact: true })).toBeVisible();
   await expect(page.getByText("Admin API unavailable").first()).toBeVisible();
   await expect(page.getByText(unavailableStatus).first()).toBeVisible();

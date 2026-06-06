@@ -1,8 +1,15 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { SupabaseAuthVerifier } from "../session/types.js";
-import { AdminRepositoryConfigurationError } from "./admin-repository.js";
-import type { AdminOrganizationKybActionRequest, AdminRepository } from "./types.js";
+import {
+  AdminRepositoryConfigurationError,
+  AdminRepositoryStateConflictError
+} from "./admin-repository.js";
+import type {
+  AdminOrganizationKybActionRequest,
+  AdminOrganizationMemberActionRequest,
+  AdminRepository
+} from "./types.js";
 
 interface RegisterAdminRoutesOptions {
   authVerifier: SupabaseAuthVerifier;
@@ -183,6 +190,88 @@ export async function registerAdminRoutes(
 
     return reply.code(200).send(organization);
   });
+
+  app.get("/v1/admin/organizations/:organizationId/members", async (request, reply) => {
+    const allowed = await requireAdminAccess(request, reply, options);
+    if (!allowed) return reply;
+
+    const { organizationId } = request.params as { organizationId?: string };
+    if (!organizationId) {
+      return reply.code(404).send({
+        code: "not_found",
+        message: "Organization was not found"
+      });
+    }
+
+    const query = request.query as { cursor?: string };
+    return reply.code(200).send(
+      await options.adminRepository.listOrganizationMembers({
+        organizationId,
+        ...(query.cursor ? { cursor: query.cursor } : {})
+      })
+    );
+  });
+
+  app.patch("/v1/admin/organizations/:organizationId/members/:membershipId", async (request, reply) => {
+    const access = await requireAdminAccessWithUser(request, reply, options);
+    if (!access) return reply;
+
+    const idempotencyKey = request.headers["idempotency-key"];
+    if (!idempotencyKey || Array.isArray(idempotencyKey)) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: "Idempotency-Key header is required"
+      });
+    }
+
+    const { membershipId, organizationId } = request.params as {
+      membershipId?: string;
+      organizationId?: string;
+    };
+    if (!membershipId || !organizationId) {
+      return reply.code(404).send({
+        code: "not_found",
+        message: "Organization member was not found"
+      });
+    }
+
+    const body = request.body as Partial<AdminOrganizationMemberActionRequest> | undefined;
+    const validationError = validateOrganizationMemberAction(body);
+    if (validationError) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: validationError
+      });
+    }
+
+    try {
+      const member = await options.adminRepository.updateOrganizationMember({
+        supabaseUserId: access.supabaseUserId,
+        organizationId,
+        membershipId,
+        body: body as AdminOrganizationMemberActionRequest,
+        idempotencyKey
+      });
+
+      if (!member) {
+        return reply.code(404).send({
+          code: "not_found",
+          message: "Organization member was not found"
+        });
+      }
+
+      return reply.code(200).send(member);
+    } catch (error) {
+      if (error instanceof AdminRepositoryStateConflictError) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: error.message
+        });
+      }
+
+      throw error;
+    }
+  });
 }
 
 function adminListInput(query: { q?: string; cursor?: string }): { query?: string; cursor?: string } {
@@ -284,6 +373,38 @@ function validateOrganizationKybAction(
     body.kybState !== "rejected"
   ) {
     return "kybState is invalid";
+  }
+
+  if (!body.reason || body.reason.trim().length < 3 || body.reason.length > 500) {
+    return "reason must be 3-500 characters";
+  }
+
+  return null;
+}
+
+function validateOrganizationMemberAction(
+  body: Partial<AdminOrganizationMemberActionRequest> | undefined
+): string | null {
+  if (!body || typeof body !== "object") {
+    return "Request body is required";
+  }
+
+  if (
+    body.role !== "owner" &&
+    body.role !== "admin" &&
+    body.role !== "member" &&
+    body.role !== "viewer"
+  ) {
+    return "role is invalid";
+  }
+
+  if (
+    body.state !== "invited" &&
+    body.state !== "active" &&
+    body.state !== "suspended" &&
+    body.state !== "removed"
+  ) {
+    return "state is invalid";
   }
 
   if (!body.reason || body.reason.trim().length < 3 || body.reason.length > 500) {

@@ -454,6 +454,16 @@ describe("database migrations", () => {
     expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role|creator_balance|withdraw|payout_queue|escrow/i);
   });
 
+  it("adds organization member admin workflow indexes without money or custody surfaces", () => {
+    const sql = readMigration("0040_organization_member_admin_workflow.sql");
+
+    expect(sql).toContain("organization_memberships_admin_lookup_idx");
+    expect(sql).toContain("on organization_memberships (organization_id, id, state)");
+    expect(sql).toContain("organization_memberships_recent_updates_idx");
+    expect(sql).toContain("on organization_memberships (organization_id, updated_at desc, created_at desc)");
+    expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role|creator_balance|withdraw|payout_queue|escrow|payment_proof/i);
+  });
+
   it("adds only user-owned projections to the Supabase realtime publication", () => {
     const sql = readMigration("0039_realtime_projection_publication.sql");
 

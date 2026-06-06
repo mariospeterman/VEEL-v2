@@ -335,6 +335,7 @@ Build each slice end-to-end before starting the next:
 25. Creator onboarding readiness checklist.
 26. Studio/Enterprise RBAC permission projection.
 27. Admin organization KYB mutation workflow.
+28. Admin organization member mutation workflow and support policy surface.
 
 Each slice must include:
 

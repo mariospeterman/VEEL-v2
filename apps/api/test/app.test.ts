@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
 import { buildApi } from "../src/app";
+import { AdminRepositoryStateConflictError } from "../src/modules/admin/admin-repository";
 import type { AdminRepository } from "../src/modules/admin/types";
 import type { ActivityRepository } from "../src/modules/activity/types";
 import { createBunnyStreamUploadAdapter } from "../src/modules/content/media-upload-adapter";
@@ -3643,6 +3644,12 @@ describe("buildApi", () => {
         async updateOrganizationKyb() {
           throw new Error("not implemented");
         },
+        async listOrganizationMembers() {
+          throw new Error("not implemented");
+        },
+        async updateOrganizationMember() {
+          throw new Error("not implemented");
+        },
         ...unimplementedComplianceAdminMethods
       },
       aiRepository: fakeAiRepository()
@@ -3696,6 +3703,12 @@ describe("buildApi", () => {
         async updateOrganizationKyb() {
           throw new Error("not implemented");
         },
+        async listOrganizationMembers() {
+          throw new Error("not implemented");
+        },
+        async updateOrganizationMember() {
+          throw new Error("not implemented");
+        },
         ...unimplementedComplianceAdminMethods
       },
       aiRepository: fakeAiRepository()
@@ -3745,6 +3758,12 @@ describe("buildApi", () => {
           throw new Error("not implemented");
         },
         async updateOrganizationKyb() {
+          throw new Error("not implemented");
+        },
+        async listOrganizationMembers() {
+          throw new Error("not implemented");
+        },
+        async updateOrganizationMember() {
           throw new Error("not implemented");
         },
         ...unimplementedComplianceAdminMethods
@@ -3906,6 +3925,157 @@ describe("buildApi", () => {
     });
 
     expect(response.statusCode).toBe(400);
+
+    await app.close();
+  });
+
+  it("returns admin organization members without money or profile payloads", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: fakeAdminRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/admin/organizations/00000000-0000-4000-8000-000000000140/members",
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      items: [
+        {
+          id: "00000000-0000-4000-8000-000000000141",
+          organizationId: "00000000-0000-4000-8000-000000000140",
+          userId: "00000000-0000-4000-8000-000000000001",
+          role: "owner",
+          state: "active"
+        }
+      ],
+      nextCursor: null
+    });
+    expect(response.body).not.toMatch(/email|displayName|handle|balance|withdraw|payout|escrow|privateKey|serviceRole|rawPayload/i);
+
+    await app.close();
+  });
+
+  it("updates organization member role and state through an audited admin mutation", async () => {
+    const calls: Array<Parameters<AdminRepository["updateOrganizationMember"]>[0]> = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: {
+        ...fakeAdminRepository,
+        async updateOrganizationMember(input) {
+          calls.push(input);
+          return {
+            id: input.membershipId,
+            organizationId: input.organizationId,
+            userId: "00000000-0000-4000-8000-000000000011",
+            role: input.body.role,
+            state: input.body.state,
+            invitedByUserId: "00000000-0000-4000-8000-000000000001",
+            joinedAt: "2026-06-06T12:00:00.000Z",
+            createdAt: "2026-06-05T10:00:00.000Z",
+            updatedAt: "2026-06-06T12:30:00.000Z"
+          };
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/admin/organizations/00000000-0000-4000-8000-000000000140/members/00000000-0000-4000-8000-000000000142",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "org-member-1"
+      },
+      payload: {
+        role: "admin",
+        state: "active",
+        reason: "Enterprise admin handoff approved"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      id: "00000000-0000-4000-8000-000000000142",
+      role: "admin",
+      state: "active"
+    });
+    expect(calls[0]).toMatchObject({
+      supabaseUserId: "00000000-0000-4000-8000-000000000001",
+      organizationId: "00000000-0000-4000-8000-000000000140",
+      membershipId: "00000000-0000-4000-8000-000000000142",
+      idempotencyKey: "org-member-1",
+      body: {
+        role: "admin",
+        state: "active",
+        reason: "Enterprise admin handoff approved"
+      }
+    });
+    expect(response.body).not.toMatch(/balance|withdraw|payout|escrow|privateKey|serviceRole|recommendation|visibility/i);
+
+    await app.close();
+  });
+
+  it("rejects organization member updates without idempotency", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: fakeAdminRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/admin/organizations/00000000-0000-4000-8000-000000000140/members/00000000-0000-4000-8000-000000000142",
+      headers: {
+        authorization: "Bearer valid-token"
+      },
+      payload: {
+        role: "admin",
+        state: "active",
+        reason: "Enterprise admin handoff approved"
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+
+    await app.close();
+  });
+
+  it("rejects organization member updates that would remove the last active owner", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: {
+        ...fakeAdminRepository,
+        async updateOrganizationMember() {
+          throw new AdminRepositoryStateConflictError("At least one active organization owner is required");
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/admin/organizations/00000000-0000-4000-8000-000000000140/members/00000000-0000-4000-8000-000000000141",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "org-member-last-owner"
+      },
+      payload: {
+        role: "viewer",
+        state: "suspended",
+        reason: "Test last owner guard"
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: "conflict",
+      message: "At least one active organization owner is required"
+    });
 
     await app.close();
   });
@@ -6491,6 +6661,37 @@ const fakeAdminRepository: AdminRepository = {
       plan: "enterprise",
       kybState: input.body.kybState,
       createdAt: "2026-06-05T10:00:00.000Z"
+    };
+  },
+  async listOrganizationMembers() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-000000000141",
+          organizationId: "00000000-0000-4000-8000-000000000140",
+          userId: "00000000-0000-4000-8000-000000000001",
+          role: "owner",
+          state: "active",
+          invitedByUserId: null,
+          joinedAt: "2026-06-05T10:00:00.000Z",
+          createdAt: "2026-06-05T10:00:00.000Z",
+          updatedAt: "2026-06-05T10:00:00.000Z"
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async updateOrganizationMember(input) {
+    return {
+      id: input.membershipId,
+      organizationId: input.organizationId,
+      userId: "00000000-0000-4000-8000-000000000001",
+      role: input.body.role,
+      state: input.body.state,
+      invitedByUserId: null,
+      joinedAt: input.body.state === "active" ? "2026-06-05T10:00:00.000Z" : null,
+      createdAt: "2026-06-05T10:00:00.000Z",
+      updatedAt: "2026-06-06T12:30:00.000Z"
     };
   }
 };

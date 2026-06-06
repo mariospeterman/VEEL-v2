@@ -1408,6 +1408,34 @@ paths:
         "200": { $ref: "#/components/responses/AdminOrganization" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /v1/admin/organizations/{organizationId}/members:
+    get:
+      operationId: listAdminOrganizationMembers
+      tags: [Admin]
+      summary: Organization member governance list
+      parameters:
+        - $ref: "#/components/parameters/OrganizationId"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/AdminOrganizationMemberPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /v1/admin/organizations/{organizationId}/members/{membershipId}:
+    patch:
+      operationId: updateAdminOrganizationMember
+      tags: [Admin]
+      summary: Update organization member role or state with audit trail
+      parameters:
+        - $ref: "#/components/parameters/OrganizationId"
+        - $ref: "#/components/parameters/MembershipId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/AdminOrganizationMemberAction"
+      responses:
+        "200": { $ref: "#/components/responses/AdminOrganizationMember" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /v1/admin/feature-flags:
     get:
       operationId: listAdminFeatureFlags
@@ -1520,6 +1548,7 @@ components:
     SupportCaseId: { name: supportCaseId, in: path, required: true, schema: { type: string, format: uuid } }
     DataRequestId: { name: dataRequestId, in: path, required: true, schema: { type: string, format: uuid } }
     OrganizationId: { name: organizationId, in: path, required: true, schema: { type: string, format: uuid } }
+    MembershipId: { name: membershipId, in: path, required: true, schema: { type: string, format: uuid } }
     FeatureFlagKey: { name: featureFlagKey, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9_.:-]{2,120}$" } }
     Slug: { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9-]{1,80}$" } }
     Handle: { name: handle, in: path, required: true, schema: { type: string, pattern: "^[a-zA-Z0-9_]{2,32}$" } }
@@ -1577,6 +1606,7 @@ components:
     AdminSupportCaseAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminSupportCaseActionRequest" } } } }
     AdminDataRequestAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminDataRequestActionRequest" } } } }
     AdminOrganizationKybAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOrganizationKybActionRequest" } } } }
+    AdminOrganizationMemberAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOrganizationMemberActionRequest" } } } }
     AdminFeatureFlagPatch: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminFeatureFlagPatchRequest" } } } }
     WebhookPayload: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
     AgeWebhookPayload:
@@ -1690,6 +1720,8 @@ components:
     AdminTierWaiverPage: { description: Admin tier waivers, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminTierWaiver" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminOrganization: { description: Admin organization, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOrganization" } } } }
     AdminOrganizationPage: { description: Admin organizations, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminOrganization" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminOrganizationMember: { description: Admin organization member, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOrganizationMember" } } } }
+    AdminOrganizationMemberPage: { description: Admin organization members, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminOrganizationMember" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminFeatureFlag: { description: Admin feature flag, content: { application/json: { schema: { $ref: "#/components/schemas/AdminFeatureFlag" } } } }
     AdminFeatureFlagPage: { description: Admin feature flags, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminFeatureFlag" } } } } } } }
     AuditEventPage: { description: Audit events, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AuditEvent" } }, nextCursor: { type: string, nullable: true } } } } } }
@@ -3202,6 +3234,19 @@ components:
         plan: { type: string, enum: [enterprise] }
         kybState: { type: string, enum: [not_started, pending, verified, rejected], nullable: true }
         createdAt: { type: string, format: date-time }
+    AdminOrganizationMember:
+      type: object
+      required: [id, organizationId, userId, role, state, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        role: { type: string, enum: [owner, admin, member, viewer] }
+        state: { type: string, enum: [invited, active, suspended, removed] }
+        invitedByUserId: { type: string, format: uuid, nullable: true }
+        joinedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time, nullable: true }
     AdminFeatureFlag:
       type: object
       required: [key, value, updatedAt]
@@ -3243,6 +3288,13 @@ components:
       required: [kybState, reason]
       properties:
         kybState: { type: string, enum: [not_started, pending, verified, rejected] }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+    AdminOrganizationMemberActionRequest:
+      type: object
+      required: [role, state, reason]
+      properties:
+        role: { type: string, enum: [owner, admin, member, viewer] }
+        state: { type: string, enum: [invited, active, suspended, removed] }
         reason: { type: string, minLength: 3, maxLength: 500 }
     AdminFeatureFlagPatchRequest:
       type: object
