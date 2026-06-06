@@ -2,6 +2,7 @@ import type { components } from "@veel/contracts";
 
 export type AdminOpsSummary = components["schemas"]["AdminOpsSummary"];
 export type AdminNotificationHealth = components["schemas"]["AdminNotificationHealth"];
+export type AuditEvent = components["schemas"]["AuditEvent"];
 export type AdminPaymentIntent = components["schemas"]["AdminPaymentIntent"];
 export type AdminUnlock = components["schemas"]["AdminUnlock"];
 export type AdminProviderEvent = components["schemas"]["AdminProviderEvent"];
@@ -47,6 +48,7 @@ export interface AdminRepository {
   listPaymentIntents(input: { query?: string; cursor?: string }): Promise<AdminPage<AdminPaymentIntent>>;
   listUnlocks(input: { query?: string; cursor?: string }): Promise<AdminPage<AdminUnlock>>;
   listProviderEvents(input: { cursor?: string }): Promise<AdminPage<AdminProviderEvent>>;
+  listAuditEvents(input: { cursor?: string }): Promise<AdminPage<AuditEvent>>;
   listSupportCases(input: { cursor?: string }): Promise<AdminPage<AdminSupportCase>>;
   updateSupportCase(input: {
     supabaseUserId: string;

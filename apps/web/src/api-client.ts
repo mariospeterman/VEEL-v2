@@ -41,6 +41,7 @@ export type AiCapabilities = components["schemas"]["AiCapabilities"];
 export type OrganizationDashboardPage = components["schemas"]["OrganizationDashboardPage"];
 export type AdminOpsSummary = components["schemas"]["AdminOpsSummary"];
 export type AdminNotificationHealth = components["schemas"]["AdminNotificationHealth"];
+export type AuditEvent = components["schemas"]["AuditEvent"];
 export type AdminPaymentIntent = components["schemas"]["AdminPaymentIntent"];
 export type AdminUnlock = components["schemas"]["AdminUnlock"];
 export type AdminProviderEvent = components["schemas"]["AdminProviderEvent"];
@@ -196,6 +197,10 @@ export async function getAdminUnlocks(): Promise<ApiResult<AdminPage<AdminUnlock
 
 export async function getAdminProviderEvents(): Promise<ApiResult<AdminPage<AdminProviderEvent>>> {
   return getJson<AdminPage<AdminProviderEvent>>("/v1/admin/provider-events");
+}
+
+export async function getAdminAuditEvents(): Promise<ApiResult<AdminPage<AuditEvent>>> {
+  return getJson<AdminPage<AuditEvent>>("/v1/admin/audit");
 }
 
 export async function getAdminSupportCases(): Promise<ApiResult<AdminPage<AdminSupportCase>>> {

@@ -21,7 +21,8 @@ import type {
   AdminSupportPolicy,
   AdminTierWaiver,
   AdminVatDetermination,
-  AdminUnlock
+  AdminUnlock,
+  AuditEvent
 } from "./types.js";
 
 export class AdminRepositoryConfigurationError extends Error {
@@ -100,6 +101,13 @@ interface ProviderEventRow {
   normalized_state: AdminProviderEvent["state"];
   received_at: Date;
   processed_at: Date | null;
+}
+
+interface AuditEventRow {
+  id: string;
+  subject_type: string;
+  action: string;
+  created_at: Date;
 }
 
 interface SupportCaseRow {
@@ -320,6 +328,9 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
         throw new AdminRepositoryConfigurationError();
       },
       async listProviderEvents() {
+        throw new AdminRepositoryConfigurationError();
+      },
+      async listAuditEvents() {
         throw new AdminRepositoryConfigurationError();
       },
       async listSupportCases() {
@@ -546,6 +557,17 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
       `;
 
       return page(rows, toProviderEvent);
+    },
+    async listAuditEvents(input) {
+      const rows = await sql<AuditEventRow[]>`
+        select id, subject_type, action, created_at
+        from audit_events
+        where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
+        order by created_at desc
+        limit ${pageSize + 1}
+      `;
+
+      return page(rows, toAuditEvent);
     },
     async listSupportCases(input) {
       const rows = await sql<SupportCaseRow[]>`
@@ -1575,6 +1597,15 @@ function toProviderEvent(row: ProviderEventRow): AdminProviderEvent {
     state: row.normalized_state,
     receivedAt: row.received_at.toISOString(),
     processedAt: row.processed_at?.toISOString() ?? null
+  };
+}
+
+function toAuditEvent(row: AuditEventRow): AuditEvent {
+  return {
+    id: row.id,
+    subjectType: row.subject_type,
+    action: row.action,
+    createdAt: row.created_at.toISOString()
   };
 }
 

@@ -3639,6 +3639,9 @@ describe("buildApi", () => {
         async listProviderEvents() {
           throw new Error("not implemented");
         },
+        async listAuditEvents() {
+          throw new Error("not implemented");
+        },
         async listSupportCases() {
           throw new Error("not implemented");
         },
@@ -3728,6 +3731,9 @@ describe("buildApi", () => {
         async listProviderEvents() {
           throw new Error("not implemented");
         },
+        async listAuditEvents() {
+          throw new Error("not implemented");
+        },
         async listSupportCases() {
           throw new Error("not implemented");
         },
@@ -3813,6 +3819,9 @@ describe("buildApi", () => {
           throw new Error("not implemented");
         },
         async listProviderEvents() {
+          throw new Error("not implemented");
+        },
+        async listAuditEvents() {
           throw new Error("not implemented");
         },
         async listSupportCases() {
@@ -3980,6 +3989,33 @@ describe("buildApi", () => {
       code: "forbidden",
       message: "CARF reporting is disabled by policy"
     });
+
+    await app.close();
+  });
+
+  it("returns sanitized admin audit events", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: fakeAdminRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/admin/audit",
+      headers: {
+        authorization: "Bearer valid-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().items[0]).toMatchObject({
+      subjectType: "feature_flag",
+      action: "feature_flag_updated"
+    });
+    expect(response.body).not.toMatch(
+      /metadata|raw|payload|secret|privateKey|serviceRole|identityDocument|idempotencyKey|reason|providerPayload/i
+    );
 
     await app.close();
   });
@@ -7069,6 +7105,19 @@ const fakeAdminRepository: AdminRepository = {
           state: "processed",
           receivedAt: "2026-06-04T20:01:00.000Z",
           processedAt: "2026-06-04T20:01:01.000Z"
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async listAuditEvents() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-000000000180",
+          subjectType: "feature_flag",
+          action: "feature_flag_updated",
+          createdAt: "2026-06-06T13:00:00.000Z"
         }
       ],
       nextCursor: null

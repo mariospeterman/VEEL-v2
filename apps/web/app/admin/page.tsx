@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import {
+  getAdminAuditEvents,
   getAdminCarfReports,
   getAdminComplianceLedger,
   getAdminDac7Reports,
@@ -17,6 +18,7 @@ import {
   getAdminSupportPolicies,
   getAdminUnlocks,
   getAdminVatDeterminations,
+  type AuditEvent,
   type AdminComplianceLedgerEntry,
   type AdminComplianceReport,
   type AdminDataRequest,
@@ -43,6 +45,7 @@ export default async function AdminPage() {
     payments,
     unlocks,
     providerEvents,
+    auditEvents,
     notificationHealth,
     complianceLedger,
     dac7Reports,
@@ -61,6 +64,7 @@ export default async function AdminPage() {
     getAdminPaymentIntents(),
     getAdminUnlocks(),
     getAdminProviderEvents(),
+    getAdminAuditEvents(),
     getAdminNotificationHealth(),
     getAdminComplianceLedger(),
     getAdminDac7Reports(),
@@ -164,6 +168,18 @@ export default async function AdminPage() {
                   <div className="grid gap-2">
                     {page.items.map((request) => (
                       <DataRequestRow key={request.id} request={request} />
+                    ))}
+                  </div>
+                )}
+              </PageState>
+            </Panel>
+
+            <Panel title="Audit log">
+              <PageState result={auditEvents} emptyLabel="No audit events">
+                {(page) => (
+                  <div className="grid gap-2">
+                    {page.items.map((event) => (
+                      <AuditEventRow event={event} key={event.id} />
                     ))}
                   </div>
                 )}
@@ -584,6 +600,19 @@ function FeatureFlagRow({ flag }: { flag: AdminFeatureFlag }) {
       <div className="mt-3 grid gap-2">
         <Fact label="Boundary" value="software policy" />
       </div>
+    </article>
+  );
+}
+
+function AuditEventRow({ event }: { event: AuditEvent }) {
+  return (
+    <article className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm md:grid-cols-[1fr_130px_180px]">
+      <div className="min-w-0">
+        <p className="font-medium">{event.action}</p>
+        <p className="mt-1 truncate text-[var(--muted)]">{event.id}</p>
+      </div>
+      <Fact label="Subject" value={event.subjectType} />
+      <Fact label="Created" value={timestampLabel(event.createdAt)} />
     </article>
   );
 }

@@ -63,6 +63,14 @@ export async function registerAdminRoutes(
     return reply.code(200).send(await options.adminRepository.listProviderEvents(adminListInput(query)));
   });
 
+  app.get("/v1/admin/audit", async (request, reply) => {
+    const allowed = await requireAdminAccess(request, reply, options);
+    if (!allowed) return reply;
+
+    const query = request.query as { cursor?: string };
+    return reply.code(200).send(await options.adminRepository.listAuditEvents(adminListInput(query)));
+  });
+
   app.get("/v1/admin/support/cases", async (request, reply) => {
     const allowed = await requireAdminAccess(request, reply, options);
     if (!allowed) return reply;
