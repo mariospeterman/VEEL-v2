@@ -3,9 +3,12 @@ import type { components } from "@veel/contracts";
 export type AdminOpsSummary = components["schemas"]["AdminOpsSummary"];
 export type AdminNotificationHealth = components["schemas"]["AdminNotificationHealth"];
 export type AuditEvent = components["schemas"]["AuditEvent"];
+export type AdminContentItem = components["schemas"]["AdminContentItem"];
 export type AdminPaymentIntent = components["schemas"]["AdminPaymentIntent"];
 export type AdminUnlock = components["schemas"]["AdminUnlock"];
 export type AdminProviderEvent = components["schemas"]["AdminProviderEvent"];
+export type AdminReport = components["schemas"]["AdminReport"];
+export type AdminUser = components["schemas"]["AdminUser"];
 export type AdminDatingSafety = components["schemas"]["AdminDatingSafety"];
 export type AdminComplianceLedgerEntry = components["schemas"]["AdminComplianceLedgerEntry"];
 export type AdminComplianceReport = components["schemas"]["AdminComplianceReport"];
@@ -35,6 +38,9 @@ export type AdminDataRequestActionRequest =
   components["schemas"]["AdminDataRequestActionRequest"];
 export type AdminFeatureFlagPatchRequest =
   components["schemas"]["AdminFeatureFlagPatchRequest"];
+export type AdminModerationActionRequest =
+  components["schemas"]["AdminModerationActionRequest"];
+export type AdminReportActionRequest = components["schemas"]["AdminReportActionRequest"];
 
 export interface AdminPage<Item> {
   items: Item[];
@@ -45,6 +51,22 @@ export interface AdminRepository {
   hasAdminAccess(supabaseUserId: string): Promise<boolean>;
   getOpsSummary(): Promise<AdminOpsSummary>;
   getNotificationHealth(): Promise<AdminNotificationHealth>;
+  listUsers(input: { query?: string; cursor?: string }): Promise<AdminPage<AdminUser>>;
+  getUser(input: { userId: string }): Promise<AdminUser | null>;
+  listContent(input: { cursor?: string }): Promise<AdminPage<AdminContentItem>>;
+  updateContentModeration(input: {
+    supabaseUserId: string;
+    contentId: string;
+    body: AdminModerationActionRequest;
+    idempotencyKey: string;
+  }): Promise<AdminContentItem | null>;
+  listReports(input: { cursor?: string }): Promise<AdminPage<AdminReport>>;
+  updateReport(input: {
+    supabaseUserId: string;
+    reportId: string;
+    body: AdminReportActionRequest;
+    idempotencyKey: string;
+  }): Promise<AdminReport | null>;
   listPaymentIntents(input: { query?: string; cursor?: string }): Promise<AdminPage<AdminPaymentIntent>>;
   listUnlocks(input: { query?: string; cursor?: string }): Promise<AdminPage<AdminUnlock>>;
   listProviderEvents(input: { cursor?: string }): Promise<AdminPage<AdminProviderEvent>>;

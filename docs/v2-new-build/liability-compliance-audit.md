@@ -68,7 +68,7 @@ Veel records evidence, state transitions, reporting facts, exports, and accounti
 | Mutuals/Connections | Compatibility backend route family and frontend projections exist. | Rename/migration from dating tables/routes, conduct UX, and hard social-money rule tests remain. |
 | Tiers | Free Verified, Veel Plus, Veel Studio, Enterprise are documented; organization member dashboards now expose software governance/readiness only. | Feature gates, admin overrides, and non-pay-to-win policy tests remain. |
 | Notifications | OpenAPI routes, RLS-backed notification/preference/device/delivery-attempt tables, Fastify account routes, worker delivery queue boundary, server-only VAPID Web Push send-provider boundary, browser service-worker enrollment UI, Supabase Realtime projection publication/cache invalidation boundary, backend tests, settings preference reads, and admin health visibility exist. | Real VAPID secrets, staging push-service verification across target browsers, and live Supabase Realtime staging verification remain. |
-| User/creator/studio/enterprise/admin dashboards | User activity, creator onboarding/readiness, creator monetisation dashboard, member-scoped Studio/Enterprise dashboards with backend-derived RBAC permission rows, admin organization KYB mutation, audited admin organization member role/state mutation, audited support case/support policy surfaces, refund/dispute review, privacy data request lifecycle, feature flag policy controls, sanitized audit-log reads, and admin ops panels exist. | Remaining admin route-map breadth, feature-gate enforcement depth, and deeper provider-backed KYB workflow depth remain. |
+| User/creator/studio/enterprise/admin dashboards | User activity, creator onboarding/readiness, creator monetisation dashboard, member-scoped Studio/Enterprise dashboards with backend-derived RBAC permission rows, admin user/content/report moderation queues, admin organization KYB mutation, audited admin organization member role/state mutation, audited support case/support policy surfaces, refund/dispute review, privacy data request lifecycle, feature flag policy controls, sanitized audit-log reads, and admin ops panels exist. | Remaining admin route-map breadth, feature-gate enforcement depth, and deeper provider-backed KYB workflow depth remain. |
 
 ## Risk Matrix
 
@@ -114,6 +114,7 @@ Veel records evidence, state transitions, reporting facts, exports, and accounti
 - Activity must show backend-derived receipts, passes, wallet transaction references, Membership state, safety actions, and relevant account issues.
 - Admin must show system health, provider health, money/access state, compliance readiness, notifications delivery health, and organization/studio governance without exposing secrets or raw provider payloads.
 - Admin audit-log reads must expose only sanitized event identity, subject type, action, and timestamp. Audit metadata stays backend-only unless a resource-specific redacted contract is explicitly approved.
+- Admin moderation reads must stay sanitized and admin moderation/report mutations must be audited state transitions only; they must not create payment truth, entitlement truth, reporting truth, bookkeeping truth, social rank, Mutuals treatment, or paid visibility.
 
 ## Provider Optimization Recommendations
 

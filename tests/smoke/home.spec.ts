@@ -199,6 +199,7 @@ test("renders the admin payment unlock and provider ops projection", async ({ pa
   await expect(page.getByText("Admin ops")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Payments", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Unlocks", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Users content and reports", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Notification health", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Provider events", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Compliance ledger", exact: true })).toBeVisible();

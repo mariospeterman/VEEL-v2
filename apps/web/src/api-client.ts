@@ -42,9 +42,12 @@ export type OrganizationDashboardPage = components["schemas"]["OrganizationDashb
 export type AdminOpsSummary = components["schemas"]["AdminOpsSummary"];
 export type AdminNotificationHealth = components["schemas"]["AdminNotificationHealth"];
 export type AuditEvent = components["schemas"]["AuditEvent"];
+export type AdminContentItem = components["schemas"]["AdminContentItem"];
 export type AdminPaymentIntent = components["schemas"]["AdminPaymentIntent"];
 export type AdminUnlock = components["schemas"]["AdminUnlock"];
 export type AdminProviderEvent = components["schemas"]["AdminProviderEvent"];
+export type AdminReport = components["schemas"]["AdminReport"];
+export type AdminUser = components["schemas"]["AdminUser"];
 export type AdminSupportCase = components["schemas"]["AdminSupportCase"];
 export type AdminSupportPolicy = components["schemas"]["AdminSupportPolicy"];
 export type AdminRefundDispute = components["schemas"]["AdminRefundDispute"];
@@ -185,6 +188,18 @@ export async function getAdminOpsSummary(): Promise<ApiResult<AdminOpsSummary>> 
 
 export async function getAdminNotificationHealth(): Promise<ApiResult<AdminNotificationHealth>> {
   return getJson<AdminNotificationHealth>("/v1/admin/notifications/health");
+}
+
+export async function getAdminUsers(): Promise<ApiResult<AdminPage<AdminUser>>> {
+  return getJson<AdminPage<AdminUser>>("/v1/admin/users");
+}
+
+export async function getAdminContent(): Promise<ApiResult<AdminPage<AdminContentItem>>> {
+  return getJson<AdminPage<AdminContentItem>>("/v1/admin/content");
+}
+
+export async function getAdminReports(): Promise<ApiResult<AdminPage<AdminReport>>> {
+  return getJson<AdminPage<AdminReport>>("/v1/admin/reports");
 }
 
 export async function getAdminPaymentIntents(): Promise<ApiResult<AdminPage<AdminPaymentIntent>>> {

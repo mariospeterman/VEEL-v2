@@ -3,6 +3,7 @@ import {
   getAdminAuditEvents,
   getAdminCarfReports,
   getAdminComplianceLedger,
+  getAdminContent,
   getAdminDac7Reports,
   getAdminDataRequests,
   getAdminFeatureFlags,
@@ -13,14 +14,17 @@ import {
   getAdminPaymentIntents,
   getAdminProviderEvents,
   getAdminReceipts,
+  getAdminReports,
   getAdminRefundDisputes,
   getAdminSupportCases,
   getAdminSupportPolicies,
   getAdminUnlocks,
+  getAdminUsers,
   getAdminVatDeterminations,
   type AuditEvent,
   type AdminComplianceLedgerEntry,
   type AdminComplianceReport,
+  type AdminContentItem,
   type AdminDataRequest,
   type AdminFeatureFlag,
   type AdminNotificationHealth,
@@ -31,10 +35,12 @@ import {
   type AdminPaymentIntent,
   type AdminProviderEvent,
   type AdminReceipt,
+  type AdminReport,
   type AdminRefundDispute,
   type AdminSupportCase,
   type AdminSupportPolicy,
   type AdminUnlock,
+  type AdminUser,
   type AdminVatDetermination,
   type ApiResult
 } from "@/api-client";
@@ -47,6 +53,9 @@ export default async function AdminPage() {
     providerEvents,
     auditEvents,
     notificationHealth,
+    users,
+    content,
+    reports,
     complianceLedger,
     dac7Reports,
     carfReports,
@@ -66,6 +75,9 @@ export default async function AdminPage() {
     getAdminProviderEvents(),
     getAdminAuditEvents(),
     getAdminNotificationHealth(),
+    getAdminUsers(),
+    getAdminContent(),
+    getAdminReports(),
     getAdminComplianceLedger(),
     getAdminDac7Reports(),
     getAdminCarfReports(),
@@ -124,6 +136,10 @@ export default async function AdminPage() {
                   </div>
                 )}
               </PageState>
+            </Panel>
+
+            <Panel title="Users content and reports">
+              <ModerationPanel users={users} content={content} reports={reports} />
             </Panel>
 
             <Panel title="Compliance ledger">
@@ -283,6 +299,46 @@ function SupportPanel({
       ))}
       {supportCases.data.items.map((supportCase) => (
         <SupportCaseRow key={supportCase.id} supportCase={supportCase} />
+      ))}
+    </div>
+  );
+}
+
+function ModerationPanel({
+  content,
+  reports,
+  users
+}: {
+  content: ApiResult<AdminPage<AdminContentItem>>;
+  reports: ApiResult<AdminPage<AdminReport>>;
+  users: ApiResult<AdminPage<AdminUser>>;
+}) {
+  if (!users.ok) {
+    return <UnavailableState result={users} />;
+  }
+
+  if (!content.ok) {
+    return <UnavailableState result={content} />;
+  }
+
+  if (!reports.ok) {
+    return <UnavailableState result={reports} />;
+  }
+
+  if (users.data.items.length === 0 && content.data.items.length === 0 && reports.data.items.length === 0) {
+    return <EmptyState label="No users, content, or reports" />;
+  }
+
+  return (
+    <div className="grid gap-2">
+      {reports.data.items.map((report) => (
+        <ReportQueueRow key={report.id} report={report} />
+      ))}
+      {content.data.items.map((item) => (
+        <ContentQueueRow content={item} key={item.id} />
+      ))}
+      {users.data.items.map((user) => (
+        <UserQueueRow key={user.id} user={user} />
       ))}
     </div>
   );
@@ -457,6 +513,45 @@ function UnlockRow({ unlock }: { unlock: AdminUnlock }) {
       </div>
       <Fact label="State" value={unlock.state} />
       <Fact label="Target" value={unlock.targetType} />
+    </article>
+  );
+}
+
+function UserQueueRow({ user }: { user: AdminUser }) {
+  return (
+    <article className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm md:grid-cols-[1fr_130px_190px]">
+      <div className="min-w-0">
+        <p className="font-medium">@{user.handle}</p>
+        <p className="mt-1 truncate text-[var(--muted)]">{user.id}</p>
+      </div>
+      <Fact label="Age" value={user.ageState} />
+      <Fact label="Wallet" value={user.walletState.connected ? "connected" : "missing"} />
+    </article>
+  );
+}
+
+function ContentQueueRow({ content }: { content: AdminContentItem }) {
+  return (
+    <article className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm md:grid-cols-[1fr_130px_190px]">
+      <div className="min-w-0">
+        <p className="font-medium">@{content.creator.handle}</p>
+        <p className="mt-1 truncate text-[var(--muted)]">{content.id}</p>
+      </div>
+      <Fact label="Moderation" value={content.moderationState} />
+      <Fact label="State" value={content.state} />
+    </article>
+  );
+}
+
+function ReportQueueRow({ report }: { report: AdminReport }) {
+  return (
+    <article className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm md:grid-cols-[1fr_130px_190px]">
+      <div className="min-w-0">
+        <p className="font-medium">{report.subjectType}</p>
+        <p className="mt-1 truncate text-[var(--muted)]">{report.reason}</p>
+      </div>
+      <Fact label="State" value={report.state} />
+      <Fact label="Subject" value={report.subjectId ?? "none"} />
     </article>
   );
 }

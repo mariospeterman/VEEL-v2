@@ -650,7 +650,8 @@ create table reports (
   subject_id uuid not null,
   reason text not null,
   queue text not null,
-  state text not null default 'submitted',
+  state text not null default 'submitted'
+    check (state in ('submitted', 'queued', 'reviewing', 'resolved', 'escalated', 'rejected')),
   idempotency_key text not null,
   created_at timestamptz not null default now(),
   reviewed_at timestamptz,

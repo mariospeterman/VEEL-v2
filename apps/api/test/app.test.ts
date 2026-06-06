@@ -3630,6 +3630,24 @@ describe("buildApi", () => {
         async getNotificationHealth() {
           throw new Error("not implemented");
         },
+        async listUsers() {
+          throw new Error("not implemented");
+        },
+        async getUser() {
+          throw new Error("not implemented");
+        },
+        async listContent() {
+          throw new Error("not implemented");
+        },
+        async updateContentModeration() {
+          throw new Error("not implemented");
+        },
+        async listReports() {
+          throw new Error("not implemented");
+        },
+        async updateReport() {
+          throw new Error("not implemented");
+        },
         async listPaymentIntents() {
           throw new Error("not implemented");
         },
@@ -3722,6 +3740,24 @@ describe("buildApi", () => {
         async getNotificationHealth() {
           throw new Error("not implemented");
         },
+        async listUsers() {
+          throw new Error("not implemented");
+        },
+        async getUser() {
+          throw new Error("not implemented");
+        },
+        async listContent() {
+          throw new Error("not implemented");
+        },
+        async updateContentModeration() {
+          throw new Error("not implemented");
+        },
+        async listReports() {
+          throw new Error("not implemented");
+        },
+        async updateReport() {
+          throw new Error("not implemented");
+        },
         async listPaymentIntents() {
           throw new Error("not implemented");
         },
@@ -3810,6 +3846,24 @@ describe("buildApi", () => {
           throw new Error("not implemented");
         },
         async getNotificationHealth() {
+          throw new Error("not implemented");
+        },
+        async listUsers() {
+          throw new Error("not implemented");
+        },
+        async getUser() {
+          throw new Error("not implemented");
+        },
+        async listContent() {
+          throw new Error("not implemented");
+        },
+        async updateContentModeration() {
+          throw new Error("not implemented");
+        },
+        async listReports() {
+          throw new Error("not implemented");
+        },
+        async updateReport() {
           throw new Error("not implemented");
         },
         async listPaymentIntents() {
@@ -4016,6 +4070,110 @@ describe("buildApi", () => {
     expect(response.body).not.toMatch(
       /metadata|raw|payload|secret|privateKey|serviceRole|identityDocument|idempotencyKey|reason|providerPayload/i
     );
+
+    await app.close();
+  });
+
+  it("returns sanitized admin users content and reports", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: fakeAdminRepository
+    });
+    await app.ready();
+
+    const headers = { authorization: "Bearer valid-token" };
+    const [users, user, content, reports] = await Promise.all([
+      app.inject({ method: "GET", url: "/v1/admin/users", headers }),
+      app.inject({ method: "GET", url: "/v1/admin/users/00000000-0000-4000-8000-000000000011", headers }),
+      app.inject({ method: "GET", url: "/v1/admin/content", headers }),
+      app.inject({ method: "GET", url: "/v1/admin/reports", headers })
+    ]);
+
+    for (const response of [users, user, content, reports]) {
+      expect(response.statusCode).toBe(200);
+      expect(response.body).not.toMatch(
+        /raw|payload|secret|privateKey|serviceRole|identityDocument|providerPayload|metadata|email|phone/i
+      );
+    }
+
+    expect(users.json().items[0]).toMatchObject({
+      handle: "maki",
+      ageState: "verified",
+      walletState: {
+        connected: true,
+        chain: "solana_devnet"
+      }
+    });
+    expect(content.json().items[0]).toMatchObject({
+      moderationState: "pending",
+      creator: { handle: "creator" }
+    });
+    expect(reports.json().items[0]).toMatchObject({
+      subjectType: "content",
+      state: "submitted"
+    });
+
+    await app.close();
+  });
+
+  it("updates admin content moderation and reports through audited mutations", async () => {
+    const contentCalls: Array<Parameters<AdminRepository["updateContentModeration"]>[0]> = [];
+    const reportCalls: Array<Parameters<AdminRepository["updateReport"]>[0]> = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: {
+        ...fakeAdminRepository,
+        async updateContentModeration(input) {
+          contentCalls.push(input);
+          return fakeAdminRepository.updateContentModeration(input);
+        },
+        async updateReport(input) {
+          reportCalls.push(input);
+          return fakeAdminRepository.updateReport(input);
+        }
+      }
+    });
+    await app.ready();
+
+    const headers = {
+      authorization: "Bearer valid-token",
+      "idempotency-key": "admin-moderation-1"
+    };
+    const [content, report] = await Promise.all([
+      app.inject({
+        method: "PATCH",
+        url: "/v1/admin/content/00000000-0000-4000-8000-000000000040/moderation",
+        headers,
+        payload: { action: "block", reason: "Policy violation" }
+      }),
+      app.inject({
+        method: "PATCH",
+        url: "/v1/admin/reports/00000000-0000-4000-8000-000000000190",
+        headers: {
+          authorization: "Bearer valid-token",
+          "idempotency-key": "admin-report-1"
+        },
+        payload: { state: "escalated", reason: "Needs senior review" }
+      })
+    ]);
+
+    expect(content.statusCode).toBe(200);
+    expect(content.json()).toMatchObject({
+      moderationState: "blocked",
+      state: "blocked"
+    });
+    expect(report.statusCode).toBe(200);
+    expect(report.json()).toMatchObject({
+      state: "escalated"
+    });
+    expect(contentCalls[0]).toMatchObject({
+      idempotencyKey: "admin-moderation-1",
+      body: { action: "block", reason: "Policy violation" }
+    });
+    expect(reportCalls[0]).toMatchObject({
+      idempotencyKey: "admin-report-1",
+      body: { state: "escalated", reason: "Needs senior review" }
+    });
 
     await app.close();
   });
@@ -7051,6 +7209,93 @@ const fakeAdminRepository: AdminRepository = {
       latestNotificationAt: "2026-06-06T10:00:00.000Z",
       latestDeviceSeenAt: "2026-06-06T10:01:00.000Z",
       latestDeliveryAt: "2026-06-06T10:02:00.000Z"
+    };
+  },
+  async listUsers() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-000000000011",
+          handle: "maki",
+          state: "active",
+          ageState: "verified",
+          walletState: {
+            connected: true,
+            chain: "solana_devnet",
+            address: "11111111111111111111111111111112"
+          }
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async getUser(input) {
+    return {
+      id: input.userId,
+      handle: "maki",
+      state: "active",
+      ageState: "verified",
+      walletState: {
+        connected: true,
+        chain: "solana_devnet",
+        address: "11111111111111111111111111111112"
+      }
+    };
+  },
+  async listContent() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-000000000040",
+          creator: {
+            id: "00000000-0000-4000-8000-000000000010",
+            handle: "creator",
+            displayName: "Creator",
+            avatarUrl: null,
+            badges: []
+          },
+          moderationState: "pending",
+          state: "ready"
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async updateContentModeration(input) {
+    return {
+      id: input.contentId,
+      creator: {
+        id: "00000000-0000-4000-8000-000000000010",
+        handle: "creator",
+        displayName: "Creator",
+        avatarUrl: null,
+        badges: []
+      },
+      moderationState: input.body.action === "block" ? "blocked" : "approved",
+      state: input.body.action === "block" ? "blocked" : "ready"
+    };
+  },
+  async listReports() {
+    return {
+      items: [
+        {
+          id: "00000000-0000-4000-8000-000000000190",
+          subjectType: "content",
+          subjectId: "00000000-0000-4000-8000-000000000040",
+          state: "submitted",
+          reason: "Unsafe content"
+        }
+      ],
+      nextCursor: null
+    };
+  },
+  async updateReport(input) {
+    return {
+      id: input.reportId,
+      subjectType: "content",
+      subjectId: "00000000-0000-4000-8000-000000000040",
+      state: input.body.state,
+      reason: "Unsafe content"
     };
   },
   async listPaymentIntents(input) {
