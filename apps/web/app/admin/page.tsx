@@ -8,18 +8,22 @@ import {
   getAdminDataRequests,
   getAdminEvents,
   getAdminFeatureFlags,
+  getAdminInvoices,
   getAdminMutualsSafety,
   getAdminNotificationHealth,
   getAdminOpsSummary,
   getAdminOrganizationMembers,
   getAdminOrganizations,
+  getAdminPartnerCampaigns,
   getAdminPaymentIntents,
   getAdminProviderEvents,
   getAdminReceipts,
+  getAdminReferralPrograms,
   getAdminReports,
   getAdminRefundDisputes,
   getAdminSupportCases,
   getAdminSupportPolicies,
+  getAdminTierWaivers,
   getAdminTickets,
   getAdminUnlocks,
   getAdminUsers,
@@ -30,19 +34,23 @@ import {
   type AdminContentItem,
   type AdminDataRequest,
   type AdminFeatureFlag,
+  type AdminInvoice,
   type AdminMutualsSafety,
   type AdminNotificationHealth,
   type AdminOpsSummary,
   type AdminOrganization,
   type AdminOrganizationMember,
+  type AdminPartnerCampaign,
   type AdminPage,
   type AdminPaymentIntent,
   type AdminProviderEvent,
   type AdminReceipt,
+  type AdminReferralProgram,
   type AdminReport,
   type AdminRefundDispute,
   type AdminSupportCase,
   type AdminSupportPolicy,
+  type AdminTierWaiver,
   type AdminUnlock,
   type AdminUser,
   type AdminVatDetermination,
@@ -67,6 +75,10 @@ export default async function AdminPage() {
     carfReports,
     vatDeterminations,
     receipts,
+    invoices,
+    referralPrograms,
+    partnerCampaigns,
+    tierWaivers,
     organizations,
     organizationMembers,
     supportCases,
@@ -92,6 +104,10 @@ export default async function AdminPage() {
     getAdminCarfReports(),
     getAdminVatDeterminations(),
     getAdminReceipts(),
+    getAdminInvoices(),
+    getAdminReferralPrograms(),
+    getAdminPartnerCampaigns(),
+    getAdminTierWaivers(),
     getAdminOrganizations(),
     getAdminOrganizationMembers("00000000-0000-4000-8000-000000000140"),
     getAdminSupportCases(),
@@ -170,6 +186,14 @@ export default async function AdminPage() {
               <ReportPanel dac7Reports={dac7Reports} carfReports={carfReports} />
             </Panel>
 
+            <Panel title="Referral governance">
+              <ReferralGovernancePanel
+                partnerCampaigns={partnerCampaigns}
+                referralPrograms={referralPrograms}
+                tierWaivers={tierWaivers}
+              />
+            </Panel>
+
             <Panel title="Organizations and KYB">
               <OrganizationPanel organizations={organizations} organizationMembers={organizationMembers} />
             </Panel>
@@ -240,8 +264,8 @@ export default async function AdminPage() {
               </PageState>
             </Panel>
 
-            <Panel title="VAT and receipts">
-              <VatReceiptPanel vatDeterminations={vatDeterminations} receipts={receipts} />
+            <Panel title="VAT receipts and invoices">
+              <VatReceiptPanel invoices={invoices} receipts={receipts} vatDeterminations={vatDeterminations} />
             </Panel>
 
             <Panel title="Feature flags">
@@ -492,10 +516,56 @@ function ReportPanel({
   );
 }
 
+function ReferralGovernancePanel({
+  partnerCampaigns,
+  referralPrograms,
+  tierWaivers
+}: {
+  partnerCampaigns: ApiResult<AdminPage<AdminPartnerCampaign>>;
+  referralPrograms: ApiResult<AdminPage<AdminReferralProgram>>;
+  tierWaivers: ApiResult<AdminPage<AdminTierWaiver>>;
+}) {
+  if (!referralPrograms.ok) {
+    return <UnavailableState result={referralPrograms} />;
+  }
+
+  if (!partnerCampaigns.ok) {
+    return <UnavailableState result={partnerCampaigns} />;
+  }
+
+  if (!tierWaivers.ok) {
+    return <UnavailableState result={tierWaivers} />;
+  }
+
+  if (
+    referralPrograms.data.items.length === 0 &&
+    partnerCampaigns.data.items.length === 0 &&
+    tierWaivers.data.items.length === 0
+  ) {
+    return <EmptyState label="No referral governance records" />;
+  }
+
+  return (
+    <div className="grid gap-2">
+      {referralPrograms.data.items.map((program) => (
+        <ReferralProgramRow key={program.id} program={program} />
+      ))}
+      {partnerCampaigns.data.items.map((campaign) => (
+        <PartnerCampaignRow campaign={campaign} key={campaign.id} />
+      ))}
+      {tierWaivers.data.items.map((waiver) => (
+        <TierWaiverRow key={waiver.id} waiver={waiver} />
+      ))}
+    </div>
+  );
+}
+
 function VatReceiptPanel({
+  invoices,
   receipts,
   vatDeterminations
 }: {
+  invoices: ApiResult<AdminPage<AdminInvoice>>;
   receipts: ApiResult<AdminPage<AdminReceipt>>;
   vatDeterminations: ApiResult<AdminPage<AdminVatDetermination>>;
 }) {
@@ -507,8 +577,16 @@ function VatReceiptPanel({
     return <UnavailableState result={receipts} />;
   }
 
-  if (vatDeterminations.data.items.length === 0 && receipts.data.items.length === 0) {
-    return <EmptyState label="No VAT determinations or receipts" />;
+  if (!invoices.ok) {
+    return <UnavailableState result={invoices} />;
+  }
+
+  if (
+    vatDeterminations.data.items.length === 0 &&
+    receipts.data.items.length === 0 &&
+    invoices.data.items.length === 0
+  ) {
+    return <EmptyState label="No VAT determinations, receipts, or invoices" />;
   }
 
   return (
@@ -518,6 +596,9 @@ function VatReceiptPanel({
       ))}
       {receipts.data.items.map((receipt) => (
         <ReceiptRow key={receipt.id} receipt={receipt} />
+      ))}
+      {invoices.data.items.map((invoice) => (
+        <InvoiceRow invoice={invoice} key={invoice.id} />
       ))}
     </div>
   );
@@ -812,6 +893,45 @@ function AuditEventRow({ event }: { event: AuditEvent }) {
   );
 }
 
+function ReferralProgramRow({ program }: { program: AdminReferralProgram }) {
+  return (
+    <article className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm md:grid-cols-[1fr_130px_190px]">
+      <div className="min-w-0">
+        <p className="font-medium">{program.name}</p>
+        <p className="mt-1 truncate text-[var(--muted)]">{program.priority}</p>
+      </div>
+      <Fact label="State" value={program.state} />
+      <Fact label="Source" value={program.commissionSource ?? "platform commission"} />
+    </article>
+  );
+}
+
+function PartnerCampaignRow({ campaign }: { campaign: AdminPartnerCampaign }) {
+  return (
+    <article className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm md:grid-cols-[1fr_130px_190px]">
+      <div className="min-w-0">
+        <p className="font-medium">{campaign.name}</p>
+        <p className="mt-1 truncate text-[var(--muted)]">{campaign.partnerName}</p>
+      </div>
+      <Fact label="State" value={campaign.state} />
+      <Fact label="Boundary" value="no social priority" />
+    </article>
+  );
+}
+
+function TierWaiverRow({ waiver }: { waiver: AdminTierWaiver }) {
+  return (
+    <article className="grid gap-3 rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm md:grid-cols-[1fr_130px_190px]">
+      <div className="min-w-0">
+        <p className="font-medium">{waiver.tierKey}</p>
+        <p className="mt-1 truncate text-[var(--muted)]">{waiver.subjectType}</p>
+      </div>
+      <Fact label="State" value={waiver.state} />
+      <Fact label="Ends" value={timestampLabel(waiver.endsAt ?? null)} />
+    </article>
+  );
+}
+
 function VatRow({ determination }: { determination: AdminVatDetermination }) {
   return (
     <article className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
@@ -819,6 +939,18 @@ function VatRow({ determination }: { determination: AdminVatDetermination }) {
       <div className="mt-3 grid gap-2">
         <Fact label="Seller" value={determination.sellerOfRecord} />
         <Fact label="VAT" value={determination.vatStatus} />
+      </div>
+    </article>
+  );
+}
+
+function InvoiceRow({ invoice }: { invoice: AdminInvoice }) {
+  return (
+    <article className="rounded border border-[var(--line)] bg-[var(--background)] p-3 text-sm">
+      <p className="font-medium">{invoice.invoiceNumber}</p>
+      <div className="mt-3 grid gap-2">
+        <Fact label="Seller of record" value={invoice.sellerOfRecord} />
+        <Fact label="State" value={invoice.state} />
       </div>
     </article>
   );

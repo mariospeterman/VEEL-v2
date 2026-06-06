@@ -40,9 +40,10 @@ Current implementation state:
 - The `/admin` web surface is separate from normal user navigation and uses
   typed API projections for ops summary, payment intents, unlocks, provider
   events, compliance ledger, DAC7/CARF reports, VAT determinations, receipts,
-  support policy, user/content/report moderation queues, Event Access ops,
-  refund/dispute review, data request lifecycle, sanitized audit events, and
-  feature flag policy controls.
+  invoices, referral governance, tier waivers, support policy,
+  user/content/report moderation queues, Event Access ops, refund/dispute
+  review, data request lifecycle, sanitized audit events, and feature flag
+  policy controls.
   It fails closed per panel when the API or admin authorization is unavailable
   and does not render fixture admin money, provider, tax, or receipt rows.
 - Event Access operations are inspectable through payment intent state, pass entitlement state, QR/check-in state, compliance ledger state, and provider event state; admin Event Access mutations remain deferred to their dedicated role-policy slices.
@@ -130,6 +131,7 @@ The admin landing dashboard should show:
 - `GET /v1/admin/refunds/disputes` and `PATCH /v1/admin/refunds/disputes/{refundDisputeId}` expose the refund/dispute review queue. They are support/compliance/finance visibility and decision records only. They do not mutate payment truth, do not move funds, and do not create bookkeeping facts; any future creator-initiated refund transaction evidence must be reconciled through blockchain settlement evidence and compliance ledger corrections.
 - `GET /v1/admin/data-requests` and `PATCH /v1/admin/data-requests/{dataRequestId}` expose privacy request lifecycle management. Data request state is compliance/support workflow state only; exports or deletion execution require separate policy-approved workers and must not expose raw PII through the admin API.
 - `GET /v1/admin/feature-flags` and `PATCH /v1/admin/feature-flags/{featureFlagKey}` expose audited feature policy controls. Feature flags can pause or enable software behavior after policy approval, but cannot override the source-of-truth split between blockchain payments, entitlement access, compliance reporting, and accounting bookkeeping.
+- `GET /v1/admin/referrals/programs`, `GET /v1/admin/referrals/partner-campaigns`, and `GET /v1/admin/tier-waivers` are visible in the admin dashboard as governance projections. They expose software/commercial policy state only and must never become pay-to-boost, pay-to-match, recommendation priority, Mutuals treatment, visibility, or message-priority controls.
 - `GET /v1/admin/compliance/carf/reports` requires the `compliance.carf_exports` flag to be `active` with `value.enabled = true`. A paused/missing flag returns a fail-closed `403` and does not call CARF report storage.
 - `GET /v1/admin/audit` exposes a narrow read-only audit log projection for operations review. Audit metadata remains backend-only until a narrower resource-specific contract is approved.
 - `GET /v1/admin/users`, `GET /v1/admin/content`, and `GET /v1/admin/reports` expose the current moderation queue without raw PII/provider payloads. `PATCH /v1/admin/content/{contentId}/moderation` and `PATCH /v1/admin/reports/{reportId}` are audited state transitions only; they do not create social rank, paid visibility, or payment/access facts.

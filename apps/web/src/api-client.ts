@@ -58,6 +58,10 @@ export type AdminComplianceLedgerEntry = components["schemas"]["AdminComplianceL
 export type AdminComplianceReport = components["schemas"]["AdminComplianceReport"];
 export type AdminVatDetermination = components["schemas"]["AdminVatDetermination"];
 export type AdminReceipt = components["schemas"]["AdminReceipt"];
+export type AdminInvoice = components["schemas"]["AdminInvoice"];
+export type AdminReferralProgram = components["schemas"]["AdminReferralProgram"];
+export type AdminPartnerCampaign = components["schemas"]["AdminPartnerCampaign"];
+export type AdminTierWaiver = components["schemas"]["AdminTierWaiver"];
 export type AdminOrganization = components["schemas"]["AdminOrganization"];
 export type AdminOrganizationMember = components["schemas"]["AdminOrganizationMember"];
 export type AdminFeatureFlag = components["schemas"]["AdminFeatureFlag"];
@@ -266,6 +270,22 @@ export async function getAdminVatDeterminations(): Promise<ApiResult<AdminPage<A
 
 export async function getAdminReceipts(): Promise<ApiResult<AdminPage<AdminReceipt>>> {
   return getJson<AdminPage<AdminReceipt>>("/v1/admin/compliance/receipts");
+}
+
+export async function getAdminInvoices(): Promise<ApiResult<AdminPage<AdminInvoice>>> {
+  return getJson<AdminPage<AdminInvoice>>("/v1/admin/compliance/invoices");
+}
+
+export async function getAdminReferralPrograms(): Promise<ApiResult<AdminPage<AdminReferralProgram>>> {
+  return getJson<AdminPage<AdminReferralProgram>>("/v1/admin/referrals/programs");
+}
+
+export async function getAdminPartnerCampaigns(): Promise<ApiResult<AdminPage<AdminPartnerCampaign>>> {
+  return getJson<AdminPage<AdminPartnerCampaign>>("/v1/admin/referrals/partner-campaigns");
+}
+
+export async function getAdminTierWaivers(): Promise<ApiResult<AdminPage<AdminTierWaiver>>> {
+  return getJson<AdminPage<AdminTierWaiver>>("/v1/admin/tier-waivers");
 }
 
 export async function getAdminOrganizations(): Promise<ApiResult<AdminPage<AdminOrganization>>> {
