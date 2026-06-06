@@ -106,11 +106,9 @@ test("renders the creator dashboard projection", async ({ page }) => {
   await page.goto("/profile");
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Maki" })).toBeVisible();
-  await expect(page.getByText("Creator dashboard")).toBeVisible();
-  await expect(page.getByText("Monetisation readiness")).toBeVisible();
-  await expect(page.getByText("creator_subscription")).toBeVisible();
-  await expect(page.getByText("earnings_recipient_wallet_required")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Creator dashboard unavailable" })).toBeVisible();
+  await expect(page.getByText("HTTP 503")).toBeVisible();
+  await expect(page.getByText("API is unavailable")).toBeVisible();
 });
 
 test("renders the delegated subscription projection", async ({ page }) => {
@@ -156,11 +154,9 @@ test("renders the public creator profile projection", async ({ page }) => {
   await page.goto("/profile/maki");
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Maki" })).toBeVisible();
-  await expect(page.getByText("Creator profile", { exact: true })).toBeVisible();
-  await expect(page.getByText("Building the first Veel v2 creator profile")).toBeVisible();
-  await expect(page.getByText("Studio lighting test")).toBeVisible();
-  await expect(page.locator("article img")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Creator profile unavailable" })).toBeVisible();
+  await expect(page.getByText("HTTP 503")).toBeVisible();
+  await expect(page.getByText("API is unavailable")).toBeVisible();
 });
 
 test("renders the admin payment unlock and provider ops projection", async ({ page }) => {

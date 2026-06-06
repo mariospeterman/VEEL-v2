@@ -4,6 +4,8 @@ import { parsePublicWebEnv } from "@veel/config";
 import type { components } from "@veel/contracts";
 
 export type ContentItem = components["schemas"]["ContentItem"];
+export type CreatorDashboard = components["schemas"]["CreatorMonetisationDashboard"];
+export type CreatorProfile = components["schemas"]["CreatorProfile"];
 export type LiveRoom = components["schemas"]["LiveRoom"];
 
 export type ApiResult<T> =
@@ -23,6 +25,14 @@ export async function getContentItem(contentId: string): Promise<ApiResult<Conte
 
 export async function getLiveRoom(liveRoomId: string): Promise<ApiResult<LiveRoom>> {
   return getJson<LiveRoom>(`/v1/live/rooms/${encodeURIComponent(liveRoomId)}`);
+}
+
+export async function getCreatorProfile(handle: string): Promise<ApiResult<CreatorProfile>> {
+  return getJson<CreatorProfile>(`/v1/profiles/${encodeURIComponent(handle)}`);
+}
+
+export async function getMyCreatorDashboard(): Promise<ApiResult<CreatorDashboard>> {
+  return getJson<CreatorDashboard>("/v1/profiles/me/creator-dashboard");
 }
 
 async function getJson<T>(path: string): Promise<ApiResult<T>> {
