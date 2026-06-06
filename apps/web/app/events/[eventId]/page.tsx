@@ -6,7 +6,7 @@ type Event = components["schemas"]["Event"];
 const event: Event = {
   id: "00000000-0000-4000-8000-0000000000e1",
   title: "Studio meetup",
-  description: "Creator-hosted event with backend-owned ticket inventory.",
+  description: "Creator-hosted Event Access with backend-owned pass inventory.",
   startsAt: "2026-07-01T20:00:00.000Z",
   endsAt: null,
   accessRule: "public_sale",
@@ -36,13 +36,13 @@ export default function EventPage() {
       <section className="mx-auto grid w-full max-w-6xl gap-5 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <section className="grid content-start gap-5">
           <div>
-            <p className="text-sm font-medium text-[var(--accent)]">Event</p>
+            <p className="text-sm font-medium text-[var(--accent)]">Event Access</p>
             <h1 className="mt-1 text-2xl font-semibold tracking-normal">{event.title}</h1>
             <p className="mt-2 text-sm text-[var(--muted)]">{event.description}</p>
           </div>
 
           <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
-            <h2 className="text-base font-semibold tracking-normal">Ticket sheet</h2>
+            <h2 className="text-base font-semibold tracking-normal">Access pass sheet</h2>
             <div className="mt-4 grid gap-3">
               {event.ticketTypes.map((ticketType) => (
                 <article className="rounded border border-[var(--line)] bg-[var(--background)] p-4" key={ticketType.id}>
@@ -68,7 +68,7 @@ export default function EventPage() {
 
         <aside className="grid content-start gap-3">
           <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
-            <p className="text-sm font-medium">Event state</p>
+            <p className="text-sm font-medium">Event Access state</p>
             <div className="mt-4 grid gap-3 text-sm">
               <Fact label="Status" value={event.state} />
               <Fact label="Starts" value={new Date(event.startsAt).toISOString()} />

@@ -21,7 +21,7 @@ const feedItems: DatingFeedItem[] = [
     handle: "maki",
     displayName: "Maki",
     avatarUrl: null,
-    title: "Dating mode profile card",
+    title: "Mutuals profile card",
     mediaKind: "image",
     posterUrl: "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=1200&q=80",
     createdAt: "2026-06-04T22:31:00.000Z"
@@ -36,8 +36,8 @@ export default function DatingPage() {
       <section className="mx-auto grid w-full max-w-6xl gap-5 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <section className="grid content-start gap-5">
           <div>
-            <p className="text-sm font-medium text-[var(--accent)]">Dating Mode</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-normal">Explicit dating feed</h1>
+            <p className="text-sm font-medium text-[var(--accent)]">Mutuals</p>
+            <h1 className="mt-1 text-2xl font-semibold tracking-normal">Explicit Mutuals feed</h1>
           </div>
 
           {feedItems.map((item) => (
@@ -65,7 +65,7 @@ export default function DatingPage() {
 
         <aside className="grid content-start gap-3">
           <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
-            <p className="text-sm font-medium">Dating safety</p>
+            <p className="text-sm font-medium">Mutuals safety</p>
             <div className="mt-4 grid gap-3 text-sm">
               <Fact label="Enabled" value={datingProfile.enabled ? "active" : "paused"} />
               <Fact label="Consent" value={datingProfile.consentVersion ?? "missing"} />

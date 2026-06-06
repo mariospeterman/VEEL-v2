@@ -24,8 +24,8 @@ export default function DatingMatchesPage() {
 
       <section className="mx-auto grid w-full max-w-6xl gap-5 px-5 py-6">
         <div>
-          <p className="text-sm font-medium text-[var(--accent)]">Dating Mode</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-normal">Matches</h1>
+          <p className="text-sm font-medium text-[var(--accent)]">Mutuals</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-normal">Mutuals</h1>
         </div>
 
         <div className="grid gap-3 md:grid-cols-2">

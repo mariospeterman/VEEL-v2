@@ -155,7 +155,7 @@ test("redirects documented app route aliases", async ({ page }) => {
 
   await page.goto("/mutuals/mutuals");
   await expect(page).toHaveURL(/\/dating\/matches$/);
-  await expect(page.getByRole("heading", { name: "Matches" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Mutuals" })).toBeVisible();
 });
 
 test("renders the public creator profile projection", async ({ page }) => {
@@ -193,7 +193,7 @@ test("renders the event ticket sheet projection", async ({ page }) => {
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Studio meetup" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Ticket sheet" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Access pass sheet" })).toBeVisible();
   await expect(page.getByText("General admission")).toBeVisible();
   await expect(page.getByText("public_sale")).toBeVisible();
 });
@@ -202,28 +202,28 @@ test("renders the user ticket QR projection", async ({ page }) => {
   await page.goto("/tickets");
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "My tickets" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "My passes" })).toBeVisible();
   await expect(page.getByText("QR token")).toBeVisible();
   await expect(page.getByText("veel_ticket_fixture")).toBeVisible();
   await expect(page.locator("span").getByText("active", { exact: true })).toBeVisible();
 });
 
-test("renders the dating mode feed projection", async ({ page }) => {
+test("renders the Mutuals feed projection", async ({ page }) => {
   await page.goto("/dating");
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Explicit dating feed" })).toBeVisible();
-  await expect(page.getByText("Dating safety")).toBeVisible();
-  await expect(page.getByText("Dating mode profile card")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Explicit Mutuals feed" })).toBeVisible();
+  await expect(page.getByText("Mutuals safety")).toBeVisible();
+  await expect(page.getByText("Mutuals profile card")).toBeVisible();
   await expect(page.getByRole("button", { name: "Not interested" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Yes" })).toBeVisible();
 });
 
-test("renders the dating matches projection", async ({ page }) => {
+test("renders the Mutuals list projection", async ({ page }) => {
   await page.goto("/dating/matches");
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Matches" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Mutuals" })).toBeVisible();
   await expect(page.getByText("Mutual match")).toBeVisible();
   await expect(page.locator("span").getByText("active", { exact: true })).toBeVisible();
 });

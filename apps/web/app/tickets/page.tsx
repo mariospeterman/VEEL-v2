@@ -24,8 +24,8 @@ export default function TicketsPage() {
 
       <section className="mx-auto grid w-full max-w-6xl gap-5 px-5 py-6">
         <div>
-          <p className="text-sm font-medium text-[var(--accent)]">Tickets</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-normal">My tickets</h1>
+          <p className="text-sm font-medium text-[var(--accent)]">Passes</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-normal">My passes</h1>
         </div>
 
         <div className="grid gap-3 md:grid-cols-2">
@@ -45,7 +45,7 @@ export default function TicketsPage() {
                 <p className="mt-2 break-all font-mono text-sm">{ticket.qrToken}</p>
               </div>
               <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
-                <Fact label="Ticket" value={ticket.id} />
+                <Fact label="Pass" value={ticket.id} />
                 <Fact label="Payment" value={ticket.paymentIntentId ?? "free"} />
                 <Fact label="Check-in" value={ticket.checkedInAt ?? "not checked in"} />
               </div>
