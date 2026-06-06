@@ -2380,7 +2380,7 @@ export interface components {
         };
         WebhookReceipt: {
             /** @enum {string} */
-            provider: "helius" | "yoti" | "sumsub" | "veriff" | "persona";
+            provider: "helius" | "bunny" | "livepeer" | "yoti" | "sumsub" | "veriff" | "persona";
             received: number;
             processed: number;
         };
@@ -6104,8 +6104,10 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["WebhookPayload"];
         responses: {
-            202: components["responses"]["Accepted"];
+            202: components["responses"]["WebhookReceipt"];
+            400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     receiveAgeWebhook: {
