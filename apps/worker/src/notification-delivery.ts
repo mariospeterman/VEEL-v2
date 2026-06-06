@@ -1,5 +1,6 @@
 import { decryptSecret, parseAes256GcmKey, type EncryptedSecret } from "@veel/config";
 import postgres from "postgres";
+import webPush from "web-push";
 
 export type NotificationDeliveryOutcome =
   | {
@@ -42,6 +43,14 @@ export interface NotificationDeliveryRepository {
 
 export interface NotificationDeliveryProvider {
   deliver(input: DueNotificationDelivery): Promise<NotificationDeliveryOutcome>;
+}
+
+export interface WebPushNotificationDeliveryProviderOptions {
+  vapidSubject: string;
+  vapidPublicKey: string;
+  vapidPrivateKey: string;
+  ttlSeconds?: number | undefined;
+  timeoutMs?: number | undefined;
 }
 
 export interface ProcessNotificationDeliveriesResult {
@@ -94,6 +103,60 @@ export function createUnconfiguredNotificationDeliveryProvider(): NotificationDe
         failureCode: "notification_delivery_provider_not_configured",
         retryAt: new Date(Date.now() + 5 * 60 * 1000)
       };
+    }
+  };
+}
+
+export function createWebPushNotificationDeliveryProvider(
+  options: WebPushNotificationDeliveryProviderOptions
+): NotificationDeliveryProvider {
+  return {
+    async deliver(input) {
+      const payload = JSON.stringify({
+        notificationId: input.notificationId,
+        title: input.title,
+        body: input.body,
+        actionUrl: input.actionUrl
+      });
+
+      try {
+        await webPush.sendNotification(
+          {
+            endpoint: input.endpoint,
+            keys: {
+              p256dh: input.p256dh,
+              auth: input.auth
+            }
+          },
+          payload,
+          {
+            TTL: options.ttlSeconds ?? 3600,
+            timeout: options.timeoutMs ?? 10_000,
+            urgency: "normal",
+            vapidDetails: {
+              subject: options.vapidSubject,
+              publicKey: options.vapidPublicKey,
+              privateKey: options.vapidPrivateKey
+            }
+          }
+        );
+
+        return { state: "delivered" };
+      } catch (error) {
+        const statusCode = getWebPushStatusCode(error);
+        if (statusCode === 404 || statusCode === 410) {
+          return {
+            state: "revoked",
+            failureCode: "push_subscription_gone"
+          };
+        }
+
+        return {
+          state: "failed",
+          failureCode: statusCode ? `web_push_http_${statusCode}` : "web_push_delivery_failed",
+          retryAt: new Date(Date.now() + 5 * 60 * 1000)
+        };
+      }
     }
   };
 }
@@ -310,4 +373,13 @@ function toDueDelivery(row: DeliveryLeaseRow, key: Buffer): DueNotificationDeliv
 
 function decrypt(ciphertext: string, iv: string, tag: string, key: Buffer): string {
   return decryptSecret({ ciphertext, iv, tag } satisfies EncryptedSecret, key);
+}
+
+function getWebPushStatusCode(error: unknown): number | null {
+  if (!error || typeof error !== "object") return null;
+
+  const statusCode = (error as { statusCode?: unknown }).statusCode;
+  if (typeof statusCode === "number") return statusCode;
+
+  return null;
 }

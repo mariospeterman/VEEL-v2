@@ -44,7 +44,8 @@ Use Supabase Realtime selectively. Do not build a custom websocket server unless
 - Notification delivery attempts are queued and leased by the worker through `notification_delivery_attempts`; the delivery provider boundary records delivered, failed, and revoked outcomes without frontend truth.
 - Admin notification health counts are exposed through a staff-only sanitized projection, including delivery queue state counts.
 - Settings includes browser service-worker enrollment. Enrollment is gated by `GET /v1/notifications/push-config`, browser Push API support, browser permission, and a Supabase session.
-- Real VAPID/web-push send-provider configuration and Realtime subscription wiring remain planned production gaps.
+- The worker includes a server-only VAPID Web Push send-provider boundary. It uses encrypted browser subscription material, sends sanitized notification payloads, retries transient push failures, and revokes devices when push services return expired subscription responses.
+- Production still needs real VAPID key configuration, staging push-service verification across target browsers, and Realtime subscription wiring.
 - In unconfigured environments, user-facing notification copy must show browser push as waiting for provider configuration rather than active delivery.
 
 ## Message Flow

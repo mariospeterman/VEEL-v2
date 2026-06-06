@@ -2,6 +2,7 @@ import { parseServerEnv } from "@veel/config";
 import {
   createPostgresNotificationDeliveryRepository,
   createUnconfiguredNotificationDeliveryProvider,
+  createWebPushNotificationDeliveryProvider,
   processNotificationDeliveries,
   type NotificationDeliveryProvider,
   type NotificationDeliveryRepository,
@@ -51,7 +52,15 @@ export async function runNotificationDeliveryTick(input: {
       databaseUrl: config.DATABASE_URL,
       encryptionKey: config.NOTIFICATION_DEVICE_ENCRYPTION_KEY
     });
-  const provider = input.provider ?? createUnconfiguredNotificationDeliveryProvider();
+  const provider =
+    input.provider ??
+    (config.WEB_PUSH_VAPID_SUBJECT && config.WEB_PUSH_VAPID_PUBLIC_KEY && config.WEB_PUSH_VAPID_PRIVATE_KEY
+      ? createWebPushNotificationDeliveryProvider({
+          vapidSubject: config.WEB_PUSH_VAPID_SUBJECT,
+          vapidPublicKey: config.WEB_PUSH_VAPID_PUBLIC_KEY,
+          vapidPrivateKey: config.WEB_PUSH_VAPID_PRIVATE_KEY
+        })
+      : createUnconfiguredNotificationDeliveryProvider());
 
   try {
     return await processNotificationDeliveries({

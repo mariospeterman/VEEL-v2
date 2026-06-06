@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildWorkerRuntime, runNotificationDeliveryTick, runSubscriptionCollectionTick } from "../src/index";
 import type {
   DueNotificationDelivery,
@@ -6,12 +6,25 @@ import type {
   NotificationDeliveryProvider,
   NotificationDeliveryRepository
 } from "../src/notification-delivery";
+import { createWebPushNotificationDeliveryProvider } from "../src/notification-delivery";
 import type {
   DueSubscriptionCollection,
   SubscriptionCollectionOutcome,
   SubscriptionCollectionProvider,
   SubscriptionCollectionRepository
 } from "../src/subscription-collections";
+
+const webPushMock = vi.hoisted(() => ({
+  sendNotification: vi.fn()
+}));
+
+vi.mock("web-push", () => ({
+  default: webPushMock
+}));
+
+beforeEach(() => {
+  webPushMock.sendNotification.mockReset();
+});
 
 describe("buildWorkerRuntime", () => {
   it("registers recurring subscription queues", () => {
@@ -126,6 +139,60 @@ describe("runNotificationDeliveryTick", () => {
         state: "revoked",
         failureCode: "push_subscription_gone"
       }
+    });
+  });
+});
+
+describe("createWebPushNotificationDeliveryProvider", () => {
+  it("sends sanitized notification payloads through VAPID web push", async () => {
+    webPushMock.sendNotification.mockResolvedValueOnce({ statusCode: 201, body: "", headers: {} });
+    const provider = createWebPushNotificationDeliveryProvider({
+      vapidSubject: "mailto:ops@example.com",
+      vapidPublicKey: "public-vapid-key",
+      vapidPrivateKey: "private-vapid-key"
+    });
+
+    const outcome = await provider.deliver(notificationDeliveryFixture());
+
+    expect(outcome).toEqual({ state: "delivered" });
+    expect(webPushMock.sendNotification).toHaveBeenCalledWith(
+      {
+        endpoint: "https://push.example/subscription",
+        keys: {
+          p256dh: "p256dh-key",
+          auth: "auth-secret"
+        }
+      },
+      JSON.stringify({
+        notificationId: "notification-1",
+        title: "Wallet action required",
+        body: "Connect a wallet to use this feature.",
+        actionUrl: "/wallet"
+      }),
+      {
+        TTL: 3600,
+        timeout: 10_000,
+        urgency: "normal",
+        vapidDetails: {
+          subject: "mailto:ops@example.com",
+          publicKey: "public-vapid-key",
+          privateKey: "private-vapid-key"
+        }
+      }
+    );
+  });
+
+  it("revokes browser devices when the push service returns gone", async () => {
+    webPushMock.sendNotification.mockRejectedValueOnce({ statusCode: 410 });
+    const provider = createWebPushNotificationDeliveryProvider({
+      vapidSubject: "mailto:ops@example.com",
+      vapidPublicKey: "public-vapid-key",
+      vapidPrivateKey: "private-vapid-key"
+    });
+
+    await expect(provider.deliver(notificationDeliveryFixture())).resolves.toEqual({
+      state: "revoked",
+      failureCode: "push_subscription_gone"
     });
   });
 });

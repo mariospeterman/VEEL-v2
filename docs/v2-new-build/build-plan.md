@@ -330,6 +330,7 @@ Build each slice end-to-end before starting the next:
 20. Notification admin health and delivery observability.
 21. Notification delivery queue and worker boundary.
 22. Browser notification enrollment and service-worker boundary.
+23. Web Push VAPID send-provider boundary.
 
 Each slice must include:
 
