@@ -272,6 +272,7 @@ Current implementation state:
 - `GET /v1/wallets` returns normalized wallet resources for the authenticated user.
 - `PATCH /v1/wallets/{walletId}/primary` safely switches the user's primary wallet and writes an audit event.
 - `POST /v1/wallets/onramp-sessions` creates an idempotent user-wallet funding session when the provider is configured, otherwise returns service unavailable without fabricating a checkout URL.
+- `/wallet` reads linked wallets and backend-observed wallet transactions through the typed web API helper. It does not render fixture wallets or fabricated funding provider URLs.
 - Embedded wallet provider code is an adapter interface only. No Privy, Turnkey, or Dynamic SDK calls are implemented until staging credentials, provider account acceptance, and exact SDK behavior are confirmed.
 - Coinbase funding is a server-side provider boundary only. It funds user-owned wallets and is not product billing or payment proof.
 

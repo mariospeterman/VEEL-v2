@@ -94,14 +94,12 @@ test("renders the wallet funding and primary-wallet projection", async ({ page }
 
   await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Funding and receipts" })).toBeVisible();
-  await expect(page.getByText("Primary wallet")).toBeVisible();
-  await expect(page.getByText("backend settlement only")).toBeVisible();
   await expect(page.getByText("User-owned wallet funding")).toBeVisible();
   await expect(page.getByText("Funding sessions do not unlock")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Open funding session" })).toHaveAttribute(
-    "href",
-    /pay\.coinbase\.com/
-  );
+  await expect(page.getByRole("heading", { name: "Wallets unavailable" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Wallet transactions unavailable" })).toBeVisible();
+  await expect(page.getByText("HTTP 503").first()).toBeVisible();
+  await expect(page.getByText("API is unavailable").first()).toBeVisible();
 });
 
 test("renders the creator dashboard projection", async ({ page }) => {

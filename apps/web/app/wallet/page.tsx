@@ -1,59 +1,22 @@
-import type { components } from "@veel/contracts";
 import { appShellNavItems } from "@veel/ui";
+import {
+  getWallets,
+  getWalletTransactionActivity,
+  type ApiResult,
+  type Wallet,
+  type WalletList,
+  type WalletTransaction,
+  type WalletTransactionPage
+} from "@/api-client";
 
-type Wallet = components["schemas"]["Wallet"];
-type OnrampSession = components["schemas"]["OnrampSession"];
-type WalletTransaction = components["schemas"]["WalletTransaction"];
-
-const wallets: Wallet[] = [
-  {
-    id: "00000000-0000-4000-8000-000000000020",
-    chain: "solana_devnet",
-    address: "VeelWallet111111111111111111111111111111111",
-    provider: "embedded_privy",
-    isPrimary: true
-  },
-  {
-    id: "00000000-0000-4000-8000-000000000021",
-    chain: "solana_devnet",
-    address: "ExternalWallet2222222222222222222222222222",
-    provider: "phantom",
-    isPrimary: false
-  }
-];
-
-const fundingSession: OnrampSession = {
-  id: "00000000-0000-4000-8000-000000000070",
-  provider: "coinbase",
-  launchUrl: "https://pay.coinbase.com/buy",
-  walletId: "00000000-0000-4000-8000-000000000020",
-  walletAddress: wallets[0]?.address ?? "",
-  state: "created",
-  createdAt: "2026-06-06T00:00:00.000Z",
-  expiresAt: null
-};
-
-const walletTransactions: WalletTransaction[] = [
-  {
-    id: "00000000-0000-4000-8000-000000000060",
-    chain: "solana_devnet",
-    direction: "outgoing",
-    amountMinor: 10000000,
-    currency: "SOL",
-    state: "confirmed",
-    source: "payment_intent",
-    paymentIntentId: "00000000-0000-4000-8000-000000000050",
-    walletId: "00000000-0000-4000-8000-000000000020",
-    signature: "5".repeat(88),
-    referenceAddress: "11111111111111111111111111111112",
-    createdAt: "2026-06-04T20:00:00.000Z",
-    submittedAt: "2026-06-04T20:00:00.000Z",
-    confirmedAt: "2026-06-04T20:01:00.000Z"
-  }
-];
-
-export default function WalletPage() {
-  const primaryWallet = wallets.find((wallet) => wallet.isPrimary) ?? wallets[0];
+export default async function WalletPage() {
+  const [wallets, walletTransactions] = await Promise.all([
+    getWallets(),
+    getWalletTransactionActivity()
+  ]);
+  const primaryWallet = wallets.ok
+    ? (wallets.data.items.find((wallet) => wallet.isPrimary) ?? wallets.data.items[0] ?? null)
+    : null;
 
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
@@ -86,42 +49,58 @@ export default function WalletPage() {
             </span>
           </div>
 
-          {primaryWallet ? <PrimaryWalletCard wallet={primaryWallet} /> : null}
+          {wallets.ok ? (
+            <>
+              {primaryWallet ? (
+                <PrimaryWalletCard wallet={primaryWallet} />
+              ) : (
+                <EmptyState label="No linked wallets yet" />
+              )}
 
-          <section className="grid gap-3">
-            {wallets.map((wallet) => (
-              <WalletRow wallet={wallet} key={wallet.id} />
-            ))}
-          </section>
+              <section className="grid gap-3">
+                {wallets.data.items.map((wallet) => (
+                  <WalletRow wallet={wallet} key={wallet.id} />
+                ))}
+              </section>
+            </>
+          ) : (
+            <UnavailableState result={wallets} title="Wallets unavailable" />
+          )}
         </section>
 
         <aside className="grid min-h-0 content-start gap-4 overflow-hidden">
           <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
             <p className="text-sm font-medium text-[var(--muted)]">Top up</p>
             <h2 className="mt-1 text-lg font-semibold tracking-normal">User-owned wallet funding</h2>
-            <div className="mt-4 grid gap-2 text-sm">
-              <Fact label="Provider" value={fundingSession.provider} />
-              <Fact label="Session state" value={fundingSession.state} />
-              <Fact label="Destination" value={shorten(fundingSession.walletAddress)} />
-            </div>
-            <a
-              className="mt-4 inline-flex w-full items-center justify-center rounded bg-[var(--accent-soft)] px-3 py-3 text-sm font-semibold text-[var(--accent-strong)]"
-              href={fundingSession.launchUrl}
-            >
-              Open funding session
-            </a>
-            <p className="mt-3 text-xs leading-5 text-[var(--muted)]">
-              Funding sessions do not unlock content, tickets, messages, memberships, or support.
+            <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
+              Funding sessions are created by the backend for a linked wallet only after explicit
+              user action. Funding sessions do not unlock content, tickets, messages, memberships,
+              or support.
             </p>
+            {primaryWallet ? (
+              <div className="mt-4 grid gap-2 text-sm">
+                <Fact label="Destination" value={shorten(primaryWallet.address)} />
+                <Fact label="Provider" value="server configured" />
+                <Fact label="Access effect" value="none" />
+              </div>
+            ) : null}
           </section>
 
           <section className="grid gap-3 overflow-hidden">
             <div className="border-b border-[var(--line)] pb-3">
               <p className="text-sm font-medium text-[var(--muted)]">Recent wallet transactions</p>
             </div>
-            {walletTransactions.map((transaction) => (
-              <TransactionRow transaction={transaction} key={transaction.id} />
-            ))}
+            {walletTransactions.ok ? (
+              walletTransactions.data.items.length > 0 ? (
+                walletTransactions.data.items.map((transaction) => (
+                  <TransactionRow transaction={transaction} key={transaction.id} />
+                ))
+              ) : (
+                <EmptyState label="No wallet transactions yet" />
+              )
+            ) : (
+              <UnavailableState result={walletTransactions} title="Wallet transactions unavailable" />
+            )}
           </section>
         </aside>
       </section>
@@ -183,6 +162,34 @@ function TransactionRow({ transaction }: { transaction: WalletTransaction }) {
         <Fact label="Signature" value={shorten(transaction.signature)} />
       </div>
     </article>
+  );
+}
+
+function EmptyState({ label }: { label: string }) {
+  return (
+    <div className="rounded border border-[var(--line)] bg-[var(--panel)] p-4 text-sm text-[var(--muted)]">
+      {label}
+    </div>
+  );
+}
+
+function UnavailableState({
+  result,
+  title
+}: {
+  result: ApiResult<WalletList> | ApiResult<WalletTransactionPage>;
+  title: string;
+}) {
+  if (result.ok) {
+    return null;
+  }
+
+  return (
+    <div className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
+      <p className="text-sm font-medium text-[var(--accent)]">HTTP {result.status}</p>
+      <h2 className="mt-2 text-base font-semibold tracking-normal">{title}</h2>
+      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{result.message}</p>
+    </div>
   );
 }
 

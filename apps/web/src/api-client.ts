@@ -17,6 +17,10 @@ export type ConversationList = {
 };
 export type Message = components["schemas"]["Message"];
 export type MessagePage = components["schemas"]["MessagePage"];
+export type Wallet = components["schemas"]["Wallet"];
+export type WalletList = {
+  items: Wallet[];
+};
 
 export type ApiResult<T> =
   | {
@@ -59,6 +63,10 @@ export async function getConversations(): Promise<ApiResult<ConversationList>> {
 
 export async function getConversationMessages(conversationId: string): Promise<ApiResult<MessagePage>> {
   return getJson<MessagePage>(`/v1/messages/conversations/${encodeURIComponent(conversationId)}/messages`);
+}
+
+export async function getWallets(): Promise<ApiResult<WalletList>> {
+  return getJson<WalletList>("/v1/wallets");
 }
 
 async function getJson<T>(path: string): Promise<ApiResult<T>> {
