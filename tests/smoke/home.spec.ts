@@ -113,6 +113,17 @@ test("renders the delegated subscription projection", async ({ page }) => {
   await expect(page.getByText("Manual Solana Pay renewal is reserved")).toBeVisible();
 });
 
+test("renders the settings projection", async ({ page }) => {
+  await page.goto("/settings");
+
+  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Account controls" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Security" })).toBeVisible();
+  await expect(page.getByText("Supabase verified")).toBeVisible();
+  await expect(page.getByText("privacy-safe only")).toBeVisible();
+  await expect(page.getByText("server-owned").first()).toBeVisible();
+});
+
 test("renders the public creator profile projection", async ({ page }) => {
   await page.goto("/profile/maki");
 
