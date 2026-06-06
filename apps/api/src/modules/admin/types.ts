@@ -1,6 +1,7 @@
 import type { components } from "@veel/contracts";
 
 export type AdminOpsSummary = components["schemas"]["AdminOpsSummary"];
+export type AdminNotificationHealth = components["schemas"]["AdminNotificationHealth"];
 export type AdminPaymentIntent = components["schemas"]["AdminPaymentIntent"];
 export type AdminUnlock = components["schemas"]["AdminUnlock"];
 export type AdminProviderEvent = components["schemas"]["AdminProviderEvent"];
@@ -23,6 +24,7 @@ export interface AdminPage<Item> {
 export interface AdminRepository {
   hasAdminAccess(supabaseUserId: string): Promise<boolean>;
   getOpsSummary(): Promise<AdminOpsSummary>;
+  getNotificationHealth(): Promise<AdminNotificationHealth>;
   listPaymentIntents(input: { query?: string; cursor?: string }): Promise<AdminPage<AdminPaymentIntent>>;
   listUnlocks(input: { query?: string; cursor?: string }): Promise<AdminPage<AdminUnlock>>;
   listProviderEvents(input: { cursor?: string }): Promise<AdminPage<AdminProviderEvent>>;

@@ -20,6 +20,13 @@ export async function registerAdminRoutes(
     return reply.code(200).send(await options.adminRepository.getOpsSummary());
   });
 
+  app.get("/v1/admin/notifications/health", async (request, reply) => {
+    const allowed = await requireAdminAccess(request, reply, options);
+    if (!allowed) return reply;
+
+    return reply.code(200).send(await options.adminRepository.getNotificationHealth());
+  });
+
   app.get("/v1/admin/payments/intents", async (request, reply) => {
     const allowed = await requireAdminAccess(request, reply, options);
     if (!allowed) return reply;

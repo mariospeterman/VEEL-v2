@@ -3,6 +3,7 @@ import {
   getAdminCarfReports,
   getAdminComplianceLedger,
   getAdminDac7Reports,
+  getAdminNotificationHealth,
   getAdminOpsSummary,
   getAdminPaymentIntents,
   getAdminProviderEvents,
@@ -11,6 +12,7 @@ import {
   getAdminVatDeterminations,
   type AdminComplianceLedgerEntry,
   type AdminComplianceReport,
+  type AdminNotificationHealth,
   type AdminOpsSummary,
   type AdminPage,
   type AdminPaymentIntent,
@@ -27,6 +29,7 @@ export default async function AdminPage() {
     payments,
     unlocks,
     providerEvents,
+    notificationHealth,
     complianceLedger,
     dac7Reports,
     carfReports,
@@ -37,6 +40,7 @@ export default async function AdminPage() {
     getAdminPaymentIntents(),
     getAdminUnlocks(),
     getAdminProviderEvents(),
+    getAdminNotificationHealth(),
     getAdminComplianceLedger(),
     getAdminDac7Reports(),
     getAdminCarfReports(),
@@ -108,6 +112,10 @@ export default async function AdminPage() {
           </div>
 
           <div className="grid content-start gap-4">
+            <Panel title="Notification health">
+              <NotificationHealthPanel notificationHealth={notificationHealth} />
+            </Panel>
+
             <Panel title="Provider events">
               <PageState result={providerEvents} emptyLabel="No provider events">
                 {(page) => (
@@ -147,6 +155,29 @@ function SummaryMetrics({ summary }: { summary: ApiResult<AdminOpsSummary> }) {
       <Metric label="Queue" value={summary.data.queueHealth} />
       <Metric label="Payments" value={summary.data.paymentCounts.total.toString()} />
       <Metric label="Unlocks" value={summary.data.unlockCounts.total.toString()} />
+    </div>
+  );
+}
+
+function NotificationHealthPanel({
+  notificationHealth
+}: {
+  notificationHealth: ApiResult<AdminNotificationHealth>;
+}) {
+  if (!notificationHealth.ok) {
+    return <UnavailableState result={notificationHealth} />;
+  }
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+      <Fact label="Unread" value={notificationHealth.data.unreadCount.toString()} />
+      <Fact label="Read" value={notificationHealth.data.readCount.toString()} />
+      <Fact label="Archived" value={notificationHealth.data.archivedCount.toString()} />
+      <Fact label="Active devices" value={notificationHealth.data.activeDeviceCount.toString()} />
+      <Fact label="Revoked devices" value={notificationHealth.data.revokedDeviceCount.toString()} />
+      <Fact label="Push enabled" value={notificationHealth.data.pushEnabledPreferenceCount.toString()} />
+      <Fact label="Latest notification" value={timestampLabel(notificationHealth.data.latestNotificationAt)} />
+      <Fact label="Latest device seen" value={timestampLabel(notificationHealth.data.latestDeviceSeenAt)} />
     </div>
   );
 }
@@ -371,6 +402,10 @@ function Fact({ label, value }: { label: string; value: string }) {
       <p className="mt-1 truncate font-medium">{value}</p>
     </div>
   );
+}
+
+function timestampLabel(value: string | null) {
+  return value ? new Date(value).toISOString() : "none";
 }
 
 function formatDate(value: string | null) {

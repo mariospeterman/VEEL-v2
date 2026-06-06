@@ -4,6 +4,7 @@ import type {
   AdminComplianceReport,
   AdminDatingSafety,
   AdminInvoice,
+  AdminNotificationHealth,
   AdminOpsSummary,
   AdminOrganization,
   AdminPartnerCampaign,
@@ -30,6 +31,17 @@ interface CountRow {
   submitted: string | number;
   confirmed: string | number;
   failed: string | number;
+}
+
+interface NotificationHealthRow {
+  unread_count: string | number;
+  read_count: string | number;
+  archived_count: string | number;
+  active_device_count: string | number;
+  revoked_device_count: string | number;
+  push_enabled_preference_count: string | number;
+  latest_notification_at: Date | null;
+  latest_device_seen_at: Date | null;
 }
 
 interface PaymentRow {
@@ -200,6 +212,9 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
       async getOpsSummary() {
         throw new AdminRepositoryConfigurationError();
       },
+      async getNotificationHealth() {
+        throw new AdminRepositoryConfigurationError();
+      },
       async listPaymentIntents() {
         throw new AdminRepositoryConfigurationError();
       },
@@ -311,6 +326,21 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
         unlockCounts: toCounts(unlockRows[0]),
         providerEventCounts: providerCounts
       };
+    },
+    async getNotificationHealth() {
+      const rows = await sql<NotificationHealthRow[]>`
+        select
+          (select count(*) from notifications where state = 'unread') as unread_count,
+          (select count(*) from notifications where state = 'read') as read_count,
+          (select count(*) from notifications where state = 'archived') as archived_count,
+          (select count(*) from notification_devices where state = 'active') as active_device_count,
+          (select count(*) from notification_devices where state = 'revoked') as revoked_device_count,
+          (select count(*) from notification_preferences where push_enabled) as push_enabled_preference_count,
+          (select max(created_at) from notifications) as latest_notification_at,
+          (select max(last_seen_at) from notification_devices) as latest_device_seen_at
+      `;
+
+      return toNotificationHealth(rows[0]);
     },
     async listPaymentIntents(input) {
       const rows = await sql<PaymentRow[]>`
@@ -600,6 +630,19 @@ function toCounts(row: CountRow | undefined): AdminOpsSummary["paymentCounts"] {
     submitted: Number(row?.submitted ?? 0),
     confirmed: Number(row?.confirmed ?? 0),
     failed: Number(row?.failed ?? 0)
+  };
+}
+
+function toNotificationHealth(row: NotificationHealthRow | undefined): AdminNotificationHealth {
+  return {
+    unreadCount: Number(row?.unread_count ?? 0),
+    readCount: Number(row?.read_count ?? 0),
+    archivedCount: Number(row?.archived_count ?? 0),
+    activeDeviceCount: Number(row?.active_device_count ?? 0),
+    revokedDeviceCount: Number(row?.revoked_device_count ?? 0),
+    pushEnabledPreferenceCount: Number(row?.push_enabled_preference_count ?? 0),
+    latestNotificationAt: row?.latest_notification_at?.toISOString() ?? null,
+    latestDeviceSeenAt: row?.latest_device_seen_at?.toISOString() ?? null
   };
 }
 

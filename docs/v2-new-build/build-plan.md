@@ -327,6 +327,7 @@ Build each slice end-to-end before starting the next:
 17. AI/MCP scoped assistant.
 18. Notifications foundation.
 19. Studio/Enterprise organization dashboards.
+20. Notification admin health and delivery observability.
 
 Each slice must include:
 

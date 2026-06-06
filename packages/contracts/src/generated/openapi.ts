@@ -1405,6 +1405,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/notifications/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Notification projection and device delivery health */
+        get: operations["getAdminNotificationHealth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/audit": {
         parameters: {
             query?: never;
@@ -3097,6 +3114,18 @@ export interface components {
             unlockCounts: components["schemas"]["AdminStateCounts"];
             providerEventCounts: components["schemas"]["AdminStateCounts"];
         };
+        AdminNotificationHealth: {
+            unreadCount: number;
+            readCount: number;
+            archivedCount: number;
+            activeDeviceCount: number;
+            revokedDeviceCount: number;
+            pushEnabledPreferenceCount: number;
+            /** Format: date-time */
+            latestNotificationAt: string | null;
+            /** Format: date-time */
+            latestDeviceSeenAt: string | null;
+        };
         AdminStateCounts: {
             total: number;
             pending: number;
@@ -4090,6 +4119,15 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["AdminOpsSummary"];
+            };
+        };
+        /** @description Admin notification health */
+        AdminNotificationHealth: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["AdminNotificationHealth"];
             };
         };
         /** @description Admin user */
@@ -6142,6 +6180,19 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["AdminOpsSummary"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getAdminNotificationHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminNotificationHealth"];
             403: components["responses"]["Forbidden"];
         };
     };

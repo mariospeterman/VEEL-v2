@@ -37,7 +37,7 @@ Current implementation state:
 - DAC7/DAC8/CARF/VAT readiness is surfaced through read-only compliance routes before export or filing workflows are enabled.
 - Admin reads require a valid session whose app user has an active staff membership in an operations, finance, support, creator-success, readonly-auditor, admin, or owner role.
 - Raw provider payloads, webhook bodies, private media URLs, stream keys, provider secrets, wallet private keys, service-role keys, and frontend-computed payment truth are not returned.
-- Notification delivery health, user notification queues, organization mutation workflows, and the complete `/admin/*` route-map breadth remain planned production gaps. They must be implemented as role-gated sanitized projections, not broad database or provider-payload exposure.
+- Notification push delivery workers, user notification queues, organization mutation workflows, and the complete `/admin/*` route-map breadth remain planned production gaps. They must be implemented as role-gated sanitized projections, not broad database or provider-payload exposure.
 
 ## Admin Principles
 
@@ -110,7 +110,7 @@ The admin landing dashboard should show:
 - webhook health and queue lag
 - provider status summary
 - incident banner when provider or deploy health is degraded
-- notification queue/delivery health after the notification slice lands
+- notification projection/device health is visible through `GET /v1/admin/notifications/health`; queue and push-provider delivery health remain future worker/provider slices
 - deeper Studio/Enterprise organization health, KYB/RBAC workflow actions, and contract/support status after the organization mutation slice lands
 
 ## Business Operations Modules

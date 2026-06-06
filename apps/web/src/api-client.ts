@@ -38,6 +38,7 @@ export type DatingMatchPage = components["schemas"]["DatingMatchPage"];
 export type AiCapabilities = components["schemas"]["AiCapabilities"];
 export type OrganizationDashboardPage = components["schemas"]["OrganizationDashboardPage"];
 export type AdminOpsSummary = components["schemas"]["AdminOpsSummary"];
+export type AdminNotificationHealth = components["schemas"]["AdminNotificationHealth"];
 export type AdminPaymentIntent = components["schemas"]["AdminPaymentIntent"];
 export type AdminUnlock = components["schemas"]["AdminUnlock"];
 export type AdminProviderEvent = components["schemas"]["AdminProviderEvent"];
@@ -162,6 +163,10 @@ export async function getOrganizationDashboards(): Promise<ApiResult<Organizatio
 
 export async function getAdminOpsSummary(): Promise<ApiResult<AdminOpsSummary>> {
   return getJson<AdminOpsSummary>("/v1/admin/ops/summary");
+}
+
+export async function getAdminNotificationHealth(): Promise<ApiResult<AdminNotificationHealth>> {
+  return getJson<AdminNotificationHealth>("/v1/admin/notifications/health");
 }
 
 export async function getAdminPaymentIntents(): Promise<ApiResult<AdminPage<AdminPaymentIntent>>> {

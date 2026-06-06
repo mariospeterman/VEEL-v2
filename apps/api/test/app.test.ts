@@ -3557,6 +3557,9 @@ describe("buildApi", () => {
         async getOpsSummary() {
           throw new Error("not implemented");
         },
+        async getNotificationHealth() {
+          throw new Error("not implemented");
+        },
         async listPaymentIntents() {
           throw new Error("not implemented");
         },
@@ -3604,6 +3607,9 @@ describe("buildApi", () => {
         async getOpsSummary() {
           throw new Error("not implemented");
         },
+        async getNotificationHealth() {
+          throw new Error("not implemented");
+        },
         async listPaymentIntents() {
           throw new Error("not implemented");
         },
@@ -3647,6 +3653,9 @@ describe("buildApi", () => {
           return false;
         },
         async getOpsSummary() {
+          throw new Error("not implemented");
+        },
+        async getNotificationHealth() {
           throw new Error("not implemented");
         },
         async listPaymentIntents() {
@@ -3754,10 +3763,15 @@ describe("buildApi", () => {
     });
     await app.ready();
 
-    const [summary, payments, unlocks, providerEvents] = await Promise.all([
+    const [summary, notificationHealth, payments, unlocks, providerEvents] = await Promise.all([
       app.inject({
         method: "GET",
         url: "/v1/admin/ops/summary",
+        headers: { authorization: "Bearer valid-token" }
+      }),
+      app.inject({
+        method: "GET",
+        url: "/v1/admin/notifications/health",
         headers: { authorization: "Bearer valid-token" }
       }),
       app.inject({
@@ -3783,6 +3797,13 @@ describe("buildApi", () => {
       paymentCounts: { confirmed: 1 },
       unlockCounts: { confirmed: 1 }
     });
+    expect(notificationHealth.statusCode).toBe(200);
+    expect(notificationHealth.json()).toMatchObject({
+      unreadCount: 2,
+      activeDeviceCount: 1,
+      pushEnabledPreferenceCount: 1
+    });
+    expect(JSON.stringify(notificationHealth.json())).not.toMatch(/raw|payload|endpoint|auth|secret|privateKey|serviceRole/i);
     expect(payments.statusCode).toBe(200);
     expect(payments.json().items[0]).toMatchObject({
       productType: "content_unlock",
@@ -6028,6 +6049,18 @@ const fakeAdminRepository: AdminRepository = {
       paymentCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 },
       unlockCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 },
       providerEventCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 }
+    };
+  },
+  async getNotificationHealth() {
+    return {
+      unreadCount: 2,
+      readCount: 5,
+      archivedCount: 1,
+      activeDeviceCount: 1,
+      revokedDeviceCount: 1,
+      pushEnabledPreferenceCount: 1,
+      latestNotificationAt: "2026-06-06T10:00:00.000Z",
+      latestDeviceSeenAt: "2026-06-06T10:01:00.000Z"
     };
   },
   async listPaymentIntents(input) {

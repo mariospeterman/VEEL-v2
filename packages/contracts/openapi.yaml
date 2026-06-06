@@ -1074,6 +1074,14 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/AdminOpsSummary" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/notifications/health:
+    get:
+      operationId: getAdminNotificationHealth
+      tags: [Admin]
+      summary: Notification projection and device delivery health
+      responses:
+        "200": { $ref: "#/components/responses/AdminNotificationHealth" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /v1/admin/audit:
     get:
       operationId: listAdminAuditEvents
@@ -1623,6 +1631,7 @@ components:
     AiToolCall: { description: AI tool call, content: { application/json: { schema: { $ref: "#/components/schemas/AiToolCall" } } } }
     OrganizationDashboardPage: { description: Organization dashboards, content: { application/json: { schema: { $ref: "#/components/schemas/OrganizationDashboardPage" } } } }
     AdminOpsSummary: { description: Admin ops summary, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOpsSummary" } } } }
+    AdminNotificationHealth: { description: Admin notification health, content: { application/json: { schema: { $ref: "#/components/schemas/AdminNotificationHealth" } } } }
     AdminUser: { description: Admin user, content: { application/json: { schema: { $ref: "#/components/schemas/AdminUser" } } } }
     AdminUserPage: { description: Admin users, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminUser" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminContentItem: { description: Admin content item, content: { application/json: { schema: { $ref: "#/components/schemas/AdminContentItem" } } } }
@@ -2849,6 +2858,28 @@ components:
         paymentCounts: { $ref: "#/components/schemas/AdminStateCounts" }
         unlockCounts: { $ref: "#/components/schemas/AdminStateCounts" }
         providerEventCounts: { $ref: "#/components/schemas/AdminStateCounts" }
+    AdminNotificationHealth:
+      type: object
+      required:
+        [
+          unreadCount,
+          readCount,
+          archivedCount,
+          activeDeviceCount,
+          revokedDeviceCount,
+          pushEnabledPreferenceCount,
+          latestNotificationAt,
+          latestDeviceSeenAt
+        ]
+      properties:
+        unreadCount: { type: integer }
+        readCount: { type: integer }
+        archivedCount: { type: integer }
+        activeDeviceCount: { type: integer }
+        revokedDeviceCount: { type: integer }
+        pushEnabledPreferenceCount: { type: integer }
+        latestNotificationAt: { type: string, format: date-time, nullable: true }
+        latestDeviceSeenAt: { type: string, format: date-time, nullable: true }
     AdminStateCounts:
       type: object
       required: [total, pending, submitted, confirmed, failed]
