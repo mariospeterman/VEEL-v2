@@ -1,28 +1,4 @@
-import type { components } from "@veel/contracts";
 import { appShellNavItems } from "@veel/ui";
-
-type CreateContentRequest = components["schemas"]["CreateContentRequest"];
-type UploadSession = components["schemas"]["UploadSession"];
-
-const draft: CreateContentRequest = {
-  mediaType: "vod",
-  caption: "Studio lighting test with subscriber-ready full playback.",
-  visibility: "public",
-  nsfwLabel: "adult"
-};
-
-const uploadSession: UploadSession = {
-  uploadUrl: "https://video.bunnycdn.com/tusupload",
-  provider: "bunny",
-  headers: {
-    "Tus-Resumable": "1.0.0",
-    AuthorizationSignature: "server-generated",
-    AuthorizationExpire: "upload-session-expiry",
-    VideoId: "bunny-video-guid",
-    LibraryId: "library-id"
-  },
-  expiresAt: "2026-06-06T00:00:00.000Z"
-};
 
 const steps = [
   { label: "Draft", state: "server-owned", detail: "POST /v1/content" },
@@ -68,20 +44,20 @@ export default function CreatePage() {
           <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
             <p className="text-sm font-medium">Draft settings</p>
             <div className="mt-4 grid gap-3 text-sm">
-              <Fact label="Media" value={draft.mediaType} />
-              <Fact label="Visibility" value={draft.visibility} />
-              <Fact label="Label" value={draft.nsfwLabel} />
-              <Fact label="Caption" value={draft.caption ?? "empty"} />
+              <Fact label="Media" value="chosen by creator" />
+              <Fact label="Visibility" value="backend validated" />
+              <Fact label="Label" value="age and moderation required" />
+              <Fact label="Caption" value="draft text only until submitted" />
             </div>
           </section>
 
           <section className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
             <p className="text-sm font-medium">Upload session</p>
             <div className="mt-4 grid gap-3 text-sm">
-              <Fact label="Provider" value={uploadSession.provider} />
+              <Fact label="Provider" value="Bunny" />
               <Fact label="Upload" value="Bunny TUS" />
               <Fact label="Headers" value="safe session headers only" />
-              <Fact label="Expires" value={uploadSession.expiresAt} />
+              <Fact label="Expires" value="server issued per explicit action" />
             </div>
           </section>
         </aside>

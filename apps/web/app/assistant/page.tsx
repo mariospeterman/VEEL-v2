@@ -1,52 +1,32 @@
-import type { components } from "@veel/contracts";
 import { appShellNavItems } from "@veel/ui";
 
-type AiSession = components["schemas"]["AiSession"];
-type AiToolCall = components["schemas"]["AiToolCall"];
-
-const session: AiSession = {
-  id: "00000000-0000-4000-8000-0000000000a1",
-  scope: "creator_helper",
-  state: "active",
-  allowedTools: ["draft_caption", "suggest_hashtags", "prepare_event_copy", "summarize_creator_metrics"],
-  createdAt: "2026-06-04T20:00:00.000Z",
-  expiresAt: "2026-06-04T20:30:00.000Z"
-};
-
-const calls: AiToolCall[] = [
+const creatorTools = [
   {
-    id: "00000000-0000-4000-8000-0000000000a2",
-    sessionId: session.id,
-    toolName: "draft_caption",
-    state: "executed",
-    confirmationState: "not_required",
-    inputSummary: "Structured input keys: contentType, tone",
-    outputSummary: "Caption draft prepared from creator-provided context",
-    result: {
-      draft: "New drop is live. Tap in for the full set and save your favorites."
-    },
-    affectedResource: {
-      type: "content",
-      id: "00000000-0000-4000-8000-000000000040"
-    },
-    createdAt: "2026-06-04T20:01:00.000Z"
+    confirmation: "not_required",
+    input: "creator-provided context",
+    name: "draft_caption",
+    output: "Caption draft prepared from creator-provided context",
+    resource: "content",
+    state: "available"
   },
   {
-    id: "00000000-0000-4000-8000-0000000000a3",
-    sessionId: session.id,
-    toolName: "prepare_refund_decision",
-    state: "prepared",
-    confirmationState: "required",
-    inputSummary: "Structured input keys: resourceId, resourceType",
-    outputSummary: "prepare_refund_decision prepared and awaiting explicit admin confirmation",
-    result: {
-      status: "confirmation_required"
-    },
-    affectedResource: {
-      type: "payment",
-      id: "00000000-0000-4000-8000-000000000050"
-    },
-    createdAt: "2026-06-04T20:02:00.000Z"
+    confirmation: "not_required",
+    input: "creator-provided event details",
+    name: "prepare_event_copy",
+    output: "Event copy draft prepared for creator review",
+    resource: "event",
+    state: "available"
+  }
+];
+
+const adminTools = [
+  {
+    confirmation: "required",
+    input: "safe payment/support context",
+    name: "prepare_refund_decision",
+    output: "Prepared decision only; no refund mutation without explicit admin confirmation",
+    resource: "payment",
+    state: "confirmation_required"
   }
 ];
 
@@ -78,8 +58,8 @@ export default function AssistantPage() {
           </div>
 
           <div className="grid gap-3">
-            {calls.map((call) => (
-              <ToolCallCard call={call} key={call.id} />
+            {[...creatorTools, ...adminTools].map((tool) => (
+              <ToolCard key={tool.name} tool={tool} />
             ))}
           </div>
         </section>
@@ -89,19 +69,19 @@ export default function AssistantPage() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-sm font-medium text-[var(--muted)]">Session</p>
-                <h2 className="mt-1 text-lg font-semibold tracking-normal">{session.scope}</h2>
+                <h2 className="mt-1 text-lg font-semibold tracking-normal">creator_helper</h2>
               </div>
               <span className="rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-semibold text-[var(--accent-strong)]">
-                {session.state}
+                explicit start
               </span>
             </div>
             <div className="mt-4 grid gap-2">
-              {session.allowedTools.map((tool) => (
+              {creatorTools.map((tool) => (
                 <span
                   className="rounded border border-[var(--line)] bg-[var(--background)] px-3 py-2 text-sm"
-                  key={tool}
+                  key={tool.name}
                 >
-                  {tool}
+                  {tool.name}
                 </span>
               ))}
             </div>
@@ -121,22 +101,33 @@ export default function AssistantPage() {
   );
 }
 
-function ToolCallCard({ call }: { call: AiToolCall }) {
+function ToolCard({
+  tool
+}: {
+  tool: {
+    confirmation: string;
+    input: string;
+    name: string;
+    output: string;
+    resource: string;
+    state: string;
+  };
+}) {
   return (
     <article className="rounded border border-[var(--line)] bg-[var(--panel)] p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-medium">{call.toolName}</p>
-          <p className="mt-1 text-sm text-[var(--muted)]">{call.outputSummary}</p>
+          <p className="font-medium">{tool.name}</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">{tool.output}</p>
         </div>
         <span className="rounded bg-[var(--background)] px-2 py-1 text-xs text-[var(--muted)]">
-          {call.confirmationState}
+          {tool.confirmation}
         </span>
       </div>
       <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
-        <Fact label="State" value={call.state} />
-        <Fact label="Input" value={call.inputSummary} />
-        <Fact label="Resource" value={call.affectedResource?.type ?? "none"} />
+        <Fact label="State" value={tool.state} />
+        <Fact label="Input" value={tool.input} />
+        <Fact label="Resource" value={tool.resource} />
       </div>
     </article>
   );

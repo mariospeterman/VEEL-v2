@@ -194,3 +194,7 @@ Current implementation state:
 - `/`, `/age`, `/content/[contentId]`, `/live/[liveRoomId]`, `/profile`, `/profile/[handle]`, `/activity`, `/messages`, `/wallet`, `/subscriptions`, `/discover`, `/events/[eventId]`, `/tickets`, `/dating`, `/dating/matches`, `/admin`, and `/settings` read backend projections through the typed web API helper instead of local business-data fixtures.
 - Home/age/detail/profile/activity/messages/wallet/subscriptions/discover/Event Access/Mutuals/admin/settings screens attach the current Supabase access token when present and render a fail-closed unavailable state on API/auth/provider errors.
 - Current smoke coverage starts the web app only, so API-backed home/age/detail/profile/activity/messages/wallet/subscriptions/discover/Event Access/Mutuals/admin/settings smoke asserts the fail-closed API-unavailable state; API-backed happy-path browser coverage belongs in the combined app integration harness.
+- `/create` and `/assistant` are mutation-safe launch surfaces: they describe
+  backend-owned draft/upload and AI/MCP session boundaries without calling
+  mutation APIs on page load or rendering fixture record IDs, provider upload
+  URLs, AI session IDs, or tool-call result payloads.
