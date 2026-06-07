@@ -1,7 +1,4 @@
-import { createHash } from "node:crypto";
-import type { FastifyInstance, FastifyRequest } from "fastify";
-import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
-import type { AgeRepository } from "../age/types.js";
+import type { FastifyInstance } from "fastify";
 import {
   PaymentIdempotencyConflictError,
   PaymentRepositoryConfigurationError
@@ -11,24 +8,23 @@ import {
   createSolanaReferenceAddress,
   SolanaPaymentConfigurationError
 } from "../payment/solana-payment.js";
-import type { PaymentRepository } from "../payment/types.js";
-import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
-import type { WalletRepository } from "../wallet/types.js";
+import {
+  conflictResponse,
+  hashMessageBody,
+  hashPaymentRequest,
+  notFoundResponse,
+  requiredIdempotencyKey,
+  serviceUnavailableResponse,
+  type RegisterMessageRoutesOptions,
+  validationResponse,
+  validateMessageBody,
+  verifyMessageReadyAccess
+} from "./message-route-utils.js";
 import { MessageRepositoryConfigurationError } from "./message-repository.js";
 import type {
   CreateMessageRequest,
-  CreatePaidMessageIntentRequest,
-  MessageRepository
+  CreatePaidMessageIntentRequest
 } from "./types.js";
-
-interface RegisterMessageRoutesOptions {
-  authVerifier: SupabaseAuthVerifier;
-  sessionRepository: SessionRepository;
-  ageRepository: AgeRepository;
-  walletRepository: WalletRepository;
-  paymentRepository: PaymentRepository;
-  messageRepository: MessageRepository;
-}
 
 const paymentIntentTtlMs = 15 * 60 * 1000;
 
@@ -236,110 +232,4 @@ export async function registerMessageRoutes(
       throw error;
     }
   });
-}
-
-type MessageReadyAccessResult =
-  | {
-      ok: true;
-      supabaseUserId: string;
-    }
-  | {
-      ok: false;
-      statusCode: 401 | 403;
-      body: {
-        code: string;
-        message: string;
-      };
-    };
-
-async function verifyMessageReadyAccess(
-  request: FastifyRequest,
-  options: Pick<
-    RegisterMessageRoutesOptions,
-    "authVerifier" | "sessionRepository" | "ageRepository" | "walletRepository"
-  >
-): Promise<MessageReadyAccessResult> {
-  const verifiedSession = await verifyRequestSession(request, options.authVerifier);
-
-  if (!verifiedSession) {
-    return {
-      ok: false,
-      statusCode: 401,
-      body: unauthorizedResponse("Missing or invalid bearer token")
-    };
-  }
-
-  const profile = await options.sessionRepository.findProfileBySupabaseUserId(
-    verifiedSession.supabaseUserId
-  );
-  const [ageStatus, hasWallet] = await Promise.all([
-    options.ageRepository.findLatestAgeStatusBySupabaseUserId(verifiedSession.supabaseUserId),
-    options.walletRepository.hasWalletBySupabaseUserId(verifiedSession.supabaseUserId)
-  ]);
-
-  if (!profile?.handle || !profile.displayName || ageStatus.state !== "verified" || !hasWallet) {
-    return {
-      ok: false,
-      statusCode: 403,
-      body: {
-        code: "forbidden",
-        message: "Messages require profile, age verification, and wallet readiness"
-      }
-    };
-  }
-
-  return {
-    ok: true,
-    supabaseUserId: verifiedSession.supabaseUserId
-  };
-}
-
-function requiredIdempotencyKey(request: FastifyRequest): string | null {
-  const idempotencyKey = request.headers["idempotency-key"];
-
-  return typeof idempotencyKey === "string" && idempotencyKey.length > 0
-    ? idempotencyKey
-    : null;
-}
-
-function validateMessageBody(
-  body: Partial<CreateMessageRequest | CreatePaidMessageIntentRequest> | undefined
-): string | null {
-  if (!body || typeof body !== "object") {
-    return "Request body is required";
-  }
-
-  if (typeof body.body !== "string" || body.body.trim().length === 0) {
-    return "body is required";
-  }
-
-  if (body.body.length > 4000) {
-    return "body must be 4000 characters or fewer";
-  }
-
-  return null;
-}
-
-function hashPaymentRequest(value: unknown): string {
-  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
-}
-
-function hashMessageBody(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
-}
-
-function validationResponse(message: string) {
-  return { code: "validation_failed", message };
-}
-
-function conflictResponse(message: string) {
-  return { code: "conflict", message };
-}
-
-function notFoundResponse(message: string) {
-  return { code: "not_found", message };
-}
-
-function serviceUnavailableResponse(message: string) {
-  return { code: "service_unavailable", message };
 }
