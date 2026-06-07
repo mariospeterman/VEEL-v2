@@ -13,6 +13,8 @@ export type CreateWalletLinkChallengeRequest =
 export type WalletLinkChallenge = components["schemas"]["WalletLinkChallenge"];
 export type LinkWalletRequest = components["schemas"]["LinkWalletRequest"];
 export type Wallet = components["schemas"]["Wallet"];
+export type ContentUnlockIntent = components["schemas"]["ContentUnlockIntent"];
+export type TransactionRequest = components["schemas"]["TransactionRequest"];
 
 export class ApiMutationError extends Error {
   constructor(
@@ -42,27 +44,51 @@ export async function linkWallet(body: LinkWalletRequest): Promise<Wallet> {
   return authenticatedMutation<Wallet>("/v1/wallets/link", "POST", body);
 }
 
+export async function createContentUnlockIntent(contentId: string): Promise<ContentUnlockIntent> {
+  return authenticatedMutation<ContentUnlockIntent>(
+    `/v1/content/${encodeURIComponent(contentId)}/unlock-intents`,
+    "POST",
+    {}
+  );
+}
+
+export async function getPaymentTransactionRequest(paymentIntentId: string): Promise<TransactionRequest> {
+  return authenticatedGet<TransactionRequest>(
+    `/v1/payments/intents/${encodeURIComponent(paymentIntentId)}/transaction-request`
+  );
+}
+
+async function authenticatedGet<T>(path: string): Promise<T> {
+  const { token } = await browserSessionToken();
+  const env = parsePublicWebEnv(process.env);
+  const response = await fetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
+    cache: "no-store",
+    headers: {
+      accept: "application/json",
+      authorization: `Bearer ${token}`
+    }
+  });
+
+  if (!response.ok) {
+    throw new ApiMutationError(await errorMessage(response), response.status);
+  }
+
+  return (await response.json()) as T;
+}
+
 async function authenticatedMutation<T>(
   path: string,
   method: "PATCH" | "POST",
   body: unknown
 ): Promise<T> {
-  const supabase = createSupabaseBrowserClient();
-  const {
-    data: { session }
-  } = await supabase.auth.getSession();
-
-  if (!session?.access_token) {
-    throw new ApiMutationError("Create or restore a session before continuing.", 401);
-  }
-
+  const { token } = await browserSessionToken();
   const env = parsePublicWebEnv(process.env);
   const response = await fetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
     body: JSON.stringify(body),
     cache: "no-store",
     headers: {
       accept: "application/json",
-      authorization: `Bearer ${session.access_token}`,
+      authorization: `Bearer ${token}`,
       "content-type": "application/json",
       "idempotency-key": mutationIdempotencyKey()
     },
@@ -74,6 +100,19 @@ async function authenticatedMutation<T>(
   }
 
   return (await response.json()) as T;
+}
+
+async function browserSessionToken() {
+  const supabase = createSupabaseBrowserClient();
+  const {
+    data: { session }
+  } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    throw new ApiMutationError("Create or restore a session before continuing.", 401);
+  }
+
+  return { token: session.access_token };
 }
 
 function mutationIdempotencyKey() {

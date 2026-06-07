@@ -1,5 +1,6 @@
 import { appShellNavItems } from "@veel/ui";
 import { getContentItem, type ContentItem } from "@/api-client";
+import { ContentUnlockPanel } from "./content-unlock-panel";
 
 export default async function ContentPage({
   params
@@ -108,7 +109,7 @@ function AccessPanel({ item }: { item: ContentItem }) {
       </section>
 
       <EngagementActions item={item} />
-      <AccessAction item={item} />
+      <ContentUnlockPanel accessState={item.accessState} contentId={item.id} />
     </aside>
   );
 }
@@ -171,40 +172,6 @@ function EngagementActions({ item }: { item: ContentItem }) {
             Block creator
           </button>
         </div>
-      </div>
-    </section>
-  );
-}
-
-function AccessAction({ item }: { item: ContentItem }) {
-  const needsUnlock = item.accessState === "locked" || item.accessState === "teaser";
-
-  return (
-    <section className="rounded border border-(--line) bg-(--panel) p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold">Access</p>
-          <p className="mt-1 text-sm text-(--muted)">Backend entitlement required</p>
-        </div>
-        <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-medium uppercase text-(--accent-strong)">
-          {item.accessState}
-        </span>
-      </div>
-
-      <div className="mt-5 grid gap-3 border-t border-(--line) pt-4">
-        <p className="text-sm leading-6 text-(--muted)">
-          {needsUnlock
-            ? "Unlock pricing and wallet handoff are created by the API; wallet approval is never treated as final access."
-            : "Full access is already reflected by the backend projection."}
-        </p>
-        {needsUnlock ? (
-          <a
-            className="rounded bg-(--foreground) px-3 py-2 text-center text-sm font-semibold text-(--background)"
-            href={`/content/${item.id}#unlock`}
-          >
-            Start unlock
-          </a>
-        ) : null}
       </div>
     </section>
   );
