@@ -3149,7 +3149,7 @@ describe("buildApi", () => {
     const paymentRepository: PaymentRepository = {
       async createOrReuseIntent(input) {
         expect(input).toMatchObject({
-          productType: "event_ticket",
+          productType: "event_access_pass",
           targetId: eventId,
           amountMinor: 10000000,
           currency: "SOL"
@@ -3157,7 +3157,7 @@ describe("buildApi", () => {
 
         return {
           ...storedPaymentIntent,
-          productType: "event_ticket",
+          productType: "event_access_pass",
           targetId: eventId,
           amountMinor: 10000000
         };
@@ -3197,7 +3197,7 @@ describe("buildApi", () => {
     expect(response.json()).toMatchObject({
       state: "payment_required",
       paymentIntent: {
-        productType: "event_ticket",
+        productType: "event_access_pass",
         amountMinor: 10000000,
         currency: "SOL"
       }
@@ -7876,7 +7876,7 @@ const fakeAdminRepository: AdminRepository = {
           holderUserId: "00000000-0000-4000-8000-000000000011",
           paymentIntentId: "00000000-0000-4000-8000-000000000050",
           state: "active",
-          qrToken: "veel_ticket_redacted",
+          qrToken: "veel_access_pass_redacted",
           checkedInAt: null,
           createdAt: "2026-06-06T14:00:00.000Z"
         }
@@ -8381,7 +8381,7 @@ function ticketFixture(
     holderUserId: "00000000-0000-4000-8000-000000000001",
     paymentIntentId: null,
     state: "active" as const,
-    qrToken: "veel_ticket_fixture",
+    qrToken: "veel_access_pass_fixture",
     checkedInAt: null,
     createdAt: "2026-07-01T20:00:00.000Z"
   };

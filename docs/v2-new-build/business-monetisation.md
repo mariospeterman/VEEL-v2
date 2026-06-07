@@ -183,7 +183,7 @@ support
 content_unlock
 paid_message
 live_pass
-event_ticket
+event_access_pass
 creator_subscription
 platform_subscription
 ```
@@ -206,7 +206,7 @@ platform_fee
 referral_commission
 ```
 
-Until the compatibility migration lands, OpenAPI and database enums keep `tip`, `content_unlock`, `event_ticket`, `creator_subscription`, and `platform_subscription` where implemented. Frontend copy must use the target product language.
+OpenAPI and new payment intents use `event_access_pass` for Event Access. Deprecated `event_ticket` database rows are normalized by the `0050_event_access_payment_product_type` migration and remain readable only as a legacy settlement compatibility value. Frontend copy must use the target product language.
 
 ## Default Split Policy
 

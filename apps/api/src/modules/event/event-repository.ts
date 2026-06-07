@@ -8,7 +8,7 @@ import {
 import { stripRequestHash, toTicket, toTicketRequest } from "./event-repository-mappers.js";
 import { eventFromRows, eventSelectSql } from "./event-repository-projection.js";
 import type { EventRow, TicketRequestRow, TicketRow } from "./event-repository-rows.js";
-import { grantTicket, hashQrToken } from "./event-ticket-repository.js";
+import { grantAccessPass, hashQrToken } from "./event-access-pass-repository.js";
 
 export {
   EventIdempotencyConflictError,
@@ -275,7 +275,7 @@ export function createPostgresEventRepository(databaseUrl?: string): EventReposi
       `;
     },
     async grantFreeTicket(input) {
-      const rows = await grantTicket(sql, {
+      const rows = await grantAccessPass(sql, {
         supabaseUserId: input.supabaseUserId,
         eventId: input.eventId,
         ticketTypeId: input.ticketTypeId,

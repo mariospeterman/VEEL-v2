@@ -50,7 +50,7 @@ Avoid launch-facing language:
 - `POST /v1/events`, `GET /v1/events/{eventId}`, and `PATCH /v1/events/{eventId}` provide profile/age-gated event creation and owner updates.
 - `POST /v1/events/{eventId}/access-passes/intents` is the canonical path for Event Access payment or approval intents.
 - `POST /v1/events/{eventId}/tickets/intents` remains a deprecated compatibility alias only.
-- Confirmed `event_ticket` compatibility settlement grants a backend Event Access Pass and QR record in the settlement transaction. Wallet approval or frontend redirect never grants access.
+- Confirmed `event_access_pass` settlement grants a backend Event Access Pass and QR record in the settlement transaction. Legacy `event_ticket` rows are normalized by migration and still settle through the same backend path during compatibility windows. Wallet approval or frontend redirect never grants access.
 - `GET /v1/activity/access-passes` is the canonical activity path for current user Event Access records.
 - `POST /v1/access-passes/{accessPassId}/check-in` validates the backend-issued QR token server-side and idempotently moves an active pass to `checked_in`.
 - `/event-access/:id` and `/passes` are the canonical typed API-backed frontend

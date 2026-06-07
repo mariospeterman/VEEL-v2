@@ -1,7 +1,7 @@
 import type postgres from "postgres";
 import type { RecordPaymentSubmissionInput, StoredPaymentIntent } from "./types.js";
 import { grantContentUnlockEntitlement, grantLivePassEntitlement } from "./payment-entitlement-settlement.js";
-import { grantEventTicketEntitlement } from "./payment-event-access-settlement.js";
+import { grantEventAccessPassEntitlement } from "./payment-event-access-pass-settlement.js";
 import { deliverPaidMessage } from "./payment-paid-message-settlement.js";
 import { recordReferralCommission, recordTipSupportSettlementLedger } from "./payment-settlement-ledger.js";
 import { insertSettlementAttempt, recordWalletTransaction } from "./payment-settlement-records.js";
@@ -15,7 +15,7 @@ export async function recordPaymentSubmission(
     const rows = await transaction<{
       payment_intent_id: string;
       user_id: string;
-      product_type: StoredPaymentIntent["productType"];
+      product_type: string;
       target_id: string;
       amount_minor: number;
       currency: StoredPaymentIntent["currency"];
@@ -103,8 +103,11 @@ export async function recordPaymentSubmission(
       });
     }
   
-    if (input.settlement.confirmed && updatedIntent?.product_type === "event_ticket") {
-      await grantEventTicketEntitlement(transaction, {
+    if (
+      input.settlement.confirmed &&
+      (updatedIntent?.product_type === "event_access_pass" || updatedIntent?.product_type === "event_ticket")
+    ) {
+      await grantEventAccessPassEntitlement(transaction, {
         userId: updatedIntent.user_id,
         paymentIntentId: updatedIntent.payment_intent_id
       });

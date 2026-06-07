@@ -1,14 +1,14 @@
 import { createHash, randomUUID } from "node:crypto";
 import type postgres from "postgres";
 
-export async function grantEventTicketEntitlement(
+export async function grantEventAccessPassEntitlement(
   transaction: postgres.TransactionSql,
   input: {
     userId: string;
     paymentIntentId: string;
   }
 ): Promise<void> {
-  const qrToken = newTicketQrToken();
+  const qrToken = newAccessPassQrToken();
   const rows = await transaction<{
     ticket_id: string;
     event_id: string;
@@ -61,7 +61,7 @@ export async function grantEventTicketEntitlement(
         purchase.buyer_user_id,
         ${input.paymentIntentId},
         ${qrToken},
-        ${hashTicketQrToken(qrToken)}
+        ${hashAccessPassQrToken(qrToken)}
       from purchase
       join inventory on inventory.id = purchase.access_pass_type_id
       on conflict (payment_intent_id) do update
@@ -102,7 +102,7 @@ export async function grantEventTicketEntitlement(
       ${input.userId},
       'event',
       ${ticket.event_id},
-      'event_ticket_entitlement_granted',
+      'event_access_pass_granted',
       ${transaction.json({
         paymentIntentId: input.paymentIntentId,
         ticketId: ticket.ticket_id,
@@ -113,10 +113,10 @@ export async function grantEventTicketEntitlement(
 }
 
 
-function newTicketQrToken(): string {
-  return `veel_ticket_${randomUUID().replaceAll("-", "")}`;
+function newAccessPassQrToken(): string {
+  return `veel_access_pass_${randomUUID().replaceAll("-", "")}`;
 }
 
-function hashTicketQrToken(token: string): string {
+function hashAccessPassQrToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }

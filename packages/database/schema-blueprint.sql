@@ -14,25 +14,23 @@ create type payment_product_type as enum (
   'content_unlock',
   'paid_message',
   'live_pass',
-  'event_ticket',
+  'event_access_pass',
   'creator_subscription',
   'platform_subscription'
 );
 create type entitlement_type as enum (
   'content_unlock',
   'live_pass',
-  'event_ticket',
+  'event_access_pass',
   'creator_subscription',
   'platform_subscription',
   'paid_message'
 );
-create type dating_action as enum ('yes', 'not_interested');
+create type mutual_interest_action as enum ('interested', 'not_interested');
 
--- Launch-language migration targets:
--- tip -> support, content_unlock -> unlock, event_ticket -> event_access_pass,
--- creator_subscription -> membership, platform_subscription -> platform_plus/platform_studio,
--- dating_profiles/swipes/matches -> mutual_profiles/interests/mutuals,
--- yes -> interested.
+-- Deprecated HTTP compatibility aliases stay at route boundaries only.
+-- Database names use launch vocabulary: support, unlock, event_access_pass,
+-- membership, mutual profiles/interests, and platform subscription tiers.
 
 create table users (
   id uuid primary key,
@@ -1001,7 +999,7 @@ create index events_creator_created_at_idx
 create index events_state_starts_at_idx
   on events (state, starts_at);
 
-create table ticket_types (
+create table event_access_pass_types (
   id uuid primary key,
   event_id uuid not null references events(id),
   label text not null,
@@ -1015,13 +1013,13 @@ create table ticket_types (
   created_at timestamptz not null default now()
 );
 
-create index ticket_types_event_state_idx
-  on ticket_types (event_id, state);
+create index event_access_pass_types_event_state_idx
+  on event_access_pass_types (event_id, state);
 
-create table ticket_entitlements (
+create table event_access_passes (
   id uuid primary key,
   event_id uuid not null references events(id),
-  ticket_type_id uuid references ticket_types(id),
+  access_pass_type_id uuid references event_access_pass_types(id),
   holder_user_id uuid not null references users(id),
   payment_intent_id uuid references payment_intents(id),
   qr_token text unique not null,
@@ -1031,19 +1029,19 @@ create table ticket_entitlements (
   created_at timestamptz not null default now()
 );
 
-create index ticket_entitlements_holder_idx
-  on ticket_entitlements (holder_user_id, created_at desc);
+create index event_access_passes_holder_idx
+  on event_access_passes (holder_user_id, created_at desc);
 
-create index ticket_entitlements_event_idx
-  on ticket_entitlements (event_id, state, created_at desc);
+create index event_access_passes_event_idx
+  on event_access_passes (event_id, state, created_at desc);
 
-create index ticket_entitlements_ticket_type_id_idx
-  on ticket_entitlements (ticket_type_id);
+create index event_access_passes_access_pass_type_id_idx
+  on event_access_passes (access_pass_type_id);
 
-create table ticket_reservations (
+create table event_access_reservations (
   id uuid primary key,
   event_id uuid not null references events(id),
-  ticket_type_id uuid references ticket_types(id),
+  access_pass_type_id uuid references event_access_pass_types(id),
   user_id uuid not null references users(id),
   payment_intent_id uuid references payment_intents(id),
   expires_at timestamptz not null,
@@ -1051,10 +1049,10 @@ create table ticket_reservations (
   created_at timestamptz not null default now()
 );
 
-create table ticket_purchase_requests (
+create table event_access_purchase_requests (
   payment_intent_id uuid primary key references payment_intents(id),
   event_id uuid not null references events(id),
-  ticket_type_id uuid not null references ticket_types(id),
+  access_pass_type_id uuid not null references event_access_pass_types(id),
   buyer_user_id uuid not null references users(id),
   amount_minor bigint not null,
   currency text not null default 'SOL',
@@ -1062,19 +1060,19 @@ create table ticket_purchase_requests (
   created_at timestamptz not null default now()
 );
 
-create index ticket_purchase_requests_buyer_idx
-  on ticket_purchase_requests (buyer_user_id, created_at desc);
+create index event_access_purchase_requests_buyer_idx
+  on event_access_purchase_requests (buyer_user_id, created_at desc);
 
-create index ticket_purchase_requests_event_id_idx
-  on ticket_purchase_requests (event_id);
+create index event_access_purchase_requests_event_id_idx
+  on event_access_purchase_requests (event_id);
 
-create index ticket_purchase_requests_ticket_type_id_idx
-  on ticket_purchase_requests (ticket_type_id);
+create index event_access_purchase_requests_access_pass_type_id_idx
+  on event_access_purchase_requests (access_pass_type_id);
 
-create table ticket_requests (
+create table event_access_requests (
   id uuid primary key,
   event_id uuid not null references events(id),
-  ticket_type_id uuid references ticket_types(id),
+  access_pass_type_id uuid references event_access_pass_types(id),
   requester_user_id uuid not null references users(id),
   note text,
   state text not null default 'requested',
@@ -1083,17 +1081,17 @@ create table ticket_requests (
   created_at timestamptz not null default now()
 );
 
-create index ticket_requests_requester_idx
-  on ticket_requests (requester_user_id, created_at desc);
+create index event_access_requests_requester_idx
+  on event_access_requests (requester_user_id, created_at desc);
 
-create index ticket_requests_ticket_type_id_idx
-  on ticket_requests (ticket_type_id);
+create index event_access_requests_access_pass_type_id_idx
+  on event_access_requests (access_pass_type_id);
 
-create index ticket_requests_reviewed_by_user_id_idx
-  on ticket_requests (reviewed_by_user_id)
+create index event_access_requests_reviewed_by_user_id_idx
+  on event_access_requests (reviewed_by_user_id)
   where reviewed_by_user_id is not null;
 
-create table dating_profiles (
+create table mutual_profiles (
   user_id uuid primary key references users(id),
   enabled boolean not null default false,
   consent_version text,
@@ -1104,7 +1102,7 @@ create table dating_profiles (
   updated_at timestamptz not null default now()
 );
 
-create table dating_swipes (
+create table mutual_interests (
   id uuid primary key,
   actor_user_id uuid not null references users(id),
   target_user_id uuid not null references users(id),
@@ -1115,22 +1113,22 @@ create table dating_swipes (
   created_at timestamptz not null default now()
 );
 
-create unique index dating_swipes_content_unique
-  on dating_swipes (actor_user_id, target_user_id, content_item_id)
+create unique index mutual_interests_content_unique
+  on mutual_interests (actor_user_id, target_user_id, content_item_id)
   where content_item_id is not null;
 
-create unique index dating_swipes_profile_unique
-  on dating_swipes (actor_user_id, target_user_id)
+create unique index mutual_interests_profile_unique
+  on mutual_interests (actor_user_id, target_user_id)
   where content_item_id is null;
 
-create index dating_swipes_target_action_idx
-  on dating_swipes (target_user_id, actor_user_id, action, created_at desc);
+create index mutual_interests_target_action_idx
+  on mutual_interests (target_user_id, actor_user_id, action, created_at desc);
 
-create index dating_swipes_content_item_id_idx
-  on dating_swipes (content_item_id)
+create index mutual_interests_content_item_id_idx
+  on mutual_interests (content_item_id)
   where content_item_id is not null;
 
-create table dating_matches (
+create table mutuals (
   id uuid primary key,
   user_a_id uuid not null references users(id),
   user_b_id uuid not null references users(id),
@@ -1144,21 +1142,21 @@ create table dating_matches (
   updated_at timestamptz not null default now()
 );
 
-create unique index dating_matches_pair_unique
-  on dating_matches (user_a_id, user_b_id);
+create unique index mutuals_pair_unique
+  on mutuals (user_a_id, user_b_id);
 
-create index dating_matches_user_a_state_idx
-  on dating_matches (user_a_id, state, created_at desc);
+create index mutuals_user_a_state_idx
+  on mutuals (user_a_id, state, created_at desc);
 
-create index dating_matches_user_b_state_idx
-  on dating_matches (user_b_id, state, created_at desc);
+create index mutuals_user_b_state_idx
+  on mutuals (user_b_id, state, created_at desc);
 
-create index dating_matches_source_content_idx
-  on dating_matches (source_content_item_id)
+create index mutuals_source_content_idx
+  on mutuals (source_content_item_id)
   where source_content_item_id is not null;
 
-create index dating_matches_archived_by_user_id_idx
-  on dating_matches (archived_by_user_id)
+create index mutuals_archived_by_user_id_idx
+  on mutuals (archived_by_user_id)
   where archived_by_user_id is not null;
 
 create table provider_events (
@@ -1464,5 +1462,5 @@ create table audit_events (
 -- 3. Add indexes for foreign keys, feed queries, moderation queues, provider lookups, and audit lookups.
 -- 4. Add updated_at triggers for mutable tables.
 -- 5. Store provider raw payloads only in redacted/restricted reconciliation tables.
--- 6. Use idempotency keys for money, access, ticket, age, wallet, moderation, admin, and webhook mutations.
+-- 6. Use idempotency keys for money, access passes, age, wallet, moderation, admin, and webhook mutations.
 -- 7. Verify OpenAPI product_type enums match payment_product_type exactly.

@@ -24,7 +24,7 @@ const productTypes = new Set([
   "content_unlock",
   "paid_message",
   "live_pass",
-  "event_ticket",
+  "event_access_pass",
   "creator_subscription",
   "platform_subscription"
 ]);

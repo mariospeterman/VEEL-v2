@@ -399,7 +399,7 @@ function safeResultForTool(
     case "summarize_own_activity":
       return {
         summary: "Own activity summary prepared",
-        activity: "Purchases, tickets, wallet records, and referrals are available in Activity.",
+        activity: "Purchases, Access Passes, wallet records, and referrals are available in Activity.",
         safetyNote: "Only own account activity is eligible."
       };
     case "find_own_purchases":

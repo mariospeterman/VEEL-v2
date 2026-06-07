@@ -544,4 +544,12 @@ describe("database migrations", () => {
     expect(sql).toContain("mutuals_select_member_or_staff");
     expect(sql).not.toMatch(/creator_balance|withdrawal|escrow|payment_proof|recommendation_boost|visibility_boost|message_priority|mutuals_boost/i);
   });
+
+  it("normalizes Event Access payment product type naming", () => {
+    const sql = readMigration("0050_event_access_payment_product_type.sql");
+
+    expect(sql).toContain("set product_type = 'event_access_pass'");
+    expect(sql).toContain("where product_type = 'event_ticket'");
+    expect(sql).not.toMatch(/drop table|drop column|creator_balance|withdrawal|escrow|recommendation_boost|visibility_boost|message_priority|mutuals_boost/i);
+  });
 });

@@ -6,7 +6,7 @@ export function hashQrToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-export async function grantTicket(
+export async function grantAccessPass(
   sql: postgres.Sql,
   input: {
     supabaseUserId: string;
@@ -113,5 +113,5 @@ export async function grantTicket(
 }
 
 function newQrToken(): string {
-  return `veel_ticket_${randomUUID().replaceAll("-", "")}`;
+  return `veel_access_pass_${randomUUID().replaceAll("-", "")}`;
 }

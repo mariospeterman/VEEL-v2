@@ -242,7 +242,7 @@ export async function registerEventRoutes(
       }
 
       const intentBody = {
-        productType: "event_ticket" as const,
+        productType: "event_access_pass" as const,
         targetId: eventId,
         accessPassTypeId,
         amountMinor: offer.ticketType.priceMinor
@@ -251,7 +251,7 @@ export async function registerEventRoutes(
         supabaseUserId: access.supabaseUserId,
         idempotencyKey,
         requestHash: hashJson(intentBody),
-        productType: "event_ticket",
+        productType: "event_access_pass",
         targetId: eventId,
         amountMinor: offer.ticketType.priceMinor,
         currency: "SOL",
@@ -548,7 +548,7 @@ function validateEventDraft(body: Partial<CreateEventRequest> | undefined): stri
     }
 
     if (ticketType.currency !== "SOL") {
-      return "ticketTypes.currency must be SOL for native launch tickets";
+      return "ticketTypes.currency must be SOL for native launch Access Passes";
     }
 
     if (!Number.isSafeInteger(ticketType.capacity) || ticketType.capacity < 1) {

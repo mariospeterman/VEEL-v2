@@ -1774,7 +1774,7 @@ components:
       in: header
       required: true
       schema: { type: string, minLength: 12, maxLength: 128 }
-      description: Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations.
+      description: Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations.
     OptionalIdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -2046,7 +2046,7 @@ components:
         details: { type: object, additionalProperties: true }
     ProductType:
       type: string
-      enum: [tip, support, content_unlock, paid_message, live_pass, event_ticket, creator_subscription, platform_subscription]
+      enum: [tip, support, content_unlock, paid_message, live_pass, event_access_pass, creator_subscription, platform_subscription]
     Currency:
       type: string
       enum: [SOL, USDC]

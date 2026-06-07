@@ -2493,7 +2493,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ProductType: "tip" | "support" | "content_unlock" | "paid_message" | "live_pass" | "event_ticket" | "creator_subscription" | "platform_subscription";
+        ProductType: "tip" | "support" | "content_unlock" | "paid_message" | "live_pass" | "event_access_pass" | "creator_subscription" | "platform_subscription";
         /** @enum {string} */
         Currency: "SOL" | "USDC";
         SessionState: {
@@ -5656,7 +5656,7 @@ export interface components {
         };
     };
     parameters: {
-        /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+        /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
         RequiredIdempotencyKey: string;
         /** @description Optional idempotency key for non-critical replay-safe requests. */
         OptionalIdempotencyKey: string;
@@ -6017,7 +6017,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -6062,7 +6062,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -6079,7 +6079,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -6097,7 +6097,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -6117,7 +6117,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -6136,7 +6136,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -6197,7 +6197,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -6347,7 +6347,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -6362,7 +6362,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -6377,7 +6377,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -6392,7 +6392,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -6422,7 +6422,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -6454,7 +6454,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -6483,7 +6483,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -6500,7 +6500,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -6519,7 +6519,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -6557,7 +6557,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -6574,7 +6574,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -6594,7 +6594,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -6616,7 +6616,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -6672,7 +6672,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -6694,7 +6694,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -6734,7 +6734,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -6756,7 +6756,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -6773,7 +6773,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -6806,7 +6806,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -6823,7 +6823,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -6838,7 +6838,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -6853,7 +6853,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -6900,7 +6900,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -6922,7 +6922,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -6945,7 +6945,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -6996,7 +6996,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7032,7 +7032,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7055,7 +7055,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -7099,7 +7099,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -7144,7 +7144,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -7165,7 +7165,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7187,7 +7187,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7209,7 +7209,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -7238,7 +7238,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7255,7 +7255,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7272,7 +7272,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7289,7 +7289,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7306,7 +7306,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7323,7 +7323,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7340,7 +7340,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7357,7 +7357,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -7372,7 +7372,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -7387,7 +7387,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -7430,7 +7430,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7447,7 +7447,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -7462,7 +7462,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -7477,7 +7477,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -7520,7 +7520,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7635,7 +7635,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -7650,7 +7650,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7770,7 +7770,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7803,7 +7803,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7868,7 +7868,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7901,7 +7901,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7935,7 +7935,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7969,7 +7969,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8004,7 +8004,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8335,7 +8335,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8372,7 +8372,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8406,7 +8406,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, ticket, message, dating, age, wallet, moderation, and admin mutations. */
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
