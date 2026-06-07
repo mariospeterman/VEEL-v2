@@ -5,6 +5,8 @@ import type { components } from "@veel/contracts";
 import { createSupabaseBrowserClient } from "@/supabase/client";
 
 export type User = components["schemas"]["User"];
+export type CreateAgeSessionRequest = components["schemas"]["CreateAgeSessionRequest"];
+export type AgeSession = components["schemas"]["AgeSession"];
 export type UpdateProfileRequest = components["schemas"]["UpdateProfileRequest"];
 export type CreateWalletLinkChallengeRequest =
   components["schemas"]["CreateWalletLinkChallengeRequest"];
@@ -20,6 +22,10 @@ export class ApiMutationError extends Error {
     super(message);
     this.name = "ApiMutationError";
   }
+}
+
+export async function createAgeSession(body: CreateAgeSessionRequest): Promise<AgeSession> {
+  return authenticatedMutation<AgeSession>("/v1/age/sessions", "POST", body);
 }
 
 export async function updateMyProfile(body: UpdateProfileRequest): Promise<User> {

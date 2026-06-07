@@ -1,4 +1,6 @@
 import { getAgeStatus, type AgeStatus, type ApiResult } from "@/api-client";
+import { getWebAuthState } from "@/supabase/auth-state";
+import { AgeSessionPanel } from "./age-session-panel";
 
 const providerRows = [
   { label: "Reusable first", value: "Yoti / portable proof" },
@@ -8,7 +10,7 @@ const providerRows = [
 ];
 
 export default async function AgePage() {
-  const ageStatus = await getAgeStatus();
+  const [authState, ageStatus] = await Promise.all([getWebAuthState(), getAgeStatus()]);
 
   return (
     <main className="min-h-screen bg-(--background) text-(--foreground)">
@@ -35,13 +37,7 @@ export default async function AgePage() {
             {ageStatus.ok ? <AgeStatusCard ageStatus={ageStatus.data} /> : <UnavailableState result={ageStatus} />}
           </section>
 
-          <section className="rounded border border-(--line) bg-(--panel) p-4">
-            <p className="text-sm font-medium">Provider sessions</p>
-            <p className="mt-3 text-sm leading-6 text-(--muted)">
-              Session launch URLs are created by the backend only after an explicit user action. The
-              page does not render fixture provider links or treat redirects as verification.
-            </p>
-          </section>
+          <AgeSessionPanel authState={authState} />
         </section>
 
         <aside className="grid content-start gap-3">

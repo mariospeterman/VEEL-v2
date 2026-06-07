@@ -40,6 +40,7 @@ test("renders the age assurance projection", async ({ page }) => {
   await expect(page.getByText("signature verified")).toBeVisible();
   await expect(page.getByText("normalized result only")).toBeVisible();
   await expect(page.getByText("Session launch URLs are created by the backend")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start age verification" })).toBeDisabled();
 });
 
 test("renders the content media viewer projection", async ({ page }) => {

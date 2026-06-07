@@ -27,7 +27,7 @@ webhooks must be configured before production rollout.
 Current implementation state:
 
 - `POST /v1/age/sessions` is wired to an injectable backend provider waterfall.
-- `GET /v1/age/status` is the browser-safe age read projection. `/age` reads it through the typed web API helper and does not render fixture provider launch URLs.
+- `GET /v1/age/status` is the browser-safe age read projection. `/age` reads it through the typed web API helper and starts `POST /v1/age/sessions` only after explicit authenticated user action.
 - The default runtime waterfall fails closed with `503` until a real provider adapter is launch-approved and configured.
 - Successful provider session starts are stored as pending `age_verifications` rows with provider reference, state, rule/jurisdiction metadata, and timestamps only.
 - Raw provider payloads, identity images, document data, and browser-completed age state are not accepted by this route.
@@ -127,7 +127,7 @@ Current implementation state:
 ### Runtime behavior in this repo
 
 - The API starts the Sumsub session.
-- The provider launch URL is returned to the browser.
+- The provider launch URL is returned to the browser; `/age` redirects to it only after the backend creates the session.
 - The browser cannot self-complete the age check.
 - A signed `applicantReviewed` webhook with `reviewResult.reviewAnswer=GREEN` applies the over-18 decision server-side.
 - A signed `applicantReviewed` webhook with `reviewResult.reviewAnswer=RED` records a failed age state.
@@ -174,7 +174,7 @@ Current implementation state:
 ### Runtime behavior in this repo
 
 - The API starts the Yoti session.
-- The launch URL is returned to the browser.
+- The launch URL is returned to the browser; `/age` redirects to it only after the backend creates the session.
 - The browser cannot self-complete the check.
 - A signed notification with `state=COMPLETE` applies the over-18 decision server-side.
 - A signed notification with `state=FAIL` or `state=ERROR` records a failed age state.
