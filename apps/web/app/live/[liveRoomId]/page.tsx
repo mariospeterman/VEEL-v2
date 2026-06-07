@@ -1,5 +1,6 @@
 import { appShellNavItems } from "@veel/ui";
 import { getLiveRoom, type LiveRoom } from "@/api-client";
+import { LivePassPanel } from "./live-pass-panel";
 
 export default async function LiveRoomPage({
   params
@@ -92,26 +93,7 @@ function LiveAccessPanel({ room }: { room: LiveRoom }) {
         </div>
       </section>
 
-      <section className="rounded border border-(--line) bg-(--panel) p-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold">Pass options</h2>
-          <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-medium text-(--accent-strong)">
-            server-priced
-          </span>
-        </div>
-        <div className="mt-4 grid gap-2">
-          {room.passOptions.map((option) => (
-            <button
-              className="flex items-center justify-between gap-3 rounded border border-(--line) px-3 py-3 text-sm transition hover:bg-(--background)"
-              key={option.durationMinutes}
-              type="button"
-            >
-              <span>{option.durationMinutes} minutes</span>
-              <span>{option.amountMinor.toLocaleString()} {option.currency}</span>
-            </button>
-          ))}
-        </div>
-      </section>
+      <LivePassPanel room={room} />
 
       <section className="rounded border border-(--line) bg-(--panel) p-4">
         <h2 className="text-sm font-semibold">Live chat</h2>

@@ -14,6 +14,8 @@ export type WalletLinkChallenge = components["schemas"]["WalletLinkChallenge"];
 export type LinkWalletRequest = components["schemas"]["LinkWalletRequest"];
 export type Wallet = components["schemas"]["Wallet"];
 export type ContentUnlockIntent = components["schemas"]["ContentUnlockIntent"];
+export type CreateLivePassIntentRequest = components["schemas"]["CreateLivePassIntentRequest"];
+export type PaymentIntent = components["schemas"]["PaymentIntent"];
 export type TransactionRequest = components["schemas"]["TransactionRequest"];
 
 export class ApiMutationError extends Error {
@@ -49,6 +51,17 @@ export async function createContentUnlockIntent(contentId: string): Promise<Cont
     `/v1/content/${encodeURIComponent(contentId)}/unlock-intents`,
     "POST",
     {}
+  );
+}
+
+export async function createLivePassIntent(
+  liveRoomId: string,
+  body: CreateLivePassIntentRequest
+): Promise<PaymentIntent> {
+  return authenticatedMutation<PaymentIntent>(
+    `/v1/live/rooms/${encodeURIComponent(liveRoomId)}/pass-intents`,
+    "POST",
+    body
   );
 }
 
