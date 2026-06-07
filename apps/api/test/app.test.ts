@@ -3482,7 +3482,7 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("keeps deprecated dating aliases as Mutuals compatibility routes", async () => {
+  it("does not expose deprecated dating aliases after the Mutuals rename", async () => {
     const mutualsRepository: MutualsRepository = {
       async activate() {
         throw new Error("not implemented");
@@ -3525,10 +3525,8 @@ describe("buildApi", () => {
       headers: { authorization: "Bearer valid-token" }
     });
 
-    expect(legacyFeedResponse.statusCode).toBe(200);
-    expect(legacyFeedResponse.json()).toMatchObject({ items: [{ title: "Mutuals profile card" }] });
-    expect(legacyMatchesResponse.statusCode).toBe(200);
-    expect(legacyMatchesResponse.json()).toMatchObject({ items: [{ state: "active" }] });
+    expect(legacyFeedResponse.statusCode).toBe(404);
+    expect(legacyMatchesResponse.statusCode).toBe(404);
 
     await app.close();
   });
@@ -5034,8 +5032,7 @@ describe("buildApi", () => {
       identityChecks,
       aiSessions,
       aiToolCalls,
-      mutualsSafety,
-      legacyDatingSafety
+      mutualsSafety
     ] = await Promise.all([
       app.inject({
         method: "GET",
@@ -5095,11 +5092,6 @@ describe("buildApi", () => {
       app.inject({
         method: "GET",
         url: "/v1/admin/mutuals/safety",
-        headers: { authorization: "Bearer valid-token" }
-      }),
-      app.inject({
-        method: "GET",
-        url: "/v1/admin/dating/safety",
         headers: { authorization: "Bearer valid-token" }
       })
     ]);
@@ -5204,12 +5196,13 @@ describe("buildApi", () => {
       staleMutuals: 0,
       socialMoneyBoundary: "money_never_buys_people_visibility_matches_or_social_priority"
     });
-    expect(legacyDatingSafety.statusCode).toBe(200);
-    expect(legacyDatingSafety.json()).toEqual({
-      openReports: 0,
-      activeMatches: 1,
-      staleMatches: 0
+
+    const legacyDatingSafety = await app.inject({
+      method: "GET",
+      url: "/v1/admin/dating/safety",
+      headers: { authorization: "Bearer valid-token" }
     });
+    expect(legacyDatingSafety.statusCode).toBe(404);
 
     const replayResponse = await app.inject({
       method: "POST",

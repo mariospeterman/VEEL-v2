@@ -1074,73 +1074,6 @@ paths:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       responses:
         "200": { $ref: "#/components/responses/Mutual" }
-  /v1/dating/activate:
-    post:
-      operationId: activateDatingMode
-      tags: [Mutuals]
-      deprecated: true
-      summary: Compatibility alias for activating Mutuals mode
-      parameters:
-        - $ref: "#/components/parameters/RequiredIdempotencyKey"
-      requestBody:
-        $ref: "#/components/requestBodies/ActivateDating"
-      responses:
-        "200": { $ref: "#/components/responses/DatingProfile" }
-  /v1/dating/preferences:
-    patch:
-      operationId: updateDatingPreferences
-      tags: [Mutuals]
-      deprecated: true
-      summary: Compatibility alias for updating Mutuals preferences
-      parameters:
-        - $ref: "#/components/parameters/RequiredIdempotencyKey"
-      requestBody:
-        $ref: "#/components/requestBodies/UpdateDatingPreferences"
-      responses:
-        "200": { $ref: "#/components/responses/DatingProfile" }
-  /v1/dating/swipes:
-    post:
-      operationId: createDatingSwipe
-      tags: [Mutuals]
-      deprecated: true
-      summary: Compatibility alias for recording Mutuals interest actions
-      parameters:
-        - $ref: "#/components/parameters/RequiredIdempotencyKey"
-      requestBody:
-        $ref: "#/components/requestBodies/DatingSwipe"
-      responses:
-        "200": { $ref: "#/components/responses/DatingSwipeResult" }
-  /v1/dating/feed:
-    get:
-      operationId: getDatingFeed
-      tags: [Mutuals]
-      deprecated: true
-      summary: Compatibility alias for the Mutuals feed
-      parameters:
-        - $ref: "#/components/parameters/Cursor"
-      responses:
-        "200": { $ref: "#/components/responses/DatingFeedPage" }
-  /v1/dating/matches:
-    get:
-      operationId: listDatingMatches
-      tags: [Mutuals]
-      deprecated: true
-      summary: Compatibility alias for listing Mutuals
-      parameters:
-        - $ref: "#/components/parameters/Cursor"
-      responses:
-        "200": { $ref: "#/components/responses/DatingMatchPage" }
-  /v1/dating/matches/{matchId}/archive:
-    patch:
-      operationId: archiveDatingMatch
-      tags: [Mutuals]
-      deprecated: true
-      summary: Compatibility alias for archiving a Mutual
-      parameters:
-        - $ref: "#/components/parameters/MatchId"
-        - $ref: "#/components/parameters/RequiredIdempotencyKey"
-      responses:
-        "200": { $ref: "#/components/responses/DatingMatch" }
   /v1/activity:
     get:
       operationId: getActivity
@@ -1573,15 +1506,6 @@ paths:
       summary: Mutuals safety queue and metrics
       responses:
         "200": { $ref: "#/components/responses/AdminMutualsSafety" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-  /v1/admin/dating/safety:
-    get:
-      operationId: getAdminDatingSafety
-      tags: [Admin]
-      deprecated: true
-      summary: Compatibility alias for Mutuals safety queue and metrics
-      responses:
-        "200": { $ref: "#/components/responses/AdminDatingSafety" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /v1/admin/compliance/ledger:
     get:
@@ -2030,7 +1954,6 @@ components:
     AdminDataRequest: { description: Admin data request, content: { application/json: { schema: { $ref: "#/components/schemas/AdminDataRequest" } } } }
     AdminDataRequestPage: { description: Admin data requests, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminDataRequest" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminMutualsSafety: { description: Admin Mutuals safety, content: { application/json: { schema: { $ref: "#/components/schemas/AdminMutualsSafety" } } } }
-    AdminDatingSafety: { description: Deprecated compatibility alias for Admin Mutuals safety, content: { application/json: { schema: { $ref: "#/components/schemas/AdminDatingSafety" } } } }
     AdminLiveRoomPage: { description: Admin live room provider projections, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminLiveRoom" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminMediaAssetPage: { description: Admin media provider projections, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminMediaAsset" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminAgeCheckPage: { description: Admin age assurance checks, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminAgeCheck" } }, nextCursor: { type: string, nullable: true } } } } } }
@@ -3621,13 +3544,6 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time, nullable: true }
         completedAt: { type: string, format: date-time, nullable: true }
-    AdminDatingSafety:
-      type: object
-      required: [openReports, activeMatches, staleMatches]
-      properties:
-        openReports: { type: integer }
-        activeMatches: { type: integer }
-        staleMatches: { type: integer }
     AdminMutualsSafety:
       type: object
       required: [openReports, activeMutuals, staleMutuals, socialMoneyBoundary]

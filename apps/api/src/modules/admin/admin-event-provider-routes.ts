@@ -88,25 +88,10 @@ export function registerAdminEventProviderRoutes(
     return reply.code(200).send(await options.adminRepository.listAiToolCalls(adminListInput(query)));
   });
 
-  async function getMutualsSafety(request: FastifyRequest, reply: FastifyReply) {
+  app.get("/v1/admin/mutuals/safety", async (request, reply) => {
     const allowed = await requireAdminAccess(request, reply, options);
     if (!allowed) return reply;
 
     return reply.code(200).send(await options.adminRepository.getMutualsSafety());
-  }
-
-  app.get("/v1/admin/mutuals/safety", getMutualsSafety);
-
-  app.get("/v1/admin/dating/safety", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
-    if (!allowed) return reply;
-
-    const safety = await options.adminRepository.getMutualsSafety();
-    return reply.code(200).send({
-      openReports: safety.openReports,
-      activeMatches: safety.activeMutuals,
-      staleMatches: safety.staleMutuals
-    });
   });
-
 }

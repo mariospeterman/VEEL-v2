@@ -1381,126 +1381,6 @@ export interface paths {
         patch: operations["archiveMutual"];
         trace?: never;
     };
-    "/v1/dating/activate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Compatibility alias for activating Mutuals mode
-         * @deprecated
-         */
-        post: operations["activateDatingMode"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/dating/preferences": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Compatibility alias for updating Mutuals preferences
-         * @deprecated
-         */
-        patch: operations["updateDatingPreferences"];
-        trace?: never;
-    };
-    "/v1/dating/swipes": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Compatibility alias for recording Mutuals interest actions
-         * @deprecated
-         */
-        post: operations["createDatingSwipe"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/dating/feed": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Compatibility alias for the Mutuals feed
-         * @deprecated
-         */
-        get: operations["getDatingFeed"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/dating/matches": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Compatibility alias for listing Mutuals
-         * @deprecated
-         */
-        get: operations["listDatingMatches"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/dating/matches/{matchId}/archive": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Compatibility alias for archiving a Mutual
-         * @deprecated
-         */
-        patch: operations["archiveDatingMatch"];
-        trace?: never;
-    };
     "/v1/activity": {
         parameters: {
             query?: never;
@@ -2196,26 +2076,6 @@ export interface paths {
         };
         /** Mutuals safety queue and metrics */
         get: operations["getAdminMutualsSafety"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/admin/dating/safety": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Compatibility alias for Mutuals safety queue and metrics
-         * @deprecated
-         */
-        get: operations["getAdminDatingSafety"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4048,11 +3908,6 @@ export interface components {
             /** Format: date-time */
             completedAt?: string | null;
         };
-        AdminDatingSafety: {
-            openReports: number;
-            activeMatches: number;
-            staleMatches: number;
-        };
         AdminMutualsSafety: {
             openReports: number;
             activeMutuals: number;
@@ -5461,15 +5316,6 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["AdminMutualsSafety"];
-            };
-        };
-        /** @description Deprecated compatibility alias for Admin Mutuals safety */
-        AdminDatingSafety: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["AdminDatingSafety"];
             };
         };
         /** @description Admin live room provider projections */
@@ -7528,96 +7374,6 @@ export interface operations {
             200: components["responses"]["Mutual"];
         };
     };
-    activateDatingMode: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
-                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: components["requestBodies"]["ActivateDating"];
-        responses: {
-            200: components["responses"]["DatingProfile"];
-        };
-    };
-    updateDatingPreferences: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
-                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: components["requestBodies"]["UpdateDatingPreferences"];
-        responses: {
-            200: components["responses"]["DatingProfile"];
-        };
-    };
-    createDatingSwipe: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
-                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: components["requestBodies"]["DatingSwipe"];
-        responses: {
-            200: components["responses"]["DatingSwipeResult"];
-        };
-    };
-    getDatingFeed: {
-        parameters: {
-            query?: {
-                cursor?: components["parameters"]["Cursor"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["DatingFeedPage"];
-        };
-    };
-    listDatingMatches: {
-        parameters: {
-            query?: {
-                cursor?: components["parameters"]["Cursor"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["DatingMatchPage"];
-        };
-    };
-    archiveDatingMatch: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
-                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
-            };
-            path: {
-                matchId: components["parameters"]["MatchId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["DatingMatch"];
-        };
-    };
     getActivity: {
         parameters: {
             query?: {
@@ -8250,19 +8006,6 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["AdminMutualsSafety"];
-            403: components["responses"]["Forbidden"];
-        };
-    };
-    getAdminDatingSafety: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["AdminDatingSafety"];
             403: components["responses"]["Forbidden"];
         };
     };

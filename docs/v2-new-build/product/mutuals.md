@@ -52,7 +52,7 @@ Money can never buy access to people, visibility, matches, recommendations, or p
 /mutuals                       canonical Mutual list
 /messages?filter=mutuals       planned
 
-/dating and /dating/matches    compatibility frontend redirects only during migration
+/mutuals/mutuals               compatibility frontend redirect only during migration
 ```
 
 ## Current Implementation State
@@ -61,19 +61,16 @@ Money can never buy access to people, visibility, matches, recommendations, or p
   `POST /v1/mutuals/activate`, `PATCH /v1/mutuals/preferences`,
   `GET /v1/mutuals/feed`, `POST /v1/mutuals/interests`,
   `GET /v1/mutuals`, and `PATCH /v1/mutuals/:id/archive`.
-- The pre-rename API family, including `GET /v1/dating/feed` and
-  `GET /v1/dating/matches`, remains a deprecated compatibility alias only
-  during migration and must not be used by launch-facing frontend calls.
+- Dating-named API routes are removed from launch-facing contracts and code.
 - Admin safety operations use canonical `GET /v1/admin/mutuals/safety`.
-  `GET /v1/admin/dating/safety` remains a deprecated compatibility alias
-  only and must not appear in launch-facing frontend calls or copy.
+  Dating-named admin safety routes are removed from launch-facing contracts and code.
 - The canonical schema names are `mutual_profiles`, `mutual_interests`, and `mutuals`.
 - The `0049_event_access_mutuals_canonical_names` migration renames the pre-launch dating tables to canonical Mutuals tables before launch-facing copy ships.
-- Frontend projections must use Mutuals copy even while the backend compatibility aliases exist.
+- Frontend projections must use Mutuals copy and canonical Mutuals API routes.
 - `/mutuals/feed` and `/mutuals` use typed API-backed projections through the
   canonical API routes `GET /v1/mutuals/feed` and `GET /v1/mutuals`; they fail
   closed when the API is unavailable instead of rendering fixture Mutuals data.
-- `/dating` and `/dating/matches` are frontend compatibility redirects only.
+- Dating-named frontend routes are removed from launch-facing navigation and redirects.
 - Admin safety should use Mutuals copy and must preserve legacy route aliases only as internal transition details.
 
 ## Backend Ownership
@@ -137,7 +134,7 @@ mutual_interests
 mutuals
 ```
 
-Historical migrations, rollback files, and deprecated dating API aliases may still contain `dating`, `swipe`, or `match` vocabulary for compatibility only. New implementation and launch-facing copy must use Mutuals, interests, and mutuals.
+Historical migrations and rollback files may still contain `dating`, `swipe`, or `match` vocabulary for audit and reversibility only. New implementation and launch-facing copy must use Mutuals, interests, and mutuals.
 
 ## Gesture Model
 

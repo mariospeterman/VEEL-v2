@@ -193,9 +193,6 @@ test("redirects documented app route aliases", async ({ page }) => {
   await expect(page).toHaveURL(/\/mutuals$/);
   await expect(page.getByRole("heading", { name: "Mutuals", exact: true })).toBeVisible();
 
-  await page.goto("/dating/matches");
-  await expect(page).toHaveURL(/\/mutuals$/);
-  await expect(page.getByRole("heading", { name: "Mutuals", exact: true })).toBeVisible();
 });
 
 test("renders the public creator profile projection", async ({ page }) => {

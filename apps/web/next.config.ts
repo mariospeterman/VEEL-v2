@@ -28,8 +28,6 @@ const nextConfig: NextConfig = {
       { source: "/tickets", destination: "/passes", permanent: false },
       { source: "/tickets/:ticketId", destination: "/passes", permanent: false },
       { source: "/events/:eventId", destination: "/event-access/:eventId", permanent: false },
-      { source: "/dating", destination: "/mutuals/feed", permanent: false },
-      { source: "/dating/matches", destination: "/mutuals", permanent: false },
       { source: "/mutuals/activate", destination: "/mutuals/feed", permanent: false },
       { source: "/mutuals/mutuals", destination: "/mutuals", permanent: false }
     ];

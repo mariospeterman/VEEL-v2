@@ -224,27 +224,10 @@ export async function registerMutualsRoutes(
     return reply.code(200).send(mutual);
   };
 
-  for (const routePath of ["/v1/mutuals/activate", "/v1/dating/activate"]) {
-    app.post(routePath, activate);
-  }
-
-  for (const routePath of ["/v1/mutuals/preferences", "/v1/dating/preferences"]) {
-    app.patch(routePath, updatePreferences);
-  }
-
-  for (const routePath of ["/v1/mutuals/feed", "/v1/dating/feed"]) {
-    app.get(routePath, listFeed);
-  }
-
-  for (const routePath of ["/v1/mutuals/interests", "/v1/dating/swipes"]) {
-    app.post(routePath, createInterest);
-  }
-
-  for (const routePath of ["/v1/mutuals", "/v1/dating/matches"]) {
-    app.get(routePath, listMutuals);
-  }
-
-  for (const routePath of ["/v1/mutuals/:mutualId/archive", "/v1/dating/matches/:matchId/archive"]) {
-    app.patch(routePath, archiveMutual);
-  }
+  app.post("/v1/mutuals/activate", activate);
+  app.patch("/v1/mutuals/preferences", updatePreferences);
+  app.get("/v1/mutuals/feed", listFeed);
+  app.post("/v1/mutuals/interests", createInterest);
+  app.get("/v1/mutuals", listMutuals);
+  app.patch("/v1/mutuals/:mutualId/archive", archiveMutual);
 }
