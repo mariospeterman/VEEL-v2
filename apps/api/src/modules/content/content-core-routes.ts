@@ -1,0 +1,151 @@
+import type { FastifyInstance } from "fastify";
+import { ContentRepositoryConfigurationError } from "./content-repository.js";
+import type { CreateContentRequest } from "./types.js";
+import {
+  contentMediaTypes,
+  contentVisibilityValues,
+  feedModeFromQuery,
+  nsfwLabels,
+  verifyAppReadyAccess,
+  withSignedPlayback,
+  type RegisterContentRoutesOptions
+} from "./content-route-shared.js";
+
+export async function registerContentCoreRoutes(
+  app: FastifyInstance,
+  options: RegisterContentRoutesOptions
+): Promise<void> {
+  app.post("/v1/content", async (request, reply) => {
+    const access = await verifyAppReadyAccess(request, options);
+
+    if (!access.ok) {
+      return reply.code(access.statusCode).send(access.body);
+    }
+
+    const idempotencyKey = request.headers["idempotency-key"];
+
+    if (typeof idempotencyKey !== "string" || idempotencyKey.length === 0) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: "Idempotency-Key header is required"
+      });
+    }
+
+    const body = request.body as Partial<CreateContentRequest> | undefined;
+
+    if (
+      !body ||
+      typeof body.mediaType !== "string" ||
+      !contentMediaTypes.has(body.mediaType) ||
+      typeof body.visibility !== "string" ||
+      !contentVisibilityValues.has(body.visibility) ||
+      typeof body.nsfwLabel !== "string" ||
+      !nsfwLabels.has(body.nsfwLabel)
+    ) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: "mediaType, visibility, and nsfwLabel are required"
+      });
+    }
+
+    try {
+      const content = await options.contentRepository.createDraft({
+        supabaseUserId: access.supabaseUserId,
+        mediaType: body.mediaType,
+        caption: typeof body.caption === "string" ? body.caption : null,
+        visibility: body.visibility,
+        nsfwLabel: body.nsfwLabel
+      });
+
+      return reply.code(201).send(content);
+    } catch (error) {
+      if (error instanceof ContentRepositoryConfigurationError) {
+        request.log.warn({ error }, "Content repository is not configured");
+        return reply.code(503).send({
+          code: "service_unavailable",
+          message: "Content storage is not configured"
+        });
+      }
+
+      throw error;
+    }
+  });
+
+  app.get("/v1/content/feed", async (request, reply) => {
+    const access = await verifyAppReadyAccess(request, options);
+
+    if (!access.ok) {
+      return reply.code(access.statusCode).send(access.body);
+    }
+
+    const query = request.query as { mode?: string; cursor?: string };
+    const mode = feedModeFromQuery(query.mode);
+
+    try {
+      const feedInput = {
+        supabaseUserId: access.supabaseUserId,
+        mode,
+        limit: 20
+      };
+
+      const feed = await options.contentRepository.listHomeFeed(
+        query.cursor ? { ...feedInput, cursor: query.cursor } : feedInput
+      );
+
+      return reply.code(200).send(feed);
+    } catch (error) {
+      if (error instanceof ContentRepositoryConfigurationError) {
+        request.log.warn({ error }, "Content repository is not configured");
+        return reply.code(200).send({
+          items: [],
+          nextCursor: null
+        });
+      }
+
+      throw error;
+    }
+  });
+
+  app.get("/v1/content/:contentId", async (request, reply) => {
+    const access = await verifyAppReadyAccess(request, options);
+
+    if (!access.ok) {
+      return reply.code(access.statusCode).send(access.body);
+    }
+
+    const params = request.params as { contentId?: string };
+
+    if (typeof params.contentId !== "string" || params.contentId.length === 0) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: "contentId is required"
+      });
+    }
+
+    try {
+      const content = await options.contentRepository.findContentDetail({
+        supabaseUserId: access.supabaseUserId,
+        contentId: params.contentId
+      });
+
+      if (!content) {
+        return reply.code(404).send({
+          code: "not_found",
+          message: "Content was not found"
+        });
+      }
+
+      return reply.code(200).send(withSignedPlayback(content, options.mediaUploadProvider));
+    } catch (error) {
+      if (error instanceof ContentRepositoryConfigurationError) {
+        request.log.warn({ error }, "Content repository is not configured");
+        return reply.code(503).send({
+          code: "service_unavailable",
+          message: "Content storage is not configured"
+        });
+      }
+
+      throw error;
+    }
+  });
+}
