@@ -1,4 +1,8 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
+import {
+  readIdempotencyKey,
+  requireIdempotencyKey as requireSharedIdempotencyKey
+} from "../../shared/idempotency.js";
 import type { AgeRepository } from "../age/types.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
@@ -31,8 +35,8 @@ export async function toggleContentAction(
 ) {
   const access = await verifyEngagementAccess(request, options);
   if (!access.ok) return reply.code(access.statusCode).send(access.body);
-  const idempotencyKey = request.headers["idempotency-key"];
-  if (typeof idempotencyKey !== "string" || idempotencyKey.length === 0) {
+  const idempotencyKey = readIdempotencyKey(request);
+  if (!idempotencyKey) {
     return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
   }
   const params = request.params as { contentId?: string };
@@ -121,10 +125,7 @@ export async function repositoryReply<T>(
 export function requireIdempotencyKey(
   request: FastifyRequest
 ): { code: string; message: string } | null {
-  const idempotencyKey = request.headers["idempotency-key"];
-  return typeof idempotencyKey === "string" && idempotencyKey.length > 0
-    ? null
-    : validationResponse("Idempotency-Key header is required");
+  return requireSharedIdempotencyKey(request);
 }
 
 export function validationResponse(message: string) {

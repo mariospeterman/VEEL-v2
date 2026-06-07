@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { requireIdempotencyKey as requireSharedIdempotencyKey } from "../../shared/idempotency.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { SupabaseAuthVerifier } from "../session/types.js";
 import { NotificationRepositoryConfigurationError } from "./notification-repository.js";
@@ -238,10 +239,7 @@ function validPreferencePatch(body: Partial<UpdateNotificationPreferencesRequest
 }
 
 function requireIdempotencyKey(request: FastifyRequest): { code: string; message: string } | null {
-  const idempotencyKey = request.headers["idempotency-key"];
-  return typeof idempotencyKey === "string" && idempotencyKey.length > 0
-    ? null
-    : validationResponse("Idempotency-Key header is required");
+  return requireSharedIdempotencyKey(request);
 }
 
 function validationResponse(message: string) {

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { FastifyRequest } from "fastify";
+import { readIdempotencyKey } from "../../shared/idempotency.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { AgeRepository } from "../age/types.js";
 import type { PaymentRepository } from "../payment/types.js";
@@ -77,11 +78,7 @@ export async function verifyMessageReadyAccess(
 }
 
 export function requiredIdempotencyKey(request: FastifyRequest): string | null {
-  const idempotencyKey = request.headers["idempotency-key"];
-
-  return typeof idempotencyKey === "string" && idempotencyKey.length > 0
-    ? idempotencyKey
-    : null;
+  return readIdempotencyKey(request);
 }
 
 export function validateMessageBody(
