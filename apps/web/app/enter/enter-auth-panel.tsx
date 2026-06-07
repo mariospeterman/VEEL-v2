@@ -7,9 +7,10 @@ import { createSupabaseBrowserClient } from "@/supabase/client";
 interface EnterAuthPanelProps {
   initialAuthState: WebAuthState;
   authError?: string | null;
+  nextPath: string;
 }
 
-export function EnterAuthPanel({ initialAuthState, authError }: EnterAuthPanelProps) {
+export function EnterAuthPanel({ initialAuthState, authError, nextPath }: EnterAuthPanelProps) {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sent" | "signed_out" | "error">("idle");
   const [message, setMessage] = useState<string | null>(authError ? "Sign-in link could not be confirmed." : null);
@@ -34,7 +35,7 @@ export function EnterAuthPanel({ initialAuthState, authError }: EnterAuthPanelPr
       return;
     }
 
-    const redirectTo = `${window.location.origin}/auth/confirm?next=/enter`;
+    const redirectTo = `${window.location.origin}/auth/confirm?next=${encodeURIComponent(nextPath)}`;
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {

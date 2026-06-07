@@ -1,7 +1,12 @@
 import { appShellNavItems } from "@veel/ui";
 import { getEventAccessPassActivity, type EventAccessPassPage } from "@/api-client";
+import { requireConfiguredSession } from "@/supabase/route-guard";
+
+export const dynamic = "force-dynamic";
 
 export default async function PassesPage() {
+  await requireConfiguredSession("/passes");
+
   const passesResult = await getEventAccessPassActivity();
 
   return (

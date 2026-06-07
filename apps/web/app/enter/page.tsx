@@ -30,10 +30,11 @@ const entryOptions = [
 export default async function EnterPage({
   searchParams
 }: {
-  searchParams?: Promise<{ error?: string }>;
+  searchParams?: Promise<{ error?: string; next?: string }>;
 }) {
-  const emptyParams: { error?: string } = {};
+  const emptyParams: { error?: string; next?: string } = {};
   const [authState, params] = await Promise.all([getWebAuthState(), searchParams ?? Promise.resolve(emptyParams)]);
+  const nextPath = safeNextPath(params.next);
   const sessionAccessReason = authState.authenticated
     ? sessionState.appAccessState.reason
     : "identity_required";
@@ -61,7 +62,7 @@ export default async function EnterPage({
       </section>
 
       <section className="grid content-center gap-3 border-t border-(--line) bg-(--panel) px-5 py-6 lg:border-l lg:border-t-0">
-        <EnterAuthPanel authError={params.error ?? null} initialAuthState={authState} />
+        <EnterAuthPanel authError={params.error ?? null} initialAuthState={authState} nextPath={nextPath} />
 
         {entryOptions.map((option, index) => (
           <article className="rounded border border-(--line) bg-(--background) p-4" key={option.title}>
@@ -80,6 +81,10 @@ export default async function EnterPage({
       </section>
     </main>
   );
+}
+
+function safeNextPath(value?: string) {
+  return value?.startsWith("/") && !value.startsWith("//") ? value : "/enter";
 }
 
 function Fact({ label, value }: { label: string; value: string }) {

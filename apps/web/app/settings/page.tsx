@@ -15,9 +15,14 @@ import {
   type SessionState,
   type WalletList
 } from "@/api-client";
+import { requireConfiguredSession } from "@/supabase/route-guard";
 import { NotificationEnrollment } from "./notification-enrollment";
 
+export const dynamic = "force-dynamic";
+
 export default async function SettingsPage() {
+  await requireConfiguredSession("/settings");
+
   const [session, ageStatus, wallets, feedPreferences, notificationPreferences, pushConfig] = await Promise.all([
     getSession(),
     getAgeStatus(),

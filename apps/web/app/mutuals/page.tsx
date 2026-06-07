@@ -1,7 +1,12 @@
 import { appShellNavItems } from "@veel/ui";
 import { getMutualsMatches, type MutualsMatchPage } from "@/api-client";
+import { requireConfiguredSession } from "@/supabase/route-guard";
+
+export const dynamic = "force-dynamic";
 
 export default async function MutualsPage() {
+  await requireConfiguredSession("/mutuals");
+
   const matchesResult = await getMutualsMatches();
 
   return (

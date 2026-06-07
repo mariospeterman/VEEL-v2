@@ -1,7 +1,12 @@
 import { appShellNavItems } from "@veel/ui";
 import { getAiCapabilities, type AiCapabilities, type ApiResult } from "@/api-client";
+import { requireConfiguredSession } from "@/supabase/route-guard";
+
+export const dynamic = "force-dynamic";
 
 export default async function AssistantPage() {
+  await requireConfiguredSession("/assistant");
+
   const capabilities = await getAiCapabilities();
 
   return (

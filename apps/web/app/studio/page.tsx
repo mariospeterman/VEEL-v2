@@ -4,8 +4,13 @@ import {
   type ApiResult,
   type OrganizationDashboardPage
 } from "@/api-client";
+import { requireConfiguredSession } from "@/supabase/route-guard";
+
+export const dynamic = "force-dynamic";
 
 export default async function StudioPage() {
+  await requireConfiguredSession("/studio");
+
   const dashboards = await getOrganizationDashboards();
 
   return (

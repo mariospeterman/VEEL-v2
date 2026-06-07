@@ -34,6 +34,7 @@ import {
   getAdminVatDeterminations,
   getAdminIdentityChecks
 } from "@/api-client";
+import { requireConfiguredSession } from "@/supabase/route-guard";
 import {
   AgeKycProviderPanel,
   AiOperationsPanel,
@@ -59,7 +60,12 @@ import {
   VatReceiptPanel,
   OrganizationPanel
 } from "./admin-panels";
+
+export const dynamic = "force-dynamic";
+
 export default async function AdminPage() {
+  await requireConfiguredSession("/admin");
+
   const [
     summary,
     payments,

@@ -1,7 +1,12 @@
 import { appShellNavItems } from "@veel/ui";
 import { getMutualsFeed, type MutualsFeedPage } from "@/api-client";
+import { requireConfiguredSession } from "@/supabase/route-guard";
+
+export const dynamic = "force-dynamic";
 
 export default async function MutualsFeedPageRoute() {
+  await requireConfiguredSession("/mutuals/feed");
+
   const feedResult = await getMutualsFeed();
 
   return (

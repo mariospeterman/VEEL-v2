@@ -1,4 +1,7 @@
 import { appShellNavItems } from "@veel/ui";
+import { requireConfiguredSession } from "@/supabase/route-guard";
+
+export const dynamic = "force-dynamic";
 
 const steps = [
   { label: "Draft", state: "server-owned", detail: "POST /v1/content" },
@@ -7,7 +10,9 @@ const steps = [
   { label: "Publish", state: "explicit", detail: "creator confirmation" }
 ];
 
-export default function CreatePage() {
+export default async function CreatePage() {
+  await requireConfiguredSession("/create");
+
   return (
     <main className="min-h-screen bg-(--background) text-(--foreground)">
       <AppNav />

@@ -8,8 +8,13 @@ import {
   type WalletTransaction,
   type WalletTransactionPage
 } from "@/api-client";
+import { requireConfiguredSession } from "@/supabase/route-guard";
+
+export const dynamic = "force-dynamic";
 
 export default async function WalletPage() {
+  await requireConfiguredSession("/wallet");
+
   const [wallets, walletTransactions] = await Promise.all([
     getWallets(),
     getWalletTransactionActivity()
