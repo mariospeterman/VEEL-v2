@@ -1,77 +1,35 @@
 import { randomUUID } from "node:crypto";
 import postgres from "postgres";
+import type { SubscriptionPlan, SubscriptionRepository } from "./types.js";
+import {
+  SubscriptionIdempotencyConflictError,
+  SubscriptionPolicyError,
+  SubscriptionRepositoryConfigurationError
+} from "./subscription-errors.js";
+import { createSubscriptionCancellationRepositoryMethods } from "./subscription-cancellation-repository.js";
+import {
+  creatorFieldsFromPlan,
+  providerReadinessFromPlanState,
+  toAuthorizationIntentResponse,
+  toSubscription,
+  toSubscriptionPlan
+} from "./subscription-repository-mappers.js";
 import type {
-  Subscription,
-  SubscriptionAuthorizationIntent,
-  SubscriptionPlan,
-  SubscriptionRepository
-} from "./types.js";
+  AuthorizationIntentRow,
+  PlanRow,
+  SubscriptionRow
+} from "./subscription-repository-rows.js";
+import {
+  findActor,
+  findSubscriptionById,
+  insertSubscriptionEvent
+} from "./subscription-repository-support.js";
 
-export class SubscriptionRepositoryConfigurationError extends Error {
-  constructor() {
-    super("DATABASE_URL_NOT_CONFIGURED");
-    this.name = "SubscriptionRepositoryConfigurationError";
-  }
-}
-
-export class SubscriptionIdempotencyConflictError extends Error {
-  constructor() {
-    super("SUBSCRIPTION_IDEMPOTENCY_CONFLICT");
-    this.name = "SubscriptionIdempotencyConflictError";
-  }
-}
-
-export class SubscriptionPolicyError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "SubscriptionPolicyError";
-  }
-}
-
-interface PlanRow {
-  id: string;
-  scope: SubscriptionPlan["scope"];
-  label: string;
-  amount_minor: string | number;
-  currency: SubscriptionPlan["currency"];
-  period_days: number;
-  billing_mode: SubscriptionPlan["billingMode"];
-  provider_state: SubscriptionPlan["providerState"];
-  token_mint: string | null;
-  token_program: SubscriptionPlan["tokenProgram"];
-  creator_user_id: string | null;
-  creator_handle: string | null;
-  creator_display_name: string | null;
-  creator_avatar_url: string | null;
-}
-
-interface SubscriptionRow {
-  id: string;
-  scope: Subscription["scope"];
-  plan_id: string;
-  state: Subscription["state"];
-  renewal_mode: Subscription["renewalMode"];
-  current_period_ends_at: Date | null;
-  next_collection_at: Date | null;
-  cancelled_at: Date | null;
-  revoked_at: Date | null;
-  authority_address: string | null;
-  delegation_address: string | null;
-  creator_user_id: string | null;
-  creator_handle: string | null;
-  creator_display_name: string | null;
-  creator_avatar_url: string | null;
-}
-
-interface AuthorizationIntentRow {
-  id: string;
-  subscription_id: string;
-  setup_reference: string;
-  transaction_request_url: string | null;
-  expires_at: Date;
-  request_hash: string;
-  state: string;
-}
+export {
+  SubscriptionIdempotencyConflictError,
+  SubscriptionPolicyError,
+  SubscriptionRepositoryConfigurationError
+} from "./subscription-errors.js";
 
 export function createPostgresSubscriptionRepository(databaseUrl?: string): SubscriptionRepository {
   if (!databaseUrl) {
@@ -533,266 +491,10 @@ export function createPostgresSubscriptionRepository(databaseUrl?: string): Subs
       });
     },
 
-    async cancel(input) {
-      const actor = await findActor(sql, input.supabaseUserId);
-
-      if (!actor) {
-        throw new SubscriptionRepositoryConfigurationError();
-      }
-
-      return sql.begin(async (transaction) => {
-        const rows = await transaction<SubscriptionRow[]>`
-          update subscriptions s
-          set
-            cancel_at_period_end = true,
-            cancelled_at = coalesce(cancelled_at, now()),
-            state = case when state = 'authorization_pending' then 'cancelled' else state end,
-            updated_at = now()
-          from profiles p
-          where p.user_id = s.creator_user_id
-            and s.id = ${input.subscriptionId}
-            and s.subscriber_user_id = ${actor.id}
-            and s.state in ('authorization_pending', 'active', 'renewal_pending', 'grace_period')
-          returning
-            s.id,
-            s.scope,
-            s.plan_id,
-            s.state,
-            s.renewal_mode,
-            s.current_period_ends_at,
-            s.next_collection_at,
-            s.cancelled_at,
-            s.revoked_at,
-            s.authority_address,
-            s.delegation_address,
-            s.creator_user_id,
-            p.handle as creator_handle,
-            p.display_name as creator_display_name,
-            p.avatar_url as creator_avatar_url
-        `;
-        let subscription = rows[0] ? toSubscription(rows[0]) : null;
-
-        if (!subscription) {
-          const platformRows = await transaction<SubscriptionRow[]>`
-            update subscriptions s
-            set
-              cancel_at_period_end = true,
-              cancelled_at = coalesce(cancelled_at, now()),
-              state = case when state = 'authorization_pending' then 'cancelled' else state end,
-              updated_at = now()
-            where s.id = ${input.subscriptionId}
-              and s.subscriber_user_id = ${actor.id}
-              and s.creator_user_id is null
-              and s.state in ('authorization_pending', 'active', 'renewal_pending', 'grace_period')
-            returning
-              s.id,
-              s.scope,
-              s.plan_id,
-              s.state,
-              s.renewal_mode,
-              s.current_period_ends_at,
-              s.next_collection_at,
-              s.cancelled_at,
-              s.revoked_at,
-              s.authority_address,
-              s.delegation_address,
-              s.creator_user_id,
-              null::text as creator_handle,
-              null::text as creator_display_name,
-              null::text as creator_avatar_url
-          `;
-          subscription = platformRows[0] ? toSubscription(platformRows[0]) : null;
-        }
-
-        if (subscription) {
-          await insertSubscriptionEvent(transaction, {
-            subscriptionId: subscription.id,
-            actorUserId: actor.id,
-            action: "subscription.cancelled",
-            authorizationIntentId: null,
-            metadata: {
-              idempotencyKey: input.idempotencyKey
-            }
-          });
-        }
-
-        return subscription;
-      });
-    },
+    ...createSubscriptionCancellationRepositoryMethods(sql),
 
     async close() {
       await sql.end({ timeout: 5 });
     }
   };
-}
-
-async function findActor(sql: postgres.Sql, supabaseUserId: string): Promise<{ id: string } | null> {
-  const rows = await sql<{ id: string }[]>`
-    select id
-    from users
-    where supabase_user_id = ${supabaseUserId}
-    limit 1
-  `;
-
-  return rows[0] ?? null;
-}
-
-async function findSubscriptionById(
-  sql: postgres.Sql,
-  input: {
-    supabaseUserId: string;
-    subscriptionId: string;
-  }
-): Promise<Subscription | null> {
-  const rows = await sql<SubscriptionRow[]>`
-    select
-      s.id,
-      s.scope,
-      s.plan_id,
-      s.state,
-      s.renewal_mode,
-      s.current_period_ends_at,
-      s.next_collection_at,
-      s.cancelled_at,
-      s.revoked_at,
-      s.authority_address,
-      s.delegation_address,
-      s.creator_user_id,
-      p.handle as creator_handle,
-      p.display_name as creator_display_name,
-      p.avatar_url as creator_avatar_url
-    from subscriptions s
-    join users u on u.id = s.subscriber_user_id
-    left join profiles p on p.user_id = s.creator_user_id
-    where s.id = ${input.subscriptionId}
-      and u.supabase_user_id = ${input.supabaseUserId}
-    limit 1
-  `;
-
-  return rows[0] ? toSubscription(rows[0]) : null;
-}
-
-async function insertSubscriptionEvent(
-  transaction: postgres.TransactionSql,
-  input: {
-    subscriptionId: string;
-    actorUserId: string;
-    action: string;
-    authorizationIntentId: string | null;
-    metadata: Record<string, unknown>;
-  }
-): Promise<void> {
-  await transaction`
-    insert into subscription_events (
-      id,
-      subscription_id,
-      actor_user_id,
-      action,
-      authorization_intent_id,
-      metadata
-    )
-    values (
-      ${randomUUID()},
-      ${input.subscriptionId},
-      ${input.actorUserId},
-      ${input.action},
-      ${input.authorizationIntentId},
-      ${transaction.json(input.metadata as postgres.JSONValue)}
-    )
-  `;
-}
-
-function toSubscriptionPlan(row: PlanRow): SubscriptionPlan {
-  const plan: SubscriptionPlan = {
-    id: row.id,
-    scope: row.scope,
-    ...(row.creator_user_id && row.creator_handle && row.creator_display_name
-      ? {
-          creator: {
-            id: row.creator_user_id,
-            handle: row.creator_handle,
-            displayName: row.creator_display_name,
-            avatarUrl: row.creator_avatar_url,
-            badges: []
-          }
-        }
-      : {}),
-    label: row.label,
-    amountMinor: Number(row.amount_minor),
-    currency: row.currency,
-    periodDays: row.period_days,
-    billingMode: row.billing_mode,
-    providerState: row.provider_state,
-    tokenMint: row.token_mint,
-    tokenProgram: row.token_program ?? null
-  };
-
-  return plan;
-}
-
-function toSubscription(row: SubscriptionRow): Subscription {
-  return {
-    id: row.id,
-    scope: row.scope,
-    planId: row.plan_id,
-    ...(row.creator_user_id && row.creator_handle && row.creator_display_name
-      ? {
-          creator: {
-            id: row.creator_user_id,
-            handle: row.creator_handle,
-            displayName: row.creator_display_name,
-            avatarUrl: row.creator_avatar_url,
-            badges: []
-          }
-        }
-      : {}),
-    state: row.state,
-    renewalMode: row.renewal_mode,
-    currentPeriodEndsAt: row.current_period_ends_at?.toISOString() ?? null,
-    nextCollectionAt: row.next_collection_at?.toISOString() ?? null,
-    cancelledAt: row.cancelled_at?.toISOString() ?? null,
-    revokedAt: row.revoked_at?.toISOString() ?? null,
-    authorityAddress: row.authority_address,
-    delegationAddress: row.delegation_address
-  };
-}
-
-function toAuthorizationIntentResponse(input: {
-  intent: AuthorizationIntentRow;
-  subscription: Subscription;
-  providerState: "candidate" | "staging_required" | "launch_approved";
-}): SubscriptionAuthorizationIntent {
-  return {
-    id: input.intent.id,
-    subscription: input.subscription,
-    authorizationMode: "delegated_solana_subscription",
-    setupReference: input.intent.setup_reference,
-    transactionRequestUrl: input.intent.transaction_request_url,
-    expiresAt: input.intent.expires_at.toISOString(),
-    providerReadiness: {
-      activeMode: "delegated_solana_subscription",
-      delegatedSubscriptions: input.providerState
-    }
-  };
-}
-
-function creatorFieldsFromPlan(plan: PlanRow): Pick<
-  SubscriptionRow,
-  "creator_handle" | "creator_display_name" | "creator_avatar_url"
-> {
-  return {
-    creator_handle: plan.creator_handle,
-    creator_display_name: plan.creator_display_name,
-    creator_avatar_url: plan.creator_avatar_url
-  };
-}
-
-function providerReadinessFromPlanState(
-  state: SubscriptionPlan["providerState"]
-): "candidate" | "staging_required" | "launch_approved" {
-  if (state === "staging_required") {
-    return "staging_required";
-  }
-
-  return "candidate";
 }
