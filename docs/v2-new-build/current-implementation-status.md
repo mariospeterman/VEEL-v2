@@ -49,7 +49,7 @@ Non-goals:
 ## Fail-Closed Or Not Production-Ready
 
 - Real provider credentials, webhook endpoints, staging accounts, sandbox smoke tests, and production keys are intentionally placeholders until manually configured.
-- `/enter` now starts real Supabase magic-link session flows, and protected web pages redirect to `/enter?next=<path>` when Supabase SSR is configured and no validated claims are present. Onboarding screens still need profile completion mutations, wallet handoff, and full backend app-access shell gating.
+- `/enter` now starts real Supabase magic-link session flows, exposes the backend `PATCH /v1/profiles/me` profile-completion mutation, and protected web pages redirect to `/enter?next=<path>` when Supabase SSR is configured and no validated claims are present. Onboarding screens still need wallet handoff and full backend app-access shell gating.
 - Age/KYC/KYB provider launch paths need one launch-approved provider fully wired with current official docs, live webhook verification, retention policy, and admin review flow.
 - Embedded wallet provider remains a boundary until a launch-approved noncustodial provider is configured and tested.
 - Payment settlement is native SOL devnet first; SPL/USDC, product-specific split settlement, exact subscription delegation program verification, and provider replay tooling still need launch-scope completion.
@@ -62,7 +62,7 @@ Non-goals:
 
 1. Continue migrating money/access/admin/safety mutations onto the shared Postgres transaction helper slice by slice; payment submission settlement is already on the shared boundary.
 2. Continue migrating route modules onto shared idempotency helpers; add shared audit, route-policy/RBAC, route-specific rate limit, and test factory helpers, then migrate money/access/admin/safety mutations onto them slice by slice.
-3. Continue Supabase onboarding beyond `/enter`: profile completion mutations, wallet handoff, and backend app-access shell gating.
+3. Continue Supabase onboarding beyond `/enter`: wallet handoff and backend app-access shell gating.
 4. Wire one launch-approved age/KYC provider path end to end and keep all unconfigured providers fail-closed.
 5. Harden product-specific Solana Pay checkout/access paths for content, support, live pass, Event Access, paid message, platform plan, and creator membership.
 6. Continue deployment hardening beyond the skeleton: artifact digest pinning, provider staging smoke, backup/snapshot verification, alert routing, and real hosting/OIDC integration.

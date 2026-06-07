@@ -187,6 +187,7 @@ Avoid:
 - Frontend uses Supabase URL plus publishable key and user JWT. Legacy anon keys may be used for compatibility only.
 - Web SSR uses `@supabase/ssr` cookie clients, `apps/web/proxy.ts` refreshes Supabase auth cookies with `auth.getClaims()`, and `/auth/confirm` exchanges email `token_hash` links for sessions before redirecting back to the app.
 - `/enter` starts the real browser-side Supabase magic-link flow and can sign out a browser session. It does not grant protected app access by itself; backend `/v1/session`, wallet readiness, and age verification remain the access truth.
+- `/enter` also exposes the profile completion form after session creation. It sends `PATCH /v1/profiles/me` with a browser Supabase bearer token and an idempotency key; backend validation, handle uniqueness, and app-access state remain authoritative.
 - Protected app pages use a shared server-side route guard before backend reads. When Supabase SSR env is configured and `getClaims()` does not validate a browser session, the guard redirects to `/enter?next=<protected-path>`.
 - Every guarded page must export `dynamic = "force-dynamic"` so auth cookies and refreshed claims are evaluated per request instead of during static prerendering.
 - When Supabase SSR env is not configured, local development and smoke projections stay visible; backend API calls still fail closed and remain the access authority.

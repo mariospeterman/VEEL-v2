@@ -1,6 +1,7 @@
 import type { components } from "@veel/contracts";
 import { getWebAuthState } from "@/supabase/auth-state";
 import { EnterAuthPanel } from "./enter-auth-panel";
+import { ProfileCompletionPanel } from "./profile-completion-panel";
 
 type SessionState = components["schemas"]["SessionState"];
 
@@ -63,6 +64,7 @@ export default async function EnterPage({
 
       <section className="grid content-center gap-3 border-t border-(--line) bg-(--panel) px-5 py-6 lg:border-l lg:border-t-0">
         <EnterAuthPanel authError={params.error ?? null} initialAuthState={authState} nextPath={nextPath} />
+        <ProfileCompletionPanel authState={authState} />
 
         {entryOptions.map((option, index) => (
           <article className="rounded border border-(--line) bg-(--background) p-4" key={option.title}>
