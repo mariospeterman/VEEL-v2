@@ -6,12 +6,12 @@ import {
   type CreatorDashboard,
   type CreatorOnboarding
 } from "@/api-client";
-import { requireConfiguredSession } from "@/supabase/route-guard";
+import { requireAppAccess } from "@/supabase/route-guard";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProfilePage() {
-  await requireConfiguredSession("/profile");
+  await requireAppAccess("/profile");
 
   const [dashboardResult, onboardingResult] = await Promise.all([
     getMyCreatorDashboard(),

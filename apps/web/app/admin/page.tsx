@@ -34,7 +34,7 @@ import {
   getAdminVatDeterminations,
   getAdminIdentityChecks
 } from "@/api-client";
-import { requireConfiguredSession } from "@/supabase/route-guard";
+import { requireAppAccess } from "@/supabase/route-guard";
 import {
   AgeKycProviderPanel,
   AiOperationsPanel,
@@ -64,7 +64,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
-  await requireConfiguredSession("/admin");
+  await requireAppAccess("/admin");
 
   const [
     summary,

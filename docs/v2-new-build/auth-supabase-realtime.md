@@ -192,6 +192,7 @@ Avoid:
 - `/enter` and `/wallet` expose external Solana wallet handoff for injected wallets using the backend wallet challenge/proof endpoints. Official Phantom Solana signing docs checked on 2026-06-07 confirm `signMessage` receives UTF-8 bytes and returns an Ed25519 signature that the backend verifies with tweetnacl.
 - `/age` exposes an authenticated start button for `POST /v1/age/sessions` with `providerPreference=reusable_first`. It redirects only to the backend-returned provider launch URL and still waits for signed provider webhook evidence before access changes.
 - Protected app pages use a shared server-side route guard before backend reads. When Supabase SSR env is configured and `getClaims()` does not validate a browser session, the guard redirects to `/enter?next=<protected-path>`.
+- Protected app-shell pages additionally call backend `GET /v1/session` and redirect incomplete access states to `/enter`, `/wallet`, or `/age` based on `appAccessState.reason`. `/wallet`, `/settings`, `/enter`, and `/age` remain reachable as remediation/onboarding surfaces.
 - Every guarded page must export `dynamic = "force-dynamic"` so auth cookies and refreshed claims are evaluated per request instead of during static prerendering.
 - When Supabase SSR env is not configured, local development and smoke projections stay visible; backend API calls still fail closed and remain the access authority.
 - Public Home/Discover, public creator profiles, content/live/event previews, `/enter`, and `/age` stay reachable without a browser session.

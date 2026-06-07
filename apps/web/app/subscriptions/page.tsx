@@ -8,12 +8,12 @@ import {
   type SubscriptionPlan,
   type SubscriptionPlanPage
 } from "@/api-client";
-import { requireConfiguredSession } from "@/supabase/route-guard";
+import { requireAppAccess } from "@/supabase/route-guard";
 
 export const dynamic = "force-dynamic";
 
 export default async function SubscriptionsPage() {
-  await requireConfiguredSession("/subscriptions");
+  await requireAppAccess("/subscriptions");
 
   const [plans, subscriptions] = await Promise.all([
     getSubscriptionPlans(),

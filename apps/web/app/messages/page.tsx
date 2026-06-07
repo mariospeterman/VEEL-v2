@@ -8,12 +8,12 @@ import {
   type Message,
   type MessagePage
 } from "@/api-client";
-import { requireConfiguredSession } from "@/supabase/route-guard";
+import { requireAppAccess } from "@/supabase/route-guard";
 
 export const dynamic = "force-dynamic";
 
 export default async function MessagesPage() {
-  await requireConfiguredSession("/messages");
+  await requireAppAccess("/messages");
 
   const conversations = await getConversations();
   const selectedConversation = conversations.ok ? (conversations.data.items[0] ?? null) : null;

@@ -1,5 +1,5 @@
 import { appShellNavItems } from "@veel/ui";
-import { requireConfiguredSession } from "@/supabase/route-guard";
+import { requireAppAccess } from "@/supabase/route-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +11,7 @@ const steps = [
 ];
 
 export default async function CreatePage() {
-  await requireConfiguredSession("/create");
+  await requireAppAccess("/create");
 
   return (
     <main className="min-h-screen bg-(--background) text-(--foreground)">
