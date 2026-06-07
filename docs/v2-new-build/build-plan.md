@@ -24,6 +24,8 @@ This is the detailed build plan for a clean `veel-v2` repository. It is not an i
 
 Use this as the primary v2 starting document. `slice-workflow.md` is the operational slice workflow. There is no in-place upgrade plan in this scaffold.
 
+Before continuing implementation, read `current-implementation-status.md`. It records what is real, what remains fail-closed, and the P0 hardening priorities that must be handled before broad feature expansion or production-readiness claims.
+
 ## Build Strategy
 
 Build v2 as a standalone provider-first platform:
