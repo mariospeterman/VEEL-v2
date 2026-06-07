@@ -152,6 +152,17 @@ test("renders the settings projection", async ({ page }) => {
   await expect(page.getByText("server-owned").first()).toBeVisible();
 });
 
+test("serves the browser push service worker with internal click handling", async ({ page }) => {
+  const response = await page.goto("/veel-sw.js");
+  const source = await page.locator("body").innerText();
+
+  expect(response?.ok()).toBe(true);
+  expect(source).toContain('self.addEventListener("push"');
+  expect(source).toContain('self.addEventListener("notificationclick"');
+  expect(source).toContain("safeInternalPath");
+  expect(source).toContain('return "/notifications"');
+});
+
 test("redirects documented app route aliases", async ({ page }) => {
   test.setTimeout(45_000);
 

@@ -2,7 +2,7 @@ self.addEventListener("push", (event) => {
   const payload = safeJson(event.data);
   const title = typeof payload.title === "string" ? payload.title : "VEEL";
   const body = typeof payload.body === "string" ? payload.body : "New account notification";
-  const actionUrl = typeof payload.actionUrl === "string" ? payload.actionUrl : "/";
+  const actionUrl = safeInternalPath(payload.actionUrl);
 
   event.waitUntil(
     self.registration.showNotification(title, {
@@ -16,7 +16,7 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const actionUrl = event.notification.data?.actionUrl ?? "/";
+  const actionUrl = safeInternalPath(event.notification.data?.actionUrl);
   const targetUrl = new URL(actionUrl, self.location.origin).toString();
 
   event.waitUntil(
@@ -40,4 +40,12 @@ function safeJson(data) {
   } catch {
     return {};
   }
+}
+
+function safeInternalPath(value) {
+  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
+    return "/notifications";
+  }
+
+  return value;
 }
