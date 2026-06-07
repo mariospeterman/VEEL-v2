@@ -1,4 +1,4 @@
-import postgres from "postgres";
+import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import { MessageRepositoryConfigurationError } from "./message-errors.js";
 import { listConversations, listMessages } from "./message-read-repository.js";
 import {
@@ -10,8 +10,8 @@ import type { MessageRepository } from "./types.js";
 
 export { MessageRepositoryConfigurationError } from "./message-errors.js";
 
-export function createPostgresMessageRepository(databaseUrl?: string): MessageRepository {
-  if (!databaseUrl) {
+export function createPostgresMessageRepository(database?: string | PostgresSql): MessageRepository {
+  if (!database) {
     return {
       async listConversations() {
         throw new MessageRepositoryConfigurationError();
@@ -31,11 +31,7 @@ export function createPostgresMessageRepository(databaseUrl?: string): MessageRe
     };
   }
 
-  const sql = postgres(databaseUrl, {
-    max: 5,
-    idle_timeout: 20,
-    prepare: false
-  });
+  const { sql, ownsClient } = resolvePostgresClient(database);
 
   return {
     async listConversations(input) {
@@ -54,7 +50,9 @@ export function createPostgresMessageRepository(databaseUrl?: string): MessageRe
       await recordPaidMessageDraft(sql, input);
     },
     async close() {
-      await sql.end({ timeout: 5 });
+      if (ownsClient) {
+        await sql.end({ timeout: 5 });
+      }
     }
   };
 }

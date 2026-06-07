@@ -1,4 +1,4 @@
-import postgres from "postgres";
+import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import type { EngagementRepository } from "./types.js";
 import { EngagementRepositoryConfigurationError } from "./engagement-errors.js";
 import { createEngagementCommentRepositoryMethods } from "./engagement-comment-repository.js";
@@ -11,8 +11,8 @@ export {
   EngagementRepositoryConfigurationError
 } from "./engagement-errors.js";
 
-export function createPostgresEngagementRepository(databaseUrl?: string): EngagementRepository {
-  if (!databaseUrl) {
+export function createPostgresEngagementRepository(database?: string | PostgresSql): EngagementRepository {
+  if (!database) {
     return {
       async getFeedPreferences() {
         throw new EngagementRepositoryConfigurationError();
@@ -53,11 +53,7 @@ export function createPostgresEngagementRepository(databaseUrl?: string): Engage
     };
   }
 
-  const sql = postgres(databaseUrl, {
-    max: 5,
-    idle_timeout: 20,
-    prepare: false
-  });
+  const { sql, ownsClient } = resolvePostgresClient(database);
 
   return {
     ...createEngagementPreferencesRepositoryMethods(sql),
@@ -65,7 +61,9 @@ export function createPostgresEngagementRepository(databaseUrl?: string): Engage
     ...createEngagementCommentRepositoryMethods(sql),
     ...createEngagementIntakeRepositoryMethods(sql),
     async close() {
-      await sql.end({ timeout: 5 });
+      if (ownsClient) {
+        await sql.end({ timeout: 5 });
+      }
     }
   };
 }

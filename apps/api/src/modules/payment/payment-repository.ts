@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import postgres from "postgres";
+import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import type { PaymentRepository } from "./types.js";
 export { createPostgresPaymentEvidenceRepository } from "./payment-evidence-repository.js";
 import { PaymentIdempotencyConflictError, PaymentRepositoryConfigurationError } from "./payment-repository-errors.js";
@@ -7,8 +7,8 @@ export { PaymentIdempotencyConflictError, PaymentRepositoryConfigurationError } 
 import { PaymentIntentRow, toStoredPaymentIntent } from "./payment-intent-mapper.js";
 import { recordPaymentSubmission } from "./payment-submission.js";
 
-export function createPostgresPaymentRepository(databaseUrl?: string): PaymentRepository {
-  if (!databaseUrl) {
+export function createPostgresPaymentRepository(database?: string | PostgresSql): PaymentRepository {
+  if (!database) {
     return {
       async createOrReuseIntent() {
         throw new PaymentRepositoryConfigurationError();
@@ -25,11 +25,7 @@ export function createPostgresPaymentRepository(databaseUrl?: string): PaymentRe
     };
   }
 
-  const sql = postgres(databaseUrl, {
-    max: 5,
-    idle_timeout: 20,
-    prepare: false
-  });
+  const { sql, ownsClient } = resolvePostgresClient(database);
 
   return {
     async createOrReuseIntent(input) {
@@ -212,7 +208,9 @@ export function createPostgresPaymentRepository(databaseUrl?: string): PaymentRe
       await recordPaymentSubmission(sql, input);
     },
     async close() {
-      await sql.end({ timeout: 5 });
+      if (ownsClient) {
+        await sql.end({ timeout: 5 });
+      }
     }
   };
 }

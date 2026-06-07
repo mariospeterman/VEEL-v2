@@ -1,4 +1,4 @@
-import postgres from "postgres";
+import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import type { EventRepository } from "./types.js";
 import { EventRepositoryConfigurationError } from "./event-errors.js";
 import { createEventAccessPassRepositoryMethods } from "./event-access-pass-methods.js";
@@ -9,8 +9,8 @@ export {
   EventRepositoryConfigurationError
 } from "./event-errors.js";
 
-export function createPostgresEventRepository(databaseUrl?: string): EventRepository {
-  if (!databaseUrl) {
+export function createPostgresEventRepository(database?: string | PostgresSql): EventRepository {
+  if (!database) {
     return {
       async createEvent() {
         throw new EventRepositoryConfigurationError();
@@ -42,11 +42,7 @@ export function createPostgresEventRepository(databaseUrl?: string): EventReposi
     };
   }
 
-  const sql = postgres(databaseUrl, {
-    max: 5,
-    idle_timeout: 20,
-    prepare: false
-  });
+  const { sql, ownsClient } = resolvePostgresClient(database);
 
   const coreMethods = createEventCoreRepositoryMethods(sql);
 
@@ -54,7 +50,9 @@ export function createPostgresEventRepository(databaseUrl?: string): EventReposi
     ...coreMethods,
     ...createEventAccessPassRepositoryMethods(sql, coreMethods.findEvent),
     async close() {
-      await sql.end({ timeout: 5 });
+      if (ownsClient) {
+        await sql.end({ timeout: 5 });
+      }
     }
   };
 }

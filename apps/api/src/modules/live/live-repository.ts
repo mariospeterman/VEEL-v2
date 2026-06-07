@@ -1,4 +1,4 @@
-import postgres from "postgres";
+import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import { createLiveChatRepositoryMethods } from "./live-chat-repository.js";
 import { LiveRepositoryConfigurationError } from "./live-errors.js";
 import { createLiveRoomRepositoryMethods } from "./live-room-repository.js";
@@ -7,16 +7,12 @@ import type { LiveRepository } from "./types.js";
 
 export { LiveRepositoryConfigurationError, LiveRoomIdempotencyConflictError } from "./live-errors.js";
 
-export function createPostgresLiveRepository(databaseUrl?: string): LiveRepository {
-  if (!databaseUrl) {
+export function createPostgresLiveRepository(database?: string | PostgresSql): LiveRepository {
+  if (!database) {
     return createUnavailableLiveRepository();
   }
 
-  const sql = postgres(databaseUrl, {
-    max: 5,
-    idle_timeout: 20,
-    prepare: false
-  });
+  const { sql, ownsClient } = resolvePostgresClient(database);
   const roomMethods = createLiveRoomRepositoryMethods(sql);
 
   return {
@@ -24,7 +20,9 @@ export function createPostgresLiveRepository(databaseUrl?: string): LiveReposito
     ...createLiveStatusRepositoryMethods(sql),
     ...createLiveChatRepositoryMethods(sql, roomMethods.findRoom),
     async close() {
-      await sql.end({ timeout: 5 });
+      if (ownsClient) {
+        await sql.end({ timeout: 5 });
+      }
     }
   };
 }

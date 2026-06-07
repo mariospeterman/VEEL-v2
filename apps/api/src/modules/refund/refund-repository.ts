@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import postgres from "postgres";
+import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import type { RefundDisputeRequest, RefundRepository } from "./types.js";
 
 export class RefundRepositoryConfigurationError extends Error {
@@ -26,8 +26,8 @@ interface RefundDisputeRow {
 
 const pageSize = 20;
 
-export function createPostgresRefundRepository(databaseUrl?: string): RefundRepository {
-  if (!databaseUrl) {
+export function createPostgresRefundRepository(database?: string | PostgresSql): RefundRepository {
+  if (!database) {
     return {
       async listRequests() {
         throw new RefundRepositoryConfigurationError();
@@ -38,11 +38,7 @@ export function createPostgresRefundRepository(databaseUrl?: string): RefundRepo
     };
   }
 
-  const sql = postgres(databaseUrl, {
-    max: 5,
-    idle_timeout: 20,
-    prepare: false
-  });
+  const { sql, ownsClient } = resolvePostgresClient(database);
 
   return {
     async listRequests(input) {
@@ -181,7 +177,9 @@ export function createPostgresRefundRepository(databaseUrl?: string): RefundRepo
       return rows[0] ? toRefundDisputeRequest(rows[0]) : null;
     },
     async close() {
-      await sql.end({ timeout: 5 });
+      if (ownsClient) {
+        await sql.end({ timeout: 5 });
+      }
     }
   };
 }

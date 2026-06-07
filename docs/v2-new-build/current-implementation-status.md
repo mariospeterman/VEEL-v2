@@ -33,7 +33,7 @@ Non-goals:
 ## Implemented And Real
 
 - Monorepo, pnpm workspace, CI/security workflow, docs checks, lint/typecheck/test/smoke scripts, GStack gates, and gitleaks local gate.
-- Fastify API bootstrap with route registration, dependency construction, close-hook lifecycle, env validation, raw-body support for signed webhooks, global rate limit, OpenAPI plugin, and Supabase boundary plugin.
+- Fastify API bootstrap with route registration, dependency construction, shared app-level Postgres client construction, close-hook lifecycle, env validation, raw-body support for signed webhooks, global rate limit, OpenAPI plugin, and Supabase boundary plugin.
 - Supabase/Auth session verification boundary and backend session/profile readiness projections.
 - Age provider waterfall boundary and normalized webhook/test paths, with unavailable providers failing closed when not configured.
 - External wallet challenge/link/revoke/status flow with backend signature verification and replay/expiry checks; onramp provider boundary fails closed unless configured.
@@ -58,7 +58,7 @@ Non-goals:
 
 ## P0 Before Broad Expansion
 
-1. Centralize the shared Postgres pool and transaction helper so repository construction does not create one pool per repository in production paths.
+1. Add a shared transaction helper on top of the shared Postgres client, then migrate money/access/admin/safety mutations onto explicit transactions slice by slice.
 2. Add shared idempotency, audit, route-policy/RBAC, route-specific rate limit, and test factory helpers, then migrate money/access/admin/safety mutations onto them slice by slice.
 3. Remove any unsafe media auto-approval path: provider playable/ready state must not equal moderation approval or publish eligibility.
 4. Replace demo-shaped `/enter` with real Supabase auth/session/onboarding and route guards.

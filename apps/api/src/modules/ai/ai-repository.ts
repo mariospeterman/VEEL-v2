@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import postgres from "postgres";
+import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import type {
   AiRepository,
   AiSession,
@@ -42,8 +42,8 @@ interface AiToolCallRow {
   created_at: Date;
 }
 
-export function createPostgresAiRepository(databaseUrl?: string): AiRepository {
-  if (!databaseUrl) {
+export function createPostgresAiRepository(database?: string | PostgresSql): AiRepository {
+  if (!database) {
     return {
       async createOrReuseSession() {
         throw new AiRepositoryConfigurationError();
@@ -57,11 +57,7 @@ export function createPostgresAiRepository(databaseUrl?: string): AiRepository {
     };
   }
 
-  const sql = postgres(databaseUrl, {
-    max: 5,
-    idle_timeout: 20,
-    prepare: false
-  });
+  const { sql, ownsClient } = resolvePostgresClient(database);
 
   return {
     async createOrReuseSession(input) {
@@ -216,7 +212,9 @@ export function createPostgresAiRepository(databaseUrl?: string): AiRepository {
       return toToolCall(row);
     },
     async close() {
-      await sql.end({ timeout: 5 });
+      if (ownsClient) {
+        await sql.end({ timeout: 5 });
+      }
     }
   };
 }

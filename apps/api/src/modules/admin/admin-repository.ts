@@ -1,4 +1,4 @@
-import postgres from "postgres";
+import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import type { AdminRepository } from "./types.js";
 import { createAccessRepository } from "./admin-repository-access.js";
 import { createComplianceRepository } from "./admin-repository-compliance.js";
@@ -14,16 +14,12 @@ import { createUnconfiguredAdminRepository } from "./admin-repository-unconfigur
 
 export { AdminRepositoryConfigurationError, AdminRepositoryStateConflictError } from "./admin-repository-errors.js";
 
-export function createPostgresAdminRepository(databaseUrl?: string): AdminRepository {
-  if (!databaseUrl) {
+export function createPostgresAdminRepository(database?: string | PostgresSql): AdminRepository {
+  if (!database) {
     return createUnconfiguredAdminRepository();
   }
 
-  const sql = postgres(databaseUrl, {
-    max: 5,
-    idle_timeout: 20,
-    prepare: false
-  });
+  const { sql, ownsClient } = resolvePostgresClient(database);
 
   return {
     ...createAccessRepository(sql),
@@ -37,7 +33,9 @@ export function createPostgresAdminRepository(databaseUrl?: string): AdminReposi
     ...createOrganizationRepository(sql),
     ...createFeatureFlagRepository(sql),
     async close() {
-      await sql.end({ timeout: 5 });
+      if (ownsClient) {
+        await sql.end({ timeout: 5 });
+      }
     }
   };
 }

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import postgres from "postgres";
+import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import type { SessionProfile, SessionRepository } from "./types.js";
 
 export class SessionRepositoryConfigurationError extends Error {
@@ -17,8 +17,8 @@ interface SessionProfileRow {
   avatar_url: string | null;
 }
 
-export function createPostgresSessionRepository(databaseUrl?: string): SessionRepository {
-  if (!databaseUrl) {
+export function createPostgresSessionRepository(database?: string | PostgresSql): SessionRepository {
+  if (!database) {
     return {
       async ensureUserForSupabaseId() {
         throw new SessionRepositoryConfigurationError();
@@ -29,11 +29,7 @@ export function createPostgresSessionRepository(databaseUrl?: string): SessionRe
     };
   }
 
-  const sql = postgres(databaseUrl, {
-    max: 5,
-    idle_timeout: 20,
-    prepare: false
-  });
+  const { sql, ownsClient } = resolvePostgresClient(database);
 
   return {
     async ensureUserForSupabaseId(supabaseUserId: string): Promise<void> {
@@ -72,7 +68,9 @@ export function createPostgresSessionRepository(databaseUrl?: string): SessionRe
       };
     },
     async close() {
-      await sql.end({ timeout: 5 });
+      if (ownsClient) {
+        await sql.end({ timeout: 5 });
+      }
     }
   };
 }

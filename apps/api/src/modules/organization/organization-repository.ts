@@ -1,4 +1,4 @@
-import postgres from "postgres";
+import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import type { OrganizationDashboard, OrganizationDashboardPage, OrganizationRepository } from "./types.js";
 
 export class OrganizationRepositoryConfigurationError extends Error {
@@ -24,8 +24,8 @@ interface OrganizationDashboardRow {
   tier_waiver_state: OrganizationDashboard["governance"]["tierWaiverState"] | null;
 }
 
-export function createPostgresOrganizationRepository(databaseUrl?: string): OrganizationRepository {
-  if (!databaseUrl) {
+export function createPostgresOrganizationRepository(database?: string | PostgresSql): OrganizationRepository {
+  if (!database) {
     return {
       async listMyDashboards() {
         throw new OrganizationRepositoryConfigurationError();
@@ -33,11 +33,7 @@ export function createPostgresOrganizationRepository(databaseUrl?: string): Orga
     };
   }
 
-  const sql = postgres(databaseUrl, {
-    max: 5,
-    idle_timeout: 20,
-    prepare: false
-  });
+  const { sql, ownsClient } = resolvePostgresClient(database);
 
   return {
     async listMyDashboards(input) {
@@ -92,7 +88,9 @@ export function createPostgresOrganizationRepository(databaseUrl?: string): Orga
       return toDashboardPage(rows, input.limit);
     },
     async close() {
-      await sql.end({ timeout: 5 });
+      if (ownsClient) {
+        await sql.end({ timeout: 5 });
+      }
     }
   };
 }

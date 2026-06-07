@@ -1,4 +1,4 @@
-import postgres from "postgres";
+import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import { createProfileCreatorRepositoryMethods } from "./profile-creator-repository.js";
 import { createProfileDashboardRepositoryMethods } from "./profile-dashboard-repository.js";
 import { ProfileRepositoryConfigurationError } from "./profile-errors.js";
@@ -7,23 +7,21 @@ import type { ProfileRepository } from "./types.js";
 
 export { ProfileHandleConflictError, ProfileRepositoryConfigurationError } from "./profile-errors.js";
 
-export function createPostgresProfileRepository(databaseUrl?: string): ProfileRepository {
-  if (!databaseUrl) {
+export function createPostgresProfileRepository(database?: string | PostgresSql): ProfileRepository {
+  if (!database) {
     return createUnavailableProfileRepository();
   }
 
-  const sql = postgres(databaseUrl, {
-    max: 5,
-    idle_timeout: 20,
-    prepare: false
-  });
+  const { sql, ownsClient } = resolvePostgresClient(database);
 
   return {
     ...createProfileMutationRepositoryMethods(sql),
     ...createProfileCreatorRepositoryMethods(sql),
     ...createProfileDashboardRepositoryMethods(sql),
     async close() {
-      await sql.end({ timeout: 5 });
+      if (ownsClient) {
+        await sql.end({ timeout: 5 });
+      }
     }
   };
 }

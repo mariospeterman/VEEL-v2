@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import postgres from "postgres";
+import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import type { ActivityPage, ReferralRepository } from "./types.js";
 
 export class ReferralRepositoryConfigurationError extends Error {
@@ -35,8 +35,8 @@ interface ReferralActivityRow {
   currency: "SOL" | "USDC" | null;
 }
 
-export function createPostgresReferralRepository(databaseUrl?: string): ReferralRepository {
-  if (!databaseUrl) {
+export function createPostgresReferralRepository(database?: string | PostgresSql): ReferralRepository {
+  if (!database) {
     return {
       async createOrReuseToken() {
         throw new ReferralRepositoryConfigurationError();
@@ -47,11 +47,7 @@ export function createPostgresReferralRepository(databaseUrl?: string): Referral
     };
   }
 
-  const sql = postgres(databaseUrl, {
-    max: 5,
-    idle_timeout: 20,
-    prepare: false
-  });
+  const { sql, ownsClient } = resolvePostgresClient(database);
 
   return {
     async createOrReuseToken(input) {
@@ -166,7 +162,9 @@ export function createPostgresReferralRepository(databaseUrl?: string): Referral
       } satisfies ActivityPage;
     },
     async close() {
-      await sql.end({ timeout: 5 });
+      if (ownsClient) {
+        await sql.end({ timeout: 5 });
+      }
     }
   };
 }

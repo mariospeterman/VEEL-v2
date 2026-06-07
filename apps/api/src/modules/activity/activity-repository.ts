@@ -1,4 +1,4 @@
-import postgres from "postgres";
+import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import { listAccessPasses } from "./activity-access-pass-repository.js";
 import { ActivityRepositoryConfigurationError } from "./activity-errors.js";
 import { listActivity, listPaymentActivity } from "./activity-ledger-repository.js";
@@ -7,8 +7,8 @@ import type { ActivityRepository } from "./types.js";
 
 export { ActivityRepositoryConfigurationError } from "./activity-errors.js";
 
-export function createPostgresActivityRepository(databaseUrl?: string): ActivityRepository {
-  if (!databaseUrl) {
+export function createPostgresActivityRepository(database?: string | PostgresSql): ActivityRepository {
+  if (!database) {
     return {
       async listActivity() {
         throw new ActivityRepositoryConfigurationError();
@@ -25,11 +25,7 @@ export function createPostgresActivityRepository(databaseUrl?: string): Activity
     };
   }
 
-  const sql = postgres(databaseUrl, {
-    max: 5,
-    idle_timeout: 20,
-    prepare: false
-  });
+  const { sql, ownsClient } = resolvePostgresClient(database);
 
   return {
     async listActivity(input) {
@@ -45,7 +41,9 @@ export function createPostgresActivityRepository(databaseUrl?: string): Activity
       return listAccessPasses(sql, input);
     },
     async close() {
-      await sql.end({ timeout: 5 });
+      if (ownsClient) {
+        await sql.end({ timeout: 5 });
+      }
     }
   };
 }

@@ -1,5 +1,5 @@
 import { parseAes256GcmKey } from "@veel/config";
-import postgres from "postgres";
+import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import { createNotificationDeviceRepositoryMethods } from "./notification-device-repository.js";
 import { NotificationRepositoryConfigurationError } from "./notification-errors.js";
 import { toNotification, toNotificationPage, toPreferences } from "./notification-repository-mappers.js";
@@ -13,18 +13,14 @@ interface NotificationRepositoryOptions {
 }
 
 export function createPostgresNotificationRepository(
-  databaseUrl?: string,
+  database?: string | PostgresSql,
   options: NotificationRepositoryOptions = {}
 ): NotificationRepository {
-  if (!databaseUrl) {
+  if (!database) {
     return createUnavailableNotificationRepository();
   }
 
-  const sql = postgres(databaseUrl, {
-    max: 5,
-    idle_timeout: 20,
-    prepare: false
-  });
+  const { sql, ownsClient } = resolvePostgresClient(database);
   const encryptionKey = parseAes256GcmKey(options.encryptionKey);
 
   return {
@@ -209,7 +205,9 @@ export function createPostgresNotificationRepository(
     },
     ...createNotificationDeviceRepositoryMethods(sql, encryptionKey),
     async close() {
-      await sql.end({ timeout: 5 });
+      if (ownsClient) {
+        await sql.end({ timeout: 5 });
+      }
     }
   };
 }

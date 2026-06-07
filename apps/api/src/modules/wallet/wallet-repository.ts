@@ -1,4 +1,4 @@
-import postgres from "postgres";
+import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import type { WalletRepository } from "./types.js";
 import { createWalletCoreRepositoryMethods } from "./wallet-core-repository.js";
 import { WalletRepositoryConfigurationError } from "./wallet-errors.js";
@@ -12,8 +12,8 @@ export {
   WalletRepositoryConfigurationError
 } from "./wallet-errors.js";
 
-export function createPostgresWalletRepository(databaseUrl?: string): WalletRepository {
-  if (!databaseUrl) {
+export function createPostgresWalletRepository(database?: string | PostgresSql): WalletRepository {
+  if (!database) {
     return {
       async listWalletsBySupabaseUserId() {
         throw new WalletRepositoryConfigurationError();
@@ -45,18 +45,16 @@ export function createPostgresWalletRepository(databaseUrl?: string): WalletRepo
     };
   }
 
-  const sql = postgres(databaseUrl, {
-    max: 5,
-    idle_timeout: 20,
-    prepare: false
-  });
+  const { sql, ownsClient } = resolvePostgresClient(database);
 
   return {
     ...createWalletCoreRepositoryMethods(sql),
     ...createWalletLinkRepositoryMethods(sql),
     ...createWalletOnrampRepositoryMethods(sql),
     async close() {
-      await sql.end({ timeout: 5 });
+      if (ownsClient) {
+        await sql.end({ timeout: 5 });
+      }
     }
   };
 }

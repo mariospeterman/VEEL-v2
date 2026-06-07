@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import postgres from "postgres";
+import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import type { AgeRepository, AgeStatus, AgeState } from "./types.js";
 
 export class AgeRepositoryConfigurationError extends Error {
@@ -19,8 +19,8 @@ const requiredAgeStatus: AgeStatus = {
   provider: null
 };
 
-export function createPostgresAgeRepository(databaseUrl?: string): AgeRepository {
-  if (!databaseUrl) {
+export function createPostgresAgeRepository(database?: string | PostgresSql): AgeRepository {
+  if (!database) {
     return {
       async findLatestAgeStatusBySupabaseUserId() {
         throw new AgeRepositoryConfigurationError();
@@ -37,11 +37,7 @@ export function createPostgresAgeRepository(databaseUrl?: string): AgeRepository
     };
   }
 
-  const sql = postgres(databaseUrl, {
-    max: 5,
-    idle_timeout: 20,
-    prepare: false
-  });
+  const { sql, ownsClient } = resolvePostgresClient(database);
 
   return {
     async findLatestAgeStatusBySupabaseUserId(supabaseUserId: string): Promise<AgeStatus> {
@@ -212,7 +208,9 @@ export function createPostgresAgeRepository(databaseUrl?: string): AgeRepository
       return rows.length > 0;
     },
     async close() {
-      await sql.end({ timeout: 5 });
+      if (ownsClient) {
+        await sql.end({ timeout: 5 });
+      }
     }
   };
 }

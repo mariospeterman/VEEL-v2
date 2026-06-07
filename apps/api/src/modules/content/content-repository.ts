@@ -1,4 +1,4 @@
-import postgres from "postgres";
+import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import { createContentDraftRepositoryMethods } from "./content-draft-repository.js";
 import { ContentRepositoryConfigurationError } from "./content-errors.js";
 import { createContentFeedRepositoryMethods } from "./content-feed-repository.js";
@@ -8,16 +8,12 @@ import type { ContentRepository } from "./types.js";
 
 export { ContentRepositoryConfigurationError } from "./content-errors.js";
 
-export function createPostgresContentRepository(databaseUrl?: string): ContentRepository {
-  if (!databaseUrl) {
+export function createPostgresContentRepository(database?: string | PostgresSql): ContentRepository {
+  if (!database) {
     return createUnavailableContentRepository();
   }
 
-  const sql = postgres(databaseUrl, {
-    max: 5,
-    idle_timeout: 20,
-    prepare: false
-  });
+  const { sql, ownsClient } = resolvePostgresClient(database);
 
   return {
     ...createContentDraftRepositoryMethods(sql),
@@ -25,7 +21,9 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
     ...createContentMediaRepositoryMethods(sql),
     ...createContentReadRepositoryMethods(sql),
     async close() {
-      await sql.end({ timeout: 5 });
+      if (ownsClient) {
+        await sql.end({ timeout: 5 });
+      }
     }
   };
 }

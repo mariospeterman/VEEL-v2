@@ -1,4 +1,4 @@
-import postgres from "postgres";
+import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import type { SubscriptionRepository } from "./types.js";
 import { createSubscriptionAuthorizationRepositoryMethods } from "./subscription-authorization-repository.js";
 import { createSubscriptionCancellationRepositoryMethods } from "./subscription-cancellation-repository.js";
@@ -15,8 +15,8 @@ export {
   SubscriptionRepositoryConfigurationError
 } from "./subscription-errors.js";
 
-export function createPostgresSubscriptionRepository(databaseUrl?: string): SubscriptionRepository {
-  if (!databaseUrl) {
+export function createPostgresSubscriptionRepository(database?: string | PostgresSql): SubscriptionRepository {
+  if (!database) {
     return {
       async listPlans() {
         throw new SubscriptionRepositoryConfigurationError();
@@ -39,11 +39,7 @@ export function createPostgresSubscriptionRepository(databaseUrl?: string): Subs
     };
   }
 
-  const sql = postgres(databaseUrl, {
-    max: 5,
-    idle_timeout: 20,
-    prepare: false
-  });
+  const { sql, ownsClient } = resolvePostgresClient(database);
 
   return {
     async listPlans() {
@@ -118,7 +114,9 @@ export function createPostgresSubscriptionRepository(databaseUrl?: string): Subs
     ...createSubscriptionCancellationRepositoryMethods(sql),
 
     async close() {
-      await sql.end({ timeout: 5 });
+      if (ownsClient) {
+        await sql.end({ timeout: 5 });
+      }
     }
   };
 }

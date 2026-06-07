@@ -56,6 +56,7 @@ import type {
 import { createWalletOnrampProvider } from "./modules/wallet/wallet-onramp-adapter.js";
 import { createPostgresWalletRepository } from "./modules/wallet/wallet-repository.js";
 import type { WalletOnrampProviderAdapter, WalletRepository } from "./modules/wallet/types.js";
+import { createPostgresClient, type PostgresSql } from "./shared/postgres.js";
 
 export interface BuildApiOptions {
   authVerifier?: SupabaseAuthVerifier;
@@ -86,9 +87,11 @@ export interface BuildApiOptions {
   onrampProvider?: WalletOnrampProviderAdapter;
   adminRepository?: AdminRepository;
   aiRepository?: AiRepository;
+  postgresClient?: PostgresSql;
 }
 
 export interface ApiDependencies {
+  postgresClient: PostgresSql | undefined;
   authVerifier: SupabaseAuthVerifier;
   sessionRepository: SessionRepository;
   ageRepository: AgeRepository;
@@ -123,55 +126,60 @@ export function createApiDependencies(
   app: FastifyInstance,
   options: BuildApiOptions = {}
 ): ApiDependencies {
+  const postgresClient =
+    options.postgresClient ??
+    (app.config.DATABASE_URL ? createPostgresClient(app.config.DATABASE_URL) : undefined);
+
   return {
+    postgresClient,
     authVerifier: options.authVerifier ?? createSupabaseAuthVerifier(app.config),
     sessionRepository:
-      options.sessionRepository ?? createPostgresSessionRepository(app.config.DATABASE_URL),
-    ageRepository: options.ageRepository ?? createPostgresAgeRepository(app.config.DATABASE_URL),
+      options.sessionRepository ?? createPostgresSessionRepository(postgresClient),
+    ageRepository: options.ageRepository ?? createPostgresAgeRepository(postgresClient),
     ageProviderWaterfall: options.ageProviderWaterfall ?? createAgeProviderWaterfall(app.config),
     profileRepository:
-      options.profileRepository ?? createPostgresProfileRepository(app.config.DATABASE_URL),
+      options.profileRepository ?? createPostgresProfileRepository(postgresClient),
     contentRepository:
-      options.contentRepository ?? createPostgresContentRepository(app.config.DATABASE_URL),
+      options.contentRepository ?? createPostgresContentRepository(postgresClient),
     mutualsRepository:
-      options.mutualsRepository ?? createPostgresMutualsRepository(app.config.DATABASE_URL),
+      options.mutualsRepository ?? createPostgresMutualsRepository(postgresClient),
     discoverRepository:
-      options.discoverRepository ?? createPostgresDiscoverRepository(app.config.DATABASE_URL),
-    eventRepository: options.eventRepository ?? createPostgresEventRepository(app.config.DATABASE_URL),
+      options.discoverRepository ?? createPostgresDiscoverRepository(postgresClient),
+    eventRepository: options.eventRepository ?? createPostgresEventRepository(postgresClient),
     engagementRepository:
-      options.engagementRepository ?? createPostgresEngagementRepository(app.config.DATABASE_URL),
+      options.engagementRepository ?? createPostgresEngagementRepository(postgresClient),
     mediaUploadProvider: options.mediaUploadProvider ?? createBunnyStreamUploadAdapter(app.config),
-    liveRepository: options.liveRepository ?? createPostgresLiveRepository(app.config.DATABASE_URL),
+    liveRepository: options.liveRepository ?? createPostgresLiveRepository(postgresClient),
     liveProvider: options.liveProvider ?? createLivepeerProviderAdapter(app.config),
     messageRepository:
-      options.messageRepository ?? createPostgresMessageRepository(app.config.DATABASE_URL),
+      options.messageRepository ?? createPostgresMessageRepository(postgresClient),
     paymentRepository:
-      options.paymentRepository ?? createPostgresPaymentRepository(app.config.DATABASE_URL),
+      options.paymentRepository ?? createPostgresPaymentRepository(postgresClient),
     paymentEvidenceRepository:
       options.paymentEvidenceRepository ??
-      createPostgresPaymentEvidenceRepository(app.config.DATABASE_URL),
+      createPostgresPaymentEvidenceRepository(postgresClient),
     activityRepository:
-      options.activityRepository ?? createPostgresActivityRepository(app.config.DATABASE_URL),
+      options.activityRepository ?? createPostgresActivityRepository(postgresClient),
     settlementVerifier:
       options.settlementVerifier ?? createSolanaRpcSettlementVerifier(app.config.SOLANA_RPC_URL),
     referralRepository:
-      options.referralRepository ?? createPostgresReferralRepository(app.config.DATABASE_URL),
-    refundRepository: options.refundRepository ?? createPostgresRefundRepository(app.config.DATABASE_URL),
+      options.referralRepository ?? createPostgresReferralRepository(postgresClient),
+    refundRepository: options.refundRepository ?? createPostgresRefundRepository(postgresClient),
     notificationRepository:
       options.notificationRepository ??
-      createPostgresNotificationRepository(app.config.DATABASE_URL, {
+      createPostgresNotificationRepository(postgresClient, {
         encryptionKey: app.config.NOTIFICATION_DEVICE_ENCRYPTION_KEY
       }),
     organizationRepository:
-      options.organizationRepository ?? createPostgresOrganizationRepository(app.config.DATABASE_URL),
+      options.organizationRepository ?? createPostgresOrganizationRepository(postgresClient),
     subscriptionRepository:
-      options.subscriptionRepository ?? createPostgresSubscriptionRepository(app.config.DATABASE_URL),
+      options.subscriptionRepository ?? createPostgresSubscriptionRepository(postgresClient),
     subscriptionAuthorizationVerifier:
       options.subscriptionAuthorizationVerifier ?? createSolanaSubscriptionAuthorizationVerifier(),
     walletRepository:
-      options.walletRepository ?? createPostgresWalletRepository(app.config.DATABASE_URL),
+      options.walletRepository ?? createPostgresWalletRepository(postgresClient),
     onrampProvider: options.onrampProvider ?? createWalletOnrampProvider(app.config),
-    adminRepository: options.adminRepository ?? createPostgresAdminRepository(app.config.DATABASE_URL),
-    aiRepository: options.aiRepository ?? createPostgresAiRepository(app.config.DATABASE_URL)
+    adminRepository: options.adminRepository ?? createPostgresAdminRepository(postgresClient),
+    aiRepository: options.aiRepository ?? createPostgresAiRepository(postgresClient)
   };
 }

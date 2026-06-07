@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
-import postgres from "postgres";
+import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import type { PaymentEvidenceRepository } from "./types.js";
 import { PaymentRepositoryConfigurationError } from "./payment-repository-errors.js";
 import { PaymentIntentRow, toStoredPaymentIntent } from "./payment-intent-mapper.js";
 
 export function createPostgresPaymentEvidenceRepository(
-  databaseUrl?: string
+  database?: string | PostgresSql
 ): PaymentEvidenceRepository {
-  if (!databaseUrl) {
+  if (!database) {
     return {
       async recordSolanaProviderEvent() {
         throw new PaymentRepositoryConfigurationError();
@@ -21,11 +21,7 @@ export function createPostgresPaymentEvidenceRepository(
     };
   }
 
-  const sql = postgres(databaseUrl, {
-    max: 5,
-    idle_timeout: 20,
-    prepare: false
-  });
+  const { sql, ownsClient } = resolvePostgresClient(database);
 
   return {
     async recordSolanaProviderEvent(input) {
@@ -132,8 +128,9 @@ export function createPostgresPaymentEvidenceRepository(
     },
 
     async close() {
-      await sql.end({ timeout: 5 });
+      if (ownsClient) {
+        await sql.end({ timeout: 5 });
+      }
     }
   };
 }
-

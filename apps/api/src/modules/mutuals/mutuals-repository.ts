@@ -1,4 +1,5 @@
-import postgres from "postgres";
+import type postgres from "postgres";
+import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import type { MutualsRepository } from "./types.js";
 import { MutualsRepositoryConfigurationError } from "./mutuals-errors.js";
 import { createMutualsInterestRepositoryMethods } from "./mutuals-interest-repository.js";
@@ -14,8 +15,8 @@ export {
   MutualsRepositoryConfigurationError
 } from "./mutuals-errors.js";
 
-export function createPostgresMutualsRepository(databaseUrl?: string): MutualsRepository {
-  if (!databaseUrl) {
+export function createPostgresMutualsRepository(database?: string | PostgresSql): MutualsRepository {
+  if (!database) {
     return {
       async activate() {
         throw new MutualsRepositoryConfigurationError();
@@ -38,11 +39,7 @@ export function createPostgresMutualsRepository(databaseUrl?: string): MutualsRe
     };
   }
 
-  const sql = postgres(databaseUrl, {
-    max: 5,
-    idle_timeout: 20,
-    prepare: false
-  });
+  const { sql, ownsClient } = resolvePostgresClient(database);
 
   return {
     async activate(input) {
@@ -221,7 +218,9 @@ export function createPostgresMutualsRepository(databaseUrl?: string): MutualsRe
       return rows[0] ? toMutual(rows[0]) : null;
     },
     async close() {
-      await sql.end({ timeout: 5 });
+      if (ownsClient) {
+        await sql.end({ timeout: 5 });
+      }
     }
   };
 }

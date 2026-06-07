@@ -1,4 +1,4 @@
-import postgres from "postgres";
+import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import type { DiscoverRepository } from "./types.js";
 import {
   listContent,
@@ -15,8 +15,8 @@ export class DiscoverRepositoryConfigurationError extends Error {
   }
 }
 
-export function createPostgresDiscoverRepository(databaseUrl?: string): DiscoverRepository {
-  if (!databaseUrl) {
+export function createPostgresDiscoverRepository(database?: string | PostgresSql): DiscoverRepository {
+  if (!database) {
     return {
       async search() {
         throw new DiscoverRepositoryConfigurationError();
@@ -39,11 +39,7 @@ export function createPostgresDiscoverRepository(databaseUrl?: string): Discover
     };
   }
 
-  const sql = postgres(databaseUrl, {
-    max: 5,
-    idle_timeout: 20,
-    prepare: false
-  });
+  const { sql, ownsClient } = resolvePostgresClient(database);
 
   return {
     async search(input) {
@@ -90,7 +86,9 @@ export function createPostgresDiscoverRepository(databaseUrl?: string): Discover
       return listLive(sql, input);
     },
     async close() {
-      await sql.end({ timeout: 5 });
+      if (ownsClient) {
+        await sql.end({ timeout: 5 });
+      }
     }
   };
 }
