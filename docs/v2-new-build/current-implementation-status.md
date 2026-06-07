@@ -39,6 +39,7 @@ Non-goals:
 - Age provider waterfall boundary and normalized webhook/test paths, with unavailable providers failing closed when not configured.
 - External wallet challenge/link/revoke/status flow with backend signature verification and replay/expiry checks; onramp provider boundary fails closed unless configured.
 - Home feed, content read model, media access projection, Bunny/Livepeer provider status boundaries, and provider webhook normalization tests.
+- Provider media readiness only updates playback/readiness projection; moderation approval and public access remain separate backend/admin-owned truth.
 - Native SOL devnet payment intent, Solana Pay transaction request URL, submitted-signature capture, backend settlement verification, shared transaction boundary for payment submission settlement, and content unlock entitlement grant after confirmed settlement.
 - Support/tip, referral attribution/commission projection, activity/payment/wallet transaction projections, and creator dashboard/onboarding projections that avoid balance/withdrawal language.
 - Live rooms/pass/chat projections, Event Access Pass projections, Mutuals projections, messages/paid-message projections, notifications/push/service-worker boundaries, organization/KYB/admin support policy surfaces, and admin provider/payment/compliance projections.
@@ -61,11 +62,10 @@ Non-goals:
 
 1. Continue migrating money/access/admin/safety mutations onto the shared Postgres transaction helper slice by slice; payment submission settlement is already on the shared boundary.
 2. Continue migrating route modules onto shared idempotency helpers; add shared audit, route-policy/RBAC, route-specific rate limit, and test factory helpers, then migrate money/access/admin/safety mutations onto them slice by slice.
-3. Remove any unsafe media auto-approval path: provider playable/ready state must not equal moderation approval or publish eligibility.
-4. Replace demo-shaped `/enter` with real Supabase auth/session/onboarding and route guards.
-5. Wire one launch-approved age/KYC provider path end to end and keep all unconfigured providers fail-closed.
-6. Harden product-specific Solana Pay checkout/access paths for content, support, live pass, Event Access, paid message, platform plan, and creator membership.
-7. Replace placeholder deployment with staged deploy/migration/rollback/health-check/observability skeleton and docs.
+3. Replace demo-shaped `/enter` with real Supabase auth/session/onboarding and route guards.
+4. Wire one launch-approved age/KYC provider path end to end and keep all unconfigured providers fail-closed.
+5. Harden product-specific Solana Pay checkout/access paths for content, support, live pass, Event Access, paid message, platform plan, and creator membership.
+6. Replace placeholder deployment with staged deploy/migration/rollback/health-check/observability skeleton and docs.
 
 ## Required Status Discipline
 

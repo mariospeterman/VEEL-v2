@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
+import { withPostgresTransaction } from "../../shared/postgres.js";
 import type { ContentItem, ContentRepository } from "./types.js";
 
 type ContentMediaRepositoryMethods = Pick<
@@ -88,7 +89,7 @@ export function createContentMediaRepositoryMethods(
         : null;
     },
     async updateMediaAssetPlayback(input) {
-      await sql.begin(async (transaction) => {
+      await withPostgresTransaction(sql, async (transaction) => {
         await transaction`
           update media_assets
           set
@@ -105,7 +106,6 @@ export function createContentMediaRepositoryMethods(
           update content_items ci
           set
             state = case when ${input.providerPlayable} then 'ready' else state end,
-            moderation_state = case when ${input.providerPlayable} then 'approved' else moderation_state end,
             updated_at = now()
           from media_assets ma
           where ma.content_item_id = ci.id
@@ -158,7 +158,7 @@ export function createContentMediaRepositoryMethods(
       return true;
     },
     async updateMediaAssetFromWebhook(input) {
-      const rows = await sql.begin(async (transaction) => {
+      const rows = await withPostgresTransaction(sql, async (transaction) => {
         const updated = await transaction<{ id: string }[]>`
           update media_assets
           set
@@ -175,7 +175,6 @@ export function createContentMediaRepositoryMethods(
           update content_items ci
           set
             state = case when ${input.providerPlayable} then 'ready' else state end,
-            moderation_state = case when ${input.providerPlayable} then 'approved' else moderation_state end,
             updated_at = now()
           from media_assets ma
           where ma.content_item_id = ci.id
