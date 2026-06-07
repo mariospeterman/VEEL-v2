@@ -35,7 +35,7 @@ Non-goals:
 - Monorepo, pnpm workspace, CI/security workflow, docs checks, lint/typecheck/test/smoke scripts, GStack gates, and gitleaks local gate.
 - Fastify API bootstrap with route registration, dependency construction, shared app-level Postgres client construction, close-hook lifecycle, env validation, raw-body support for signed webhooks, global rate limit, OpenAPI plugin, and Supabase boundary plugin.
 - Shared backend helpers now cover the app-level Postgres client, explicit transaction boundary, and common Idempotency-Key parsing/validation for migrated route utilities.
-- Supabase/Auth session verification boundary and backend session/profile readiness projections.
+- Supabase/Auth session verification boundary, web SSR cookie refresh/confirmation route, real `/enter` magic-link session UX, and backend session/profile readiness projections.
 - Age provider waterfall boundary and normalized webhook/test paths, with unavailable providers failing closed when not configured.
 - External wallet challenge/link/revoke/status flow with backend signature verification and replay/expiry checks; onramp provider boundary fails closed unless configured.
 - Home feed, content read model, media access projection, Bunny/Livepeer provider status boundaries, and provider webhook normalization tests.
@@ -49,7 +49,7 @@ Non-goals:
 ## Fail-Closed Or Not Production-Ready
 
 - Real provider credentials, webhook endpoints, staging accounts, sandbox smoke tests, and production keys are intentionally placeholders until manually configured.
-- `/enter` and onboarding screens still need full real Supabase signup/login/onboarding UX, route guards, and browser session persistence polish.
+- `/enter` now starts real Supabase magic-link session flows, but onboarding screens still need route guards, profile completion mutations, wallet handoff, and full browser session persistence polish.
 - Age/KYC/KYB provider launch paths need one launch-approved provider fully wired with current official docs, live webhook verification, retention policy, and admin review flow.
 - Embedded wallet provider remains a boundary until a launch-approved noncustodial provider is configured and tested.
 - Payment settlement is native SOL devnet first; SPL/USDC, product-specific split settlement, exact subscription delegation program verification, and provider replay tooling still need launch-scope completion.
@@ -62,7 +62,7 @@ Non-goals:
 
 1. Continue migrating money/access/admin/safety mutations onto the shared Postgres transaction helper slice by slice; payment submission settlement is already on the shared boundary.
 2. Continue migrating route modules onto shared idempotency helpers; add shared audit, route-policy/RBAC, route-specific rate limit, and test factory helpers, then migrate money/access/admin/safety mutations onto them slice by slice.
-3. Replace demo-shaped `/enter` with real Supabase auth/session/onboarding and route guards.
+3. Continue Supabase onboarding beyond `/enter`: route guards, profile completion mutations, wallet handoff, and protected-shell redirects.
 4. Wire one launch-approved age/KYC provider path end to end and keep all unconfigured providers fail-closed.
 5. Harden product-specific Solana Pay checkout/access paths for content, support, live pass, Event Access, paid message, platform plan, and creator membership.
 6. Replace placeholder deployment with staged deploy/migration/rollback/health-check/observability skeleton and docs.

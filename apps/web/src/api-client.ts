@@ -481,6 +481,11 @@ async function getSupabaseAccessToken(env: ReturnType<typeof parsePublicWebEnv>)
       }
     }
   });
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+  if (claimsError || !claimsData?.claims) {
+    return null;
+  }
+
   const { data } = await supabase.auth.getSession();
 
   return data.session?.access_token ?? null;

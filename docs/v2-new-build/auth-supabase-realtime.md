@@ -185,6 +185,9 @@ Avoid:
 ## Session Security
 
 - Frontend uses Supabase URL plus publishable key and user JWT. Legacy anon keys may be used for compatibility only.
+- Web SSR uses `@supabase/ssr` cookie clients, `apps/web/proxy.ts` refreshes Supabase auth cookies with `auth.getClaims()`, and `/auth/confirm` exchanges email `token_hash` links for sessions before redirecting back to the app.
+- `/enter` starts the real browser-side Supabase magic-link flow and can sign out a browser session. It does not grant protected app access by itself; backend `/v1/session`, wallet readiness, and age verification remain the access truth.
+- Configure Supabase Auth email templates for server-side flow: set magic-link and confirm-signup links to `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/enter`.
 - Backend never exposes secret or service-role keys to browser bundles.
 - Backend verifies Supabase-issued access tokens with Supabase Auth `getClaims()` where possible, falling back to Auth-server verification behavior for shared-secret signing projects.
 - JWT verification keys/config must be cached and rotated safely.
