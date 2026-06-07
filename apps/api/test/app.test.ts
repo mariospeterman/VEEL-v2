@@ -5408,7 +5408,7 @@ describe("buildApi", () => {
     vi.unstubAllEnvs();
   });
 
-  it("rejects client-priced generic content unlock payment intents", async () => {
+  it("rejects client-priced generic access-bearing payment intents", async () => {
     vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -5426,7 +5426,7 @@ describe("buildApi", () => {
         "idempotency-key": "generic-content-unlock-1"
       },
       payload: {
-        productType: "content_unlock",
+        productType: "live_pass",
         targetId: "00000000-0000-4000-8000-000000000040",
         amountMinor: 1
       }

@@ -22,12 +22,12 @@ Non-goals:
 
 Current implementation state:
 
-- `POST /v1/payments/intents` creates a backend-owned native SOL payment intent for app-ready users when `PAYMENT_PLATFORM_TREASURY_WALLET` is configured.
+- `POST /v1/payments/intents` creates a backend-owned native SOL voluntary `support`/`tip` intent for app-ready users when `PAYMENT_PLATFORM_TREASURY_WALLET` is configured. It must not accept client-priced access-bearing product types.
 - The intent stores server-owned amount, currency, product target, treasury wallet, Solana cluster, and a unique Solana reference address.
 - `GET /v1/payments/intents/{paymentIntentId}/transaction-request` returns a Solana Pay transfer request URL for native SOL devnet settlement.
 - `POST /v1/payments/intents/{paymentIntentId}/submissions` records the wallet-submitted signature, then marks the intent confirmed only when backend Solana RPC verification finds a successful transaction with the expected reference address, treasury recipient, and lamport amount.
 - Wallet approval, frontend success, and submitted signatures remain non-final until backend settlement verification confirms chain evidence.
-- `POST /v1/content/{contentId}/unlock-intents` creates or reuses a backend-priced `content_unlock` intent from active content access rules. The generic payment-intent endpoint does not accept client-priced content unlocks.
+- `POST /v1/content/{contentId}/unlock-intents` creates or reuses a backend-priced `content_unlock` intent from active content access rules. Live passes, Event Access Passes, paid messages, platform plans, creator memberships, and content unlocks must use product-specific backend-priced endpoints instead of the generic payment-intent endpoint.
 - Confirmed `content_unlock` settlement grants an active content entitlement in the same backend transaction, and media/feed access projection returns `unlocked` only from backend entitlement state.
 - Confirmed `tip` and `support` compatibility settlement posts creator earning and platform fee ledger entries using the documented launch platform fee, but never writes an access grant. UI copy should say support.
 - Confirmed `event_access_pass` settlement grants a backend Event Access Pass entitlement and QR/check-in record. Legacy `event_ticket` rows are normalized by migration and still settle through the same backend path during compatibility windows. Event Access is never created from wallet approval, redirect state, or frontend-computed payment success.

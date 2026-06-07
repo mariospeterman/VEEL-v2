@@ -720,7 +720,7 @@ paths:
     post:
       operationId: createPaymentIntent
       tags: [Payments]
-      summary: Create or reuse backend-owned payment intent
+      summary: Create or reuse backend-owned voluntary support/tip payment intent
       parameters:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       requestBody:
@@ -1742,7 +1742,7 @@ components:
     CreateReport: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateReportRequest" } } } }
     CreateMessage: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateMessageRequest" } } } }
     CreatePaidMessageIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreatePaidMessageIntentRequest" } } } }
-    CreatePaymentIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreatePaymentIntentRequest" }, examples: { tip: { value: { productType: tip, targetId: "00000000-0000-4000-8000-000000000001", amountMinor: 50000000 } }, contentUnlock: { value: { productType: content_unlock, targetId: "00000000-0000-4000-8000-000000000002" } } } } } }
+    CreatePaymentIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreatePaymentIntentRequest" }, examples: { support: { value: { productType: support, targetId: "00000000-0000-4000-8000-000000000001", amountMinor: 50000000 } }, tip: { value: { productType: tip, targetId: "00000000-0000-4000-8000-000000000001", amountMinor: 50000000 } } } } } }
     SubmitPaymentSignature: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SubmitPaymentSignatureRequest" } } } }
     SolanaIndexerWebhook: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SolanaIndexerWebhookPayload" } } } }
     CreateReferralToken: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateReferralTokenRequest" } } } }
@@ -2632,10 +2632,9 @@ components:
       type: object
       required: [productType, targetId]
       properties:
-        productType: { $ref: "#/components/schemas/ProductType" }
+        productType: { type: string, enum: [tip, support] }
         targetId: { type: string, format: uuid }
         amountMinor: { type: integer, nullable: true }
-        livePassDurationMinutes: { type: integer, enum: [30, 60, 180], nullable: true }
         referralToken: { type: string, nullable: true }
     PaymentIntent:
       type: object

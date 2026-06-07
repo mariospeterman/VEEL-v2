@@ -3,7 +3,7 @@ import { PaymentIdempotencyConflictError, PaymentRepositoryConfigurationError } 
 import { assertSolanaAddress, buildSolanaPayTransferRequestUrl, createSolanaReferenceAddress, SolanaPaymentConfigurationError } from "./solana-payment.js";
 import type { CreatePaymentIntentRequest, SubmitPaymentSignatureRequest } from "./types.js";
 import type { RegisterPaymentRoutesOptions } from "./payment-route-shared.js";
-import { hashPaymentIntentRequest, notFoundResponse, paymentIntentTtlMs, toPaymentIntentResponse, validateCreatePaymentIntentRequest, validationResponse, verifyPaymentReadyAccess } from "./payment-route-shared.js";
+import { hashPaymentIntentRequest, notFoundResponse, paymentIntentTtlMs, requiredIdempotencyKey, toPaymentIntentResponse, validateCreatePaymentIntentRequest, validationResponse, verifyPaymentReadyAccess } from "./payment-route-shared.js";
 
 export async function registerPaymentIntentRoutes(
   app: FastifyInstance,
@@ -16,9 +16,9 @@ export async function registerPaymentIntentRoutes(
       return reply.code(access.statusCode).send(access.body);
     }
 
-    const idempotencyKey = request.headers["idempotency-key"];
+    const idempotencyKey = requiredIdempotencyKey(request);
 
-    if (typeof idempotencyKey !== "string" || idempotencyKey.length === 0) {
+    if (!idempotencyKey) {
       return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
     }
 
@@ -27,12 +27,6 @@ export async function registerPaymentIntentRoutes(
 
     if (validationError) {
       return reply.code(400).send(validationResponse(validationError));
-    }
-
-    if (body?.productType === "content_unlock") {
-      return reply
-        .code(400)
-        .send(validationResponse("Use /v1/content/{contentId}/unlock-intents for content unlocks"));
     }
 
     if (!app.config.PAYMENT_PLATFORM_TREASURY_WALLET) {
@@ -175,9 +169,9 @@ export async function registerPaymentIntentRoutes(
       return reply.code(access.statusCode).send(access.body);
     }
 
-    const idempotencyKey = request.headers["idempotency-key"];
+    const idempotencyKey = requiredIdempotencyKey(request);
 
-    if (typeof idempotencyKey !== "string" || idempotencyKey.length === 0) {
+    if (!idempotencyKey) {
       return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
     }
 

@@ -903,7 +903,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create or reuse backend-owned payment intent */
+        /** Create or reuse backend-owned voluntary support/tip payment intent */
         post: operations["createPaymentIntent"];
         delete?: never;
         options?: never;
@@ -2943,12 +2943,11 @@ export interface components {
             message?: components["schemas"]["Message"];
         };
         CreatePaymentIntentRequest: {
-            productType: components["schemas"]["ProductType"];
+            /** @enum {string} */
+            productType: "tip" | "support";
             /** Format: uuid */
             targetId: string;
             amountMinor?: number | null;
-            /** @enum {integer|null} */
-            livePassDurationMinutes?: 30 | 60 | 180 | null;
             referralToken?: string | null;
         };
         PaymentIntent: {

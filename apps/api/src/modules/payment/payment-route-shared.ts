@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { FastifyRequest } from "fastify";
+import { readIdempotencyKey } from "../../shared/idempotency.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { AgeRepository } from "../age/types.js";
 import type { ContentRepository } from "../content/types.js";
@@ -20,13 +21,7 @@ export interface RegisterPaymentRoutesOptions {
 
 const productTypes = new Set([
   "tip",
-  "support",
-  "content_unlock",
-  "paid_message",
-  "live_pass",
-  "event_access_pass",
-  "creator_subscription",
-  "platform_subscription"
+  "support"
 ]);
 export const paymentIntentTtlMs = 15 * 60 * 1000;
 
@@ -113,7 +108,17 @@ export function validateCreatePaymentIntentRequest(
   return null;
 }
 
-export function hashPaymentIntentRequest(body: CreatePaymentIntentRequest): string {
+export function requiredIdempotencyKey(request: FastifyRequest): string | null {
+  return readIdempotencyKey(request);
+}
+
+export function hashPaymentIntentRequest(body: {
+  productType: ProductType;
+  targetId: string;
+  amountMinor?: number | null;
+  livePassDurationMinutes?: 30 | 60 | 180 | null;
+  referralToken?: string | null;
+}): string {
   return createHash("sha256")
     .update(
       JSON.stringify({
