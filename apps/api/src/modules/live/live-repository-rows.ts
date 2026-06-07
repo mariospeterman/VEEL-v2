@@ -9,7 +9,7 @@ export interface LiveRoomRow {
   creator_handle: string;
   creator_display_name: string;
   creator_avatar_url: string | null;
-  provider_stream_id: string;
+  provider_stream_id: string | null;
   provider_playback_id: string | null;
   host_ingest_url: string | null;
   host_stream_key: string | null;

@@ -63,25 +63,36 @@ export async function registerLiveRoomRoutes(
         idempotencyKey
       });
 
-      if (existingRoom) {
-        if (existingRoom.requestHash !== requestHash) {
-          return reply.code(409).send(conflictResponse("Idempotency key was already used"));
-        }
+      if (existingRoom?.requestHash !== undefined && existingRoom.requestHash !== requestHash) {
+        return reply.code(409).send(conflictResponse("Idempotency key was already used"));
+      }
 
+      if (existingRoom?.providerStreamId) {
         return reply.code(201).send(toLiveRoomResponse(existingRoom));
       }
 
+      const reservedRoom =
+        existingRoom ??
+        (await options.liveRepository.reserveRoom({
+          supabaseUserId: access.supabaseUserId,
+          idempotencyKey,
+          requestHash,
+          ...normalizedBody
+        }));
       const providerRoom = await options.liveProvider.createRoom({
-        roomId: "pending",
+        roomId: reservedRoom.id,
         title: normalizedBody.title
       });
-      const room = await options.liveRepository.createRoom({
+
+      const room = await options.liveRepository.attachProviderRoom({
         supabaseUserId: access.supabaseUserId,
-        idempotencyKey,
-        requestHash,
-        ...normalizedBody,
+        roomId: reservedRoom.id,
         providerRoom
       });
+
+      if (!room) {
+        return reply.code(404).send(notFoundResponse("Live room was not found"));
+      }
 
       return reply.code(201).send(toLiveRoomResponse(room));
     } catch (error) {
@@ -195,6 +206,10 @@ export async function registerLiveRoomRoutes(
 
       if (!room) {
         return reply.code(404).send(notFoundResponse("Live room was not found"));
+      }
+
+      if (!room.providerStreamId) {
+        return reply.code(503).send(serviceUnavailableResponse("Live room provider setup is pending"));
       }
 
       const status = await options.liveProvider.getRoomStatus({

@@ -42,7 +42,7 @@ Non-goals:
 - Provider media readiness only updates playback/readiness projection; moderation approval and public access remain separate backend/admin-owned truth.
 - Native SOL devnet payment intent, Solana Pay transaction request URL, submitted-signature capture, backend settlement verification, shared transaction boundary for payment submission settlement, content unlock entitlement grant after confirmed settlement, and browser content-unlock handoff to backend-created intents/transaction requests.
 - Support/tip, referral attribution/commission projection, activity/payment/wallet transaction projections, and creator dashboard/onboarding projections that avoid balance/withdrawal language.
-- Live rooms/pass/chat projections, Event Access Pass projections, Mutuals projections, messages/paid-message projections, notifications/push/service-worker boundaries, organization/KYB/admin support policy surfaces, and admin provider/payment/compliance projections.
+- Live rooms/pass/chat projections, DB-first Livepeer room reservation before provider creation, Event Access Pass projections, Mutuals projections, messages/paid-message projections, notifications/push/service-worker boundaries, organization/KYB/admin support policy surfaces, and admin provider/payment/compliance projections.
 - Auto-renewing subscription architecture is modeled through backend-owned delegated authorization, renewal worker tick, collection/grace/revocation states, and fail-closed provider boundaries.
 - Frontend smoke coverage covers desktop/mobile app shell, onboarding, age, content, create, discover, messages, activity, wallet, creator dashboard, subscriptions, Studio/org, settings, admin, live, Event Access, Mutuals, and assistant projections.
 

@@ -49,6 +49,7 @@ import type {
   LiveRepository,
   StoredLiveRoom
 } from "../src/modules/live/types";
+import { LiveProviderConfigurationError } from "../src/modules/live/livepeer-adapter";
 import type { Message, MessageRepository } from "../src/modules/message/types";
 import type {
   Notification,
@@ -5768,16 +5769,26 @@ describe("buildApi", () => {
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
       liveRepository: fakeLiveRepository({
-        async onCreateRoom(input) {
+        async onReserveRoom(input) {
           repositoryCreates.push(input.title);
           return liveRoomFixture({
             id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10",
             title: input.title,
+            providerStreamId: null,
+            providerPlaybackId: null,
+            hostIngestUrl: null,
+            hostStreamKey: null,
+            requestHash: input.requestHash
+          });
+        },
+        async onAttachProviderRoom(input) {
+          return liveRoomFixture({
+            id: input.roomId,
+            title: "Friday live room",
             providerStreamId: input.providerRoom.providerStreamId,
             providerPlaybackId: input.providerRoom.providerPlaybackId,
             hostIngestUrl: input.providerRoom.hostIngestUrl,
-            hostStreamKey: input.providerRoom.hostStreamKey,
-            requestHash: input.requestHash
+            hostStreamKey: input.providerRoom.hostStreamKey
           });
         },
         async onFindOwnedRoomByIdempotency() {
@@ -5834,8 +5845,80 @@ describe("buildApi", () => {
       }
     });
     expect(JSON.stringify(response.json())).not.toContain("test");
-    expect(providerCreates).toEqual([{ roomId: "pending", title: "Friday live room" }]);
+    expect(providerCreates).toEqual([
+      { roomId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10", title: "Friday live room" }
+    ]);
     expect(repositoryCreates).toEqual(["Friday live room"]);
+
+    await app.close();
+  });
+
+  it("reserves a live room before provider creation and avoids provider attachment on failure", async () => {
+    const repositoryReservations: string[] = [];
+    const providerCreates: Array<{ roomId: string; title: string }> = [];
+    const providerAttachments: string[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      liveRepository: fakeLiveRepository({
+        async onReserveRoom(input) {
+          repositoryReservations.push(input.title);
+          return liveRoomFixture({
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa19",
+            title: input.title,
+            providerStreamId: null,
+            providerPlaybackId: null,
+            hostIngestUrl: null,
+            hostStreamKey: null,
+            requestHash: input.requestHash
+          });
+        },
+        async onAttachProviderRoom(input) {
+          providerAttachments.push(input.roomId);
+          return null;
+        },
+        async onFindOwnedRoomByIdempotency() {
+          return null;
+        }
+      }),
+      liveProvider: {
+        isConfigured: () => true,
+        async createRoom(input) {
+          providerCreates.push(input);
+          throw new LiveProviderConfigurationError();
+        },
+        async getRoomStatus() {
+          throw new Error("not implemented");
+        },
+        async createPlaybackJwt() {
+          return null;
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/live/rooms",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "live-room-create-fail-1"
+      },
+      payload: {
+        title: "Provider fail room",
+        teaserSeconds: 45,
+        passPriceMinor: 75000000
+      }
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(repositoryReservations).toEqual(["Provider fail room"]);
+    expect(providerCreates).toEqual([
+      { roomId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa19", title: "Provider fail room" }
+    ]);
+    expect(providerAttachments).toEqual([]);
 
     await app.close();
   });
@@ -6919,6 +7002,8 @@ function liveRoomFixture(
 function fakeLiveRepository(
   overrides: Partial<{
     onCreateRoom: LiveRepository["createRoom"];
+    onReserveRoom: LiveRepository["reserveRoom"];
+    onAttachProviderRoom: LiveRepository["attachProviderRoom"];
     onFindRoom: LiveRepository["findRoom"];
     onFindOwnedRoom: LiveRepository["findOwnedRoom"];
     onFindOwnedRoomByIdempotency: LiveRepository["findOwnedRoomByIdempotency"];
@@ -6933,6 +7018,12 @@ function fakeLiveRepository(
   return {
     async createRoom(input) {
       return overrides.onCreateRoom?.(input) ?? liveRoomFixture();
+    },
+    async reserveRoom(input) {
+      return overrides.onReserveRoom?.(input) ?? liveRoomFixture({ id: input.idempotencyKey });
+    },
+    async attachProviderRoom(input) {
+      return overrides.onAttachProviderRoom?.(input) ?? liveRoomFixture({ id: input.roomId });
     },
     async findRoom(input) {
       return overrides.onFindRoom?.(input) ?? liveRoomFixture({ id: input.roomId });

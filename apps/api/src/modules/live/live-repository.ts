@@ -32,6 +32,12 @@ function createUnavailableLiveRepository(): LiveRepository {
     async createRoom() {
       throw new LiveRepositoryConfigurationError();
     },
+    async reserveRoom() {
+      throw new LiveRepositoryConfigurationError();
+    },
+    async attachProviderRoom() {
+      throw new LiveRepositoryConfigurationError();
+    },
     async findRoom() {
       throw new LiveRepositoryConfigurationError();
     },

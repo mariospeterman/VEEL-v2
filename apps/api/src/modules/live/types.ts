@@ -56,6 +56,21 @@ export interface CreateLiveRoomInput {
   providerRoom: CreatedLiveProviderRoom;
 }
 
+export interface ReserveLiveRoomInput {
+  supabaseUserId: string;
+  idempotencyKey: string;
+  requestHash: string;
+  title: string;
+  teaserSeconds: number;
+  passPriceMinor: number;
+}
+
+export interface AttachLiveProviderRoomInput {
+  supabaseUserId: string;
+  roomId: string;
+  providerRoom: CreatedLiveProviderRoom;
+}
+
 export interface FindLiveRoomInput {
   supabaseUserId: string;
   roomId: string;
@@ -108,7 +123,7 @@ export interface CreateLiveChatMessageInput {
 }
 
 export interface StoredLiveRoom extends LiveRoom {
-  providerStreamId: string;
+  providerStreamId: string | null;
   providerPlaybackId: string | null;
   hostIngestUrl: string | null;
   hostStreamKey: string | null;
@@ -117,6 +132,8 @@ export interface StoredLiveRoom extends LiveRoom {
 
 export interface LiveRepository {
   createRoom(input: CreateLiveRoomInput): Promise<StoredLiveRoom>;
+  reserveRoom(input: ReserveLiveRoomInput): Promise<StoredLiveRoom>;
+  attachProviderRoom(input: AttachLiveProviderRoomInput): Promise<StoredLiveRoom | null>;
   findRoom(input: FindLiveRoomInput): Promise<StoredLiveRoom | null>;
   findOwnedRoom(input: FindOwnedLiveRoomInput): Promise<StoredLiveRoom | null>;
   findOwnedRoomByIdempotency(input: FindOwnedLiveRoomByIdempotencyInput): Promise<StoredLiveRoom | null>;

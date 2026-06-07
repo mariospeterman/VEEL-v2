@@ -97,9 +97,10 @@ sequenceDiagram
   participant DB
 
   Creator->>API: Create/start room
-  API->>Livepeer: Create stream
+  API->>DB: Reserve room id and idempotency record
+  API->>Livepeer: Create stream with Veel room id tag
   Livepeer-->>API: streamKey, ingest, playback
-  API->>DB: Store encrypted host credentials
+  API->>DB: Attach provider ids and host connection secrets
   API-->>Creator: Host connection
   Viewer->>API: Open viewer room
   API-->>Viewer: Safe playback/access state
@@ -109,6 +110,7 @@ sequenceDiagram
 
 Rules:
 
+- Live room creation is DB-first: the API reserves a durable room id and idempotency record before creating a Livepeer stream, then attaches provider ids and host connection fields. Retrying the same idempotency key reuses the same Veel room id instead of creating unrelated provider resources.
 - Current v2 API exposes a masked creator host connection only. A reveal/control workflow must add explicit break-glass UX, auditing, and staging provider validation before exposing full host credentials to a browser surface.
 - Viewer never receives stream key or ingest URL.
 - Replay state is separate from live state.
