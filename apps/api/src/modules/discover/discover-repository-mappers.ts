@@ -1,0 +1,106 @@
+import type { ContentItem, Event, LiveRoom, User } from "./types.js";
+import type { ContentRow, CreatorRow, EventRow, LiveRoomRow } from "./discover-repository-rows.js";
+
+export function normalizeSearch(query: string | undefined): string | null {
+  const normalized = query?.trim().replace(/^#/, "").toLowerCase();
+
+  return normalized && normalized.length > 0 ? normalized.slice(0, 80) : null;
+}
+
+export function toUser(
+  row: CreatorRow | { creator_id: string; handle: string | null; display_name: string | null; avatar_url: string | null }
+): User {
+  return {
+    id: "id" in row ? row.id : row.creator_id,
+    handle: row.handle ?? "",
+    displayName: row.display_name ?? "",
+    avatarUrl: row.avatar_url,
+    badges: []
+  };
+}
+
+export function toContentItem(row: ContentRow): ContentItem {
+  const accessState = row.entitlement_id
+    ? "unlocked"
+    : row.access_type === "locked" || row.access_type === "paid" || row.product_type === "content_unlock"
+      ? "locked"
+      : "free";
+  const playback =
+    row.provider && row.provider_playable && row.playback_url && ["free", "unlocked", "subscribed"].includes(accessState)
+      ? { state: "full" as const, url: row.playback_url, provider: row.provider }
+      : { state: "not_ready" as const, url: null, provider: "none" as const };
+
+  return {
+    id: row.id,
+    creator: toUser(row),
+    mediaType: row.media_type,
+    caption: row.caption,
+    posterUrl: row.poster_url,
+    playback,
+    accessState,
+    nsfwLabel: row.nsfw_label,
+    engagement: {
+      liked: row.liked,
+      saved: row.saved,
+      likeCount: Number(row.like_count),
+      commentCount: Number(row.comment_count),
+      shareCount: Number(row.share_count)
+    }
+  };
+}
+
+export function toEvent(row: EventRow): Event {
+  const ticketTypes = Array.isArray(row.access_pass_types) ? row.access_pass_types : [];
+  const location: Event["location"] = {
+    type: row.location_type,
+    ...(row.location_label ? { label: row.location_label } : {}),
+    ...(row.location_lat === null ? {} : { latitude: Number(row.location_lat) }),
+    ...(row.location_lng === null ? {} : { longitude: Number(row.location_lng) })
+  };
+
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    startsAt: row.starts_at.toISOString(),
+    endsAt: row.ends_at?.toISOString() ?? null,
+    accessRule: row.access_rule,
+    location,
+    state: row.state,
+    ticketTypes: ticketTypes as Event["ticketTypes"]
+  };
+}
+
+export function toLiveRoom(row: LiveRoomRow): LiveRoom {
+  const accessState = row.has_active_pass ? "pass_active" : "pass_required";
+  const allowedDurations = new Set([30, 60, 180]);
+
+  return {
+    id: row.id,
+    title: row.title,
+    creator: toUser({
+      creator_id: row.creator_id,
+      handle: row.handle,
+      display_name: row.display_name,
+      avatar_url: row.avatar_url
+    }),
+    state: row.state,
+    accessState,
+    playback: row.playback_url && row.has_active_pass
+      ? { state: "full", url: row.playback_url, provider: "livepeer" }
+      : { state: "blocked", url: null, provider: "livepeer" },
+    teaserSecondsRemaining: accessState === "pass_required" ? row.teaser_seconds : 0,
+    passOptions: row.pass_durations_minutes
+      .filter((durationMinutes): durationMinutes is 30 | 60 | 180 => allowedDurations.has(durationMinutes))
+      .map((durationMinutes) => ({
+        durationMinutes,
+        amountMinor: Number(row.pass_price_minor),
+        currency: row.currency
+      })),
+    chat: {
+      enabled: true,
+      accessState: accessState === "pass_active" ? "allowed" : "pass_required"
+    },
+    replayContentId: row.replay_content_item_id
+  };
+}
