@@ -1,81 +1,20 @@
 import { randomUUID } from "node:crypto";
 import postgres from "postgres";
-import type { ContentItem, ContentRepository, Entitlement } from "./types.js";
+import type { ContentRepository } from "./types.js";
+import { createContentMediaRepositoryMethods } from "./content-media-repository.js";
+import { accessStateForRule, extractHashtagSlugs, toContentItem, toEntitlement } from "./content-repository-mappers.js";
+import type {
+  ContentDetailRow,
+  ContentRow,
+  ContentUnlockOfferRow,
+  FeedRow
+} from "./content-repository-rows.js";
 
 export class ContentRepositoryConfigurationError extends Error {
   constructor() {
     super("DATABASE_URL_NOT_CONFIGURED");
     this.name = "ContentRepositoryConfigurationError";
   }
-}
-
-interface FeedRow {
-  id: string;
-  media_type: ContentItem["mediaType"];
-  caption: string | null;
-  nsfw_label: NonNullable<ContentItem["nsfwLabel"]>;
-  created_at: Date;
-  creator_id: string;
-  handle: string | null;
-  display_name: string | null;
-  avatar_url: string | null;
-  poster_url: string | null;
-  playback_url: string | null;
-  provider: "bunny" | "livepeer" | null;
-  provider_state: string | null;
-  provider_playable: boolean | null;
-  access_type: string | null;
-  product_type: string | null;
-  entitlement_id: string | null;
-  entitlement_state: Entitlement["state"] | null;
-  entitlement_granted_at: Date | null;
-  entitlement_ends_at: Date | null;
-  liked: boolean;
-  saved: boolean;
-  like_count: string | number;
-  comment_count: string | number;
-  share_count: string | number;
-}
-
-interface ContentRow {
-  id: string;
-  media_type: ContentItem["mediaType"];
-  caption: string | null;
-  nsfw_label: NonNullable<ContentItem["nsfwLabel"]>;
-  creator_id: string;
-  handle: string | null;
-  display_name: string | null;
-  avatar_url: string | null;
-  liked?: boolean;
-  saved?: boolean;
-  like_count?: string | number;
-  comment_count?: string | number;
-  share_count?: string | number;
-}
-
-interface ContentDetailRow extends ContentRow {
-  poster_url: string | null;
-  playback_url: string | null;
-  provider: "bunny" | "livepeer" | null;
-  provider_state: string | null;
-  provider_playable: boolean | null;
-  access_type: string | null;
-  product_type: string | null;
-  entitlement_id: string | null;
-  entitlement_state: Entitlement["state"] | null;
-  entitlement_granted_at: Date | null;
-  entitlement_ends_at: Date | null;
-}
-
-interface ContentUnlockOfferRow {
-  content_id: string;
-  price_minor: number;
-  currency: "SOL";
-  entitlement_id: string | null;
-  entitlement_state: Entitlement["state"] | null;
-  entitlement_granted_at: Date | null;
-  entitlement_ends_at: Date | null;
-  is_creator: boolean;
 }
 
 export function createPostgresContentRepository(databaseUrl?: string): ContentRepository {
@@ -120,7 +59,7 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
     prepare: false
   });
 
-  return {
+ return {
     async createDraft(input) {
       const rows = await sql<ContentRow[]>`
         with target_user as (
@@ -192,25 +131,7 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
 
       return toContentItem(row, null);
     },
-    async createMediaAsset(input) {
-      await sql`
-        insert into media_assets (
-          id,
-          content_item_id,
-          provider,
-          provider_asset_id,
-          provider_state
-        )
-        values (
-          ${randomUUID()},
-          ${input.contentId},
-          ${input.provider},
-          ${input.providerAssetId},
-          ${input.providerState}
-        )
-        on conflict (provider, provider_asset_id) do nothing
-      `;
-    },
+    ...createContentMediaRepositoryMethods(sql),
     async findContentDetail(input) {
       const rows = await sql<ContentDetailRow[]>`
         select
@@ -388,168 +309,6 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
         ...(entitlement ? { entitlement } : {})
       };
     },
-    async findOwnedContentForUpload(input) {
-      const rows = await sql<{ id: string; media_type: ContentItem["mediaType"]; caption: string | null }[]>`
-        select
-          ci.id,
-          ci.media_type,
-          ci.caption
-        from content_items ci
-        join users u on u.id = ci.creator_user_id
-        where ci.id = ${input.contentId}
-          and u.supabase_user_id = ${input.supabaseUserId}
-          and ci.state in ('draft', 'processing')
-        limit 1
-      `;
-
-      const row = rows[0];
-
-      return row
-        ? {
-            id: row.id,
-            mediaType: row.media_type,
-            caption: row.caption
-          }
-        : null;
-    },
-    async findOwnedMediaAssetForSync(input) {
-      const rows = await sql<
-        { id: string; content_item_id: string; provider: "bunny"; provider_asset_id: string }[]
-      >`
-        select
-          ma.id,
-          ma.content_item_id,
-          ma.provider,
-          ma.provider_asset_id
-        from media_assets ma
-        join content_items ci on ci.id = ma.content_item_id
-        join users u on u.id = ci.creator_user_id
-        where ma.id = ${input.mediaAssetId}
-          and ma.provider = 'bunny'
-          and u.supabase_user_id = ${input.supabaseUserId}
-        limit 1
-      `;
-      const row = rows[0];
-
-      return row
-        ? {
-            id: row.id,
-            contentId: row.content_item_id,
-            provider: row.provider,
-            providerAssetId: row.provider_asset_id
-          }
-        : null;
-    },
-    async updateMediaAssetPlayback(input) {
-      await sql.begin(async (transaction) => {
-        await transaction`
-          update media_assets
-          set
-            provider_state = ${input.providerState},
-            provider_playable = ${input.providerPlayable},
-            playback_url = ${input.playbackUrl ?? null},
-            poster_url = coalesce(${input.posterUrl ?? null}, poster_url),
-            duration_ms = coalesce(${input.durationMs ?? null}, duration_ms),
-            ready_at = case when ${input.providerPlayable} then coalesce(ready_at, now()) else ready_at end,
-            provider_checked_at = now()
-          where id = ${input.mediaAssetId}
-        `;
-        await transaction`
-          update content_items ci
-          set
-            state = case when ${input.providerPlayable} then 'ready' else state end,
-            moderation_state = case when ${input.providerPlayable} then 'approved' else moderation_state end,
-            updated_at = now()
-          from media_assets ma
-          where ma.content_item_id = ci.id
-            and ma.id = ${input.mediaAssetId}
-        `;
-      });
-    },
-    async recordMediaProviderWebhook(input) {
-      const insertedReceipts = await sql<{ id: string }[]>`
-        insert into provider_webhook_receipts (
-          id,
-          provider,
-          webhook_type,
-          signature_hash,
-          idempotency_key
-        )
-        values (
-          ${randomUUID()},
-          ${input.provider},
-          'media-status',
-          ${input.signatureHash ?? null},
-          ${input.providerEventId}
-        )
-        on conflict (provider, webhook_type, idempotency_key) do nothing
-        returning id
-      `;
-
-      if (insertedReceipts.length === 0) {
-        return false;
-      }
-
-      await sql`
-        insert into provider_events (
-          id,
-          provider,
-          provider_event_id,
-          event_type,
-          normalized_state
-        )
-        values (
-          ${randomUUID()},
-          ${input.provider},
-          ${input.providerEventId},
-          ${input.eventType},
-          ${input.normalizedState}
-        )
-        on conflict (provider, provider_event_id) do nothing
-      `;
-
-      return true;
-    },
-    async updateMediaAssetFromWebhook(input) {
-      const rows = await sql.begin(async (transaction) => {
-        const updated = await transaction<{ id: string }[]>`
-          update media_assets
-          set
-            provider_state = ${input.providerState},
-            provider_playable = ${input.providerPlayable},
-            ready_at = case when ${input.providerPlayable} then coalesce(ready_at, now()) else ready_at end,
-            provider_checked_at = now()
-          where provider = ${input.provider}
-            and provider_asset_id = ${input.providerAssetId}
-          returning id
-        `;
-
-        await transaction`
-          update content_items ci
-          set
-            state = case when ${input.providerPlayable} then 'ready' else state end,
-            moderation_state = case when ${input.providerPlayable} then 'approved' else moderation_state end,
-            updated_at = now()
-          from media_assets ma
-          where ma.content_item_id = ci.id
-            and ma.provider = ${input.provider}
-            and ma.provider_asset_id = ${input.providerAssetId}
-        `;
-
-        await transaction`
-          update provider_events
-          set
-            normalized_state = ${input.providerState},
-            processed_at = now()
-          where provider = ${input.provider}
-            and provider_event_id = ${input.providerEventId}
-        `;
-
-        return updated;
-      });
-
-      return rows.length > 0;
-    },
     async listHomeFeed(input) {
       const rows = await sql<FeedRow[]>`
         select
@@ -675,142 +434,5 @@ export function createPostgresContentRepository(databaseUrl?: string): ContentRe
     async close() {
       await sql.end({ timeout: 5 });
     }
-  };
-}
-
-function toContentItem(
-  row: ContentRow,
-  posterUrl: string | null,
-  accessState: ContentItem["accessState"] = "free"
-): ContentItem {
-  return {
-    id: row.id,
-    creator: {
-      id: row.creator_id,
-      handle: row.handle ?? "",
-      displayName: row.display_name ?? "",
-      avatarUrl: row.avatar_url,
-      badges: []
-    },
-    mediaType: row.media_type,
-    caption: row.caption,
-    posterUrl,
-    playback: playbackForRow(row as Partial<PlaybackProjectionRow>, accessState),
-    accessState,
-    nsfwLabel: row.nsfw_label,
-    engagement: {
-      liked: Boolean(row.liked),
-      saved: Boolean(row.saved),
-      likeCount: Number(row.like_count ?? 0),
-      commentCount: Number(row.comment_count ?? 0),
-      shareCount: Number(row.share_count ?? 0)
-    }
-  };
-}
-
-function playbackForRow(
-  row: Partial<PlaybackProjectionRow>,
-  accessState: ContentItem["accessState"]
-): NonNullable<ContentItem["playback"]> {
-  if (!row.provider || !row.provider_playable || !row.playback_url) {
-    return {
-      state: "not_ready",
-      url: null,
-      provider: "none"
-    };
-  }
-
-  if (!["free", "unlocked", "subscribed"].includes(accessState)) {
-    return {
-      state: accessState === "teaser" ? "teaser" : "blocked",
-      url: null,
-      provider: row.provider
-    };
-  }
-
-  return {
-    state: "full",
-    url: row.playback_url,
-    provider: row.provider
-  };
-}
-
-interface PlaybackProjectionRow {
-  playback_url: string | null;
-  provider: "bunny" | "livepeer" | null;
-  provider_state: string | null;
-  provider_playable: boolean | null;
-}
-
-function accessStateForRule(row: {
-  access_type: string | null;
-  product_type: string | null;
-  entitlement_id?: string | null;
-}): ContentItem["accessState"] {
-  if (row.entitlement_id) {
-    return "unlocked";
-  }
-
-  if (!row.access_type || row.access_type === "free") {
-    return "free";
-  }
-
-  if (row.access_type === "teaser") {
-    return "teaser";
-  }
-
-  if (row.product_type === "live_pass" || row.access_type === "live_pass") {
-    return "pass_required";
-  }
-
-  if (
-    row.product_type === "content_unlock" ||
-    row.product_type === "subscriber_only" ||
-    row.access_type === "locked" ||
-    row.access_type === "paid"
-  ) {
-    return "locked";
-  }
-
-  return "locked";
-}
-
-function extractHashtagSlugs(caption: string | null | undefined): string[] {
-  if (!caption) {
-    return [];
-  }
-
-  const slugs = new Set<string>();
-  const matches = caption.matchAll(/(^|[\s([{"'])#([A-Za-z0-9_]{1,64})/g);
-
-  for (const match of matches) {
-    const slug = match[2]?.toLowerCase();
-    if (slug && /^[a-z0-9][a-z0-9_]{0,63}$/.test(slug)) {
-      slugs.add(slug);
-    }
-  }
-
-  return [...slugs].slice(0, 20);
-}
-
-function toEntitlement(row: {
-  content_id: string;
-  entitlement_id: string | null;
-  entitlement_state: Entitlement["state"] | null;
-  entitlement_granted_at: Date | null;
-  entitlement_ends_at: Date | null;
-}): Entitlement | undefined {
-  if (!row.entitlement_id || !row.entitlement_state || !row.entitlement_granted_at) {
-    return undefined;
-  }
-
-  return {
-    id: row.entitlement_id,
-    targetType: "content",
-    targetId: row.content_id,
-    productType: "content_unlock",
-    state: row.entitlement_state,
-    grantedAt: row.entitlement_granted_at.toISOString(),
-    expiresAt: row.entitlement_ends_at ? row.entitlement_ends_at.toISOString() : null
   };
 }
