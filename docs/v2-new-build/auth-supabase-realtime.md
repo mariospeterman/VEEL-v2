@@ -107,6 +107,7 @@ Wallet linking is not Supabase Auth by itself.
 - Backend verifies signature.
 - Backend links wallet to the authenticated Supabase user profile.
 - Wallet link events are audited.
+- `/enter` and `/wallet` can coordinate injected Phantom/Solflare/wallet-adapter signing for the existing `POST /v1/wallets/link-challenges` and `POST /v1/wallets/link` flow. The browser signs exactly the returned challenge text with `signMessage`; it never stores wallet truth, never treats wallet approval as payment proof, and never opens protected access without the backend session/access state.
 
 Embedded wallets are also linked to the Veel profile, but they are not a backend custody account. The selected wallet provider must support a noncustodial/user-controlled model where Veel cannot move funds without user approval.
 
@@ -188,6 +189,7 @@ Avoid:
 - Web SSR uses `@supabase/ssr` cookie clients, `apps/web/proxy.ts` refreshes Supabase auth cookies with `auth.getClaims()`, and `/auth/confirm` exchanges email `token_hash` links for sessions before redirecting back to the app.
 - `/enter` starts the real browser-side Supabase magic-link flow and can sign out a browser session. It does not grant protected app access by itself; backend `/v1/session`, wallet readiness, and age verification remain the access truth.
 - `/enter` also exposes the profile completion form after session creation. It sends `PATCH /v1/profiles/me` with a browser Supabase bearer token and an idempotency key; backend validation, handle uniqueness, and app-access state remain authoritative.
+- `/enter` and `/wallet` expose external Solana wallet handoff for injected wallets using the backend wallet challenge/proof endpoints. Official Phantom Solana signing docs checked on 2026-06-07 confirm `signMessage` receives UTF-8 bytes and returns an Ed25519 signature that the backend verifies with tweetnacl.
 - Protected app pages use a shared server-side route guard before backend reads. When Supabase SSR env is configured and `getClaims()` does not validate a browser session, the guard redirects to `/enter?next=<protected-path>`.
 - Every guarded page must export `dynamic = "force-dynamic"` so auth cookies and refreshed claims are evaluated per request instead of during static prerendering.
 - When Supabase SSR env is not configured, local development and smoke projections stay visible; backend API calls still fail closed and remain the access authority.

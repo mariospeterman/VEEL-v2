@@ -8,14 +8,17 @@ import {
   type WalletTransaction,
   type WalletTransactionPage
 } from "@/api-client";
+import { getWebAuthState } from "@/supabase/auth-state";
 import { requireConfiguredSession } from "@/supabase/route-guard";
+import { WalletLinkPanel } from "@/wallet/wallet-link-panel";
 
 export const dynamic = "force-dynamic";
 
 export default async function WalletPage() {
   await requireConfiguredSession("/wallet");
 
-  const [wallets, walletTransactions] = await Promise.all([
+  const [authState, wallets, walletTransactions] = await Promise.all([
+    getWebAuthState(),
     getWallets(),
     getWalletTransactionActivity()
   ]);
@@ -59,7 +62,7 @@ export default async function WalletPage() {
               {primaryWallet ? (
                 <PrimaryWalletCard wallet={primaryWallet} />
               ) : (
-                <EmptyState label="No linked wallets yet" />
+                <WalletLinkPanel authState={authState} />
               )}
 
               <section className="grid gap-3">

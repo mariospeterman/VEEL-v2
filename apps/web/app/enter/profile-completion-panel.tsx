@@ -1,9 +1,8 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
-import { parsePublicWebEnv } from "@veel/config";
+import { useState, type FormEvent } from "react";
+import { ApiMutationError, updateMyProfile } from "@/api-mutations";
 import type { WebAuthState } from "@/supabase/auth-state";
-import { createSupabaseBrowserClient } from "@/supabase/client";
 
 interface ProfileCompletionPanelProps {
   authState: WebAuthState;
@@ -17,63 +16,27 @@ export function ProfileCompletionPanel({ authState }: ProfileCompletionPanelProp
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [state, setState] = useState<"idle" | "saved" | "error">("idle");
-  const supabase = useMemo(() => {
-    try {
-      return createSupabaseBrowserClient();
-    } catch {
-      return null;
-    }
-  }, []);
 
   async function submitProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
     setMessage(null);
 
-    if (!supabase) {
-      setState("error");
-      setMessage("Supabase sign-in is not configured.");
-      setSubmitting(false);
-      return;
-    }
-
-    const {
-      data: { session }
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      setState("error");
-      setMessage("Create or restore a session before completing profile.");
-      setSubmitting(false);
-      return;
-    }
-
-    const env = parsePublicWebEnv(process.env);
-    const response = await fetch(new URL("/v1/profiles/me", env.NEXT_PUBLIC_API_BASE_URL), {
-      body: JSON.stringify({
+    try {
+      await updateMyProfile({
         handle,
         displayName,
         ...(bio ? { bio } : {}),
         ...(locationLabel ? { locationLabel } : {})
-      }),
-      cache: "no-store",
-      headers: {
-        accept: "application/json",
-        authorization: `Bearer ${session.access_token}`,
-        "content-type": "application/json",
-        "idempotency-key": crypto.randomUUID()
-      },
-      method: "PATCH"
-    });
-
-    setSubmitting(false);
-
-    if (!response.ok) {
+      });
+    } catch (error) {
+      setSubmitting(false);
       setState("error");
-      setMessage(await errorMessage(response));
+      setMessage(error instanceof ApiMutationError ? error.message : "Profile update failed");
       return;
     }
 
+    setSubmitting(false);
     setState("saved");
     setMessage("Profile saved. Continue with wallet and age readiness.");
   }
@@ -157,16 +120,4 @@ export function ProfileCompletionPanel({ authState }: ProfileCompletionPanelProp
       ) : null}
     </form>
   );
-}
-
-async function errorMessage(response: Response) {
-  try {
-    const body = (await response.json()) as { message?: unknown; code?: unknown };
-    if (typeof body.message === "string" && body.message) return body.message;
-    if (typeof body.code === "string" && body.code) return body.code;
-  } catch {
-    return response.statusText || "Profile update failed";
-  }
-
-  return response.statusText || "Profile update failed";
 }

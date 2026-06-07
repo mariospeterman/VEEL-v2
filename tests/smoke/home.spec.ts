@@ -24,6 +24,7 @@ test("renders the enter onboarding projection", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Identity, wallet, then age gate." })).toBeVisible();
   await expect(page.getByText("Email or passkey")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Complete identity" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Link Solana wallet" })).toBeVisible();
   await expect(page.getByText("External Solana wallet")).toBeVisible();
   await expect(page.getByRole("link", { name: "Continue" })).toHaveAttribute("href", "/age");
 });

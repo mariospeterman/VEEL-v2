@@ -1,5 +1,6 @@
 import type { components } from "@veel/contracts";
 import { getWebAuthState } from "@/supabase/auth-state";
+import { WalletLinkPanel } from "@/wallet/wallet-link-panel";
 import { EnterAuthPanel } from "./enter-auth-panel";
 import { ProfileCompletionPanel } from "./profile-completion-panel";
 
@@ -65,6 +66,7 @@ export default async function EnterPage({
       <section className="grid content-center gap-3 border-t border-(--line) bg-(--panel) px-5 py-6 lg:border-l lg:border-t-0">
         <EnterAuthPanel authError={params.error ?? null} initialAuthState={authState} nextPath={nextPath} />
         <ProfileCompletionPanel authState={authState} />
+        <WalletLinkPanel authState={authState} compact />
 
         {entryOptions.map((option, index) => (
           <article className="rounded border border-(--line) bg-(--background) p-4" key={option.title}>
