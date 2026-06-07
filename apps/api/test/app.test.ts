@@ -3103,7 +3103,7 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("creates a server-priced paid ticket intent", async () => {
+  it("creates a server-priced paid Event Access Pass intent", async () => {
     const eventId = "00000000-0000-4000-8000-0000000000e1";
     const ticketTypeId = "00000000-0000-4000-8000-0000000000e2";
     const eventRepository: EventRepository = {
@@ -3185,10 +3185,19 @@ describe("buildApi", () => {
 
     const response = await app.inject({
       method: "POST",
+      url: `/v1/events/${eventId}/access-passes/intents`,
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "access-pass-key"
+      },
+      payload: { accessPassTypeId: ticketTypeId }
+    });
+    const legacyResponse = await app.inject({
+      method: "POST",
       url: `/v1/events/${eventId}/tickets/intents`,
       headers: {
         authorization: "Bearer valid-token",
-        "idempotency-key": "ticket-key"
+        "idempotency-key": "legacy-ticket-key"
       },
       payload: { ticketTypeId }
     });
@@ -3202,6 +3211,7 @@ describe("buildApi", () => {
         currency: "SOL"
       }
     });
+    expect(legacyResponse.statusCode).toBe(404);
 
     await app.close();
   });
@@ -3287,7 +3297,7 @@ describe("buildApi", () => {
       url: `/v1/events/${eventId}/access-passes/intents`,
       headers: {
         authorization: "Bearer valid-token",
-        "idempotency-key": "free-ticket-key"
+        "idempotency-key": "free-access-pass-key"
       },
       payload: { accessPassTypeId: ticketTypeId }
     });
@@ -3305,9 +3315,25 @@ describe("buildApi", () => {
       },
       payload: { qrToken: ticket.qrToken }
     });
+    const legacyActivityResponse = await app.inject({
+      method: "GET",
+      url: "/v1/activity/tickets",
+      headers: { authorization: "Bearer valid-token" }
+    });
+    const legacyCheckInResponse = await app.inject({
+      method: "POST",
+      url: `/v1/tickets/${ticket.id}/check-in`,
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "legacy-check-in-key"
+      },
+      payload: { qrToken: ticket.qrToken }
+    });
 
     expect(grantResponse.statusCode).toBe(201);
     expect(grantResponse.json()).toMatchObject({ state: "free_granted", accessPass });
+    expect(legacyActivityResponse.statusCode).toBe(404);
+    expect(legacyCheckInResponse.statusCode).toBe(404);
     expect(activityResponse.statusCode).toBe(200);
     expect(activityResponse.json()).toMatchObject({ items: [accessPass], nextCursor: null });
     expect(checkInResponse.statusCode).toBe(200);
@@ -4271,9 +4297,9 @@ describe("buildApi", () => {
     await app.ready();
 
     const headers = { authorization: "Bearer valid-token" };
-    const [events, tickets] = await Promise.all([
+    const [events, accessPasses] = await Promise.all([
       app.inject({ method: "GET", url: "/v1/admin/events", headers }),
-      app.inject({ method: "GET", url: "/v1/admin/tickets", headers })
+      app.inject({ method: "GET", url: "/v1/admin/event-access-passes", headers })
     ]);
 
     expect(events.statusCode).toBe(200);
@@ -4282,12 +4308,14 @@ describe("buildApi", () => {
       state: "published",
       ticketTypes: [expect.objectContaining({ remaining: 49 })]
     });
-    expect(tickets.statusCode).toBe(200);
-    expect(tickets.json().items[0]).toMatchObject({
+    expect(accessPasses.statusCode).toBe(200);
+    expect(accessPasses.json().items[0]).toMatchObject({
       eventId: "00000000-0000-4000-8000-0000000000e1",
       state: "active"
     });
-    expect(`${events.body}${tickets.body}`).not.toMatch(
+    const legacyAdminResponse = await app.inject({ method: "GET", url: "/v1/admin/tickets", headers });
+    expect(legacyAdminResponse.statusCode).toBe(404);
+    expect(`${events.body}${accessPasses.body}`).not.toMatch(
       /raw|payload|secret|privateKey|serviceRole|identityDocument|providerPayload|metadata|streamKey|ingest|balance|payout/i
     );
 

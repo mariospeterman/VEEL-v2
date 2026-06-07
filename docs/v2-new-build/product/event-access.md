@@ -49,7 +49,7 @@ Avoid launch-facing language:
 
 - `POST /v1/events`, `GET /v1/events/{eventId}`, and `PATCH /v1/events/{eventId}` provide profile/age-gated event creation and owner updates.
 - `POST /v1/events/{eventId}/access-passes/intents` is the canonical path for Event Access payment or approval intents.
-- `POST /v1/events/{eventId}/tickets/intents` remains a deprecated compatibility alias only.
+- Ticket-named API aliases are removed from launch-facing contracts and code.
 - Confirmed `event_access_pass` settlement grants a backend Event Access Pass and QR record in the settlement transaction. Legacy `event_ticket` rows are normalized by migration and still settle through the same backend path during compatibility windows. Wallet approval or frontend redirect never grants access.
 - `GET /v1/activity/access-passes` is the canonical activity path for current user Event Access records.
 - `POST /v1/access-passes/{accessPassId}/check-in` validates the backend-issued QR token server-side and idempotently moves an active pass to `checked_in`.
@@ -57,7 +57,7 @@ Avoid launch-facing language:
   projections for Event Access sheets and Pass QR display. When the API is
   unavailable, both routes fail closed instead of rendering fixture Event
   Access data.
-- `/events/:id`, `/tickets`, and app-prefixed historical paths are compatibility
+- `/events/:id` and app-prefixed historical event paths are compatibility
   redirects only.
 
 ## Product Position
@@ -91,11 +91,8 @@ Noncustodial boundary:
 /admin/event-access            planned admin access ops
 
 /events/:id                    compatibility frontend redirect
-/tickets                       compatibility frontend redirect
 /v1/events/{eventId}/access-passes/intents canonical API path
-/v1/events/{eventId}/tickets/intents deprecated compatibility API alias
 /v1/access-passes/:id/check-in canonical API path
-/v1/tickets/:id/check-in       deprecated compatibility API alias
 ```
 
 ## Backend Ownership
@@ -181,7 +178,7 @@ event_access_passes
 event_access_requests
 ```
 
-The `0049_event_access_mutuals_canonical_names` migration renames the pre-launch ticket tables and `ticket_type_id` columns to the canonical Event Access Pass vocabulary. Historical migrations and deprecated API aliases may still contain `ticket` names for rollback/API compatibility only.
+The `0049_event_access_mutuals_canonical_names` migration renames the pre-launch ticket tables and `ticket_type_id` columns to the canonical Event Access Pass vocabulary. Historical migrations and rollback files may still contain `ticket` names for audit and reversibility only.
 
 ## Paid Event Access Flow
 

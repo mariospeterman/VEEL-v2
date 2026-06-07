@@ -125,7 +125,6 @@ export async function registerActivityRoutes(
   };
 
   app.get("/v1/activity/access-passes", listAccessPasses);
-  app.get("/v1/activity/tickets", listAccessPasses);
 }
 
 type ActivityAccessResult =

@@ -1168,66 +1168,6 @@ export interface paths {
         patch: operations["updateEvent"];
         trace?: never;
     };
-    "/v1/events/{eventId}/tickets/intents": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create ticket payment or approval intent
-         * @deprecated
-         */
-        post: operations["createTicketIntent"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/events/{eventId}/tickets/requests": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Request creator approval for a private event ticket
-         * @deprecated
-         */
-        post: operations["requestPrivateEventTicket"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/tickets/{ticketId}/check-in": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Check in an event ticket by QR/token
-         * @deprecated
-         */
-        post: operations["checkInTicket"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/events/{eventId}/access-passes/intents": {
         parameters: {
             query?: never;
@@ -1424,26 +1364,6 @@ export interface paths {
         };
         /** Backend-observed wallet transaction activity */
         get: operations["getWalletTransactionActivity"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/activity/tickets": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Ticket ownership and event activity
-         * @deprecated
-         */
-        get: operations["getTicketActivity"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1920,26 +1840,6 @@ export interface paths {
         };
         /** Admin event queue and health */
         get: operations["listAdminEvents"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/admin/tickets": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Admin ticket entitlement and check-in list
-         * @deprecated
-         */
-        get: operations["listAdminTickets"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3348,21 +3248,6 @@ export interface components {
             items: components["schemas"]["AccessPass"][];
             nextCursor?: string | null;
         };
-        CreateTicketIntentRequest: {
-            /** Format: uuid */
-            ticketTypeId: string;
-        };
-        TicketIntent: {
-            /** @enum {string} */
-            state: "free_granted" | "approval_required" | "payment_required";
-            paymentIntent?: components["schemas"]["PaymentIntent"];
-            ticket?: components["schemas"]["Ticket"];
-        };
-        CreateTicketRequestRequest: {
-            /** Format: uuid */
-            ticketTypeId: string;
-            note?: string;
-        };
         TicketRequest: {
             /** Format: uuid */
             id: string;
@@ -3374,9 +3259,6 @@ export interface components {
             state: "requested" | "approved" | "rejected" | "expired";
             /** Format: date-time */
             createdAt: string;
-        };
-        CheckInTicketRequest: {
-            qrToken: string;
         };
         Ticket: {
             /** Format: uuid */
@@ -4928,24 +4810,6 @@ export interface components {
                 "application/json": components["schemas"]["AccessPassPage"];
             };
         };
-        /** @description Ticket intent */
-        TicketIntent: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["TicketIntent"];
-            };
-        };
-        /** @description Ticket request */
-        TicketRequest: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["TicketRequest"];
-            };
-        };
         /** @description Ticket */
         Ticket: {
             headers: {
@@ -5577,7 +5441,6 @@ export interface components {
         PaymentIntentId: string;
         EventId: string;
         AccessPassId: string;
-        TicketId: string;
         UserId: string;
         WalletId: string;
         ConversationId: string;
@@ -5766,21 +5629,6 @@ export interface components {
         CheckInAccessPass: {
             content: {
                 "application/json": components["schemas"]["CheckInAccessPassRequest"];
-            };
-        };
-        CreateTicketIntent: {
-            content: {
-                "application/json": components["schemas"]["CreateTicketIntentRequest"];
-            };
-        };
-        CreateTicketRequest: {
-            content: {
-                "application/json": components["schemas"]["CreateTicketRequestRequest"];
-            };
-        };
-        CheckInTicket: {
-            content: {
-                "application/json": components["schemas"]["CheckInTicketRequest"];
             };
         };
         ActivateMutuals: {
@@ -7182,57 +7030,6 @@ export interface operations {
             200: components["responses"]["Event"];
         };
     };
-    createTicketIntent: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
-                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
-            };
-            path: {
-                eventId: components["parameters"]["EventId"];
-            };
-            cookie?: never;
-        };
-        requestBody: components["requestBodies"]["CreateTicketIntent"];
-        responses: {
-            201: components["responses"]["TicketIntent"];
-        };
-    };
-    requestPrivateEventTicket: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
-                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
-            };
-            path: {
-                eventId: components["parameters"]["EventId"];
-            };
-            cookie?: never;
-        };
-        requestBody: components["requestBodies"]["CreateTicketRequest"];
-        responses: {
-            201: components["responses"]["TicketRequest"];
-        };
-    };
-    checkInTicket: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
-                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
-            };
-            path: {
-                ticketId: components["parameters"]["TicketId"];
-            };
-            cookie?: never;
-        };
-        requestBody: components["requestBodies"]["CheckInTicket"];
-        responses: {
-            200: components["responses"]["Ticket"];
-        };
-    };
     createAccessPassIntent: {
         parameters: {
             query?: never;
@@ -7414,20 +7211,6 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["WalletTransactionPage"];
-        };
-    };
-    getTicketActivity: {
-        parameters: {
-            query?: {
-                cursor?: components["parameters"]["Cursor"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["TicketPage"];
         };
     };
     getAccessPassActivity: {
@@ -7873,21 +7656,6 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["EventPage"];
-            403: components["responses"]["Forbidden"];
-        };
-    };
-    listAdminTickets: {
-        parameters: {
-            query?: {
-                cursor?: components["parameters"]["Cursor"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["TicketPage"];
             403: components["responses"]["Forbidden"];
         };
     };

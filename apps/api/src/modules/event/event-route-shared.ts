@@ -141,12 +141,8 @@ export function hashJson(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
-export function accessPassIntentResponse(
-  state: "free_granted",
-  responseShape: "access_pass" | "ticket",
-  ticket: Ticket
-) {
-  return responseShape === "ticket" ? { state, ticket } : { state, accessPass: toAccessPass(ticket) };
+export function accessPassIntentResponse(state: "free_granted", ticket: Ticket) {
+  return { state, accessPass: toAccessPass(ticket) };
 }
 
 export function toAccessPass(ticket: Ticket): AccessPass {

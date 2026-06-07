@@ -185,7 +185,7 @@ POST /v1/live/rooms
 GET  /v1/live/rooms/:id
 GET  /v1/live/rooms/:id/host-connection
 POST /v1/engagement/:contentId/like
-POST /v1/events/:eventId/tickets/intents
+POST /v1/events/:eventId/access-passes/intents
 ```
 
 ## Backend Acceptance Criteria

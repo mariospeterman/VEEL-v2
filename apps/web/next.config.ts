@@ -25,8 +25,6 @@ const nextConfig: NextConfig = {
       { source: "/app/studio", destination: "/studio", permanent: false },
       { source: "/app/settings", destination: "/settings", permanent: false },
       { source: "/app/assistant", destination: "/assistant", permanent: false },
-      { source: "/tickets", destination: "/passes", permanent: false },
-      { source: "/tickets/:ticketId", destination: "/passes", permanent: false },
       { source: "/events/:eventId", destination: "/event-access/:eventId", permanent: false },
       { source: "/mutuals/activate", destination: "/mutuals/feed", permanent: false },
       { source: "/mutuals/mutuals", destination: "/mutuals", permanent: false }

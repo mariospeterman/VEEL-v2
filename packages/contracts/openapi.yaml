@@ -938,45 +938,6 @@ paths:
         $ref: "#/components/requestBodies/UpdateEvent"
       responses:
         "200": { $ref: "#/components/responses/Event" }
-  /v1/events/{eventId}/tickets/intents:
-    post:
-      operationId: createTicketIntent
-      tags: [Events]
-      deprecated: true
-      summary: Create ticket payment or approval intent
-      parameters:
-        - $ref: "#/components/parameters/EventId"
-        - $ref: "#/components/parameters/RequiredIdempotencyKey"
-      requestBody:
-        $ref: "#/components/requestBodies/CreateTicketIntent"
-      responses:
-        "201": { $ref: "#/components/responses/TicketIntent" }
-  /v1/events/{eventId}/tickets/requests:
-    post:
-      operationId: requestPrivateEventTicket
-      tags: [Events]
-      deprecated: true
-      summary: Request creator approval for a private event ticket
-      parameters:
-        - $ref: "#/components/parameters/EventId"
-        - $ref: "#/components/parameters/RequiredIdempotencyKey"
-      requestBody:
-        $ref: "#/components/requestBodies/CreateTicketRequest"
-      responses:
-        "201": { $ref: "#/components/responses/TicketRequest" }
-  /v1/tickets/{ticketId}/check-in:
-    post:
-      operationId: checkInTicket
-      tags: [Access Passes]
-      deprecated: true
-      summary: Check in an event ticket by QR/token
-      parameters:
-        - $ref: "#/components/parameters/TicketId"
-        - $ref: "#/components/parameters/RequiredIdempotencyKey"
-      requestBody:
-        $ref: "#/components/requestBodies/CheckInTicket"
-      responses:
-        "200": { $ref: "#/components/responses/Ticket" }
   /v1/events/{eventId}/access-passes/intents:
     post:
       operationId: createAccessPassIntent
@@ -1101,16 +1062,6 @@ paths:
         - $ref: "#/components/parameters/Cursor"
       responses:
         "200": { $ref: "#/components/responses/WalletTransactionPage" }
-  /v1/activity/tickets:
-    get:
-      operationId: getTicketActivity
-      tags: [Activity]
-      deprecated: true
-      summary: Ticket ownership and event activity
-      parameters:
-        - $ref: "#/components/parameters/Cursor"
-      responses:
-        "200": { $ref: "#/components/responses/TicketPage" }
   /v1/activity/access-passes:
     get:
       operationId: getAccessPassActivity
@@ -1417,17 +1368,6 @@ paths:
         - $ref: "#/components/parameters/Cursor"
       responses:
         "200": { $ref: "#/components/responses/EventPage" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-  /v1/admin/tickets:
-    get:
-      operationId: listAdminTickets
-      tags: [Admin]
-      deprecated: true
-      summary: Admin ticket entitlement and check-in list
-      parameters:
-        - $ref: "#/components/parameters/Cursor"
-      responses:
-        "200": { $ref: "#/components/responses/TicketPage" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /v1/admin/event-access-passes:
     get:
@@ -1749,7 +1689,6 @@ components:
     PaymentIntentId: { name: paymentIntentId, in: path, required: true, schema: { type: string, format: uuid } }
     EventId: { name: eventId, in: path, required: true, schema: { type: string, format: uuid } }
     AccessPassId: { name: accessPassId, in: path, required: true, schema: { type: string, format: uuid } }
-    TicketId: { name: ticketId, in: path, required: true, schema: { type: string, format: uuid } }
     UserId: { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
     WalletId: { name: walletId, in: path, required: true, schema: { type: string, format: uuid } }
     ConversationId: { name: conversationId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1815,9 +1754,6 @@ components:
     CreateAccessPassIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateAccessPassIntentRequest" } } } }
     CreateAccessPassRequest: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateAccessPassRequestRequest" } } } }
     CheckInAccessPass: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CheckInAccessPassRequest" } } } }
-    CreateTicketIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateTicketIntentRequest" } } } }
-    CreateTicketRequest: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateTicketRequestRequest" } } } }
-    CheckInTicket: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CheckInTicketRequest" } } } }
     ActivateMutuals: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ActivateMutualsRequest" } } } }
     UpdateMutualsPreferences: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateMutualsPreferencesRequest" } } } }
     MutualsInterest: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/MutualsInterestRequest" } } } }
@@ -1914,8 +1850,6 @@ components:
     AccessPassRequest: { description: Event Access Pass request, content: { application/json: { schema: { $ref: "#/components/schemas/AccessPassRequest" } } } }
     AccessPass: { description: Event Access Pass, content: { application/json: { schema: { $ref: "#/components/schemas/AccessPass" } } } }
     AccessPassPage: { description: Event Access Passes, content: { application/json: { schema: { $ref: "#/components/schemas/AccessPassPage" } } } }
-    TicketIntent: { description: Ticket intent, content: { application/json: { schema: { $ref: "#/components/schemas/TicketIntent" } } } }
-    TicketRequest: { description: Ticket request, content: { application/json: { schema: { $ref: "#/components/schemas/TicketRequest" } } } }
     Ticket: { description: Ticket, content: { application/json: { schema: { $ref: "#/components/schemas/Ticket" } } } }
     TicketPage: { description: Tickets, content: { application/json: { schema: { $ref: "#/components/schemas/TicketPage" } } } }
     MutualsProfile: { description: Mutuals profile, content: { application/json: { schema: { $ref: "#/components/schemas/MutualsProfile" } } } }
@@ -2987,24 +2921,6 @@ components:
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/AccessPass" } }
         nextCursor: { type: string, nullable: true }
-    CreateTicketIntentRequest:
-      type: object
-      required: [ticketTypeId]
-      properties:
-        ticketTypeId: { type: string, format: uuid }
-    TicketIntent:
-      type: object
-      required: [state]
-      properties:
-        state: { type: string, enum: [free_granted, approval_required, payment_required] }
-        paymentIntent: { $ref: "#/components/schemas/PaymentIntent" }
-        ticket: { $ref: "#/components/schemas/Ticket" }
-    CreateTicketRequestRequest:
-      type: object
-      required: [ticketTypeId]
-      properties:
-        ticketTypeId: { type: string, format: uuid }
-        note: { type: string, maxLength: 500 }
     TicketRequest:
       type: object
       required: [id, eventId, ticketTypeId, state, createdAt]
@@ -3014,11 +2930,6 @@ components:
         ticketTypeId: { type: string, format: uuid }
         state: { type: string, enum: [requested, approved, rejected, expired] }
         createdAt: { type: string, format: date-time }
-    CheckInTicketRequest:
-      type: object
-      required: [qrToken]
-      properties:
-        qrToken: { type: string }
     Ticket:
       type: object
       required: [id, eventId, ticketTypeId, holderUserId, state, qrToken, createdAt]

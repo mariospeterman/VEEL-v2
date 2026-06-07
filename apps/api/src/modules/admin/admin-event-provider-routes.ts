@@ -14,31 +14,21 @@ export function registerAdminEventProviderRoutes(
     return reply.code(200).send(await options.adminRepository.listEvents(adminListInput(query)));
   });
 
-  const listEventAccessPasses = async (
-    request: FastifyRequest,
-    reply: FastifyReply,
-    responseShape: "access_pass" | "ticket"
-  ) => {
+  const listEventAccessPasses = async (request: FastifyRequest, reply: FastifyReply) => {
     const allowed = await requireAdminAccess(request, reply, options);
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
     const page = await options.adminRepository.listTickets(adminListInput(query));
-    const response =
-      responseShape === "ticket"
-        ? page
-        : {
-            items: page.items.map(toAccessPass),
-            nextCursor: page.nextCursor
-          };
+    const response = {
+      items: page.items.map(toAccessPass),
+      nextCursor: page.nextCursor
+    };
 
     return reply.code(200).send(response);
   };
 
-  app.get("/v1/admin/event-access-passes", (request, reply) =>
-    listEventAccessPasses(request, reply, "access_pass")
-  );
-  app.get("/v1/admin/tickets", (request, reply) => listEventAccessPasses(request, reply, "ticket"));
+  app.get("/v1/admin/event-access-passes", listEventAccessPasses);
 
   app.get("/v1/admin/live/rooms", async (request, reply) => {
     const allowed = await requireAdminAccess(request, reply, options);

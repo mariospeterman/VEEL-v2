@@ -11,11 +11,8 @@ import {
 import { EventRepositoryConfigurationError } from "./event-repository.js";
 import type {
   CheckInAccessPassRequest,
-  CheckInTicketRequest,
   CreateAccessPassIntentRequest,
-  CreateAccessPassRequestRequest,
-  CreateTicketIntentRequest,
-  CreateTicketRequestRequest
+  CreateAccessPassRequestRequest
 } from "./types.js";
 import {
   accessPassIntentResponse,
@@ -33,8 +30,8 @@ import {
 
 const paymentIntentTtlMs = 15 * 60 * 1000;
 
-type AccessPassIntentBody = Partial<CreateAccessPassIntentRequest & CreateTicketIntentRequest>;
-type AccessPassRequestBody = Partial<CreateAccessPassRequestRequest & CreateTicketRequestRequest>;
+type AccessPassIntentBody = Partial<CreateAccessPassIntentRequest>;
+type AccessPassRequestBody = Partial<CreateAccessPassRequestRequest>;
 
 export async function registerEventAccessPassRoutes(
   app: FastifyInstance,
@@ -42,8 +39,7 @@ export async function registerEventAccessPassRoutes(
 ): Promise<void> {
   const createAccessPassIntent = async (
     request: FastifyRequest,
-    reply: FastifyReply,
-    responseShape: "access_pass" | "ticket"
+    reply: FastifyReply
   ) => {
     const access = await verifyEventAccess(request, options);
 
@@ -80,7 +76,7 @@ export async function registerEventAccessPassRoutes(
       if (offer.alreadyIssuedTicket) {
         return reply
           .code(201)
-          .send(accessPassIntentResponse("free_granted", responseShape, offer.alreadyIssuedTicket));
+          .send(accessPassIntentResponse("free_granted", offer.alreadyIssuedTicket));
       }
 
       if (offer.event.accessRule === "private_apply") {
@@ -98,7 +94,7 @@ export async function registerEventAccessPassRoutes(
           return reply.code(409).send(conflictResponse("Access Pass inventory is no longer available"));
         }
 
-        return reply.code(201).send(accessPassIntentResponse("free_granted", responseShape, ticket));
+        return reply.code(201).send(accessPassIntentResponse("free_granted", ticket));
       }
 
       if (!app.config.PAYMENT_PLATFORM_TREASURY_WALLET) {
@@ -176,8 +172,7 @@ export async function registerEventAccessPassRoutes(
 
   const requestAccessPass = async (
     request: FastifyRequest,
-    reply: FastifyReply,
-    responseShape: "access_pass" | "ticket"
+    reply: FastifyReply
   ) => {
     const access = await verifyEventAccess(request, options);
 
@@ -226,9 +221,7 @@ export async function registerEventAccessPassRoutes(
         return reply.code(404).send(notFoundResponse("Private Access Pass offer was not found"));
       }
 
-      return reply
-        .code(201)
-        .send(responseShape === "ticket" ? ticketRequest : toAccessPassRequest(ticketRequest));
+      return reply.code(201).send(toAccessPassRequest(ticketRequest));
     } catch (error) {
       if (error instanceof EventRepositoryConfigurationError) {
         request.log.warn({ error }, "Access Pass request failed");
@@ -241,8 +234,7 @@ export async function registerEventAccessPassRoutes(
 
   const checkInAccessPass = async (
     request: FastifyRequest,
-    reply: FastifyReply,
-    responseShape: "access_pass" | "ticket"
+    reply: FastifyReply
   ) => {
     const access = await verifyEventAccess(request, options);
 
@@ -254,14 +246,14 @@ export async function registerEventAccessPassRoutes(
       return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
     }
 
-    const body = request.body as Partial<CheckInAccessPassRequest & CheckInTicketRequest> | undefined;
+    const body = request.body as Partial<CheckInAccessPassRequest> | undefined;
 
     if (!body?.qrToken) {
       return reply.code(400).send(validationResponse("qrToken is required"));
     }
 
-    const params = request.params as { accessPassId?: string; ticketId?: string };
-    const accessPassId = params.accessPassId ?? params.ticketId ?? "";
+    const params = request.params as { accessPassId?: string };
+    const accessPassId = params.accessPassId ?? "";
 
     try {
       const ticket = await options.eventRepository.checkInTicket({
@@ -274,7 +266,7 @@ export async function registerEventAccessPassRoutes(
         return reply.code(404).send(notFoundResponse("Access Pass was not found"));
       }
 
-      return reply.code(200).send(responseShape === "ticket" ? ticket : toAccessPass(ticket));
+      return reply.code(200).send(toAccessPass(ticket));
     } catch (error) {
       if (error instanceof EventRepositoryConfigurationError) {
         request.log.warn({ error }, "Access Pass check-in failed");
@@ -285,24 +277,11 @@ export async function registerEventAccessPassRoutes(
     }
   };
 
-  app.post("/v1/events/:eventId/access-passes/intents", (request, reply) =>
-    createAccessPassIntent(request, reply, "access_pass")
-  );
-  app.post("/v1/events/:eventId/tickets/intents", (request, reply) =>
-    createAccessPassIntent(request, reply, "ticket")
-  );
-  app.post("/v1/events/:eventId/access-passes/requests", (request, reply) =>
-    requestAccessPass(request, reply, "access_pass")
-  );
-  app.post("/v1/events/:eventId/tickets/requests", (request, reply) =>
-    requestAccessPass(request, reply, "ticket")
-  );
-  app.post("/v1/access-passes/:accessPassId/check-in", (request, reply) =>
-    checkInAccessPass(request, reply, "access_pass")
-  );
-  app.post("/v1/tickets/:ticketId/check-in", (request, reply) => checkInAccessPass(request, reply, "ticket"));
+  app.post("/v1/events/:eventId/access-passes/intents", createAccessPassIntent);
+  app.post("/v1/events/:eventId/access-passes/requests", requestAccessPass);
+  app.post("/v1/access-passes/:accessPassId/check-in", checkInAccessPass);
 }
 
 function getAccessPassTypeId(body: AccessPassIntentBody | AccessPassRequestBody | undefined): string | null {
-  return body?.accessPassTypeId ?? body?.ticketTypeId ?? null;
+  return body?.accessPassTypeId ?? null;
 }
