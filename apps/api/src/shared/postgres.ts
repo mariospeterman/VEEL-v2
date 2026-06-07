@@ -1,6 +1,7 @@
 import postgres from "postgres";
 
 export type PostgresSql = postgres.Sql;
+export type PostgresTransaction = postgres.TransactionSql;
 
 export class PostgresConfigurationError extends Error {
   constructor() {
@@ -32,4 +33,12 @@ export function resolvePostgresClient(database: string | PostgresSql): {
     sql: database,
     ownsClient: false
   };
+}
+
+export async function withPostgresTransaction<T>(
+  sql: PostgresSql,
+  work: (transaction: PostgresTransaction) => Promise<T>
+): Promise<T> {
+  const result = await sql.begin((transaction) => work(transaction));
+  return result as T;
 }

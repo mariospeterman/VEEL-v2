@@ -1,4 +1,5 @@
 import type postgres from "postgres";
+import { withPostgresTransaction } from "../../shared/postgres.js";
 import type { RecordPaymentSubmissionInput, StoredPaymentIntent } from "./types.js";
 import { grantContentUnlockEntitlement, grantLivePassEntitlement } from "./payment-entitlement-settlement.js";
 import { grantEventAccessPassEntitlement } from "./payment-event-access-pass-settlement.js";
@@ -10,7 +11,7 @@ export async function recordPaymentSubmission(
   sql: postgres.Sql,
   input: RecordPaymentSubmissionInput
 ): Promise<void> {
-  await sql.begin(async (transaction) => {
+  await withPostgresTransaction(sql, async (transaction) => {
     const nextState = input.settlement.confirmed ? "confirmed" : "submitted";
     const rows = await transaction<{
       payment_intent_id: string;
@@ -47,9 +48,9 @@ export async function recordPaymentSubmission(
               pi.amount_minor,
               pi.currency
           `;
-  
+
     const updatedIntent = rows[0];
-  
+
     if (updatedIntent) {
       await recordWalletTransaction(transaction, {
         userId: updatedIntent.user_id,
@@ -60,7 +61,7 @@ export async function recordPaymentSubmission(
         currency: updatedIntent.currency
       });
     }
-  
+
     if (input.settlement.confirmed && updatedIntent?.product_type === "content_unlock") {
       await grantContentUnlockEntitlement(transaction, {
         userId: updatedIntent.user_id,
@@ -68,7 +69,7 @@ export async function recordPaymentSubmission(
         paymentIntentId: updatedIntent.payment_intent_id
       });
     }
-  
+
     if (
       input.settlement.confirmed &&
       (updatedIntent?.product_type === "tip" || updatedIntent?.product_type === "support")
@@ -88,21 +89,21 @@ export async function recordPaymentSubmission(
         platformFeeMinor: ledger.platformFeeMinor
       });
     }
-  
+
     if (input.settlement.confirmed && updatedIntent?.product_type === "live_pass") {
       await grantLivePassEntitlement(transaction, {
         userId: updatedIntent.user_id,
         paymentIntentId: updatedIntent.payment_intent_id
       });
     }
-  
+
     if (input.settlement.confirmed && updatedIntent?.product_type === "paid_message") {
       await deliverPaidMessage(transaction, {
         userId: updatedIntent.user_id,
         paymentIntentId: updatedIntent.payment_intent_id
       });
     }
-  
+
     if (
       input.settlement.confirmed &&
       (updatedIntent?.product_type === "event_access_pass" || updatedIntent?.product_type === "event_ticket")
@@ -112,7 +113,7 @@ export async function recordPaymentSubmission(
         paymentIntentId: updatedIntent.payment_intent_id
       });
     }
-  
+
     await insertSettlementAttempt(transaction, input);
   });
 }

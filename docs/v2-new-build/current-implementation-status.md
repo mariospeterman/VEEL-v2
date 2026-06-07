@@ -38,7 +38,7 @@ Non-goals:
 - Age provider waterfall boundary and normalized webhook/test paths, with unavailable providers failing closed when not configured.
 - External wallet challenge/link/revoke/status flow with backend signature verification and replay/expiry checks; onramp provider boundary fails closed unless configured.
 - Home feed, content read model, media access projection, Bunny/Livepeer provider status boundaries, and provider webhook normalization tests.
-- Native SOL devnet payment intent, Solana Pay transaction request URL, submitted-signature capture, backend settlement verification, and content unlock entitlement grant after confirmed settlement.
+- Native SOL devnet payment intent, Solana Pay transaction request URL, submitted-signature capture, backend settlement verification, shared transaction boundary for payment submission settlement, and content unlock entitlement grant after confirmed settlement.
 - Support/tip, referral attribution/commission projection, activity/payment/wallet transaction projections, and creator dashboard/onboarding projections that avoid balance/withdrawal language.
 - Live rooms/pass/chat projections, Event Access Pass projections, Mutuals projections, messages/paid-message projections, notifications/push/service-worker boundaries, organization/KYB/admin support policy surfaces, and admin provider/payment/compliance projections.
 - Auto-renewing subscription architecture is modeled through backend-owned delegated authorization, renewal worker tick, collection/grace/revocation states, and fail-closed provider boundaries.
@@ -58,7 +58,7 @@ Non-goals:
 
 ## P0 Before Broad Expansion
 
-1. Add a shared transaction helper on top of the shared Postgres client, then migrate money/access/admin/safety mutations onto explicit transactions slice by slice.
+1. Continue migrating money/access/admin/safety mutations onto the shared Postgres transaction helper slice by slice; payment submission settlement is already on the shared boundary.
 2. Add shared idempotency, audit, route-policy/RBAC, route-specific rate limit, and test factory helpers, then migrate money/access/admin/safety mutations onto them slice by slice.
 3. Remove any unsafe media auto-approval path: provider playable/ready state must not equal moderation approval or publish eligibility.
 4. Replace demo-shaped `/enter` with real Supabase auth/session/onboarding and route guards.
