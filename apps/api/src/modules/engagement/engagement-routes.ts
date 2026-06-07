@@ -7,6 +7,7 @@ import {
   isShareTargetType,
   repositoryReply,
   requireIdempotencyKey,
+  requiredIdempotencyKey,
   toggleContentAction,
   type RegisterEngagementRoutesOptions,
   validationResponse,
@@ -63,8 +64,8 @@ export async function registerEngagementRoutes(
     const access = await verifyEngagementAccess(request, options);
     if (!access.ok) return reply.code(access.statusCode).send(access.body);
 
-    const idempotencyKey = request.headers["idempotency-key"];
-    if (typeof idempotencyKey !== "string" || idempotencyKey.length === 0) {
+    const idempotencyKey = requiredIdempotencyKey(request);
+    if (!idempotencyKey) {
       return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
     }
 
@@ -80,8 +81,8 @@ export async function registerEngagementRoutes(
   app.post("/v1/feed/hide-creator", async (request, reply) => {
     const access = await verifyEngagementAccess(request, options);
     if (!access.ok) return reply.code(access.statusCode).send(access.body);
-    const idempotencyKey = request.headers["idempotency-key"];
-    if (typeof idempotencyKey !== "string" || idempotencyKey.length === 0) {
+    const idempotencyKey = requiredIdempotencyKey(request);
+    if (!idempotencyKey) {
       return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
     }
 
@@ -101,8 +102,8 @@ export async function registerEngagementRoutes(
   app.post("/v1/feed/hide-topic", async (request, reply) => {
     const access = await verifyEngagementAccess(request, options);
     if (!access.ok) return reply.code(access.statusCode).send(access.body);
-    const idempotencyKey = request.headers["idempotency-key"];
-    if (typeof idempotencyKey !== "string" || idempotencyKey.length === 0) {
+    const idempotencyKey = requiredIdempotencyKey(request);
+    if (!idempotencyKey) {
       return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
     }
 
@@ -150,8 +151,8 @@ export async function registerEngagementRoutes(
   app.post("/v1/engagement/:contentId/comments", async (request, reply) => {
     const access = await verifyEngagementAccess(request, options);
     if (!access.ok) return reply.code(access.statusCode).send(access.body);
-    const idempotencyKey = request.headers["idempotency-key"];
-    if (typeof idempotencyKey !== "string" || idempotencyKey.length === 0) {
+    const idempotencyKey = requiredIdempotencyKey(request);
+    if (!idempotencyKey) {
       return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
     }
     const params = request.params as { contentId?: string };
@@ -180,8 +181,8 @@ export async function registerEngagementRoutes(
   app.post("/v1/shares", async (request, reply) => {
     const access = await verifyEngagementAccess(request, options);
     if (!access.ok) return reply.code(access.statusCode).send(access.body);
-    const idempotencyKey = request.headers["idempotency-key"];
-    if (typeof idempotencyKey !== "string" || idempotencyKey.length === 0) {
+    const idempotencyKey = requiredIdempotencyKey(request);
+    if (!idempotencyKey) {
       return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
     }
     const body = request.body as Partial<CreateShareRequest>;
@@ -213,8 +214,8 @@ export async function registerEngagementRoutes(
   app.post("/v1/reports", async (request, reply) => {
     const access = await verifyEngagementAccess(request, options);
     if (!access.ok) return reply.code(access.statusCode).send(access.body);
-    const idempotencyKey = request.headers["idempotency-key"];
-    if (typeof idempotencyKey !== "string" || idempotencyKey.length === 0) {
+    const idempotencyKey = requiredIdempotencyKey(request);
+    if (!idempotencyKey) {
       return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
     }
     const body = request.body as Partial<CreateReportRequest>;
@@ -251,8 +252,8 @@ export async function registerEngagementRoutes(
   app.post("/v1/blocks/:userId", async (request, reply) => {
     const access = await verifyEngagementAccess(request, options);
     if (!access.ok) return reply.code(access.statusCode).send(access.body);
-    const idempotencyKey = request.headers["idempotency-key"];
-    if (typeof idempotencyKey !== "string" || idempotencyKey.length === 0) {
+    const idempotencyKey = requiredIdempotencyKey(request);
+    if (!idempotencyKey) {
       return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
     }
     const params = request.params as { userId?: string };

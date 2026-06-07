@@ -128,6 +128,10 @@ export function requireIdempotencyKey(
   return requireSharedIdempotencyKey(request);
 }
 
+export function requiredIdempotencyKey(request: FastifyRequest): string | null {
+  return readIdempotencyKey(request);
+}
+
 export function validationResponse(message: string) {
   return {
     code: "validation_failed",
