@@ -8,12 +8,27 @@ permissions:
   id-token: write
 
 jobs:
-  staging-plan:
+  staging-gate:
     runs-on: ubuntu-latest
     environment: staging
     steps:
       - uses: actions/checkout@v6
-      - name: Staging deployment placeholder
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Enable Corepack
         run: |
-          echo "Staging deploy becomes active after infra/deploy defines the target platform."
-          echo "Use OIDC and environment-scoped secrets only; do not add long-lived deploy keys."
+          corepack enable
+          corepack prepare pnpm@10.0.0 --activate
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build deployable apps
+        run: pnpm build
+      - name: Check database migrations
+        run: pnpm database:check
+      - name: Verify staging deploy readiness
+        env:
+          DEPLOY_ENABLED: ${{ vars.DEPLOY_ENABLED }}
+          API_HEALTH_URL: ${{ vars.API_HEALTH_URL }}
+          API_READY_URL: ${{ vars.API_READY_URL }}
+        run: pnpm deploy:check

@@ -30,7 +30,7 @@ const repositoryKeys = [
 ] as const;
 
 export function registerApiCloseHooks(app: FastifyInstance, dependencies: ApiDependencies): void {
-  if (dependencies.postgresClient) {
+  if (dependencies.postgresClient?.end) {
     app.addHook("onClose", async () => {
       await dependencies.postgresClient?.end({ timeout: 5 });
     });

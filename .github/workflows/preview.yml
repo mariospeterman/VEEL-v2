@@ -8,11 +8,20 @@ permissions:
   pull-requests: write
 
 jobs:
-  preview-plan:
+  preview-gate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Preview deployment placeholder
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Enable Corepack
         run: |
-          echo "Preview deployment is enabled after the foundation slice creates apps/web, apps/api, and infra/deploy."
-          echo "Until then, ci.yml is the executable gate."
+          corepack enable
+          corepack prepare pnpm@10.0.0 --activate
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build deployable apps
+        run: pnpm build
+      - name: Verify deploy skeleton
+        run: pnpm deploy:check

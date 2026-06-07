@@ -4,6 +4,7 @@ import sensible from "@fastify/sensible";
 import Fastify, { type FastifyInstance } from "fastify";
 import rawBody from "fastify-raw-body";
 import { createApiDependencies, type BuildApiOptions } from "./app-dependencies.js";
+import { registerApiHealthRoutes } from "./app-health.js";
 import { registerApiCloseHooks } from "./app-lifecycle.js";
 import { registerApiRoutes } from "./app-routes.js";
 import { envPlugin } from "./plugins/env.js";
@@ -49,6 +50,7 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
 
   const dependencies = createApiDependencies(app, options);
   registerApiCloseHooks(app, dependencies);
+  await registerApiHealthRoutes(app, dependencies);
   await registerApiRoutes(app, dependencies);
   await app.register(openApiPlugin);
 

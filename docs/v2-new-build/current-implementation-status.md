@@ -56,7 +56,7 @@ Non-goals:
 - Subscription renewals are architected as auto-renewing backend/worker collections, but production collection requires real provider/program configuration, authority verification, and staging evidence.
 - Media creation needs full browser upload, resumability, provider-ready plus moderation-pending separation, publish action, entitlement-aware playback, and abuse quota enforcement.
 - Admin dashboard is substantial but still needs final role matrix coverage, reason-required mutation audit expansion, and removal of any remaining compatibility aliases after migrations and clients are updated.
-- Deployment remains not production-ready while production workflow, infra skeleton, migration runner, rollback plan, health checks, observability, alerts, and provider staging smoke are incomplete.
+- Deployment has an executable skeleton with health/readiness probes, build/migration workflow gates, rollback runbook, deploy preflight, and observability runbook. It remains not production-ready until real hosting targets, artifact digest pinning, database backup confirmation, provider staging smoke, alert routing, and environment-scoped deploy variables are configured.
 
 ## P0 Before Broad Expansion
 
@@ -65,7 +65,7 @@ Non-goals:
 3. Continue Supabase onboarding beyond `/enter`: route guards, profile completion mutations, wallet handoff, and protected-shell redirects.
 4. Wire one launch-approved age/KYC provider path end to end and keep all unconfigured providers fail-closed.
 5. Harden product-specific Solana Pay checkout/access paths for content, support, live pass, Event Access, paid message, platform plan, and creator membership.
-6. Replace placeholder deployment with staged deploy/migration/rollback/health-check/observability skeleton and docs.
+6. Continue deployment hardening beyond the skeleton: artifact digest pinning, provider staging smoke, backup/snapshot verification, alert routing, and real hosting/OIDC integration.
 
 ## Required Status Discipline
 

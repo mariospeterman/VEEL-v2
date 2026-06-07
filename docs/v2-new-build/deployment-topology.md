@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: server topology, cost, environments, scaling
-Last updated: 2026-06-03
+Last updated: 2026-06-07
 Source of truth: yes
 
 Owns:
@@ -184,6 +184,19 @@ flowchart LR
   Smoke --> Prod["Production deploy"]
   Prod --> Monitor["Canary monitoring + rollback"]
 ```
+
+## Executable Skeleton
+
+The repository now includes an executable deployment skeleton:
+
+- `infra/deploy/README.md` defines launch services, required runtime settings, deploy gate variables, and hard guardrails.
+- `infra/deploy/rollback-checklist.md` defines rollback triggers and steps without creating competing money, access, compliance, or accounting truth.
+- `infra/observability/README.md` defines required launch signals, redaction rules, dashboards, and alert defaults.
+- `GET /healthz` is the unauthenticated API liveness probe.
+- `GET /readyz` is the unauthenticated API readiness probe and returns `503` when Postgres is missing or unreachable.
+- `pnpm deploy:check` validates the skeleton while deploy is disabled, and checks `API_HEALTH_URL` plus `API_READY_URL` when `DEPLOY_ENABLED=true`.
+
+Staging and production workflows remain gates until a real hosting platform is configured through GitHub environment variables. They must not become traffic-shipping workflows until artifact digest pinning, database backup confirmation, provider staging smoke, health checks, and rollback instructions are all present.
 
 ## Data And Backup Requirements
 

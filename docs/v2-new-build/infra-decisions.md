@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: queues, search, analytics, observability, notifications, feature flags, compliance research constraints
-Last updated: 2026-06-03
+Last updated: 2026-06-07
 Source of truth: yes for v2 infrastructure defaults
 
 Owns:
@@ -59,6 +59,13 @@ Launch repository must keep these workflows:
 ```
 
 Current scaffold workflows run docs/contract/schema checks and security scaffolding. They become full production gates when the foundation slice creates real app, API, worker, migration, and E2E tooling.
+
+Current executable state:
+
+- `preview` installs dependencies, builds deployable apps, and verifies the deploy skeleton.
+- `deploy-staging` and `deploy-production` install dependencies, build deployable apps, run database migration checks, and run `pnpm deploy:check`.
+- `DEPLOY_ENABLED=true` must be set only in a GitHub environment after real hosting targets exist.
+- `API_HEALTH_URL` and `API_READY_URL` are required when deploy checks are active and must point at `/healthz` and `/readyz`.
 
 Required branch protection for `main`:
 

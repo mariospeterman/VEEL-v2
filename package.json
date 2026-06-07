@@ -6,6 +6,8 @@
   "scripts": {
     "docs:check": "node scripts/check-docs.mjs",
     "scaffold:check": "pnpm docs:check",
+    "build": "pnpm -r --if-present build",
+    "deploy:check": "node scripts/check-deploy-readiness.mjs",
     "contracts:generate": "pnpm --filter @veel/contracts generate",
     "database:check": "pnpm --filter @veel/database check",
     "lint": "eslint .",

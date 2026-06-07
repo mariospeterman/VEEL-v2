@@ -13,6 +13,7 @@ servers:
 security:
   - bearerAuth: []
 tags:
+  - name: Health
   - name: Auth
   - name: Me
   - name: Age
@@ -36,6 +37,23 @@ tags:
   - name: Admin
   - name: Webhooks
 paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      tags: [Health]
+      security: []
+      summary: API liveness probe
+      responses:
+        "200": { $ref: "#/components/responses/HealthStatus" }
+  /readyz:
+    get:
+      operationId: getReadiness
+      tags: [Health]
+      security: []
+      summary: API deploy readiness probe
+      responses:
+        "200": { $ref: "#/components/responses/HealthStatus" }
+        "503": { $ref: "#/components/responses/HealthStatus" }
   /v1/session:
     get:
       operationId: getSession
@@ -1907,6 +1925,7 @@ components:
                 additionalProperties: true
   responses:
     Accepted: { description: Accepted }
+    HealthStatus: { description: Sanitized service health status, content: { application/json: { schema: { $ref: "#/components/schemas/HealthStatus" } } } }
     WebhookReceipt: { description: Webhook accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookReceipt" } } } }
     Unauthorized: { description: Unauthorized, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     Forbidden: { description: Forbidden, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
@@ -2034,6 +2053,24 @@ components:
     AdminFeatureFlagPage: { description: Admin feature flags, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminFeatureFlag" } } } } } } }
     AuditEventPage: { description: Audit events, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AuditEvent" } }, nextCursor: { type: string, nullable: true } } } } } }
   schemas:
+    HealthStatus:
+      type: object
+      required: [service, status, environment, version, commit, timestamp, checks]
+      properties:
+        service: { type: string }
+        status: { type: string, enum: [ok, degraded, unavailable] }
+        environment: { type: string }
+        version: { type: string }
+        commit: { type: string }
+        timestamp: { type: string, format: date-time }
+        checks:
+          type: object
+          additionalProperties:
+            type: object
+            required: [status]
+            properties:
+              status: { type: string, enum: [ok, degraded, unavailable, not_configured] }
+              message: { type: string }
     ErrorCode:
       type: string
       enum: [unauthorized, forbidden, not_found, validation_failed, rate_limited, conflict, idempotency_conflict, provider_unavailable, payment_not_confirmed, webhook_signature_invalid]
