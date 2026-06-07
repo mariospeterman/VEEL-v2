@@ -1,61 +1,15 @@
-import { createHash, randomUUID } from "node:crypto";
-import { encryptSecret, parseAes256GcmKey } from "@veel/config";
+import { parseAes256GcmKey } from "@veel/config";
 import postgres from "postgres";
-import type {
-  Notification,
-  NotificationDevice,
-  NotificationPage,
-  NotificationPreferences,
-  NotificationRepository
-} from "./types.js";
+import { createNotificationDeviceRepositoryMethods } from "./notification-device-repository.js";
+import { NotificationRepositoryConfigurationError } from "./notification-errors.js";
+import { toNotification, toNotificationPage, toPreferences } from "./notification-repository-mappers.js";
+import type { NotificationRow, PreferenceRow } from "./notification-repository-rows.js";
+import type { NotificationRepository } from "./types.js";
 
-export class NotificationRepositoryConfigurationError extends Error {
-  constructor() {
-    super("DATABASE_URL_NOT_CONFIGURED");
-    this.name = "NotificationRepositoryConfigurationError";
-  }
-}
+export { NotificationRepositoryConfigurationError } from "./notification-errors.js";
 
 interface NotificationRepositoryOptions {
   encryptionKey?: string | undefined;
-}
-
-interface NotificationRow {
-  id: string;
-  kind: Notification["kind"];
-  title: string;
-  body: string | null;
-  action_url: string | null;
-  state: Notification["state"];
-  related_resource_type: NonNullable<Notification["relatedResource"]>["type"] | null;
-  related_resource_id: string | null;
-  created_at: Date;
-  read_at: Date | null;
-}
-
-interface PreferenceRow {
-  messages_enabled: boolean;
-  engagement_enabled: boolean;
-  live_enabled: boolean;
-  payments_enabled: boolean;
-  memberships_enabled: boolean;
-  event_access_enabled: boolean;
-  mutuals_enabled: boolean;
-  safety_enabled: boolean;
-  wallet_enabled: boolean;
-  creator_setup_enabled: boolean;
-  studio_setup_enabled: boolean;
-  push_enabled: boolean;
-  updated_at: Date;
-}
-
-interface DeviceRow {
-  id: string;
-  provider: NotificationDevice["provider"];
-  platform: NotificationDevice["platform"];
-  state: NotificationDevice["state"];
-  created_at: Date;
-  last_seen_at: Date | null;
 }
 
 export function createPostgresNotificationRepository(
@@ -63,26 +17,7 @@ export function createPostgresNotificationRepository(
   options: NotificationRepositoryOptions = {}
 ): NotificationRepository {
   if (!databaseUrl) {
-    return {
-      async listNotifications() {
-        throw new NotificationRepositoryConfigurationError();
-      },
-      async markRead() {
-        throw new NotificationRepositoryConfigurationError();
-      },
-      async getPreferences() {
-        throw new NotificationRepositoryConfigurationError();
-      },
-      async updatePreferences() {
-        throw new NotificationRepositoryConfigurationError();
-      },
-      async registerDevice() {
-        throw new NotificationRepositoryConfigurationError();
-      },
-      async deleteDevice() {
-        throw new NotificationRepositoryConfigurationError();
-      }
-    };
+    return createUnavailableNotificationRepository();
   }
 
   const sql = postgres(databaseUrl, {
@@ -272,177 +207,32 @@ export function createPostgresNotificationRepository(
 
       return toPreferences(rows[0]);
     },
-    async registerDevice(input) {
-      const endpointHash = sha256(input.body.endpoint);
-      const p256dhHash = sha256(input.body.p256dh);
-      const authHash = sha256(input.body.auth);
-      const encryptedEndpoint = encryptionKey ? encryptSecret(input.body.endpoint, encryptionKey) : null;
-      const encryptedP256dh = encryptionKey ? encryptSecret(input.body.p256dh, encryptionKey) : null;
-      const encryptedAuth = encryptionKey ? encryptSecret(input.body.auth, encryptionKey) : null;
-      const rows = await sql<DeviceRow[]>`
-        with target_user as (
-          select id
-          from users
-          where supabase_user_id = ${input.supabaseUserId}
-          limit 1
-        ),
-        upserted as (
-          insert into notification_devices (
-            id,
-            user_id,
-            provider,
-            platform,
-            endpoint_hash,
-            p256dh_hash,
-            auth_hash,
-            endpoint_ciphertext,
-            endpoint_iv,
-            endpoint_tag,
-            p256dh_ciphertext,
-            p256dh_iv,
-            p256dh_tag,
-            auth_ciphertext,
-            auth_iv,
-            auth_tag,
-            user_agent,
-            state,
-            last_seen_at,
-            idempotency_key,
-            updated_at
-          )
-          select
-            ${randomUUID()},
-            target_user.id,
-            ${input.body.provider},
-            ${input.body.platform},
-            ${endpointHash},
-            ${p256dhHash},
-            ${authHash},
-            ${encryptedEndpoint?.ciphertext ?? null},
-            ${encryptedEndpoint?.iv ?? null},
-            ${encryptedEndpoint?.tag ?? null},
-            ${encryptedP256dh?.ciphertext ?? null},
-            ${encryptedP256dh?.iv ?? null},
-            ${encryptedP256dh?.tag ?? null},
-            ${encryptedAuth?.ciphertext ?? null},
-            ${encryptedAuth?.iv ?? null},
-            ${encryptedAuth?.tag ?? null},
-            ${input.body.userAgent ?? null},
-            'active',
-            now(),
-            ${input.idempotencyKey},
-            now()
-          from target_user
-          on conflict (provider, endpoint_hash) do update
-          set
-            user_id = excluded.user_id,
-            platform = excluded.platform,
-            p256dh_hash = excluded.p256dh_hash,
-            auth_hash = excluded.auth_hash,
-            endpoint_ciphertext = excluded.endpoint_ciphertext,
-            endpoint_iv = excluded.endpoint_iv,
-            endpoint_tag = excluded.endpoint_tag,
-            p256dh_ciphertext = excluded.p256dh_ciphertext,
-            p256dh_iv = excluded.p256dh_iv,
-            p256dh_tag = excluded.p256dh_tag,
-            auth_ciphertext = excluded.auth_ciphertext,
-            auth_iv = excluded.auth_iv,
-            auth_tag = excluded.auth_tag,
-            user_agent = excluded.user_agent,
-            state = 'active',
-            last_seen_at = now(),
-            updated_at = now()
-          returning id, provider, platform, state, created_at, last_seen_at
-        )
-        select * from upserted
-      `;
-
-      const row = rows[0];
-      if (!row) throw new NotificationRepositoryConfigurationError();
-      return toDevice(row);
-    },
-    async deleteDevice(input) {
-      const rows = await sql<{ id: string }[]>`
-        with target_user as (
-          select id
-          from users
-          where supabase_user_id = ${input.supabaseUserId}
-          limit 1
-        )
-        update notification_devices nd
-        set state = 'revoked', updated_at = now()
-        from target_user tu
-        where nd.id = ${input.notificationDeviceId}
-          and nd.user_id = tu.id
-        returning nd.id
-      `;
-
-      return rows.length > 0;
-    },
+    ...createNotificationDeviceRepositoryMethods(sql, encryptionKey),
     async close() {
       await sql.end({ timeout: 5 });
     }
   };
 }
 
-function sha256(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
-}
-
-function toNotificationPage(rows: NotificationRow[], limit: number): NotificationPage {
-  const pageRows = rows.slice(0, limit);
-  const extraRow = rows[limit];
-
+function createUnavailableNotificationRepository(): NotificationRepository {
   return {
-    items: pageRows.map(toNotification),
-    nextCursor: extraRow ? extraRow.created_at.toISOString() : null
-  };
-}
-
-function toNotification(row: NotificationRow): Notification {
-  return {
-    id: row.id,
-    kind: row.kind,
-    title: row.title,
-    body: row.body,
-    actionUrl: row.action_url,
-    state: row.state,
-    relatedResource: row.related_resource_type
-      ? {
-          type: row.related_resource_type,
-          id: row.related_resource_id
-        }
-      : null,
-    createdAt: row.created_at.toISOString(),
-    readAt: row.read_at?.toISOString() ?? null
-  };
-}
-
-function toPreferences(row: PreferenceRow | undefined): NotificationPreferences {
-  return {
-    messagesEnabled: row?.messages_enabled ?? true,
-    engagementEnabled: row?.engagement_enabled ?? true,
-    liveEnabled: row?.live_enabled ?? true,
-    paymentsEnabled: row?.payments_enabled ?? true,
-    membershipsEnabled: row?.memberships_enabled ?? true,
-    eventAccessEnabled: row?.event_access_enabled ?? true,
-    mutualsEnabled: row?.mutuals_enabled ?? true,
-    safetyEnabled: row?.safety_enabled ?? true,
-    walletEnabled: row?.wallet_enabled ?? true,
-    creatorSetupEnabled: row?.creator_setup_enabled ?? true,
-    studioSetupEnabled: row?.studio_setup_enabled ?? true,
-    pushEnabled: row?.push_enabled ?? false,
-    updatedAt: row?.updated_at.toISOString() ?? null
-  };
-}
-
-function toDevice(row: DeviceRow): NotificationDevice {
-  return {
-    id: row.id,
-    provider: row.provider,
-    platform: row.platform,
-    state: row.state,
-    createdAt: row.created_at.toISOString(),
-    lastSeenAt: row.last_seen_at?.toISOString() ?? null
+    async listNotifications() {
+      throw new NotificationRepositoryConfigurationError();
+    },
+    async markRead() {
+      throw new NotificationRepositoryConfigurationError();
+    },
+    async getPreferences() {
+      throw new NotificationRepositoryConfigurationError();
+    },
+    async updatePreferences() {
+      throw new NotificationRepositoryConfigurationError();
+    },
+    async registerDevice() {
+      throw new NotificationRepositoryConfigurationError();
+    },
+    async deleteDevice() {
+      throw new NotificationRepositoryConfigurationError();
+    }
   };
 }
