@@ -1,5 +1,6 @@
 import { appShellNavItems } from "@veel/ui";
 import { requireAppAccess } from "@/supabase/route-guard";
+import { CreateWorkspace } from "./create-workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,7 @@ export default async function CreatePage() {
           </div>
 
           <section className="grid gap-3">
+            <CreateWorkspace />
             {steps.map((step) => (
               <article className="rounded border border-(--line) bg-(--panel) p-4" key={step.label}>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
