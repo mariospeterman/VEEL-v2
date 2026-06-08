@@ -17,6 +17,10 @@ export type ContentUnlockIntent = components["schemas"]["ContentUnlockIntent"];
 export type CreateLivePassIntentRequest = components["schemas"]["CreateLivePassIntentRequest"];
 export type CreateAccessPassIntentRequest = components["schemas"]["CreateAccessPassIntentRequest"];
 export type AccessPassIntent = components["schemas"]["AccessPassIntent"];
+export type CreateMessageRequest = components["schemas"]["CreateMessageRequest"];
+export type CreatePaidMessageIntentRequest = components["schemas"]["CreatePaidMessageIntentRequest"];
+export type Message = components["schemas"]["Message"];
+export type PaidMessageIntent = components["schemas"]["PaidMessageIntent"];
 export type PaymentIntent = components["schemas"]["PaymentIntent"];
 export type TransactionRequest = components["schemas"]["TransactionRequest"];
 
@@ -73,6 +77,28 @@ export async function createEventAccessPassIntent(
 ): Promise<AccessPassIntent> {
   return authenticatedMutation<AccessPassIntent>(
     `/v1/events/${encodeURIComponent(eventId)}/access-passes/intents`,
+    "POST",
+    body
+  );
+}
+
+export async function createMessage(
+  conversationId: string,
+  body: CreateMessageRequest
+): Promise<Message> {
+  return authenticatedMutation<Message>(
+    `/v1/messages/conversations/${encodeURIComponent(conversationId)}/messages`,
+    "POST",
+    body
+  );
+}
+
+export async function createPaidMessageIntent(
+  conversationId: string,
+  body: CreatePaidMessageIntentRequest
+): Promise<PaidMessageIntent> {
+  return authenticatedMutation<PaidMessageIntent>(
+    `/v1/messages/conversations/${encodeURIComponent(conversationId)}/paid-message-intents`,
     "POST",
     body
   );

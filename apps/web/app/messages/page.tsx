@@ -8,6 +8,7 @@ import {
   type Message,
   type MessagePage
 } from "@/api-client";
+import { MessageComposer } from "./message-composer";
 import { requireAppAccess } from "@/supabase/route-guard";
 
 export const dynamic = "force-dynamic";
@@ -84,6 +85,7 @@ export default async function MessagesPage() {
                   <UnavailableState result={messages} title="Conversation unavailable" />
                 ) : null}
               </div>
+              <MessageComposer conversation={selectedConversation} />
             </>
           ) : conversations.ok ? (
             <div className="p-4">
