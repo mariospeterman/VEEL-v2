@@ -1,9 +1,9 @@
 import type postgres from "postgres";
-import type { ContentRepository } from "./types.js";
+import type { ContentCreationAbusePolicy, ContentRepository } from "./types.js";
 
 type ContentQuotaRepositoryMethods = Pick<
   ContentRepository,
-  "countContentDraftsCreatedSince" | "countMediaAssetsCreatedSince"
+  "countContentDraftsCreatedSince" | "countMediaAssetsCreatedSince" | "getContentCreationAbusePolicy"
 >;
 
 export function createContentQuotaRepositoryMethods(
@@ -32,6 +32,25 @@ export function createContentQuotaRepositoryMethods(
       `;
 
       return rows[0]?.count ?? 0;
+    },
+    async getContentCreationAbusePolicy() {
+      const rows = await sql<{ value: unknown }[]>`
+        select value
+        from feature_flags
+        where key = 'safety.content_creation_abuse_policy'
+          and state = 'active'
+          and category = 'safety'
+          and policy_boundary = 'software_policy_only_no_payment_access_or_social_priority'
+        limit 1
+      `;
+
+      const value = rows[0]?.value;
+
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return null;
+      }
+
+      return value as ContentCreationAbusePolicy;
     }
   };
 }

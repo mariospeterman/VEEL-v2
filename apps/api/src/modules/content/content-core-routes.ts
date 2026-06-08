@@ -13,11 +13,11 @@ import type {
 import {
   contentMediaTypes,
   contentVisibilityValues,
-  dailyContentDraftQuota,
   dailyQuotaWindowStart,
   feedModeFromQuery,
   nsfwLabels,
   quotaExceededResponse,
+  resolveContentCreationAbusePolicy,
   verifyAppReadyAccess,
   withSignedPlayback,
   type RegisterContentRoutesOptions
@@ -62,12 +62,13 @@ export async function registerContentCoreRoutes(
 
     try {
       if (options.contentRepository.countContentDraftsCreatedSince) {
+        const abusePolicy = await resolveContentCreationAbusePolicy(options.contentRepository);
         const draftCount = await options.contentRepository.countContentDraftsCreatedSince({
           supabaseUserId: access.supabaseUserId,
-          since: dailyQuotaWindowStart()
+          since: dailyQuotaWindowStart(new Date(), abusePolicy.rollingWindowHours)
         });
 
-        if (draftCount >= dailyContentDraftQuota) {
+        if (draftCount >= abusePolicy.dailyContentDraftQuota) {
           return reply
             .code(429)
             .send(quotaExceededResponse("Daily content draft quota has been reached"));

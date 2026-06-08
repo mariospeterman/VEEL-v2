@@ -52,6 +52,9 @@ function createUnavailableContentRepository(): ContentRepository {
     async countMediaAssetsCreatedSince() {
       throw new ContentRepositoryConfigurationError();
     },
+    async getContentCreationAbusePolicy() {
+      throw new ContentRepositoryConfigurationError();
+    },
     async findContentDetail() {
       throw new ContentRepositoryConfigurationError();
     },

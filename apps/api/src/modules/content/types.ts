@@ -23,6 +23,7 @@ export interface ContentRepository {
   createMediaAsset(input: CreateMediaAssetInput): Promise<{ id: string } | void>;
   countContentDraftsCreatedSince?(input: CountContentQuotaInput): Promise<number>;
   countMediaAssetsCreatedSince?(input: CountContentQuotaInput): Promise<number>;
+  getContentCreationAbusePolicy?(): Promise<ContentCreationAbusePolicy | null>;
   findContentDetail(input: FindContentDetailInput): Promise<ContentItem | null>;
   findContentUnlockOffer(input: FindContentUnlockOfferInput): Promise<ContentUnlockOffer | null>;
   findOwnedMediaAssetForSync?(input: FindOwnedMediaAssetForSyncInput): Promise<OwnedMediaAssetForSync | null>;
@@ -47,6 +48,12 @@ export interface CreateContentDraftInput {
 export interface CountContentQuotaInput {
   supabaseUserId: string;
   since: Date;
+}
+
+export interface ContentCreationAbusePolicy {
+  dailyContentDraftQuota?: number | null;
+  dailyMediaUploadQuota?: number | null;
+  rollingWindowHours?: number | null;
 }
 
 export interface UpdateOwnedContentInput {

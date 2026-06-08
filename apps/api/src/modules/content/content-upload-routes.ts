@@ -6,9 +6,9 @@ import {
 } from "./media-upload-adapter.js";
 import type { CreateUploadRequest } from "./types.js";
 import {
-  dailyMediaUploadQuota,
   dailyQuotaWindowStart,
   quotaExceededResponse,
+  resolveContentCreationAbusePolicy,
   verifyAppReadyAccess,
   videoMimeTypes,
   type RegisterContentRoutesOptions
@@ -63,12 +63,13 @@ export async function registerContentUploadRoutes(
       }
 
       if (options.contentRepository.countMediaAssetsCreatedSince) {
+        const abusePolicy = await resolveContentCreationAbusePolicy(options.contentRepository);
         const uploadCount = await options.contentRepository.countMediaAssetsCreatedSince({
           supabaseUserId: access.supabaseUserId,
-          since: dailyQuotaWindowStart()
+          since: dailyQuotaWindowStart(new Date(), abusePolicy.rollingWindowHours)
         });
 
-        if (uploadCount >= dailyMediaUploadQuota) {
+        if (uploadCount >= abusePolicy.dailyMediaUploadQuota) {
           return reply
             .code(429)
             .send(quotaExceededResponse("Daily media upload quota has been reached"));

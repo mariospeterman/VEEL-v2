@@ -28,6 +28,19 @@ export const nsfwLabels = new Set(["none", "adult", "explicit", "sensitive"]);
 export const videoMimeTypes = new Set(["video/mp4", "video/quicktime", "video/webm"]);
 export const dailyContentDraftQuota = 20;
 export const dailyMediaUploadQuota = 30;
+export const contentCreationQuotaWindowHours = 24;
+
+export interface ContentCreationAbusePolicy {
+  dailyContentDraftQuota: number;
+  dailyMediaUploadQuota: number;
+  rollingWindowHours: number;
+}
+
+export const defaultContentCreationAbusePolicy: ContentCreationAbusePolicy = {
+  dailyContentDraftQuota,
+  dailyMediaUploadQuota,
+  rollingWindowHours: contentCreationQuotaWindowHours
+};
 
 export function feedModeFromQuery(mode: string | undefined): FeedMode {
   return feedModes.has(mode ?? "") ? (mode as FeedMode) : "recommended";
@@ -45,8 +58,11 @@ export function rawBodyBuffer(rawBody: unknown): Buffer {
   return Buffer.alloc(0);
 }
 
-export function dailyQuotaWindowStart(now = new Date()): Date {
-  return new Date(now.getTime() - 24 * 60 * 60 * 1000);
+export function dailyQuotaWindowStart(
+  now = new Date(),
+  windowHours = contentCreationQuotaWindowHours
+): Date {
+  return new Date(now.getTime() - windowHours * 60 * 60 * 1000);
 }
 
 export function quotaExceededResponse(message: string): {
@@ -56,6 +72,31 @@ export function quotaExceededResponse(message: string): {
   return {
     code: "rate_limited",
     message
+  };
+}
+
+export async function resolveContentCreationAbusePolicy(
+  repository: ContentRepository
+): Promise<ContentCreationAbusePolicy> {
+  if (!repository.getContentCreationAbusePolicy) {
+    return defaultContentCreationAbusePolicy;
+  }
+
+  const policy = await repository.getContentCreationAbusePolicy();
+
+  return {
+    dailyContentDraftQuota: positiveIntegerOrDefault(
+      policy?.dailyContentDraftQuota,
+      defaultContentCreationAbusePolicy.dailyContentDraftQuota
+    ),
+    dailyMediaUploadQuota: positiveIntegerOrDefault(
+      policy?.dailyMediaUploadQuota,
+      defaultContentCreationAbusePolicy.dailyMediaUploadQuota
+    ),
+    rollingWindowHours: positiveIntegerOrDefault(
+      policy?.rollingWindowHours,
+      defaultContentCreationAbusePolicy.rollingWindowHours
+    )
   };
 }
 
@@ -184,4 +225,12 @@ function bunnyProviderAssetIdFromPlaybackUrl(url: string): string | null {
   } catch {
     return null;
   }
+}
+
+function positiveIntegerOrDefault(value: number | null | undefined, fallback: number): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+    return fallback;
+  }
+
+  return value;
 }
