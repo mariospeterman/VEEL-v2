@@ -22,7 +22,7 @@ Non-goals:
 
 Current implementation state:
 
-- `POST /v1/payments/intents` creates a backend-owned native SOL voluntary `support`/`tip` intent for app-ready users when `PAYMENT_PLATFORM_TREASURY_WALLET` is configured. It must not accept client-priced access-bearing product types.
+- `POST /v1/payments/intents` creates a backend-owned native SOL voluntary `support`/`tip` intent for app-ready users when `PAYMENT_PLATFORM_TREASURY_WALLET` is configured. Public creator profiles use this path for voluntary support handoff. It must not accept client-priced access-bearing product types.
 - The intent stores server-owned amount, currency, product target, treasury wallet, Solana cluster, and a unique Solana reference address.
 - `GET /v1/payments/intents/{paymentIntentId}/transaction-request` returns a Solana Pay transfer request URL for native SOL devnet settlement.
 - `POST /v1/payments/intents/{paymentIntentId}/submissions` records the wallet-submitted signature, then marks the intent confirmed only when backend Solana RPC verification finds a successful transaction with the expected reference address, treasury recipient, and lamport amount.

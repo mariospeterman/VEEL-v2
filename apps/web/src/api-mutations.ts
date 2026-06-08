@@ -21,6 +21,7 @@ export type CreateMessageRequest = components["schemas"]["CreateMessageRequest"]
 export type CreatePaidMessageIntentRequest = components["schemas"]["CreatePaidMessageIntentRequest"];
 export type Message = components["schemas"]["Message"];
 export type PaidMessageIntent = components["schemas"]["PaidMessageIntent"];
+export type CreatePaymentIntentRequest = components["schemas"]["CreatePaymentIntentRequest"];
 export type PaymentIntent = components["schemas"]["PaymentIntent"];
 export type TransactionRequest = components["schemas"]["TransactionRequest"];
 
@@ -102,6 +103,10 @@ export async function createPaidMessageIntent(
     "POST",
     body
   );
+}
+
+export async function createPaymentIntent(body: CreatePaymentIntentRequest): Promise<PaymentIntent> {
+  return authenticatedMutation<PaymentIntent>("/v1/payments/intents", "POST", body);
 }
 
 export async function getPaymentTransactionRequest(paymentIntentId: string): Promise<TransactionRequest> {

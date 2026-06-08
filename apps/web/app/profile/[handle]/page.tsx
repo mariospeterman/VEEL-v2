@@ -1,5 +1,6 @@
 import { appShellNavItems } from "@veel/ui";
 import { getCreatorProfile, type CreatorProfile } from "@/api-client";
+import { CreatorSupportPanel } from "./creator-support-panel";
 
 export default async function PublicCreatorProfilePage({
   params
@@ -63,6 +64,7 @@ function ProfileView({ profile }: { profile: CreatorProfile }) {
           <Stat label="Payments" value={profile.stats.confirmedPaymentCount} />
           <Stat label="Followers" value={profile.stats.followerCount} />
         </div>
+        <CreatorSupportPanel profile={profile} />
       </aside>
 
       <section className="grid content-start gap-4">
