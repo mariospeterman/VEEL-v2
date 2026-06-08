@@ -95,6 +95,18 @@ export async function createMediaUpload(body: CreateUploadRequest): Promise<Uplo
   return authenticatedMutation<UploadSession>("/v1/media/uploads", "POST", body);
 }
 
+export async function syncMediaAsset(mediaAssetId: string): Promise<void> {
+  await authenticatedEmptyMutation(
+    `/v1/media/assets/${encodeURIComponent(mediaAssetId)}/sync`,
+    "POST",
+    {}
+  );
+}
+
+export async function getContentForMutation(contentId: string): Promise<ContentItem> {
+  return authenticatedGet<ContentItem>(`/v1/content/${encodeURIComponent(contentId)}`);
+}
+
 export async function createContentUnlockIntent(contentId: string): Promise<ContentUnlockIntent> {
   return authenticatedMutation<ContentUnlockIntent>(
     `/v1/content/${encodeURIComponent(contentId)}/unlock-intents`,
@@ -224,6 +236,30 @@ async function authenticatedMutation<T>(
   }
 
   return (await response.json()) as T;
+}
+
+async function authenticatedEmptyMutation(
+  path: string,
+  method: "PATCH" | "POST",
+  body: unknown
+): Promise<void> {
+  const { token } = await browserSessionToken();
+  const env = parsePublicWebEnv(process.env);
+  const response = await fetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
+    body: JSON.stringify(body),
+    cache: "no-store",
+    headers: {
+      accept: "application/json",
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+      "idempotency-key": mutationIdempotencyKey()
+    },
+    method
+  });
+
+  if (!response.ok) {
+    throw new ApiMutationError(await errorMessage(response), response.status);
+  }
 }
 
 async function browserSessionToken() {

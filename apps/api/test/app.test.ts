@@ -2012,6 +2012,7 @@ describe("buildApi", () => {
       },
       async createMediaAsset(input) {
         createdAssets.push(input);
+        return { id: "00000000-0000-4000-8000-000000000041" };
       },
       async findContentDetail() {
         throw new Error("not implemented");
@@ -2099,6 +2100,7 @@ describe("buildApi", () => {
     expect(response.json()).toEqual({
       uploadUrl: "https://video.bunnycdn.com/tusupload",
       provider: "bunny",
+      mediaAssetId: "00000000-0000-4000-8000-000000000041",
       headers: {
         AuthorizationSignature: "signed",
         AuthorizationExpire: "upload-expires-at",

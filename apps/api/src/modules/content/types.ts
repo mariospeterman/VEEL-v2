@@ -20,7 +20,7 @@ export interface ListHomeFeedInput {
 
 export interface ContentRepository {
   createDraft(input: CreateContentDraftInput): Promise<ContentItem>;
-  createMediaAsset(input: CreateMediaAssetInput): Promise<void>;
+  createMediaAsset(input: CreateMediaAssetInput): Promise<{ id: string } | void>;
   countContentDraftsCreatedSince?(input: CountContentQuotaInput): Promise<number>;
   countMediaAssetsCreatedSince?(input: CountContentQuotaInput): Promise<number>;
   findContentDetail(input: FindContentDetailInput): Promise<ContentItem | null>;

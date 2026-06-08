@@ -2784,6 +2784,8 @@ export interface components {
             uploadUrl: string;
             /** @enum {string} */
             provider: "bunny";
+            /** Format: uuid */
+            mediaAssetId: string;
             headers?: {
                 [key: string]: string;
             };

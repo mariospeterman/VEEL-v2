@@ -2466,10 +2466,11 @@ components:
         mimeType: { type: string }
     UploadSession:
       type: object
-      required: [uploadUrl, provider, expiresAt]
+      required: [uploadUrl, provider, mediaAssetId, expiresAt]
       properties:
         uploadUrl: { type: string, format: uri }
         provider: { type: string, enum: [bunny] }
+        mediaAssetId: { type: string, format: uuid }
         headers: { type: object, additionalProperties: { type: string } }
         expiresAt: { type: string, format: date-time }
     CreateLiveRoomRequest:

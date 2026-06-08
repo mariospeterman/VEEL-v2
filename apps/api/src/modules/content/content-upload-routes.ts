@@ -88,16 +88,25 @@ export async function registerContentUploadRoutes(
         mimeType: body.mimeType
       });
 
-      await options.contentRepository.createMediaAsset({
+      const mediaAsset = await options.contentRepository.createMediaAsset({
         contentId: content.id,
         provider: providerSession.provider,
         providerAssetId: providerSession.providerAssetId,
         providerState: "created"
       });
 
+      if (!mediaAsset?.id) {
+        request.log.warn("Media asset record was not created for upload session");
+        return reply.code(503).send({
+          code: "service_unavailable",
+          message: "Media upload session was not persisted"
+        });
+      }
+
       return reply.code(201).send({
         uploadUrl: providerSession.uploadUrl,
         provider: providerSession.provider,
+        mediaAssetId: mediaAsset.id,
         headers: providerSession.headers,
         expiresAt: providerSession.expiresAt.toISOString()
       });

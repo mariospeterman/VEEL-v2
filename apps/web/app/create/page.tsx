@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 const steps = [
   { label: "Draft", state: "server-owned", detail: "POST /v1/content" },
   { label: "Upload", state: "provider-ready", detail: "Bunny TUS session" },
+  { label: "Provider sync", state: "backend-truth", detail: "POST /v1/media/assets/:id/sync" },
   { label: "Policy", state: "required", detail: "age and moderation gates" },
   { label: "Publish", state: "explicit", detail: "creator confirmation" }
 ];

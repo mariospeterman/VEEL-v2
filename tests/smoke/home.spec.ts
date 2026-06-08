@@ -59,6 +59,7 @@ test("renders the create upload workspace projection", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Upload workspace" })).toBeVisible();
   await expect(page.getByText("POST /v1/content")).toBeVisible();
   await expect(page.getByText("Bunny TUS session")).toBeVisible();
+  await expect(page.getByText("POST /v1/media/assets/:id/sync")).toBeVisible();
   await expect(page.getByText("safe session headers only")).toBeVisible();
   await expect(page.locator("span").getByText("explicit", { exact: true })).toBeVisible();
 });

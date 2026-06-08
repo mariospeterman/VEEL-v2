@@ -18,23 +18,35 @@ export function createContentMediaRepositoryMethods(
 ): ContentMediaRepositoryMethods {
   return {
     async createMediaAsset(input) {
-      await sql`
-        insert into media_assets (
-          id,
-          content_item_id,
-          provider,
-          provider_asset_id,
-          provider_state
+      const rows = await sql<{ id: string }[]>`
+        with inserted as (
+          insert into media_assets (
+            id,
+            content_item_id,
+            provider,
+            provider_asset_id,
+            provider_state
+          )
+          values (
+            ${randomUUID()},
+            ${input.contentId},
+            ${input.provider},
+            ${input.providerAssetId},
+            ${input.providerState}
+          )
+          on conflict (provider, provider_asset_id) do nothing
+          returning id
         )
-        values (
-          ${randomUUID()},
-          ${input.contentId},
-          ${input.provider},
-          ${input.providerAssetId},
-          ${input.providerState}
-        )
-        on conflict (provider, provider_asset_id) do nothing
+        select id from inserted
+        union all
+        select id
+        from media_assets
+        where provider = ${input.provider}
+          and provider_asset_id = ${input.providerAssetId}
+        limit 1
       `;
+
+      return rows[0] ? { id: rows[0].id } : undefined;
     },
     async findOwnedContentForUpload(input) {
       const rows = await sql<{ id: string; media_type: ContentItem["mediaType"]; caption: string | null }[]>`
