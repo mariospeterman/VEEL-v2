@@ -350,6 +350,7 @@ Admin mutations require role policy, confirmation, and audit event.
 ## Tests
 
 - creator creates event draft
+- creator can link or replace a draft Event Access record from owned content metadata before publishing
 - event publish validates capacity/date/price
 - free access grants entitlement idempotently
 - paid access grants entitlement only after backend verification

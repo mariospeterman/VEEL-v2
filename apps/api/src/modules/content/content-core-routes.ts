@@ -1,8 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import {
+  ContentEventDraftConflictError,
   ContentPublishConflictError,
   ContentRepositoryConfigurationError
 } from "./content-repository.js";
+import { validateEventDraft } from "../event/event-route-shared.js";
 import type {
   CreateContentRequest,
   PublishContentRequest,
@@ -218,6 +220,7 @@ export async function registerContentCoreRoutes(
       const content = await options.contentRepository.updateOwnedContent({
         supabaseUserId: access.supabaseUserId,
         contentId: params.contentId,
+        idempotencyKey,
         caption: body && "caption" in body ? body.caption ?? null : undefined,
         captionProvided: Boolean(body && "caption" in body),
         visibility: body?.visibility,
@@ -228,7 +231,9 @@ export async function registerContentCoreRoutes(
         teaserEndMsProvided: Boolean(body && "teaserEndMs" in body),
         thumbnailFrameMs:
           body && "thumbnailFrameMs" in body ? body.thumbnailFrameMs ?? null : undefined,
-        thumbnailFrameMsProvided: Boolean(body && "thumbnailFrameMs" in body)
+        thumbnailFrameMsProvided: Boolean(body && "thumbnailFrameMs" in body),
+        eventDraft: body?.eventDraft,
+        eventDraftProvided: Boolean(body && "eventDraft" in body)
       });
 
       if (!content) {
@@ -240,6 +245,13 @@ export async function registerContentCoreRoutes(
 
       return reply.code(200).send(content);
     } catch (error) {
+      if (error instanceof ContentEventDraftConflictError) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: "Linked Event Access draft is no longer editable"
+        });
+      }
+
       if (error instanceof ContentRepositoryConfigurationError) {
         request.log.warn({ error }, "Content repository is not configured");
         return reply.code(503).send({
@@ -351,7 +363,10 @@ function validateUpdateContentBody(body: Partial<UpdateContentRequest> | undefin
   }
 
   if ("eventDraft" in body) {
-    return "eventDraft updates are not available until the Event Access publish slice";
+    const eventDraftError = validateEventDraft(body.eventDraft);
+    if (eventDraftError) {
+      return eventDraftError;
+    }
   }
 
   if ("caption" in body && typeof body.caption !== "string") {

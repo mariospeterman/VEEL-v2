@@ -1761,6 +1761,7 @@ describe("buildApi", () => {
         expect(input).toEqual({
           supabaseUserId: "00000000-0000-4000-8000-000000000001",
           contentId: "00000000-0000-4000-8000-000000000040",
+          idempotencyKey: "content-update-1",
           caption: "updated #studio",
           captionProvided: true,
           visibility: "followers",
@@ -1770,7 +1771,9 @@ describe("buildApi", () => {
           teaserEndMs: 5000,
           teaserEndMsProvided: true,
           thumbnailFrameMs: 1200,
-          thumbnailFrameMsProvided: true
+          thumbnailFrameMsProvided: true,
+          eventDraft: undefined,
+          eventDraftProvided: false
         });
 
         return {
@@ -1826,7 +1829,7 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("rejects unavailable event draft content updates instead of silently ignoring them", async () => {
+  it("validates event draft content updates through the Event Access draft rules", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       sessionRepository: sessionRepositoryWithProfile({
@@ -1866,7 +1869,103 @@ describe("buildApi", () => {
     expect(response.statusCode).toBe(400);
     expect(response.json()).toMatchObject({
       code: "validation_failed",
-      message: "eventDraft updates are not available until the Event Access publish slice"
+      message: "accessRule is required"
+    });
+
+    await app.close();
+  });
+
+  it("links a valid Event Access draft from owned content metadata", async () => {
+    const eventDraft = {
+      title: "Studio event",
+      startsAt: "2026-08-01T20:00:00.000Z",
+      accessRule: "public_sale" as const,
+      location: { type: "digital_live_stream" as const, label: "Veel Live" },
+      ticketTypes: [
+        {
+          label: "General access",
+          priceMinor: 10_000,
+          currency: "SOL" as const,
+          capacity: 50,
+          perUserLimit: 1
+        }
+      ]
+    };
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        throw new Error("not implemented");
+      },
+      async createMediaAsset() {
+        throw new Error("not implemented");
+      },
+      async findContentDetail() {
+        throw new Error("not implemented");
+      },
+      async findContentUnlockOffer() {
+        throw new Error("not implemented");
+      },
+      async findOwnedContentForUpload() {
+        throw new Error("not implemented");
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      },
+      async updateOwnedContent(input) {
+        expect(input).toEqual({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          contentId: "00000000-0000-4000-8000-000000000040",
+          idempotencyKey: "content-update-event-2",
+          caption: undefined,
+          captionProvided: false,
+          visibility: undefined,
+          nsfwLabel: undefined,
+          teaserStartMs: undefined,
+          teaserStartMsProvided: false,
+          teaserEndMs: undefined,
+          teaserEndMsProvided: false,
+          thumbnailFrameMs: undefined,
+          thumbnailFrameMsProvided: false,
+          eventDraft,
+          eventDraftProvided: true
+        });
+
+        return homeFeedItem;
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "content-update-event-2"
+      },
+      payload: {
+        eventDraft
+      }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(200);
+    expect(response.json()).toMatchObject({
+      id: "00000000-0000-4000-8000-000000000040"
     });
 
     await app.close();

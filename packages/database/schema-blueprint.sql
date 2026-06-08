@@ -994,7 +994,8 @@ create table events (
   state text not null default 'draft',
   idempotency_key text not null,
   request_hash text not null,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create index events_creator_created_at_idx
@@ -1002,6 +1003,10 @@ create index events_creator_created_at_idx
 
 create index events_state_starts_at_idx
   on events (state, starts_at);
+
+create unique index events_content_item_id_unique_idx
+  on events (content_item_id)
+  where content_item_id is not null;
 
 create table event_access_pass_types (
   id uuid primary key,

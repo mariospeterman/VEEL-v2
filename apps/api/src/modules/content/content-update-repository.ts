@@ -1,8 +1,9 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type postgres from "postgres";
+import { ContentEventDraftConflictError } from "./content-errors.js";
 import { extractHashtagSlugs, toContentItem } from "./content-repository-mappers.js";
 import type { ContentRow } from "./content-repository-rows.js";
-import type { ContentRepository } from "./types.js";
+import type { ContentRepository, UpdateOwnedContentInput } from "./types.js";
 
 export function createContentUpdateRepositoryMethods(
   sql: postgres.Sql
@@ -73,12 +74,134 @@ export function createContentUpdateRepositoryMethods(
           await replaceCaptionHashtags(transaction, row.id, input.caption);
         }
 
+        await upsertLinkedEventDraft(transaction, input, row.id, row.creator_id);
+
         return toContentItem(row, null);
       });
 
       return result;
     }
   };
+}
+
+async function upsertLinkedEventDraft(
+  transaction: postgres.TransactionSql,
+  input: UpdateOwnedContentInput,
+  contentId: string,
+  creatorUserId: string
+): Promise<void> {
+  if (!input.eventDraftProvided || !input.eventDraft) {
+    return;
+  }
+
+  const existingRows = await transaction<{ id: string; state: string }[]>`
+    select id, state
+    from events
+    where content_item_id = ${contentId}
+      and creator_user_id = ${creatorUserId}
+    limit 1
+  `;
+  const existing = existingRows[0];
+
+  if (existing && existing.state !== "draft") {
+    throw new ContentEventDraftConflictError();
+  }
+
+  const eventDraft = input.eventDraft;
+  const eventId = existing?.id ?? randomUUID();
+
+  if (existing) {
+    await transaction`
+      update events
+      set
+        title = ${eventDraft.title.trim()},
+        description = ${eventDraft.description?.trim() || null},
+        starts_at = ${eventDraft.startsAt},
+        ends_at = ${eventDraft.endsAt ?? null},
+        event_type = ${eventDraft.location.type},
+        location_type = ${eventDraft.location.type},
+        location_label = ${eventDraft.location.label?.trim() || null},
+        location_lat = ${eventDraft.location.latitude ?? null},
+        location_lng = ${eventDraft.location.longitude ?? null},
+        access_rule = ${eventDraft.accessRule},
+        request_hash = ${hashJson(eventDraft)},
+        updated_at = now()
+      where id = ${eventId}
+    `;
+  } else {
+    await transaction`
+      insert into events (
+        id,
+        creator_user_id,
+        content_item_id,
+        title,
+        description,
+        starts_at,
+        ends_at,
+        event_type,
+        location_type,
+        location_label,
+        location_lat,
+        location_lng,
+        access_rule,
+        idempotency_key,
+        request_hash
+      )
+      values (
+        ${eventId},
+        ${creatorUserId},
+        ${contentId},
+        ${eventDraft.title.trim()},
+        ${eventDraft.description?.trim() || null},
+        ${eventDraft.startsAt},
+        ${eventDraft.endsAt ?? null},
+        ${eventDraft.location.type},
+        ${eventDraft.location.type},
+        ${eventDraft.location.label?.trim() || null},
+        ${eventDraft.location.latitude ?? null},
+        ${eventDraft.location.longitude ?? null},
+        ${eventDraft.accessRule},
+        ${`content:${contentId}:${input.idempotencyKey}`},
+        ${hashJson(eventDraft)}
+      )
+    `;
+  }
+
+  await transaction`
+    delete from event_access_pass_types
+    where event_id = ${eventId}
+  `;
+
+  for (const ticketType of eventDraft.ticketTypes) {
+    await transaction`
+      insert into event_access_pass_types (
+        id,
+        event_id,
+        label,
+        price_minor,
+        currency,
+        capacity,
+        sale_starts_at,
+        sale_ends_at,
+        per_user_limit
+      )
+      values (
+        ${randomUUID()},
+        ${eventId},
+        ${ticketType.label.trim()},
+        ${ticketType.priceMinor ?? null},
+        ${ticketType.currency},
+        ${ticketType.capacity},
+        ${ticketType.saleStartsAt ?? null},
+        ${ticketType.saleEndsAt ?? null},
+        ${ticketType.perUserLimit ?? 1}
+      )
+    `;
+  }
+}
+
+function hashJson(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
 async function replaceCaptionHashtags(

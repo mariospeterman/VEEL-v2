@@ -52,6 +52,7 @@ export interface CountContentQuotaInput {
 export interface UpdateOwnedContentInput {
   supabaseUserId: string;
   contentId: string;
+  idempotencyKey: string;
   caption?: string | null | undefined;
   captionProvided: boolean;
   visibility?: string | undefined;
@@ -62,6 +63,8 @@ export interface UpdateOwnedContentInput {
   teaserEndMsProvided: boolean;
   thumbnailFrameMs?: number | null | undefined;
   thumbnailFrameMsProvided: boolean;
+  eventDraft?: components["schemas"]["EventDraft"] | undefined;
+  eventDraftProvided: boolean;
 }
 
 export interface PublishOwnedContentInput {

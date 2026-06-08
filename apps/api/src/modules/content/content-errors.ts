@@ -11,3 +11,10 @@ export class ContentPublishConflictError extends Error {
     this.name = "ContentPublishConflictError";
   }
 }
+
+export class ContentEventDraftConflictError extends Error {
+  constructor() {
+    super("event_draft_not_editable");
+    this.name = "ContentEventDraftConflictError";
+  }
+}

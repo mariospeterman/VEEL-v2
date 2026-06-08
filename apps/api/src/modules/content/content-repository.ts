@@ -9,7 +9,11 @@ import { createContentReadRepositoryMethods } from "./content-read-repository.js
 import { createContentUpdateRepositoryMethods } from "./content-update-repository.js";
 import type { ContentRepository } from "./types.js";
 
-export { ContentPublishConflictError, ContentRepositoryConfigurationError } from "./content-errors.js";
+export {
+  ContentEventDraftConflictError,
+  ContentPublishConflictError,
+  ContentRepositoryConfigurationError
+} from "./content-errors.js";
 
 export function createPostgresContentRepository(database?: string | PostgresSql): ContentRepository {
   if (!database) {
