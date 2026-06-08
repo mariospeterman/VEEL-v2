@@ -6,8 +6,10 @@ import {
   ApiMutationError,
   createContentDraft,
   createMediaUpload,
+  updateContent,
   type ContentItem,
   type CreateContentRequest,
+  type UpdateContentRequest,
   type UploadSession
 } from "@/api-mutations";
 
@@ -31,7 +33,11 @@ export function CreateWorkspace() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadState, setUploadState] = useState<"idle" | "uploading" | "complete" | "failed" | "aborted">("idle");
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
-  const [pending, setPending] = useState<"draft" | "upload" | null>(null);
+  const [teaserStartMs, setTeaserStartMs] = useState("");
+  const [teaserEndMs, setTeaserEndMs] = useState("");
+  const [thumbnailFrameMs, setThumbnailFrameMs] = useState("");
+  const [pending, setPending] = useState<"draft" | "save" | "upload" | null>(null);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const uploadRef = useRef<tus.Upload | null>(null);
 
@@ -49,6 +55,31 @@ export function CreateWorkspace() {
       });
       setDraft(nextDraft);
       setUploadSession(null);
+      setSavedAt(new Date().toISOString());
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function onSaveDraftSettings() {
+    if (!draft) return;
+
+    setPending("save");
+    setError(null);
+
+    try {
+      const body: UpdateContentRequest = {
+        caption,
+        visibility,
+        nsfwLabel,
+        teaserStartMs: numericControlValue(teaserStartMs),
+        teaserEndMs: numericControlValue(teaserEndMs),
+        thumbnailFrameMs: numericControlValue(thumbnailFrameMs)
+      };
+      setDraft(await updateContent(draft.id, body));
+      setSavedAt(new Date().toISOString());
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -188,6 +219,22 @@ export function CreateWorkspace() {
           <Fact label="Draft" value={draft.id} />
           <Fact label="Access" value={draft.accessState} />
           <Fact label="Playback" value={draft.playback?.state ?? "not_ready"} />
+          <Fact label="Visibility" value={visibility} />
+          <Fact label="Label" value={nsfwLabel} />
+          {savedAt ? <Fact label="Last saved" value={savedAt} /> : null}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <NumberInput label="Teaser start ms" onChange={setTeaserStartMs} value={teaserStartMs} />
+            <NumberInput label="Teaser end ms" onChange={setTeaserEndMs} value={teaserEndMs} />
+            <NumberInput label="Thumbnail frame ms" onChange={setThumbnailFrameMs} value={thumbnailFrameMs} />
+          </div>
+          <button
+            className="rounded border border-(--line) px-3 py-2 font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={pending !== null}
+            onClick={onSaveDraftSettings}
+            type="button"
+          >
+            {pending === "save" ? "Saving settings" : "Save draft settings"}
+          </button>
           <label className="grid gap-1">
             <span className="text-(--muted)">Video file</span>
             <input accept="video/mp4,video/quicktime,video/webm" onChange={onFileChange} type="file" />
@@ -308,6 +355,29 @@ function Select<T extends string>({
   );
 }
 
+function NumberInput({
+  label,
+  onChange,
+  value
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <label className="grid gap-1 text-sm">
+      <span className="text-(--muted)">{label}</span>
+      <input
+        className="rounded border border-(--line) bg-(--background) px-3 py-2 text-(--foreground)"
+        min="0"
+        onChange={(event) => onChange(event.currentTarget.value)}
+        type="number"
+        value={value}
+      />
+    </label>
+  );
+}
+
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
@@ -323,4 +393,12 @@ function errorMessage(caught: unknown) {
   }
 
   return "Create action failed.";
+}
+
+function numericControlValue(value: string) {
+  if (!value.trim()) {
+    return null;
+  }
+
+  return Number.parseInt(value, 10);
 }

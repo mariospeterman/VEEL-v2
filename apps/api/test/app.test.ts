@@ -1668,6 +1668,141 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("updates owned content metadata and preview controls without publishing", async () => {
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        throw new Error("not implemented");
+      },
+      async createMediaAsset() {
+        throw new Error("not implemented");
+      },
+      async findContentDetail() {
+        throw new Error("not implemented");
+      },
+      async findContentUnlockOffer() {
+        throw new Error("not implemented");
+      },
+      async findOwnedContentForUpload() {
+        throw new Error("not implemented");
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      },
+      async updateOwnedContent(input) {
+        expect(input).toEqual({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          contentId: "00000000-0000-4000-8000-000000000040",
+          caption: "updated #studio",
+          captionProvided: true,
+          visibility: "followers",
+          nsfwLabel: "adult",
+          teaserStartMs: 1000,
+          teaserStartMsProvided: true,
+          teaserEndMs: 5000,
+          teaserEndMsProvided: true,
+          thumbnailFrameMs: 1200,
+          thumbnailFrameMsProvided: true
+        });
+
+        return {
+          ...homeFeedItem,
+          caption: "updated #studio",
+          nsfwLabel: "adult"
+        };
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "content-update-1"
+      },
+      payload: {
+        caption: "updated #studio",
+        visibility: "followers",
+        nsfwLabel: "adult",
+        teaserStartMs: 1000,
+        teaserEndMs: 5000,
+        thumbnailFrameMs: 1200
+      }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(200);
+    expect(response.json()).toMatchObject({
+      id: "00000000-0000-4000-8000-000000000040",
+      caption: "updated #studio",
+      nsfwLabel: "adult"
+    });
+
+    await app.close();
+  });
+
+  it("rejects unavailable event draft content updates instead of silently ignoring them", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "content-update-event-1"
+      },
+      payload: {
+        eventDraft: {
+          title: "Studio event",
+          startsAt: "2026-08-01T20:00:00.000Z",
+          accessRule: "paid",
+          location: { type: "venue", label: "Studio" },
+          ticketTypes: []
+        }
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: "validation_failed",
+      message: "eventDraft updates are not available until the Event Access publish slice"
+    });
+
+    await app.close();
+  });
+
   it("creates a Bunny upload session for an owned content draft", async () => {
     const createdAssets: CreateMediaAssetInput[] = [];
     const contentRepository: ContentRepository = {

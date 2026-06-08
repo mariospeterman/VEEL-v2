@@ -455,6 +455,11 @@ paths:
         $ref: "#/components/requestBodies/UpdateContent"
       responses:
         "200": { $ref: "#/components/responses/ContentItem" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/media/uploads:
     post:
       operationId: createMediaUpload

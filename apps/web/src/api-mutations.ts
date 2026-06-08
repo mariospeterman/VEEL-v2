@@ -14,6 +14,7 @@ export type WalletLinkChallenge = components["schemas"]["WalletLinkChallenge"];
 export type LinkWalletRequest = components["schemas"]["LinkWalletRequest"];
 export type Wallet = components["schemas"]["Wallet"];
 export type CreateContentRequest = components["schemas"]["CreateContentRequest"];
+export type UpdateContentRequest = components["schemas"]["UpdateContentRequest"];
 export type ContentItem = components["schemas"]["ContentItem"];
 export type CreateUploadRequest = components["schemas"]["CreateUploadRequest"];
 export type UploadSession = components["schemas"]["UploadSession"];
@@ -65,6 +66,17 @@ export async function linkWallet(body: LinkWalletRequest): Promise<Wallet> {
 
 export async function createContentDraft(body: CreateContentRequest): Promise<ContentItem> {
   return authenticatedMutation<ContentItem>("/v1/content", "POST", body);
+}
+
+export async function updateContent(
+  contentId: string,
+  body: UpdateContentRequest
+): Promise<ContentItem> {
+  return authenticatedMutation<ContentItem>(
+    `/v1/content/${encodeURIComponent(contentId)}`,
+    "PATCH",
+    body
+  );
 }
 
 export async function createMediaUpload(body: CreateUploadRequest): Promise<UploadSession> {

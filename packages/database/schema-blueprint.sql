@@ -546,6 +546,7 @@ create table media_assets (
   poster_url text,
   teaser_start_ms integer,
   teaser_end_ms integer,
+  thumbnail_frame_ms integer,
   duration_ms integer,
   created_at timestamptz not null default now(),
   unique (provider, provider_asset_id)

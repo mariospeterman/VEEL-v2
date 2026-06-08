@@ -4,6 +4,7 @@ import { ContentRepositoryConfigurationError } from "./content-errors.js";
 import { createContentFeedRepositoryMethods } from "./content-feed-repository.js";
 import { createContentMediaRepositoryMethods } from "./content-media-repository.js";
 import { createContentReadRepositoryMethods } from "./content-read-repository.js";
+import { createContentUpdateRepositoryMethods } from "./content-update-repository.js";
 import type { ContentRepository } from "./types.js";
 
 export { ContentRepositoryConfigurationError } from "./content-errors.js";
@@ -20,6 +21,7 @@ export function createPostgresContentRepository(database?: string | PostgresSql)
     ...createContentFeedRepositoryMethods(sql),
     ...createContentMediaRepositoryMethods(sql),
     ...createContentReadRepositoryMethods(sql),
+    ...createContentUpdateRepositoryMethods(sql),
     async close() {
       if (ownsClient) {
         await sql.end({ timeout: 5 });
@@ -58,6 +60,9 @@ function createUnavailableContentRepository(): ContentRepository {
       throw new ContentRepositoryConfigurationError();
     },
     async updateMediaAssetPlayback() {
+      throw new ContentRepositoryConfigurationError();
+    },
+    async updateOwnedContent() {
       throw new ContentRepositoryConfigurationError();
     }
   };

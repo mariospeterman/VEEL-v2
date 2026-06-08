@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { ContentRepositoryConfigurationError } from "./content-repository.js";
-import type { CreateContentRequest } from "./types.js";
+import type { CreateContentRequest, UpdateContentRequest } from "./types.js";
 import {
   contentMediaTypes,
   contentVisibilityValues,
@@ -148,4 +148,147 @@ export async function registerContentCoreRoutes(
       throw error;
     }
   });
+
+  app.patch("/v1/content/:contentId", async (request, reply) => {
+    const access = await verifyAppReadyAccess(request, options);
+
+    if (!access.ok) {
+      return reply.code(access.statusCode).send(access.body);
+    }
+
+    const idempotencyKey = request.headers["idempotency-key"];
+
+    if (typeof idempotencyKey !== "string" || idempotencyKey.length === 0) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: "Idempotency-Key header is required"
+      });
+    }
+
+    const params = request.params as { contentId?: string };
+
+    if (typeof params.contentId !== "string" || params.contentId.length === 0) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: "contentId is required"
+      });
+    }
+
+    const body = request.body as Partial<UpdateContentRequest> | undefined;
+    const validationError = validateUpdateContentBody(body);
+
+    if (validationError) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: validationError
+      });
+    }
+
+    try {
+      if (!options.contentRepository.updateOwnedContent) {
+        return reply.code(503).send({
+          code: "service_unavailable",
+          message: "Content storage is not configured"
+        });
+      }
+
+      const content = await options.contentRepository.updateOwnedContent({
+        supabaseUserId: access.supabaseUserId,
+        contentId: params.contentId,
+        caption: body && "caption" in body ? body.caption ?? null : undefined,
+        captionProvided: Boolean(body && "caption" in body),
+        visibility: body?.visibility,
+        nsfwLabel: body?.nsfwLabel,
+        teaserStartMs: body && "teaserStartMs" in body ? body.teaserStartMs ?? null : undefined,
+        teaserStartMsProvided: Boolean(body && "teaserStartMs" in body),
+        teaserEndMs: body && "teaserEndMs" in body ? body.teaserEndMs ?? null : undefined,
+        teaserEndMsProvided: Boolean(body && "teaserEndMs" in body),
+        thumbnailFrameMs:
+          body && "thumbnailFrameMs" in body ? body.thumbnailFrameMs ?? null : undefined,
+        thumbnailFrameMsProvided: Boolean(body && "thumbnailFrameMs" in body)
+      });
+
+      if (!content) {
+        return reply.code(404).send({
+          code: "not_found",
+          message: "Content was not found"
+        });
+      }
+
+      return reply.code(200).send(content);
+    } catch (error) {
+      if (error instanceof ContentRepositoryConfigurationError) {
+        request.log.warn({ error }, "Content repository is not configured");
+        return reply.code(503).send({
+          code: "service_unavailable",
+          message: "Content storage is not configured"
+        });
+      }
+
+      throw error;
+    }
+  });
+}
+
+function validateUpdateContentBody(body: Partial<UpdateContentRequest> | undefined): string | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return "Update body is required";
+  }
+
+  const hasKnownField =
+    "caption" in body ||
+    "visibility" in body ||
+    "nsfwLabel" in body ||
+    "teaserStartMs" in body ||
+    "teaserEndMs" in body ||
+    "thumbnailFrameMs" in body ||
+    "eventDraft" in body;
+
+  if (!hasKnownField) {
+    return "At least one content update field is required";
+  }
+
+  if ("eventDraft" in body) {
+    return "eventDraft updates are not available until the Event Access publish slice";
+  }
+
+  if ("caption" in body && typeof body.caption !== "string") {
+    return "caption must be a string";
+  }
+
+  if (typeof body.caption === "string" && body.caption.length > 2_200) {
+    return "caption must be 2200 characters or fewer";
+  }
+
+  if ("visibility" in body && !contentVisibilityValues.has(body.visibility ?? "")) {
+    return "visibility is invalid";
+  }
+
+  if ("nsfwLabel" in body && !nsfwLabels.has(body.nsfwLabel ?? "")) {
+    return "nsfwLabel is invalid";
+  }
+
+  for (const [field, value] of [
+    ["teaserStartMs", body.teaserStartMs],
+    ["teaserEndMs", body.teaserEndMs],
+    ["thumbnailFrameMs", body.thumbnailFrameMs]
+  ] as const) {
+    if (
+      field in body &&
+      value !== null &&
+      (typeof value !== "number" || !Number.isInteger(value) || value < 0)
+    ) {
+      return `${field} must be a non-negative integer or null`;
+    }
+  }
+
+  if (
+    typeof body.teaserStartMs === "number" &&
+    typeof body.teaserEndMs === "number" &&
+    body.teaserEndMs < body.teaserStartMs
+  ) {
+    return "teaserEndMs must be greater than or equal to teaserStartMs";
+  }
+
+  return null;
 }

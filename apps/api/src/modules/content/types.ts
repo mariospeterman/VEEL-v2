@@ -8,6 +8,7 @@ export type Entitlement = components["schemas"]["Entitlement"];
 export type FeedPage = components["schemas"]["FeedPage"];
 export type FeedMode = "recommended" | "following" | "nsfw" | "sfw" | "live" | "premium";
 export type UploadSession = components["schemas"]["UploadSession"];
+export type UpdateContentRequest = components["schemas"]["UpdateContentRequest"];
 
 export interface ListHomeFeedInput {
   supabaseUserId: string;
@@ -27,15 +28,31 @@ export interface ContentRepository {
   recordMediaProviderWebhook?(input: RecordMediaProviderWebhookInput): Promise<boolean>;
   updateMediaAssetFromWebhook?(input: UpdateMediaAssetFromWebhookInput): Promise<boolean>;
   updateMediaAssetPlayback?(input: UpdateMediaAssetPlaybackInput): Promise<void>;
+  updateOwnedContent?(input: UpdateOwnedContentInput): Promise<ContentItem | null>;
   close?(): Promise<void>;
 }
 
 export interface CreateContentDraftInput {
   supabaseUserId: string;
   mediaType: ContentItem["mediaType"];
-  caption?: string | null;
+  caption?: string | null | undefined;
   visibility: string;
   nsfwLabel: NonNullable<ContentItem["nsfwLabel"]>;
+}
+
+export interface UpdateOwnedContentInput {
+  supabaseUserId: string;
+  contentId: string;
+  caption?: string | null | undefined;
+  captionProvided: boolean;
+  visibility?: string | undefined;
+  nsfwLabel?: NonNullable<ContentItem["nsfwLabel"]> | undefined;
+  teaserStartMs?: number | null | undefined;
+  teaserStartMsProvided: boolean;
+  teaserEndMs?: number | null | undefined;
+  teaserEndMsProvided: boolean;
+  thumbnailFrameMs?: number | null | undefined;
+  thumbnailFrameMsProvided: boolean;
 }
 
 export interface FindOwnedContentForUploadInput {
