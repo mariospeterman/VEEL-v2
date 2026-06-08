@@ -33,8 +33,8 @@ Current implementation state:
 - `BUNNY_STREAM_API_KEY` and `BUNNY_STREAM_LIBRARY_ID` are server-only config values; the Stream API key is never returned to the browser.
 - Upload state is stored in `media_assets` as normalized provider/provider asset/provider state only.
 - `GET /v1/content/{contentId}` returns a frontend-safe media viewer projection backed by `content_access_rules`, creator profile data, and the first media poster.
-- `/content/[contentId]` consumes that projection through the web API helper and renders backend access/playback state only; it does not create local payment or playback fixtures.
-- Access projection is conservative: free/teaser/pass/locked states are exposed, but no entitlement grant, signed playback URL, tokenized playback URL, or provider management URL is exposed by this slice.
+- `/content/[contentId]` consumes that projection through the web API helper and renders backend access/playback state only. Full backend-issued Bunny embed resources render in an iframe, direct/HLS resources render in the browser media element, and blocked/teaser/not-ready states stay gated; it does not create local payment or playback fixtures.
+- Access projection is conservative: free/teaser/pass/locked states are exposed, entitlement grants remain backend-settlement-owned, and provider management URLs are never exposed to the browser.
 - `GET /v1/content/{contentId}` fails full Bunny playback closed unless backend access is already `free`, `unlocked`, or `subscribed` and a short-lived Bunny embed token can be generated server-side.
 - `POST /v1/webhooks/media/{provider}` accepts Bunny Stream signed webhooks for the `bunny` provider and Livepeer signed stream webhooks for the `livepeer` provider, verifies raw-body HMAC signatures, records idempotent provider receipts, and applies normalized media/live processing state.
 - Bunny playback token issuing is backend-owned through embed-view token authentication; moderation state transitions and broader locked playback policy surfaces are deferred to their owning media/access slices.

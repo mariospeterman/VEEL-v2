@@ -50,14 +50,7 @@ export default async function ContentPage({
 function MediaStage({ item }: { item: ContentItem }) {
   return (
     <section className="relative min-h-[68vh] overflow-hidden rounded border border-(--line) bg-[#0f1217]">
-      {item.posterUrl ? (
-        <img
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover"
-          src={item.posterUrl}
-        />
-      ) : null}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/5 to-black/35" />
+      <PlaybackFrame item={item} />
       <div className="absolute left-4 top-4 rounded bg-(--background)/85 px-2 py-1 text-xs font-medium">
         {item.mediaType.toUpperCase()}
       </div>
@@ -72,6 +65,57 @@ function MediaStage({ item }: { item: ContentItem }) {
       </div>
     </section>
   );
+}
+
+function PlaybackFrame({ item }: { item: ContentItem }) {
+  const playback = item.playback;
+
+  if (playback?.state === "full" && playback.url) {
+    if (playback.resourceType === "embed") {
+      return (
+        <iframe
+          allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+          className="absolute inset-0 h-full w-full"
+          src={playback.url}
+          title="Veel content playback"
+        />
+      );
+    }
+
+    return (
+      <video
+        className="absolute inset-0 h-full w-full bg-black object-contain"
+        controls
+        poster={item.posterUrl ?? undefined}
+        preload="metadata"
+        src={playback.url}
+      />
+    );
+  }
+
+  return (
+    <>
+      {item.posterUrl ? (
+        <img alt="" className="absolute inset-0 h-full w-full object-cover" src={item.posterUrl} />
+      ) : null}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/5 to-black/35" />
+      <div className="absolute inset-x-4 top-1/2 mx-auto max-w-sm -translate-y-1/2 rounded border border-white/20 bg-black/55 p-4 text-center text-white backdrop-blur">
+        <p className="text-sm font-semibold">{playbackStateLabel(playback?.state)}</p>
+        <p className="mt-2 text-xs leading-5 text-zinc-200">
+          Playback is rendered only from backend-issued access projection.
+        </p>
+      </div>
+    </>
+  );
+}
+
+function playbackStateLabel(
+  state: NonNullable<ContentItem["playback"]>["state"] | undefined
+) {
+  if (state === "blocked") return "Access required";
+  if (state === "teaser") return "Teaser preview";
+  return "Playback not ready";
 }
 
 function AccessPanel({ item }: { item: ContentItem }) {
