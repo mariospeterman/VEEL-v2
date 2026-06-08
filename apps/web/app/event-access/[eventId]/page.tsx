@@ -1,5 +1,6 @@
 import { appShellNavItems } from "@veel/ui";
 import { getEvent, type Event } from "@/api-client";
+import { EventAccessPassPanel } from "./event-access-pass-panel";
 
 export default async function EventPage({
   params
@@ -42,34 +43,7 @@ function EventBody({ event }: { event: Event }) {
         </p>
       </div>
 
-      <section className="rounded border border-(--line) bg-(--panel) p-4">
-        <h2 className="text-base font-semibold tracking-normal">Access pass sheet</h2>
-        <div className="mt-4 grid gap-3">
-          {event.ticketTypes.map((ticketType) => (
-            <article className="rounded border border-(--line) bg-(--background) p-4" key={ticketType.id}>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="font-medium">{ticketType.label}</p>
-                  <p className="mt-1 text-sm text-(--muted)">{ticketType.remaining} remaining</p>
-                </div>
-                <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-medium text-(--accent-strong)">
-                  {ticketType.state}
-                </span>
-              </div>
-              <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
-                <Fact label="Price" value={`${ticketType.priceMinor?.toLocaleString() ?? "free"} ${ticketType.currency}`} />
-                <Fact label="Capacity" value={ticketType.capacity.toString()} />
-                <Fact label="Access" value={event.accessRule} />
-              </div>
-            </article>
-          ))}
-          {event.ticketTypes.length === 0 ? (
-            <p className="rounded border border-(--line) bg-(--background) p-4 text-sm text-(--muted)">
-              No active pass types are available.
-            </p>
-          ) : null}
-        </div>
-      </section>
+      <EventAccessPassPanel event={event} />
     </section>
   );
 }

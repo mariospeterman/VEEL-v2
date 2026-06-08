@@ -15,6 +15,8 @@ export type LinkWalletRequest = components["schemas"]["LinkWalletRequest"];
 export type Wallet = components["schemas"]["Wallet"];
 export type ContentUnlockIntent = components["schemas"]["ContentUnlockIntent"];
 export type CreateLivePassIntentRequest = components["schemas"]["CreateLivePassIntentRequest"];
+export type CreateAccessPassIntentRequest = components["schemas"]["CreateAccessPassIntentRequest"];
+export type AccessPassIntent = components["schemas"]["AccessPassIntent"];
 export type PaymentIntent = components["schemas"]["PaymentIntent"];
 export type TransactionRequest = components["schemas"]["TransactionRequest"];
 
@@ -60,6 +62,17 @@ export async function createLivePassIntent(
 ): Promise<PaymentIntent> {
   return authenticatedMutation<PaymentIntent>(
     `/v1/live/rooms/${encodeURIComponent(liveRoomId)}/pass-intents`,
+    "POST",
+    body
+  );
+}
+
+export async function createEventAccessPassIntent(
+  eventId: string,
+  body: CreateAccessPassIntentRequest
+): Promise<AccessPassIntent> {
+  return authenticatedMutation<AccessPassIntent>(
+    `/v1/events/${encodeURIComponent(eventId)}/access-passes/intents`,
     "POST",
     body
   );
