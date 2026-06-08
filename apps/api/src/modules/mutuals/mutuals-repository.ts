@@ -124,7 +124,9 @@ export function createPostgresMutualsRepository(database?: string | PostgresSql)
         join profiles p on p.user_id = ci.creator_user_id
         left join media_assets ma on ma.content_item_id = ci.id
         where exists (select 1 from actor)
-          and ci.state = 'published'
+          and ci.state = 'ready'
+          and ci.publish_state = 'published'
+          and ci.moderation_state = 'approved'
           and ci.visibility = 'public'
           and ci.creator_user_id <> (select id from actor)
           and (${input.cursor ?? null}::timestamptz is null or ci.created_at < ${input.cursor ?? null}::timestamptz)

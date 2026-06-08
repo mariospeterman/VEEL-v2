@@ -26,7 +26,8 @@ Current implementation state:
 - `POST /v1/media/uploads` creates a Bunny Stream upload session for an owned content draft.
 - `/create` now uses those backend endpoints for explicit draft creation, metadata/preview updates, and upload-session creation, then uploads bytes through `tus-js-client` using the server-issued Bunny TUS endpoint and headers. The browser displays progress, pause/resume state, safe upload headers, expiry, and frontend-safe content access/playback projection; it does not receive the Bunny API key, mutate moderation state, or publish content locally.
 - `PATCH /v1/content/{contentId}` is creator-owned and idempotency-header gated. It updates caption, visibility, NSFW label, teaser start/end, and thumbnail frame controls only; it does not publish, approve moderation, grant access, or update provider playback truth. `eventDraft` is rejected until the dedicated Event Access publish slice owns that workflow end to end.
-- Browser upload completion is still provider-transfer completion only. Publish, provider-ready playback, moderation approval, and public/discovery access remain backend-owned follow-up states.
+- `POST /v1/content/{contentId}/publish` is creator-owned and idempotency-header gated. It requires explicit `submit_for_review` confirmation and provider-ready media before moving `publish_state` to `submitted_for_review` or `published` if moderation was already approved. It does not approve moderation, grant access, or create paid visibility.
+- Browser upload completion is still provider-transfer completion only. Provider-ready playback, moderation approval, publish state, and public/discovery access remain backend-owned follow-up states.
 - The Bunny adapter follows the current Bunny Stream TUS flow: create video object, generate server-side SHA256 upload signature, return `https://video.bunnycdn.com/tusupload` plus safe upload headers.
 - `BUNNY_STREAM_API_KEY` and `BUNNY_STREAM_LIBRARY_ID` are server-only config values; the Stream API key is never returned to the browser.
 - Upload state is stored in `media_assets` as normalized provider/provider asset/provider state only.
@@ -206,7 +207,7 @@ Token policy:
 ## Moderation Pipeline
 
 ```text
-upload ready -> automated scan -> policy review if needed -> publish allowed
+upload ready -> creator submit_for_review -> automated scan -> policy review if needed -> publish allowed
 ```
 
 Moderation can block:

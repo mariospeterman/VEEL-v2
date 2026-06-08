@@ -1803,6 +1803,138 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("submits provider-ready content for moderation through an explicit publish action", async () => {
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        throw new Error("not implemented");
+      },
+      async createMediaAsset() {
+        throw new Error("not implemented");
+      },
+      async findContentDetail() {
+        throw new Error("not implemented");
+      },
+      async findContentUnlockOffer() {
+        throw new Error("not implemented");
+      },
+      async findOwnedContentForUpload() {
+        throw new Error("not implemented");
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      },
+      async publishOwnedContent(input) {
+        expect(input).toEqual({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          contentId: "00000000-0000-4000-8000-000000000040",
+          idempotencyKey: "content-publish-1"
+        });
+
+        return homeFeedItem;
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040/publish",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "content-publish-1"
+      },
+      payload: {
+        confirmation: "submit_for_review"
+      }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(200);
+    expect(response.json()).toEqual(homeFeedItem);
+
+    await app.close();
+  });
+
+  it("fails content publish closed until provider media is ready", async () => {
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        throw new Error("not implemented");
+      },
+      async createMediaAsset() {
+        throw new Error("not implemented");
+      },
+      async findContentDetail() {
+        throw new Error("not implemented");
+      },
+      async findContentUnlockOffer() {
+        throw new Error("not implemented");
+      },
+      async findOwnedContentForUpload() {
+        throw new Error("not implemented");
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      },
+      async publishOwnedContent() {
+        const { ContentPublishConflictError } = await import("../src/modules/content/content-repository");
+        throw new ContentPublishConflictError("provider_not_ready");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040/publish",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "content-publish-2"
+      },
+      payload: {
+        confirmation: "submit_for_review"
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: "conflict",
+      message: "Content cannot be published until provider media is ready"
+    });
+
+    await app.close();
+  });
+
   it("creates a Bunny upload session for an owned content draft", async () => {
     const createdAssets: CreateMediaAssetInput[] = [];
     const contentRepository: ContentRepository = {

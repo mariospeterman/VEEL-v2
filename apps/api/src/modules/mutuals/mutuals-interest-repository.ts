@@ -35,7 +35,9 @@ export function createMutualsInterestRepositoryMethods(
           from content_items ci
           join target_profile tp on tp.user_id = ci.creator_user_id
           where ci.id = ${input.body.contentId}
-            and ci.state = 'published'
+            and ci.state = 'ready'
+            and ci.publish_state = 'published'
+            and ci.moderation_state = 'approved'
             and ci.visibility = 'public'
           limit 1
         ),

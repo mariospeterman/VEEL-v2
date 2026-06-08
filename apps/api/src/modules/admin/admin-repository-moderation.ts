@@ -48,7 +48,7 @@ export function createModerationRepository(
             limit 1
           ),
           current_content as (
-            select id, state, moderation_state
+            select id, state, moderation_state, publish_state
             from content_items
             where id = ${input.contentId}
             for update
@@ -58,6 +58,22 @@ export function createModerationRepository(
             set
               moderation_state = ${moderation.moderationState},
               state = ${moderation.state}::content_state,
+              publish_state = case
+                when ${input.body.action} in ('approve', 'reinstate')
+                  and cc.publish_state = 'submitted_for_review'
+                  and ${moderation.state} = 'ready'
+                then 'published'
+                when ${input.body.action} = 'block' then 'blocked'
+                when ${input.body.action} = 'delete' then 'blocked'
+                else ci.publish_state
+              end,
+              published_at = case
+                when ${input.body.action} in ('approve', 'reinstate')
+                  and cc.publish_state = 'submitted_for_review'
+                  and ${moderation.state} = 'ready'
+                then coalesce(ci.published_at, now())
+                else ci.published_at
+              end,
               updated_at = now()
             from current_content cc
             where ci.id = cc.id
@@ -66,8 +82,10 @@ export function createModerationRepository(
               ci.creator_user_id,
               ci.moderation_state,
               ci.state,
+              ci.publish_state,
               ci.created_at,
               cc.state::text as previous_state,
+              cc.publish_state as previous_publish_state,
               cc.moderation_state as previous_moderation_state
           ),
           audit_insert as (
@@ -91,6 +109,8 @@ export function createModerationRepository(
                 'adminAction', ${input.body.action},
                 'previousState', updated_content.previous_state,
                 'newState', updated_content.state,
+                'previousPublishState', updated_content.previous_publish_state,
+                'newPublishState', updated_content.publish_state,
                 'previousModerationState', updated_content.previous_moderation_state,
                 'newModerationState', updated_content.moderation_state
               )

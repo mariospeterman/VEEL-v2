@@ -15,6 +15,7 @@ export type LinkWalletRequest = components["schemas"]["LinkWalletRequest"];
 export type Wallet = components["schemas"]["Wallet"];
 export type CreateContentRequest = components["schemas"]["CreateContentRequest"];
 export type UpdateContentRequest = components["schemas"]["UpdateContentRequest"];
+export type PublishContentRequest = components["schemas"]["PublishContentRequest"];
 export type ContentItem = components["schemas"]["ContentItem"];
 export type CreateUploadRequest = components["schemas"]["CreateUploadRequest"];
 export type UploadSession = components["schemas"]["UploadSession"];
@@ -75,6 +76,17 @@ export async function updateContent(
   return authenticatedMutation<ContentItem>(
     `/v1/content/${encodeURIComponent(contentId)}`,
     "PATCH",
+    body
+  );
+}
+
+export async function publishContent(
+  contentId: string,
+  body: PublishContentRequest
+): Promise<ContentItem> {
+  return authenticatedMutation<ContentItem>(
+    `/v1/content/${encodeURIComponent(contentId)}/publish`,
+    "POST",
     body
   );
 }

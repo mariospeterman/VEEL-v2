@@ -460,6 +460,24 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/content/{contentId}/publish:
+    post:
+      operationId: publishContent
+      tags: [Content]
+      summary: Submit provider-ready content for moderation or publish after approval
+      parameters:
+        - $ref: "#/components/parameters/ContentId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/PublishContent"
+      responses:
+        "200": { $ref: "#/components/responses/ContentItem" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/media/uploads:
     post:
       operationId: createMediaUpload
@@ -1733,6 +1751,7 @@ components:
     UpdateProfile: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateProfileRequest" } } } }
     CreateContent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateContentRequest" } } } }
     UpdateContent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateContentRequest" } } } }
+    PublishContent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PublishContentRequest" } } } }
     UpdateFeedPreferences: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateFeedPreferencesRequest" } } } }
     HideFeedCreator: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/HideFeedCreatorRequest" } } } }
     HideFeedTopic: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/HideFeedTopicRequest" } } } }
@@ -2367,6 +2386,11 @@ components:
         teaserEndMs: { type: integer, nullable: true }
         thumbnailFrameMs: { type: integer, nullable: true }
         eventDraft: { $ref: "#/components/schemas/EventDraft" }
+    PublishContentRequest:
+      type: object
+      required: [confirmation]
+      properties:
+        confirmation: { type: string, enum: [submit_for_review] }
     EventDraft:
       type: object
       required: [title, startsAt, accessRule, location, ticketTypes]

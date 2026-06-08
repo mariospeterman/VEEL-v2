@@ -9,6 +9,7 @@ export type FeedPage = components["schemas"]["FeedPage"];
 export type FeedMode = "recommended" | "following" | "nsfw" | "sfw" | "live" | "premium";
 export type UploadSession = components["schemas"]["UploadSession"];
 export type UpdateContentRequest = components["schemas"]["UpdateContentRequest"];
+export type PublishContentRequest = components["schemas"]["PublishContentRequest"];
 
 export interface ListHomeFeedInput {
   supabaseUserId: string;
@@ -29,6 +30,7 @@ export interface ContentRepository {
   updateMediaAssetFromWebhook?(input: UpdateMediaAssetFromWebhookInput): Promise<boolean>;
   updateMediaAssetPlayback?(input: UpdateMediaAssetPlaybackInput): Promise<void>;
   updateOwnedContent?(input: UpdateOwnedContentInput): Promise<ContentItem | null>;
+  publishOwnedContent?(input: PublishOwnedContentInput): Promise<ContentItem | null>;
   close?(): Promise<void>;
 }
 
@@ -53,6 +55,12 @@ export interface UpdateOwnedContentInput {
   teaserEndMsProvided: boolean;
   thumbnailFrameMs?: number | null | undefined;
   thumbnailFrameMsProvided: boolean;
+}
+
+export interface PublishOwnedContentInput {
+  supabaseUserId: string;
+  contentId: string;
+  idempotencyKey: string;
 }
 
 export interface FindOwnedContentForUploadInput {

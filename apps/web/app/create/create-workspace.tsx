@@ -6,6 +6,7 @@ import {
   ApiMutationError,
   createContentDraft,
   createMediaUpload,
+  publishContent,
   updateContent,
   type ContentItem,
   type CreateContentRequest,
@@ -36,8 +37,9 @@ export function CreateWorkspace() {
   const [teaserStartMs, setTeaserStartMs] = useState("");
   const [teaserEndMs, setTeaserEndMs] = useState("");
   const [thumbnailFrameMs, setThumbnailFrameMs] = useState("");
-  const [pending, setPending] = useState<"draft" | "save" | "upload" | null>(null);
+  const [pending, setPending] = useState<"draft" | "save" | "publish" | "upload" | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [publishState, setPublishState] = useState<"draft" | "submitted_for_review">("draft");
   const [error, setError] = useState<string | null>(null);
   const uploadRef = useRef<tus.Upload | null>(null);
 
@@ -55,6 +57,28 @@ export function CreateWorkspace() {
       });
       setDraft(nextDraft);
       setUploadSession(null);
+      setSavedAt(new Date().toISOString());
+      setPublishState("draft");
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function onPublishDraft() {
+    if (!draft) return;
+
+    setPending("publish");
+    setError(null);
+
+    try {
+      setDraft(
+        await publishContent(draft.id, {
+          confirmation: "submit_for_review"
+        })
+      );
+      setPublishState("submitted_for_review");
       setSavedAt(new Date().toISOString());
     } catch (caught) {
       setError(errorMessage(caught));
@@ -221,6 +245,7 @@ export function CreateWorkspace() {
           <Fact label="Playback" value={draft.playback?.state ?? "not_ready"} />
           <Fact label="Visibility" value={visibility} />
           <Fact label="Label" value={nsfwLabel} />
+          <Fact label="Publish" value={publishState} />
           {savedAt ? <Fact label="Last saved" value={savedAt} /> : null}
           <div className="grid gap-3 sm:grid-cols-3">
             <NumberInput label="Teaser start ms" onChange={setTeaserStartMs} value={teaserStartMs} />
@@ -234,6 +259,14 @@ export function CreateWorkspace() {
             type="button"
           >
             {pending === "save" ? "Saving settings" : "Save draft settings"}
+          </button>
+          <button
+            className="rounded bg-(--foreground) px-3 py-2 font-semibold text-(--background) disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={pending !== null || uploadState !== "complete" || publishState === "submitted_for_review"}
+            onClick={onPublishDraft}
+            type="button"
+          >
+            {pending === "publish" ? "Submitting for review" : "Submit for review"}
           </button>
           <label className="grid gap-1">
             <span className="text-(--muted)">Video file</span>

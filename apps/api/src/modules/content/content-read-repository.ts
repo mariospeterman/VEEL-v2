@@ -102,6 +102,7 @@ export function createContentReadRepositoryMethods(
           and (
             (
               ci.state = 'ready'
+              and ci.publish_state = 'published'
               and ci.visibility = 'public'
               and ci.moderation_state = 'approved'
             )
@@ -157,6 +158,7 @@ export function createContentReadRepositoryMethods(
         ) eg on true
         where ci.id = ${input.contentId}
           and ci.state = 'ready'
+          and ci.publish_state = 'published'
           and ci.visibility = 'public'
           and ci.moderation_state = 'approved'
           and not exists (

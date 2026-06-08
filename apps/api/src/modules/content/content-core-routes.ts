@@ -1,6 +1,13 @@
 import type { FastifyInstance } from "fastify";
-import { ContentRepositoryConfigurationError } from "./content-repository.js";
-import type { CreateContentRequest, UpdateContentRequest } from "./types.js";
+import {
+  ContentPublishConflictError,
+  ContentRepositoryConfigurationError
+} from "./content-repository.js";
+import type {
+  CreateContentRequest,
+  PublishContentRequest,
+  UpdateContentRequest
+} from "./types.js";
 import {
   contentMediaTypes,
   contentVisibilityValues,
@@ -217,6 +224,85 @@ export async function registerContentCoreRoutes(
 
       return reply.code(200).send(content);
     } catch (error) {
+      if (error instanceof ContentRepositoryConfigurationError) {
+        request.log.warn({ error }, "Content repository is not configured");
+        return reply.code(503).send({
+          code: "service_unavailable",
+          message: "Content storage is not configured"
+        });
+      }
+
+      throw error;
+    }
+  });
+
+  app.post("/v1/content/:contentId/publish", async (request, reply) => {
+    const access = await verifyAppReadyAccess(request, options);
+
+    if (!access.ok) {
+      return reply.code(access.statusCode).send(access.body);
+    }
+
+    const idempotencyKey = request.headers["idempotency-key"];
+
+    if (typeof idempotencyKey !== "string" || idempotencyKey.length === 0) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: "Idempotency-Key header is required"
+      });
+    }
+
+    const params = request.params as { contentId?: string };
+
+    if (typeof params.contentId !== "string" || params.contentId.length === 0) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: "contentId is required"
+      });
+    }
+
+    const body = request.body as Partial<PublishContentRequest> | undefined;
+
+    if (!body || body.confirmation !== "submit_for_review") {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: "confirmation must be submit_for_review"
+      });
+    }
+
+    try {
+      if (!options.contentRepository.publishOwnedContent) {
+        return reply.code(503).send({
+          code: "service_unavailable",
+          message: "Content storage is not configured"
+        });
+      }
+
+      const content = await options.contentRepository.publishOwnedContent({
+        supabaseUserId: access.supabaseUserId,
+        contentId: params.contentId,
+        idempotencyKey
+      });
+
+      if (!content) {
+        return reply.code(404).send({
+          code: "not_found",
+          message: "Content was not found"
+        });
+      }
+
+      return reply.code(200).send(content);
+    } catch (error) {
+      if (error instanceof ContentPublishConflictError) {
+        return reply.code(409).send({
+          code: "conflict",
+          message:
+            error.reason === "blocked"
+              ? "Content is blocked and cannot be published"
+              : "Content cannot be published until provider media is ready"
+        });
+      }
+
       if (error instanceof ContentRepositoryConfigurationError) {
         request.log.warn({ error }, "Content repository is not configured");
         return reply.code(503).send({

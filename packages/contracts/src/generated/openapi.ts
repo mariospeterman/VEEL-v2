@@ -602,6 +602,23 @@ export interface paths {
         patch: operations["updateContent"];
         trace?: never;
     };
+    "/v1/content/{contentId}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit provider-ready content for moderation or publish after approval */
+        post: operations["publishContent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/media/uploads": {
         parameters: {
             query?: never;
@@ -2684,6 +2701,10 @@ export interface components {
             teaserEndMs?: number | null;
             thumbnailFrameMs?: number | null;
             eventDraft?: components["schemas"]["EventDraft"];
+        };
+        PublishContentRequest: {
+            /** @enum {string} */
+            confirmation: "submit_for_review";
         };
         EventDraft: {
             title: string;
@@ -5500,6 +5521,11 @@ export interface components {
                 "application/json": components["schemas"]["UpdateContentRequest"];
             };
         };
+        PublishContent: {
+            content: {
+                "application/json": components["schemas"]["PublishContentRequest"];
+            };
+        };
         UpdateFeedPreferences: {
             content: {
                 "application/json": components["schemas"]["UpdateFeedPreferencesRequest"];
@@ -6350,6 +6376,29 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    publishContent: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                contentId: components["parameters"]["ContentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["PublishContent"];
+        responses: {
+            200: components["responses"]["ContentItem"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };

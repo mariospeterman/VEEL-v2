@@ -108,6 +108,7 @@ export async function listContent(
       limit 1
     ) eg on true
     where ci.state = 'ready'
+      and ci.publish_state = 'published'
       and ci.visibility = 'public'
       and ci.moderation_state = 'approved'
       and (${input.cursor ?? null}::timestamptz is null or ci.created_at < ${input.cursor ?? null}::timestamptz)

@@ -4,3 +4,10 @@ export class ContentRepositoryConfigurationError extends Error {
     this.name = "ContentRepositoryConfigurationError";
   }
 }
+
+export class ContentPublishConflictError extends Error {
+  constructor(readonly reason: "provider_not_ready" | "blocked") {
+    super(reason);
+    this.name = "ContentPublishConflictError";
+  }
+}
