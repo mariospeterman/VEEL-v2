@@ -1668,6 +1668,75 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("blocks content draft creation when the daily server quota is reached", async () => {
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        throw new Error("quota should be checked before draft creation");
+      },
+      async createMediaAsset() {
+        throw new Error("not implemented");
+      },
+      async countContentDraftsCreatedSince(input) {
+        expect(input.supabaseUserId).toBe("00000000-0000-4000-8000-000000000001");
+        expect(input.since).toBeInstanceOf(Date);
+        return 20;
+      },
+      async findContentDetail() {
+        throw new Error("not implemented");
+      },
+      async findContentUnlockOffer() {
+        throw new Error("not implemented");
+      },
+      async findOwnedContentForUpload() {
+        throw new Error("not implemented");
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/content",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "content-draft-quota-1"
+      },
+      payload: {
+        mediaType: "vod",
+        caption: "studio cut",
+        visibility: "private",
+        nsfwLabel: "none"
+      }
+    });
+
+    expect(response.statusCode).toBe(429);
+    expect(response.json()).toMatchObject({
+      code: "rate_limited",
+      message: "Daily content draft quota has been reached"
+    });
+
+    await app.close();
+  });
+
   it("updates owned content metadata and preview controls without publishing", async () => {
     const contentRepository: ContentRepository = {
       async createDraft() {
@@ -2046,6 +2115,92 @@ describe("buildApi", () => {
         providerState: "created"
       }
     ]);
+
+    await app.close();
+  });
+
+  it("blocks media uploads when the daily server quota is reached before calling Bunny", async () => {
+    let providerCalled = false;
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        throw new Error("not implemented");
+      },
+      async createMediaAsset() {
+        throw new Error("provider should not create an asset when quota is reached");
+      },
+      async countMediaAssetsCreatedSince(input) {
+        expect(input.supabaseUserId).toBe("00000000-0000-4000-8000-000000000001");
+        expect(input.since).toBeInstanceOf(Date);
+        return 30;
+      },
+      async findContentDetail() {
+        throw new Error("not implemented");
+      },
+      async findContentUnlockOffer() {
+        throw new Error("not implemented");
+      },
+      async findOwnedContentForUpload() {
+        return {
+          id: "00000000-0000-4000-8000-000000000040",
+          mediaType: "vod",
+          caption: "studio cut"
+        };
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      }
+    };
+    const mediaUploadProvider: MediaUploadProviderAdapter = {
+      provider: "bunny",
+      isConfigured() {
+        providerCalled = true;
+        return true;
+      },
+      async createUploadSession() {
+        providerCalled = true;
+        throw new Error("Bunny should not be called when quota is reached");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository,
+      mediaUploadProvider
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/media/uploads",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "media-upload-quota-1"
+      },
+      payload: {
+        contentId: "00000000-0000-4000-8000-000000000040",
+        fileName: "studio.mp4",
+        mimeType: "video/mp4"
+      }
+    });
+
+    expect(response.statusCode).toBe(429);
+    expect(response.json()).toMatchObject({
+      code: "rate_limited",
+      message: "Daily media upload quota has been reached"
+    });
+    expect(providerCalled).toBe(false);
 
     await app.close();
   });

@@ -6,6 +6,9 @@ import {
 } from "./media-upload-adapter.js";
 import type { CreateUploadRequest } from "./types.js";
 import {
+  dailyMediaUploadQuota,
+  dailyQuotaWindowStart,
+  quotaExceededResponse,
   verifyAppReadyAccess,
   videoMimeTypes,
   type RegisterContentRoutesOptions
@@ -57,6 +60,19 @@ export async function registerContentUploadRoutes(
           code: "not_found",
           message: "Content draft was not found"
         });
+      }
+
+      if (options.contentRepository.countMediaAssetsCreatedSince) {
+        const uploadCount = await options.contentRepository.countMediaAssetsCreatedSince({
+          supabaseUserId: access.supabaseUserId,
+          since: dailyQuotaWindowStart()
+        });
+
+        if (uploadCount >= dailyMediaUploadQuota) {
+          return reply
+            .code(429)
+            .send(quotaExceededResponse("Daily media upload quota has been reached"));
+        }
       }
 
       if (!options.mediaUploadProvider.isConfigured()) {

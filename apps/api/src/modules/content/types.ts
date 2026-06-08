@@ -21,6 +21,8 @@ export interface ListHomeFeedInput {
 export interface ContentRepository {
   createDraft(input: CreateContentDraftInput): Promise<ContentItem>;
   createMediaAsset(input: CreateMediaAssetInput): Promise<void>;
+  countContentDraftsCreatedSince?(input: CountContentQuotaInput): Promise<number>;
+  countMediaAssetsCreatedSince?(input: CountContentQuotaInput): Promise<number>;
   findContentDetail(input: FindContentDetailInput): Promise<ContentItem | null>;
   findContentUnlockOffer(input: FindContentUnlockOfferInput): Promise<ContentUnlockOffer | null>;
   findOwnedMediaAssetForSync?(input: FindOwnedMediaAssetForSyncInput): Promise<OwnedMediaAssetForSync | null>;
@@ -40,6 +42,11 @@ export interface CreateContentDraftInput {
   caption?: string | null | undefined;
   visibility: string;
   nsfwLabel: NonNullable<ContentItem["nsfwLabel"]>;
+}
+
+export interface CountContentQuotaInput {
+  supabaseUserId: string;
+  since: Date;
 }
 
 export interface UpdateOwnedContentInput {

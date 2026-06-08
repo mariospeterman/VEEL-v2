@@ -11,8 +11,11 @@ import type {
 import {
   contentMediaTypes,
   contentVisibilityValues,
+  dailyContentDraftQuota,
+  dailyQuotaWindowStart,
   feedModeFromQuery,
   nsfwLabels,
+  quotaExceededResponse,
   verifyAppReadyAccess,
   withSignedPlayback,
   type RegisterContentRoutesOptions
@@ -56,6 +59,19 @@ export async function registerContentCoreRoutes(
     }
 
     try {
+      if (options.contentRepository.countContentDraftsCreatedSince) {
+        const draftCount = await options.contentRepository.countContentDraftsCreatedSince({
+          supabaseUserId: access.supabaseUserId,
+          since: dailyQuotaWindowStart()
+        });
+
+        if (draftCount >= dailyContentDraftQuota) {
+          return reply
+            .code(429)
+            .send(quotaExceededResponse("Daily content draft quota has been reached"));
+        }
+      }
+
       const content = await options.contentRepository.createDraft({
         supabaseUserId: access.supabaseUserId,
         mediaType: body.mediaType,

@@ -23,7 +23,8 @@ Non-goals:
 Current implementation state:
 
 - `POST /v1/content` creates a server-owned content draft for app-ready users.
-- `POST /v1/media/uploads` creates a Bunny Stream upload session for an owned content draft.
+- `POST /v1/content` enforces a backend-owned daily draft quota before inserting content.
+- `POST /v1/media/uploads` creates a Bunny Stream upload session for an owned content draft and enforces a backend-owned daily upload-session quota before touching Bunny.
 - `/create` now uses those backend endpoints for explicit draft creation, metadata/preview updates, and upload-session creation, then uploads bytes through `tus-js-client` using the server-issued Bunny TUS endpoint and headers. The browser displays progress, pause/resume state, safe upload headers, expiry, and frontend-safe content access/playback projection; it does not receive the Bunny API key, mutate moderation state, or publish content locally.
 - `PATCH /v1/content/{contentId}` is creator-owned and idempotency-header gated. It updates caption, visibility, NSFW label, teaser start/end, and thumbnail frame controls only; it does not publish, approve moderation, grant access, or update provider playback truth. `eventDraft` is rejected until the dedicated Event Access publish slice owns that workflow end to end.
 - `POST /v1/content/{contentId}/publish` is creator-owned and idempotency-header gated. It requires explicit `submit_for_review` confirmation and provider-ready media before moving `publish_state` to `submitted_for_review` or `published` if moderation was already approved. It does not approve moderation, grant access, or create paid visibility.

@@ -26,6 +26,8 @@ export const contentMediaTypes = new Set(["bit", "clip", "image", "vod", "live_r
 export const contentVisibilityValues = new Set(["public", "followers", "subscribers", "private"]);
 export const nsfwLabels = new Set(["none", "adult", "explicit", "sensitive"]);
 export const videoMimeTypes = new Set(["video/mp4", "video/quicktime", "video/webm"]);
+export const dailyContentDraftQuota = 20;
+export const dailyMediaUploadQuota = 30;
 
 export function feedModeFromQuery(mode: string | undefined): FeedMode {
   return feedModes.has(mode ?? "") ? (mode as FeedMode) : "recommended";
@@ -41,6 +43,20 @@ export function rawBodyBuffer(rawBody: unknown): Buffer {
   }
 
   return Buffer.alloc(0);
+}
+
+export function dailyQuotaWindowStart(now = new Date()): Date {
+  return new Date(now.getTime() - 24 * 60 * 60 * 1000);
+}
+
+export function quotaExceededResponse(message: string): {
+  code: "rate_limited";
+  message: string;
+} {
+  return {
+    code: "rate_limited",
+    message
+  };
 }
 
 export function withSignedPlayback(
