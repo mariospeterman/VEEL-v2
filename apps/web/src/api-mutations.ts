@@ -24,6 +24,12 @@ export type PaidMessageIntent = components["schemas"]["PaidMessageIntent"];
 export type CreatePaymentIntentRequest = components["schemas"]["CreatePaymentIntentRequest"];
 export type PaymentIntent = components["schemas"]["PaymentIntent"];
 export type TransactionRequest = components["schemas"]["TransactionRequest"];
+export type CreateSubscriptionIntentRequest = components["schemas"]["CreateSubscriptionIntentRequest"];
+export type SubscriptionAuthorizationIntent =
+  components["schemas"]["SubscriptionAuthorizationIntent"];
+export type SubmitSubscriptionAuthorizationRequest =
+  components["schemas"]["SubmitSubscriptionAuthorizationRequest"];
+export type Subscription = components["schemas"]["Subscription"];
 
 export class ApiMutationError extends Error {
   constructor(
@@ -112,6 +118,31 @@ export async function createPaymentIntent(body: CreatePaymentIntentRequest): Pro
 export async function getPaymentTransactionRequest(paymentIntentId: string): Promise<TransactionRequest> {
   return authenticatedGet<TransactionRequest>(
     `/v1/payments/intents/${encodeURIComponent(paymentIntentId)}/transaction-request`
+  );
+}
+
+export async function createSubscriptionIntent(
+  body: CreateSubscriptionIntentRequest
+): Promise<SubscriptionAuthorizationIntent> {
+  return authenticatedMutation<SubscriptionAuthorizationIntent>("/v1/subscriptions/intents", "POST", body);
+}
+
+export async function submitSubscriptionAuthorization(
+  authorizationIntentId: string,
+  body: SubmitSubscriptionAuthorizationRequest
+): Promise<Subscription> {
+  return authenticatedMutation<Subscription>(
+    `/v1/subscriptions/authorizations/${encodeURIComponent(authorizationIntentId)}/submissions`,
+    "POST",
+    body
+  );
+}
+
+export async function cancelSubscription(subscriptionId: string): Promise<Subscription> {
+  return authenticatedMutation<Subscription>(
+    `/v1/subscriptions/${encodeURIComponent(subscriptionId)}/cancel`,
+    "PATCH",
+    {}
   );
 }
 

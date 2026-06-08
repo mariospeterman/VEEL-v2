@@ -9,6 +9,8 @@ import {
   type SubscriptionPlanPage
 } from "@/api-client";
 import { requireAppAccess } from "@/supabase/route-guard";
+import { SubscriptionAuthorizationPanel } from "./subscription-authorization-panel";
+import { SubscriptionCancelPanel } from "./subscription-cancel-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -84,6 +86,7 @@ function SubscriptionSummary({ subscription }: { subscription: Subscription }) {
       <Fact label="Renewal" value={subscription.renewalMode} />
       <Fact label="Next collection" value={subscription.nextCollectionAt ?? "pending authorization"} />
       <Fact label="Authority" value={subscription.authorityAddress ?? "not verified"} />
+      <SubscriptionCancelPanel subscription={subscription} />
     </div>
   );
 }
@@ -107,6 +110,7 @@ function PlanRow({ plan }: { plan: SubscriptionPlan }) {
         <Fact label="Token" value={plan.tokenProgram ?? "unconfigured"} />
         <Fact label="Mint" value={plan.tokenMint ?? "unconfigured"} />
       </dl>
+      <SubscriptionAuthorizationPanel plan={plan} />
     </article>
   );
 }
