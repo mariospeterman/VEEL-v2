@@ -1783,9 +1783,6 @@ components:
     ActivateMutuals: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ActivateMutualsRequest" } } } }
     UpdateMutualsPreferences: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateMutualsPreferencesRequest" } } } }
     MutualsInterest: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/MutualsInterestRequest" } } } }
-    ActivateDating: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ActivateDatingRequest" } } } }
-    UpdateDatingPreferences: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateDatingPreferencesRequest" } } } }
-    DatingSwipe: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/DatingSwipeRequest" } } } }
     CreateAiSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateAiSessionRequest" } } } }
     CreateAiToolCall: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateAiToolCallRequest" } } } }
     AdminReason: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminReasonRequest" } } } }
@@ -1876,18 +1873,11 @@ components:
     AccessPassRequest: { description: Event Access Pass request, content: { application/json: { schema: { $ref: "#/components/schemas/AccessPassRequest" } } } }
     AccessPass: { description: Event Access Pass, content: { application/json: { schema: { $ref: "#/components/schemas/AccessPass" } } } }
     AccessPassPage: { description: Event Access Passes, content: { application/json: { schema: { $ref: "#/components/schemas/AccessPassPage" } } } }
-    Ticket: { description: Ticket, content: { application/json: { schema: { $ref: "#/components/schemas/Ticket" } } } }
-    TicketPage: { description: Tickets, content: { application/json: { schema: { $ref: "#/components/schemas/TicketPage" } } } }
     MutualsProfile: { description: Mutuals profile, content: { application/json: { schema: { $ref: "#/components/schemas/MutualsProfile" } } } }
     MutualsFeedPage: { description: Mutuals feed, content: { application/json: { schema: { $ref: "#/components/schemas/MutualsFeedPage" } } } }
     MutualsInterestResult: { description: Mutuals interest action result, content: { application/json: { schema: { $ref: "#/components/schemas/MutualsInterestResult" } } } }
     MutualsPage: { description: Mutuals, content: { application/json: { schema: { $ref: "#/components/schemas/MutualsPage" } } } }
     Mutual: { description: Mutual, content: { application/json: { schema: { $ref: "#/components/schemas/Mutual" } } } }
-    DatingProfile: { description: Mutuals profile, content: { application/json: { schema: { $ref: "#/components/schemas/DatingProfile" } } } }
-    DatingFeedPage: { description: Mutuals feed, content: { application/json: { schema: { $ref: "#/components/schemas/DatingFeedPage" } } } }
-    DatingSwipeResult: { description: Mutuals interest action result, content: { application/json: { schema: { $ref: "#/components/schemas/DatingSwipeResult" } } } }
-    DatingMatchPage: { description: Mutuals, content: { application/json: { schema: { $ref: "#/components/schemas/DatingMatchPage" } } } }
-    DatingMatch: { description: Mutual, content: { application/json: { schema: { $ref: "#/components/schemas/DatingMatch" } } } }
     ActivityPage: { description: Activity page, content: { application/json: { schema: { $ref: "#/components/schemas/ActivityPage" } } } }
     WalletTransactionPage: { description: Wallet transactions, content: { application/json: { schema: { $ref: "#/components/schemas/WalletTransactionPage" } } } }
     AiSession: { description: AI session, content: { application/json: { schema: { $ref: "#/components/schemas/AiSession" } } } }
@@ -2395,7 +2385,7 @@ components:
         confirmation: { type: string, enum: [submit_for_review] }
     EventDraft:
       type: object
-      required: [title, startsAt, accessRule, location, ticketTypes]
+      required: [title, startsAt, accessRule, location, accessPassTypes]
       properties:
         title: { type: string }
         description: { type: string }
@@ -2403,10 +2393,10 @@ components:
         endsAt: { type: string, format: date-time }
         accessRule: { type: string, enum: [public_sale, private_apply] }
         location: { $ref: "#/components/schemas/EventLocationDraft" }
-        ticketTypes:
+        accessPassTypes:
           type: array
           minItems: 1
-          items: { $ref: "#/components/schemas/EventTicketTypeDraft" }
+          items: { $ref: "#/components/schemas/EventAccessPassTypeDraft" }
     EventPatch:
       type: object
       properties:
@@ -2416,11 +2406,11 @@ components:
         endsAt: { type: string, format: date-time }
         accessRule: { type: string, enum: [public_sale, private_apply] }
         location: { $ref: "#/components/schemas/EventLocationDraft" }
-        ticketTypes:
+        accessPassTypes:
           type: array
-          items: { $ref: "#/components/schemas/EventTicketTypeDraft" }
+          items: { $ref: "#/components/schemas/EventAccessPassTypeDraft" }
         state: { type: string, enum: [draft, published, sold_out, cancelled, completed] }
-    EventTicketType:
+    EventAccessPassType:
       type: object
       required: [id, label, priceMinor, currency, capacity, remaining, state]
       properties:
@@ -2434,7 +2424,7 @@ components:
         saleStartsAt: { type: string, format: date-time, nullable: true }
         saleEndsAt: { type: string, format: date-time, nullable: true }
         perUserLimit: { type: integer, minimum: 1, maximum: 20, nullable: true }
-    EventTicketTypeDraft:
+    EventAccessPassTypeDraft:
       type: object
       required: [label, currency, capacity]
       properties:
@@ -2455,8 +2445,6 @@ components:
         longitude: { type: number, format: double }
         provider: { type: string, enum: [openstreetmap, manual, none] }
         providerPlaceId: { type: string }
-    EventAccessPassType: { $ref: "#/components/schemas/EventTicketType" }
-    EventAccessPassTypeDraft: { $ref: "#/components/schemas/EventTicketTypeDraft" }
     CreateUploadRequest:
       type: object
       required: [contentId, fileName, mimeType]
@@ -2888,7 +2876,7 @@ components:
     UpdateEventRequest: { $ref: "#/components/schemas/EventPatch" }
     Event:
       type: object
-      required: [id, title, startsAt, accessRule, location, state, ticketTypes]
+      required: [id, title, startsAt, accessRule, location, state, accessPassTypes]
       properties:
         id: { type: string, format: uuid }
         title: { type: string }
@@ -2898,9 +2886,9 @@ components:
         accessRule: { type: string, enum: [public_sale, private_apply] }
         location: { $ref: "#/components/schemas/EventLocationDraft" }
         state: { type: string, enum: [draft, published, sold_out, cancelled, completed] }
-        ticketTypes:
+        accessPassTypes:
           type: array
-          items: { $ref: "#/components/schemas/EventTicketType" }
+          items: { $ref: "#/components/schemas/EventAccessPassType" }
     CreateAccessPassIntentRequest:
       type: object
       required: [accessPassTypeId]
@@ -2952,45 +2940,53 @@ components:
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/AccessPass" } }
         nextCursor: { type: string, nullable: true }
-    TicketRequest:
+    ActivateMutualsRequest:
       type: object
-      required: [id, eventId, ticketTypeId, state, createdAt]
+      required: [consentVersion]
       properties:
-        id: { type: string, format: uuid }
-        eventId: { type: string, format: uuid }
-        ticketTypeId: { type: string, format: uuid }
-        state: { type: string, enum: [requested, approved, rejected, expired] }
+        consentVersion: { type: string }
+    UpdateMutualsPreferencesRequest:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        activeMatchLimit: { type: integer, minimum: 1, maximum: 50 }
+    MutualsProfile:
+      type: object
+      required: [enabled, consentVersion, activeMatchLimit, visibleOnMedia, safetyState, createdAt, updatedAt]
+      properties:
+        enabled: { type: boolean }
+        consentVersion: { type: string, nullable: true }
+        activeMatchLimit: { type: integer }
+        visibleOnMedia: { type: boolean }
+        safetyState: { type: string, enum: [clear, limited, blocked] }
         createdAt: { type: string, format: date-time }
-    Ticket:
+        updatedAt: { type: string, format: date-time }
+    MutualsFeedItem:
       type: object
-      required: [id, eventId, ticketTypeId, holderUserId, state, qrToken, createdAt]
+      required: [contentId, creatorUserId, handle, displayName, title, mediaKind, createdAt]
       properties:
-        id: { type: string, format: uuid }
-        eventId: { type: string, format: uuid }
-        ticketTypeId: { type: string, format: uuid }
-        holderUserId: { type: string, format: uuid }
-        paymentIntentId: { type: string, format: uuid, nullable: true }
-        state: { type: string, enum: [active, checked_in, revoked, expired] }
-        qrToken: { type: string }
-        checkedInAt: { type: string, format: date-time, nullable: true }
+        contentId: { type: string, format: uuid }
+        creatorUserId: { type: string, format: uuid }
+        handle: { type: string }
+        displayName: { type: string }
+        avatarUrl: { type: string, nullable: true }
+        title: { type: string }
+        mediaKind: { type: string, enum: [image, video, live, replay] }
+        posterUrl: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
-    TicketPage:
-      type: object
-      required: [items]
-      properties:
-        items: { type: array, items: { $ref: "#/components/schemas/Ticket" } }
-        nextCursor: { type: string, nullable: true }
-    ActivateMutualsRequest: { $ref: "#/components/schemas/ActivateDatingRequest" }
-    UpdateMutualsPreferencesRequest: { $ref: "#/components/schemas/UpdateDatingPreferencesRequest" }
-    MutualsProfile: { $ref: "#/components/schemas/DatingProfile" }
-    MutualsFeedItem: { $ref: "#/components/schemas/DatingFeedItem" }
     MutualsFeedPage:
       type: object
       required: [items]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/MutualsFeedItem" } }
         nextCursor: { type: string, nullable: true }
-    MutualsInterestRequest: { $ref: "#/components/schemas/DatingSwipeRequest" }
+    MutualsInterestRequest:
+      type: object
+      required: [targetUserId, contentId, action]
+      properties:
+        targetUserId: { type: string, format: uuid }
+        contentId: { type: string, format: uuid }
+        action: { type: string, enum: [yes, not_interested] }
     MutualsInterestResult:
       type: object
       required: [mutualCreated, interestId]
@@ -3018,80 +3014,6 @@ components:
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/Mutual" } }
         nextCursor: { type: string, nullable: true }
-    ActivateDatingRequest:
-      type: object
-      required: [consentVersion]
-      properties:
-        consentVersion: { type: string }
-    UpdateDatingPreferencesRequest:
-      type: object
-      properties:
-        enabled: { type: boolean }
-        activeMatchLimit: { type: integer, minimum: 1, maximum: 50 }
-    DatingProfile:
-      type: object
-      required: [enabled, consentVersion, activeMatchLimit, visibleOnMedia, safetyState, createdAt, updatedAt]
-      properties:
-        enabled: { type: boolean }
-        consentVersion: { type: string, nullable: true }
-        activeMatchLimit: { type: integer }
-        visibleOnMedia: { type: boolean }
-        safetyState: { type: string, enum: [clear, limited, blocked] }
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
-    DatingFeedItem:
-      type: object
-      required: [contentId, creatorUserId, handle, displayName, title, mediaKind, createdAt]
-      properties:
-        contentId: { type: string, format: uuid }
-        creatorUserId: { type: string, format: uuid }
-        handle: { type: string }
-        displayName: { type: string }
-        avatarUrl: { type: string, nullable: true }
-        title: { type: string }
-        mediaKind: { type: string, enum: [image, video, live, replay] }
-        posterUrl: { type: string, nullable: true }
-        createdAt: { type: string, format: date-time }
-    DatingFeedPage:
-      type: object
-      required: [items]
-      properties:
-        items: { type: array, items: { $ref: "#/components/schemas/DatingFeedItem" } }
-        nextCursor: { type: string, nullable: true }
-    DatingSwipeRequest:
-      type: object
-      required: [targetUserId, contentId, action]
-      properties:
-        targetUserId: { type: string, format: uuid }
-        contentId: { type: string, format: uuid }
-        action: { type: string, enum: [yes, not_interested] }
-    DatingSwipeResult:
-      type: object
-      required: [matchCreated, swipeId]
-      properties:
-        swipeId: { type: string, format: uuid }
-        matchCreated: { type: boolean }
-        matchId: { type: string, format: uuid, nullable: true }
-        match: { $ref: "#/components/schemas/DatingMatch" }
-    DatingMatch:
-      type: object
-      required: [id, userAId, userBId, state, createdAt]
-      properties:
-        id: { type: string, format: uuid }
-        userAId: { type: string, format: uuid }
-        userBId: { type: string, format: uuid }
-        sourceContentId: { type: string, format: uuid, nullable: true }
-        conversationId: { type: string, format: uuid, nullable: true }
-        state: { type: string, enum: [active, stale, archived, blocked, reported, expired] }
-        staleAt: { type: string, format: date-time, nullable: true }
-        expiresAt: { type: string, format: date-time, nullable: true }
-        createdAt: { type: string, format: date-time }
-    DatingMatchPage:
-      type: object
-      required: [items]
-      properties:
-        items: { type: array, items: { $ref: "#/components/schemas/DatingMatch" } }
-        nextCursor: { type: string, nullable: true }
     ActivityPage:
       type: object
       required: [items]
@@ -3103,7 +3025,7 @@ components:
       required: [id, kind, title, state, createdAt]
       properties:
         id: { type: string, format: uuid }
-        kind: { type: string, enum: [payment_intent, wallet_transaction, entitlement, referral, ticket, system] }
+        kind: { type: string, enum: [payment_intent, wallet_transaction, entitlement, referral, access_pass, system] }
         title: { type: string }
         state: { type: string }
         productType: { $ref: "#/components/schemas/ProductType" }

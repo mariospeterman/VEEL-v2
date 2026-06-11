@@ -1,5 +1,4 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { toAccessPass } from "./admin-route-adapters.js";
 import { adminListInput, requireAdminAccess, type RegisterAdminRoutesOptions } from "./admin-route-auth.js";
 
 export function registerAdminEventProviderRoutes(
@@ -19,13 +18,7 @@ export function registerAdminEventProviderRoutes(
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
-    const page = await options.adminRepository.listTickets(adminListInput(query));
-    const response = {
-      items: page.items.map(toAccessPass),
-      nextCursor: page.nextCursor
-    };
-
-    return reply.code(200).send(response);
+    return reply.code(200).send(await options.adminRepository.listAccessPasses(adminListInput(query)));
   };
 
   app.get("/v1/admin/event-access-passes", listEventAccessPasses);

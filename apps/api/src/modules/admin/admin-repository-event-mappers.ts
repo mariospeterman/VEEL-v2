@@ -5,9 +5,9 @@ import type {
   AdminIdentityCheck,
   AdminAiSession,
   AdminAiToolCall,
+  AccessPass,
   Event,
-  EventTicketType,
-  Ticket
+  EventAccessPassType
 } from "./types.js";
 
 import { nullableNumber } from "./admin-repository-mapper-utils.js";
@@ -27,27 +27,27 @@ export interface EventRow {
   created_at: Date;
 }
 
-export interface EventTicketTypeRow {
+export interface EventAccessPassTypeRow {
   id: string;
   event_id: string;
   label: string;
   price_minor: string | number | null;
-  currency: EventTicketType["currency"];
+  currency: EventAccessPassType["currency"];
   capacity: number;
   sale_starts_at: Date | null;
   sale_ends_at: Date | null;
   per_user_limit: number;
-  state: EventTicketType["state"];
+  state: EventAccessPassType["state"];
   issued_count: string | number;
 }
 
-export interface TicketRow {
+export interface AccessPassRow {
   id: string;
   event_id: string;
   access_pass_type_id: string;
   holder_user_id: string;
   payment_intent_id: string | null;
-  state: Ticket["state"];
+  state: AccessPass["state"];
   checked_in_at: Date | null;
   created_at: Date;
 }
@@ -247,7 +247,7 @@ export function toAiToolCall(row: AiToolCallRow): AdminAiToolCall {
   };
 }
 
-export function toEvent(row: EventRow, ticketTypeRows: EventTicketTypeRow[]): Event {
+export function toEvent(row: EventRow, accessPassTypeRows: EventAccessPassTypeRow[]): Event {
   return {
     id: row.id,
     title: row.title,
@@ -262,11 +262,11 @@ export function toEvent(row: EventRow, ticketTypeRows: EventTicketTypeRow[]): Ev
       ...(row.location_lng !== null ? { longitude: Number(row.location_lng) } : {})
     },
     state: row.state,
-    ticketTypes: ticketTypeRows.map(toEventTicketType)
+    accessPassTypes: accessPassTypeRows.map(toEventAccessPassType)
   };
 }
 
-export function toEventTicketType(row: EventTicketTypeRow): EventTicketType {
+export function toEventAccessPassType(row: EventAccessPassTypeRow): EventAccessPassType {
   const issued = Number(row.issued_count);
 
   return {
@@ -283,11 +283,11 @@ export function toEventTicketType(row: EventTicketTypeRow): EventTicketType {
   };
 }
 
-export function toTicket(row: TicketRow): Ticket {
+export function toEventAccessPass(row: AccessPassRow): AccessPass {
   return {
     id: row.id,
     eventId: row.event_id,
-    ticketTypeId: row.access_pass_type_id,
+    accessPassTypeId: row.access_pass_type_id,
     holderUserId: row.holder_user_id,
     paymentIntentId: row.payment_intent_id,
     state: row.state,

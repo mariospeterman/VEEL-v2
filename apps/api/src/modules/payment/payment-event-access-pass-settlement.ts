@@ -10,7 +10,7 @@ export async function grantEventAccessPassEntitlement(
 ): Promise<void> {
   const qrToken = newAccessPassQrToken();
   const rows = await transaction<{
-    ticket_id: string;
+    access_pass_id: string;
     event_id: string;
     access_pass_type_id: string;
   }[]>`
@@ -25,7 +25,7 @@ export async function grantEventAccessPassEntitlement(
         and state = 'pending_payment'
       limit 1
     ),
-    ticket_lock as (
+    access_pass_lock as (
       select pg_advisory_xact_lock(hashtextextended(access_pass_type_id::text, 0))
       from purchase
     ),
@@ -37,14 +37,14 @@ export async function grantEventAccessPassEntitlement(
         count(te.id) filter (where te.state in ('active', 'checked_in')) as issued_count
       from event_access_pass_types tt
       join purchase p on p.access_pass_type_id = tt.id and p.event_id = tt.event_id
-      cross join ticket_lock
+      cross join access_pass_lock
       left join event_access_passes te on te.access_pass_type_id = tt.id
       where tt.state = 'active'
       group by tt.id
       having count(te.id) filter (where te.state in ('active', 'checked_in')) < tt.capacity
       limit 1
     ),
-    inserted_ticket as (
+    inserted_access_pass as (
       insert into event_access_passes (
         id,
         event_id,
@@ -70,21 +70,21 @@ export async function grantEventAccessPassEntitlement(
     ),
     updated_purchase as (
       update event_access_purchase_requests tpr
-      set state = 'ticket_granted'
-      from inserted_ticket it
+      set state = 'access_pass_granted'
+      from inserted_access_pass it
       where tpr.payment_intent_id = ${input.paymentIntentId}
       returning it.id, it.event_id, it.access_pass_type_id
     )
     select
-      id as ticket_id,
+      id as access_pass_id,
       event_id,
       access_pass_type_id
     from updated_purchase
     limit 1
   `;
-  const ticket = rows[0];
+  const accessPass = rows[0];
 
-  if (!ticket) {
+  if (!accessPass) {
     return;
   }
 
@@ -101,12 +101,12 @@ export async function grantEventAccessPassEntitlement(
       ${randomUUID()},
       ${input.userId},
       'event',
-      ${ticket.event_id},
+      ${accessPass.event_id},
       'event_access_pass_granted',
       ${transaction.json({
         paymentIntentId: input.paymentIntentId,
-        ticketId: ticket.ticket_id,
-        ticketTypeId: ticket.access_pass_type_id
+        accessPassId: accessPass.access_pass_id,
+        accessPassTypeId: accessPass.access_pass_type_id
       })}
     )
   `;

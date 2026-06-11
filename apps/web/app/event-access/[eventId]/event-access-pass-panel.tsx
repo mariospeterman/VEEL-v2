@@ -19,10 +19,10 @@ export function EventAccessPassPanel({ event }: EventAccessPassPanelProps) {
     <section className="rounded border border-(--line) bg-(--panel) p-4">
       <h2 className="text-base font-semibold tracking-normal">Access pass sheet</h2>
       <div className="mt-4 grid gap-3">
-        {event.ticketTypes.map((ticketType) => (
-          <EventAccessPassOption event={event} key={ticketType.id} ticketType={ticketType} />
+        {event.accessPassTypes.map((accessPassType) => (
+          <EventAccessPassOption event={event} key={accessPassType.id} accessPassType={accessPassType} />
         ))}
-        {event.ticketTypes.length === 0 ? (
+        {event.accessPassTypes.length === 0 ? (
           <p className="rounded border border-(--line) bg-(--background) p-4 text-sm text-(--muted)">
             No active pass types are available.
           </p>
@@ -34,10 +34,10 @@ export function EventAccessPassPanel({ event }: EventAccessPassPanelProps) {
 
 function EventAccessPassOption({
   event,
-  ticketType
+  accessPassType
 }: {
   event: Event;
-  ticketType: Event["ticketTypes"][number];
+  accessPassType: Event["accessPassTypes"][number];
 }) {
   const [state, setState] = useState<"idle" | "creating" | "ready" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
@@ -52,7 +52,7 @@ function EventAccessPassOption({
 
     try {
       const result = await createEventAccessPassIntent(event.id, {
-        accessPassTypeId: ticketType.id
+        accessPassTypeId: accessPassType.id
       });
 
       if (result.state === "approval_required") {
@@ -86,22 +86,22 @@ function EventAccessPassOption({
     <article className="rounded border border-(--line) bg-(--background) p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="font-medium">{ticketType.label}</p>
-          <p className="mt-1 text-sm text-(--muted)">{ticketType.remaining} remaining</p>
+          <p className="font-medium">{accessPassType.label}</p>
+          <p className="mt-1 text-sm text-(--muted)">{accessPassType.remaining} remaining</p>
         </div>
         <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-medium text-(--accent-strong)">
-          {ticketType.state}
+          {accessPassType.state}
         </span>
       </div>
       <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
-        <Fact label="Price" value={`${ticketType.priceMinor?.toLocaleString() ?? "free"} ${ticketType.currency}`} />
-        <Fact label="Capacity" value={ticketType.capacity.toString()} />
+        <Fact label="Price" value={`${accessPassType.priceMinor?.toLocaleString() ?? "free"} ${accessPassType.currency}`} />
+        <Fact label="Capacity" value={accessPassType.capacity.toString()} />
         <Fact label="Access" value={event.accessRule} />
       </div>
       <div className="mt-4 grid gap-3 border-t border-(--line) pt-4">
         <button
           className="rounded bg-(--foreground) px-3 py-2 text-center text-sm font-semibold text-(--background) disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={state === "creating" || ticketType.state !== "active" || ticketType.remaining <= 0}
+          disabled={state === "creating" || accessPassType.state !== "active" || accessPassType.remaining <= 0}
           onClick={startAccessPass}
           type="button"
         >

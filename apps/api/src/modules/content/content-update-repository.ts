@@ -172,7 +172,7 @@ async function upsertLinkedEventDraft(
     where event_id = ${eventId}
   `;
 
-  for (const ticketType of eventDraft.ticketTypes) {
+  for (const accessPassType of eventDraft.accessPassTypes) {
     await transaction`
       insert into event_access_pass_types (
         id,
@@ -188,13 +188,13 @@ async function upsertLinkedEventDraft(
       values (
         ${randomUUID()},
         ${eventId},
-        ${ticketType.label.trim()},
-        ${ticketType.priceMinor ?? null},
-        ${ticketType.currency},
-        ${ticketType.capacity},
-        ${ticketType.saleStartsAt ?? null},
-        ${ticketType.saleEndsAt ?? null},
-        ${ticketType.perUserLimit ?? 1}
+        ${accessPassType.label.trim()},
+        ${accessPassType.priceMinor ?? null},
+        ${accessPassType.currency},
+        ${accessPassType.capacity},
+        ${accessPassType.saleStartsAt ?? null},
+        ${accessPassType.saleEndsAt ?? null},
+        ${accessPassType.perUserLimit ?? 1}
       )
     `;
   }

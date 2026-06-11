@@ -1066,7 +1066,11 @@ create table event_access_purchase_requests (
   amount_minor bigint not null,
   currency text not null default 'SOL',
   state text not null default 'pending_payment',
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  check (amount_minor > 0),
+  check (currency in ('SOL', 'USDC')),
+  constraint event_access_purchase_requests_state_check
+    check (state in ('pending_payment', 'access_pass_granted', 'cancelled'))
 );
 
 create index event_access_purchase_requests_buyer_idx

@@ -30,7 +30,7 @@ Launch AI/MCP as a permissioned tool layer for three narrow jobs:
 2. User self-service.
 3. Admin/platform operations.
 
-Do not let AI spend money, unlock content, issue tickets, publish content, message users, change safety/admin decisions, access private content/messages, or call provider APIs unless the user/admin explicitly confirms and backend policy allows the tool call.
+Do not let AI spend money, unlock content, issue Event Access Passes, publish content, message users, change safety/admin decisions, access private content/messages, or call provider APIs unless the user/admin explicitly confirms and backend policy allows the tool call.
 
 The first production slice is the backend gateway, session scope, tool allowlist, confirmation state, and audit trail. It uses deterministic internal tools only. LLM provider calls and externally reachable MCP transports remain disabled until the provider ADR and eval fixtures are launch-approved.
 
@@ -48,7 +48,7 @@ Allowed tools:
 - prepare metadata for a scheduled post/live/event
 - suggest a teaser title and thumbnail checklist
 - explain monetisation options using backend config
-- suggest event copy/ticket labels from creator-entered event details
+- suggest event copy/Access Pass labels from creator-entered event details
 
 Not allowed:
 
@@ -60,12 +60,12 @@ Not allowed:
 
 ### User Self-Service Assistant
 
-Useful because payments, wallets, unlocks, tickets, and age verification create support load.
+Useful because payments, wallets, unlocks, Access Passes, and age verification create support load.
 
 Allowed tools:
 
 - explain wallet/top-up state
-- find own purchases/unlocks/tickets
+- find own purchases/unlocks/Access Passes
 - summarize own activity
 - explain why access is pending
 - help retry failed payment or age session
@@ -90,7 +90,7 @@ Allowed tools:
 - summarize creator revenue and retention cohorts
 - identify high-churn funnels
 - explain failed media processing states
-- draft support response from safe ticket context
+- draft support response from safe Access Pass context
 - prepare moderation decision summary
 - prepare refund/revocation recommendation with evidence
 - produce launch-readiness checklist from current metrics
@@ -176,8 +176,8 @@ Launch implementation rules:
 - creator activation funnel
 - user conversion funnel
 - churn indicators
-- event ticket sales/check-ins
-- dating active-match health
+- Event Access Pass sales/check-ins
+- Mutuals active-mutual health
 - AI tool audit events
 
 ## References

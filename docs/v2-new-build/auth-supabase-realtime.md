@@ -125,7 +125,7 @@ Wallet approval is required for wallet actions:
 - paid message
 - creator subscription
 - live pass
-- event ticket
+- Event Access Pass
 - creator earning/tax setup
 
 Wallet is not required for public landing pages, public teaser/deep-link capture, or reading public marketing content. It is required before the protected 18+ app shell opens. Supabase Auth alone is not enough.

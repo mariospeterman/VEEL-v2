@@ -1,12 +1,12 @@
-import type { Event, EventTicketType, Ticket, TicketRequest } from "./types.js";
-import type { TicketRequestRow, TicketRow, TicketTypeRow } from "./event-repository-rows.js";
+import type { AccessPass, AccessPassRequest, Event, EventAccessPassType } from "./types.js";
+import type { AccessPassRequestRow, AccessPassRow, AccessPassTypeRow } from "./event-repository-rows.js";
 
 export function stripRequestHash(event: Event & { requestHash?: string }): Event {
   const { requestHash: _requestHash, ...publicEvent } = event;
   return publicEvent;
 }
 
-export function toTicketType(row: TicketTypeRow): EventTicketType {
+export function toAccessPassType(row: AccessPassTypeRow): EventAccessPassType {
   const issued = Number(row.issued_count);
 
   return {
@@ -23,11 +23,11 @@ export function toTicketType(row: TicketTypeRow): EventTicketType {
   };
 }
 
-export function toTicket(row: TicketRow): Ticket {
+export function toEventAccessPass(row: AccessPassRow): AccessPass {
   return {
     id: row.id,
     eventId: row.event_id,
-    ticketTypeId: row.access_pass_type_id,
+    accessPassTypeId: row.access_pass_type_id,
     holderUserId: row.holder_user_id,
     paymentIntentId: row.payment_intent_id,
     state: row.state,
@@ -37,11 +37,11 @@ export function toTicket(row: TicketRow): Ticket {
   };
 }
 
-export function toTicketRequest(row: TicketRequestRow): TicketRequest {
+export function toEventAccessPassRequest(row: AccessPassRequestRow): AccessPassRequest {
   return {
     id: row.id,
     eventId: row.event_id,
-    ticketTypeId: row.access_pass_type_id,
+    accessPassTypeId: row.access_pass_type_id,
     state: row.state,
     createdAt: row.created_at.toISOString()
   };

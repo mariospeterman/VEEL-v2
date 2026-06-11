@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type postgres from "postgres";
-import type { TicketRow } from "./event-repository-rows.js";
+import type { AccessPassRow } from "./event-repository-rows.js";
 
 export function hashQrToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
@@ -11,20 +11,20 @@ export async function grantAccessPass(
   input: {
     supabaseUserId: string;
     eventId: string;
-    ticketTypeId: string;
+    accessPassTypeId: string;
     paymentIntentId: string | null;
   }
-): Promise<TicketRow[]> {
+): Promise<AccessPassRow[]> {
   const qrToken = newQrToken();
 
-  return sql<TicketRow[]>`
+  return sql<AccessPassRow[]>`
     with holder as (
       select id
       from users
       where supabase_user_id = ${input.supabaseUserId}
       limit 1
     ),
-    existing_ticket as (
+    existing_access_pass as (
       select
         te.id,
         te.event_id,
@@ -38,12 +38,12 @@ export async function grantAccessPass(
       from event_access_passes te
       join holder on holder.id = te.holder_user_id
       where te.event_id = ${input.eventId}
-        and te.access_pass_type_id = ${input.ticketTypeId}
+        and te.access_pass_type_id = ${input.accessPassTypeId}
         and te.state in ('active', 'checked_in')
       limit 1
     ),
     ticket_lock as (
-      select pg_advisory_xact_lock(hashtextextended(${input.ticketTypeId}, 0))
+      select pg_advisory_xact_lock(hashtextextended(${input.accessPassTypeId}, 0))
     ),
     inventory as (
       select
@@ -54,15 +54,15 @@ export async function grantAccessPass(
       from event_access_pass_types tt
       cross join ticket_lock
       left join event_access_passes te on te.access_pass_type_id = tt.id
-      where tt.id = ${input.ticketTypeId}
+      where tt.id = ${input.accessPassTypeId}
         and tt.event_id = ${input.eventId}
         and tt.state = 'active'
-        and not exists (select 1 from existing_ticket)
+        and not exists (select 1 from existing_access_pass)
       group by tt.id
       having count(te.id) filter (where te.state in ('active', 'checked_in')) < tt.capacity
       limit 1
     ),
-    inserted_ticket as (
+    inserted_access_pass as (
       insert into event_access_passes (
         id,
         event_id,
@@ -95,7 +95,7 @@ export async function grantAccessPass(
       state,
       checked_in_at,
       created_at
-    from inserted_ticket
+    from inserted_access_pass
     union all
     select
       id,
@@ -107,7 +107,7 @@ export async function grantAccessPass(
       state,
       checked_in_at,
       created_at
-    from existing_ticket
+    from existing_access_pass
     limit 1
   `;
 }

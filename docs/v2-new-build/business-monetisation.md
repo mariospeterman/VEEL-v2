@@ -382,7 +382,7 @@ The admin dashboard must expose safe, role-gated views for:
 - top creators/products
 - refunds/disputes/revocations
 - KYC/KYB earning readiness
-- event ticket sales and check-ins
+- Event Access Pass sales and check-ins
 
 Financial dashboards must link to immutable settlement records and audit events, not frontend counters.
 
@@ -422,7 +422,7 @@ audit_required
 - content unlock settlement with access grant
 - paid message settlement with message entitlement
 - live pass settlement with room access
-- event ticket settlement with ticket entitlement
+- Event Access Pass settlement with backend Access Pass entitlement
 - creator subscription create/renew/cancel/fail/recover
 - platform subscription create/renew/cancel/fail/recover
 - referral attribution and commission

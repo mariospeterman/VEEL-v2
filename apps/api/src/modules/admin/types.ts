@@ -49,9 +49,8 @@ export type AdminModerationActionRequest =
 export type AdminReportActionRequest = components["schemas"]["AdminReportActionRequest"];
 export type AdminReasonRequest = components["schemas"]["AdminReasonRequest"];
 export type Event = components["schemas"]["Event"];
-export type EventTicketType = components["schemas"]["EventTicketType"];
+export type EventAccessPassType = components["schemas"]["EventAccessPassType"];
 export type AccessPass = components["schemas"]["AccessPass"];
-export type Ticket = components["schemas"]["Ticket"];
 
 export interface AdminPage<Item> {
   items: Item[];
@@ -117,7 +116,7 @@ export interface AdminRepository {
     idempotencyKey: string;
   }): Promise<AdminDataRequest | null>;
   listEvents(input: { cursor?: string }): Promise<AdminPage<Event>>;
-  listTickets(input: { cursor?: string }): Promise<AdminPage<Ticket>>;
+  listAccessPasses(input: { cursor?: string }): Promise<AdminPage<AccessPass>>;
   listLiveRooms(input: { cursor?: string }): Promise<AdminPage<AdminLiveRoom>>;
   listMediaAssets(input: { cursor?: string }): Promise<AdminPage<AdminMediaAsset>>;
   listAgeChecks(input: { cursor?: string }): Promise<AdminPage<AdminAgeCheck>>;

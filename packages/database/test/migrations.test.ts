@@ -552,4 +552,13 @@ describe("database migrations", () => {
     expect(sql).toContain("where product_type = 'event_ticket'");
     expect(sql).not.toMatch(/drop table|drop column|creator_balance|withdrawal|escrow|recommendation_boost|visibility_boost|message_priority|mutuals_boost/i);
   });
+
+  it("normalizes Event Access purchase request state naming", () => {
+    const sql = readMigration("0056_event_access_purchase_request_state.sql");
+
+    expect(sql).toContain("set state = 'access_pass_granted'");
+    expect(sql).toContain("where state = 'ticket_granted'");
+    expect(sql).toContain("event_access_purchase_requests_state_check");
+    expect(sql).not.toMatch(/drop table|drop column|creator_balance|withdrawal|escrow|recommendation_boost|visibility_boost|message_priority|mutuals_boost/i);
+  });
 });

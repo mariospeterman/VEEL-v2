@@ -55,7 +55,7 @@ This is cheaper and easier to operate than microservices while still allowing fu
 
 ## Why Not Microservices At Launch
 
-Money, access, referrals, subscriptions, tickets, media status, and safety all need consistent transactions and audit trails. Splitting them into services too early creates:
+Money, access, referrals, subscriptions, Event Access Passes, media status, and safety all need consistent transactions and audit trails. Splitting them into services too early creates:
 
 - distributed transaction problems
 - duplicate auth/policy logic

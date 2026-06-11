@@ -2716,7 +2716,7 @@ export interface components {
             /** @enum {string} */
             accessRule: "public_sale" | "private_apply";
             location: components["schemas"]["EventLocationDraft"];
-            ticketTypes: components["schemas"]["EventTicketTypeDraft"][];
+            accessPassTypes: components["schemas"]["EventAccessPassTypeDraft"][];
         };
         EventPatch: {
             title?: string;
@@ -2728,11 +2728,11 @@ export interface components {
             /** @enum {string} */
             accessRule?: "public_sale" | "private_apply";
             location?: components["schemas"]["EventLocationDraft"];
-            ticketTypes?: components["schemas"]["EventTicketTypeDraft"][];
+            accessPassTypes?: components["schemas"]["EventAccessPassTypeDraft"][];
             /** @enum {string} */
             state?: "draft" | "published" | "sold_out" | "cancelled" | "completed";
         };
-        EventTicketType: {
+        EventAccessPassType: {
             /** Format: uuid */
             id: string;
             label: string;
@@ -2748,7 +2748,7 @@ export interface components {
             saleEndsAt?: string | null;
             perUserLimit?: number | null;
         };
-        EventTicketTypeDraft: {
+        EventAccessPassTypeDraft: {
             label: string;
             priceMinor?: number | null;
             currency: components["schemas"]["Currency"];
@@ -2771,8 +2771,6 @@ export interface components {
             provider?: "openstreetmap" | "manual" | "none";
             providerPlaceId?: string;
         };
-        EventAccessPassType: components["schemas"]["EventTicketType"];
-        EventAccessPassTypeDraft: components["schemas"]["EventTicketTypeDraft"];
         CreateUploadRequest: {
             /** Format: uuid */
             contentId: string;
@@ -3215,7 +3213,7 @@ export interface components {
             location: components["schemas"]["EventLocationDraft"];
             /** @enum {string} */
             state: "draft" | "published" | "sold_out" | "cancelled" | "completed";
-            ticketTypes: components["schemas"]["EventTicketType"][];
+            accessPassTypes: components["schemas"]["EventAccessPassType"][];
         };
         CreateAccessPassIntentRequest: {
             /** Format: uuid */
@@ -3270,50 +3268,52 @@ export interface components {
             items: components["schemas"]["AccessPass"][];
             nextCursor?: string | null;
         };
-        TicketRequest: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            eventId: string;
-            /** Format: uuid */
-            ticketTypeId: string;
+        ActivateMutualsRequest: {
+            consentVersion: string;
+        };
+        UpdateMutualsPreferencesRequest: {
+            enabled?: boolean;
+            activeMatchLimit?: number;
+        };
+        MutualsProfile: {
+            enabled: boolean;
+            consentVersion: string | null;
+            activeMatchLimit: number;
+            visibleOnMedia: boolean;
             /** @enum {string} */
-            state: "requested" | "approved" | "rejected" | "expired";
+            safetyState: "clear" | "limited" | "blocked";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        MutualsFeedItem: {
+            /** Format: uuid */
+            contentId: string;
+            /** Format: uuid */
+            creatorUserId: string;
+            handle: string;
+            displayName: string;
+            avatarUrl?: string | null;
+            title: string;
+            /** @enum {string} */
+            mediaKind: "image" | "video" | "live" | "replay";
+            posterUrl?: string | null;
             /** Format: date-time */
             createdAt: string;
         };
-        Ticket: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            eventId: string;
-            /** Format: uuid */
-            ticketTypeId: string;
-            /** Format: uuid */
-            holderUserId: string;
-            /** Format: uuid */
-            paymentIntentId?: string | null;
-            /** @enum {string} */
-            state: "active" | "checked_in" | "revoked" | "expired";
-            qrToken: string;
-            /** Format: date-time */
-            checkedInAt?: string | null;
-            /** Format: date-time */
-            createdAt: string;
-        };
-        TicketPage: {
-            items: components["schemas"]["Ticket"][];
-            nextCursor?: string | null;
-        };
-        ActivateMutualsRequest: components["schemas"]["ActivateDatingRequest"];
-        UpdateMutualsPreferencesRequest: components["schemas"]["UpdateDatingPreferencesRequest"];
-        MutualsProfile: components["schemas"]["DatingProfile"];
-        MutualsFeedItem: components["schemas"]["DatingFeedItem"];
         MutualsFeedPage: {
             items: components["schemas"]["MutualsFeedItem"][];
             nextCursor?: string | null;
         };
-        MutualsInterestRequest: components["schemas"]["DatingSwipeRequest"];
+        MutualsInterestRequest: {
+            /** Format: uuid */
+            targetUserId: string;
+            /** Format: uuid */
+            contentId: string;
+            /** @enum {string} */
+            action: "yes" | "not_interested";
+        };
         MutualsInterestResult: {
             /** Format: uuid */
             interestId: string;
@@ -3346,84 +3346,6 @@ export interface components {
             items: components["schemas"]["Mutual"][];
             nextCursor?: string | null;
         };
-        ActivateDatingRequest: {
-            consentVersion: string;
-        };
-        UpdateDatingPreferencesRequest: {
-            enabled?: boolean;
-            activeMatchLimit?: number;
-        };
-        DatingProfile: {
-            enabled: boolean;
-            consentVersion: string | null;
-            activeMatchLimit: number;
-            visibleOnMedia: boolean;
-            /** @enum {string} */
-            safetyState: "clear" | "limited" | "blocked";
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-        };
-        DatingFeedItem: {
-            /** Format: uuid */
-            contentId: string;
-            /** Format: uuid */
-            creatorUserId: string;
-            handle: string;
-            displayName: string;
-            avatarUrl?: string | null;
-            title: string;
-            /** @enum {string} */
-            mediaKind: "image" | "video" | "live" | "replay";
-            posterUrl?: string | null;
-            /** Format: date-time */
-            createdAt: string;
-        };
-        DatingFeedPage: {
-            items: components["schemas"]["DatingFeedItem"][];
-            nextCursor?: string | null;
-        };
-        DatingSwipeRequest: {
-            /** Format: uuid */
-            targetUserId: string;
-            /** Format: uuid */
-            contentId: string;
-            /** @enum {string} */
-            action: "yes" | "not_interested";
-        };
-        DatingSwipeResult: {
-            /** Format: uuid */
-            swipeId: string;
-            matchCreated: boolean;
-            /** Format: uuid */
-            matchId?: string | null;
-            match?: components["schemas"]["DatingMatch"];
-        };
-        DatingMatch: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            userAId: string;
-            /** Format: uuid */
-            userBId: string;
-            /** Format: uuid */
-            sourceContentId?: string | null;
-            /** Format: uuid */
-            conversationId?: string | null;
-            /** @enum {string} */
-            state: "active" | "stale" | "archived" | "blocked" | "reported" | "expired";
-            /** Format: date-time */
-            staleAt?: string | null;
-            /** Format: date-time */
-            expiresAt?: string | null;
-            /** Format: date-time */
-            createdAt: string;
-        };
-        DatingMatchPage: {
-            items: components["schemas"]["DatingMatch"][];
-            nextCursor?: string | null;
-        };
         ActivityPage: {
             items: components["schemas"]["ActivityItem"][];
             nextCursor?: string | null;
@@ -3432,7 +3354,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            kind: "payment_intent" | "wallet_transaction" | "entitlement" | "referral" | "ticket" | "system";
+            kind: "payment_intent" | "wallet_transaction" | "entitlement" | "referral" | "access_pass" | "system";
             title: string;
             state: string;
             productType?: components["schemas"]["ProductType"];
@@ -4832,24 +4754,6 @@ export interface components {
                 "application/json": components["schemas"]["AccessPassPage"];
             };
         };
-        /** @description Ticket */
-        Ticket: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["Ticket"];
-            };
-        };
-        /** @description Tickets */
-        TicketPage: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["TicketPage"];
-            };
-        };
         /** @description Mutuals profile */
         MutualsProfile: {
             headers: {
@@ -4893,51 +4797,6 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["Mutual"];
-            };
-        };
-        /** @description Mutuals profile */
-        DatingProfile: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["DatingProfile"];
-            };
-        };
-        /** @description Mutuals feed */
-        DatingFeedPage: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["DatingFeedPage"];
-            };
-        };
-        /** @description Mutuals interest action result */
-        DatingSwipeResult: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["DatingSwipeResult"];
-            };
-        };
-        /** @description Mutuals */
-        DatingMatchPage: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["DatingMatchPage"];
-            };
-        };
-        /** @description Mutual */
-        DatingMatch: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["DatingMatch"];
             };
         };
         /** @description Activity page */
@@ -5671,21 +5530,6 @@ export interface components {
         MutualsInterest: {
             content: {
                 "application/json": components["schemas"]["MutualsInterestRequest"];
-            };
-        };
-        ActivateDating: {
-            content: {
-                "application/json": components["schemas"]["ActivateDatingRequest"];
-            };
-        };
-        UpdateDatingPreferences: {
-            content: {
-                "application/json": components["schemas"]["UpdateDatingPreferencesRequest"];
-            };
-        };
-        DatingSwipe: {
-            content: {
-                "application/json": components["schemas"]["DatingSwipeRequest"];
             };
         };
         CreateAiSession: {

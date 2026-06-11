@@ -1,8 +1,8 @@
 import type postgres from "postgres";
 import type { Event } from "./types.js";
 import { EventRepositoryConfigurationError } from "./event-errors.js";
-import { toTicketType } from "./event-repository-mappers.js";
-import type { EventRow, TicketTypeRow } from "./event-repository-rows.js";
+import { toAccessPassType } from "./event-repository-mappers.js";
+import type { EventRow, AccessPassTypeRow } from "./event-repository-rows.js";
 
 export function eventSelectSql(sql: postgres.Sql) {
   return sql`
@@ -34,7 +34,7 @@ export async function eventFromRows(
     throw new EventRepositoryConfigurationError();
   }
 
-  const ticketRows = await sql<TicketTypeRow[]>`
+  const accessPassRows = await sql<AccessPassTypeRow[]>`
     select
       tt.id,
       tt.event_id,
@@ -68,7 +68,7 @@ export async function eventFromRows(
       ...(row.location_lng !== null ? { longitude: Number(row.location_lng) } : {})
     },
     state: row.state,
-    ticketTypes: ticketRows.map(toTicketType),
+    accessPassTypes: accessPassRows.map(toAccessPassType),
     ...(requestHash ?? row.request_hash ? { requestHash: requestHash ?? row.request_hash } : {})
   };
 }

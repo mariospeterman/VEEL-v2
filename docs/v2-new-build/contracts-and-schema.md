@@ -38,7 +38,7 @@ They are intentionally broad enough to cover the full platform, but not final mi
 - Frontend imports generated clients/types from `packages/contracts`.
 - API validates every request against schema.
 - Backend resources are provider-sanitized.
-- Payment, entitlement, referral, commission, ticket, subscription, dating, age/KYC, and admin state come from backend responses only.
+- Payment, entitlement, referral, commission, Event Access Pass, subscription, Mutuals, age/KYC, and admin state come from backend responses only.
 
 ## First API Domains
 

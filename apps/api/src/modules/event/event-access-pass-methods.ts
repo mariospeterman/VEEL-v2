@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
-import type { EventRepository, TicketOffer } from "./types.js";
+import type { EventRepository, AccessPassOffer } from "./types.js";
 import { grantAccessPass, hashQrToken } from "./event-access-pass-repository.js";
-import { toTicket, toTicketRequest } from "./event-repository-mappers.js";
-import type { TicketRequestRow, TicketRow } from "./event-repository-rows.js";
+import { toEventAccessPass, toEventAccessPassRequest } from "./event-repository-mappers.js";
+import type { AccessPassRequestRow, AccessPassRow } from "./event-repository-rows.js";
 
 type FindEventMethod = EventRepository["findEvent"];
 
@@ -12,15 +12,15 @@ export function createEventAccessPassRepositoryMethods(
   findEvent: FindEventMethod
 ): Pick<
   EventRepository,
-  | "findTicketOffer"
-  | "recordTicketPurchaseRequest"
-  | "grantFreeTicket"
-  | "createTicketRequest"
-  | "checkInTicket"
-  | "listTickets"
+  | "findAccessPassOffer"
+  | "recordAccessPassPurchaseRequest"
+  | "grantFreeAccessPass"
+  | "createAccessPassRequest"
+  | "checkInAccessPass"
+  | "listAccessPasses"
 > {
   return {
-    async findTicketOffer(input) {
+    async findAccessPassOffer(input) {
       const event = await findEvent({
         supabaseUserId: input.supabaseUserId,
         eventId: input.eventId
@@ -30,13 +30,13 @@ export function createEventAccessPassRepositoryMethods(
         return null;
       }
 
-      const ticketType = event.ticketTypes.find((candidate) => candidate.id === input.ticketTypeId);
+      const accessPassType = event.accessPassTypes.find((candidate) => candidate.id === input.accessPassTypeId);
 
-      if (!ticketType || ticketType.state !== "active") {
+      if (!accessPassType || accessPassType.state !== "active") {
         return null;
       }
 
-      const ticketRows = await sql<TicketRow[]>`
+      const accessPassRows = await sql<AccessPassRow[]>`
         with actor as (
           select id
           from users
@@ -56,7 +56,7 @@ export function createEventAccessPassRepositoryMethods(
         from event_access_passes te
         join actor on actor.id = te.holder_user_id
         where te.event_id = ${input.eventId}
-          and te.access_pass_type_id = ${input.ticketTypeId}
+          and te.access_pass_type_id = ${input.accessPassTypeId}
           and te.state in ('active', 'checked_in')
         order by te.created_at desc
         limit 1
@@ -64,11 +64,11 @@ export function createEventAccessPassRepositoryMethods(
 
       return {
         event,
-        ticketType,
-        alreadyIssuedTicket: ticketRows[0] ? toTicket(ticketRows[0]) : null
-      } satisfies TicketOffer;
+        accessPassType,
+        alreadyIssuedAccessPass: accessPassRows[0] ? toEventAccessPass(accessPassRows[0]) : null
+      } satisfies AccessPassOffer;
     },
-    async recordTicketPurchaseRequest(input) {
+    async recordAccessPassPurchaseRequest(input) {
       await sql`
         with buyer as (
           select id
@@ -87,7 +87,7 @@ export function createEventAccessPassRepositoryMethods(
         select
           ${input.paymentIntentId},
           ${input.eventId},
-          ${input.ticketTypeId},
+          ${input.accessPassTypeId},
           id,
           ${input.amountMinor},
           ${input.currency}
@@ -95,18 +95,18 @@ export function createEventAccessPassRepositoryMethods(
         on conflict (payment_intent_id) do nothing
       `;
     },
-    async grantFreeTicket(input) {
+    async grantFreeAccessPass(input) {
       const rows = await grantAccessPass(sql, {
         supabaseUserId: input.supabaseUserId,
         eventId: input.eventId,
-        ticketTypeId: input.ticketTypeId,
+        accessPassTypeId: input.accessPassTypeId,
         paymentIntentId: null
       });
 
-      return rows[0] ? toTicket(rows[0]) : null;
+      return rows[0] ? toEventAccessPass(rows[0]) : null;
     },
-    async createTicketRequest(input) {
-      const rows = await sql<TicketRequestRow[]>`
+    async createAccessPassRequest(input) {
+      const rows = await sql<AccessPassRequestRow[]>`
         with requester as (
           select id
           from users
@@ -123,7 +123,7 @@ export function createEventAccessPassRepositoryMethods(
         select
           ${randomUUID()},
           ${input.eventId},
-          ${input.ticketTypeId},
+          ${input.accessPassTypeId},
           id,
           ${input.note ?? null}
         from requester
@@ -132,32 +132,32 @@ export function createEventAccessPassRepositoryMethods(
         returning id, event_id, access_pass_type_id, state, created_at
       `;
 
-      return rows[0] ? toTicketRequest(rows[0]) : null;
+      return rows[0] ? toEventAccessPassRequest(rows[0]) : null;
     },
-    async checkInTicket(input) {
-      const rows = await sql<TicketRow[]>`
+    async checkInAccessPass(input) {
+      const rows = await sql<AccessPassRow[]>`
         with actor as (
           select id
           from users
           where supabase_user_id = ${input.supabaseUserId}
           limit 1
         ),
-        matched_ticket as (
+        matched_access_pass as (
           select te.*
           from event_access_passes te
           join events e on e.id = te.event_id
-          where te.id = ${input.ticketId}
+          where te.id = ${input.accessPassId}
             and te.qr_token_hash = ${hashQrToken(input.qrToken)}
             and (e.creator_user_id = (select id from actor) or private.is_staff_member())
           limit 1
         ),
-        updated_ticket as (
+        updated_access_pass as (
           update event_access_passes te
           set
             state = case when state = 'active' then 'checked_in' else state end,
             checked_in_at = case when state = 'active' then now() else checked_in_at end,
             updated_at = now()
-          from matched_ticket mt
+          from matched_access_pass mt
           where te.id = mt.id
             and te.state in ('active', 'checked_in')
           returning te.*
@@ -172,13 +172,13 @@ export function createEventAccessPassRepositoryMethods(
           state,
           checked_in_at,
           created_at
-        from updated_ticket
+        from updated_access_pass
       `;
 
-      return rows[0] ? toTicket(rows[0]) : null;
+      return rows[0] ? toEventAccessPass(rows[0]) : null;
     },
-    async listTickets(input) {
-      const rows = await sql<TicketRow[]>`
+    async listAccessPasses(input) {
+      const rows = await sql<AccessPassRow[]>`
         with actor as (
           select id
           from users
@@ -206,7 +206,7 @@ export function createEventAccessPassRepositoryMethods(
       const extraRow = rows[input.limit];
 
       return {
-        items: pageRows.map(toTicket),
+        items: pageRows.map(toEventAccessPass),
         nextCursor: extraRow ? extraRow.created_at.toISOString() : null
       };
     }

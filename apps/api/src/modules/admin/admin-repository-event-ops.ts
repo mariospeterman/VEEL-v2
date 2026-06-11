@@ -2,8 +2,8 @@ import type postgres from "postgres";
 import type { AdminRepository, AdminMutualsSafety } from "./types.js";
 import {
   EventRow,
-  EventTicketTypeRow,
-  TicketRow,
+  EventAccessPassTypeRow,
+  AccessPassRow,
   LiveRoomRow,
   MediaAssetRow,
   AgeCheckRow,
@@ -14,7 +14,7 @@ import {
   page,
   cursorFor,
   toEvent,
-  toTicket,
+  toEventAccessPass,
   toLiveRoom,
   toMediaAsset,
   toAgeCheck,
@@ -25,7 +25,7 @@ import {
 
 export function createEventOpsRepository(
   sql: postgres.Sql
-): Pick<AdminRepository, "listEvents" | "listTickets" | "listLiveRooms" | "listMediaAssets" | "listAgeChecks" | "listIdentityChecks" | "listAiSessions" | "listAiToolCalls" | "getMutualsSafety"> {
+): Pick<AdminRepository, "listEvents" | "listAccessPasses" | "listLiveRooms" | "listMediaAssets" | "listAgeChecks" | "listIdentityChecks" | "listAiSessions" | "listAiToolCalls" | "getMutualsSafety"> {
   return {
     async listEvents(input) {
       const eventRows = await sql<EventRow[]>`
@@ -49,9 +49,9 @@ export function createEventOpsRepository(
       `;
       const visibleRows = eventRows.slice(0, pageSize);
       const eventIds = visibleRows.map((row) => row.id);
-      const ticketRows =
+      const accessPassRows =
         eventIds.length > 0
-          ? await sql<EventTicketTypeRow[]>`
+          ? await sql<EventAccessPassTypeRow[]>`
               select
                 tt.id,
                 tt.event_id,
@@ -73,20 +73,20 @@ export function createEventOpsRepository(
               order by tt.created_at asc
             `
           : [];
-      const ticketTypesByEvent = new Map<string, EventTicketTypeRow[]>();
-      for (const row of ticketRows) {
-        const rows = ticketTypesByEvent.get(row.event_id) ?? [];
+      const accessPassTypesByEvent = new Map<string, EventAccessPassTypeRow[]>();
+      for (const row of accessPassRows) {
+        const rows = accessPassTypesByEvent.get(row.event_id) ?? [];
         rows.push(row);
-        ticketTypesByEvent.set(row.event_id, rows);
+        accessPassTypesByEvent.set(row.event_id, rows);
       }
 
       return {
-        items: visibleRows.map((row) => toEvent(row, ticketTypesByEvent.get(row.id) ?? [])),
+        items: visibleRows.map((row) => toEvent(row, accessPassTypesByEvent.get(row.id) ?? [])),
         nextCursor: cursorFor(eventRows.length > pageSize ? eventRows[pageSize] : null)
       };
     },
-    async listTickets(input) {
-      const rows = await sql<TicketRow[]>`
+    async listAccessPasses(input) {
+      const rows = await sql<AccessPassRow[]>`
         select
           id,
           event_id,
@@ -102,7 +102,7 @@ export function createEventOpsRepository(
         limit ${pageSize + 1}
       `;
 
-      return page(rows, toTicket);
+      return page(rows, toEventAccessPass);
     },
     async listLiveRooms(input) {
       const rows = await sql<LiveRoomRow[]>`

@@ -10,10 +10,6 @@ export type AccessPassPage = components["schemas"]["AccessPassPage"];
 export type AccessPassRequest = components["schemas"]["AccessPassRequest"];
 export type Event = components["schemas"]["Event"];
 export type EventAccessPassType = components["schemas"]["EventAccessPassType"];
-export type EventTicketType = components["schemas"]["EventTicketType"];
-export type Ticket = components["schemas"]["Ticket"];
-export type TicketPage = components["schemas"]["TicketPage"];
-export type TicketRequest = components["schemas"]["TicketRequest"];
 export type UpdateEventRequest = components["schemas"]["UpdateEventRequest"];
 
 export interface CreateEventInput {
@@ -34,47 +30,47 @@ export interface FindEventInput {
   eventId: string;
 }
 
-export interface TicketOffer {
+export interface AccessPassOffer {
   event: Event;
-  ticketType: EventTicketType;
-  alreadyIssuedTicket: Ticket | null;
+  accessPassType: EventAccessPassType;
+  alreadyIssuedAccessPass: AccessPass | null;
 }
 
-export interface FindTicketOfferInput {
+export interface FindAccessPassOfferInput {
   supabaseUserId: string;
   eventId: string;
-  ticketTypeId: string;
+  accessPassTypeId: string;
 }
 
-export interface RecordTicketPurchaseRequestInput {
+export interface RecordAccessPassPurchaseRequestInput {
   supabaseUserId: string;
   eventId: string;
-  ticketTypeId: string;
+  accessPassTypeId: string;
   paymentIntentId: string;
   amountMinor: number;
   currency: "SOL";
 }
 
-export interface GrantFreeTicketInput {
+export interface GrantFreeAccessPassInput {
   supabaseUserId: string;
   eventId: string;
-  ticketTypeId: string;
+  accessPassTypeId: string;
 }
 
-export interface CreateTicketRequestInput {
+export interface CreateAccessPassRequestInput {
   supabaseUserId: string;
   eventId: string;
-  ticketTypeId: string;
+  accessPassTypeId: string;
   note?: string | null;
 }
 
-export interface CheckInTicketInput {
+export interface CheckInAccessPassInput {
   supabaseUserId: string;
-  ticketId: string;
+  accessPassId: string;
   qrToken: string;
 }
 
-export interface ListTicketsInput {
+export interface ListAccessPassesInput {
   supabaseUserId: string;
   limit: number;
   cursor?: string;
@@ -84,11 +80,11 @@ export interface EventRepository {
   createEvent(input: CreateEventInput): Promise<Event>;
   findEvent(input: FindEventInput): Promise<Event | null>;
   updateEvent(input: UpdateEventInput): Promise<Event | null>;
-  findTicketOffer(input: FindTicketOfferInput): Promise<TicketOffer | null>;
-  recordTicketPurchaseRequest(input: RecordTicketPurchaseRequestInput): Promise<void>;
-  grantFreeTicket(input: GrantFreeTicketInput): Promise<Ticket | null>;
-  createTicketRequest(input: CreateTicketRequestInput): Promise<TicketRequest | null>;
-  checkInTicket(input: CheckInTicketInput): Promise<Ticket | null>;
-  listTickets(input: ListTicketsInput): Promise<TicketPage>;
+  findAccessPassOffer(input: FindAccessPassOfferInput): Promise<AccessPassOffer | null>;
+  recordAccessPassPurchaseRequest(input: RecordAccessPassPurchaseRequestInput): Promise<void>;
+  grantFreeAccessPass(input: GrantFreeAccessPassInput): Promise<AccessPass | null>;
+  createAccessPassRequest(input: CreateAccessPassRequestInput): Promise<AccessPassRequest | null>;
+  checkInAccessPass(input: CheckInAccessPassInput): Promise<AccessPass | null>;
+  listAccessPasses(input: ListAccessPassesInput): Promise<AccessPassPage>;
   close?(): Promise<void>;
 }

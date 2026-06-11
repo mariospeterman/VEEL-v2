@@ -21,22 +21,22 @@ export function createPostgresEventRepository(database?: string | PostgresSql): 
       async updateEvent() {
         throw new EventRepositoryConfigurationError();
       },
-      async findTicketOffer() {
+      async findAccessPassOffer() {
         throw new EventRepositoryConfigurationError();
       },
-      async recordTicketPurchaseRequest() {
+      async recordAccessPassPurchaseRequest() {
         throw new EventRepositoryConfigurationError();
       },
-      async grantFreeTicket() {
+      async grantFreeAccessPass() {
         throw new EventRepositoryConfigurationError();
       },
-      async createTicketRequest() {
+      async createAccessPassRequest() {
         throw new EventRepositoryConfigurationError();
       },
-      async checkInTicket() {
+      async checkInAccessPass() {
         throw new EventRepositoryConfigurationError();
       },
-      async listTickets() {
+      async listAccessPasses() {
         throw new EventRepositoryConfigurationError();
       }
     };

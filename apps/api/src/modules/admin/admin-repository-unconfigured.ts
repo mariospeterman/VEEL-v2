@@ -30,7 +30,7 @@ export function createUnconfiguredAdminRepository(): AdminRepository {
     listDataRequests: fail,
     updateDataRequest: fail,
     listEvents: fail,
-    listTickets: fail,
+    listAccessPasses: fail,
     listLiveRooms: fail,
     listMediaAssets: fail,
     listAgeChecks: fail,

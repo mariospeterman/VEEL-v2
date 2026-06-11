@@ -110,7 +110,7 @@ Categories:
 - creator revenue received
 - subscriptions
 - live passes
-- event tickets
+- Event Access Passes
 - referral shares
 - commissions
 - wallet transactions
@@ -122,7 +122,7 @@ Activity must link to safe records:
 - payment intent
 - transaction signature where safe
 - entitlement
-- ticket/QR
+- Access Pass/QR
 - referral attribution
 - commission state
 
@@ -147,7 +147,7 @@ Avoid:
 - ranking users by explicit content consumption
 - exposing private spending rankings
 - shaming low-ranked creators
-- ranking dating desirability
+- ranking Mutuals desirability
 - rewarding only infinite watch time
 
 Ranking inputs:
@@ -165,7 +165,7 @@ Ranking inputs:
 
 - use progress and badges to make platform state clear
 - avoid dark patterns, streak pressure, or shame loops
-- no gambling-style randomness for money or dating
+- no gambling-style randomness for money or Mutuals
 - no “you are falling behind” notifications
 - clear opt-out for ranking visibility where reasonable
 
@@ -190,4 +190,4 @@ Admin can tune ranking weights, but every change should be versioned and auditab
 - badges are backend-derived
 - badge grant/revoke writes audit event
 - rankings exclude blocked/reported unsafe creators
-- activity records link to backend payment/entitlement/ticket/referral state
+- activity records link to backend payment/entitlement/Event Access Pass/referral state

@@ -50,7 +50,7 @@ export function toContentItem(row: ContentRow): ContentItem {
 }
 
 export function toEvent(row: EventRow): Event {
-  const ticketTypes = Array.isArray(row.access_pass_types) ? row.access_pass_types : [];
+  const accessPassTypes = Array.isArray(row.access_pass_types) ? row.access_pass_types : [];
   const location: Event["location"] = {
     type: row.location_type,
     ...(row.location_label ? { label: row.location_label } : {}),
@@ -67,7 +67,7 @@ export function toEvent(row: EventRow): Event {
     accessRule: row.access_rule,
     location,
     state: row.state,
-    ticketTypes: ticketTypes as Event["ticketTypes"]
+    accessPassTypes: accessPassTypes as Event["accessPassTypes"]
   };
 }
 

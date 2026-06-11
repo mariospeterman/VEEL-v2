@@ -103,8 +103,8 @@ User
   ├─ creator settings
   ├─ messages/conversations
   ├─ follows, likes, saves, comments, shares
-  ├─ dating profile and matches
-  └─ purchases, passes, tickets, subscriptions
+  ├─ Mutuals profile and mutuals
+  └─ purchases, passes, Event Access Passes, subscriptions
 
 Creator/User
   ├─ content items
@@ -112,8 +112,8 @@ Creator/User
   │   ├─ teaser/full access rules
   │   ├─ monetisation config
   │   └─ optional event attachment
-  ├─ dating profile/settings
-  │   └─ media shows dating-active affordance when profile mode is enabled
+  ├─ Mutuals profile/settings
+  │   └─ media shows Mutuals-active affordance when profile mode is enabled
   ├─ live rooms
   ├─ subscriptions
   ├─ referrals
@@ -131,7 +131,7 @@ Money object
 ## Payment And Entitlement Flow
 
 ```text
-1. User taps Tip / Support / Unlock / Subscribe / Pass / Ticket / Paid message
+1. User taps Tip / Support / Unlock / Subscribe / Live Pass / Event Access Pass / Paid message
 2. Frontend asks API for payment intent
 3. API computes:
    - product type
@@ -213,18 +213,18 @@ User opts into Mutuals
   -> report/block removes visibility and audits safety event
 ```
 
-## Events And Ticketing Flow
+## Event Access Flow
 
 ```text
 Creator attaches event to media
-  -> event config: digital live stream or physical, title, date/time, ticket count, price/free, public/private
+  -> event config: digital live stream or physical, title, date/time, Access Pass capacity, price/free, public/private
   -> event appears from media/event surfaces
-  -> user opens ticket sheet
-  -> paid ticket creates payment intent
+  -> user opens Access Pass sheet
+  -> paid Access Pass creates payment intent
   -> wallet approves noncustodial transfer
   -> backend verifies confirmed payment
-  -> backend grants ticket entitlement and QR/receipt
-  -> admin can inspect ticket, payment, check-in, refund/escalation state
+  -> backend grants Event Access Pass entitlement and QR/receipt
+  -> admin can inspect Access Pass, payment, check-in, refund/escalation state
 ```
 
 ## Admin, Ops, And AI/MCP

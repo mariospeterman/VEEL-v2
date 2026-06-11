@@ -1937,7 +1937,7 @@ describe("buildApi", () => {
           startsAt: "2026-08-01T20:00:00.000Z",
           accessRule: "paid",
           location: { type: "venue", label: "Studio" },
-          ticketTypes: []
+          accessPassTypes: []
         }
       }
     });
@@ -1957,7 +1957,7 @@ describe("buildApi", () => {
       startsAt: "2026-08-01T20:00:00.000Z",
       accessRule: "public_sale" as const,
       location: { type: "digital_live_stream" as const, label: "Veel Live" },
-      ticketTypes: [
+      accessPassTypes: [
         {
           label: "General access",
           priceMinor: 10_000,
@@ -3714,14 +3714,14 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("creates an event with backend-owned ticket inventory", async () => {
+  it("creates an event with backend-owned accessPass inventory", async () => {
     const eventRepository: EventRepository = {
       async createEvent(input) {
         expect(input).toMatchObject({
           supabaseUserId: "00000000-0000-4000-8000-000000000001",
           idempotencyKey: "event-key"
         });
-        expect(input.body.ticketTypes[0]).toMatchObject({
+        expect(input.body.accessPassTypes[0]).toMatchObject({
           label: "General admission",
           priceMinor: 10000000,
           currency: "SOL",
@@ -3736,22 +3736,22 @@ describe("buildApi", () => {
       async updateEvent() {
         throw new Error("not implemented");
       },
-      async findTicketOffer() {
+      async findAccessPassOffer() {
         throw new Error("not implemented");
       },
-      async recordTicketPurchaseRequest() {
+      async recordAccessPassPurchaseRequest() {
         throw new Error("not implemented");
       },
-      async grantFreeTicket() {
+      async grantFreeAccessPass() {
         throw new Error("not implemented");
       },
-      async createTicketRequest() {
+      async createAccessPassRequest() {
         throw new Error("not implemented");
       },
-      async checkInTicket() {
+      async checkInAccessPass() {
         throw new Error("not implemented");
       },
-      async listTickets() {
+      async listAccessPasses() {
         throw new Error("not implemented");
       }
     };
@@ -3775,7 +3775,7 @@ describe("buildApi", () => {
         startsAt: "2026-07-01T20:00:00.000Z",
         accessRule: "public_sale",
         location: { type: "physical", label: "Belgrade studio" },
-        ticketTypes: [
+        accessPassTypes: [
           {
             label: "General admission",
             priceMinor: 10000000,
@@ -3790,7 +3790,7 @@ describe("buildApi", () => {
     expect(response.json()).toMatchObject({
       title: "Studio meetup",
       state: "draft",
-      ticketTypes: [{ label: "General admission", remaining: 25 }]
+      accessPassTypes: [{ label: "General admission", remaining: 25 }]
     });
 
     await app.close();
@@ -3798,7 +3798,7 @@ describe("buildApi", () => {
 
   it("creates a server-priced paid Event Access Pass intent", async () => {
     const eventId = "00000000-0000-4000-8000-0000000000e1";
-    const ticketTypeId = "00000000-0000-4000-8000-0000000000e2";
+    const accessPassTypeId = "00000000-0000-4000-8000-0000000000e2";
     const eventRepository: EventRepository = {
       async createEvent() {
         throw new Error("not implemented");
@@ -3809,33 +3809,33 @@ describe("buildApi", () => {
       async updateEvent() {
         throw new Error("not implemented");
       },
-      async findTicketOffer(input) {
-        expect(input).toMatchObject({ eventId, ticketTypeId });
+      async findAccessPassOffer(input) {
+        expect(input).toMatchObject({ eventId, accessPassTypeId });
         return {
-          event: eventFixture({ id: eventId, state: "published", ticketTypeId }),
-          ticketType: ticketTypeFixture({ id: ticketTypeId, priceMinor: 10000000 }),
-          alreadyIssuedTicket: null
+          event: eventFixture({ id: eventId, state: "published", accessPassTypeId }),
+          accessPassType: accessPassTypeFixture({ id: accessPassTypeId, priceMinor: 10000000 }),
+          alreadyIssuedAccessPass: null
         };
       },
-      async recordTicketPurchaseRequest(input) {
+      async recordAccessPassPurchaseRequest(input) {
         expect(input).toMatchObject({
           eventId,
-          ticketTypeId,
+          accessPassTypeId,
           paymentIntentId: "00000000-0000-4000-8000-000000000050",
           amountMinor: 10000000,
           currency: "SOL"
         });
       },
-      async grantFreeTicket() {
+      async grantFreeAccessPass() {
         throw new Error("not implemented");
       },
-      async createTicketRequest() {
+      async createAccessPassRequest() {
         throw new Error("not implemented");
       },
-      async checkInTicket() {
+      async checkInAccessPass() {
         throw new Error("not implemented");
       },
-      async listTickets() {
+      async listAccessPasses() {
         throw new Error("not implemented");
       }
     };
@@ -3883,16 +3883,16 @@ describe("buildApi", () => {
         authorization: "Bearer valid-token",
         "idempotency-key": "access-pass-key"
       },
-      payload: { accessPassTypeId: ticketTypeId }
+      payload: { accessPassTypeId: accessPassTypeId }
     });
     const legacyResponse = await app.inject({
       method: "POST",
       url: `/v1/events/${eventId}/tickets/intents`,
       headers: {
         authorization: "Bearer valid-token",
-        "idempotency-key": "legacy-ticket-key"
+        "idempotency-key": "legacy-accessPass-key"
       },
-      payload: { ticketTypeId }
+      payload: { accessPassTypeId }
     });
 
     expect(response.statusCode, JSON.stringify(response.json())).toBe(201);
@@ -3911,19 +3911,8 @@ describe("buildApi", () => {
 
   it("grants a free Event Access Pass and supports activity/check-in projections", async () => {
     const eventId = "00000000-0000-4000-8000-0000000000e1";
-    const ticketTypeId = "00000000-0000-4000-8000-0000000000e2";
-    const ticket = ticketFixture({ eventId, ticketTypeId });
-    const accessPass = {
-      id: ticket.id,
-      eventId: ticket.eventId,
-      accessPassTypeId: ticket.ticketTypeId,
-      holderUserId: ticket.holderUserId,
-      paymentIntentId: ticket.paymentIntentId,
-      state: ticket.state,
-      qrToken: ticket.qrToken,
-      checkedInAt: ticket.checkedInAt,
-      createdAt: ticket.createdAt
-    };
+    const accessPassTypeId = "00000000-0000-4000-8000-0000000000e2";
+    const accessPass = accessPassFixture({ eventId, accessPassTypeId });
     const eventRepository: EventRepository = {
       async createEvent() {
         throw new Error("not implemented");
@@ -3934,27 +3923,27 @@ describe("buildApi", () => {
       async updateEvent() {
         throw new Error("not implemented");
       },
-      async findTicketOffer() {
+      async findAccessPassOffer() {
         return {
-          event: eventFixture({ id: eventId, state: "published", ticketTypeId, priceMinor: null }),
-          ticketType: ticketTypeFixture({ id: ticketTypeId, priceMinor: null }),
-          alreadyIssuedTicket: null
+          event: eventFixture({ id: eventId, state: "published", accessPassTypeId, priceMinor: null }),
+          accessPassType: accessPassTypeFixture({ id: accessPassTypeId, priceMinor: null }),
+          alreadyIssuedAccessPass: null
         };
       },
-      async recordTicketPurchaseRequest() {
+      async recordAccessPassPurchaseRequest() {
         throw new Error("not implemented");
       },
-      async grantFreeTicket() {
-        return ticket;
+      async grantFreeAccessPass() {
+        return accessPass;
       },
-      async createTicketRequest() {
+      async createAccessPassRequest() {
         throw new Error("not implemented");
       },
-      async checkInTicket(input) {
-        expect(input).toMatchObject({ ticketId: ticket.id, qrToken: ticket.qrToken });
-        return { ...ticket, state: "checked_in", checkedInAt: "2026-07-01T20:10:00.000Z" };
+      async checkInAccessPass(input) {
+        expect(input).toMatchObject({ accessPassId: accessPass.id, qrToken: accessPass.qrToken });
+        return { ...accessPass, state: "checked_in", checkedInAt: "2026-07-01T20:10:00.000Z" };
       },
-      async listTickets() {
+      async listAccessPasses() {
         throw new Error("not implemented");
       }
     };
@@ -3992,7 +3981,7 @@ describe("buildApi", () => {
         authorization: "Bearer valid-token",
         "idempotency-key": "free-access-pass-key"
       },
-      payload: { accessPassTypeId: ticketTypeId }
+      payload: { accessPassTypeId: accessPassTypeId }
     });
     const activityResponse = await app.inject({
       method: "GET",
@@ -4001,12 +3990,12 @@ describe("buildApi", () => {
     });
     const checkInResponse = await app.inject({
       method: "POST",
-      url: `/v1/access-passes/${ticket.id}/check-in`,
+      url: `/v1/access-passes/${accessPass.id}/check-in`,
       headers: {
         authorization: "Bearer valid-token",
         "idempotency-key": "check-in-key"
       },
-      payload: { qrToken: ticket.qrToken }
+      payload: { qrToken: accessPass.qrToken }
     });
     const legacyActivityResponse = await app.inject({
       method: "GET",
@@ -4015,12 +4004,12 @@ describe("buildApi", () => {
     });
     const legacyCheckInResponse = await app.inject({
       method: "POST",
-      url: `/v1/tickets/${ticket.id}/check-in`,
+      url: `/v1/tickets/${accessPass.id}/check-in`,
       headers: {
         authorization: "Bearer valid-token",
         "idempotency-key": "legacy-check-in-key"
       },
-      payload: { qrToken: ticket.qrToken }
+      payload: { qrToken: accessPass.qrToken }
     });
 
     expect(grantResponse.statusCode).toBe(201);
@@ -4481,7 +4470,7 @@ describe("buildApi", () => {
         async listEvents() {
           throw new Error("not implemented");
         },
-        async listTickets() {
+        async listAccessPasses() {
           throw new Error("not implemented");
         },
         async listLiveRooms() {
@@ -4618,7 +4607,7 @@ describe("buildApi", () => {
         async listEvents() {
           throw new Error("not implemented");
         },
-        async listTickets() {
+        async listAccessPasses() {
           throw new Error("not implemented");
         },
         async listLiveRooms() {
@@ -4753,7 +4742,7 @@ describe("buildApi", () => {
         async listEvents() {
           throw new Error("not implemented");
         },
-        async listTickets() {
+        async listAccessPasses() {
           throw new Error("not implemented");
         },
         async listLiveRooms() {
@@ -4999,7 +4988,7 @@ describe("buildApi", () => {
     expect(events.json().items[0]).toMatchObject({
       title: "Creator live night",
       state: "published",
-      ticketTypes: [expect.objectContaining({ remaining: 49 })]
+      accessPassTypes: [expect.objectContaining({ remaining: 49 })]
     });
     expect(accessPasses.statusCode).toBe(200);
     expect(accessPasses.json().items[0]).toMatchObject({
@@ -8651,7 +8640,7 @@ const fakeAdminRepository: AdminRepository = {
           accessRule: "public_sale",
           location: { type: "digital_live_stream", label: "Veel Live" },
           state: "published",
-          ticketTypes: [
+          accessPassTypes: [
             {
               id: "00000000-0000-4000-8000-0000000000e2",
               label: "Access Pass",
@@ -8670,13 +8659,13 @@ const fakeAdminRepository: AdminRepository = {
       nextCursor: null
     };
   },
-  async listTickets() {
+  async listAccessPasses() {
     return {
       items: [
         {
           id: "00000000-0000-4000-8000-0000000000e3",
           eventId: "00000000-0000-4000-8000-0000000000e1",
-          ticketTypeId: "00000000-0000-4000-8000-0000000000e2",
+          accessPassTypeId: "00000000-0000-4000-8000-0000000000e2",
           holderUserId: "00000000-0000-4000-8000-000000000011",
           paymentIntentId: "00000000-0000-4000-8000-000000000050",
           state: "active",
@@ -9130,11 +9119,11 @@ function eventFixture(
   overrides: Partial<{
     id: string;
     state: "draft" | "published" | "sold_out" | "cancelled" | "completed";
-    ticketTypeId: string;
+    accessPassTypeId: string;
     priceMinor: number | null;
   }> = {}
 ) {
-  const ticketTypeId = overrides.ticketTypeId ?? "00000000-0000-4000-8000-0000000000e2";
+  const accessPassTypeId = overrides.accessPassTypeId ?? "00000000-0000-4000-8000-0000000000e2";
   const priceMinor: number | null = overrides.priceMinor === undefined ? 10000000 : overrides.priceMinor;
 
   return {
@@ -9146,11 +9135,11 @@ function eventFixture(
     accessRule: "public_sale" as const,
     location: { type: "physical" as const, label: "Belgrade studio" },
     state: overrides.state ?? "published",
-    ticketTypes: [ticketTypeFixture({ id: ticketTypeId, priceMinor })]
+    accessPassTypes: [accessPassTypeFixture({ id: accessPassTypeId, priceMinor })]
   };
 }
 
-function ticketTypeFixture(
+function accessPassTypeFixture(
   overrides: Partial<{
     id: string;
     priceMinor: number | null;
@@ -9172,16 +9161,16 @@ function ticketTypeFixture(
   };
 }
 
-function ticketFixture(
+function accessPassFixture(
   overrides: Partial<{
     eventId: string;
-    ticketTypeId: string;
+    accessPassTypeId: string;
   }> = {}
 ) {
   return {
     id: "00000000-0000-4000-8000-0000000000f1",
     eventId: overrides.eventId ?? "00000000-0000-4000-8000-0000000000e1",
-    ticketTypeId: overrides.ticketTypeId ?? "00000000-0000-4000-8000-0000000000e2",
+    accessPassTypeId: overrides.accessPassTypeId ?? "00000000-0000-4000-8000-0000000000e2",
     holderUserId: "00000000-0000-4000-8000-000000000001",
     paymentIntentId: null,
     state: "active" as const,

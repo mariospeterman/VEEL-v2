@@ -63,38 +63,38 @@ export async function registerEventAccessPassRoutes(
     const eventId = (request.params as { eventId?: string }).eventId ?? "";
 
     try {
-      const offer = await options.eventRepository.findTicketOffer({
+      const offer = await options.eventRepository.findAccessPassOffer({
         supabaseUserId: access.supabaseUserId,
         eventId,
-        ticketTypeId: accessPassTypeId
+        accessPassTypeId: accessPassTypeId
       });
 
       if (!offer) {
         return reply.code(404).send(notFoundResponse("Access Pass offer was not found"));
       }
 
-      if (offer.alreadyIssuedTicket) {
+      if (offer.alreadyIssuedAccessPass) {
         return reply
           .code(201)
-          .send(accessPassIntentResponse("free_granted", offer.alreadyIssuedTicket));
+          .send(accessPassIntentResponse("free_granted", offer.alreadyIssuedAccessPass));
       }
 
       if (offer.event.accessRule === "private_apply") {
         return reply.code(201).send({ state: "approval_required" });
       }
 
-      if (!offer.ticketType.priceMinor || offer.ticketType.priceMinor <= 0) {
-        const ticket = await options.eventRepository.grantFreeTicket({
+      if (!offer.accessPassType.priceMinor || offer.accessPassType.priceMinor <= 0) {
+        const accessPass = await options.eventRepository.grantFreeAccessPass({
           supabaseUserId: access.supabaseUserId,
           eventId,
-          ticketTypeId: accessPassTypeId
+          accessPassTypeId: accessPassTypeId
         });
 
-        if (!ticket) {
+        if (!accessPass) {
           return reply.code(409).send(conflictResponse("Access Pass inventory is no longer available"));
         }
 
-        return reply.code(201).send(accessPassIntentResponse("free_granted", ticket));
+        return reply.code(201).send(accessPassIntentResponse("free_granted", accessPass));
       }
 
       if (!app.config.PAYMENT_PLATFORM_TREASURY_WALLET) {
@@ -116,7 +116,7 @@ export async function registerEventAccessPassRoutes(
         productType: "event_access_pass" as const,
         targetId: eventId,
         accessPassTypeId,
-        amountMinor: offer.ticketType.priceMinor
+        amountMinor: offer.accessPassType.priceMinor
       };
       const intent = await options.paymentRepository.createOrReuseIntent({
         supabaseUserId: access.supabaseUserId,
@@ -124,7 +124,7 @@ export async function registerEventAccessPassRoutes(
         requestHash: hashJson(intentBody),
         productType: "event_access_pass",
         targetId: eventId,
-        amountMinor: offer.ticketType.priceMinor,
+        amountMinor: offer.accessPassType.priceMinor,
         currency: "SOL",
         solanaCluster: app.config.SOLANA_CLUSTER,
         treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET,
@@ -133,12 +133,12 @@ export async function registerEventAccessPassRoutes(
         referralToken: null
       });
 
-      await options.eventRepository.recordTicketPurchaseRequest({
+      await options.eventRepository.recordAccessPassPurchaseRequest({
         supabaseUserId: access.supabaseUserId,
         eventId,
-        ticketTypeId: accessPassTypeId,
+        accessPassTypeId: accessPassTypeId,
         paymentIntentId: intent.id,
-        amountMinor: offer.ticketType.priceMinor,
+        amountMinor: offer.accessPassType.priceMinor,
         currency: "SOL"
       });
 
@@ -200,28 +200,28 @@ export async function registerEventAccessPassRoutes(
     const eventId = (request.params as { eventId?: string }).eventId ?? "";
 
     try {
-      const offer = await options.eventRepository.findTicketOffer({
+      const offer = await options.eventRepository.findAccessPassOffer({
         supabaseUserId: access.supabaseUserId,
         eventId,
-        ticketTypeId: accessPassTypeId
+        accessPassTypeId: accessPassTypeId
       });
 
       if (!offer || offer.event.accessRule !== "private_apply") {
         return reply.code(404).send(notFoundResponse("Private Access Pass offer was not found"));
       }
 
-      const ticketRequest = await options.eventRepository.createTicketRequest({
+      const accessPassRequest = await options.eventRepository.createAccessPassRequest({
         supabaseUserId: access.supabaseUserId,
         eventId,
-        ticketTypeId: accessPassTypeId,
+        accessPassTypeId: accessPassTypeId,
         note: note?.trim() || null
       });
 
-      if (!ticketRequest) {
+      if (!accessPassRequest) {
         return reply.code(404).send(notFoundResponse("Private Access Pass offer was not found"));
       }
 
-      return reply.code(201).send(toAccessPassRequest(ticketRequest));
+      return reply.code(201).send(toAccessPassRequest(accessPassRequest));
     } catch (error) {
       if (error instanceof EventRepositoryConfigurationError) {
         request.log.warn({ error }, "Access Pass request failed");
@@ -256,17 +256,17 @@ export async function registerEventAccessPassRoutes(
     const accessPassId = params.accessPassId ?? "";
 
     try {
-      const ticket = await options.eventRepository.checkInTicket({
+      const accessPass = await options.eventRepository.checkInAccessPass({
         supabaseUserId: access.supabaseUserId,
-        ticketId: accessPassId,
+        accessPassId,
         qrToken: body.qrToken
       });
 
-      if (!ticket) {
+      if (!accessPass) {
         return reply.code(404).send(notFoundResponse("Access Pass was not found"));
       }
 
-      return reply.code(200).send(toAccessPass(ticket));
+      return reply.code(200).send(toAccessPass(accessPass));
     } catch (error) {
       if (error instanceof EventRepositoryConfigurationError) {
         request.log.warn({ error }, "Access Pass check-in failed");

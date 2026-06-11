@@ -166,7 +166,7 @@ Adapters expose internal DTOs. They do not leak raw provider payloads to fronten
 - Service-role Supabase key only in backend.
 - Provider keys only in backend.
 - Webhook signature verification.
-- Idempotency keys on payments, webhooks, moderation, age/KYC, tickets, messages with payment.
+- Idempotency keys on payments, webhooks, moderation, age/KYC, Event Access Passes, messages with payment.
 - Request body limits.
 - SSRF guard on user-provided URLs.
 - Structured logs with redaction.

@@ -130,7 +130,7 @@ flowchart TB
 - Veel backend owns business truth.
 - Frontend owns UX, state presentation, and explicit user confirmation.
 - Supabase owns identity primitives, Postgres, and realtime transport, not business policy.
-- No client calculates payment success, access grants, splits, commissions, tickets, or KYC state.
+- No client calculates payment success, access grants, splits, commissions, Event Access Passes, or KYC state.
 - No provider secrets, stream keys, Bunny keys, Helius keys, signed private URLs, or raw PII enter frontend bundles.
 - All money/access/provider callbacks are idempotent, auditable, and replay-safe.
 - Every route, API, event, database table, and provider payload is documented before implementation.
@@ -216,7 +216,7 @@ Not allowed direct client ownership:
 - access grants
 - commissions
 - content publish decisions
-- ticket issuance
+- Event Access Pass issuance
 - creator earning/KYC state
 - moderation/admin actions
 - provider upload object creation without backend policy

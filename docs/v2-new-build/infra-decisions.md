@@ -39,7 +39,7 @@ This document freezes the default infrastructure choices for the greenfield repo
 
 ## Hard Rules
 
-- Backend is the business-truth layer for money, access, age, dating, tickets, subscriptions, referrals, reports, and moderation.
+- Backend is the business-truth layer for money, access, age, Mutuals, Event Access Passes, subscriptions, referrals, reports, and moderation.
 - Realtime is for delivery and freshness, not entitlement authority.
 - Feature flags cannot bypass payment validation, age requirements, provider signatures, admin audit logging, or content safety policy.
 - Paid promotion cannot silently rank content higher in For You. Any paid distribution product must be explicit, labeled, opt-out aware, and reviewed by a separate ADR.
@@ -109,12 +109,12 @@ PostHog tracks product events only:
 - wallet path chosen
 - age verification conversion
 - Home/Bits feed engagement
-- content-unlock/support/tip/live-pass/ticket intent and completion
+- content-unlock/support/tip/live-pass/Event Access Pass intent and completion
 - share/referral click and conversion
 - creator dashboard usage
 - report/block/safety actions
-- dating opt-in, match creation, stale/closed matches
-- event ticket purchase and check-in
+- Mutuals opt-in, mutual creation, stale/closed Mutuals
+- Event Access Pass purchase and check-in
 
 Do not send raw PII, raw message bodies, provider payloads, wallet private data, age images/docs, signed playback URLs, or exact private locations to analytics.
 
@@ -152,14 +152,14 @@ Allowed launch notifications:
 - paid message request/action needed
 - live room starting for followed creators
 - payment completed/failed/retry needed
-- ticket receipt/check-in reminder
+- Event Access Pass receipt/check-in reminder
 - referral commission state change
 - new Mutual and one first-reply nudge
 - safety/report/admin decision
 
 Disallowed launch notifications:
 
-- spammy dating nudges
+- spammy Mutuals nudges
 - addictive infinite-feed pressure
 - hidden paid ranking prompts
 - repeated unpaid creator promotion pressure
@@ -171,8 +171,8 @@ The June 2026 build plan assumes:
 - Social video is a huge market, but discovery must include user control, break states, reporting, and non-addictive defaults.
 - EU DSA-style recommender transparency means users need meaningful feed controls and a non-profiling/chronological option where required.
 - Age assurance for adult services must be real, provider-backed, and privacy-minimizing; self-declaration is not enough.
-- Ticketing must show all fees before confirmation and avoid dark patterns around checkout.
-- Dating must reduce ghosting/overwhelm with active-match limits, stale-match cleanup, consent rules, report/block tooling, and gentle notifications.
+- Event Access Pass purchase flows must show all fees before confirmation and avoid dark patterns around checkout.
+- Mutuals must reduce ghosting/overwhelm with active-Mutual limits, stale-Mutual cleanup, consent rules, report/block tooling, and gentle notifications.
 
 References:
 

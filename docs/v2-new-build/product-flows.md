@@ -161,7 +161,7 @@ Not MVP:
 - client-owned video processing
 - direct provider object creation from frontend
 - unlicensed music uploads as a platform-provided feature
-- dating controls inside Create
+- Mutuals controls inside Create
 
 Location UX:
 
@@ -285,15 +285,15 @@ Events are content-attached conversion flows.
   - title
   - description
   - date/time
-  - ticket amount/capacity
-  - public ticket sale or private request-to-join/apply
+  - Access Pass capacity
+  - public Access Pass sale or private request-to-join/apply
   - digital live stream or physical location
   - location selected through map/autodetect/manual search
-- user opens ticket sheet
+- user opens Access Pass sheet
 - wallet confirms payment if paid
 - backend verifies payment
-- backend grants ticket entitlement
-- QR/receipt generated from backend ticket record
+- backend grants Event Access Pass entitlement
+- QR/receipt generated from backend Access Pass record
 
 ## Mutuals Flow
 

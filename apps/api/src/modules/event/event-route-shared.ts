@@ -11,8 +11,6 @@ import type {
   AccessPassRequest,
   CreateEventRequest,
   EventRepository,
-  Ticket,
-  TicketRequest,
   UpdateEventRequest
 } from "./types.js";
 
@@ -96,21 +94,21 @@ export function validateEventDraft(body: Partial<CreateEventRequest> | undefined
     return "location.type is required";
   }
 
-  if (!Array.isArray(body.ticketTypes) || body.ticketTypes.length === 0) {
-    return "ticketTypes are required";
+  if (!Array.isArray(body.accessPassTypes) || body.accessPassTypes.length === 0) {
+    return "accessPassTypes are required";
   }
 
-  for (const ticketType of body.ticketTypes) {
-    if (!ticketType.label || ticketType.label.trim().length === 0) {
-      return "ticketTypes.label is required";
+  for (const accessPassType of body.accessPassTypes) {
+    if (!accessPassType.label || accessPassType.label.trim().length === 0) {
+      return "accessPassTypes.label is required";
     }
 
-    if (ticketType.currency !== "SOL") {
-      return "ticketTypes.currency must be SOL for native launch Access Passes";
+    if (accessPassType.currency !== "SOL") {
+      return "accessPassTypes.currency must be SOL for native launch Access Passes";
     }
 
-    if (!Number.isSafeInteger(ticketType.capacity) || ticketType.capacity < 1) {
-      return "ticketTypes.capacity must be at least 1";
+    if (!Number.isSafeInteger(accessPassType.capacity) || accessPassType.capacity < 1) {
+      return "accessPassTypes.capacity must be at least 1";
     }
   }
 
@@ -141,32 +139,16 @@ export function hashJson(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
-export function accessPassIntentResponse(state: "free_granted", ticket: Ticket) {
-  return { state, accessPass: toAccessPass(ticket) };
+export function accessPassIntentResponse(state: "free_granted", accessPass: AccessPass) {
+  return { state, accessPass };
 }
 
-export function toAccessPass(ticket: Ticket): AccessPass {
-  return {
-    id: ticket.id,
-    eventId: ticket.eventId,
-    accessPassTypeId: ticket.ticketTypeId,
-    holderUserId: ticket.holderUserId,
-    state: ticket.state,
-    qrToken: ticket.qrToken,
-    createdAt: ticket.createdAt,
-    ...(ticket.paymentIntentId !== undefined ? { paymentIntentId: ticket.paymentIntentId } : {}),
-    ...(ticket.checkedInAt !== undefined ? { checkedInAt: ticket.checkedInAt } : {})
-  };
+export function toAccessPass(accessPass: AccessPass): AccessPass {
+  return accessPass;
 }
 
-export function toAccessPassRequest(ticketRequest: TicketRequest): AccessPassRequest {
-  return {
-    id: ticketRequest.id,
-    eventId: ticketRequest.eventId,
-    accessPassTypeId: ticketRequest.ticketTypeId,
-    state: ticketRequest.state,
-    createdAt: ticketRequest.createdAt
-  };
+export function toAccessPassRequest(accessPassRequest: AccessPassRequest): AccessPassRequest {
+  return accessPassRequest;
 }
 
 export function validationResponse(message: string) {

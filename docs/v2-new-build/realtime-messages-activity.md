@@ -101,7 +101,7 @@ Activity is backend-derived:
 - tips/support
 - subscriptions
 - live passes
-- event tickets
+- Event Access Passes
 - referral shares
 - commissions
 - wallet transactions

@@ -90,7 +90,7 @@ export function createEventCoreRepositoryMethods(
             nullif(ticket_type->>'saleEndsAt', '')::timestamptz,
             coalesce((ticket_type->>'perUserLimit')::integer, 1)
           from selected_event se,
-            jsonb_array_elements(${sql.json(input.body.ticketTypes)}::jsonb) ticket_type
+            jsonb_array_elements(${sql.json(input.body.accessPassTypes)}::jsonb) ticket_type
           where exists (select 1 from inserted_event)
           returning id
         )

@@ -80,7 +80,7 @@ export function ReportQueueRow({ report }: { report: AdminReport }) {
 }
 
 export function EventOpsRow({ event }: { event: Event }) {
-  const passCount = event.ticketTypes.reduce((total, ticketType) => total + ticketType.capacity - ticketType.remaining, 0);
+  const passCount = event.accessPassTypes.reduce((total, accessPassType) => total + accessPassType.capacity - accessPassType.remaining, 0);
 
   return (
     <article className="grid gap-3 rounded border border-(--line) bg-(--background) p-3 text-sm md:grid-cols-[1fr_130px_190px]">

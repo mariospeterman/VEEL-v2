@@ -1,4 +1,4 @@
-import type { Event, EventTicketType, Ticket, TicketRequest } from "./types.js";
+import type { AccessPass, AccessPassRequest, Event, EventAccessPassType } from "./types.js";
 
 export interface EventRow {
   id: string;
@@ -15,36 +15,36 @@ export interface EventRow {
   request_hash?: string;
 }
 
-export interface TicketTypeRow {
+export interface AccessPassTypeRow {
   id: string;
   event_id: string;
   label: string;
   price_minor: string | number | null;
-  currency: EventTicketType["currency"];
+  currency: EventAccessPassType["currency"];
   capacity: number;
   issued_count: string | number;
   sale_starts_at: Date | null;
   sale_ends_at: Date | null;
   per_user_limit: number;
-  state: EventTicketType["state"];
+  state: EventAccessPassType["state"];
 }
 
-export interface TicketRow {
+export interface AccessPassRow {
   id: string;
   event_id: string;
   access_pass_type_id: string;
   holder_user_id: string;
   payment_intent_id: string | null;
   qr_token: string;
-  state: Ticket["state"];
+  state: AccessPass["state"];
   checked_in_at: Date | null;
   created_at: Date;
 }
 
-export interface TicketRequestRow {
+export interface AccessPassRequestRow {
   id: string;
   event_id: string;
   access_pass_type_id: string;
-  state: TicketRequest["state"];
+  state: AccessPassRequest["state"];
   created_at: Date;
 }
