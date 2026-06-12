@@ -4,6 +4,10 @@ on:
   pull_request:
     paths:
       - "packages/database/**"
+      - "supabase/**"
+      - "scripts/run-supabase-cli.mjs"
+      - "package.json"
+      - "pnpm-lock.yaml"
       - ".github/workflows/db-migrations.yml"
 
 permissions:
@@ -23,6 +27,8 @@ jobs:
           corepack prepare pnpm@10.0.0 --activate
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Check Supabase CLI
+        run: pnpm supabase:version
       - name: Check database migrations
         run: pnpm database:check
       - name: Run database tests

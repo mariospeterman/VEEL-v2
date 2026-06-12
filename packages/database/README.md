@@ -35,9 +35,17 @@ pnpm supabase:migrations
 pnpm supabase:push:dry
 ```
 
-If direct `DATABASE_URL` access is unavailable from the current network, use the authenticated
-Supabase MCP project connection to list/apply migrations and run advisors. Keep applied MCP
-migrations byte-for-byte aligned with committed files in this package.
+Use `SUPABASE_MIGRATIONS_DB_URL` or `SUPABASE_DIRECT_DB_URL` for remote CLI checks when available.
+If only `DATABASE_URL` is set and it points at a Supabase transaction pooler, the root wrapper uses
+session-pooler port `5432` for the CLI command because migration commands require prepared-statement
+compatible connections.
+
+The current shared remote project has timestamped Supabase migration history from MCP-applied
+migrations while this package keeps sequence-named SQL files. `pnpm supabase:migrations` verifies
+connectivity and remote visibility; `pnpm supabase:push:dry` is expected to stop until a deliberate
+migration-history normalization is planned. If direct database access is unavailable from the current
+network, use the authenticated Supabase MCP project connection to list/apply migrations and run
+advisors. Keep applied MCP migrations byte-for-byte aligned with committed files in this package.
 
 ## RLS Baseline
 
