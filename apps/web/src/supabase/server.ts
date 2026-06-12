@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import { parsePublicWebEnv } from "@veel/config";
+import { parsePublicWebEnv } from "@veel/config/public";
 
 export async function createSupabaseServerClient() {
   const env = parsePublicWebEnv(process.env);

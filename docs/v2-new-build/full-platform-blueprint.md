@@ -167,7 +167,7 @@ Frontend never computes final access, final commission, final pass state, final 
 | Mutuals | `product/mutuals.md`, `native-ui-ux-screens.md` | mutuals, interests, safety | Mutuals mode, Mutuals, Mutual chat | age provider, realtime |
 | Event Access | `product/event-access.md`, `business-monetisation.md` | events, passes, payments | event sheet, passes | Solana evidence, email/push |
 | DAC7/DAC8/VAT | `compliance/dac7-dac8-vat-system.md` | compliance, receipts, invoices, exports | admin compliance | Supabase Postgres, counsel-reviewed exports |
-| AI/MCP | `safety-admin-ai.md`, `ai-mcp-use-cases.md` | AI sessions, tools, permissions, audit | AI assistant/admin AI | OpenAI-compatible adapter first |
+| AI/MCP | `safety-admin-ai.md`, `ai-mcp-use-cases.md` | MCP connections, scopes, tools, permissions, audit | Capability-gated assistant/admin AI | Secure MCP connection layer first; external clients bring LLMs |
 | Admin/ops | `admin-operations-dashboard.md`, `deployment-topology.md` | admin, audit, ops diagnostics | admin app | all providers via sanitized diagnostics |
 | Adult compliance/age/KYC | `compliance/*`, `providers/identity-provider-wiring.md` | age, KYC/KYB, audit | age gate, creator earning/tax setup | Yoti/Sumsub/Veriff/Persona |
 | Security/content protection | `providers/content-protection.md`, `safety-admin-ai.md` | access policy, signed playback | safe media resources | Bunny, Livepeer |

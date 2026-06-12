@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: AI assistant, MCP tools, admin ops, creator/user utility
-Last updated: 2026-06-04
+Last updated: 2026-06-12
 Source of truth: yes for v2 AI/MCP scope
 
 Owns:
@@ -24,15 +24,31 @@ AI/MCP must solve real operational or user pain. It must not become a chatbot gi
 
 ## Core Decision
 
-Launch AI/MCP as a permissioned tool layer for three narrow jobs:
+Launch AI/MCP as a lightweight, permissioned MCP connection layer first.
+External AI clients and LLMs provide the reasoning layer; Veel provides
+authenticated data, scopes, safe tools, policy checks, rate limits, and audit.
 
-1. Creator productivity.
-2. User self-service.
-3. Admin/platform operations.
+The launch jobs are:
+
+1. Creator productivity through read tools and draft tools.
+2. User self-service through own-account read tools.
+3. Admin/platform operations through read tools and draft/recommendation tools.
 
 Do not let AI spend money, unlock content, issue Event Access Passes, publish content, message users, change safety/admin decisions, access private content/messages, or call provider APIs unless the user/admin explicitly confirms and backend policy allows the tool call.
 
-The first production slice is the backend gateway, session scope, tool allowlist, confirmation state, and audit trail. It uses deterministic internal tools only. LLM provider calls and externally reachable MCP transports remain disabled until the provider ADR and eval fixtures are launch-approved.
+The first production slice is a secure remote MCP foundation:
+
+- Veel MCP server with OAuth 2.1 authorization, resource/audience-bound tokens,
+  least-privilege scopes, and no token passthrough
+- connection records, scoped tokens, tool allowlists, rate limits, and audit
+- small safe tool set that reads backend projections or creates drafts/review
+  requests only
+- AI-generated/AI-edited content label fields where content policy requires it
+- optional BYO in-app assistant later, after provider ADR, prompt/eval fixtures,
+  budget controls, and UX evidence are approved
+
+Do not build a broad AI platform, custom model layer, casino-like assistant
+dashboard, or provider-calling autonomous agent for MVP.
 
 ## Real Pain Solvers
 
@@ -40,15 +56,23 @@ The first production slice is the backend gateway, session scope, tool allowlist
 
 Useful because creators need lower-friction publishing, better captions, and faster content organization.
 
-Allowed tools:
+Allowed MCP tools:
 
-- draft caption from creator-provided prompt/media metadata
-- suggest hashtags and mentions
-- summarize own creator activity
-- prepare metadata for a scheduled post/live/event
-- suggest a teaser title and thumbnail checklist
-- explain monetisation options using backend config
-- suggest event copy/Access Pass labels from creator-entered event details
+- `get_my_profile`
+- `get_my_creator_settings`
+- `list_my_media`
+- `get_my_media_detail`
+- `get_my_metrics_summary`
+- `list_my_drafts`
+- `list_my_events`
+- `create_profile_update_draft`
+- `create_post_draft`
+- `create_event_draft`
+- `create_message_reply_draft`
+- `create_media_metadata_draft`
+- `request_publish_review`
+- `request_profile_update_review`
+- `mark_media_as_ai_generated`
 
 Not allowed:
 
@@ -82,18 +106,20 @@ Not allowed:
 
 This is the highest ROI use case. Alibaba-style agentic commerce patterns point toward controlled operational agents, not open-ended chat. For Veel, admin AI should triage and explain operational state, then prepare actions for human confirmation.
 
-Allowed tools:
+Allowed MCP tools:
 
-- summarize provider health
-- detect stuck payment intents or webhook lag
-- cluster reports by content/user/risk
-- summarize creator revenue and retention cohorts
-- identify high-churn funnels
-- explain failed media processing states
-- draft support response from safe Access Pass context
-- prepare moderation decision summary
-- prepare refund/revocation recommendation with evidence
-- produce launch-readiness checklist from current metrics
+- `get_platform_health_summary`
+- `list_open_support_cases`
+- `get_support_case_summary`
+- `list_moderation_queue`
+- `get_moderation_case_summary`
+- `list_payment_issues`
+- `get_creator_account_summary`
+- `draft_support_reply`
+- `draft_moderation_decision_note`
+- `draft_creator_warning`
+- `draft_refund_recommendation`
+- `create_internal_task`
 
 Not allowed:
 
@@ -106,11 +132,23 @@ Not allowed:
 ## MCP Architecture
 
 ```text
-AI client/session
-  -> AI gateway
+External AI client or optional in-app assistant
+  -> Veel MCP server
   -> policy engine
   -> tool registry
-  -> MCP/internal tool adapter
+  -> backend service/query
+  -> draft/review request when mutation-like
+  -> redacted structured result
+  -> audited tool-call record
+```
+
+In-app assistant architecture, if later enabled:
+
+```text
+Veel UI
+  -> AI gateway
+  -> provider adapter / BYO key boundary
+  -> same Veel MCP server or internal tool gateway
   -> backend service/query
   -> audited result
 ```
@@ -132,37 +170,75 @@ Launch implementation rules:
 - `GET /v1/ai/capabilities` exposes backend-derived scopes and tool allowlists without creating a session or executing a tool.
 - `POST /v1/ai/sessions` creates an expiring scoped session with backend-derived allowed tools.
 - `POST /v1/ai/sessions/:id/tool-calls` accepts only enumed tool names from OpenAPI.
+- Remote MCP tools must expose typed input and output schemas; clients may use
+  tool filtering and approval requests where supported.
 - Admin tools require an active staff membership check before execution.
 - Confirmation-required tools can only prepare a decision or draft in this slice; they cannot send, refund, ban, revoke, publish, or mutate safety state.
 - Stored input and output are redacted summaries plus safe JSON results, never raw prompts, provider payloads, secrets, or private messages.
-- External MCP transports must follow the current MCP authorization spec before launch: bearer tokens on every HTTP request, audience/resource validation, no tokens in query strings, and least-privilege scopes.
+- External MCP transports must follow the current MCP authorization spec before launch: OAuth 2.1, PKCE where applicable, bearer tokens on every HTTP request, resource/audience validation, HTTPS except localhost development redirect URIs, exact redirect URI validation, no tokens in query strings, no token passthrough to downstream services, and least-privilege scopes.
+- Tool outputs must treat user/profile/content text as untrusted data. Prompt-injection defenses include strict schemas, no instruction-following from retrieved content, resource-scoped authorization after every tool call, output redaction, and human confirmation before risky actions.
+- Rate limits are per connection, user, organization, tool, and risk class.
+- `/app/assistant` exists only when backend capability allows it, is not a
+  primary mobile nav item, and cannot publish, spend, message, moderate, call
+  providers, change admin state, or mutate user data without explicit
+  confirmation.
 
 ## Tool Scope Matrix
 
 | Tool | User | Creator | Admin | Confirmation |
 | --- | --- | --- | --- | --- |
-| `explain_app_state` | yes | yes | yes | no |
-| `summarize_own_activity` | yes | yes | no | no |
-| `find_own_purchases` | yes | yes | no | no |
-| `draft_caption` | no | yes | no | no |
-| `suggest_hashtags` | no | yes | no | no |
-| `prepare_event_copy` | no | yes | no | no |
-| `summarize_creator_metrics` | no | own only | yes | no |
-| `payment_lookup` | own only | own revenue only | yes | no |
-| `provider_health_summary` | no | no | yes | no |
-| `moderation_queue_summary` | no | no | yes | no |
-| `draft_support_reply` | no | no | yes | yes before send |
-| `prepare_refund_decision` | no | no | yes | yes |
-| `prepare_ban_or_restriction` | no | no | yes | yes |
+| `get_my_profile` | own only | own only | no | no |
+| `get_my_creator_settings` | no | own only | no | no |
+| `list_my_media` | no | own only | no | no |
+| `get_my_media_detail` | no | own only | no | no |
+| `get_my_metrics_summary` | no | own only | no | no |
+| `list_my_drafts` | no | own only | no | no |
+| `list_my_events` | no | own only | no | no |
+| `create_profile_update_draft` | no | own only | no | review before apply |
+| `create_post_draft` | no | own only | no | review before publish |
+| `create_event_draft` | no | own only | no | review before publish |
+| `create_message_reply_draft` | no | own only | no | review before send |
+| `create_media_metadata_draft` | no | own only | no | review before apply |
+| `request_publish_review` | no | own only | no | human review |
+| `request_profile_update_review` | no | own only | no | human review |
+| `mark_media_as_ai_generated` | no | own only | no | no |
+| `get_platform_health_summary` | no | no | yes | no |
+| `list_open_support_cases` | no | no | yes | no |
+| `get_support_case_summary` | no | no | yes | no |
+| `list_moderation_queue` | no | no | yes | no |
+| `get_moderation_case_summary` | no | no | yes | no |
+| `list_payment_issues` | no | no | yes | no |
+| `get_creator_account_summary` | no | no | yes | no |
+| `draft_support_reply` | no | no | yes | review before send |
+| `draft_moderation_decision_note` | no | no | yes | review before apply |
+| `draft_creator_warning` | no | no | yes | review before send |
+| `draft_refund_recommendation` | no | no | yes | review before refund |
+| `create_internal_task` | no | no | yes | no |
+
+No `admin.full_access` scope is allowed. Scopes must be human-readable and
+specific, for example `creator.profile.read`, `creator.drafts.write`,
+`admin.support.read`, or `admin.moderation.drafts.write`.
+
+## AI Content Labels
+
+- AI-generated or AI-edited media/audio requires visible user-facing labeling.
+- Likeness, deepfake, or voice-clone workflows require visible labeling plus
+  consent verification before publication.
+- Caption-only assistance is stored as internal `ai_assisted` provenance and
+  does not need a visible media label unless policy changes.
 
 ## LLM Provider Strategy
 
-- Keep the AI gateway provider-agnostic.
-- Start with one OpenAI-compatible adapter and one model config.
-- Store prompts, tool schemas, and eval fixtures in versioned files.
-- Do not let the LLM provider call internal tools directly.
-- Backend tool gateway remains the policy boundary.
-- Do not ship provider-backed generation until provider docs have been checked, prompts/tool schemas are versioned, and eval fixtures cover unsafe money, messaging, publishing, age/KYC, and admin requests.
+- External MCP clients bring their own LLM/provider by default.
+- Keep any future in-app assistant provider-agnostic, with BYO key or
+  environment-scoped provider credentials server-only.
+- Store prompts, tool schemas, approval copy, and eval fixtures in versioned
+  files before provider-backed generation ships.
+- Do not let an LLM provider call internal tools directly; the Veel MCP/tool
+  gateway remains the policy boundary.
+- Do not ship provider-backed generation until official provider docs have been
+  checked and eval fixtures cover unsafe money, messaging, publishing,
+  age/KYC, prompt injection, and admin requests.
 
 ## Admin Metrics AI Should Use
 
@@ -182,7 +258,9 @@ Launch implementation rules:
 
 ## References
 
-- OpenAI Agents guide: https://platform.openai.com/docs/guides/agents
-- OpenAI Agents SDK tools: https://openai.github.io/openai-agents-js/guides/tools/
+- OpenAI Agents guide: https://developers.openai.com/api/docs/guides/agents
+- OpenAI MCP/connectors tools: https://developers.openai.com/api/docs/guides/tools-connectors-mcp
+- OpenAI remote MCP server guide: https://developers.openai.com/api/docs/mcp
 - MCP authorization: https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization
+- MCP security best practices: https://modelcontextprotocol.io/docs/tutorials/security/security_best_practices
 - MCP enterprise managed authorization: https://modelcontextprotocol.io/extensions/auth/enterprise-managed-authorization

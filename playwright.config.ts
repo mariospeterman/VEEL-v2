@@ -6,8 +6,8 @@ export default defineConfig({
   expect: {
     timeout: 5_000
   },
-  fullyParallel: true,
-  workers: process.env.CI ? 2 : 1,
+  fullyParallel: false,
+  workers: 1,
   reporter: [["list"]],
   use: {
     baseURL: "http://127.0.0.1:3000",
@@ -15,8 +15,12 @@ export default defineConfig({
   },
   webServer: {
     command: "node scripts/run-local-tool.mjs web-dev",
+    env: {
+      NEXT_PUBLIC_API_BASE_URL: "http://127.0.0.1:4000",
+      NEXT_PUBLIC_ENABLE_E2E_AUTH: "true"
+    },
     url: "http://127.0.0.1:3000",
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120_000
   },
   projects: [

@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: frontend
-Last updated: 2026-06-01
+Last updated: 2026-06-12
 Source of truth: yes
 
 Owns:
@@ -191,6 +191,8 @@ Current implementation state:
 - `pnpm smoke` runs Playwright against the Next.js app shell and Home media card.
 - The smoke suite runs desktop Chromium and mobile Chromium projects from `tests/smoke`.
 - CI installs Chromium and runs the smoke suite after lint, typecheck, and unit tests.
+- Smoke runs are serialized because the authenticated happy-path spec owns a
+  temporary local API server on the shared smoke API port.
 - `/`, `/age`, `/content/[contentId]`, `/live/[liveRoomId]`, `/profile`, `/profile/[handle]`, `/activity`, `/messages`, `/wallet`, `/subscriptions`, `/studio`, `/discover`, `/event-access/[eventId]`, `/passes`, `/mutuals/feed`, `/mutuals`, `/admin`, and `/settings` read backend projections through the typed web API helper instead of local business-data fixtures.
 - Settings reads session, age, wallet, feed preference, and notification preference projections from the API; feed/notification preference mutation remains backend-owned through explicit control actions.
 - Browser Supabase Realtime subscribes only to approved user-owned projection tables and invalidates typed API caches/server component projections. It must not use realtime payloads as payment, access, notification, messaging, or social truth.
@@ -198,7 +200,12 @@ Current implementation state:
 - Protected app-shell pages use a backend session access guard after Supabase SSR auth. The guard honors `GET /v1/session.appAccessState` and redirects identity, wallet, or age gaps to their remediation routes; it is inert in local projection mode when Supabase browser auth is intentionally unconfigured.
 - Content detail now renders only backend-issued playback resources: Bunny embed resources use an iframe, direct/HLS resources use the browser media element, and blocked/teaser/not-ready states show access/readiness copy without local entitlement decisions. The unlock panel uses `POST /v1/content/{contentId}/unlock-intents` and `GET /v1/payments/intents/{paymentIntentId}/transaction-request`; the browser displays the backend-built wallet request only and entitlement remains backend-settlement-owned.
 - Create now calls `POST /v1/content`, `PATCH /v1/content/{contentId}`, `POST /v1/media/uploads`, `POST /v1/media/assets/{mediaAssetId}/sync`, `GET /v1/content/{contentId}`, and `POST /v1/content/{contentId}/publish` around `tus-js-client` Bunny uploads. Browser state is UX/cache only: metadata save, preview controls, upload completion, provider-sync pending state, and submit-for-review do not approve moderation or create access.
-- Current smoke coverage starts the web app only, so API-backed home/age/detail/profile/activity/messages/wallet/subscriptions/studio/discover/Event Access/Mutuals/admin/settings smoke asserts the fail-closed API-unavailable state; API-backed happy-path browser coverage belongs in the combined app integration harness.
+- Current smoke coverage keeps broad projection routes fail-closed when the API
+  is unavailable and adds authenticated browser happy-path coverage with a local
+  mock API for `enter -> profile -> wallet -> age -> home -> create -> unlock`.
+  The happy path verifies bearer-token attachment and Idempotency-Key behavior
+  for create and unlock mutations. Provider staging smoke is still separate and
+  required before production readiness.
 - `/create` is a mutation-safe launch surface: it describes backend-owned
   draft/upload boundaries without calling mutation APIs on page load or
   rendering fixture record IDs, provider upload URLs, or draft payloads.

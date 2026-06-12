@@ -1,5 +1,5 @@
 import { createBrowserClient } from "@supabase/ssr";
-import { parsePublicWebEnv } from "@veel/config";
+import { parsePublicWebEnv } from "@veel/config/public";
 
 export function createSupabaseBrowserClient() {
   const env = parsePublicWebEnv(process.env);

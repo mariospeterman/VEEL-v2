@@ -1,7 +1,8 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import { parsePublicWebEnv } from "@veel/config";
+import { parsePublicWebEnv } from "@veel/config/public";
 import type { components } from "@veel/contracts";
+import { getE2eAccessToken } from "./supabase/e2e-auth";
 
 export type ContentItem = components["schemas"]["ContentItem"];
 export type SessionState = components["schemas"]["SessionState"];
@@ -464,6 +465,11 @@ async function getJson<T>(path: string): Promise<ApiResult<T>> {
 }
 
 async function getSupabaseAccessToken(env: ReturnType<typeof parsePublicWebEnv>) {
+  const e2eAccessToken = await getE2eAccessToken();
+  if (e2eAccessToken) {
+    return e2eAccessToken;
+  }
+
   const supabaseKey = env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!env.NEXT_PUBLIC_SUPABASE_URL || !supabaseKey) {

@@ -1,8 +1,9 @@
 "use client";
 
-import { parsePublicWebEnv } from "@veel/config";
+import { parsePublicWebEnv } from "@veel/config/public";
 import type { components } from "@veel/contracts";
 import { createSupabaseBrowserClient } from "@/supabase/client";
+import { e2eAuthCookieName } from "@/supabase/auth-cookie";
 
 export type User = components["schemas"]["User"];
 export type CreateAgeSessionRequest = components["schemas"]["CreateAgeSessionRequest"];
@@ -36,6 +37,9 @@ export type SubscriptionAuthorizationIntent =
 export type SubmitSubscriptionAuthorizationRequest =
   components["schemas"]["SubmitSubscriptionAuthorizationRequest"];
 export type Subscription = components["schemas"]["Subscription"];
+
+const browserE2eAuthEnabled =
+  process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_ENABLE_E2E_AUTH === "true";
 
 export class ApiMutationError extends Error {
   constructor(
@@ -263,6 +267,11 @@ async function authenticatedEmptyMutation(
 }
 
 async function browserSessionToken() {
+  const e2eToken = browserE2eAccessToken();
+  if (e2eToken) {
+    return { token: e2eToken };
+  }
+
   const supabase = createSupabaseBrowserClient();
   const {
     data: { session }
@@ -273,6 +282,20 @@ async function browserSessionToken() {
   }
 
   return { token: session.access_token };
+}
+
+function browserE2eAccessToken() {
+  if (!browserE2eAuthEnabled) {
+    return null;
+  }
+
+  const token = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${e2eAuthCookieName}=`))
+    ?.slice(e2eAuthCookieName.length + 1);
+
+  return token ? decodeURIComponent(token) : null;
 }
 
 function mutationIdempotencyKey() {

@@ -2,7 +2,7 @@
 
 Status: draft
 Scope: wallet, onramp, payments, subscriptions, media, live, age/KYC, AI, events
-Last updated: 2026-06-03
+Last updated: 2026-06-12
 Source of truth: draft pending vendor/account checks
 
 Owns:
@@ -38,7 +38,7 @@ This ADR turns the v2 blueprint into concrete provider defaults for the first im
 | Live/replay | Livepeer with JWT playback access from day one for paid streams/replays | Provider-owned live infra and provider-enforced protected playback. |
 | Age assurance | Yoti app/Digital ID first, Sumsub reusable/KYC fallback, Veriff age-assurance fallback, Persona documentary fallback only after privacy/procurement review | User choice, reusable/low-friction first, no raw identity data in core DB. |
 | Creator KYC/KYB | Disabled by default except high-risk/admin-required creators; Sumsub primary candidate | Avoid unnecessary friction while keeping an easy switch for legal/risk expansion. |
-| AI/MCP | Provider-agnostic LLM gateway with OpenAI-compatible adapter first | Avoid lock-in; all tools permission-scoped and audited. |
+| AI/MCP | Secure MCP connection layer first; external AI clients/LLMs bring the brain, optional BYO in-app assistant later | Avoid overbuilding a model platform; Veel owns data, scopes, policy, rate limits, approvals, and audit. |
 | Create flow | Raw/simple create: record/upload, essential edits, caption/#/@/location, NSFW label, optional event, monetisation, preview, publish | Avoids overbuilt editor while preserving creator conversion controls. |
 | Mutuals | Profile/settings-owned explicit mode; not configured per Create draft | Mutuals appears on creator media only when profile mode is active and viewer also opted in. |
 | Event Access | Internal backend QR/pass entitlement + Solana Pay settlement first; NFT/Solana pass ADR later | Proven, simple, noncustodial split settlement without premature custom smart contracts. |
@@ -104,6 +104,10 @@ Before implementation, verify the latest official docs for each provider/API. Th
 | Bunny edge/API protection | `https://docs.bunny.net/shield/overview` |
 | Livepeer JWT access | `https://docs.livepeer.org/developers/guides/access-control-jwt` |
 | Livepeer React Player | `https://docs.livepeer.org/sdks/react/migration/3.x/Player` |
+| MCP authorization | `https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization` |
+| MCP security best practices | `https://modelcontextprotocol.io/docs/tutorials/security/security_best_practices` |
+| OpenAI MCP/connectors | `https://developers.openai.com/api/docs/guides/tools-connectors-mcp` |
+| OpenAI remote MCP server guide | `https://developers.openai.com/api/docs/mcp` |
 
 Provider docs override assumptions in this ADR if an API has changed. Any changed provider behavior needs an ADR update before coding.
 
@@ -436,3 +440,7 @@ Every admin mutation requires:
 - Livepeer JWT access control: https://docs.livepeer.org/developers/guides/access-control-jwt
 - Yoti age verification: https://developers.yoti.com/age-verification/age-verification-introduction
 - Sumsub reusable KYC: https://docs.sumsub.com/docs/reusable-kyc
+- MCP authorization: https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization
+- MCP security best practices: https://modelcontextprotocol.io/docs/tutorials/security/security_best_practices
+- OpenAI MCP/connectors: https://developers.openai.com/api/docs/guides/tools-connectors-mcp
+- OpenAI remote MCP server guide: https://developers.openai.com/api/docs/mcp

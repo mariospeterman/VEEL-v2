@@ -107,9 +107,9 @@ Rules:
 
 AI/MCP is permissioned and audited.
 
-The practical launch scope is defined in `ai-mcp-use-cases.md`. AI should start with creator productivity, user self-service, and admin operations summaries. Do not build a generic chatbot or unrestricted MCP gateway.
+The practical launch scope is defined in `ai-mcp-use-cases.md`. AI should start as a lightweight MCP connection layer for creator productivity, user self-service, and admin operations summaries/drafts. External AI clients bring their own LLMs by default. Do not build a generic chatbot, autonomous admin agent, or unrestricted MCP gateway.
 
-The launch implementation is an audited internal tool gateway, not a direct LLM-to-tool bridge. AI sessions are scoped, short-lived, and backed by a server-side allowlist. Tool calls store redacted input/output summaries only.
+The launch implementation is an audited tool gateway, not a direct LLM-to-provider or LLM-to-admin bridge. AI/MCP sessions are scoped, short-lived, and backed by a server-side allowlist. Tool calls store redacted input/output summaries only.
 
 Allowed user tools:
 
