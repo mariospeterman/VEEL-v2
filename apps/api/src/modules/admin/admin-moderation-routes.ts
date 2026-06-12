@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { RegisterAdminRoutesOptions } from "./admin-route-auth.js";
-import { adminListInput, requireAdminAccess, requireAdminAccessWithUser } from "./admin-route-auth.js";
+import { mutationRateLimit } from "../../shared/rate-limits.js";
+import { adminListInput, requireAdminAccess, requireAdminMutation } from "./admin-route-auth.js";
 import { validateModerationAction, validateReportAction } from "./admin-route-validators.js";
 import type { AdminModerationActionRequest, AdminReportActionRequest } from "./types.js";
 
@@ -47,18 +48,7 @@ export function registerAdminModerationRoutes(
     return reply.code(200).send(await options.adminRepository.listContent(adminListInput(query)));
   });
 
-  app.patch("/v1/admin/content/:contentId/moderation", async (request, reply) => {
-    const access = await requireAdminAccessWithUser(request, reply, options);
-    if (!access) return reply;
-
-    const idempotencyKey = request.headers["idempotency-key"];
-    if (!idempotencyKey || Array.isArray(idempotencyKey)) {
-      return reply.code(400).send({
-        code: "validation_failed",
-        message: "Idempotency-Key header is required"
-      });
-    }
-
+  app.patch("/v1/admin/content/:contentId/moderation", mutationRateLimit("adminMutation"), async (request, reply) => {
     const { contentId } = request.params as { contentId?: string };
     if (!contentId) {
       return reply.code(404).send({
@@ -67,20 +57,20 @@ export function registerAdminModerationRoutes(
       });
     }
 
-    const body = request.body as Partial<AdminModerationActionRequest> | undefined;
-    const validationError = validateModerationAction(body);
-    if (validationError) {
-      return reply.code(400).send({
-        code: "validation_failed",
-        message: validationError
-      });
-    }
+    const mutation = await requireAdminMutation<AdminModerationActionRequest>(
+      request,
+      reply,
+      options,
+      { action: "content_moderation_updated" },
+      validateModerationAction
+    );
+    if (!mutation) return reply;
 
     const content = await options.adminRepository.updateContentModeration({
-      supabaseUserId: access.supabaseUserId,
+      supabaseUserId: mutation.supabaseUserId,
       contentId,
-      body: body as AdminModerationActionRequest,
-      idempotencyKey
+      body: mutation.body,
+      idempotencyKey: mutation.idempotencyKey
     });
 
     if (!content) {
@@ -101,18 +91,7 @@ export function registerAdminModerationRoutes(
     return reply.code(200).send(await options.adminRepository.listReports(adminListInput(query)));
   });
 
-  app.patch("/v1/admin/reports/:reportId", async (request, reply) => {
-    const access = await requireAdminAccessWithUser(request, reply, options);
-    if (!access) return reply;
-
-    const idempotencyKey = request.headers["idempotency-key"];
-    if (!idempotencyKey || Array.isArray(idempotencyKey)) {
-      return reply.code(400).send({
-        code: "validation_failed",
-        message: "Idempotency-Key header is required"
-      });
-    }
-
+  app.patch("/v1/admin/reports/:reportId", mutationRateLimit("adminMutation"), async (request, reply) => {
     const { reportId } = request.params as { reportId?: string };
     if (!reportId) {
       return reply.code(404).send({
@@ -121,20 +100,20 @@ export function registerAdminModerationRoutes(
       });
     }
 
-    const body = request.body as Partial<AdminReportActionRequest> | undefined;
-    const validationError = validateReportAction(body);
-    if (validationError) {
-      return reply.code(400).send({
-        code: "validation_failed",
-        message: validationError
-      });
-    }
+    const mutation = await requireAdminMutation<AdminReportActionRequest>(
+      request,
+      reply,
+      options,
+      { action: "report_review_updated" },
+      validateReportAction
+    );
+    if (!mutation) return reply;
 
     const report = await options.adminRepository.updateReport({
-      supabaseUserId: access.supabaseUserId,
+      supabaseUserId: mutation.supabaseUserId,
       reportId,
-      body: body as AdminReportActionRequest,
-      idempotencyKey
+      body: mutation.body,
+      idempotencyKey: mutation.idempotencyKey
     });
 
     if (!report) {

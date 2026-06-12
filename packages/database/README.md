@@ -24,6 +24,21 @@ pnpm database:check
 pnpm --filter @veel/database test
 ```
 
+The root Supabase CLI project lives in `supabase/`. Its `migrations` entry is a symlink to
+`packages/database/migrations` so local and remote Supabase workflows use the same canonical SQL
+files without copying migration history.
+
+Run remote migration checks through the repo-local CLI:
+
+```sh
+pnpm supabase:migrations
+pnpm supabase:push:dry
+```
+
+If direct `DATABASE_URL` access is unavailable from the current network, use the authenticated
+Supabase MCP project connection to list/apply migrations and run advisors. Keep applied MCP
+migrations byte-for-byte aligned with committed files in this package.
+
 ## RLS Baseline
 
 Migration `0017_rls_policy_baseline.sql` enables RLS for public-schema tables created before the realtime/read-model slices and adds explicit authenticated read policies for all current client-visible tables.

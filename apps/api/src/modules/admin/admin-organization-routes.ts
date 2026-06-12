@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import type { RegisterAdminRoutesOptions } from "./admin-route-auth.js";
 import { AdminRepositoryStateConflictError } from "./admin-repository.js";
-import { adminListInput, requireAdminAccess, requireAdminAccessWithUser } from "./admin-route-auth.js";
+import { mutationRateLimit } from "../../shared/rate-limits.js";
+import { adminListInput, requireAdminAccess, requireAdminMutation } from "./admin-route-auth.js";
 import { validateFeatureFlagPatch, validateOrganizationKybAction, validateOrganizationMemberAction } from "./admin-route-validators.js";
 import type { AdminFeatureFlagPatchRequest, AdminOrganizationKybActionRequest, AdminOrganizationMemberActionRequest } from "./types.js";
 
@@ -17,18 +18,7 @@ export function registerAdminOrganizationRoutes(
     return reply.code(200).send(await options.adminRepository.listOrganizations(adminListInput(query)));
   });
 
-  app.patch("/v1/admin/organizations/:organizationId/kyb", async (request, reply) => {
-    const access = await requireAdminAccessWithUser(request, reply, options);
-    if (!access) return reply;
-
-    const idempotencyKey = request.headers["idempotency-key"];
-    if (!idempotencyKey || Array.isArray(idempotencyKey)) {
-      return reply.code(400).send({
-        code: "validation_failed",
-        message: "Idempotency-Key header is required"
-      });
-    }
-
+  app.patch("/v1/admin/organizations/:organizationId/kyb", mutationRateLimit("adminMutation"), async (request, reply) => {
     const { organizationId } = request.params as { organizationId?: string };
     if (!organizationId) {
       return reply.code(404).send({
@@ -37,20 +27,20 @@ export function registerAdminOrganizationRoutes(
       });
     }
 
-    const body = request.body as Partial<AdminOrganizationKybActionRequest> | undefined;
-    const validationError = validateOrganizationKybAction(body);
-    if (validationError) {
-      return reply.code(400).send({
-        code: "validation_failed",
-        message: validationError
-      });
-    }
+    const mutation = await requireAdminMutation<AdminOrganizationKybActionRequest>(
+      request,
+      reply,
+      options,
+      { action: "organization_kyb_updated" },
+      validateOrganizationKybAction
+    );
+    if (!mutation) return reply;
 
     const organization = await options.adminRepository.updateOrganizationKyb({
-      supabaseUserId: access.supabaseUserId,
+      supabaseUserId: mutation.supabaseUserId,
       organizationId,
-      body: body as AdminOrganizationKybActionRequest,
-      idempotencyKey
+      body: mutation.body,
+      idempotencyKey: mutation.idempotencyKey
     });
 
     if (!organization) {
@@ -84,18 +74,7 @@ export function registerAdminOrganizationRoutes(
     );
   });
 
-  app.patch("/v1/admin/organizations/:organizationId/members/:membershipId", async (request, reply) => {
-    const access = await requireAdminAccessWithUser(request, reply, options);
-    if (!access) return reply;
-
-    const idempotencyKey = request.headers["idempotency-key"];
-    if (!idempotencyKey || Array.isArray(idempotencyKey)) {
-      return reply.code(400).send({
-        code: "validation_failed",
-        message: "Idempotency-Key header is required"
-      });
-    }
-
+  app.patch("/v1/admin/organizations/:organizationId/members/:membershipId", mutationRateLimit("adminMutation"), async (request, reply) => {
     const { membershipId, organizationId } = request.params as {
       membershipId?: string;
       organizationId?: string;
@@ -107,22 +86,22 @@ export function registerAdminOrganizationRoutes(
       });
     }
 
-    const body = request.body as Partial<AdminOrganizationMemberActionRequest> | undefined;
-    const validationError = validateOrganizationMemberAction(body);
-    if (validationError) {
-      return reply.code(400).send({
-        code: "validation_failed",
-        message: validationError
-      });
-    }
+    const mutation = await requireAdminMutation<AdminOrganizationMemberActionRequest>(
+      request,
+      reply,
+      options,
+      { action: "organization_member_updated" },
+      validateOrganizationMemberAction
+    );
+    if (!mutation) return reply;
 
     try {
       const member = await options.adminRepository.updateOrganizationMember({
-        supabaseUserId: access.supabaseUserId,
+        supabaseUserId: mutation.supabaseUserId,
         organizationId,
         membershipId,
-        body: body as AdminOrganizationMemberActionRequest,
-        idempotencyKey
+        body: mutation.body,
+        idempotencyKey: mutation.idempotencyKey
       });
 
       if (!member) {
@@ -152,18 +131,7 @@ export function registerAdminOrganizationRoutes(
     return reply.code(200).send(await options.adminRepository.listFeatureFlags());
   });
 
-  app.patch("/v1/admin/feature-flags/:featureFlagKey", async (request, reply) => {
-    const access = await requireAdminAccessWithUser(request, reply, options);
-    if (!access) return reply;
-
-    const idempotencyKey = request.headers["idempotency-key"];
-    if (!idempotencyKey || Array.isArray(idempotencyKey)) {
-      return reply.code(400).send({
-        code: "validation_failed",
-        message: "Idempotency-Key header is required"
-      });
-    }
-
+  app.patch("/v1/admin/feature-flags/:featureFlagKey", mutationRateLimit("adminMutation"), async (request, reply) => {
     const { featureFlagKey } = request.params as { featureFlagKey?: string };
     if (!featureFlagKey) {
       return reply.code(404).send({
@@ -172,20 +140,20 @@ export function registerAdminOrganizationRoutes(
       });
     }
 
-    const body = request.body as Partial<AdminFeatureFlagPatchRequest> | undefined;
-    const validationError = validateFeatureFlagPatch(body);
-    if (validationError) {
-      return reply.code(400).send({
-        code: "validation_failed",
-        message: validationError
-      });
-    }
+    const mutation = await requireAdminMutation<AdminFeatureFlagPatchRequest>(
+      request,
+      reply,
+      options,
+      { action: "feature_flag_updated" },
+      validateFeatureFlagPatch
+    );
+    if (!mutation) return reply;
 
     const featureFlag = await options.adminRepository.updateFeatureFlag({
-      supabaseUserId: access.supabaseUserId,
+      supabaseUserId: mutation.supabaseUserId,
       featureFlagKey,
-      body: body as AdminFeatureFlagPatchRequest,
-      idempotencyKey
+      body: mutation.body,
+      idempotencyKey: mutation.idempotencyKey
     });
 
     if (!featureFlag) {
