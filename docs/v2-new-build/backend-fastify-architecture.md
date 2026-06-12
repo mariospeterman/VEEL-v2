@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: backend
-Last updated: 2026-06-03
+Last updated: 2026-06-12
 Source of truth: yes
 
 Owns:
@@ -125,6 +125,15 @@ flowchart LR
 - All mutable state transitions use enums/state tables where useful.
 - All user-owned reads go through policy/repository functions.
 - All admin mutations write audit logs.
+
+## Shared Mutation Boundary
+
+Money, access, safety, age/KYC, wallet, Event Access, Mutuals, messages, and admin mutations must use shared route-boundary helpers instead of hand-rolled request checks:
+
+- `apps/api/src/shared/idempotency.ts` owns `Idempotency-Key` parsing and stable request hashing helpers.
+- `apps/api/src/shared/rate-limits.ts` owns route-specific mutation rate-limit presets on top of the global Fastify rate limit.
+- Admin reason-required mutations use `requireAdminMutation` so session verification, staff policy, idempotency, body validation, and audit-intent logging are applied consistently before repository work.
+- Repository methods still own durable transaction semantics and audit inserts. Route helpers must not become a second business source of truth.
 
 ## Worker Model
 

@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: implementation status, known gaps, and next hardening priorities
-Last updated: 2026-06-07
+Last updated: 2026-06-12
 Source of truth: yes
 
 Owns:
@@ -34,7 +34,8 @@ Non-goals:
 
 - Monorepo, pnpm workspace, CI/security workflow, docs checks, lint/typecheck/test/smoke scripts, GStack gates, and gitleaks local gate.
 - Fastify API bootstrap with route registration, dependency construction, shared app-level Postgres client construction, close-hook lifecycle, env validation, raw-body support for signed webhooks, global rate limit, OpenAPI plugin, and Supabase boundary plugin.
-- Shared backend helpers now cover the app-level Postgres client, explicit transaction boundary, and common Idempotency-Key parsing/validation for migrated route utilities.
+- Shared backend helpers now cover the app-level Postgres client, explicit transaction boundary, common Idempotency-Key parsing/validation, stable idempotency request hashing, route-specific mutation rate-limit presets, and the first admin mutation route-policy guard for migrated route utilities.
+- Root Supabase CLI project is initialized with committed `supabase/config.toml`, repo-local Supabase CLI `2.106.0`, and `supabase/migrations` linked to the canonical `packages/database/migrations` SQL files. Supabase MCP is authenticated against the active `Veel v2` project and migration `0056_event_access_purchase_request_state` is applied remotely.
 - Supabase/Auth session verification boundary, web SSR cookie refresh/confirmation route, real `/enter` magic-link session UX, profile-completion mutation UI, external wallet challenge handoff UI, configured-session redirects, backend app-access redirects for protected app-shell pages, and backend session/profile readiness projections.
 - Age provider waterfall boundary, `/age` provider-session start UI, and normalized webhook/test paths, with unavailable providers failing closed when not configured.
 - External wallet challenge/link/revoke/status flow with backend signature verification and replay/expiry checks; `/enter` and `/wallet` can now coordinate injected-wallet challenge signing while keeping wallet truth server-side; onramp provider boundary fails closed unless configured.
@@ -55,14 +56,14 @@ Non-goals:
 - Payment settlement is native SOL devnet first; SPL/USDC, product-specific split settlement beyond the current content-unlock handoff, exact subscription delegation program verification, and provider replay tooling still need launch-scope completion.
 - Subscription renewals are architected as auto-renewing backend/worker collections, but production collection requires real provider/program configuration, authority verification, and staging evidence.
 - Media creation has backend draft, admin-tunable draft/upload abuse policy enforcement with safe defaults, metadata/preview update, Event Access draft linking, persisted upload-session handoff, TUS browser upload/resume wiring, provider-status sync UI, entitlement-aware content playback rendering, explicit publish submission, and a separate `publish_state`.
-- Admin dashboard is substantial but still needs final role matrix coverage, reason-required mutation audit expansion, and removal of any remaining compatibility aliases after migrations and clients are updated.
-- Deployment has an executable skeleton with health/readiness probes, build/migration workflow gates, rollback runbook, deploy preflight, and observability runbook. It remains not production-ready until real hosting targets, artifact digest pinning, database backup confirmation, provider staging smoke, alert routing, and environment-scoped deploy variables are configured.
+- Admin dashboard is substantial; organization KYB/member, support policy/case, moderation/report, refund/dispute, data-request, and feature-flag mutations now share the admin mutation route-policy/idempotency/rate-limit guard, but final role matrix coverage and removal of any remaining compatibility aliases after migrations and clients are updated still remain.
+- Deployment has an executable skeleton with health/readiness probes, build/migration workflow gates, rollback runbook, deploy preflight, and observability runbook. It remains not production-ready until real hosting targets, artifact digest pinning, database backup confirmation, provider staging smoke, alert routing, environment-scoped deploy variables, and direct Supabase CLI DB connectivity or equivalent CI MCP/management workflow are configured.
 
 ## P0 Before Broad Expansion
 
 1. Continue migrating money/access/admin/safety mutations onto the shared Postgres transaction helper slice by slice; payment submission settlement is already on the shared boundary.
-2. Continue migrating route modules onto shared idempotency helpers; add shared audit, route-policy/RBAC, route-specific rate limit, and test factory helpers, then migrate money/access/admin/safety mutations onto them slice by slice.
-3. Continue Supabase onboarding beyond `/enter`: embedded-wallet provider selection/wiring and authenticated happy-path browser coverage now that session/profile/external-wallet/age-session and backend app-access shell handoffs exist.
+2. Continue migrating route modules onto shared idempotency helpers, route-policy/RBAC, route-specific rate-limit presets, and test factory helpers. The first admin mutation routes are migrated; money/access/safety routes still need slice-by-slice adoption and durable generic idempotency conflict behavior where route-specific stores are insufficient.
+3. Continue Supabase onboarding beyond `/enter`: direct CLI database access currently times out through the root `DATABASE_URL` pooler from this workspace, while MCP works and has applied `0056`; either fix the direct DB URL/access-token path for CI or standardize remote migration operations on MCP/management API. Then continue embedded-wallet provider selection/wiring and authenticated happy-path browser coverage now that session/profile/external-wallet/age-session and backend app-access shell handoffs exist.
 4. Wire one launch-approved age/KYC provider path end to end and keep all unconfigured providers fail-closed.
 5. Harden product-specific Solana Pay checkout/access paths beyond the content-unlock handoff: support, live pass, Event Access, paid message, platform plan, and creator membership.
 6. Continue deployment hardening beyond the skeleton: artifact digest pinning, provider staging smoke, backup/snapshot verification, alert routing, and real hosting/OIDC integration.

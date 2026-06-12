@@ -1,4 +1,9 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
+import {
+  idempotencyKeyValidationResponse,
+  readIdempotencyKey,
+  type ValidationErrorResponse
+} from "../../shared/idempotency.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { SupabaseAuthVerifier } from "../session/types.js";
 import { AdminRepositoryConfigurationError } from "./admin-repository.js";
@@ -7,6 +12,18 @@ import type { AdminRepository } from "./types.js";
 export interface RegisterAdminRoutesOptions {
   authVerifier: SupabaseAuthVerifier;
   adminRepository: AdminRepository;
+}
+
+export interface AdminMutationContext<Body> {
+  supabaseUserId: string;
+  idempotencyKey: string;
+  body: Body;
+}
+
+export interface AdminRoutePolicy {
+  action: string;
+  mutation?: boolean;
+  reasonRequired?: boolean;
 }
 
 export function adminListInput(query: { q?: string; cursor?: string }): { query?: string; cursor?: string } {
@@ -28,7 +45,8 @@ export async function requireAdminAccess(
 export async function requireAdminAccessWithUser(
   request: FastifyRequest,
   reply: FastifyReply,
-  options: RegisterAdminRoutesOptions
+  options: RegisterAdminRoutesOptions,
+  policy: AdminRoutePolicy = { action: "admin.access" }
 ): Promise<{ supabaseUserId: string } | null> {
   const verifiedSession = await verifyRequestSession(request, options.authVerifier);
 
@@ -41,6 +59,13 @@ export async function requireAdminAccessWithUser(
     const isAdmin = await options.adminRepository.hasAdminAccess(verifiedSession.supabaseUserId);
 
     if (!isAdmin) {
+      request.log.warn(
+        {
+          policyAction: policy.action,
+          policyMutation: policy.mutation === true
+        },
+        "Admin route policy denied request"
+      );
       reply.code(403).send({
         code: "forbidden",
         message: "Admin access is required"
@@ -63,6 +88,48 @@ export async function requireAdminAccessWithUser(
   }
 }
 
+export async function requireAdminMutation<Body>(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  options: RegisterAdminRoutesOptions,
+  policy: AdminRoutePolicy,
+  validateBody: (body: Partial<Body> | undefined) => string | null
+): Promise<AdminMutationContext<Body> | null> {
+  const access = await requireAdminAccessWithUser(request, reply, options, {
+    ...policy,
+    mutation: true,
+    reasonRequired: true
+  });
+  if (!access) return null;
+
+  const idempotencyKey = readIdempotencyKey(request);
+  if (!idempotencyKey) {
+    reply.code(400).send(idempotencyKeyValidationResponse());
+    return null;
+  }
+
+  const body = request.body as Partial<Body> | undefined;
+  const validationError = validateBody(body);
+  if (validationError) {
+    reply.code(400).send(validationResponse(validationError));
+    return null;
+  }
+
+  request.log.info(
+    {
+      policyAction: policy.action,
+      idempotencyKey
+    },
+    "Admin mutation accepted by route policy"
+  );
+
+  return {
+    supabaseUserId: access.supabaseUserId,
+    idempotencyKey,
+    body: body as Body
+  };
+}
+
 export async function featureFlagEnabled(repository: AdminRepository, key: string): Promise<boolean> {
   const flags = await repository.listFeatureFlags();
   const flag = flags.items.find((item) => item.key === key);
@@ -76,4 +143,11 @@ export async function featureFlagEnabled(repository: AdminRepository, key: strin
   }
 
   return (flag.value as { enabled?: unknown }).enabled === true;
+}
+
+function validationResponse(message: string): ValidationErrorResponse {
+  return {
+    code: "validation_failed",
+    message
+  };
 }
