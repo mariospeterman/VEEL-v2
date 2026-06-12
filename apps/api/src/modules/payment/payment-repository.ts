@@ -123,7 +123,13 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
           treasury_wallet,
           solana_cluster,
           expires_at,
-          request_hash
+          request_hash,
+          withdrawal_waiver_required,
+          withdrawal_waiver_accepted_at,
+          withdrawal_waiver_version,
+          terms_version,
+          durable_confirmation_required,
+          refund_value_basis
         from inserted_intent
         union all
         select
@@ -137,7 +143,13 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
           treasury_wallet,
           solana_cluster,
           expires_at,
-          request_hash
+          request_hash,
+          withdrawal_waiver_required,
+          withdrawal_waiver_accepted_at,
+          withdrawal_waiver_version,
+          terms_version,
+          durable_confirmation_required,
+          refund_value_basis
         from existing_intent
         limit 1
       `;
@@ -167,7 +179,13 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
           pi.treasury_wallet,
           pi.solana_cluster,
           pi.expires_at,
-          pi.request_hash
+          pi.request_hash,
+          pi.withdrawal_waiver_required,
+          pi.withdrawal_waiver_accepted_at,
+          pi.withdrawal_waiver_version,
+          pi.terms_version,
+          pi.durable_confirmation_required,
+          pi.refund_value_basis
         from payment_intents pi
         join users u on u.id = pi.user_id
         where pi.id = ${input.paymentIntentId}

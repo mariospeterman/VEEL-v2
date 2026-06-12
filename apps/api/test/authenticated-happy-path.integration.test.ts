@@ -436,6 +436,106 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         entitlement_event_count: "1"
       });
 
+      const refundRequestBody = {
+        paymentIntentId: unlock.paymentIntent.id,
+        kind: "refund_request",
+        requestedAction: "creator_refund",
+        reason: "Confirmed transaction did not provide expected access during support review"
+      };
+      const refundRequestResponse = await app.inject({
+        method: "POST",
+        url: "/v1/refunds/requests",
+        headers: authenticatedHeaders(`refund-request-${runId}`),
+        payload: refundRequestBody
+      });
+
+      expect(refundRequestResponse.statusCode, refundRequestResponse.body).toBe(201);
+      expect(refundRequestResponse.json()).toMatchObject({
+        paymentIntentId: unlock.paymentIntent.id,
+        entitlementId: expect.any(String),
+        kind: "refund_request",
+        requestedAction: "creator_refund",
+        state: "opened",
+        custodyBoundary: "no_platform_custody_no_payout_queue"
+      });
+      const refundRequest = refundRequestResponse.json<{ id: string }>();
+
+      const repeatedRefundRequestResponse = await app.inject({
+        method: "POST",
+        url: "/v1/refunds/requests",
+        headers: authenticatedHeaders(`refund-request-${runId}`),
+        payload: refundRequestBody
+      });
+
+      expect(repeatedRefundRequestResponse.statusCode, repeatedRefundRequestResponse.body).toBe(201);
+      expect(repeatedRefundRequestResponse.json()).toMatchObject({
+        id: refundRequest.id,
+        paymentIntentId: unlock.paymentIntent.id,
+        custodyBoundary: "no_platform_custody_no_payout_queue"
+      });
+
+      const conflictingRefundRequestResponse = await app.inject({
+        method: "POST",
+        url: "/v1/refunds/requests",
+        headers: authenticatedHeaders(`refund-request-${runId}`),
+        payload: {
+          ...refundRequestBody,
+          requestedAction: "replacement_access",
+          reason: "Same idempotency key with a different requested remedy should conflict"
+        }
+      });
+
+      expect(conflictingRefundRequestResponse.statusCode, conflictingRefundRequestResponse.body).toBe(409);
+
+      const refundRows = await sql<{
+        refund_request_count: string;
+        refund_audit_count: string;
+        active_entitlement_count: string;
+        confirmed_payment_count: string;
+      }[]>`
+        select
+          (
+            select count(*)
+            from refunds_and_disputes rd
+            join users u on u.id = rd.reporter_user_id
+            where u.supabase_user_id = ${buyerSupabaseUserId}
+              and rd.payment_intent_id = ${unlock.paymentIntent.id}
+              and rd.id = ${refundRequest.id}
+              and rd.idempotency_key = ${`refund-request-${runId}`}
+              and rd.state = 'opened'
+              and rd.custody_boundary = 'no_platform_custody_no_payout_queue'
+          ) as refund_request_count,
+          (
+            select count(*)
+            from audit_events ae
+            where ae.subject_id = ${refundRequest.id}
+              and ae.subject_type = 'refund_dispute'
+              and ae.action = 'refund_dispute_requested'
+          ) as refund_audit_count,
+          (
+            select count(*)
+            from entitlements e
+            where e.payment_intent_id = ${unlock.paymentIntent.id}
+              and e.state = 'active'
+          ) as active_entitlement_count,
+          (
+            select count(*)
+            from payment_intents pi
+            where pi.id = ${unlock.paymentIntent.id}
+              and pi.state = 'confirmed'
+          ) as confirmed_payment_count
+      `;
+
+      expect(refundRows[0]).toEqual({
+        refund_request_count: "1",
+        refund_audit_count: "1",
+        active_entitlement_count: "1",
+        confirmed_payment_count: "1"
+      });
+      expect(
+        `${refundRequestResponse.body}${repeatedRefundRequestResponse.body}${conflictingRefundRequestResponse.body}`
+      ).not.toMatch(/automaticRefund|platformBalance|creatorBalance|withdraw|payoutQueue|escrow|privateKey|serviceRole/i);
+
       const accessPassIntentResponse = await app.inject({
         method: "POST",
         url: `/v1/events/${seededEventId}/access-passes/intents`,
@@ -1850,6 +1950,10 @@ async function cleanupRun(
       }
       if (paymentIntentIds.length > 0) {
         await tx`
+          delete from refunds_and_disputes
+          where payment_intent_id in ${tx(paymentIntentIds)}
+        `;
+        await tx`
           delete from event_access_passes
           where payment_intent_id in ${tx(paymentIntentIds)}
         `;
@@ -1886,6 +1990,10 @@ async function cleanupRun(
           where payment_intent_id in ${tx(paymentIntentIds)}
         `;
       }
+      await tx`
+        delete from refunds_and_disputes
+        where reporter_user_id in ${tx(userIds)}
+      `;
       await tx`
         delete from wallet_transaction_records
         where user_id in ${tx(userIds)}

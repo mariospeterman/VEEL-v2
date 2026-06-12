@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: custody boundary, subscriptions, wallet funding, compliance risk controls
-Last updated: 2026-06-05
+Last updated: 2026-06-12
 Source of truth: yes
 
 Owns:
@@ -52,6 +52,7 @@ Subscription implementation rules:
 - Platform plans settle directly to the platform fee wallet.
 - Users can cancel in Veel and revoke delegated authority in wallet/provider UX.
 - Failed or revoked renewals must move through grace/cancel/expire states without creating debt or internal receivables.
+- Cancellation must be easy to find from the subscription surface, stop future collections, and keep cancellation/revocation audit state. It must not rely on hidden support contact, dark-pattern retention, or browser-only state.
 
 ## Wallet Funding And Onramp Boundary
 
@@ -76,6 +77,23 @@ Noncustodial money movement does not remove launch obligations:
 - clear membership/platform plan cancellation, refund, dispute, and support policy
 - immutable records for purchase receipts, refunds, revocations, commissions, tax exports, and admin actions
 - region/product restrictions when legal, provider, or bank policy requires them
+
+## Refund And Consumer-Remedy Boundary
+
+Veel can make noncustodial crypto purchases commercially final after immediate access is delivered, but only as a default rule with explicit exceptions. A blanket "no refunds under any circumstances" policy is not launch-approved because consumer law, subscription rules, and platform-failure facts can still require a remedy.
+
+Allowed launch copy and behavior:
+
+- "Final sale after immediate access starts, except where required by law or where access was not delivered" is allowed after counsel review.
+- "No refunds ever" is not allowed.
+- Users must see seller/responsible-party identity, price, token/currency, renewal period if any, access start, cancellation path, and refund/dispute exception summary before signing.
+- For EU/EEA users, the checkout must require explicit immediate-access consent and explicit acknowledgement that withdrawal rights are lost once access begins. The platform must retain versioned terms/waiver evidence and send durable confirmation, normally email/receipt.
+- Direct crypto settlement is irreversible at the protocol layer; remedy workflows are support/legal workflows backed by audit, seller-funded refund evidence, replacement access, entitlement revocation where policy allows, or platform-funded remedy only when Veel is responsible.
+- Refund/dispute records must be idempotent and audited. Retried requests must not create duplicate refund obligations.
+- Refund/reversal decisions must not create balances, custody, receivables, debt collection, payout queues, escrow, or frontend-derived payment truth.
+- Referral commissions and platform-fee reporting must be netted or corrected only from backend compliance/accounting records after approved refund/reversal evidence.
+- Creator-sold product refunds should not create platform loss by default. Veel refunds platform commission only when policy/legal review requires it or Veel is responsible; creator share refunds are seller-funded noncustodial transactions where legally supportable.
+- Switzerland is more provider-friendly for ordinary online withdrawal rights, but EU/EEA rules still matter for EU/EEA consumers. The launch default must therefore implement the stricter EU-style waiver/evidence path and allow country policy overrides only after counsel review.
 
 ## AI And Agent Money Boundary
 

@@ -12,6 +12,7 @@ export interface ListRefundDisputeRequestsInput {
 export interface CreateRefundDisputeRequestInput {
   supabaseUserId: string;
   idempotencyKey: string;
+  requestHash: string;
   body: CreateRefundDisputeRequest;
 }
 

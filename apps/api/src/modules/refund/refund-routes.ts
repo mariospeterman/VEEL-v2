@@ -1,8 +1,9 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { readIdempotentMutationRequest } from "../../shared/idempotency.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { AgeRepository } from "../age/types.js";
 import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
-import { RefundRepositoryConfigurationError } from "./refund-repository.js";
+import { RefundIdempotencyConflictError, RefundRepositoryConfigurationError } from "./refund-repository.js";
 import type { CreateRefundDisputeRequest, RefundRepository } from "./types.js";
 
 interface RegisterRefundRoutesOptions {
@@ -47,21 +48,22 @@ export async function registerRefundRoutes(
       return reply.code(access.statusCode).send(access.body);
     }
 
-    const idempotencyKey = request.headers["idempotency-key"];
-    if (typeof idempotencyKey !== "string" || idempotencyKey.length === 0) {
-      return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
-    }
-
     const body = request.body as Partial<CreateRefundDisputeRequest> | undefined;
     const validationError = validateCreateRefundDisputeRequest(body);
     if (validationError) {
       return reply.code(400).send(validationResponse(validationError));
     }
 
+    const mutation = readIdempotentMutationRequest(request, body);
+    if ("code" in mutation) {
+      return reply.code(400).send(mutation);
+    }
+
     try {
       const requestRecord = await options.refundRepository.createRequest({
         supabaseUserId: access.supabaseUserId,
-        idempotencyKey,
+        idempotencyKey: mutation.idempotencyKey,
+        requestHash: mutation.requestHash,
         body: body as CreateRefundDisputeRequest
       });
 
@@ -79,6 +81,13 @@ export async function registerRefundRoutes(
         return reply.code(503).send({
           code: "service_unavailable",
           message: "Refund requests are not configured"
+        });
+      }
+
+      if (error instanceof RefundIdempotencyConflictError) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: "Idempotency key was already used for a different refund request"
         });
       }
 

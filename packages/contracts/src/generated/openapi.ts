@@ -2971,6 +2971,16 @@ export interface components {
             amountMinor?: number | null;
             referralToken?: string | null;
         };
+        PaymentIntentRefundPolicy: {
+            withdrawalWaiverRequired: boolean;
+            /** Format: date-time */
+            withdrawalWaiverAcceptedAt: string | null;
+            withdrawalWaiverVersion: string;
+            termsVersion: string;
+            durableConfirmationRequired: boolean;
+            /** @enum {string} */
+            refundValueBasis: "original_crypto_amount" | "fiat_value_at_purchase" | "manual_resolution";
+        };
         PaymentIntent: {
             /** Format: uuid */
             id: string;
@@ -2979,6 +2989,7 @@ export interface components {
             currency: components["schemas"]["Currency"];
             /** @enum {string} */
             state: "pending" | "transaction_requested" | "submitted" | "confirmed" | "failed" | "expired";
+            refundPolicy: components["schemas"]["PaymentIntentRefundPolicy"];
         };
         SubmitPaymentSignatureRequest: {
             signature: string;

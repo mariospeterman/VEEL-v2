@@ -2656,15 +2656,26 @@ components:
         targetId: { type: string, format: uuid }
         amountMinor: { type: integer, nullable: true }
         referralToken: { type: string, nullable: true }
+    PaymentIntentRefundPolicy:
+      type: object
+      required: [withdrawalWaiverRequired, withdrawalWaiverAcceptedAt, withdrawalWaiverVersion, termsVersion, durableConfirmationRequired, refundValueBasis]
+      properties:
+        withdrawalWaiverRequired: { type: boolean }
+        withdrawalWaiverAcceptedAt: { type: string, format: date-time, nullable: true }
+        withdrawalWaiverVersion: { type: string }
+        termsVersion: { type: string }
+        durableConfirmationRequired: { type: boolean }
+        refundValueBasis: { type: string, enum: [original_crypto_amount, fiat_value_at_purchase, manual_resolution] }
     PaymentIntent:
       type: object
-      required: [id, productType, amountMinor, currency, state]
+      required: [id, productType, amountMinor, currency, state, refundPolicy]
       properties:
         id: { type: string, format: uuid }
         productType: { $ref: "#/components/schemas/ProductType" }
         amountMinor: { type: integer }
         currency: { $ref: "#/components/schemas/Currency" }
         state: { type: string, enum: [pending, transaction_requested, submitted, confirmed, failed, expired] }
+        refundPolicy: { $ref: "#/components/schemas/PaymentIntentRefundPolicy" }
     SubmitPaymentSignatureRequest:
       type: object
       required: [signature]

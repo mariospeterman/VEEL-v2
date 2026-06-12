@@ -51,6 +51,12 @@ export interface StoredPaymentIntent extends PaymentIntent {
   solanaCluster: "devnet" | "mainnet-beta";
   expiresAt: Date;
   requestHash: string;
+  withdrawalWaiverRequired: boolean;
+  withdrawalWaiverAcceptedAt: Date | null;
+  withdrawalWaiverVersion: string | null;
+  termsVersion: string | null;
+  durableConfirmationRequired: boolean;
+  refundValueBasis: "original_crypto_amount" | "fiat_value_at_purchase" | "manual_resolution";
 }
 
 export interface PaymentRepository {

@@ -8,6 +8,7 @@ import {
   createSolanaReferenceAddress,
   SolanaPaymentConfigurationError
 } from "../payment/solana-payment.js";
+import { toPaymentIntentResponse } from "../payment/payment-route-shared.js";
 import { EventRepositoryConfigurationError } from "./event-repository.js";
 import type {
   CheckInAccessPassRequest,
@@ -144,13 +145,7 @@ export async function registerEventAccessPassRoutes(
 
       return reply.code(201).send({
         state: "payment_required",
-        paymentIntent: {
-          id: intent.id,
-          productType: intent.productType,
-          amountMinor: intent.amountMinor,
-          currency: intent.currency,
-          state: intent.state
-        }
+        paymentIntent: toPaymentIntentResponse(intent)
       });
     } catch (error) {
       if (error instanceof PaymentIdempotencyConflictError) {

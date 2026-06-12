@@ -8,6 +8,7 @@ import {
   createSolanaReferenceAddress,
   SolanaPaymentConfigurationError
 } from "../payment/solana-payment.js";
+import { toPaymentIntentResponse } from "../payment/payment-route-shared.js";
 import { LiveRepositoryConfigurationError } from "./live-repository.js";
 import type { CreateLivePassIntentRequest } from "./types.js";
 import {
@@ -105,12 +106,8 @@ export async function registerLivePassRoutes(
       });
 
       return reply.code(201).send({
-        id: intent.id,
-        productType: intent.productType,
+        ...toPaymentIntentResponse(intent),
         targetId: intent.targetId,
-        amountMinor: intent.amountMinor,
-        currency: intent.currency,
-        state: intent.state,
         referenceAddress: intent.referenceAddress,
         expiresAt: intent.expiresAt.toISOString()
       });

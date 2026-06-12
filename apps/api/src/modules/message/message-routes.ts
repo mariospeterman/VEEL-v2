@@ -8,6 +8,7 @@ import {
   createSolanaReferenceAddress,
   SolanaPaymentConfigurationError
 } from "../payment/solana-payment.js";
+import { toPaymentIntentResponse } from "../payment/payment-route-shared.js";
 import {
   conflictResponse,
   hashMessageBody,
@@ -205,12 +206,8 @@ export async function registerMessageRoutes(
         state: "payment_required",
         conversationId,
         paymentIntent: {
-          id: intent.id,
-          productType: intent.productType,
+          ...toPaymentIntentResponse(intent),
           targetId: intent.targetId,
-          amountMinor: intent.amountMinor,
-          currency: intent.currency,
-          state: intent.state,
           referenceAddress: intent.referenceAddress,
           expiresAt: intent.expiresAt.toISOString()
         }

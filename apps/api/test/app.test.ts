@@ -3157,7 +3157,8 @@ describe("buildApi", () => {
       productType: "tip",
       amountMinor: 10000000,
       currency: "SOL",
-      state: "pending"
+      state: "pending",
+      refundPolicy: storedPaymentIntent.refundPolicy
     });
 
     await app.close();
@@ -6082,7 +6083,8 @@ describe("buildApi", () => {
         productType: "content_unlock",
         amountMinor: 25000000,
         currency: "SOL",
-        state: "pending"
+        state: "pending",
+        refundPolicy: storedPaymentIntent.refundPolicy
       }
     });
 
@@ -7626,7 +7628,21 @@ const storedPaymentIntent: StoredPaymentIntent = {
   treasuryWallet,
   solanaCluster: "devnet",
   expiresAt: new Date("2026-06-04T23:15:00.000Z"),
-  requestHash: "request-hash"
+  requestHash: "request-hash",
+  refundPolicy: {
+    withdrawalWaiverRequired: true,
+    withdrawalWaiverAcceptedAt: "2026-06-04T23:00:00.000Z",
+    withdrawalWaiverVersion: "instant-digital-access-v1",
+    termsVersion: "veel-terms-v1",
+    durableConfirmationRequired: true,
+    refundValueBasis: "manual_resolution"
+  },
+  withdrawalWaiverRequired: true,
+  withdrawalWaiverAcceptedAt: new Date("2026-06-04T23:00:00.000Z"),
+  withdrawalWaiverVersion: "instant-digital-access-v1",
+  termsVersion: "veel-terms-v1",
+  durableConfirmationRequired: true,
+  refundValueBasis: "manual_resolution"
 };
 
 function liveRoomFixture(
