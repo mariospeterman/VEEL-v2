@@ -114,7 +114,7 @@ No fake counters.
 Current implementation slice:
 
 - `GET /v1/activity` returns a backend-derived activity feed composed from payment and wallet transaction records.
-- `GET /v1/activity/payments` returns normalized payment-intent activity for the authenticated, age-verified user.
+- `GET /v1/activity/payments` returns normalized payment-intent activity for the authenticated, age-verified user, including backend-derived receipt number/state, durable confirmation delivery state, withdrawal-right status, latest refund/dispute review state, and whether an exception review request can be opened.
 - `GET /v1/activity/wallet-transactions` returns backend-observed wallet transaction records created during payment submission/settlement handling.
 - `GET /v1/activity/referrals` is the activity route-map alias for the same backend-derived referral activity returned by `GET /v1/referrals/activity`.
 - `/activity` reads payment activity and wallet transactions through the typed web API helper and does not render local payment or wallet transaction fixtures.

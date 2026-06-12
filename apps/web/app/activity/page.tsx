@@ -7,6 +7,7 @@ import {
   type WalletTransaction,
   type WalletTransactionPage
 } from "@/api-client";
+import { RefundRequestPanel } from "./refund-request-panel";
 import { requireAppAccess } from "@/supabase/route-guard";
 
 export const dynamic = "force-dynamic";
@@ -95,7 +96,18 @@ function ActivityRow({ item }: { item: ActivityItem }) {
         <Fact label="Amount" value={`${item.amountMinor?.toLocaleString() ?? "0"} ${item.currency ?? ""}`} />
         <Fact label="Kind" value={item.kind} />
         <Fact label="Reference" value={shorten(item.referenceAddress)} />
+        <Fact label="Receipt" value={item.receiptNumber ?? "pending"} />
+        <Fact label="In-app confirmation" value={item.inAppConfirmationState ?? "pending"} />
+        <Fact label="Email confirmation" value={item.emailConfirmationState ?? "provider pending"} />
+        <Fact label="Withdrawal" value={withdrawalLabel(item.withdrawalRightStatus)} />
+        <Fact label="Review" value={item.latestRefundRequestState ?? "available for exceptions"} />
       </div>
+      {item.paymentIntentId && item.supportReviewAvailable ? (
+        <RefundRequestPanel
+          latestRefundRequestState={item.latestRefundRequestState}
+          paymentIntentId={item.paymentIntentId}
+        />
+      ) : null}
     </article>
   );
 }
@@ -136,6 +148,18 @@ function shorten(value: string | null | undefined) {
   }
 
   return `${value.slice(0, 6)}...${value.slice(-4)}`;
+}
+
+function withdrawalLabel(status: ActivityItem["withdrawalRightStatus"] | undefined | null) {
+  switch (status) {
+    case "waived_after_immediate_access":
+      return "ended after access";
+    case "review_required":
+      return "review required";
+    case "not_applicable":
+    default:
+      return "not applicable";
+  }
 }
 
 function EmptyState({ label }: { label: string }) {

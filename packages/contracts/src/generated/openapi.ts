@@ -3377,6 +3377,16 @@ export interface components {
             paymentIntentId?: string | null;
             signature?: string | null;
             referenceAddress?: string | null;
+            /** Format: uuid */
+            receiptId?: string | null;
+            receiptNumber?: string | null;
+            receiptState?: string | null;
+            inAppConfirmationState?: string | null;
+            emailConfirmationState?: string | null;
+            /** @enum {string|null} */
+            withdrawalRightStatus?: "not_applicable" | "waived_after_immediate_access" | "review_required" | null;
+            supportReviewAvailable?: boolean;
+            latestRefundRequestState?: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */

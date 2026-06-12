@@ -3322,6 +3322,14 @@ describe("buildApi", () => {
               paymentIntentId: "00000000-0000-4000-8000-000000000050",
               signature: "5".repeat(88),
               referenceAddress: "11111111111111111111111111111112",
+              receiptId: "00000000-0000-4000-8000-000000000060",
+              receiptNumber: "VEEL-0000000000004000",
+              receiptState: "issued",
+              inAppConfirmationState: "sent",
+              emailConfirmationState: "provider_not_configured",
+              withdrawalRightStatus: "waived_after_immediate_access",
+              supportReviewAvailable: true,
+              latestRefundRequestState: null,
               createdAt: "2026-06-04T20:00:00.000Z",
               confirmedAt: "2026-06-04T20:01:00.000Z"
             }
@@ -3361,7 +3369,12 @@ describe("buildApi", () => {
           state: "confirmed",
           productType: "tip",
           amountMinor: 10000000,
-          currency: "SOL"
+          currency: "SOL",
+          receiptNumber: "VEEL-0000000000004000",
+          inAppConfirmationState: "sent",
+          emailConfirmationState: "provider_not_configured",
+          withdrawalRightStatus: "waived_after_immediate_access",
+          supportReviewAvailable: true
         }
       ],
       nextCursor: null

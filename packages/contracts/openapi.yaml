@@ -3046,6 +3046,17 @@ components:
         paymentIntentId: { type: string, format: uuid, nullable: true }
         signature: { type: string, nullable: true }
         referenceAddress: { type: string, nullable: true }
+        receiptId: { type: string, format: uuid, nullable: true }
+        receiptNumber: { type: string, nullable: true }
+        receiptState: { type: string, nullable: true }
+        inAppConfirmationState: { type: string, nullable: true }
+        emailConfirmationState: { type: string, nullable: true }
+        withdrawalRightStatus:
+          type: string
+          enum: [not_applicable, waived_after_immediate_access, review_required]
+          nullable: true
+        supportReviewAvailable: { type: boolean }
+        latestRefundRequestState: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
         confirmedAt: { type: string, format: date-time, nullable: true }
     WalletTransactionPage:

@@ -599,9 +599,33 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         active_entitlement_count: "1",
         confirmed_payment_count: "1"
       });
+
+      const paymentActivityResponse = await app.inject({
+        method: "GET",
+        url: "/v1/activity/payments",
+        headers: authenticatedHeaders(`payment-activity-${runId}`)
+      });
+
+      expect(paymentActivityResponse.statusCode, paymentActivityResponse.body).toBe(200);
+      expect(paymentActivityResponse.json()).toMatchObject({
+        items: expect.arrayContaining([
+          expect.objectContaining({
+            paymentIntentId: unlock.paymentIntent.id,
+            productType: "content_unlock",
+            state: "confirmed",
+            receiptNumber: expect.stringMatching(/^VEEL-/),
+            receiptState: "issued",
+            inAppConfirmationState: "sent",
+            emailConfirmationState: "provider_not_configured",
+            withdrawalRightStatus: "waived_after_immediate_access",
+            supportReviewAvailable: true,
+            latestRefundRequestState: "opened"
+          })
+        ])
+      });
       expect(
-        `${refundRequestResponse.body}${repeatedRefundRequestResponse.body}${conflictingRefundRequestResponse.body}`
-      ).not.toMatch(/automaticRefund|platformBalance|creatorBalance|withdraw|payoutQueue|escrow|privateKey|serviceRole/i);
+        `${refundRequestResponse.body}${repeatedRefundRequestResponse.body}${conflictingRefundRequestResponse.body}${paymentActivityResponse.body}`
+      ).not.toMatch(/automaticRefund|platformBalance|creatorBalance|withdrawalRequest|payoutQueue|escrow|privateKey|serviceRole/i);
 
       const accessPassIntentResponse = await app.inject({
         method: "POST",
