@@ -42,13 +42,13 @@ If only `DATABASE_URL` is set and it points at a Supabase transaction pooler, th
 session-pooler port `5432` for the CLI command because migration commands require prepared-statement
 compatible connections.
 
-The current shared remote project has timestamped Supabase migration history from MCP-applied
-migrations while this package keeps sequence-named SQL files. `pnpm supabase:migrations` verifies
-connectivity and remote visibility; `pnpm supabase:history:check` reports missing sequential history
-and extra remote history rows; `pnpm supabase:push:dry` is expected to stop until a deliberate
-migration-history normalization is planned. If direct database access is unavailable from the current
-network, use the authenticated Supabase MCP project connection to list/apply migrations and run
-advisors. Keep applied MCP migrations byte-for-byte aligned with committed files in this package.
+The current shared remote project migration history is normalized to this package's sequence-named SQL
+files. `pnpm supabase:migrations` verifies local/remote version alignment; `pnpm
+supabase:history:check` reports missing sequential history or extra remote history rows; `pnpm
+supabase:push:dry` must report that the remote database is up to date before new schema work builds on
+the shared remote project. If direct database access is unavailable from the current network, use the
+authenticated Supabase MCP project connection to list/apply migrations and run advisors. Keep applied
+MCP migrations byte-for-byte aligned with committed files in this package.
 
 ## RLS Baseline
 

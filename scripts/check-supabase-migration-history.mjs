@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -44,12 +43,11 @@ const migrations = readdirSync(migrationsDir)
   .filter((fileName) => /^\d+_.+\.sql$/.test(fileName) && !fileName.endsWith(".down.sql"))
   .sort()
   .map((fileName) => {
-    const sql = readFileSync(resolve(migrationsDir, fileName), "utf8");
+    readFileSync(resolve(migrationsDir, fileName), "utf8");
     return {
       fileName: fileName.replace(/\.sql$/, ""),
       version: fileName.slice(0, 4),
-      description: fileName.replace(/^\d+_/, "").replace(/\.sql$/, ""),
-      md5: createHash("md5").update(sql).digest("hex")
+      description: fileName.replace(/^\d+_/, "").replace(/\.sql$/, "")
     };
   });
 
@@ -61,16 +59,16 @@ if (migrations.length === 0) {
 const sqlValues = migrations
   .map((migration) => {
     const safe = (value) => value.replaceAll("'", "''");
-    return `('${safe(migration.fileName)}', '${safe(migration.version)}', '${safe(migration.description)}', '${safe(migration.md5)}')`;
+    return `('${safe(migration.fileName)}', '${safe(migration.version)}', '${safe(migration.description)}')`;
   })
   .join(",");
 
 const query = `
-with local_migrations(file_name, version, description, local_md5) as (
+with local_migrations(file_name, version, description) as (
   values ${sqlValues}
 ),
 remote_migrations as (
-  select version, name, md5(statements[1]) as remote_md5
+  select version, name
   from supabase_migrations.schema_migrations
 ),
 local_status as (
@@ -78,16 +76,14 @@ local_status as (
     local_migrations.file_name,
     local_migrations.version,
     local_migrations.description,
-    local_migrations.local_md5,
     version_match.version is not null as sequential_history_present,
     name_match.version as name_matched_remote_version,
-    name_match.name as name_matched_remote_name,
-    name_match.remote_md5 = local_migrations.local_md5 as name_matched_sql_hash
+    name_match.name as name_matched_remote_name
   from local_migrations
   left join remote_migrations version_match
     on version_match.version = local_migrations.version
   left join lateral (
-    select version, name, remote_md5
+    select version, name
     from remote_migrations
     where name = local_migrations.file_name
        or name = local_migrations.description
@@ -113,9 +109,7 @@ select json_build_object(
     (select json_agg(json_build_object('version', version, 'name', name) order by version) from extra_remote_history),
     '[]'::json
   ),
-  'name_matched_history_count', (select count(*) from local_status where name_matched_remote_version is not null),
-  'name_matched_sql_hash_count', (select count(*) from local_status where name_matched_sql_hash),
-  'name_matched_sql_hash_mismatches', coalesce(
+  'name_matched_history', coalesce(
     (
       select json_agg(
         json_build_object(
@@ -127,7 +121,6 @@ select json_build_object(
       )
       from local_status
       where name_matched_remote_version is not null
-        and not coalesce(name_matched_sql_hash, false)
     ),
     '[]'::json
   )

@@ -31,7 +31,9 @@ Remote verification on 2026-06-12:
 
 - Repo-local Supabase CLI: `2.106.0`.
 - `pnpm supabase:migrations` connects through the session-pooler rewrite and lists remote history.
-- `pnpm supabase:push:dry` remains intentionally blocked because the remote contains timestamped history rows.
+- The remote migration history was normalized from MCP-applied timestamped rows to committed sequential versions `0001` through `0056` after a Docker-backed Supabase shadow diff applied every committed migration successfully.
+- `pnpm supabase:push:dry` reports `Remote database is up to date`.
+- `pnpm supabase:history:check` reports no missing sequential history and no extra remote history rows.
 - `pnpm supabase:advisors` reports no warn-level security or performance issues.
 - Public-table RLS metadata verification shows RLS enabled on every public table.
-- Local Docker is required for a CLI shadow-database schema diff and was not running in this workspace, so remote history was not repaired.
+- The shadow diff reported only role/default privilege grant noise from local Supabase initialization versus the hosted project; no table/type/index/policy migration SQL drift was applied to the remote.
