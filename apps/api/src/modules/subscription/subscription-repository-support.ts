@@ -19,7 +19,7 @@ export async function findActor(
 }
 
 export async function findSubscriptionById(
-  sql: postgres.Sql,
+  sql: postgres.Sql | postgres.TransactionSql,
   input: {
     supabaseUserId: string;
     subscriptionId: string;

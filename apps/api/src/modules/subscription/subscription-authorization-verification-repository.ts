@@ -118,7 +118,7 @@ export async function submitAuthorization(
     }
 
     await activateSubscriptionAfterVerification(transaction, row, input);
-    const subscription = await findSubscriptionById(sql, {
+    const subscription = await findSubscriptionById(transaction, {
       supabaseUserId: input.supabaseUserId,
       subscriptionId: row.id
     });
