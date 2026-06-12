@@ -380,6 +380,13 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         settlement_attempt_count: string;
         entitlement_count: string;
         entitlement_event_count: string;
+        receipt_count: string;
+        compliance_ledger_count: string;
+        confirmation_delivery_count: string;
+        sent_in_app_confirmation_count: string;
+        email_provider_pending_count: string;
+        notification_count: string;
+        durable_confirmation_audit_count: string;
       }[]>`
         select
           (
@@ -424,7 +431,60 @@ describeIntegration("authenticated API happy path against Postgres", () => {
             from entitlement_events ee
             where ee.payment_intent_id = ${unlock.paymentIntent.id}
               and ee.action = 'granted'
-          ) as entitlement_event_count
+          ) as entitlement_event_count,
+          (
+            select count(*)
+            from receipts r
+            where r.payment_intent_id = ${unlock.paymentIntent.id}
+              and r.state = 'issued'
+          ) as receipt_count,
+          (
+            select count(*)
+            from compliance_ledger_entries cle
+            where cle.payment_intent_id = ${unlock.paymentIntent.id}
+              and cle.event_type = 'payment_settled'
+              and cle.receipt_id is not null
+              and cle.metadata->>'withdrawalWaiverVersion' = 'instant-digital-access-v1'
+          ) as compliance_ledger_count,
+          (
+            select count(*)
+            from payment_confirmation_deliveries pcd
+            where pcd.payment_intent_id = ${unlock.paymentIntent.id}
+              and pcd.confirmation_version = 'payment-confirmation-v1'
+              and pcd.terms_version = 'veel-terms-v1'
+              and pcd.withdrawal_waiver_version = 'instant-digital-access-v1'
+          ) as confirmation_delivery_count,
+          (
+            select count(*)
+            from payment_confirmation_deliveries pcd
+            where pcd.payment_intent_id = ${unlock.paymentIntent.id}
+              and pcd.channel = 'in_app'
+              and pcd.state = 'sent'
+              and pcd.delivered_at is not null
+          ) as sent_in_app_confirmation_count,
+          (
+            select count(*)
+            from payment_confirmation_deliveries pcd
+            where pcd.payment_intent_id = ${unlock.paymentIntent.id}
+              and pcd.channel = 'email'
+              and pcd.state = 'provider_not_configured'
+              and pcd.payload->>'nextStep' = 'configure_launch_approved_email_provider'
+          ) as email_provider_pending_count,
+          (
+            select count(*)
+            from notifications n
+            join receipts r on r.id = n.related_resource_id
+            where r.payment_intent_id = ${unlock.paymentIntent.id}
+              and n.kind = 'payment'
+              and n.idempotency_key = ${`payment-confirmation:${unlock.paymentIntent.id}`}
+          ) as notification_count,
+          (
+            select count(*)
+            from audit_events ae
+            where ae.subject_id = ${unlock.paymentIntent.id}
+              and ae.subject_type = 'payment_intent'
+              and ae.action = 'payment_durable_confirmation_recorded'
+          ) as durable_confirmation_audit_count
       `;
 
       expect(persistedRows[0]).toEqual({
@@ -433,7 +493,14 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         wallet_transaction_count: "1",
         settlement_attempt_count: "1",
         entitlement_count: "1",
-        entitlement_event_count: "1"
+        entitlement_event_count: "1",
+        receipt_count: "1",
+        compliance_ledger_count: "1",
+        confirmation_delivery_count: "2",
+        sent_in_app_confirmation_count: "1",
+        email_provider_pending_count: "1",
+        notification_count: "1",
+        durable_confirmation_audit_count: "1"
       });
 
       const refundRequestBody = {
@@ -1950,6 +2017,35 @@ async function cleanupRun(
       }
       if (paymentIntentIds.length > 0) {
         await tx`
+          delete from payment_confirmation_deliveries
+          where payment_intent_id in ${tx(paymentIntentIds)}
+        `;
+        await tx`
+          delete from notifications
+          where related_resource_type = 'receipt'
+            and related_resource_id in (
+              select id
+              from receipts
+              where payment_intent_id in ${tx(paymentIntentIds)}
+            )
+        `;
+        await tx`
+          delete from compliance_ledger_entries
+          where payment_intent_id in ${tx(paymentIntentIds)}
+        `;
+        await tx`
+          delete from receipt_lines
+          where receipt_id in (
+            select id
+            from receipts
+            where payment_intent_id in ${tx(paymentIntentIds)}
+          )
+        `;
+        await tx`
+          delete from receipts
+          where payment_intent_id in ${tx(paymentIntentIds)}
+        `;
+        await tx`
           delete from refunds_and_disputes
           where payment_intent_id in ${tx(paymentIntentIds)}
         `;
@@ -1997,6 +2093,33 @@ async function cleanupRun(
       await tx`
         delete from wallet_transaction_records
         where user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from payment_confirmation_deliveries
+        where user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from notifications
+        where user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from compliance_ledger_entries
+        where buyer_user_id in ${tx(userIds)}
+           or seller_user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from receipt_lines
+        where receipt_id in (
+          select id
+          from receipts
+          where buyer_user_id in ${tx(userIds)}
+             or seller_user_id in ${tx(userIds)}
+        )
+      `;
+      await tx`
+        delete from receipts
+        where buyer_user_id in ${tx(userIds)}
+           or seller_user_id in ${tx(userIds)}
       `;
       await tx`
         delete from entitlement_events

@@ -265,6 +265,10 @@ create table receipts (
   issued_at timestamptz not null default now()
 );
 
+create unique index receipts_payment_intent_id_uidx
+  on receipts (payment_intent_id)
+  where payment_intent_id is not null;
+
 create table receipt_lines (
   id uuid primary key,
   receipt_id uuid not null references receipts(id),
@@ -274,6 +278,31 @@ create table receipt_lines (
   currency text not null,
   created_at timestamptz not null default now()
 );
+
+create table payment_confirmation_deliveries (
+  id uuid primary key,
+  payment_intent_id uuid not null references payment_intents(id),
+  receipt_id uuid references receipts(id),
+  user_id uuid not null references users(id),
+  channel text not null check (channel in ('in_app', 'email')),
+  state text not null default 'queued'
+    check (state in ('queued', 'sent', 'provider_not_configured', 'failed')),
+  durable_medium boolean not null default true,
+  confirmation_version text not null default 'payment-confirmation-v1',
+  terms_version text not null,
+  withdrawal_waiver_version text not null,
+  payload jsonb not null default '{}'::jsonb,
+  delivered_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (payment_intent_id, channel)
+);
+
+create index payment_confirmation_deliveries_user_created_idx
+  on payment_confirmation_deliveries (user_id, created_at desc);
+
+create index payment_confirmation_deliveries_state_created_idx
+  on payment_confirmation_deliveries (state, created_at desc);
 
 create table platform_fee_statements (
   id uuid primary key,

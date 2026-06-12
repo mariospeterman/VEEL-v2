@@ -1,0 +1,10 @@
+drop policy if exists payment_confirmation_deliveries_select_self_or_staff on payment_confirmation_deliveries;
+
+revoke select on table payment_confirmation_deliveries from authenticated;
+
+drop index if exists payment_confirmation_deliveries_state_created_idx;
+drop index if exists payment_confirmation_deliveries_user_created_idx;
+
+drop table if exists payment_confirmation_deliveries;
+
+drop index if exists receipts_payment_intent_id_uidx;
