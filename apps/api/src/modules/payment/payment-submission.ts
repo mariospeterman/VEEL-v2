@@ -4,6 +4,7 @@ import type { RecordPaymentSubmissionInput, StoredPaymentIntent } from "./types.
 import { grantContentUnlockEntitlement, grantLivePassEntitlement } from "./payment-entitlement-settlement.js";
 import { grantEventAccessPassEntitlement } from "./payment-event-access-pass-settlement.js";
 import { deliverPaidMessage } from "./payment-paid-message-settlement.js";
+import { recordPaymentDurableConfirmation } from "./payment-durable-confirmation.js";
 import { recordReferralCommission, recordTipSupportSettlementLedger } from "./payment-settlement-ledger.js";
 import { insertSettlementAttempt, recordWalletTransaction } from "./payment-settlement-records.js";
 
@@ -111,6 +112,16 @@ export async function recordPaymentSubmission(
       await grantEventAccessPassEntitlement(transaction, {
         userId: updatedIntent.user_id,
         paymentIntentId: updatedIntent.payment_intent_id
+      });
+    }
+
+    if (input.settlement.confirmed && updatedIntent) {
+      await recordPaymentDurableConfirmation(transaction, {
+        paymentIntentId: updatedIntent.payment_intent_id,
+        userId: updatedIntent.user_id,
+        productType: updatedIntent.product_type as StoredPaymentIntent["productType"],
+        currency: updatedIntent.currency,
+        signature: input.signature
       });
     }
 
