@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { parsePublicWebEnv } from "@veel/config";
+import { parsePublicWebEnv } from "@veel/config/public";
 
 export async function updateSupabaseSession(request: NextRequest) {
   const env = parsePublicWebEnv(process.env);

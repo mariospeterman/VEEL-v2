@@ -63,7 +63,7 @@ Rules:
 | `/mutuals/feed` | Phase 4 | yes | yes | yes | mutuals | Explicit Mutuals feed only. |
 | `/mutuals` | Phase 4 | yes | yes | yes | mutuals | Canonical Mutual list and stale/archived state. |
 | `/mutuals/mutuals` | migration | yes | yes | yes | mutuals | Compatibility alias that redirects to canonical Mutuals routes. Dating-named launch routes are removed. |
-| `/app/assistant` | Phase 5 | yes | yes | yes | ai | Permission-scoped AI/MCP tool gateway with confirmation states and audit visibility. |
+| `/app/assistant` | Phase 5 | yes | yes | yes | ai | Capability-gated AI/MCP surface; not primary mobile nav. Permission-scoped tools require confirmation states and audit visibility. |
 | `/admin` | MVP internal | admin | yes | yes | admin | Ops dashboard, role-gated. |
 | `/admin/*` | phased | admin | yes | yes | admin | Users, content, reports, payments, Event Access, Mutuals, providers, compliance. |
 | `/admin/compliance/ledger` | Phase 2 | admin | yes | yes | compliance | Immutable compliance ledger search/export. |

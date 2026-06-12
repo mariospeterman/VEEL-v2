@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: desktop/mobile PWA UX
-Last updated: 2026-06-05
+Last updated: 2026-06-12
 Source of truth: yes
 
 Owns:
@@ -39,7 +39,7 @@ This document defines how every main v2 screen should behave so Veel feels like 
 Mobile bottom nav:
 
 ```text
-Home | Bits | Create | Discover | Profile
+Home | Bits | Create | Messages | Profile
 ```
 
 Mobile top actions:
@@ -73,8 +73,17 @@ Rules:
 - Admin is separate protected surface.
 - Mutuals is explicit mode, not root nav.
 - Events are content type + Event Access conversion flow.
-- AI/MCP is not root nav.
+- Discover, Event Access, Mutuals, Wallet, Settings, and Assistant live in
+  secondary menus, contextual surfaces, or route-specific affordances on mobile.
+- AI/MCP is not root nav or a primary mobile dock item.
 - Activity lives under Profile/Settings/Wallet.
+
+Mockup-derived shell direction:
+
+- desktop uses a quiet fixed rail and keeps media/content in the center
+- mobile uses a compact dock plus top account/wallet/status affordances
+- glass and blur are used sparingly for chrome and sheets, not as nested cards
+- no inert navigation, fake tools, or buttons without a real route/action
 
 ## Home And Bits Product Meaning
 
@@ -193,7 +202,8 @@ Desktop:
 Mobile:
 
 - record/upload first
-- bottom-aligned steps: media, thumbnail/teaser, caption, labels, monetise, optional event, preview, publish
+- bottom-aligned or sheet-based steps: media, thumbnail/teaser, caption, labels,
+  monetise, optional event, preview, publish
 - thumbnail and Bit/teaser selection are simple native controls
 - labels include NSFW/adult/sensitive and optional event attachment only
 - event attachment captures date/time, pass capacity, public sale or private request-to-join, digital live stream or physical location, and map-assisted location search
@@ -207,6 +217,7 @@ Desktop:
 - clean studio workspace
 - media preview dominant
 - steps/panels around preview
+- status/readiness remains compact and operational
 - no complex timeline editor in MVP
 
 MVP non-goals:
@@ -226,12 +237,16 @@ Own profile:
 - edit profile/dashboard/activity
 - tabs: Feed, Bits, Premium, Collabs
 - live replay/memories row above grid
+- readiness, wallet, age/KYC, and monetisation state use backend projections and
+  route to real remediation surfaces
 
 Public profile:
 
 - Follow, Message, Support, Membership/Unlock where applicable
 - creator media grid
 - premium/live/event states
+- Assistant is not a public profile CTA; creator-side assistant/MCP setup belongs
+  under Studio/Profile settings when capability allows
 
 ## Messages
 

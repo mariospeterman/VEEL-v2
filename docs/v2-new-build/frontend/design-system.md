@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: documentation
-Last updated: 2026-06-03
+Last updated: 2026-06-12
 Source of truth: yes
 
 Owns:
@@ -61,6 +61,33 @@ Rules:
 - flatter, lighter, less boxed
 - premium dark base with clean light-mode equivalent
 - Solana-inspired accents used with restraint
+
+## Mockup-Derived Principles
+
+Reference mockups were inspected from `/Users/maki/Desktop/Veel.v2-Mockups`
+on 2026-06-12. They are inspiration only; production UI must still follow the
+Veel route map, contracts, provider boundaries, and real workflows.
+
+Useful principles to carry forward:
+
+- fixed quiet shell with desktop left rail, compact top status/actions, and a
+  mobile bottom dock
+- media-first center of gravity with creator identity, access state, and next
+  action attached to the active content
+- guided onboarding/workspace patterns for identity, profile, wallet, age, and
+  creator setup
+- create flow as a studio workspace: preview first, steps around it, explicit
+  save/upload/publish controls, and no fake editor tools
+- profile as identity plus readiness/activity dashboard, not a marketing page
+- restrained glass, borders, and depth; premium, calm, studio-grade surfaces
+  instead of crypto-casino color, game-like dashboards, or generic AI chrome
+- secondary tools, including Assistant, live in menus, Studio/Profile context,
+  or admin surfaces; they are not primary mobile navigation items
+
+Do not copy raw mockup assets or layout one-to-one unless a project-owned asset
+is intentionally added and documented. Extract spacing, density, hierarchy, and
+interaction ideas, then adapt them to implemented routes and backend-owned
+capabilities.
 
 ## Color system
 

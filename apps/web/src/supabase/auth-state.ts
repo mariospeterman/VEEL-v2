@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from "./server";
+import { getE2eAuthState } from "./e2e-auth";
 
 export interface WebAuthState {
   configured: boolean;
@@ -7,6 +8,11 @@ export interface WebAuthState {
 }
 
 export async function getWebAuthState(): Promise<WebAuthState> {
+  const e2eAuthState = await getE2eAuthState();
+  if (e2eAuthState) {
+    return e2eAuthState;
+  }
+
   const supabase = await createSupabaseServerClient();
 
   if (!supabase) {

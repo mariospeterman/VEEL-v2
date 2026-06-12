@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: documentation
-Last updated: 2026-06-03
+Last updated: 2026-06-12
 Source of truth: yes
 
 Owns:
@@ -20,93 +20,122 @@ Launch scope:
 Non-goals:
 - historical-context inference, duplicate systems, and unapproved provider/product expansion
 
-This document describes target v2 route ownership.
+This document describes current v2 route and component ownership.
 
 ## Routes
 
 ### `app/page.tsx`
 
-- landing
-- panel scroll behavior
-- CTA handoff
+- authenticated mixed feed
+- backend feed/search projections through the typed web API helper
+- fail-closed API-unavailable state when local/staging API is absent
 
 ### `app/enter/page.tsx`
 
 - onboarding entry
-- server-passed mode param
+- Supabase magic-link UI
+- profile-completion mutation UI
+- external wallet challenge handoff UI
+- backend session/readiness projection
 
-### `app/app/layout.tsx`
+### `app/layout.tsx`
 
-- persistent protected shell
+- root app shell, styles, metadata, and provider boundaries
 
-### `app/app/home/page.tsx`
+### `app/age/page.tsx`
 
-- relationship feed
+- provider-backed age status
+- provider session start panel
 
-### `app/app/bits/page.tsx`
+### `app/create/page.tsx`
 
-- dedicated video feed
-- initial mode from search params
+- creator draft workspace
+- backend content draft and metadata mutation handoff
+- Bunny upload session creation and TUS upload state
+- publish submission handoff without client-side moderation truth
 
-### `app/app/create/page.tsx`
+### `app/content/[contentId]/page.tsx`
 
-- creator workflow
+- media detail projection
+- backend-issued playback resource rendering
+- unlock-intent and wallet transaction request panel
 
-### `app/app/messages/page.tsx`
+### `app/live/[liveRoomId]/page.tsx`
+
+- live room projection
+- Livepeer playback resource rendering
+- live pass payment handoff panel
+
+### `app/messages/page.tsx`
 
 - conversation, inbox, and activity shell
+- paid-message handoff where backend projects it
 
-### `app/app/profile/page.tsx`
+### `app/profile/page.tsx`
 
 - managed profile
 - own badges, verification status, activity, wallet/payment stats
 
-### `app/app/profile/[handle]/page.tsx`
+### `app/profile/[handle]/page.tsx`
 
 - contextual creator route
 - public creator badges, creator media, follow/support/subscribe actions
 
-### `app/app/discover/page.tsx`
+### `app/discover/page.tsx`
 
 - search and discovery surface
 - creator, hashtag, event, live, and safe category discovery
 - never a redirect alias to Bits
 
+### Protected operations routes
+
+- `app/wallet/page.tsx`: wallet projections, funding receipts, transaction state
+- `app/activity/page.tsx`: activity projection
+- `app/subscriptions/page.tsx`: backend-owned subscription authorization and cancellation controls
+- `app/event-access/[eventId]/page.tsx`: Event Access pass projection and purchase handoff
+- `app/passes/page.tsx`: pass inventory projection
+- `app/mutuals/page.tsx` and `app/mutuals/feed/page.tsx`: backend-owned Mutuals mode/projection
+- `app/studio/page.tsx`: Studio/org workspace projection
+- `app/admin/page.tsx`: admin/ops projections and safe mutation panels
+- `app/settings/page.tsx`: preference projections and explicit mutations
+- `app/assistant/page.tsx`: capability-gated AI/MCP surface only; not primary mobile navigation
+
 ## Feature slices
 
-### `features/landing`
+### Shared route helpers
 
-- landing page
-- visual storytelling panels
-- captures inbound `?ref=` attribution before onboarding/login
+- `src/api-client.ts` owns typed server/read API calls and attaches the current
+  Supabase access token when available.
+- `src/api-mutations.ts` owns typed browser mutations, Idempotency-Key creation,
+  and browser token attachment.
+- `src/supabase/*` owns SSR/browser Supabase setup, auth state, cookie refresh,
+  and guarded E2E auth helpers.
 
-### `features/onboarding`
+### Route-local panels
 
-- locked 3-step onboarding UI
-- uses shared button and age-provider selection primitives
+- Use route-local panels when the component is tightly coupled to one workflow:
+  `enter/*panel.tsx`, `create/create-workspace.tsx`,
+  `content/[contentId]/content-unlock-panel.tsx`,
+  `live/[liveRoomId]/live-pass-panel.tsx`,
+  `subscriptions/*panel.tsx`, and admin row/panel files.
+- Promote shared components only after more than one route needs the same
+  behavior and contract.
 
-### `features/app-shell`
+### UI primitives
 
-- app chrome
-- icons
-- shared primitive-backed stage overlay
-- creator module
-- creator profile cache
-- home surface
-- bits surface
-- create surface
-- messages surface
-- profile surface
-- creator route surface
-- stream surface
-- no raw lowercase `<button>` elements in app-shell route surfaces; use `Button` or link variants
-- native file/range inputs remain only where required by browser media/upload behavior
+- Shared controls live under `components/ui`.
+- Use project primitives for buttons, sheets, inputs, textareas, selects,
+  checkboxes, and segmented controls.
+- Native file/range inputs remain only where required by browser upload/media
+  behavior.
 
-### `features/home`
+### Smoke and E2E harness
 
-- API client
-- auth state
-- age state
-- wallet-link state
-- shell data hydration
-- referral link creation and local `?ref=` attribution capture
+- `tests/smoke` owns browser coverage for shell/projection behavior.
+- `tests/smoke/auth-happy-path.spec.ts` owns the local authenticated happy path:
+  enter -> profile -> wallet -> age -> home -> create -> unlock.
+- The auth smoke harness uses a local mock API on `127.0.0.1:4000`, a guarded
+  non-production `veel_e2e_access_token` cookie, and serialized Playwright
+  workers so other smoke specs do not observe the mock backend by accident.
+- `NEXT_PUBLIC_ENABLE_E2E_AUTH` is test-only and must remain ineffective in
+  production.
