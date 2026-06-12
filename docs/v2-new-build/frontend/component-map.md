@@ -90,6 +90,7 @@ This document describes current v2 route and component ownership.
 ### Protected operations routes
 
 - `app/wallet/page.tsx`: wallet projections, funding receipts, transaction state
+- `app/activity/page.tsx` and `app/activity/refund-request-panel.tsx`: payment activity, receipt/confirmation state, withdrawal-review status, and real refund/access-issue review request mutation
 - `app/activity/page.tsx`: activity projection
 - `app/subscriptions/page.tsx`: backend-owned subscription authorization and cancellation controls
 - `app/event-access/[eventId]/page.tsx`: Event Access pass projection and purchase handoff

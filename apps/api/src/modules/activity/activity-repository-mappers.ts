@@ -12,6 +12,14 @@ export interface ActivityRow {
   payment_intent_id: string | null;
   signature: string | null;
   reference_address: string | null;
+  receipt_id: string | null;
+  receipt_number: string | null;
+  receipt_state: string | null;
+  in_app_confirmation_state: string | null;
+  email_confirmation_state: string | null;
+  withdrawal_right_status: ActivityItem["withdrawalRightStatus"] | null;
+  support_review_available: boolean | null;
+  latest_refund_request_state: string | null;
   created_at: Date;
   confirmed_at: Date | null;
 }
@@ -101,6 +109,14 @@ function toActivityItem(row: ActivityRow): ActivityItem {
     paymentIntentId: row.payment_intent_id,
     signature: row.signature,
     referenceAddress: row.reference_address,
+    receiptId: row.receipt_id,
+    receiptNumber: row.receipt_number,
+    receiptState: row.receipt_state,
+    inAppConfirmationState: row.in_app_confirmation_state,
+    emailConfirmationState: row.email_confirmation_state,
+    withdrawalRightStatus: row.withdrawal_right_status ?? null,
+    supportReviewAvailable: Boolean(row.support_review_available),
+    latestRefundRequestState: row.latest_refund_request_state,
     createdAt: row.created_at.toISOString(),
     confirmedAt: row.confirmed_at ? row.confirmed_at.toISOString() : null
   };

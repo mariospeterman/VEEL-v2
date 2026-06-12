@@ -37,6 +37,8 @@ export type SubscriptionAuthorizationIntent =
 export type SubmitSubscriptionAuthorizationRequest =
   components["schemas"]["SubmitSubscriptionAuthorizationRequest"];
 export type Subscription = components["schemas"]["Subscription"];
+export type CreateRefundDisputeRequest = components["schemas"]["CreateRefundDisputeRequest"];
+export type RefundDisputeRequest = components["schemas"]["RefundDisputeRequest"];
 
 const browserE2eAuthEnabled =
   process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_ENABLE_E2E_AUTH === "true";
@@ -196,6 +198,12 @@ export async function cancelSubscription(subscriptionId: string): Promise<Subscr
     "PATCH",
     {}
   );
+}
+
+export async function createRefundDisputeRequest(
+  body: CreateRefundDisputeRequest
+): Promise<RefundDisputeRequest> {
+  return authenticatedMutation<RefundDisputeRequest>("/v1/refunds/requests", "POST", body);
 }
 
 async function authenticatedGet<T>(path: string): Promise<T> {
