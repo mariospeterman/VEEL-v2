@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: seller/agent posture, liability boundaries, compliance gaps, monetisation guardrails
-Last updated: 2026-06-06
+Last updated: 2026-06-12
 Source of truth: yes
 
 Owns:
@@ -62,7 +62,7 @@ Veel records evidence, state transitions, reporting facts, exports, and accounti
 | Memberships | Delegated Solana subscription foundation exists with cancel/revoke state. | Launch needs official delegated subscription staging evidence, recurring collection worker, grace/expiry operations, and wallet UX. |
 | Live Passes | Live room, pass intent, chat, replay, and Livepeer boundary exist. | Provider launch approval, production stream access signing, and admin/event ops workflows remain. |
 | Event Access | Event/pass/check-in foundation, read-only admin Event Access ops projections, and audited provider-event replay enqueue/worker boundary exist. | Launch copy must avoid ticket-marketplace positioning; admin Event Access mutations, provider-specific replay adapters, refund/transfer/resale remain out of launch unless separately approved. |
-| Refunds/disputes | User request routes, admin review routes, RLS-backed request table, sanitized projections, idempotency-required mutations, and audit events exist. | Creator-initiated noncustodial refund transaction evidence, policy-approved entitlement revocation/replacement execution, provider/counsel-reviewed copy, and jurisdiction-specific consumer disclosures remain. |
+| Refunds/disputes | User request routes, admin review routes, RLS-backed request table, sanitized projections, persisted idempotency/request-hash dedupe, payment-intent withdrawal-waiver evidence fields, and audit events exist. | Durable receipt/email delivery, creator-initiated noncustodial refund transaction evidence, policy-approved entitlement revocation/replacement execution, withdrawal-function UI for EU consumers where rights still exist, provider/counsel-reviewed copy, and jurisdiction-specific consumer disclosures remain. |
 | Compliance ledger | DAC7/VAT docs and admin read routes exist; DAC8/CARF report reads are backend-gated by the paused `compliance.carf_exports` feature flag until explicitly enabled. | Export/filing workflows, USD snapshot provider, seller onboarding collection, and counsel/tax review remain. |
 | Creator verification | Age/profile/wallet foundations and the backend-owned Become Creator readiness checklist exist. | Identity/KYB provider approval, tax profile collection, and deeper conversion/support UX remain. |
 | Mutuals/Connections | Canonical Mutuals API routes such as `GET /v1/mutuals/feed` and `GET /v1/mutuals`, launch-facing frontend projections, and regression tests proving dating-named API aliases are gone exist. | Migration from dating-named historical table/type vocabulary, conduct UX, and hard social-money rule tests remain. |
@@ -76,6 +76,7 @@ Veel records evidence, state transitions, reporting facts, exports, and accounti
 | --- | --- | --- |
 | Veel appears to be seller/merchant of record for creator products | High | Use creator-as-seller copy, seller-of-record determinations, direct settlement, creator refund policy, and compliance ledger evidence. |
 | Custody or payout-operator characteristics | High | Ban balances, credits, escrow, withdrawals, payout queues, and Veel-held creator funds in docs, schema, API, and UX. |
+| Blanket no-refund copy conflicts with consumer/subscription law | High | Use final-sale-after-access copy only with express immediate-access consent, withdrawal-loss acknowledgement, durable confirmation, and mandatory-rights, duplicate-settlement, non-delivery, fraud, misdescription, age/KYC rejection, provider-failure, and platform-failure exceptions. |
 | Crypto/direct settlement assumed to remove VAT/tax duties | High | Store jurisdiction-agnostic tax/compliance data, DAC7/CARF/VAT readiness records, and avoid legal conclusions. |
 | Money influences social access or ranking | High | Enforce the hard social-money rule in docs, tests, recommendation logic, Mutuals, platform tiers, and admin policy. |
 | Provider production path ships while ADR state is candidate | High | Keep provider-dependent paths gated until exact use case is staging-approved or launch-approved. |
@@ -98,6 +99,8 @@ Veel records evidence, state transitions, reporting facts, exports, and accounti
 - Notification events must be backend-derived from existing business state; browser push is delivery only.
 - Studio and Enterprise dashboards must be organization-scoped software/admin surfaces, not financial custody or payout surfaces.
 - Refund workflows are modeled as request, creator/admin review, optional creator-initiated refund transaction, entitlement revocation/replacement where policy allows, and audit evidence. The current implementation covers request/review/audit state only; it must not be used as payment truth, access truth, reporting truth, or bookkeeping truth.
+- Refund/dispute creation must use durable idempotency so retries cannot create duplicate refund obligations or duplicate support queues. Same key plus same request returns the existing record; same key plus different request conflicts.
+- Payment-intent creation must preserve the waiver/terms evidence used to reject ordinary change-of-mind refunds after immediate digital access. A missing or invalid waiver is a refund-review risk, not a reason to hide or delete payment evidence.
 - Data request workflows are privacy lifecycle records only; export/deletion execution requires separate policy-approved workers and identity-minimized projections.
 - Feature flags are audited software policy controls only; they cannot override payment truth, entitlement access truth, compliance reporting truth, accounting bookkeeping truth, or the hard social-money rule.
 
@@ -145,6 +148,6 @@ Veel records evidence, state transitions, reporting facts, exports, and accounti
 2. Complete notification production rollout: real VAPID secrets, staging push-service verification across target browsers, and live Supabase Realtime staging verification with real RLS claims.
 3. Complete single creator onboarding/readiness flow and creator/studio dashboard expansion.
 4. Complete provider launch approvals and any remaining provider-backed KYB expansion after staging provider fixtures are verified.
-5. Complete refund/dispute execution follow-up only after policy approval: creator-initiated noncustodial refund transaction evidence, entitlement revocation/replacement controls, consumer disclosures, and compliance ledger correction events.
+5. Complete refund/dispute execution follow-up only after policy approval: durable receipt/email delivery, EU withdrawal-function UI where rights still exist, creator-initiated noncustodial refund transaction evidence, entitlement revocation/replacement controls, consumer disclosures, platform-plan cancellation copy, and compliance ledger correction events.
 6. Complete provider launch approvals and staging fixtures for Solana settlement, delegated Membership renewals, Bunny, Livepeer, age/KYC, and embedded wallets.
 7. Complete compliance export/readiness workflows only after counsel/tax review.

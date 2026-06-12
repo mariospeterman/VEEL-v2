@@ -138,13 +138,27 @@ export function toPaymentIntentResponse(intent: {
   amountMinor: number;
   currency: "SOL" | "USDC";
   state: PaymentIntent["state"];
+  withdrawalWaiverRequired?: boolean;
+  withdrawalWaiverAcceptedAt?: Date | null;
+  withdrawalWaiverVersion?: string | null;
+  termsVersion?: string | null;
+  durableConfirmationRequired?: boolean;
+  refundValueBasis?: PaymentIntent["refundPolicy"]["refundValueBasis"];
 }): PaymentIntent {
   return {
     id: intent.id,
     productType: intent.productType,
     amountMinor: intent.amountMinor,
     currency: intent.currency,
-    state: intent.state
+    state: intent.state,
+    refundPolicy: {
+      withdrawalWaiverRequired: intent.withdrawalWaiverRequired ?? true,
+      withdrawalWaiverAcceptedAt: intent.withdrawalWaiverAcceptedAt?.toISOString() ?? null,
+      withdrawalWaiverVersion: intent.withdrawalWaiverVersion ?? "instant-digital-access-v1",
+      termsVersion: intent.termsVersion ?? "veel-terms-v1",
+      durableConfirmationRequired: intent.durableConfirmationRequired ?? true,
+      refundValueBasis: intent.refundValueBasis ?? "manual_resolution"
+    }
   };
 }
 

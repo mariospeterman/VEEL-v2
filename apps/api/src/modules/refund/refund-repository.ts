@@ -9,6 +9,13 @@ export class RefundRepositoryConfigurationError extends Error {
   }
 }
 
+export class RefundIdempotencyConflictError extends Error {
+  constructor() {
+    super("REFUND_IDEMPOTENCY_CONFLICT");
+    this.name = "RefundIdempotencyConflictError";
+  }
+}
+
 interface RefundDisputeRow {
   id: string;
   payment_intent_id: string;
@@ -19,6 +26,7 @@ interface RefundDisputeRow {
   state: RefundDisputeRequest["state"];
   resolution: string | null;
   custody_boundary: RefundDisputeRequest["custodyBoundary"];
+  request_hash?: string;
   created_at: Date;
   updated_at: Date | null;
   resolved_at: Date | null;
@@ -86,12 +94,33 @@ export function createPostgresRefundRepository(database?: string | PostgresSql):
             where supabase_user_id = ${input.supabaseUserId}
             limit 1
           ),
+          existing_request as (
+            select
+              rd.id,
+              rd.payment_intent_id,
+              rd.entitlement_id,
+              rd.reporter_user_id,
+              rd.kind,
+              rd.requested_action,
+              rd.state,
+              rd.resolution,
+              rd.custody_boundary,
+              rd.request_hash,
+              rd.created_at,
+              rd.updated_at,
+              rd.resolved_at
+            from refunds_and_disputes rd
+            join target_user tu on tu.id = rd.reporter_user_id
+            where rd.idempotency_key = ${input.idempotencyKey}::text
+            limit 1
+          ),
           owned_payment_intent as (
             select pi.id, pi.user_id, e.id as entitlement_id
             from payment_intents pi
             join target_user tu on tu.id = pi.user_id
             left join entitlements e on e.payment_intent_id = pi.id
-            where pi.id = ${input.body.paymentIntentId}
+            where pi.id = ${input.body.paymentIntentId}::uuid
+              and not exists (select 1 from existing_request)
             limit 1
           ),
           inserted_request as (
@@ -102,16 +131,20 @@ export function createPostgresRefundRepository(database?: string | PostgresSql):
               reporter_user_id,
               kind,
               requested_action,
-              reason
+              reason,
+              idempotency_key,
+              request_hash
             )
             select
               ${randomUUID()},
               owned_payment_intent.id,
               owned_payment_intent.entitlement_id,
               owned_payment_intent.user_id,
-              ${input.body.kind},
-              ${input.body.requestedAction},
-              ${input.body.reason}
+              ${input.body.kind}::text,
+              ${input.body.requestedAction}::text,
+              ${input.body.reason}::text,
+              ${input.idempotencyKey}::text,
+              ${input.requestHash}::text
             from owned_payment_intent
             returning
               id,
@@ -123,6 +156,7 @@ export function createPostgresRefundRepository(database?: string | PostgresSql):
               state,
               resolution,
               custody_boundary,
+              request_hash,
               created_at,
               updated_at,
               resolved_at
@@ -143,7 +177,7 @@ export function createPostgresRefundRepository(database?: string | PostgresSql):
               inserted_request.id,
               'refund_dispute_requested',
               jsonb_build_object(
-                'idempotencyKey', ${input.idempotencyKey},
+                'idempotencyKey', ${input.idempotencyKey}::text,
                 'paymentIntentId', inserted_request.payment_intent_id,
                 'entitlementId', inserted_request.entitlement_id,
                 'kind', inserted_request.kind,
@@ -164,15 +198,37 @@ export function createPostgresRefundRepository(database?: string | PostgresSql):
             state,
             resolution,
             custody_boundary,
+            request_hash,
             created_at,
             updated_at,
             resolved_at
           from inserted_request
           where exists (select 1 from audit_insert)
+          union all
+          select
+            id,
+            payment_intent_id,
+            entitlement_id,
+            reporter_user_id,
+            kind,
+            requested_action,
+            state,
+            resolution,
+            custody_boundary,
+            request_hash,
+            created_at,
+            updated_at,
+            resolved_at
+          from existing_request
+          limit 1
         `;
 
         return insertedRows;
       });
+
+      if (rows[0]?.request_hash && rows[0].request_hash !== input.requestHash) {
+        throw new RefundIdempotencyConflictError();
+      }
 
       return rows[0] ? toRefundDisputeRequest(rows[0]) : null;
     },

@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Solana Pay, monetisation, referrals
-Last updated: 2026-06-05
+Last updated: 2026-06-12
 Source of truth: yes
 
 Owns:
@@ -37,6 +37,7 @@ Current implementation state:
 - Real API/test-DB coverage verifies the `paid_message` route sequence through backend intent creation, confirmed settlement submission, wallet transaction and settlement attempt rows, delivered paid-message draft state, visible message row, audit event, and conversation message projection.
 - Real API/test-DB coverage verifies the `live_pass` route sequence through backend intent creation, confirmed settlement submission, wallet transaction and settlement attempt rows, live-pass purchase request, active live pass row, live-room entitlement, audit event, signed playback projection, and pass-gated chat write/list projection.
 - Real API/test-DB coverage verifies delegated subscription authorization through backend plan listing, authorization intent creation, verifier-scoped evidence submission, active subscription projection, authorization intent/event rows, initial confirmed collection row, worker-submitted renewal collection, confirmed collection signature, collection events, and provider-event replay state updates.
+- Real API/test-DB coverage verifies refund/dispute request behavior after confirmed content unlock settlement: the request is idempotent by persisted request hash, writes one audit event, keeps payment and entitlement truth unchanged, and exposes only the no-custody review boundary.
 - Confirmed `tip` and `support` compatibility settlement posts creator earning and platform fee ledger entries using the documented launch platform fee, but never writes an access grant. UI copy should say support.
 - Confirmed `event_access_pass` settlement grants a backend Event Access Pass entitlement and QR/check-in record. Legacy `event_ticket` rows are normalized by migration and still settle through the same backend path during compatibility windows. Event Access is never created from wallet approval, redirect state, or frontend-computed payment success.
 - `POST /v1/referrals/tokens` creates backend-owned external/internal referral tokens. Optional payment-intent `referralToken` values are resolved server-side, self-referrals are not attributed, and confirmed eligible support settlement creates at most one commission from Veel platform commission net of refunds and tax.
@@ -54,6 +55,7 @@ Official references checked:
 - Solana Pay overview: https://solana.com/docs/tools/solana-pay
 - Solana Pay transfer requests: https://solana.com/docs/tools/solana-pay/quickstart/transfer-requests
 - Solana Pay transaction requests and validation: https://solana.com/docs/tools/solana-pay/quickstart/transaction-requests
+- Solana Pay transaction request overview: https://docs.solanapay.com/core/transaction-request/overview
 - Solana Subscriptions overview: https://solana.com/docs/payments/subscriptions/overview
 - Solana fixed delegation: https://solana.com/docs/payments/subscriptions/fixed-delegation
 - Solana recurring delegation: https://solana.com/docs/payments/subscriptions/recurring-delegation
@@ -61,6 +63,13 @@ Official references checked:
 - Solana RPC `getTransaction`: https://solana.com/docs/rpc/http/gettransaction
 - Helius webhooks overview: https://www.helius.dev/docs/webhooks
 - Helius webhook `authHeader`: https://www.helius.dev/docs/api-reference/webhooks/create-webhook
+- ESMA MiCA overview: https://www.esma.europa.eu/esmas-activities/digital-finance-and-innovation/markets-crypto-assets-regulation-mica
+- FTC cryptocurrency consumer guidance: https://consumer.ftc.gov/articles/what-know-about-cryptocurrency-scams
+- EU Consumer Rights Directive 2011/83/EU: https://eur-lex.europa.eu/legal-content/EN/TXT/PDF/?uri=CELEX%3A32011L0083
+- EU consumer withdrawal overview: https://europa.eu/youreurope/citizens/consumers/shopping/returns/index_en.htm
+- Directive (EU) 2023/2673 withdrawal-function update: https://eur-lex.europa.eu/legal-content/EN/TXT/PDF/?uri=OJ:L_202302673
+- FTC Negative Option Rule reference: https://www.ftc.gov/legal-library/browse/rules/negative-option-rule
+- Swiss SME e-commerce obligations: https://www.kmu.admin.ch/kmu/en/home/concrete-know-how/sme-management/e-commerce/creating-own-website/statutory-obligations-in-switzerland-and-the-eu%20.html
 
 ## Payment Principles
 
@@ -209,6 +218,23 @@ Referral types:
 - User-generated external referral: user shares content/profile/event outside Veel; backend creates token/link; click/signup/payment attribution is server-owned; eligible paid actions can create commission from platform share.
 - Internal Veel share: share to another Veel user/chat; creates share/activity record; no commission by default.
 - Admin/partner referral: admin creates partner campaign/code with commission rules, cap, expiry, and audit trail.
+
+## Refund And Dispute Policy
+
+Crypto settlement finality means Veel cannot promise automatic reversals, card-style chargebacks, or platform-funded refunds for creator-delivered products. It does not remove consumer-protection, subscription-cancellation, non-delivery, misdescription, duplicate-settlement, fraud, age/KYC rejection, provider-failure, outage, or mandatory statutory-rights obligations.
+
+Launch policy:
+
+- Checkout copy may say purchases are final after immediate digital access is delivered, except where required by law or where the seller, provider, or platform failed to deliver the purchased access.
+- For EU/EEA consumer distance contracts, the change-of-mind withdrawal right can be treated as lost for digital content/service access only when the user gave prior express consent to immediate supply, acknowledged that withdrawal rights are lost once access begins, access actually begins, and Veel/seller sends durable confirmation of that consent/acknowledgement.
+- Creator content, paid messages, live passes, Event Access Passes, creator Memberships, and creator support are creator-sold products where the creator/event owner is the seller/responsible party where legally supportable.
+- Platform plans and platform software features are Veel-sold products, so Veel owns cancellation, non-delivery, support, and legally required remedy obligations for those products.
+- Refund/dispute routes create audited review state only. They do not execute a refund, debit a creator wallet, create a Veel balance, create a creator balance, create escrow, create a payout queue, or revoke access by themselves.
+- If a refund is approved for a creator-sold product, the normal path is seller-funded noncustodial refund transaction evidence plus any policy-approved entitlement revocation/replacement. Veel may choose platform-funded goodwill only when Veel is responsible or counsel approves the exception.
+- Subscription cancellation stops future collections. No pro-rata refund is promised after the current access period starts unless law, provider failure, platform failure, or approved policy requires a remedy.
+- Payment intents expose a `refundPolicy` evidence block and store `withdrawal_waiver_*`, `terms_version`, durable-confirmation requirement, and refund-value basis. This supports later receipts/email confirmation and refund review without making frontend state the legal or payment source of truth.
+- If a refund is legally required, use same-means reimbursement where feasible: original wallet when safe, otherwise a user-verified wallet/payment route agreed by the buyer. Resolution records must specify whether value basis is original crypto amount, fiat value at purchase, or manual resolution.
+- From 19 June 2026, EU-facing online withdrawal flows need an electronic withdrawal function where a withdrawal right still exists. If valid immediate-access waiver has already ended that right, the UI should show that withdrawal is unavailable for change-of-mind reasons while still allowing support/refund claims for non-delivery, technical failure, fraud, duplicate payment, sanctions/AML, underage, or legal exceptions.
 
 ## Payment API
 

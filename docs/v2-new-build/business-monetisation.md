@@ -306,6 +306,8 @@ Recurring subscription policy:
 - Manual Solana Pay renewal is recovery fallback only; do not use merchant checkout, card billing, custodial subscription balances, or provider-operated product subscriptions.
 - Users must be able to cancel in Veel and revoke delegated allowance in wallet/provider UX.
 - Backend subscription status mirrors verified payment/collection evidence and internal entitlement policy; it is not a stored debt or receivable.
+- Renewal checkout and settings must disclose amount, period, token/mint, cancellation path, delegated authority, and that cancellation stops future collection rather than automatically refunding the current started period unless law or platform/provider failure requires it.
+- EU/EEA platform subscription checkout must collect immediate digital service consent and withdrawal-loss acknowledgement before the first access period starts, then send durable confirmation with plan, wallet, authorization/delegation evidence, terms version, and cancellation path.
 
 ## Referral And Commission Lifecycle
 
@@ -366,6 +368,15 @@ Launch policy can defer automated refunds, but the data model must support:
 - settlement reversal or compensating transaction if noncustodial refund is executed
 
 Do not remove buyer access to already purchased content without a documented policy and audit reason.
+
+Commercial default:
+
+- Creator-sold products are final once immediate access is delivered, except mandatory legal rights, duplicate settlement, fraud/unauthorized access, misdescription, provider/platform failure, or seller non-delivery.
+- Veel-sold platform plans are final once the current access period starts, except mandatory legal rights, duplicate collection, fraud/unauthorized access, platform failure, or failure to provide the software feature.
+- Creator-sold refunds should be seller-funded noncustodial transactions. Veel must not promise to absorb creator refund exposure from platform treasury unless counsel approves a goodwill or platform-fault exception.
+- Referral commissions come only from Veel platform commission net of refunds and tax; approved refunds/reversals must correct commission eligibility through backend records.
+- If a creator-sold refund is approved, creator share refund responsibility remains with the seller where legally supportable. Veel only refunds/reverses its commission when required by law, policy, or Veel fault, and referral commissions must be clawed back or marked ineligible from backend records rather than by creating a negative user balance.
+- Payment/refund review records must preserve `payment_confirmed`, `access_granted_at`, `withdrawal_waiver_accepted_at`, `withdrawal_waiver_version`, `terms_version`, `refund_eligible_reason`, `refund_status`, `refund_wallet`, and `refund_value_basis` either directly or through linked payment, entitlement, refund/dispute, receipt, and audit rows.
 
 ## Admin And Business Reporting Requirements
 
