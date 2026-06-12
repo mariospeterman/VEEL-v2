@@ -27,9 +27,10 @@ const treasuryWallet = "1".repeat(32);
 const validSolanaSignature =
   "5Pj5fCupXLUePYn18JkY8SrRaWFiUctuDTRwvUy2MLgVFG1FsCeezrWwZsmxkL5YJQFmQpAcY7rc5pN6vrXJt7Qp";
 const validEventAccessSolanaSignature = deterministicBase58Signature(41);
+const validPaidMessageSolanaSignature = deterministicBase58Signature(83);
 
 describeIntegration("authenticated API happy path against Postgres", () => {
-  it("links wallet, verifies age, creates content, unlocks content, and buys Event Access", async () => {
+  it("links wallet, verifies age, creates content, unlocks content, buys Event Access, and sends a paid message", async () => {
     const databaseUrl = integrationDatabaseUrl();
     assertIntegrationDatabaseIsAllowed(databaseUrl);
 
@@ -44,6 +45,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     const seededAccessRuleId = randomUUID();
     const seededEventId = randomUUID();
     const seededAccessPassTypeId = randomUUID();
+    const seededConversationId = randomUUID();
     const providerReference = `sumsub-${runId}`;
     const ageProviderWaterfall = createIntegrationAgeWaterfall(providerReference);
     const settlementInputs: PaymentSettlementInput[] = [];
@@ -77,7 +79,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         creatorSupabaseUserId,
         providerReference,
         seededContentId,
-        seededEventId
+        seededEventId,
+        seededConversationId
       });
       await seedCreatorPaidContent(sql, {
         creatorUserId: seededCreatorUserId,
@@ -195,6 +198,12 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(profileResponse.json()).toMatchObject({
         handle: buyerHandle,
         displayName: "Integration Buyer"
+      });
+      await seedDirectConversation(sql, {
+        conversationId: seededConversationId,
+        buyerSupabaseUserId,
+        creatorSupabaseUserId,
+        creatorUserId: seededCreatorUserId
       });
 
       const createContentResponse = await app.inject({
@@ -510,6 +519,156 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         access_pass_count: "1",
         audit_event_count: "1"
       });
+
+      const paidMessageBody = `Paid integration hello ${shortRunId}`;
+      const paidMessageIntentResponse = await app.inject({
+        method: "POST",
+        url: `/v1/messages/conversations/${seededConversationId}/paid-message-intents`,
+        headers: authenticatedHeaders(`paid-message-${runId}`),
+        payload: {
+          body: paidMessageBody
+        }
+      });
+
+      expect(paidMessageIntentResponse.statusCode, paidMessageIntentResponse.body).toBe(201);
+      expect(paidMessageIntentResponse.json()).toMatchObject({
+        state: "payment_required",
+        conversationId: seededConversationId,
+        paymentIntent: {
+          productType: "paid_message",
+          targetId: seededConversationId,
+          amountMinor: 10000000,
+          currency: "SOL",
+          state: "pending"
+        }
+      });
+      const paidMessageIntent = paidMessageIntentResponse.json<{
+        paymentIntent: {
+          id: string;
+          amountMinor: number;
+        };
+      }>();
+
+      const paidMessageSubmissionResponse = await app.inject({
+        method: "POST",
+        url: `/v1/payments/intents/${paidMessageIntent.paymentIntent.id}/submissions`,
+        headers: authenticatedHeaders(`paid-message-submission-${runId}`),
+        payload: {
+          signature: validPaidMessageSolanaSignature
+        }
+      });
+
+      expect(paidMessageSubmissionResponse.statusCode, paidMessageSubmissionResponse.body).toBe(202);
+      const confirmedPaidMessageIntentResponse = await app.inject({
+        method: "GET",
+        url: `/v1/payments/intents/${paidMessageIntent.paymentIntent.id}`,
+        headers: authenticatedHeaders(`paid-message-intent-${runId}`)
+      });
+
+      expect(confirmedPaidMessageIntentResponse.statusCode, confirmedPaidMessageIntentResponse.body).toBe(200);
+      expect(confirmedPaidMessageIntentResponse.json()).toMatchObject({
+        id: paidMessageIntent.paymentIntent.id,
+        state: "confirmed",
+        productType: "paid_message"
+      });
+      expect(settlementInputs).toHaveLength(3);
+      expect(settlementInputs[2]).toEqual(
+        expect.objectContaining({
+          signature: validPaidMessageSolanaSignature,
+          treasuryWallet,
+          amountMinor: paidMessageIntent.paymentIntent.amountMinor
+        })
+      );
+      expect(settlementInputs[2]?.referenceAddress).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
+
+      const paidMessagesResponse = await app.inject({
+        method: "GET",
+        url: `/v1/messages/conversations/${seededConversationId}/messages`,
+        headers: authenticatedHeaders(`paid-message-list-${runId}`)
+      });
+
+      expect(paidMessagesResponse.statusCode, paidMessagesResponse.body).toBe(200);
+      expect(paidMessagesResponse.json()).toMatchObject({
+        items: [
+          {
+            conversationId: seededConversationId,
+            body: paidMessageBody,
+            deliveryState: "visible",
+            paymentIntentId: paidMessageIntent.paymentIntent.id
+          }
+        ]
+      });
+
+      const paidMessageRows = await sql<{
+        payment_intent_count: string;
+        wallet_transaction_count: string;
+        settlement_attempt_count: string;
+        delivery_request_count: string;
+        message_count: string;
+        audit_event_count: string;
+      }[]>`
+        select
+          (
+            select count(*)
+            from payment_intents pi
+            join users u on u.id = pi.user_id
+            where u.supabase_user_id = ${buyerSupabaseUserId}
+              and pi.id = ${paidMessageIntent.paymentIntent.id}
+              and pi.target_id = ${seededConversationId}
+              and pi.product_type = 'paid_message'
+              and pi.state = 'confirmed'
+          ) as payment_intent_count,
+          (
+            select count(*)
+            from wallet_transaction_records wtr
+            join users u on u.id = wtr.user_id
+            where u.supabase_user_id = ${buyerSupabaseUserId}
+              and wtr.payment_intent_id = ${paidMessageIntent.paymentIntent.id}
+              and wtr.state = 'confirmed'
+          ) as wallet_transaction_count,
+          (
+            select count(*)
+            from payment_settlement_attempts psa
+            where psa.payment_intent_id = ${paidMessageIntent.paymentIntent.id}
+              and psa.state = 'confirmed'
+          ) as settlement_attempt_count,
+          (
+            select count(*)
+            from paid_message_delivery_requests pmdr
+            join users u on u.id = pmdr.sender_user_id
+            where u.supabase_user_id = ${buyerSupabaseUserId}
+              and pmdr.payment_intent_id = ${paidMessageIntent.paymentIntent.id}
+              and pmdr.conversation_id = ${seededConversationId}
+              and pmdr.state = 'delivered'
+              and pmdr.delivered_at is not null
+          ) as delivery_request_count,
+          (
+            select count(*)
+            from messages m
+            join users u on u.id = m.sender_user_id
+            where u.supabase_user_id = ${buyerSupabaseUserId}
+              and m.payment_intent_id = ${paidMessageIntent.paymentIntent.id}
+              and m.conversation_id = ${seededConversationId}
+              and m.delivery_state = 'visible'
+              and m.body = ${paidMessageBody}
+          ) as message_count,
+          (
+            select count(*)
+            from audit_events ae
+            join messages m on m.id = ae.subject_id
+            where m.payment_intent_id = ${paidMessageIntent.paymentIntent.id}
+              and ae.action = 'paid_message_delivered'
+          ) as audit_event_count
+      `;
+
+      expect(paidMessageRows[0]).toEqual({
+        payment_intent_count: "1",
+        wallet_transaction_count: "1",
+        settlement_attempt_count: "1",
+        delivery_request_count: "1",
+        message_count: "1",
+        audit_event_count: "1"
+      });
     } finally {
       await cleanupRun(sql, {
         buyerHandle,
@@ -518,12 +677,13 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         creatorSupabaseUserId,
         providerReference,
         seededContentId,
-        seededEventId
+        seededEventId,
+        seededConversationId
       });
       await app.close();
       vi.unstubAllEnvs();
     }
-  }, 30_000);
+  }, 60_000);
 });
 
 function integrationDatabaseUrl(): string {
@@ -762,6 +922,44 @@ async function seedCreatorPaidEvent(
   `;
 }
 
+async function seedDirectConversation(
+  sql: PostgresSql,
+  input: {
+    conversationId: string;
+    buyerSupabaseUserId: string;
+    creatorSupabaseUserId: string;
+    creatorUserId: string;
+  }
+): Promise<void> {
+  const buyerRows = await sql<{ id: string }[]>`
+    select id
+    from users
+    where supabase_user_id = ${input.buyerSupabaseUserId}
+    limit 1
+  `;
+  const buyerUserId = buyerRows[0]?.id;
+
+  if (!buyerUserId) {
+    throw new Error("Integration buyer user was not created before conversation seed.");
+  }
+
+  await sql`
+    insert into users (id, supabase_user_id)
+    values (${input.creatorUserId}, ${input.creatorSupabaseUserId})
+    on conflict (supabase_user_id) do update set state = 'active'
+  `;
+  await sql`
+    insert into conversations (id, type, state)
+    values (${input.conversationId}, 'direct', 'active')
+  `;
+  await sql`
+    insert into conversation_members (conversation_id, user_id, role)
+    values
+      (${input.conversationId}, ${buyerUserId}, 'member'),
+      (${input.conversationId}, ${input.creatorUserId}, 'creator')
+  `;
+}
+
 async function cleanupRun(
   sql: PostgresSql,
   input: {
@@ -772,6 +970,7 @@ async function cleanupRun(
     providerReference: string;
     seededContentId: string;
     seededEventId: string;
+    seededConversationId: string;
   }
 ): Promise<void> {
   await sql.begin(async (tx) => {
@@ -826,6 +1025,12 @@ async function cleanupRun(
           where id = ${input.seededEventId}
         `;
     const eventIds = eventRows.map((row) => row.id);
+    const conversationRows = await tx<{ id: string }[]>`
+      select id
+      from conversations
+      where id = ${input.seededConversationId}
+    `;
+    const conversationIds = conversationRows.map((row) => row.id);
     const ageIds = ageRows.map((row) => row.id);
     const walletIds = walletRows.map((row) => row.id);
     const paymentIntentRows = userIds.length
@@ -833,12 +1038,12 @@ async function cleanupRun(
           select id
           from payment_intents
           where user_id in ${tx(userIds)}
-             or target_id in (${input.seededContentId}, ${input.seededEventId})
+             or target_id in (${input.seededContentId}, ${input.seededEventId}, ${input.seededConversationId})
         `
       : await tx<{ id: string }[]>`
           select id
           from payment_intents
-          where target_id in (${input.seededContentId}, ${input.seededEventId})
+          where target_id in (${input.seededContentId}, ${input.seededEventId}, ${input.seededConversationId})
         `;
     const paymentIntentIds = paymentIntentRows.map((row) => row.id);
 
@@ -850,6 +1055,14 @@ async function cleanupRun(
         `;
         await tx`
           delete from event_access_purchase_requests
+          where payment_intent_id in ${tx(paymentIntentIds)}
+        `;
+        await tx`
+          delete from paid_message_delivery_requests
+          where payment_intent_id in ${tx(paymentIntentIds)}
+        `;
+        await tx`
+          delete from messages
           where payment_intent_id in ${tx(paymentIntentIds)}
         `;
         await tx`
@@ -891,12 +1104,21 @@ async function cleanupRun(
            or reviewed_by_user_id in ${tx(userIds)}
       `;
       await tx`
+        delete from paid_message_delivery_requests
+        where sender_user_id in ${tx(userIds)}
+           or recipient_user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from messages
+        where sender_user_id in ${tx(userIds)}
+      `;
+      await tx`
         delete from payment_settlement_attempts
         where payment_intent_id in (
           select id
           from payment_intents
           where user_id in ${tx(userIds)}
-             or target_id in (${input.seededContentId}, ${input.seededEventId})
+             or target_id in (${input.seededContentId}, ${input.seededEventId}, ${input.seededConversationId})
         )
       `;
       await tx`
@@ -905,13 +1127,13 @@ async function cleanupRun(
           select id
           from payment_intents
           where user_id in ${tx(userIds)}
-             or target_id in (${input.seededContentId}, ${input.seededEventId})
+             or target_id in (${input.seededContentId}, ${input.seededEventId}, ${input.seededConversationId})
         )
       `;
       await tx`
         delete from payment_intents
         where user_id in ${tx(userIds)}
-           or target_id in (${input.seededContentId}, ${input.seededEventId})
+           or target_id in (${input.seededContentId}, ${input.seededEventId}, ${input.seededConversationId})
       `;
       await tx`
         delete from wallet_link_challenges
@@ -951,6 +1173,25 @@ async function cleanupRun(
       await tx`
         delete from events
         where id in ${tx(eventIds)}
+      `;
+    }
+
+    if (conversationIds.length > 0) {
+      await tx`
+        delete from paid_message_delivery_requests
+        where conversation_id in ${tx(conversationIds)}
+      `;
+      await tx`
+        delete from messages
+        where conversation_id in ${tx(conversationIds)}
+      `;
+      await tx`
+        delete from conversation_members
+        where conversation_id in ${tx(conversationIds)}
+      `;
+      await tx`
+        delete from conversations
+        where id in ${tx(conversationIds)}
       `;
     }
 
