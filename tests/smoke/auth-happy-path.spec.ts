@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { expect, test } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 const e2eToken = "veel-e2e-token";
 const contentId = "00000000-0000-4000-8000-000000000040";
@@ -46,8 +47,7 @@ test.beforeEach(async ({ context }) => {
 });
 
 test("covers authenticated enter to profile wallet age home create and unlock", async ({ page }) => {
-  await page.goto("/enter");
-  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
+  await gotoUntilVisible(page, "/enter", () => page.getByRole("link", { name: "VEEL" }));
   await expect(page.getByText("Sessionactive")).toBeVisible();
   await expect(page.getByText("Walletrequired")).toBeVisible();
 
@@ -114,6 +114,24 @@ test("covers authenticated enter to profile wallet age home create and unlock", 
   expect(requests.some((request) => request.method === "POST" && request.path === "/v1/content" && request.idempotencyKey)).toBe(true);
   expect(requests.some((request) => request.method === "POST" && request.path === `/v1/content/${contentId}/unlock-intents` && request.idempotencyKey)).toBe(true);
 });
+
+async function gotoUntilVisible(page: Page, path: string, readyLocator: () => Locator) {
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await page.goto(path);
+
+    try {
+      await expect(readyLocator()).toBeVisible({ timeout: 5_000 });
+      return;
+    } catch (error) {
+      lastError = error;
+      await page.waitForTimeout(1_000);
+    }
+  }
+
+  throw lastError;
+}
 
 async function handleApiRequest(request: IncomingMessage, response: ServerResponse) {
   const method = request.method ?? "GET";
