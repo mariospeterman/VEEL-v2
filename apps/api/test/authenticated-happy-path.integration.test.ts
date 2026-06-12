@@ -28,9 +28,10 @@ const validSolanaSignature =
   "5Pj5fCupXLUePYn18JkY8SrRaWFiUctuDTRwvUy2MLgVFG1FsCeezrWwZsmxkL5YJQFmQpAcY7rc5pN6vrXJt7Qp";
 const validEventAccessSolanaSignature = deterministicBase58Signature(41);
 const validPaidMessageSolanaSignature = deterministicBase58Signature(83);
+const validLivePassSolanaSignature = deterministicBase58Signature(127);
 
 describeIntegration("authenticated API happy path against Postgres", () => {
-  it("links wallet, verifies age, creates content, unlocks content, buys Event Access, and sends a paid message", async () => {
+  it("links wallet, verifies age, creates content, unlocks content, buys Event Access, sends a paid message, and buys a live pass", async () => {
     const databaseUrl = integrationDatabaseUrl();
     assertIntegrationDatabaseIsAllowed(databaseUrl);
 
@@ -46,6 +47,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     const seededEventId = randomUUID();
     const seededAccessPassTypeId = randomUUID();
     const seededConversationId = randomUUID();
+    const seededLiveRoomId = randomUUID();
     const providerReference = `sumsub-${runId}`;
     const ageProviderWaterfall = createIntegrationAgeWaterfall(providerReference);
     const settlementInputs: PaymentSettlementInput[] = [];
@@ -67,6 +69,22 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       authVerifier: integrationAuthVerifier,
       ageProviderWaterfall,
       settlementVerifier,
+      liveProvider: {
+        isConfigured: () => true,
+        async createRoom() {
+          throw new Error("Integration test seeds the live room directly.");
+        },
+        async getRoomStatus() {
+          throw new Error("Integration test does not sync provider status.");
+        },
+        async createPlaybackJwt(input) {
+          expect(input).toEqual({
+            playbackId: `livepeer-playback-${shortRunId}`,
+            supabaseUserId: buyerSupabaseUserId
+          });
+          return `integration-live-jwt-${shortRunId}`;
+        }
+      },
       postgresClient: sql
     });
 
@@ -80,7 +98,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         providerReference,
         seededContentId,
         seededEventId,
-        seededConversationId
+        seededConversationId,
+        seededLiveRoomId
       });
       await seedCreatorPaidContent(sql, {
         creatorUserId: seededCreatorUserId,
@@ -95,6 +114,12 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         eventId: seededEventId,
         accessPassTypeId: seededAccessPassTypeId,
         idempotencyKey: `event-${runId}`
+      });
+      await seedCreatorLiveRoom(sql, {
+        creatorUserId: seededCreatorUserId,
+        liveRoomId: seededLiveRoomId,
+        shortRunId,
+        idempotencyKey: `live-room-${runId}`
       });
 
       const walletKeypair = nacl.sign.keyPair();
@@ -669,6 +694,240 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         message_count: "1",
         audit_event_count: "1"
       });
+
+      const lockedLiveRoomResponse = await app.inject({
+        method: "GET",
+        url: `/v1/live/rooms/${seededLiveRoomId}`,
+        headers: authenticatedHeaders(`live-room-before-pass-${runId}`)
+      });
+
+      expect(lockedLiveRoomResponse.statusCode, lockedLiveRoomResponse.body).toBe(200);
+      expect(lockedLiveRoomResponse.json()).toMatchObject({
+        id: seededLiveRoomId,
+        state: "live",
+        accessState: "pass_required",
+        playback: {
+          state: "blocked",
+          url: null,
+          provider: "livepeer"
+        },
+        chat: {
+          enabled: true,
+          accessState: "pass_required"
+        }
+      });
+
+      const livePassIntentResponse = await app.inject({
+        method: "POST",
+        url: `/v1/live/rooms/${seededLiveRoomId}/pass-intents`,
+        headers: authenticatedHeaders(`live-pass-${runId}`),
+        payload: {
+          durationMinutes: 60
+        }
+      });
+
+      expect(livePassIntentResponse.statusCode, livePassIntentResponse.body).toBe(201);
+      expect(livePassIntentResponse.json()).toMatchObject({
+        productType: "live_pass",
+        targetId: seededLiveRoomId,
+        amountMinor: 50000000,
+        currency: "SOL",
+        state: "pending"
+      });
+      const livePassIntent = livePassIntentResponse.json<{
+        id: string;
+        amountMinor: number;
+      }>();
+
+      const livePassSubmissionResponse = await app.inject({
+        method: "POST",
+        url: `/v1/payments/intents/${livePassIntent.id}/submissions`,
+        headers: authenticatedHeaders(`live-pass-submission-${runId}`),
+        payload: {
+          signature: validLivePassSolanaSignature
+        }
+      });
+
+      expect(livePassSubmissionResponse.statusCode, livePassSubmissionResponse.body).toBe(202);
+      const confirmedLivePassIntentResponse = await app.inject({
+        method: "GET",
+        url: `/v1/payments/intents/${livePassIntent.id}`,
+        headers: authenticatedHeaders(`live-pass-intent-${runId}`)
+      });
+
+      expect(confirmedLivePassIntentResponse.statusCode, confirmedLivePassIntentResponse.body).toBe(200);
+      expect(confirmedLivePassIntentResponse.json()).toMatchObject({
+        id: livePassIntent.id,
+        state: "confirmed",
+        productType: "live_pass"
+      });
+      expect(settlementInputs).toHaveLength(4);
+      expect(settlementInputs[3]).toEqual(
+        expect.objectContaining({
+          signature: validLivePassSolanaSignature,
+          treasuryWallet,
+          amountMinor: livePassIntent.amountMinor
+        })
+      );
+      expect(settlementInputs[3]?.referenceAddress).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
+
+      const activeLiveRoomResponse = await app.inject({
+        method: "GET",
+        url: `/v1/live/rooms/${seededLiveRoomId}`,
+        headers: authenticatedHeaders(`live-room-after-pass-${runId}`)
+      });
+
+      expect(activeLiveRoomResponse.statusCode, activeLiveRoomResponse.body).toBe(200);
+      expect(activeLiveRoomResponse.json()).toMatchObject({
+        id: seededLiveRoomId,
+        state: "live",
+        accessState: "pass_active",
+        playback: {
+          state: "full",
+          provider: "livepeer",
+          resourceType: "hls"
+        },
+        chat: {
+          enabled: true,
+          accessState: "allowed"
+        }
+      });
+      expect(activeLiveRoomResponse.json().playback.url).toContain(
+        `https://livepeercdn.studio/hls/livepeer-playback-${shortRunId}/index.m3u8`
+      );
+      expect(activeLiveRoomResponse.json().playback.url).toContain(
+        `jwt=integration-live-jwt-${shortRunId}`
+      );
+
+      const liveChatBody = `Live integration hello ${shortRunId}`;
+      const liveChatResponse = await app.inject({
+        method: "POST",
+        url: `/v1/live/rooms/${seededLiveRoomId}/messages`,
+        headers: authenticatedHeaders(`live-chat-${runId}`),
+        payload: {
+          body: liveChatBody
+        }
+      });
+
+      expect(liveChatResponse.statusCode, liveChatResponse.body).toBe(201);
+      expect(liveChatResponse.json()).toMatchObject({
+        roomId: seededLiveRoomId,
+        body: liveChatBody
+      });
+
+      const liveChatListResponse = await app.inject({
+        method: "GET",
+        url: `/v1/live/rooms/${seededLiveRoomId}/messages`,
+        headers: authenticatedHeaders(`live-chat-list-${runId}`)
+      });
+
+      expect(liveChatListResponse.statusCode, liveChatListResponse.body).toBe(200);
+      expect(liveChatListResponse.json()).toMatchObject({
+        items: [
+          {
+            roomId: seededLiveRoomId,
+            body: liveChatBody
+          }
+        ]
+      });
+
+      const livePassRows = await sql<{
+        payment_intent_count: string;
+        wallet_transaction_count: string;
+        settlement_attempt_count: string;
+        purchase_request_count: string;
+        live_pass_count: string;
+        entitlement_count: string;
+        audit_event_count: string;
+        chat_message_count: string;
+      }[]>`
+        select
+          (
+            select count(*)
+            from payment_intents pi
+            join users u on u.id = pi.user_id
+            where u.supabase_user_id = ${buyerSupabaseUserId}
+              and pi.id = ${livePassIntent.id}
+              and pi.target_id = ${seededLiveRoomId}
+              and pi.product_type = 'live_pass'
+              and pi.state = 'confirmed'
+          ) as payment_intent_count,
+          (
+            select count(*)
+            from wallet_transaction_records wtr
+            join users u on u.id = wtr.user_id
+            where u.supabase_user_id = ${buyerSupabaseUserId}
+              and wtr.payment_intent_id = ${livePassIntent.id}
+              and wtr.state = 'confirmed'
+          ) as wallet_transaction_count,
+          (
+            select count(*)
+            from payment_settlement_attempts psa
+            where psa.payment_intent_id = ${livePassIntent.id}
+              and psa.state = 'confirmed'
+          ) as settlement_attempt_count,
+          (
+            select count(*)
+            from live_pass_purchase_requests lppr
+            join users u on u.id = lppr.buyer_user_id
+            where u.supabase_user_id = ${buyerSupabaseUserId}
+              and lppr.payment_intent_id = ${livePassIntent.id}
+              and lppr.room_id = ${seededLiveRoomId}
+              and lppr.duration_minutes = 60
+          ) as purchase_request_count,
+          (
+            select count(*)
+            from live_passes lp
+            join users u on u.id = lp.user_id
+            where u.supabase_user_id = ${buyerSupabaseUserId}
+              and lp.payment_intent_id = ${livePassIntent.id}
+              and lp.room_id = ${seededLiveRoomId}
+              and lp.duration_minutes = 60
+              and lp.state = 'active'
+              and lp.starts_at <= now()
+              and lp.expires_at > now()
+          ) as live_pass_count,
+          (
+            select count(*)
+            from entitlements e
+            join users u on u.id = e.user_id
+            where u.supabase_user_id = ${buyerSupabaseUserId}
+              and e.payment_intent_id = ${livePassIntent.id}
+              and e.target_type = 'live_room'
+              and e.target_id = ${seededLiveRoomId}
+              and e.product_type = 'live_pass'
+              and e.state = 'active'
+              and e.ends_at > now()
+          ) as entitlement_count,
+          (
+            select count(*)
+            from audit_events ae
+            join users u on u.id = ae.actor_user_id
+            where u.supabase_user_id = ${buyerSupabaseUserId}
+              and ae.subject_id = ${seededLiveRoomId}
+              and ae.action = 'live_pass_entitlement_granted'
+          ) as audit_event_count,
+          (
+            select count(*)
+            from live_chat_messages lcm
+            join users u on u.id = lcm.user_id
+            where u.supabase_user_id = ${buyerSupabaseUserId}
+              and lcm.room_id = ${seededLiveRoomId}
+              and lcm.body = ${liveChatBody}
+              and lcm.state = 'visible'
+          ) as chat_message_count
+      `;
+
+      expect(livePassRows[0]).toEqual({
+        payment_intent_count: "1",
+        wallet_transaction_count: "1",
+        settlement_attempt_count: "1",
+        purchase_request_count: "1",
+        live_pass_count: "1",
+        entitlement_count: "1",
+        audit_event_count: "1",
+        chat_message_count: "1"
+      });
     } finally {
       await cleanupRun(sql, {
         buyerHandle,
@@ -678,12 +937,13 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         providerReference,
         seededContentId,
         seededEventId,
-        seededConversationId
+        seededConversationId,
+        seededLiveRoomId
       });
       await app.close();
       vi.unstubAllEnvs();
     }
-  }, 60_000);
+  }, 75_000);
 });
 
 function integrationDatabaseUrl(): string {
@@ -960,6 +1220,57 @@ async function seedDirectConversation(
   `;
 }
 
+async function seedCreatorLiveRoom(
+  sql: PostgresSql,
+  input: {
+    creatorUserId: string;
+    liveRoomId: string;
+    shortRunId: string;
+    idempotencyKey: string;
+  }
+): Promise<void> {
+  await sql`
+    insert into live_rooms (
+      id,
+      creator_user_id,
+      title,
+      provider_stream_id,
+      provider_playback_id,
+      provider_state,
+      state,
+      access_rule,
+      teaser_seconds,
+      pass_price_minor,
+      currency,
+      pass_durations_minutes,
+      host_ingest_url,
+      host_stream_key,
+      playback_url,
+      idempotency_key,
+      request_hash
+    )
+    values (
+      ${input.liveRoomId},
+      ${input.creatorUserId},
+      'Integration live room',
+      ${`livepeer-stream-${input.shortRunId}`},
+      ${`livepeer-playback-${input.shortRunId}`},
+      'active',
+      'live',
+      'pass_required',
+      60,
+      50000000,
+      'SOL',
+      array[30, 60, 180],
+      'rtmp://rtmp.livepeer.com/live/integration',
+      'integration-stream-key',
+      ${`https://livepeercdn.studio/hls/livepeer-playback-${input.shortRunId}/index.m3u8`},
+      ${input.idempotencyKey},
+      'integration-live-room'
+    )
+  `;
+}
+
 async function cleanupRun(
   sql: PostgresSql,
   input: {
@@ -971,6 +1282,7 @@ async function cleanupRun(
     seededContentId: string;
     seededEventId: string;
     seededConversationId: string;
+    seededLiveRoomId: string;
   }
 ): Promise<void> {
   await sql.begin(async (tx) => {
@@ -1031,6 +1343,19 @@ async function cleanupRun(
       where id = ${input.seededConversationId}
     `;
     const conversationIds = conversationRows.map((row) => row.id);
+    const liveRoomRows = userIds.length
+      ? await tx<{ id: string }[]>`
+          select id
+          from live_rooms
+          where creator_user_id in ${tx(userIds)}
+             or id = ${input.seededLiveRoomId}
+        `
+      : await tx<{ id: string }[]>`
+          select id
+          from live_rooms
+          where id = ${input.seededLiveRoomId}
+        `;
+    const liveRoomIds = liveRoomRows.map((row) => row.id);
     const ageIds = ageRows.map((row) => row.id);
     const walletIds = walletRows.map((row) => row.id);
     const paymentIntentRows = userIds.length
@@ -1038,12 +1363,12 @@ async function cleanupRun(
           select id
           from payment_intents
           where user_id in ${tx(userIds)}
-             or target_id in (${input.seededContentId}, ${input.seededEventId}, ${input.seededConversationId})
+             or target_id in (${input.seededContentId}, ${input.seededEventId}, ${input.seededConversationId}, ${input.seededLiveRoomId})
         `
       : await tx<{ id: string }[]>`
           select id
           from payment_intents
-          where target_id in (${input.seededContentId}, ${input.seededEventId}, ${input.seededConversationId})
+          where target_id in (${input.seededContentId}, ${input.seededEventId}, ${input.seededConversationId}, ${input.seededLiveRoomId})
         `;
     const paymentIntentIds = paymentIntentRows.map((row) => row.id);
 
@@ -1059,6 +1384,14 @@ async function cleanupRun(
         `;
         await tx`
           delete from paid_message_delivery_requests
+          where payment_intent_id in ${tx(paymentIntentIds)}
+        `;
+        await tx`
+          delete from live_passes
+          where payment_intent_id in ${tx(paymentIntentIds)}
+        `;
+        await tx`
+          delete from live_pass_purchase_requests
           where payment_intent_id in ${tx(paymentIntentIds)}
         `;
         await tx`
@@ -1113,12 +1446,24 @@ async function cleanupRun(
         where sender_user_id in ${tx(userIds)}
       `;
       await tx`
+        delete from live_chat_messages
+        where user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from live_passes
+        where user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from live_pass_purchase_requests
+        where buyer_user_id in ${tx(userIds)}
+      `;
+      await tx`
         delete from payment_settlement_attempts
         where payment_intent_id in (
           select id
           from payment_intents
           where user_id in ${tx(userIds)}
-             or target_id in (${input.seededContentId}, ${input.seededEventId}, ${input.seededConversationId})
+             or target_id in (${input.seededContentId}, ${input.seededEventId}, ${input.seededConversationId}, ${input.seededLiveRoomId})
         )
       `;
       await tx`
@@ -1127,13 +1472,13 @@ async function cleanupRun(
           select id
           from payment_intents
           where user_id in ${tx(userIds)}
-             or target_id in (${input.seededContentId}, ${input.seededEventId}, ${input.seededConversationId})
+             or target_id in (${input.seededContentId}, ${input.seededEventId}, ${input.seededConversationId}, ${input.seededLiveRoomId})
         )
       `;
       await tx`
         delete from payment_intents
         where user_id in ${tx(userIds)}
-           or target_id in (${input.seededContentId}, ${input.seededEventId}, ${input.seededConversationId})
+           or target_id in (${input.seededContentId}, ${input.seededEventId}, ${input.seededConversationId}, ${input.seededLiveRoomId})
       `;
       await tx`
         delete from wallet_link_challenges
@@ -1192,6 +1537,47 @@ async function cleanupRun(
       await tx`
         delete from conversations
         where id in ${tx(conversationIds)}
+      `;
+    }
+
+    if (liveRoomIds.length > 0) {
+      const liveRoomEntitlementRows = await tx<{ id: string }[]>`
+        select id
+        from entitlements
+        where target_type = 'live_room'
+          and target_id in ${tx(liveRoomIds)}
+      `;
+      const liveRoomEntitlementIds = liveRoomEntitlementRows.map((row) => row.id);
+
+      if (liveRoomEntitlementIds.length > 0) {
+        await tx`
+          delete from entitlement_events
+          where entitlement_id in ${tx(liveRoomEntitlementIds)}
+        `;
+        await tx`
+          delete from entitlements
+          where id in ${tx(liveRoomEntitlementIds)}
+        `;
+      }
+      await tx`
+        delete from live_chat_messages
+        where room_id in ${tx(liveRoomIds)}
+      `;
+      await tx`
+        delete from live_passes
+        where room_id in ${tx(liveRoomIds)}
+      `;
+      await tx`
+        delete from live_pass_purchase_requests
+        where room_id in ${tx(liveRoomIds)}
+      `;
+      await tx`
+        delete from audit_events
+        where subject_id in ${tx(liveRoomIds)}
+      `;
+      await tx`
+        delete from live_rooms
+        where id in ${tx(liveRoomIds)}
       `;
     }
 
