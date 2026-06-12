@@ -125,7 +125,7 @@ For the authenticated onboarding and access path, run:
 VEEL_ALLOW_REMOTE_API_INTEGRATION_TESTS=1 pnpm test:integration:api
 ```
 
-This command loads root `.env`, requires `VEEL_ENABLE_REAL_API_INTEGRATION_TESTS`, and runs only against the configured non-production Postgres/Supabase database. The current coverage links an external Solana wallet with a real Ed25519 signature, starts and completes age verification through a signed Sumsub-style webhook, completes profile readiness, creates content through the API, seeds only the prerequisite paid creator content, creates a backend-priced content unlock intent, and verifies persisted wallet/payment rows before deterministic cleanup.
+This command loads root `.env`, requires `VEEL_ENABLE_REAL_API_INTEGRATION_TESTS`, and runs only against the configured non-production Postgres/Supabase database. The current coverage links an external Solana wallet with a real Ed25519 signature, starts and completes age verification through a signed Sumsub-style webhook, completes profile readiness, creates content through the API, seeds only the prerequisite paid creator content, creates a backend-priced content unlock intent, submits confirmed backend settlement evidence through the payment route, verifies the content access projection becomes entitlement-backed `unlocked`, verifies the already-unlocked response, checks persisted wallet/payment/settlement/entitlement rows, and performs deterministic cleanup.
 
 Do not run this gate against production. For remote databases, the explicit `VEEL_ALLOW_REMOTE_API_INTEGRATION_TESTS=1` acknowledgement is required so accidental writes to the wrong project fail closed.
 

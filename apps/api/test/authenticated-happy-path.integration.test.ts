@@ -6,6 +6,10 @@ import { describe, expect, it, vi } from "vitest";
 import { buildApi } from "../src/app";
 import type { AgeProviderWaterfall } from "../src/modules/age/types";
 import type {
+  PaymentSettlementInput,
+  PaymentSettlementVerifier
+} from "../src/modules/payment/types";
+import type {
   SupabaseAuthVerifier,
   VerifiedSupabaseSession
 } from "../src/modules/session/types";
@@ -20,6 +24,8 @@ const creatorSupabaseUserId = "10000000-0000-4000-8000-000000000002";
 const authToken = "integration-buyer-token";
 const sumsubWebhookSecret = "sumsub-integration-webhook-secret";
 const treasuryWallet = "1".repeat(32);
+const validSolanaSignature =
+  "5Pj5fCupXLUePYn18JkY8SrRaWFiUctuDTRwvUy2MLgVFG1FsCeezrWwZsmxkL5YJQFmQpAcY7rc5pN6vrXJt7Qp";
 
 describeIntegration("authenticated API happy path against Postgres", () => {
   it("links wallet, verifies age, creates content, and opens a content unlock intent", async () => {
@@ -37,6 +43,16 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     const seededAccessRuleId = randomUUID();
     const providerReference = `sumsub-${runId}`;
     const ageProviderWaterfall = createIntegrationAgeWaterfall(providerReference);
+    const settlementInputs: PaymentSettlementInput[] = [];
+    const settlementVerifier: PaymentSettlementVerifier = {
+      async verifyNativeSolTransfer(input) {
+        settlementInputs.push(input);
+
+        return {
+          confirmed: true
+        };
+      }
+    };
 
     vi.stubEnv("DATABASE_URL", databaseUrl);
     vi.stubEnv("SUMSUB_WEBHOOK_SECRET", sumsubWebhookSecret);
@@ -45,6 +61,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     const app = await buildApi({
       authVerifier: integrationAuthVerifier,
       ageProviderWaterfall,
+      settlementVerifier,
       postgresClient: sql
     });
 
@@ -206,8 +223,81 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           state: "pending"
         }
       });
+      const unlock = unlockResponse.json<{
+        paymentIntent: {
+          id: string;
+          amountMinor: number;
+        };
+      }>();
 
-      const persistedRows = await sql<{ wallet_count: string; payment_intent_count: string }[]>`
+      const submissionResponse = await app.inject({
+        method: "POST",
+        url: `/v1/payments/intents/${unlock.paymentIntent.id}/submissions`,
+        headers: authenticatedHeaders(`payment-submission-${runId}`),
+        payload: {
+          signature: validSolanaSignature
+        }
+      });
+
+      expect(submissionResponse.statusCode, submissionResponse.body).toBe(202);
+      const confirmedIntentResponse = await app.inject({
+        method: "GET",
+        url: `/v1/payments/intents/${unlock.paymentIntent.id}`,
+        headers: authenticatedHeaders(`payment-intent-${runId}`)
+      });
+
+      expect(confirmedIntentResponse.statusCode, confirmedIntentResponse.body).toBe(200);
+      expect(confirmedIntentResponse.json()).toMatchObject({
+        id: unlock.paymentIntent.id,
+        state: "confirmed"
+      });
+      expect(settlementInputs).toHaveLength(1);
+      expect(settlementInputs[0]).toEqual(
+        expect.objectContaining({
+          signature: validSolanaSignature,
+          treasuryWallet,
+          amountMinor: unlock.paymentIntent.amountMinor
+        })
+      );
+      expect(settlementInputs[0]?.referenceAddress).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
+
+      const unlockedContentResponse = await app.inject({
+        method: "GET",
+        url: `/v1/content/${seededContentId}`,
+        headers: authenticatedHeaders(`content-detail-${runId}`)
+      });
+
+      expect(unlockedContentResponse.statusCode, unlockedContentResponse.body).toBe(200);
+      expect(unlockedContentResponse.json()).toMatchObject({
+        id: seededContentId,
+        accessState: "unlocked"
+      });
+
+      const alreadyUnlockedResponse = await app.inject({
+        method: "POST",
+        url: `/v1/content/${seededContentId}/unlock-intents`,
+        headers: authenticatedHeaders(`content-already-unlocked-${runId}`)
+      });
+
+      expect(alreadyUnlockedResponse.statusCode, alreadyUnlockedResponse.body).toBe(201);
+      expect(alreadyUnlockedResponse.json()).toMatchObject({
+        state: "already_unlocked",
+        contentId: seededContentId,
+        entitlement: {
+          targetId: seededContentId,
+          productType: "content_unlock",
+          state: "active"
+        }
+      });
+
+      const persistedRows = await sql<{
+        wallet_count: string;
+        payment_intent_count: string;
+        wallet_transaction_count: string;
+        settlement_attempt_count: string;
+        entitlement_count: string;
+        entitlement_event_count: string;
+      }[]>`
         select
           (
             select count(*)
@@ -222,12 +312,45 @@ describeIntegration("authenticated API happy path against Postgres", () => {
             where u.supabase_user_id = ${buyerSupabaseUserId}
               and pi.target_id = ${seededContentId}
               and pi.product_type = 'content_unlock'
-          ) as payment_intent_count
+          ) as payment_intent_count,
+          (
+            select count(*)
+            from wallet_transaction_records wtr
+            join users u on u.id = wtr.user_id
+            where u.supabase_user_id = ${buyerSupabaseUserId}
+              and wtr.payment_intent_id = ${unlock.paymentIntent.id}
+              and wtr.state = 'confirmed'
+          ) as wallet_transaction_count,
+          (
+            select count(*)
+            from payment_settlement_attempts psa
+            where psa.payment_intent_id = ${unlock.paymentIntent.id}
+              and psa.state = 'confirmed'
+          ) as settlement_attempt_count,
+          (
+            select count(*)
+            from entitlements e
+            join users u on u.id = e.user_id
+            where u.supabase_user_id = ${buyerSupabaseUserId}
+              and e.target_id = ${seededContentId}
+              and e.product_type = 'content_unlock'
+              and e.state = 'active'
+          ) as entitlement_count,
+          (
+            select count(*)
+            from entitlement_events ee
+            where ee.payment_intent_id = ${unlock.paymentIntent.id}
+              and ee.action = 'granted'
+          ) as entitlement_event_count
       `;
 
       expect(persistedRows[0]).toEqual({
         wallet_count: "1",
-        payment_intent_count: "1"
+        payment_intent_count: "1",
+        wallet_transaction_count: "1",
+        settlement_attempt_count: "1",
+        entitlement_count: "1",
+        entitlement_event_count: "1"
       });
     } finally {
       await cleanupRun(sql, {
@@ -463,8 +586,47 @@ async function cleanupRun(
     const contentIds = contentRows.map((row) => row.id);
     const ageIds = ageRows.map((row) => row.id);
     const walletIds = walletRows.map((row) => row.id);
+    const paymentIntentRows = userIds.length
+      ? await tx<{ id: string }[]>`
+          select id
+          from payment_intents
+          where user_id in ${tx(userIds)}
+             or target_id = ${input.seededContentId}
+        `
+      : await tx<{ id: string }[]>`
+          select id
+          from payment_intents
+          where target_id = ${input.seededContentId}
+        `;
+    const paymentIntentIds = paymentIntentRows.map((row) => row.id);
 
     if (userIds.length > 0) {
+      if (paymentIntentIds.length > 0) {
+        await tx`
+          delete from wallet_transaction_records
+          where payment_intent_id in ${tx(paymentIntentIds)}
+        `;
+        await tx`
+          delete from entitlement_events
+          where payment_intent_id in ${tx(paymentIntentIds)}
+        `;
+        await tx`
+          delete from entitlements
+          where payment_intent_id in ${tx(paymentIntentIds)}
+        `;
+      }
+      await tx`
+        delete from wallet_transaction_records
+        where user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from entitlement_events
+        where actor_user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from entitlements
+        where user_id in ${tx(userIds)}
+      `;
       await tx`
         delete from payment_settlement_attempts
         where payment_intent_id in (
@@ -503,6 +665,24 @@ async function cleanupRun(
     }
 
     if (contentIds.length > 0) {
+      const contentEntitlementRows = await tx<{ id: string }[]>`
+        select id
+        from entitlements
+        where target_type = 'content'
+          and target_id in ${tx(contentIds)}
+      `;
+      const contentEntitlementIds = contentEntitlementRows.map((row) => row.id);
+
+      if (contentEntitlementIds.length > 0) {
+        await tx`
+          delete from entitlement_events
+          where entitlement_id in ${tx(contentEntitlementIds)}
+        `;
+        await tx`
+          delete from entitlements
+          where id in ${tx(contentEntitlementIds)}
+        `;
+      }
       await tx`
         delete from content_access_rules
         where content_item_id in ${tx(contentIds)}
