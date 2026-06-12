@@ -13,7 +13,16 @@ import type {
   SupabaseAuthVerifier,
   VerifiedSupabaseSession
 } from "../src/modules/session/types";
+import type { SubscriptionAuthorizationVerifier } from "../src/modules/subscription/types";
 import { createPostgresClient, type PostgresSql } from "../src/shared/postgres";
+import {
+  createPostgresProviderEventReplayRepository,
+  processProviderEventReplays
+} from "../../worker/src/provider-event-replay";
+import {
+  createPostgresSubscriptionCollectionRepository,
+  processDueSubscriptionCollections
+} from "../../worker/src/subscription-collections";
 
 const enableRealApiIntegration =
   process.env.VEEL_ENABLE_REAL_API_INTEGRATION_TESTS === "1" ||
@@ -24,14 +33,20 @@ const creatorSupabaseUserId = "10000000-0000-4000-8000-000000000002";
 const authToken = "integration-buyer-token";
 const sumsubWebhookSecret = "sumsub-integration-webhook-secret";
 const treasuryWallet = "1".repeat(32);
+const subscriptionCollectorWallet = "1".repeat(32);
+const subscriptionTokenMint = "3".repeat(32);
+const subscriptionAuthorityAddress = "4".repeat(32);
+const subscriptionDelegationAddress = "5".repeat(32);
+const subscriptionTokenAccount = "6".repeat(32);
 const validSolanaSignature =
   "5Pj5fCupXLUePYn18JkY8SrRaWFiUctuDTRwvUy2MLgVFG1FsCeezrWwZsmxkL5YJQFmQpAcY7rc5pN6vrXJt7Qp";
 const validEventAccessSolanaSignature = deterministicBase58Signature(41);
 const validPaidMessageSolanaSignature = deterministicBase58Signature(83);
 const validLivePassSolanaSignature = deterministicBase58Signature(127);
+const validSubscriptionAuthorizationSignature = deterministicBase58Signature(149);
 
 describeIntegration("authenticated API happy path against Postgres", () => {
-  it("links wallet, verifies age, creates content, unlocks content, buys Event Access, sends a paid message, and buys a live pass", async () => {
+  it("links wallet, verifies age, creates content, unlocks content, buys Event Access, sends a paid message, buys a live pass, and verifies subscriptions", async () => {
     const databaseUrl = integrationDatabaseUrl();
     assertIntegrationDatabaseIsAllowed(databaseUrl);
 
@@ -48,6 +63,9 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     const seededAccessPassTypeId = randomUUID();
     const seededConversationId = randomUUID();
     const seededLiveRoomId = randomUUID();
+    const seededSubscriptionPlanId = `integration-platform-${shortRunId}`;
+    const seededProviderEventId = randomUUID();
+    const seededProviderReplayRequestId = randomUUID();
     const providerReference = `sumsub-${runId}`;
     const ageProviderWaterfall = createIntegrationAgeWaterfall(providerReference);
     const settlementInputs: PaymentSettlementInput[] = [];
@@ -64,11 +82,26 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     vi.stubEnv("DATABASE_URL", databaseUrl);
     vi.stubEnv("SUMSUB_WEBHOOK_SECRET", sumsubWebhookSecret);
     vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    vi.stubEnv("SOLANA_SUBSCRIPTION_COLLECTOR_WALLET", subscriptionCollectorWallet);
+
+    const subscriptionVerificationInputs: Parameters<
+      SubscriptionAuthorizationVerifier["verifyAuthorization"]
+    >[0][] = [];
+    const subscriptionAuthorizationVerifier: SubscriptionAuthorizationVerifier = {
+      async verifyAuthorization(input) {
+        subscriptionVerificationInputs.push(input);
+
+        return {
+          verified: true
+        };
+      }
+    };
 
     const app = await buildApi({
       authVerifier: integrationAuthVerifier,
       ageProviderWaterfall,
       settlementVerifier,
+      subscriptionAuthorizationVerifier,
       liveProvider: {
         isConfigured: () => true,
         async createRoom() {
@@ -99,7 +132,10 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         seededContentId,
         seededEventId,
         seededConversationId,
-        seededLiveRoomId
+        seededLiveRoomId,
+        seededSubscriptionPlanId,
+        seededProviderEventId,
+        seededProviderReplayRequestId
       });
       await seedCreatorPaidContent(sql, {
         creatorUserId: seededCreatorUserId,
@@ -120,6 +156,9 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         liveRoomId: seededLiveRoomId,
         shortRunId,
         idempotencyKey: `live-room-${runId}`
+      });
+      await seedPlatformSubscriptionPlan(sql, {
+        planId: seededSubscriptionPlanId
       });
 
       const walletKeypair = nacl.sign.keyPair();
@@ -928,6 +967,326 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         audit_event_count: "1",
         chat_message_count: "1"
       });
+
+      const subscriptionPlansResponse = await app.inject({
+        method: "GET",
+        url: "/v1/subscriptions/plans",
+        headers: authenticatedHeaders(`subscription-plans-${runId}`)
+      });
+
+      expect(subscriptionPlansResponse.statusCode, subscriptionPlansResponse.body).toBe(200);
+      expect(subscriptionPlansResponse.json()).toMatchObject({
+        items: expect.arrayContaining([
+          expect.objectContaining({
+            id: seededSubscriptionPlanId,
+            scope: "platform",
+            amountMinor: 19000000,
+            currency: "USDC",
+            periodDays: 30,
+            billingMode: "delegated_solana_subscription",
+            tokenMint: subscriptionTokenMint,
+            tokenProgram: "spl_token"
+          })
+        ])
+      });
+
+      const subscriptionIntentResponse = await app.inject({
+        method: "POST",
+        url: "/v1/subscriptions/intents",
+        headers: authenticatedHeaders(`subscription-intent-${runId}`),
+        payload: {
+          planId: seededSubscriptionPlanId
+        }
+      });
+
+      expect(subscriptionIntentResponse.statusCode, subscriptionIntentResponse.body).toBe(201);
+      expect(subscriptionIntentResponse.json()).toMatchObject({
+        subscription: {
+          scope: "platform",
+          planId: seededSubscriptionPlanId,
+          state: "authorization_pending",
+          renewalMode: "delegated_solana_subscription"
+        },
+        authorizationMode: "delegated_solana_subscription",
+        providerReadiness: {
+          activeMode: "delegated_solana_subscription"
+        }
+      });
+      const subscriptionIntent = subscriptionIntentResponse.json<{
+        id: string;
+        setupReference: string;
+        subscription: {
+          id: string;
+        };
+      }>();
+
+      const subscriptionAuthorizationResponse = await app.inject({
+        method: "POST",
+        url: `/v1/subscriptions/authorizations/${subscriptionIntent.id}/submissions`,
+        headers: authenticatedHeaders(`subscription-authorization-${runId}`),
+        payload: {
+          signature: validSubscriptionAuthorizationSignature,
+          authorityAddress: subscriptionAuthorityAddress,
+          delegationAddress: subscriptionDelegationAddress,
+          subscriberTokenAccount: subscriptionTokenAccount
+        }
+      });
+
+      expect(subscriptionAuthorizationResponse.statusCode, subscriptionAuthorizationResponse.body).toBe(202);
+      expect(subscriptionAuthorizationResponse.json()).toMatchObject({
+        id: subscriptionIntent.subscription.id,
+        scope: "platform",
+        planId: seededSubscriptionPlanId,
+        state: "active",
+        renewalMode: "delegated_solana_subscription",
+        authorityAddress: subscriptionAuthorityAddress,
+        delegationAddress: subscriptionDelegationAddress
+      });
+      expect(subscriptionVerificationInputs).toEqual([
+        expect.objectContaining({
+          signature: validSubscriptionAuthorizationSignature,
+          setupReference: subscriptionIntent.setupReference,
+          authorityAddress: subscriptionAuthorityAddress,
+          delegationAddress: subscriptionDelegationAddress,
+          subscriberTokenAccount: subscriptionTokenAccount,
+          collectorAddress: subscriptionCollectorWallet,
+          tokenMint: subscriptionTokenMint,
+          tokenProgram: "spl_token",
+          amountMinor: 19000000,
+          periodDays: 30
+        })
+      ]);
+
+      const subscriptionsResponse = await app.inject({
+        method: "GET",
+        url: "/v1/subscriptions",
+        headers: authenticatedHeaders(`subscriptions-list-${runId}`)
+      });
+
+      expect(subscriptionsResponse.statusCode, subscriptionsResponse.body).toBe(200);
+      expect(subscriptionsResponse.json()).toMatchObject({
+        items: [
+          {
+            id: subscriptionIntent.subscription.id,
+            state: "active",
+            planId: seededSubscriptionPlanId,
+            authorityAddress: subscriptionAuthorityAddress,
+            delegationAddress: subscriptionDelegationAddress
+          }
+        ]
+      });
+
+      const subscriptionRows = await sql<{
+        subscription_count: string;
+        authorization_intent_count: string;
+        initial_collection_count: string;
+        authorization_event_count: string;
+      }[]>`
+        select
+          (
+            select count(*)
+            from subscriptions s
+            join users u on u.id = s.subscriber_user_id
+            where u.supabase_user_id = ${buyerSupabaseUserId}
+              and s.id = ${subscriptionIntent.subscription.id}
+              and s.plan_id = ${seededSubscriptionPlanId}
+              and s.state = 'active'
+              and s.authority_address = ${subscriptionAuthorityAddress}
+              and s.delegation_address = ${subscriptionDelegationAddress}
+              and s.subscriber_token_account = ${subscriptionTokenAccount}
+              and s.collector_address = ${subscriptionCollectorWallet}
+              and s.next_collection_at is not null
+          ) as subscription_count,
+          (
+            select count(*)
+            from subscription_authorization_intents sai
+            where sai.id = ${subscriptionIntent.id}
+              and sai.subscription_id = ${subscriptionIntent.subscription.id}
+              and sai.state = 'verified'
+              and sai.verified_signature = ${validSubscriptionAuthorizationSignature}
+          ) as authorization_intent_count,
+          (
+            select count(*)
+            from subscription_collections sc
+            where sc.subscription_id = ${subscriptionIntent.subscription.id}
+              and sc.state = 'confirmed'
+          ) as initial_collection_count,
+          (
+            select count(*)
+            from subscription_events se
+            where se.subscription_id = ${subscriptionIntent.subscription.id}
+              and se.authorization_intent_id = ${subscriptionIntent.id}
+              and se.action in (
+                'subscription.authorization_intent_created',
+                'subscription.authorization_verified'
+              )
+          ) as authorization_event_count
+      `;
+
+      expect(subscriptionRows[0]).toEqual({
+        subscription_count: "1",
+        authorization_intent_count: "1",
+        initial_collection_count: "1",
+        authorization_event_count: "2"
+      });
+
+      await sql`
+        update subscriptions
+        set
+          current_period_ends_at = now() - interval '1 second',
+          next_collection_at = now() - interval '1 second'
+        where id = ${subscriptionIntent.subscription.id}
+      `;
+
+      const collectionRepository = createPostgresSubscriptionCollectionRepository(databaseUrl);
+      try {
+        const collectionResult = await processDueSubscriptionCollections({
+          repository: collectionRepository,
+          now: new Date(),
+          limit: 5,
+          provider: {
+            async collect(input) {
+              expect(input).toEqual(
+                expect.objectContaining({
+                  subscriptionId: subscriptionIntent.subscription.id,
+                  planId: seededSubscriptionPlanId,
+                  amountMinor: 19000000,
+                  currency: "USDC",
+                  authorityAddress: subscriptionAuthorityAddress,
+                  delegationAddress: subscriptionDelegationAddress,
+                  subscriberTokenAccount: subscriptionTokenAccount,
+                  collectorAddress: subscriptionCollectorWallet,
+                  tokenMint: subscriptionTokenMint,
+                  tokenProgram: "spl_token"
+                })
+              );
+
+              return {
+                state: "confirmed",
+                collectionSignature: deterministicBase58Signature(171)
+              };
+            }
+          }
+        });
+
+        expect(collectionResult).toEqual({
+          expired: 0,
+          leased: 1,
+          confirmed: 1,
+          failed: 0,
+          revoked: 0
+        });
+      } finally {
+        await collectionRepository.close?.();
+      }
+
+      const subscriptionCollectionRows = await sql<{
+        confirmed_collection_count: string;
+        submitted_event_count: string;
+        confirmed_event_count: string;
+        active_subscription_count: string;
+      }[]>`
+        select
+          (
+            select count(*)
+            from subscription_collections sc
+            where sc.subscription_id = ${subscriptionIntent.subscription.id}
+              and sc.state = 'confirmed'
+              and sc.collection_signature = ${deterministicBase58Signature(171)}
+              and sc.confirmed_at is not null
+          ) as confirmed_collection_count,
+          (
+            select count(*)
+            from subscription_events se
+            where se.subscription_id = ${subscriptionIntent.subscription.id}
+              and se.action = 'subscription.collection_submitted'
+          ) as submitted_event_count,
+          (
+            select count(*)
+            from subscription_events se
+            where se.subscription_id = ${subscriptionIntent.subscription.id}
+              and se.action = 'subscription.collection_confirmed'
+          ) as confirmed_event_count,
+          (
+            select count(*)
+            from subscriptions s
+            where s.id = ${subscriptionIntent.subscription.id}
+              and s.state = 'active'
+              and s.next_collection_at > now()
+          ) as active_subscription_count
+      `;
+
+      expect(subscriptionCollectionRows[0]).toEqual({
+        confirmed_collection_count: "1",
+        submitted_event_count: "1",
+        confirmed_event_count: "1",
+        active_subscription_count: "1"
+      });
+
+      await seedProviderReplayRequest(sql, {
+        providerEventId: seededProviderEventId,
+        replayRequestId: seededProviderReplayRequestId,
+        runId
+      });
+
+      const replayRepository = createPostgresProviderEventReplayRepository(databaseUrl);
+      try {
+        const replayResult = await processProviderEventReplays({
+          repository: replayRepository,
+          now: new Date(),
+          limit: 5,
+          adapter: {
+            async replay(input) {
+              expect(input).toEqual({
+                replayRequestId: seededProviderReplayRequestId,
+                providerEventId: seededProviderEventId,
+                provider: "solana_indexer",
+                eventType: "payment.confirmed"
+              });
+
+              return {
+                state: "replayed"
+              };
+            }
+          }
+        });
+
+        expect(replayResult).toEqual({
+          leased: 1,
+          replayed: 1,
+          failed: 0
+        });
+      } finally {
+        await replayRepository.close?.();
+      }
+
+      const replayRows = await sql<{
+        replay_request_count: string;
+        provider_event_count: string;
+      }[]>`
+        select
+          (
+            select count(*)
+            from provider_event_replay_requests perr
+            where perr.id = ${seededProviderReplayRequestId}
+              and perr.provider_event_id = ${seededProviderEventId}
+              and perr.state = 'replayed'
+              and perr.attempt_count = 1
+              and perr.processed_at is not null
+          ) as replay_request_count,
+          (
+            select count(*)
+            from provider_events pe
+            where pe.id = ${seededProviderEventId}
+              and pe.normalized_state = 'replayed'
+              and pe.processed_at is not null
+          ) as provider_event_count
+      `;
+
+      expect(replayRows[0]).toEqual({
+        replay_request_count: "1",
+        provider_event_count: "1"
+      });
     } finally {
       await cleanupRun(sql, {
         buyerHandle,
@@ -938,7 +1297,10 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         seededContentId,
         seededEventId,
         seededConversationId,
-        seededLiveRoomId
+        seededLiveRoomId,
+        seededSubscriptionPlanId,
+        seededProviderEventId,
+        seededProviderReplayRequestId
       });
       await app.close();
       vi.unstubAllEnvs();
@@ -1271,6 +1633,84 @@ async function seedCreatorLiveRoom(
   `;
 }
 
+async function seedPlatformSubscriptionPlan(
+  sql: PostgresSql,
+  input: {
+    planId: string;
+  }
+): Promise<void> {
+  await sql`
+    insert into subscription_plans (
+      id,
+      scope,
+      label,
+      amount_minor,
+      currency,
+      period_days,
+      billing_mode,
+      provider_state,
+      token_mint,
+      token_program,
+      state
+    )
+    values (
+      ${input.planId},
+      'platform',
+      'Integration Platform',
+      19000000,
+      'USDC',
+      30,
+      'delegated_solana_subscription',
+      'staging_required',
+      ${subscriptionTokenMint},
+      'spl_token',
+      'active'
+    )
+  `;
+}
+
+async function seedProviderReplayRequest(
+  sql: PostgresSql,
+  input: {
+    providerEventId: string;
+    replayRequestId: string;
+    runId: string;
+  }
+): Promise<void> {
+  await sql`
+    insert into provider_events (
+      id,
+      provider,
+      provider_event_id,
+      event_type,
+      normalized_state
+    )
+    values (
+      ${input.providerEventId},
+      'solana_indexer',
+      ${`integration-provider-event-${input.runId}`},
+      'payment.confirmed',
+      'failed'
+    )
+  `;
+  await sql`
+    insert into provider_event_replay_requests (
+      id,
+      provider_event_id,
+      idempotency_key,
+      reason,
+      state
+    )
+    values (
+      ${input.replayRequestId},
+      ${input.providerEventId},
+      ${`provider-replay-${input.runId}`},
+      'integration replay coverage',
+      'queued'
+    )
+  `;
+}
+
 async function cleanupRun(
   sql: PostgresSql,
   input: {
@@ -1283,6 +1723,9 @@ async function cleanupRun(
     seededEventId: string;
     seededConversationId: string;
     seededLiveRoomId: string;
+    seededSubscriptionPlanId: string;
+    seededProviderEventId: string;
+    seededProviderReplayRequestId: string;
   }
 ): Promise<void> {
   await sql.begin(async (tx) => {
@@ -1356,6 +1799,20 @@ async function cleanupRun(
           where id = ${input.seededLiveRoomId}
         `;
     const liveRoomIds = liveRoomRows.map((row) => row.id);
+    const subscriptionRows = userIds.length
+      ? await tx<{ id: string }[]>`
+          select id
+          from subscriptions
+          where subscriber_user_id in ${tx(userIds)}
+             or creator_user_id in ${tx(userIds)}
+             or plan_id = ${input.seededSubscriptionPlanId}
+        `
+      : await tx<{ id: string }[]>`
+          select id
+          from subscriptions
+          where plan_id = ${input.seededSubscriptionPlanId}
+        `;
+    const subscriptionIds = subscriptionRows.map((row) => row.id);
     const ageIds = ageRows.map((row) => row.id);
     const walletIds = walletRows.map((row) => row.id);
     const paymentIntentRows = userIds.length
@@ -1373,6 +1830,24 @@ async function cleanupRun(
     const paymentIntentIds = paymentIntentRows.map((row) => row.id);
 
     if (userIds.length > 0) {
+      if (subscriptionIds.length > 0) {
+        await tx`
+          delete from subscription_events
+          where subscription_id in ${tx(subscriptionIds)}
+        `;
+        await tx`
+          delete from subscription_collections
+          where subscription_id in ${tx(subscriptionIds)}
+        `;
+        await tx`
+          delete from subscription_authorization_intents
+          where subscription_id in ${tx(subscriptionIds)}
+        `;
+        await tx`
+          delete from subscriptions
+          where id in ${tx(subscriptionIds)}
+        `;
+      }
       if (paymentIntentIds.length > 0) {
         await tx`
           delete from event_access_passes
@@ -1493,6 +1968,40 @@ async function cleanupRun(
         where actor_user_id in ${tx(userIds)}
       `;
     }
+
+    await tx`
+      delete from provider_event_replay_requests
+      where id = ${input.seededProviderReplayRequestId}
+         or provider_event_id = ${input.seededProviderEventId}
+    `;
+    await tx`
+      delete from provider_events
+      where id = ${input.seededProviderEventId}
+    `;
+
+    if (subscriptionIds.length > 0) {
+      await tx`
+        delete from subscription_events
+        where subscription_id in ${tx(subscriptionIds)}
+      `;
+      await tx`
+        delete from subscription_collections
+        where subscription_id in ${tx(subscriptionIds)}
+      `;
+      await tx`
+        delete from subscription_authorization_intents
+        where subscription_id in ${tx(subscriptionIds)}
+      `;
+      await tx`
+        delete from subscriptions
+        where id in ${tx(subscriptionIds)}
+      `;
+    }
+
+    await tx`
+      delete from subscription_plans
+      where id = ${input.seededSubscriptionPlanId}
+    `;
 
     if (eventIds.length > 0) {
       await tx`
