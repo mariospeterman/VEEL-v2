@@ -210,6 +210,17 @@ describe("database migrations", () => {
     expect(sql).not.toMatch(/raw_payload|private_key|seed_phrase|mnemonic|service_role_key|api_key/i);
   });
 
+  it("adds transactional payment confirmation email delivery metadata without custody state", () => {
+    const sql = readMigration("0060_payment_confirmation_email_delivery.sql");
+
+    expect(sql).toContain("payment_confirmation_deliveries");
+    expect(sql).toContain("'processing'");
+    expect(sql).toContain("attempt_count integer not null default 0");
+    expect(sql).toContain("provider_message_id text");
+    expect(sql).toContain("payment_confirmation_deliveries_provider_message_id_idx");
+    expect(sql).not.toMatch(/creator_balance|withdraw|payout_queue|escrow|private_key|service_role/i);
+  });
+
   it("covers AI/MCP composite foreign keys for Supabase performance advisors", () => {
     const sql = readMigration("0026_ai_mcp_fk_indexes.sql");
 

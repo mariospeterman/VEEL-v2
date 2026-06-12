@@ -3004,6 +3004,7 @@ describe("buildApi", () => {
         YOTI_LAUNCH_BASE_URL: "https://age.yoti.com",
         VERIFF_API_BASE_URL: "https://stationapi.veriff.com",
         PERSONA_API_BASE_URL: "https://api.withpersona.com",
+        TRANSACTIONAL_EMAIL_PROVIDER: "disabled",
         BUNNY_STREAM_API_KEY: "bunny-secret",
         BUNNY_STREAM_LIBRARY_ID: "library-id",
         BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS: 900
@@ -3067,6 +3068,7 @@ describe("buildApi", () => {
       YOTI_LAUNCH_BASE_URL: "https://age.yoti.com",
       VERIFF_API_BASE_URL: "https://stationapi.veriff.com",
       PERSONA_API_BASE_URL: "https://api.withpersona.com",
+      TRANSACTIONAL_EMAIL_PROVIDER: "disabled",
       BUNNY_STREAM_API_KEY: "bunny-secret",
       BUNNY_STREAM_LIBRARY_ID: "759",
       BUNNY_STREAM_EMBED_TOKEN_KEY: "embed-token-secret",

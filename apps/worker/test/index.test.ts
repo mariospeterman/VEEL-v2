@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildWorkerRuntime,
   runNotificationDeliveryTick,
+  runPaymentConfirmationEmailTick,
   runProviderEventReplayTick,
   runSubscriptionCollectionTick
 } from "../src/index";
@@ -12,6 +13,16 @@ import type {
   NotificationDeliveryRepository
 } from "../src/notification-delivery";
 import { createWebPushNotificationDeliveryProvider } from "../src/notification-delivery";
+import type {
+  PaymentConfirmationEmailOutcome,
+  PaymentConfirmationEmailProvider,
+  PaymentConfirmationEmailRepository,
+  QueuedPaymentConfirmationEmail
+} from "../src/payment-confirmation-email";
+import {
+  createResendPaymentConfirmationEmailProvider,
+  createUnconfiguredPaymentConfirmationEmailProvider
+} from "../src/payment-confirmation-email";
 import type {
   ProviderEventReplayAdapter,
   ProviderEventReplayOutcome,
@@ -47,6 +58,7 @@ describe("buildWorkerRuntime", () => {
         "subscription-authorizations",
         "subscription-collections",
         "notification-deliveries",
+        "payment-confirmation-emails",
         "provider-event-replays"
       ],
       schedules: [
@@ -59,6 +71,11 @@ describe("buildWorkerRuntime", () => {
           name: "notification-deliveries",
           cadence: "every_minute",
           sourceIndex: "notification_delivery_attempts_state_next_idx"
+        },
+        {
+          name: "payment-confirmation-emails",
+          cadence: "every_minute",
+          sourceIndex: "payment_confirmation_deliveries_state_created_idx"
         },
         {
           name: "provider-event-replays",
@@ -215,6 +232,119 @@ describe("createWebPushNotificationDeliveryProvider", () => {
       state: "revoked",
       failureCode: "push_subscription_gone"
     });
+  });
+});
+
+describe("runPaymentConfirmationEmailTick", () => {
+  it("sends queued durable payment confirmations through the transactional provider", async () => {
+    const repository = fakePaymentConfirmationEmailRepository({
+      deliveries: [paymentConfirmationEmailFixture()]
+    });
+    const provider = fakePaymentConfirmationEmailProvider({
+      state: "sent",
+      providerMessageId: "resend-message-1"
+    });
+
+    const result = await runPaymentConfirmationEmailTick({
+      repository,
+      provider,
+      now: new Date("2026-06-06T00:00:00.000Z")
+    });
+
+    expect(result).toEqual({
+      leased: 1,
+      sent: 1,
+      providerNotConfigured: 0,
+      failed: 0
+    });
+    expect(repository.includeProviderNotConfiguredFlags).toEqual([true]);
+    expect(provider.inputs[0]).toMatchObject({
+      deliveryId: "confirmation-delivery-1",
+      to: "buyer@example.test",
+      receiptNumber: "VEEL-0000000000004000"
+    });
+    expect(repository.outcomes[0]).toMatchObject({
+      deliveryId: "confirmation-delivery-1",
+      outcome: {
+        state: "sent",
+        providerMessageId: "resend-message-1"
+      }
+    });
+  });
+
+  it("marks queued confirmations provider-not-configured when transactional email is disabled", async () => {
+    const repository = fakePaymentConfirmationEmailRepository({
+      deliveries: [paymentConfirmationEmailFixture()]
+    });
+
+    const result = await runPaymentConfirmationEmailTick({
+      repository,
+      provider: createUnconfiguredPaymentConfirmationEmailProvider(),
+      now: new Date("2026-06-06T00:00:00.000Z")
+    });
+
+    expect(result).toEqual({
+      leased: 1,
+      sent: 0,
+      providerNotConfigured: 1,
+      failed: 0
+    });
+    expect(repository.includeProviderNotConfiguredFlags).toEqual([false]);
+    expect(repository.outcomes[0]).toMatchObject({
+      outcome: {
+        state: "provider_not_configured",
+        failureCode: "transactional_email_provider_not_configured"
+      }
+    });
+  });
+
+  it("allows configured providers to recover previous provider-not-configured confirmations", async () => {
+    const repository = fakePaymentConfirmationEmailRepository({
+      deliveries: [paymentConfirmationEmailFixture()]
+    });
+    const provider = fakePaymentConfirmationEmailProvider({
+      state: "sent",
+      providerMessageId: "resend-message-2"
+    });
+
+    await runPaymentConfirmationEmailTick({
+      repository,
+      provider,
+      now: new Date("2026-06-06T00:00:00.000Z")
+    });
+
+    expect(repository.includeProviderNotConfiguredFlags).toEqual([true]);
+  });
+});
+
+describe("createResendPaymentConfirmationEmailProvider", () => {
+  it("sends the durable receipt and waiver facts to Resend with a stable idempotency key", async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ id: "resend-message-1" }), { status: 200 }));
+    const provider = createResendPaymentConfirmationEmailProvider({
+      apiKey: "resend-api-key",
+      from: "Veel Receipts <receipts@example.test>",
+      replyTo: "support@example.test",
+      webUrl: "https://veel.example.test",
+      fetchImpl
+    });
+
+    await expect(provider.send(paymentConfirmationEmailFixture())).resolves.toEqual({
+      state: "sent",
+      providerMessageId: "resend-message-1"
+    });
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://api.resend.com/emails",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          authorization: "Bearer resend-api-key",
+          "idempotency-key": "payment-confirmation:confirmation-delivery-1"
+        })
+      })
+    );
+    const requestInit = fetchImpl.mock.calls[0]?.at(1);
+    expect(JSON.stringify(requestInit)).not.toMatch(/privateKey|serviceRole|rawPayload/i);
   });
 });
 
@@ -375,6 +505,46 @@ describe("runProviderEventReplayTick", () => {
       }
     });
   });
+
+  it("records adapter exceptions as failed replay outcomes and keeps processing the queue", async () => {
+    const repository = fakeProviderEventReplayRepository({
+      requests: [
+        providerEventReplayFixture({ replayRequestId: "replay-request-1" }),
+        providerEventReplayFixture({ replayRequestId: "replay-request-2" })
+      ]
+    });
+
+    const result = await runProviderEventReplayTick({
+      repository,
+      adapter: {
+        async replay(input) {
+          if (input.replayRequestId === "replay-request-1") {
+            throw new Error("temporary provider outage");
+          }
+
+          return { state: "replayed" };
+        }
+      },
+      now: new Date("2026-06-06T00:00:00.000Z")
+    });
+
+    expect(result).toEqual({
+      leased: 2,
+      replayed: 1,
+      failed: 1
+    });
+    expect(repository.outcomes[0]).toMatchObject({
+      replayRequestId: "replay-request-1",
+      outcome: {
+        state: "failed",
+        failureCode: "provider_event_replay_exception:temporary provider outage"
+      }
+    });
+    expect(repository.outcomes[1]).toMatchObject({
+      replayRequestId: "replay-request-2",
+      outcome: { state: "replayed" }
+    });
+  });
 });
 
 function dueCollectionFixture(
@@ -438,6 +608,71 @@ function fakeSubscriptionCollectionRepository(input: {
       return input.dueCollections ?? [];
     },
     async recordCollectionOutcome(outcome) {
+      outcomes.push(outcome);
+    }
+  };
+}
+
+function paymentConfirmationEmailFixture(
+  overrides: Partial<QueuedPaymentConfirmationEmail> = {}
+): QueuedPaymentConfirmationEmail {
+  return {
+    deliveryId: overrides.deliveryId ?? "confirmation-delivery-1",
+    paymentIntentId: overrides.paymentIntentId ?? "00000000-0000-4000-8000-000000000050",
+    receiptId: overrides.receiptId ?? "00000000-0000-4000-8000-000000000051",
+    userId: overrides.userId ?? "buyer-1",
+    to: overrides.to ?? "buyer@example.test",
+    receiptNumber: overrides.receiptNumber ?? "VEEL-0000000000004000",
+    productType: overrides.productType ?? "content_unlock",
+    amountMinor: overrides.amountMinor ?? 25000000,
+    currency: overrides.currency ?? "SOL",
+    termsVersion: overrides.termsVersion ?? "veel-terms-v1",
+    withdrawalWaiverVersion: overrides.withdrawalWaiverVersion ?? "instant-digital-access-v1",
+    withdrawalWaiverAcceptedAt:
+      overrides.withdrawalWaiverAcceptedAt ?? "2026-06-06T00:00:00.000Z"
+  };
+}
+
+function fakePaymentConfirmationEmailProvider(
+  outcome: PaymentConfirmationEmailOutcome
+): PaymentConfirmationEmailProvider & { inputs: QueuedPaymentConfirmationEmail[] } {
+  const inputs: QueuedPaymentConfirmationEmail[] = [];
+
+  return {
+    isConfigured: true,
+    inputs,
+    async send(input) {
+      inputs.push(input);
+
+      return outcome;
+    }
+  };
+}
+
+function fakePaymentConfirmationEmailRepository(input: {
+  deliveries?: QueuedPaymentConfirmationEmail[];
+}): PaymentConfirmationEmailRepository & {
+  includeProviderNotConfiguredFlags: boolean[];
+  outcomes: Array<{
+    deliveryId: string;
+    outcome: PaymentConfirmationEmailOutcome;
+  }>;
+} {
+  const includeProviderNotConfiguredFlags: boolean[] = [];
+  const outcomes: Array<{
+    deliveryId: string;
+    outcome: PaymentConfirmationEmailOutcome;
+  }> = [];
+
+  return {
+    includeProviderNotConfiguredFlags,
+    outcomes,
+    async leaseDueConfirmations(leaseInput) {
+      includeProviderNotConfiguredFlags.push(leaseInput.includeProviderNotConfigured);
+
+      return input.deliveries ?? [];
+    },
+    async recordDeliveryOutcome(outcome) {
       outcomes.push(outcome);
     }
   };

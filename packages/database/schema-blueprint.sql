@@ -286,12 +286,16 @@ create table payment_confirmation_deliveries (
   user_id uuid not null references users(id),
   channel text not null check (channel in ('in_app', 'email')),
   state text not null default 'queued'
-    check (state in ('queued', 'sent', 'provider_not_configured', 'failed')),
+    check (state in ('queued', 'processing', 'sent', 'provider_not_configured', 'failed')),
   durable_medium boolean not null default true,
   confirmation_version text not null default 'payment-confirmation-v1',
   terms_version text not null,
   withdrawal_waiver_version text not null,
   payload jsonb not null default '{}'::jsonb,
+  attempt_count integer not null default 0 check (attempt_count >= 0),
+  leased_at timestamptz,
+  failure_code text,
+  provider_message_id text,
   delivered_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -303,6 +307,10 @@ create index payment_confirmation_deliveries_user_created_idx
 
 create index payment_confirmation_deliveries_state_created_idx
   on payment_confirmation_deliveries (state, created_at desc);
+
+create index payment_confirmation_deliveries_provider_message_id_idx
+  on payment_confirmation_deliveries (provider_message_id)
+  where provider_message_id is not null;
 
 create table platform_fee_statements (
   id uuid primary key,
