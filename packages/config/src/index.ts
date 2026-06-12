@@ -66,7 +66,11 @@ export const serverEnvSchema = z.object({
   NOTIFICATION_DEVICE_ENCRYPTION_KEY: z.string().optional(),
   WEB_PUSH_VAPID_SUBJECT: z.string().optional(),
   WEB_PUSH_VAPID_PUBLIC_KEY: z.string().optional(),
-  WEB_PUSH_VAPID_PRIVATE_KEY: z.string().optional()
+  WEB_PUSH_VAPID_PRIVATE_KEY: z.string().optional(),
+  TRANSACTIONAL_EMAIL_PROVIDER: z.enum(["disabled", "resend"]).default("disabled"),
+  TRANSACTIONAL_EMAIL_FROM: z.string().optional(),
+  TRANSACTIONAL_EMAIL_REPLY_TO: z.string().optional(),
+  RESEND_API_KEY: z.string().optional()
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

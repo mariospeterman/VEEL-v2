@@ -47,7 +47,10 @@ export async function processProviderEventReplays(input: {
   };
 
   for (const request of requests) {
-    const outcome = await input.adapter.replay(request);
+    const outcome = await input.adapter.replay(request).catch((error: unknown): ProviderEventReplayOutcome => ({
+      state: "failed",
+      failureCode: providerReplayFailureCode(error)
+    }));
     await input.repository.recordReplayOutcome({
       replayRequestId: request.replayRequestId,
       providerEventId: request.providerEventId,
@@ -59,6 +62,14 @@ export async function processProviderEventReplays(input: {
   }
 
   return result;
+}
+
+function providerReplayFailureCode(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return `provider_event_replay_exception:${error.message.slice(0, 80)}`;
+  }
+
+  return "provider_event_replay_exception";
 }
 
 export function createUnconfiguredProviderEventReplayAdapter(): ProviderEventReplayAdapter {

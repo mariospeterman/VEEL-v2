@@ -47,6 +47,8 @@ test.beforeEach(async ({ context }) => {
 });
 
 test("covers authenticated enter to profile wallet age home create and unlock", async ({ page }) => {
+  test.setTimeout(70_000);
+
   await gotoUntilVisible(page, "/enter", () => page.getByRole("link", { name: "VEEL" }));
   await expect(page.getByText("Sessionactive")).toBeVisible();
   await expect(page.getByText("Walletrequired")).toBeVisible();
@@ -109,10 +111,18 @@ test("covers authenticated enter to profile wallet age home create and unlock", 
     "https://wallet.example.test/request/content-unlock"
   );
 
+  await page.goto("/activity");
+  await expect(page.getByRole("heading", { name: "Payments" })).toBeVisible();
+  await expect(page.getByText("VEEL-0000000000004000")).toBeVisible();
+  await expect(page.getByText("sent", { exact: true })).toHaveCount(2);
+  await expect(page.getByText("ended after access")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open review" })).toBeVisible();
+
   const protectedRequests = requests.filter((request) => request.path.startsWith("/v1/"));
   expect(protectedRequests.every((request) => request.authorization === `Bearer ${e2eToken}`)).toBe(true);
   expect(requests.some((request) => request.method === "POST" && request.path === "/v1/content" && request.idempotencyKey)).toBe(true);
   expect(requests.some((request) => request.method === "POST" && request.path === `/v1/content/${contentId}/unlock-intents` && request.idempotencyKey)).toBe(true);
+  expect(requests.some((request) => request.method === "GET" && request.path === "/v1/activity/payments")).toBe(true);
 });
 
 async function gotoUntilVisible(page: Page, path: string, readyLocator: () => Locator) {
@@ -180,6 +190,11 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
 
   if (method === "GET" && url.pathname === "/v1/activity/wallet-transactions") {
     sendJson(response, 200, { items: [walletTransaction()], nextCursor: null });
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/v1/activity/payments") {
+    sendJson(response, 200, { items: [paymentActivityItem()], nextCursor: null });
     return;
   }
 
@@ -341,6 +356,32 @@ function walletTransaction() {
     paymentIntentId,
     walletId: wallet().id,
     signature: "5rQ5mockedWalletSignature"
+  };
+}
+
+function paymentActivityItem() {
+  return {
+    id: paymentIntentId,
+    kind: "payment",
+    title: "Payment confirmed",
+    state: "confirmed",
+    productType: "content_unlock",
+    targetId: contentId,
+    amountMinor: 25,
+    currency: "SOL",
+    paymentIntentId,
+    signature: "5rQ5mockedWalletSignature",
+    referenceAddress: "So11111111111111111111111111111111111111112",
+    receiptId: "00000000-0000-4000-8000-000000000051",
+    receiptNumber: "VEEL-0000000000004000",
+    receiptState: "issued",
+    inAppConfirmationState: "sent",
+    emailConfirmationState: "sent",
+    withdrawalRightStatus: "waived_after_immediate_access",
+    supportReviewAvailable: true,
+    latestRefundRequestState: null,
+    createdAt: "2026-06-12T10:00:00.000Z",
+    confirmedAt: "2026-06-12T10:00:10.000Z"
   };
 }
 
