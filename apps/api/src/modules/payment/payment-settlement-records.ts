@@ -69,7 +69,7 @@ export async function recordWalletTransaction(
       ${input.signature},
       pi.reference_address,
       now(),
-      case when ${input.state} = 'confirmed' then now() else null end
+      case when ${input.state}::text = 'confirmed' then now() else null end
     from payment_intents pi
     left join wallets w on w.user_id = pi.user_id and w.is_primary
     where pi.id = ${input.paymentIntentId}
