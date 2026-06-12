@@ -26,9 +26,10 @@ const sumsubWebhookSecret = "sumsub-integration-webhook-secret";
 const treasuryWallet = "1".repeat(32);
 const validSolanaSignature =
   "5Pj5fCupXLUePYn18JkY8SrRaWFiUctuDTRwvUy2MLgVFG1FsCeezrWwZsmxkL5YJQFmQpAcY7rc5pN6vrXJt7Qp";
+const validEventAccessSolanaSignature = deterministicBase58Signature(41);
 
 describeIntegration("authenticated API happy path against Postgres", () => {
-  it("links wallet, verifies age, creates content, and opens a content unlock intent", async () => {
+  it("links wallet, verifies age, creates content, unlocks content, and buys Event Access", async () => {
     const databaseUrl = integrationDatabaseUrl();
     assertIntegrationDatabaseIsAllowed(databaseUrl);
 
@@ -41,6 +42,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     const seededContentId = randomUUID();
     const seededMediaAssetId = randomUUID();
     const seededAccessRuleId = randomUUID();
+    const seededEventId = randomUUID();
+    const seededAccessPassTypeId = randomUUID();
     const providerReference = `sumsub-${runId}`;
     const ageProviderWaterfall = createIntegrationAgeWaterfall(providerReference);
     const settlementInputs: PaymentSettlementInput[] = [];
@@ -73,7 +76,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         buyerSupabaseUserId,
         creatorSupabaseUserId,
         providerReference,
-        seededContentId
+        seededContentId,
+        seededEventId
       });
       await seedCreatorPaidContent(sql, {
         creatorUserId: seededCreatorUserId,
@@ -82,6 +86,12 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         contentId: seededContentId,
         mediaAssetId: seededMediaAssetId,
         accessRuleId: seededAccessRuleId
+      });
+      await seedCreatorPaidEvent(sql, {
+        creatorUserId: seededCreatorUserId,
+        eventId: seededEventId,
+        accessPassTypeId: seededAccessPassTypeId,
+        idempotencyKey: `event-${runId}`
       });
 
       const walletKeypair = nacl.sign.keyPair();
@@ -352,6 +362,154 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         entitlement_count: "1",
         entitlement_event_count: "1"
       });
+
+      const accessPassIntentResponse = await app.inject({
+        method: "POST",
+        url: `/v1/events/${seededEventId}/access-passes/intents`,
+        headers: authenticatedHeaders(`event-access-pass-${runId}`),
+        payload: {
+          accessPassTypeId: seededAccessPassTypeId
+        }
+      });
+
+      expect(accessPassIntentResponse.statusCode, accessPassIntentResponse.body).toBe(201);
+      expect(accessPassIntentResponse.json()).toMatchObject({
+        state: "payment_required",
+        paymentIntent: {
+          productType: "event_access_pass",
+          amountMinor: 15000000,
+          currency: "SOL",
+          state: "pending"
+        }
+      });
+      const accessPassIntent = accessPassIntentResponse.json<{
+        paymentIntent: {
+          id: string;
+          amountMinor: number;
+        };
+      }>();
+
+      const accessPassSubmissionResponse = await app.inject({
+        method: "POST",
+        url: `/v1/payments/intents/${accessPassIntent.paymentIntent.id}/submissions`,
+        headers: authenticatedHeaders(`event-access-pass-submission-${runId}`),
+        payload: {
+          signature: validEventAccessSolanaSignature
+        }
+      });
+
+      expect(accessPassSubmissionResponse.statusCode, accessPassSubmissionResponse.body).toBe(202);
+      const confirmedAccessPassIntentResponse = await app.inject({
+        method: "GET",
+        url: `/v1/payments/intents/${accessPassIntent.paymentIntent.id}`,
+        headers: authenticatedHeaders(`event-access-pass-intent-${runId}`)
+      });
+
+      expect(confirmedAccessPassIntentResponse.statusCode, confirmedAccessPassIntentResponse.body).toBe(200);
+      expect(confirmedAccessPassIntentResponse.json()).toMatchObject({
+        id: accessPassIntent.paymentIntent.id,
+        state: "confirmed",
+        productType: "event_access_pass"
+      });
+      expect(settlementInputs).toHaveLength(2);
+      expect(settlementInputs[1]).toEqual(
+        expect.objectContaining({
+          signature: validEventAccessSolanaSignature,
+          treasuryWallet,
+          amountMinor: accessPassIntent.paymentIntent.amountMinor
+        })
+      );
+      expect(settlementInputs[1]?.referenceAddress).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
+
+      const accessPassActivityResponse = await app.inject({
+        method: "GET",
+        url: "/v1/activity/access-passes",
+        headers: authenticatedHeaders(`event-access-pass-activity-${runId}`)
+      });
+
+      expect(accessPassActivityResponse.statusCode, accessPassActivityResponse.body).toBe(200);
+      expect(accessPassActivityResponse.json()).toMatchObject({
+        items: [
+          {
+            eventId: seededEventId,
+            accessPassTypeId: seededAccessPassTypeId,
+            paymentIntentId: accessPassIntent.paymentIntent.id,
+            state: "active"
+          }
+        ]
+      });
+
+      const eventAccessRows = await sql<{
+        payment_intent_count: string;
+        wallet_transaction_count: string;
+        settlement_attempt_count: string;
+        purchase_request_count: string;
+        access_pass_count: string;
+        audit_event_count: string;
+      }[]>`
+        select
+          (
+            select count(*)
+            from payment_intents pi
+            join users u on u.id = pi.user_id
+            where u.supabase_user_id = ${buyerSupabaseUserId}
+              and pi.id = ${accessPassIntent.paymentIntent.id}
+              and pi.target_id = ${seededEventId}
+              and pi.product_type = 'event_access_pass'
+              and pi.state = 'confirmed'
+          ) as payment_intent_count,
+          (
+            select count(*)
+            from wallet_transaction_records wtr
+            join users u on u.id = wtr.user_id
+            where u.supabase_user_id = ${buyerSupabaseUserId}
+              and wtr.payment_intent_id = ${accessPassIntent.paymentIntent.id}
+              and wtr.state = 'confirmed'
+          ) as wallet_transaction_count,
+          (
+            select count(*)
+            from payment_settlement_attempts psa
+            where psa.payment_intent_id = ${accessPassIntent.paymentIntent.id}
+              and psa.state = 'confirmed'
+          ) as settlement_attempt_count,
+          (
+            select count(*)
+            from event_access_purchase_requests eapr
+            join users u on u.id = eapr.buyer_user_id
+            where u.supabase_user_id = ${buyerSupabaseUserId}
+              and eapr.payment_intent_id = ${accessPassIntent.paymentIntent.id}
+              and eapr.event_id = ${seededEventId}
+              and eapr.access_pass_type_id = ${seededAccessPassTypeId}
+              and eapr.state = 'access_pass_granted'
+          ) as purchase_request_count,
+          (
+            select count(*)
+            from event_access_passes eap
+            join users u on u.id = eap.holder_user_id
+            where u.supabase_user_id = ${buyerSupabaseUserId}
+              and eap.payment_intent_id = ${accessPassIntent.paymentIntent.id}
+              and eap.event_id = ${seededEventId}
+              and eap.access_pass_type_id = ${seededAccessPassTypeId}
+              and eap.state = 'active'
+          ) as access_pass_count,
+          (
+            select count(*)
+            from audit_events ae
+            join users u on u.id = ae.actor_user_id
+            where u.supabase_user_id = ${buyerSupabaseUserId}
+              and ae.subject_id = ${seededEventId}
+              and ae.action = 'event_access_pass_granted'
+          ) as audit_event_count
+      `;
+
+      expect(eventAccessRows[0]).toEqual({
+        payment_intent_count: "1",
+        wallet_transaction_count: "1",
+        settlement_attempt_count: "1",
+        purchase_request_count: "1",
+        access_pass_count: "1",
+        audit_event_count: "1"
+      });
     } finally {
       await cleanupRun(sql, {
         buyerHandle,
@@ -359,7 +517,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         buyerSupabaseUserId,
         creatorSupabaseUserId,
         providerReference,
-        seededContentId
+        seededContentId,
+        seededEventId
       });
       await app.close();
       vi.unstubAllEnvs();
@@ -435,6 +594,10 @@ function createIntegrationAgeWaterfall(providerReference: string): AgeProviderWa
 
 function sumsubDigest(rawPayload: string): string {
   return createHmac("sha256", sumsubWebhookSecret).update(rawPayload).digest("hex");
+}
+
+function deterministicBase58Signature(seed: number): string {
+  return bs58.encode(Uint8Array.from({ length: 64 }, (_, index) => (seed + index * 17) % 256));
 }
 
 async function seedCreatorPaidContent(
@@ -534,6 +697,71 @@ async function seedCreatorPaidContent(
   `;
 }
 
+async function seedCreatorPaidEvent(
+  sql: PostgresSql,
+  input: {
+    creatorUserId: string;
+    eventId: string;
+    accessPassTypeId: string;
+    idempotencyKey: string;
+  }
+): Promise<void> {
+  await sql`
+    insert into events (
+      id,
+      creator_user_id,
+      title,
+      description,
+      starts_at,
+      ends_at,
+      event_type,
+      location_type,
+      location_label,
+      access_rule,
+      state,
+      idempotency_key,
+      request_hash
+    )
+    values (
+      ${input.eventId},
+      ${input.creatorUserId},
+      'Integration Event Access',
+      'Paid integration Event Access offer',
+      '2026-07-01T20:00:00.000Z',
+      '2026-07-01T22:00:00.000Z',
+      'physical',
+      'physical',
+      'Belgrade studio',
+      'public_sale',
+      'published',
+      ${input.idempotencyKey},
+      'integration-event-access'
+    )
+  `;
+  await sql`
+    insert into event_access_pass_types (
+      id,
+      event_id,
+      label,
+      price_minor,
+      currency,
+      capacity,
+      per_user_limit,
+      state
+    )
+    values (
+      ${input.accessPassTypeId},
+      ${input.eventId},
+      'General admission',
+      15000000,
+      'SOL',
+      10,
+      1,
+      'active'
+    )
+  `;
+}
+
 async function cleanupRun(
   sql: PostgresSql,
   input: {
@@ -543,6 +771,7 @@ async function cleanupRun(
     creatorSupabaseUserId: string;
     providerReference: string;
     seededContentId: string;
+    seededEventId: string;
   }
 ): Promise<void> {
   await sql.begin(async (tx) => {
@@ -584,6 +813,19 @@ async function cleanupRun(
           where id = ${input.seededContentId}
         `;
     const contentIds = contentRows.map((row) => row.id);
+    const eventRows = userIds.length
+      ? await tx<{ id: string }[]>`
+          select id
+          from events
+          where creator_user_id in ${tx(userIds)}
+             or id = ${input.seededEventId}
+        `
+      : await tx<{ id: string }[]>`
+          select id
+          from events
+          where id = ${input.seededEventId}
+        `;
+    const eventIds = eventRows.map((row) => row.id);
     const ageIds = ageRows.map((row) => row.id);
     const walletIds = walletRows.map((row) => row.id);
     const paymentIntentRows = userIds.length
@@ -591,17 +833,25 @@ async function cleanupRun(
           select id
           from payment_intents
           where user_id in ${tx(userIds)}
-             or target_id = ${input.seededContentId}
+             or target_id in (${input.seededContentId}, ${input.seededEventId})
         `
       : await tx<{ id: string }[]>`
           select id
           from payment_intents
-          where target_id = ${input.seededContentId}
+          where target_id in (${input.seededContentId}, ${input.seededEventId})
         `;
     const paymentIntentIds = paymentIntentRows.map((row) => row.id);
 
     if (userIds.length > 0) {
       if (paymentIntentIds.length > 0) {
+        await tx`
+          delete from event_access_passes
+          where payment_intent_id in ${tx(paymentIntentIds)}
+        `;
+        await tx`
+          delete from event_access_purchase_requests
+          where payment_intent_id in ${tx(paymentIntentIds)}
+        `;
         await tx`
           delete from wallet_transaction_records
           where payment_intent_id in ${tx(paymentIntentIds)}
@@ -628,12 +878,25 @@ async function cleanupRun(
         where user_id in ${tx(userIds)}
       `;
       await tx`
+        delete from event_access_passes
+        where holder_user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from event_access_purchase_requests
+        where buyer_user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from event_access_requests
+        where requester_user_id in ${tx(userIds)}
+           or reviewed_by_user_id in ${tx(userIds)}
+      `;
+      await tx`
         delete from payment_settlement_attempts
         where payment_intent_id in (
           select id
           from payment_intents
           where user_id in ${tx(userIds)}
-             or target_id = ${input.seededContentId}
+             or target_id in (${input.seededContentId}, ${input.seededEventId})
         )
       `;
       await tx`
@@ -642,13 +905,13 @@ async function cleanupRun(
           select id
           from payment_intents
           where user_id in ${tx(userIds)}
-             or target_id = ${input.seededContentId}
+             or target_id in (${input.seededContentId}, ${input.seededEventId})
         )
       `;
       await tx`
         delete from payment_intents
         where user_id in ${tx(userIds)}
-           or target_id = ${input.seededContentId}
+           or target_id in (${input.seededContentId}, ${input.seededEventId})
       `;
       await tx`
         delete from wallet_link_challenges
@@ -661,6 +924,33 @@ async function cleanupRun(
       await tx`
         delete from audit_events
         where actor_user_id in ${tx(userIds)}
+      `;
+    }
+
+    if (eventIds.length > 0) {
+      await tx`
+        delete from event_access_passes
+        where event_id in ${tx(eventIds)}
+      `;
+      await tx`
+        delete from event_access_purchase_requests
+        where event_id in ${tx(eventIds)}
+      `;
+      await tx`
+        delete from event_access_requests
+        where event_id in ${tx(eventIds)}
+      `;
+      await tx`
+        delete from event_access_pass_types
+        where event_id in ${tx(eventIds)}
+      `;
+      await tx`
+        delete from audit_events
+        where subject_id in ${tx(eventIds)}
+      `;
+      await tx`
+        delete from events
+        where id in ${tx(eventIds)}
       `;
     }
 
