@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: build process, repo strategy, gstack usage
-Last updated: 2026-06-01
+Last updated: 2026-06-12
 Source of truth: yes
 
 Owns:
@@ -114,6 +114,20 @@ Every v2 slice starts with:
 - UI route/screen contract
 
 Then code.
+
+## Real API Integration Gate
+
+Mock API/browser smoke remains useful for fast UX regression checks, but money/access/readiness slices also need a real API/test-DB path before production-readiness claims.
+
+For the authenticated onboarding and access path, run:
+
+```text
+VEEL_ALLOW_REMOTE_API_INTEGRATION_TESTS=1 pnpm test:integration:api
+```
+
+This command loads root `.env`, requires `VEEL_ENABLE_REAL_API_INTEGRATION_TESTS`, and runs only against the configured non-production Postgres/Supabase database. The current coverage links an external Solana wallet with a real Ed25519 signature, starts and completes age verification through a signed Sumsub-style webhook, completes profile readiness, creates content through the API, seeds only the prerequisite paid creator content, creates a backend-priced content unlock intent, and verifies persisted wallet/payment rows before deterministic cleanup.
+
+Do not run this gate against production. For remote databases, the explicit `VEEL_ALLOW_REMOTE_API_INTEGRATION_TESTS=1` acknowledgement is required so accidental writes to the wrong project fail closed.
 
 ## Vertical Slice Order
 

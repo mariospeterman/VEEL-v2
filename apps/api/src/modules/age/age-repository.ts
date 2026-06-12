@@ -146,9 +146,9 @@ export function createPostgresAgeRepository(database?: string | PostgresSql): Ag
       const rows = await sql<{ id: string }[]>`
         update age_verifications
         set
-          state = ${input.state},
+          state = ${input.state}::age_state,
           verified_at = case
-            when ${input.state} = 'verified' then coalesce(verified_at, ${input.verifiedAt ?? null}, now())
+            when ${input.state}::age_state = 'verified'::age_state then coalesce(verified_at, ${input.verifiedAt ?? null}, now())
             else verified_at
           end
         where provider = ${input.provider}
@@ -193,10 +193,10 @@ export function createPostgresAgeRepository(database?: string | PostgresSql): Ag
             av.id,
             'age.webhook_applied',
             jsonb_build_object(
-              'provider', ${input.provider},
-              'providerEventId', ${input.providerEventId},
-              'state', ${input.state},
-              'failureCode', ${input.failureCode ?? null}
+              'provider', ${input.provider}::text,
+              'providerEventId', ${input.providerEventId}::text,
+              'state', ${input.state}::text,
+              'failureCode', ${input.failureCode ?? null}::text
             )
           from age_verifications av
           where av.provider = ${input.provider}
