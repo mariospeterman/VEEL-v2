@@ -13,6 +13,8 @@
     "supabase:version": "supabase --version",
     "supabase:link": "node --env-file=.env scripts/run-supabase-cli.mjs link --project-ref-env",
     "supabase:migrations": "node --env-file=.env scripts/run-supabase-cli.mjs migration list --db-url-env",
+    "supabase:history:check": "node --env-file=.env scripts/check-supabase-migration-history.mjs",
+    "supabase:advisors": "node --env-file=.env scripts/run-supabase-cli.mjs db advisors --db-url-env --type all --level warn --fail-on none",
     "supabase:push:dry": "node --env-file=.env scripts/run-supabase-cli.mjs db push --db-url-env --dry-run",
     "supabase:push": "node --env-file=.env scripts/run-supabase-cli.mjs db push --db-url-env",
     "lint": "eslint .",
