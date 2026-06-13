@@ -42,6 +42,8 @@ export interface RefundDisputeRow {
   state: AdminRefundDispute["state"];
   resolution: string | null;
   custody_boundary: AdminRefundDispute["custodyBoundary"];
+  remediation_evidence_count: string;
+  latest_remediation_evidence_at: Date | null;
   created_at: Date;
   updated_at: Date | null;
   resolved_at: Date | null;
@@ -100,6 +102,8 @@ export function toRefundDispute(row: RefundDisputeRow): AdminRefundDispute {
     state: row.state,
     resolution: row.resolution,
     custodyBoundary: row.custody_boundary,
+    remediationEvidenceCount: Number(row.remediation_evidence_count),
+    latestRemediationEvidenceAt: row.latest_remediation_evidence_at?.toISOString() ?? null,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at?.toISOString() ?? null,
     resolvedAt: row.resolved_at?.toISOString() ?? null

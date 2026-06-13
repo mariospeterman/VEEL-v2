@@ -3106,12 +3106,28 @@ export interface components {
             resolution?: string | null;
             /** @enum {string} */
             custodyBoundary: "no_platform_custody_no_payout_queue";
+            remediationEvidenceCount: number;
+            /** Format: date-time */
+            latestRemediationEvidenceAt?: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
             updatedAt?: string | null;
             /** Format: date-time */
             resolvedAt?: string | null;
+        };
+        RefundRemediationEvidenceInput: {
+            /** @enum {string} */
+            evidenceType: "creator_refund_attestation" | "replacement_access_recorded" | "access_revocation_recorded" | "technical_remediation_recorded" | "no_refund_denial_recorded";
+            /** @enum {string} */
+            evidenceSource: "creator_attestation" | "provider_reference" | "support_observation" | "platform_access_change";
+            externalReference?: string;
+            amountMinor?: number;
+            currency?: string;
+            /** @enum {string} */
+            refundValueBasis?: "original_crypto_amount" | "fiat_value_at_purchase" | "manual_resolution";
+            refundWallet?: string;
+            notes: string;
         };
         RefundDisputeRequestPage: {
             items: components["schemas"]["RefundDisputeRequest"][];
@@ -3730,6 +3746,9 @@ export interface components {
             resolution?: string | null;
             /** @enum {string} */
             custodyBoundary: "no_platform_custody_no_payout_queue";
+            remediationEvidenceCount: number;
+            /** Format: date-time */
+            latestRemediationEvidenceAt?: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -4130,6 +4149,7 @@ export interface components {
             state: components["schemas"]["RefundDisputeState"];
             resolution: string;
             reason: string;
+            remediationEvidence?: components["schemas"]["RefundRemediationEvidenceInput"];
         };
         AdminDataRequestActionRequest: {
             /** @enum {string} */

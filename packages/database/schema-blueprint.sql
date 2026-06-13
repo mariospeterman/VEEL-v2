@@ -1412,6 +1412,24 @@ create table refunds_and_disputes (
   resolved_at timestamptz
 );
 
+create table refund_remediation_evidence (
+  id uuid primary key,
+  refund_dispute_id uuid not null references refunds_and_disputes(id) on delete cascade,
+  payment_intent_id uuid not null references payment_intents(id),
+  recorded_by_user_id uuid not null references users(id),
+  evidence_type text not null,
+  evidence_source text not null,
+  external_reference text,
+  amount_minor bigint,
+  currency text,
+  refund_value_basis text,
+  refund_wallet text,
+  notes text not null,
+  custody_boundary text not null default 'evidence_only_no_platform_custody_no_payout_queue',
+  idempotency_key text not null,
+  created_at timestamptz not null default now()
+);
+
 create table data_requests (
   id uuid primary key,
   requester_user_id uuid not null references users(id),

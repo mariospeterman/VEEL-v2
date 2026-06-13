@@ -2777,7 +2777,7 @@ components:
       enum: [opened, reviewing, creator_action_required, rejected, withdrawn, resolved, closed]
     RefundDisputeRequest:
       type: object
-      required: [id, paymentIntentId, reporterUserId, kind, requestedAction, state, custodyBoundary, createdAt]
+      required: [id, paymentIntentId, reporterUserId, kind, requestedAction, state, custodyBoundary, remediationEvidenceCount, createdAt]
       properties:
         id: { type: string, format: uuid }
         paymentIntentId: { type: string, format: uuid }
@@ -2788,9 +2788,29 @@ components:
         state: { $ref: "#/components/schemas/RefundDisputeState" }
         resolution: { type: string, nullable: true }
         custodyBoundary: { type: string, enum: [no_platform_custody_no_payout_queue] }
+        remediationEvidenceCount: { type: integer, minimum: 0 }
+        latestRemediationEvidenceAt: { type: string, format: date-time, nullable: true }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time, nullable: true }
         resolvedAt: { type: string, format: date-time, nullable: true }
+    RefundRemediationEvidenceInput:
+      type: object
+      required: [evidenceType, evidenceSource, notes]
+      properties:
+        evidenceType:
+          type: string
+          enum: [creator_refund_attestation, replacement_access_recorded, access_revocation_recorded, technical_remediation_recorded, no_refund_denial_recorded]
+        evidenceSource:
+          type: string
+          enum: [creator_attestation, provider_reference, support_observation, platform_access_change]
+        externalReference: { type: string, minLength: 1, maxLength: 200 }
+        amountMinor: { type: integer, minimum: 0 }
+        currency: { type: string, minLength: 2, maxLength: 12 }
+        refundValueBasis:
+          type: string
+          enum: [original_crypto_amount, fiat_value_at_purchase, manual_resolution]
+        refundWallet: { type: string, minLength: 8, maxLength: 120 }
+        notes: { type: string, minLength: 3, maxLength: 1000 }
     RefundDisputeRequestPage:
       type: object
       required: [items, nextCursor]
@@ -3404,7 +3424,7 @@ components:
         updatedAt: { type: string, format: date-time }
     AdminRefundDispute:
       type: object
-      required: [id, paymentIntentId, reporterUserId, kind, requestedAction, state, custodyBoundary, createdAt]
+      required: [id, paymentIntentId, reporterUserId, kind, requestedAction, state, custodyBoundary, remediationEvidenceCount, createdAt]
       properties:
         id: { type: string, format: uuid }
         paymentIntentId: { type: string, format: uuid }
@@ -3415,6 +3435,8 @@ components:
         state: { $ref: "#/components/schemas/RefundDisputeState" }
         resolution: { type: string, nullable: true }
         custodyBoundary: { type: string, enum: [no_platform_custody_no_payout_queue] }
+        remediationEvidenceCount: { type: integer, minimum: 0 }
+        latestRemediationEvidenceAt: { type: string, format: date-time, nullable: true }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time, nullable: true }
         resolvedAt: { type: string, format: date-time, nullable: true }
@@ -3730,6 +3752,7 @@ components:
         state: { $ref: "#/components/schemas/RefundDisputeState" }
         resolution: { type: string, minLength: 3, maxLength: 1000 }
         reason: { type: string, minLength: 3, maxLength: 500 }
+        remediationEvidence: { $ref: "#/components/schemas/RefundRemediationEvidenceInput" }
     AdminDataRequestActionRequest:
       type: object
       required: [state, reason]
