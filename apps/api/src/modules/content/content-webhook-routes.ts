@@ -60,7 +60,15 @@ export async function registerContentWebhookRoutes(
             providerEventId: normalized.providerEventId,
             eventType: normalized.eventType,
             normalizedState: normalized.providerState,
-            signatureHash: normalized.signatureHash
+            signatureHash: normalized.signatureHash,
+            replayPayload: {
+              kind: "livepeer_stream",
+              providerStreamId: normalized.livepeerStream.providerStreamId,
+              providerPlaybackId: normalized.livepeerStream.providerPlaybackId,
+              providerState: normalized.providerState,
+              roomState: normalized.livepeerStream.roomState,
+              playbackUrl: normalized.livepeerStream.playbackUrl
+            }
           });
 
           if (!isNewLiveEvent) {
@@ -101,7 +109,13 @@ export async function registerContentWebhookRoutes(
           providerEventId: normalized.providerEventId,
           eventType: normalized.eventType,
           normalizedState: normalized.providerState,
-          signatureHash: normalized.signatureHash
+          signatureHash: normalized.signatureHash,
+          replayPayload: {
+            kind: "media_asset",
+            providerAssetId: normalized.providerAssetId,
+            providerState: normalized.providerState,
+            providerPlayable: normalized.providerPlayable
+          }
         });
 
         if (!isNewEvent) {

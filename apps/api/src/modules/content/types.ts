@@ -143,6 +143,7 @@ export interface RecordMediaProviderWebhookInput {
   eventType: string;
   normalizedState: string;
   signatureHash?: string | null;
+  replayPayload?: Record<string, unknown>;
 }
 
 export interface UpdateMediaAssetFromWebhookInput {

@@ -70,7 +70,8 @@ export const serverEnvSchema = z.object({
   TRANSACTIONAL_EMAIL_PROVIDER: z.enum(["disabled", "resend"]).default("disabled"),
   TRANSACTIONAL_EMAIL_FROM: z.string().optional(),
   TRANSACTIONAL_EMAIL_REPLY_TO: z.string().optional(),
-  RESEND_API_KEY: z.string().optional()
+  RESEND_API_KEY: z.string().optional(),
+  TRANSACTIONAL_EMAIL_SMOKE_TO: z.string().email().optional()
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

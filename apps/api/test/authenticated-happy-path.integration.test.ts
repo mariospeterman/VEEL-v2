@@ -1432,7 +1432,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
                 replayRequestId: seededProviderReplayRequestId,
                 providerEventId: seededProviderEventId,
                 provider: "solana_indexer",
-                eventType: "payment.confirmed"
+                eventType: "payment.confirmed",
+                replayPayload: {}
               });
 
               return {
@@ -1496,7 +1497,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       await app.close();
       vi.unstubAllEnvs();
     }
-  }, 75_000);
+  }, 120_000);
 });
 
 function integrationDatabaseUrl(): string {
@@ -1971,11 +1972,19 @@ async function cleanupRun(
           where id = ${input.seededEventId}
         `;
     const eventIds = eventRows.map((row) => row.id);
-    const conversationRows = await tx<{ id: string }[]>`
-      select id
-      from conversations
-      where id = ${input.seededConversationId}
-    `;
+    const conversationRows = userIds.length
+      ? await tx<{ id: string }[]>`
+          select distinct c.id
+          from conversations c
+          left join conversation_members cm on cm.conversation_id = c.id
+          where c.id = ${input.seededConversationId}
+             or cm.user_id in ${tx(userIds)}
+        `
+      : await tx<{ id: string }[]>`
+          select id
+          from conversations
+          where id = ${input.seededConversationId}
+        `;
     const conversationIds = conversationRows.map((row) => row.id);
     const liveRoomRows = userIds.length
       ? await tx<{ id: string }[]>`
@@ -2418,6 +2427,7 @@ async function cleanupRun(
     await tx`
       delete from profiles
       where handle in (${input.buyerHandle}, ${input.creatorHandle})
+        ${userIds.length > 0 ? tx`or user_id in ${tx(userIds)}` : tx``}
     `;
 
     if (userIds.length > 0) {

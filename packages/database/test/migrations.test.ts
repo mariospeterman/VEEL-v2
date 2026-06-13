@@ -221,6 +221,14 @@ describe("database migrations", () => {
     expect(sql).not.toMatch(/creator_balance|withdraw|payout_queue|escrow|private_key|service_role/i);
   });
 
+  it("adds sanitized provider event replay payloads without raw provider payload storage", () => {
+    const sql = readMigration("0061_provider_event_replay_payload.sql");
+
+    expect(sql).toContain("add column replay_payload jsonb not null default '{}'::jsonb");
+    expect(sql).toContain("provider_events_replay_payload_gin_idx");
+    expect(sql).not.toMatch(/raw_payload|provider_payload|private_key|service_role|secret/i);
+  });
+
   it("covers AI/MCP composite foreign keys for Supabase performance advisors", () => {
     const sql = readMigration("0026_ai_mcp_fk_indexes.sql");
 

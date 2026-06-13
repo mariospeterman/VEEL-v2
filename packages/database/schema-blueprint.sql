@@ -1215,6 +1215,7 @@ create table provider_events (
   provider_event_id text not null,
   event_type text not null,
   normalized_state text not null,
+  replay_payload jsonb not null default '{}'::jsonb,
   received_at timestamptz not null default now(),
   processed_at timestamptz,
   unique (provider, provider_event_id)
@@ -1222,6 +1223,9 @@ create table provider_events (
 
 create index provider_events_received_at_idx
   on provider_events (received_at desc);
+
+create index provider_events_replay_payload_gin_idx
+  on provider_events using gin (replay_payload);
 
 create table provider_event_replay_requests (
   id uuid primary key,

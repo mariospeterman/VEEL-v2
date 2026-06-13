@@ -378,6 +378,7 @@ Commercial default:
 - If a creator-sold refund is approved, creator share refund responsibility remains with the seller where legally supportable. Veel only refunds/reverses its commission when required by law, policy, or Veel fault, and referral commissions must be clawed back or marked ineligible from backend records rather than by creating a negative user balance.
 - Payment/refund review records must preserve `payment_confirmed`, `access_granted_at`, `withdrawal_waiver_accepted_at`, `withdrawal_waiver_version`, `terms_version`, `refund_eligible_reason`, `refund_status`, `refund_wallet`, and `refund_value_basis` either directly or through linked payment, entitlement, refund/dispute, receipt, and audit rows.
 - Confirmed settlement must also preserve durable confirmation evidence through backend receipt, compliance-ledger, notification, and confirmation-delivery rows. In-app delivery may be marked sent when the backend notification exists; email delivery is leased by the worker and must stay queued/provider-not-configured/failed until a launch-approved transactional email provider confirms delivery.
+- If transactional email is not enabled, the in-app confirmation remains the user-visible fallback and support evidence, but launch compliance should not rely on in-app-only waiver confirmation for EU/EEA distance-sale flows unless counsel approves that durable-medium interpretation for the exact user interface and retention model.
 
 ## Admin And Business Reporting Requirements
 

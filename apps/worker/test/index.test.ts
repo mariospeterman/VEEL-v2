@@ -29,6 +29,7 @@ import type {
   ProviderEventReplayRepository,
   QueuedProviderEventReplay
 } from "../src/provider-event-replay";
+import { createProviderSpecificReplayAdapter } from "../src/provider-event-replay";
 import type {
   DueSubscriptionCollection,
   SubscriptionCollectionOutcome,
@@ -545,6 +546,55 @@ describe("runProviderEventReplayTick", () => {
       outcome: { state: "replayed" }
     });
   });
+
+  it("dispatches sanitized Helius replay payloads to the provider-specific handler", async () => {
+    const adapter = createProviderSpecificReplayAdapter({
+      async helius(input) {
+        expect(input.replayPayload).toEqual({
+          kind: "solana_payment",
+          signature: "solana-signature",
+          referenceAddresses: ["reference-address"]
+        });
+
+        return { state: "replayed" };
+      }
+    });
+
+    await expect(adapter.replay(providerEventReplayFixture())).resolves.toEqual({ state: "replayed" });
+  });
+
+  it("fails provider-specific replay when a known provider lacks a configured handler", async () => {
+    const adapter = createProviderSpecificReplayAdapter({});
+
+    await expect(adapter.replay(providerEventReplayFixture())).resolves.toEqual({
+      state: "failed",
+      failureCode: "provider_event_replay_handler_not_configured:helius"
+    });
+  });
+
+  it("fails provider-specific replay when sanitized payload is missing or malformed", async () => {
+    const adapter = createProviderSpecificReplayAdapter({
+      async helius() {
+        return { state: "replayed" };
+      }
+    });
+
+    await expect(adapter.replay(providerEventReplayFixture({ replayPayload: {} }))).resolves.toEqual({
+      state: "failed",
+      failureCode: "provider_event_replay_payload_missing:helius"
+    });
+  });
+
+  it("fails provider-specific replay for unsupported providers", async () => {
+    const adapter = createProviderSpecificReplayAdapter({});
+
+    await expect(
+      adapter.replay(providerEventReplayFixture({ provider: "unknown_provider" }))
+    ).resolves.toEqual({
+      state: "failed",
+      failureCode: "provider_event_replay_provider_unsupported:unknown_provider"
+    });
+  });
 });
 
 function dueCollectionFixture(
@@ -748,7 +798,12 @@ function providerEventReplayFixture(
     replayRequestId: overrides.replayRequestId ?? "replay-request-1",
     providerEventId: overrides.providerEventId ?? "00000000-0000-4000-8000-000000000050",
     provider: overrides.provider ?? "helius",
-    eventType: overrides.eventType ?? "payment.confirmed"
+    eventType: overrides.eventType ?? "payment.confirmed",
+    replayPayload: overrides.replayPayload ?? {
+      kind: "solana_payment",
+      signature: "solana-signature",
+      referenceAddresses: ["reference-address"]
+    }
   };
 }
 

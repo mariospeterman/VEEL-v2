@@ -3,6 +3,9 @@ import type postgres from "postgres";
 import { withPostgresTransaction } from "../../shared/postgres.js";
 import type { ContentItem, ContentRepository } from "./types.js";
 
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+type JsonObject = { [key: string]: JsonValue };
+
 type ContentMediaRepositoryMethods = Pick<
   ContentRepository,
   | "createMediaAsset"
@@ -155,14 +158,16 @@ export function createContentMediaRepositoryMethods(
           provider,
           provider_event_id,
           event_type,
-          normalized_state
+          normalized_state,
+          replay_payload
         )
         values (
           ${randomUUID()},
           ${input.provider},
           ${input.providerEventId},
           ${input.eventType},
-          ${input.normalizedState}
+          ${input.normalizedState},
+          ${sql.json(toJsonObject(input.replayPayload ?? {}))}
         )
         on conflict (provider, provider_event_id) do nothing
       `;
@@ -209,4 +214,8 @@ export function createContentMediaRepositoryMethods(
       return rows.length > 0;
     }
   };
+}
+
+function toJsonObject(value: Record<string, unknown>): JsonObject {
+  return JSON.parse(JSON.stringify(value)) as JsonObject;
 }
