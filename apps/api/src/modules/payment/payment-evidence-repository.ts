@@ -55,14 +55,20 @@ export function createPostgresPaymentEvidenceRepository(
           provider,
           provider_event_id,
           event_type,
-          normalized_state
+          normalized_state,
+          replay_payload
         )
         values (
           ${randomUUID()},
           'helius',
           ${input.providerEventId},
           ${input.eventType},
-          'pending'
+          'pending',
+          ${sql.json({
+            kind: "solana_payment",
+            signature: input.signature,
+            referenceAddresses: input.referenceAddresses
+          })}
         )
         on conflict (provider, provider_event_id) do nothing
       `;

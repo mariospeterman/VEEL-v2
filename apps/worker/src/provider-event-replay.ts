@@ -9,6 +9,7 @@ export interface QueuedProviderEventReplay {
   providerEventId: string;
   provider: string;
   eventType: string;
+  replayPayload: unknown;
 }
 
 export interface ProviderEventReplayRepository {
@@ -23,6 +24,43 @@ export interface ProviderEventReplayRepository {
 
 export interface ProviderEventReplayAdapter {
   replay(input: QueuedProviderEventReplay): Promise<ProviderEventReplayOutcome>;
+}
+
+export interface ProviderSpecificReplayHandlers {
+  helius?: (input: HeliusReplayEvent) => Promise<ProviderEventReplayOutcome>;
+  bunny?: (input: BunnyReplayEvent) => Promise<ProviderEventReplayOutcome>;
+  livepeer?: (input: LivepeerReplayEvent) => Promise<ProviderEventReplayOutcome>;
+}
+
+export interface HeliusReplayEvent extends QueuedProviderEventReplay {
+  provider: "helius" | "solana_indexer";
+  replayPayload: {
+    kind: "solana_payment";
+    signature: string;
+    referenceAddresses: string[];
+  };
+}
+
+export interface BunnyReplayEvent extends QueuedProviderEventReplay {
+  provider: "bunny";
+  replayPayload: {
+    kind: "media_asset";
+    providerAssetId: string;
+    providerState: string;
+    providerPlayable: boolean;
+  };
+}
+
+export interface LivepeerReplayEvent extends QueuedProviderEventReplay {
+  provider: "livepeer";
+  replayPayload: {
+    kind: "livepeer_stream";
+    providerStreamId: string;
+    providerPlaybackId: string | null;
+    providerState: string;
+    roomState: "waiting" | "live" | "ended" | "replay_ready";
+    playbackUrl: string | null;
+  };
 }
 
 export interface ProcessProviderEventReplaysResult {
@@ -83,6 +121,43 @@ export function createUnconfiguredProviderEventReplayAdapter(): ProviderEventRep
   };
 }
 
+export function createProviderSpecificReplayAdapter(
+  handlers: ProviderSpecificReplayHandlers
+): ProviderEventReplayAdapter {
+  return {
+    async replay(input) {
+      if (input.provider === "helius" || input.provider === "solana_indexer") {
+        const event = toHeliusReplayEvent(input);
+        if (!event) return missingReplayPayload(input);
+        return handlers.helius
+          ? handlers.helius(event)
+          : missingReplayHandler(input);
+      }
+
+      if (input.provider === "bunny") {
+        const event = toBunnyReplayEvent(input);
+        if (!event) return missingReplayPayload(input);
+        return handlers.bunny
+          ? handlers.bunny(event)
+          : missingReplayHandler(input);
+      }
+
+      if (input.provider === "livepeer") {
+        const event = toLivepeerReplayEvent(input);
+        if (!event) return missingReplayPayload(input);
+        return handlers.livepeer
+          ? handlers.livepeer(event)
+          : missingReplayHandler(input);
+      }
+
+      return {
+        state: "failed",
+        failureCode: `provider_event_replay_provider_unsupported:${input.provider}`
+      };
+    }
+  };
+}
+
 export function createPostgresProviderEventReplayRepository(
   databaseUrl?: string
 ): ProviderEventReplayRepository {
@@ -128,14 +203,16 @@ export function createPostgresProviderEventReplayRepository(
             perr.id as replay_request_id,
             pe.id as provider_event_id,
             pe.provider,
-            pe.event_type
+            pe.event_type,
+            pe.replay_payload
         `;
 
         return rows.map((row) => ({
           replayRequestId: row.replay_request_id,
           providerEventId: row.provider_event_id,
           provider: row.provider,
-          eventType: row.event_type
+          eventType: row.event_type,
+          replayPayload: row.replay_payload
         }));
       });
     },
@@ -185,4 +262,120 @@ interface QueuedProviderEventReplayRow {
   provider_event_id: string;
   provider: string;
   event_type: string;
+  replay_payload: unknown;
+}
+
+function missingReplayPayload(input: QueuedProviderEventReplay): ProviderEventReplayOutcome {
+  return {
+    state: "failed",
+    failureCode: `provider_event_replay_payload_missing:${input.provider}`
+  };
+}
+
+function missingReplayHandler(input: QueuedProviderEventReplay): ProviderEventReplayOutcome {
+  return {
+    state: "failed",
+    failureCode: `provider_event_replay_handler_not_configured:${input.provider}`
+  };
+}
+
+function objectPayload(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function booleanValue(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
+function stringArrayValue(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const values = value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0);
+  return values.length === value.length && values.length > 0 ? values : null;
+}
+
+function nullableStringValue(value: unknown): string | null {
+  return value === null || value === undefined ? null : stringValue(value);
+}
+
+function toHeliusReplayEvent(input: QueuedProviderEventReplay): HeliusReplayEvent | null {
+  const payload = objectPayload(input.replayPayload);
+  const signature = stringValue(payload?.signature);
+  const referenceAddresses = stringArrayValue(payload?.referenceAddresses);
+  if (
+    (input.provider !== "helius" && input.provider !== "solana_indexer") ||
+    payload?.kind !== "solana_payment" ||
+    !signature ||
+    !referenceAddresses
+  ) {
+    return null;
+  }
+
+  return {
+    ...input,
+    provider: input.provider,
+    replayPayload: {
+      kind: "solana_payment",
+      signature,
+      referenceAddresses
+    }
+  };
+}
+
+function toBunnyReplayEvent(input: QueuedProviderEventReplay): BunnyReplayEvent | null {
+  const payload = objectPayload(input.replayPayload);
+  const providerAssetId = stringValue(payload?.providerAssetId);
+  const providerState = stringValue(payload?.providerState);
+  const providerPlayable = booleanValue(payload?.providerPlayable);
+  if (payload?.kind !== "media_asset" || !providerAssetId || !providerState || providerPlayable === null) {
+    return null;
+  }
+
+  return {
+    ...input,
+    provider: "bunny",
+    replayPayload: {
+      kind: "media_asset",
+      providerAssetId,
+      providerState,
+      providerPlayable
+    }
+  };
+}
+
+function toLivepeerReplayEvent(input: QueuedProviderEventReplay): LivepeerReplayEvent | null {
+  const payload = objectPayload(input.replayPayload);
+  const providerStreamId = stringValue(payload?.providerStreamId);
+  const providerState = stringValue(payload?.providerState);
+  const roomState = stringValue(payload?.roomState);
+  if (
+    payload?.kind !== "livepeer_stream" ||
+    !providerStreamId ||
+    !providerState ||
+    !isLivepeerRoomState(roomState)
+  ) {
+    return null;
+  }
+
+  return {
+    ...input,
+    provider: "livepeer",
+    replayPayload: {
+      kind: "livepeer_stream",
+      providerStreamId,
+      providerPlaybackId: nullableStringValue(payload.providerPlaybackId),
+      providerState,
+      roomState,
+      playbackUrl: nullableStringValue(payload.playbackUrl)
+    }
+  };
+}
+
+function isLivepeerRoomState(value: string | null): value is LivepeerReplayEvent["replayPayload"]["roomState"] {
+  return value === "waiting" || value === "live" || value === "ended" || value === "replay_ready";
 }

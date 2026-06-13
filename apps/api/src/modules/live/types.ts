@@ -105,6 +105,7 @@ export interface RecordLiveProviderWebhookInput {
   eventType: string;
   normalizedState: string;
   signatureHash?: string | null;
+  replayPayload?: Record<string, unknown>;
 }
 
 export interface UpdateLiveRoomFromWebhookInput {

@@ -3,6 +3,9 @@ import type postgres from "postgres";
 import { ensureLiveReplayContent } from "./live-replay-repository.js";
 import type { LiveRepository } from "./types.js";
 
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+type JsonObject = { [key: string]: JsonValue };
+
 export function createLiveStatusRepositoryMethods(
   sql: postgres.Sql
 ): Pick<LiveRepository, "recordLiveProviderWebhook" | "updateRoomFromWebhook" | "updateRoomStatus"> {
@@ -95,14 +98,16 @@ export function createLiveStatusRepositoryMethods(
           provider,
           provider_event_id,
           event_type,
-          normalized_state
+          normalized_state,
+          replay_payload
         )
         values (
           ${randomUUID()},
           'livepeer',
           ${input.providerEventId},
           ${input.eventType},
-          ${input.normalizedState}
+          ${input.normalizedState},
+          ${sql.json(toJsonObject(input.replayPayload ?? {}))}
         )
         on conflict (provider, provider_event_id) do nothing
       `;
@@ -150,4 +155,8 @@ export function createLiveStatusRepositoryMethods(
       return rows.length > 0;
     }
   };
+}
+
+function toJsonObject(value: Record<string, unknown>): JsonObject {
+  return JSON.parse(JSON.stringify(value)) as JsonObject;
 }
