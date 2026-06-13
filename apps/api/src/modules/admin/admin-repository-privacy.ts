@@ -25,10 +25,19 @@ export function createPrivacyRepository(
           state,
           resolution,
           custody_boundary,
+          coalesce(evidence.remediation_evidence_count, 0)::text as remediation_evidence_count,
+          evidence.latest_remediation_evidence_at,
           created_at,
           updated_at,
           resolved_at
         from refunds_and_disputes
+        left join lateral (
+          select
+            count(*) as remediation_evidence_count,
+            max(rre.created_at) as latest_remediation_evidence_at
+          from refund_remediation_evidence rre
+          where rre.refund_dispute_id = refunds_and_disputes.id
+        ) evidence on true
         where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
         order by created_at desc
         limit ${pageSize + 1}
@@ -37,6 +46,7 @@ export function createPrivacyRepository(
       return page(rows, toRefundDispute);
     },
     async updateRefundDispute(input) {
+      const evidence = input.body.remediationEvidence;
       const rows = await sql.begin(async (transaction) => {
         const updatedRows = await transaction<RefundDisputeRow[]>`
           with actor as (
@@ -46,7 +56,7 @@ export function createPrivacyRepository(
             limit 1
           ),
           current_request as (
-            select id, state, resolution
+            select id, payment_intent_id, state, resolution
             from refunds_and_disputes
             where id = ${input.refundDisputeId}
             for update
@@ -108,21 +118,70 @@ export function createPrivacyRepository(
             from updated_request
             cross join actor
             returning id
+          ),
+          evidence_insert as (
+            insert into refund_remediation_evidence (
+              id,
+              refund_dispute_id,
+              payment_intent_id,
+              recorded_by_user_id,
+              evidence_type,
+              evidence_source,
+              external_reference,
+              amount_minor,
+              currency,
+              refund_value_basis,
+              refund_wallet,
+              notes,
+              idempotency_key
+            )
+            select
+              gen_random_uuid(),
+              updated_request.id,
+              updated_request.payment_intent_id,
+              actor.id,
+              ${evidence?.evidenceType ?? null}::text,
+              ${evidence?.evidenceSource ?? null}::text,
+              ${evidence?.externalReference ?? null}::text,
+              ${evidence?.amountMinor ?? null}::bigint,
+              ${evidence?.currency ?? null}::text,
+              ${evidence?.refundValueBasis ?? null}::text,
+              ${evidence?.refundWallet ?? null}::text,
+              ${evidence?.notes ?? null}::text,
+              ${input.idempotencyKey}
+            from updated_request
+            cross join actor
+            where ${evidence ? true : false}
+            on conflict (refund_dispute_id, idempotency_key) do nothing
+            returning id, created_at
           )
           select
-            id,
-            payment_intent_id,
-            entitlement_id,
-            reporter_user_id,
-            kind,
-            requested_action,
-            state,
-            resolution,
-            custody_boundary,
-            created_at,
-            updated_at,
-            resolved_at
+            updated_request.id,
+            updated_request.payment_intent_id,
+            updated_request.entitlement_id,
+            updated_request.reporter_user_id,
+            updated_request.kind,
+            updated_request.requested_action,
+            updated_request.state,
+            updated_request.resolution,
+            updated_request.custody_boundary,
+            (coalesce(evidence.remediation_evidence_count, 0) + (select count(*) from evidence_insert))::text
+              as remediation_evidence_count,
+            coalesce(
+              (select max(created_at) from evidence_insert),
+              evidence.latest_remediation_evidence_at
+            ) as latest_remediation_evidence_at,
+            updated_request.created_at,
+            updated_request.updated_at,
+            updated_request.resolved_at
           from updated_request
+          left join lateral (
+            select
+              count(*) as remediation_evidence_count,
+              max(rre.created_at) as latest_remediation_evidence_at
+            from refund_remediation_evidence rre
+            where rre.refund_dispute_id = updated_request.id
+          ) evidence on true
           where exists (select 1 from audit_insert)
         `;
 

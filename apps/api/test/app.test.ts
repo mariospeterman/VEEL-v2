@@ -5329,26 +5329,48 @@ describe("buildApi", () => {
         "idempotency-key": "refund-admin-1"
       },
       payload: {
-        state: "creator_action_required",
-        resolution: "Creator must decide whether to submit a noncustodial refund transaction",
-        reason: "Confirmed access issue after support review"
+        state: "resolved",
+        resolution: "Creator attested that the noncustodial refund transaction was sent",
+        reason: "Confirmed access issue after support review",
+        remediationEvidence: {
+          evidenceType: "creator_refund_attestation",
+          evidenceSource: "creator_attestation",
+          externalReference: "creator-refund-signature",
+          amountMinor: 25000000,
+          currency: "SOL",
+          refundValueBasis: "original_crypto_amount",
+          refundWallet: "BuyerRefundWallet111111111111111111111111111",
+          notes: "Creator supplied a refund transaction reference for support review."
+        }
       }
     });
 
     expect(listed.statusCode).toBe(200);
     expect(listed.json().items[0]).toMatchObject({
       kind: "access_issue",
-      custodyBoundary: "no_platform_custody_no_payout_queue"
+      custodyBoundary: "no_platform_custody_no_payout_queue",
+      remediationEvidenceCount: 0,
+      latestRemediationEvidenceAt: null
     });
     expect(updated.statusCode).toBe(200);
     expect(updated.json()).toMatchObject({
       id: "00000000-0000-4000-8000-000000000160",
-      state: "creator_action_required",
-      custodyBoundary: "no_platform_custody_no_payout_queue"
+      state: "resolved",
+      custodyBoundary: "no_platform_custody_no_payout_queue",
+      remediationEvidenceCount: 1,
+      latestRemediationEvidenceAt: "2026-06-06T11:30:00.000Z"
     });
     expect(updateCalls[0]).toMatchObject({
       supabaseUserId: "00000000-0000-4000-8000-000000000001",
-      idempotencyKey: "refund-admin-1"
+      idempotencyKey: "refund-admin-1",
+      body: {
+        remediationEvidence: {
+          evidenceType: "creator_refund_attestation",
+          evidenceSource: "creator_attestation",
+          externalReference: "creator-refund-signature",
+          refundValueBasis: "original_crypto_amount"
+        }
+      }
     });
     expect(`${listed.body}${updated.body}`).not.toMatch(
       /raw|payload|secret|privateKey|serviceRole|creatorBalance|withdraw|payoutQueue|escrow|paymentProof|automaticRefund|platformBalance/i
@@ -7916,6 +7938,8 @@ function fakeRefundRepository(
               state: "opened",
               resolution: null,
               custodyBoundary: "no_platform_custody_no_payout_queue",
+              remediationEvidenceCount: 0,
+              latestRemediationEvidenceAt: null,
               createdAt: "2026-06-06T11:00:00.000Z",
               updatedAt: null,
               resolvedAt: null
@@ -7941,6 +7965,8 @@ function fakeRefundRepository(
         state: "opened",
         resolution: null,
         custodyBoundary: "no_platform_custody_no_payout_queue",
+        remediationEvidenceCount: 0,
+        latestRemediationEvidenceAt: null,
         createdAt: "2026-06-06T11:00:00.000Z",
         updatedAt: null,
         resolvedAt: null
@@ -8597,6 +8623,8 @@ const fakeAdminRepository: AdminRepository = {
           state: "opened",
           resolution: null,
           custodyBoundary: "no_platform_custody_no_payout_queue",
+          remediationEvidenceCount: 0,
+          latestRemediationEvidenceAt: null,
           createdAt: "2026-06-06T11:00:00.000Z",
           updatedAt: null,
           resolvedAt: null
@@ -8616,6 +8644,8 @@ const fakeAdminRepository: AdminRepository = {
       state: input.body.state,
       resolution: input.body.resolution,
       custodyBoundary: "no_platform_custody_no_payout_queue",
+      remediationEvidenceCount: input.body.remediationEvidence ? 1 : 0,
+      latestRemediationEvidenceAt: input.body.remediationEvidence ? "2026-06-06T11:30:00.000Z" : null,
       createdAt: "2026-06-06T11:00:00.000Z",
       updatedAt: "2026-06-06T11:30:00.000Z",
       resolvedAt:

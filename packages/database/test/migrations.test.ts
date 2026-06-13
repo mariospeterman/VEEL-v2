@@ -580,4 +580,15 @@ describe("database migrations", () => {
     expect(sql).toContain("event_access_purchase_requests_state_check");
     expect(sql).not.toMatch(/drop table|drop column|creator_balance|withdrawal|escrow|recommendation_boost|visibility_boost|message_priority|mutuals_boost/i);
   });
+
+  it("adds refund remediation evidence without custody or payout queues", () => {
+    const sql = readMigration("0062_refund_remediation_evidence.sql");
+
+    expect(sql).toContain("create table refund_remediation_evidence");
+    expect(sql).toContain("evidence_only_no_platform_custody_no_payout_queue");
+    expect(sql).toContain("refund_remediation_evidence_dispute_idempotency_idx");
+    expect(sql).toContain("alter table refund_remediation_evidence enable row level security");
+    expect(sql).toContain("refund_remediation_evidence_select_self_or_staff");
+    expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role|creator_balance|withdrawal|automatic_refund|platform_balance|escrow/i);
+  });
 });

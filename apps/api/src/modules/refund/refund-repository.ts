@@ -26,6 +26,8 @@ interface RefundDisputeRow {
   state: RefundDisputeRequest["state"];
   resolution: string | null;
   custody_boundary: RefundDisputeRequest["custodyBoundary"];
+  remediation_evidence_count: string;
+  latest_remediation_evidence_at: Date | null;
   request_hash?: string;
   created_at: Date;
   updated_at: Date | null;
@@ -67,11 +69,20 @@ export function createPostgresRefundRepository(database?: string | PostgresSql):
           rd.state,
           rd.resolution,
           rd.custody_boundary,
+          coalesce(evidence.remediation_evidence_count, 0)::text as remediation_evidence_count,
+          evidence.latest_remediation_evidence_at,
           rd.created_at,
           rd.updated_at,
           rd.resolved_at
         from refunds_and_disputes rd
         join target_user tu on tu.id = rd.reporter_user_id
+        left join lateral (
+          select
+            count(*) as remediation_evidence_count,
+            max(rre.created_at) as latest_remediation_evidence_at
+          from refund_remediation_evidence rre
+          where rre.refund_dispute_id = rd.id
+        ) evidence on true
         where (${input.cursor ?? null}::timestamptz is null or rd.created_at < ${input.cursor ?? null}::timestamptz)
         order by rd.created_at desc
         limit ${pageSize + 1}
@@ -105,12 +116,21 @@ export function createPostgresRefundRepository(database?: string | PostgresSql):
               rd.state,
               rd.resolution,
               rd.custody_boundary,
+              coalesce(evidence.remediation_evidence_count, 0)::text as remediation_evidence_count,
+              evidence.latest_remediation_evidence_at,
               rd.request_hash,
               rd.created_at,
               rd.updated_at,
               rd.resolved_at
             from refunds_and_disputes rd
             join target_user tu on tu.id = rd.reporter_user_id
+            left join lateral (
+              select
+                count(*) as remediation_evidence_count,
+                max(rre.created_at) as latest_remediation_evidence_at
+              from refund_remediation_evidence rre
+              where rre.refund_dispute_id = rd.id
+            ) evidence on true
             where rd.idempotency_key = ${input.idempotencyKey}::text
             limit 1
           ),
@@ -156,6 +176,8 @@ export function createPostgresRefundRepository(database?: string | PostgresSql):
               state,
               resolution,
               custody_boundary,
+              '0'::text as remediation_evidence_count,
+              null::timestamptz as latest_remediation_evidence_at,
               request_hash,
               created_at,
               updated_at,
@@ -198,6 +220,8 @@ export function createPostgresRefundRepository(database?: string | PostgresSql):
             state,
             resolution,
             custody_boundary,
+            remediation_evidence_count,
+            latest_remediation_evidence_at,
             request_hash,
             created_at,
             updated_at,
@@ -215,6 +239,8 @@ export function createPostgresRefundRepository(database?: string | PostgresSql):
             state,
             resolution,
             custody_boundary,
+            remediation_evidence_count,
+            latest_remediation_evidence_at,
             request_hash,
             created_at,
             updated_at,
@@ -251,6 +277,8 @@ export function toRefundDisputeRequest(row: RefundDisputeRow): RefundDisputeRequ
     state: row.state,
     resolution: row.resolution,
     custodyBoundary: row.custody_boundary,
+    remediationEvidenceCount: Number(row.remediation_evidence_count),
+    latestRemediationEvidenceAt: row.latest_remediation_evidence_at?.toISOString() ?? null,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at?.toISOString() ?? null,
     resolvedAt: row.resolved_at?.toISOString() ?? null

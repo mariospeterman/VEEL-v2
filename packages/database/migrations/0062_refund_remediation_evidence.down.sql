@@ -1,0 +1,9 @@
+drop policy if exists refund_remediation_evidence_select_self_or_staff on refund_remediation_evidence;
+
+revoke select on table refund_remediation_evidence from authenticated;
+
+drop index if exists refund_remediation_evidence_payment_created_idx;
+drop index if exists refund_remediation_evidence_dispute_created_idx;
+drop index if exists refund_remediation_evidence_dispute_idempotency_idx;
+
+drop table if exists refund_remediation_evidence;
