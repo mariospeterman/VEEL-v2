@@ -1,21 +1,19 @@
-import { appShellNavItems } from "@veel/ui";
 import {
   getWallets,
   getWalletTransactionActivity,
-  type ApiResult,
   type Wallet,
-  type WalletList,
-  type WalletTransaction,
-  type WalletTransactionPage
+  type WalletTransaction
 } from "@/api-client";
 import { getWebAuthState } from "@/supabase/auth-state";
 import { requireConfiguredSession } from "@/supabase/route-guard";
 import { WalletLinkPanel } from "@/wallet/wallet-link-panel";
+import { AppShell } from "../app-shell";
+import { Card, EmptyState, ErrorState, Fact, PageHeader, StatusPill } from "../ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function WalletPage() {
-  await requireConfiguredSession("/wallet");
+  await requireConfiguredSession("/app/wallet");
 
   const [authState, wallets, walletTransactions] = await Promise.all([
     getWebAuthState(),
@@ -27,36 +25,17 @@ export default async function WalletPage() {
     : null;
 
   return (
-    <main className="min-h-screen bg-(--background) text-(--foreground)">
-      <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-(--line) px-5 py-4">
-        <a className="text-lg font-semibold tracking-normal" href="/">
-          VEEL
-        </a>
-        <div className="flex gap-1">
-          {appShellNavItems.map((item) => (
-            <a
-              className="rounded px-3 py-2 text-sm text-(--muted) transition hover:bg-(--panel) hover:text-(--foreground)"
-              href={item.href}
-              key={item.href}
-            >
-              {item.label}
-            </a>
-          ))}
-        </div>
-      </nav>
+    <AppShell>
+      <PageHeader
+        action={<StatusPill tone={primaryWallet ? "good" : "warn"}>{primaryWallet ? "Wallet linked" : "Connect wallet"}</StatusPill>}
+        eyebrow="Wallet"
+        title="Funding and receipts"
+      >
+        Non-custodial wallet state, linked wallets, funding handoff, and backend-issued receipts.
+      </PageHeader>
 
-      <section className="mx-auto grid h-[calc(100vh-65px)] w-full max-w-6xl gap-5 overflow-hidden px-5 py-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <section className="grid min-h-0 content-start gap-4 overflow-hidden">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium text-(--accent)">Wallet</p>
-              <h1 className="mt-1 text-2xl font-semibold tracking-normal">Funding and receipts</h1>
-            </div>
-            <span className="hidden rounded border border-(--line) bg-(--panel) px-3 py-2 text-sm text-(--muted) sm:block">
-              /v1/wallets
-            </span>
-          </div>
-
           {wallets.ok ? (
             <>
               {primaryWallet ? (
@@ -72,12 +51,12 @@ export default async function WalletPage() {
               </section>
             </>
           ) : (
-            <UnavailableState result={wallets} title="Wallets unavailable" />
+            <ErrorState result={wallets} title="Wallet state unavailable" context="Wallet" />
           )}
         </section>
 
         <aside className="grid min-h-0 content-start gap-4 overflow-hidden">
-          <section className="rounded border border-(--line) bg-(--panel) p-4">
+          <Card className="p-4">
             <p className="text-sm font-medium text-(--muted)">Top up</p>
             <h2 className="mt-1 text-lg font-semibold tracking-normal">User-owned wallet funding</h2>
             <p className="mt-3 text-sm leading-6 text-(--muted)">
@@ -92,7 +71,7 @@ export default async function WalletPage() {
                 <Fact label="Access effect" value="none" />
               </div>
             ) : null}
-          </section>
+          </Card>
 
           <section className="grid gap-3 overflow-hidden">
             <div className="border-b border-(--line) pb-3">
@@ -104,109 +83,68 @@ export default async function WalletPage() {
                   <TransactionRow transaction={transaction} key={transaction.id} />
                 ))
               ) : (
-                <EmptyState label="No wallet transactions yet" />
+                <EmptyState title="No wallet transactions yet">
+                  Wallet movements appear after backend-visible wallet activity exists.
+                </EmptyState>
               )
             ) : (
-              <UnavailableState result={walletTransactions} title="Wallet transactions unavailable" />
+              <ErrorState result={walletTransactions} title="Wallet transactions unavailable" context="Wallet transactions" />
             )}
           </section>
         </aside>
       </section>
-    </main>
+    </AppShell>
   );
 }
 
 function PrimaryWalletCard({ wallet }: { wallet: Wallet }) {
   return (
-    <article className="rounded border border-(--line) bg-(--panel) p-5">
+    <Card className="p-5">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-sm text-(--muted)">Primary wallet</p>
           <p className="mt-2 truncate text-xl font-semibold tracking-normal">{wallet.address}</p>
         </div>
-        <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-semibold text-(--accent-strong)">
-          primary
-        </span>
+        <StatusPill tone="good">primary</StatusPill>
       </div>
       <div className="mt-5 grid gap-3 text-sm sm:grid-cols-3">
         <Fact label="Provider" value={wallet.provider} />
         <Fact label="Chain" value={wallet.chain} />
         <Fact label="Payment proof" value="backend settlement only" />
       </div>
-    </article>
+    </Card>
   );
 }
 
 function WalletRow({ wallet }: { wallet: Wallet }) {
   return (
-    <article className="rounded border border-(--line) bg-(--panel) p-4">
+    <Card className="p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-medium">{wallet.provider}</p>
           <p className="mt-1 truncate text-sm text-(--muted)">{wallet.address}</p>
         </div>
-        <span className="rounded bg-(--background) px-2 py-1 text-xs text-(--muted)">
-          {wallet.isPrimary ? "primary" : "linked"}
-        </span>
+        <StatusPill tone={wallet.isPrimary ? "good" : "neutral"}>{wallet.isPrimary ? "primary" : "linked"}</StatusPill>
       </div>
-    </article>
+    </Card>
   );
 }
 
 function TransactionRow({ transaction }: { transaction: WalletTransaction }) {
   return (
-    <article className="rounded border border-(--line) bg-(--panel) p-4">
+    <Card className="p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-medium">{transaction.direction}</p>
           <p className="mt-1 text-sm text-(--muted)">{transaction.source}</p>
         </div>
-        <span className="rounded bg-(--background) px-2 py-1 text-xs text-(--muted)">
-          {transaction.state}
-        </span>
+        <StatusPill>{transaction.state}</StatusPill>
       </div>
       <div className="mt-4 grid gap-2 text-sm">
         <Fact label="Amount" value={`${transaction.amountMinor.toLocaleString()} ${transaction.currency}`} />
         <Fact label="Signature" value={shorten(transaction.signature)} />
       </div>
-    </article>
-  );
-}
-
-function EmptyState({ label }: { label: string }) {
-  return (
-    <div className="rounded border border-(--line) bg-(--panel) p-4 text-sm text-(--muted)">
-      {label}
-    </div>
-  );
-}
-
-function UnavailableState({
-  result,
-  title
-}: {
-  result: ApiResult<WalletList> | ApiResult<WalletTransactionPage>;
-  title: string;
-}) {
-  if (result.ok) {
-    return null;
-  }
-
-  return (
-    <div className="rounded border border-(--line) bg-(--panel) p-4">
-      <p className="text-sm font-medium text-(--accent)">HTTP {result.status}</p>
-      <h2 className="mt-2 text-base font-semibold tracking-normal">{title}</h2>
-      <p className="mt-2 text-sm leading-6 text-(--muted)">{result.message}</p>
-    </div>
-  );
-}
-
-function Fact({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-xs uppercase text-(--muted)">{label}</p>
-      <p className="mt-1 truncate font-medium">{value}</p>
-    </div>
+    </Card>
   );
 }
 

@@ -5,6 +5,7 @@ import type {
   AdminPage,
   ApiResult
 } from "@/api-client";
+import { mapApiFailure } from "@/api-errors";
 
 export function PageState<T>({
   children,
@@ -53,11 +54,19 @@ export function EmptyState({ label }: { label: string }) {
 }
 
 export function UnavailableState<T>({ result }: { result: Extract<ApiResult<T>, { ok: false }> }) {
+  const mapped = mapApiFailure(result, "Admin");
+
   return (
     <div className="rounded border border-(--line) bg-(--background) p-3 text-sm">
-      <p className="font-medium">Admin API unavailable</p>
-      <p className="mt-1 text-(--muted)">HTTP {result.status}</p>
-      <p className="mt-1 text-(--muted)">{result.message}</p>
+      <p className="font-medium">{mapped.title}</p>
+      <p className="mt-1 text-(--muted)">{mapped.message}</p>
+      {process.env.NODE_ENV !== "production" ? (
+        <details className="debug-details">
+          <summary>Developer details</summary>
+          <p>Status {mapped.status ?? "unknown"}</p>
+          <p>{mapped.debugMessage}</p>
+        </details>
+      ) : null}
     </div>
   );
 }

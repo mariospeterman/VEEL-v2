@@ -1,4 +1,3 @@
-import { appShellNavItems } from "@veel/ui";
 import {
   getMyCreatorDashboard,
   getMyCreatorOnboarding,
@@ -7,11 +6,13 @@ import {
   type CreatorOnboarding
 } from "@/api-client";
 import { requireAppAccess } from "@/supabase/route-guard";
+import { AppShell } from "../app-shell";
+import { Card, ErrorState, Fact, MetricCard, PageHeader, StatusPill } from "../ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProfilePage() {
-  await requireAppAccess("/profile");
+  await requireAppAccess("/app/profile");
 
   const [dashboardResult, onboardingResult] = await Promise.all([
     getMyCreatorDashboard(),
@@ -19,42 +20,18 @@ export default async function ProfilePage() {
   ]);
 
   return (
-    <main className="min-h-screen bg-(--background) text-(--foreground)">
-      <AppNav />
-
+    <AppShell>
       {dashboardResult.ok ? (
         <DashboardView dashboard={dashboardResult.data} onboarding={onboardingResult} />
       ) : onboardingResult.ok ? (
         <OnboardingOnlyView onboarding={onboardingResult.data} unavailable={dashboardResult} />
       ) : (
-        <UnavailableState
-          message={dashboardResult.message}
-          status={dashboardResult.status}
-          title="Creator dashboard unavailable"
-        />
+        <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <ErrorState result={dashboardResult} title="Creator dashboard unavailable" context="Creator dashboard" />
+          <ProfileCapabilityLinks />
+        </section>
       )}
-    </main>
-  );
-}
-
-function AppNav() {
-  return (
-    <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-(--line) px-5 py-4">
-      <a className="text-lg font-semibold tracking-normal" href="/">
-        VEEL
-      </a>
-      <div className="flex gap-1">
-        {appShellNavItems.map((item) => (
-          <a
-            className="rounded px-3 py-2 text-sm text-(--muted) transition hover:bg-(--panel) hover:text-(--foreground)"
-            href={item.href}
-            key={item.href}
-          >
-            {item.label}
-          </a>
-        ))}
-      </div>
-    </nav>
+    </AppShell>
   );
 }
 
@@ -66,19 +43,21 @@ function DashboardView({
   onboarding: ApiResult<CreatorOnboarding>;
 }) {
   return (
-    <section className="mx-auto grid w-full max-w-6xl gap-6 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+    <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
       <section className="grid content-start gap-5">
-        <div>
-          <p className="text-sm font-medium text-(--accent)">Creator dashboard</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-normal">{dashboard.creator.displayName}</h1>
-          <p className="mt-2 text-sm text-(--muted)">@{dashboard.creator.handle}</p>
-        </div>
+        <PageHeader
+          action={<StatusPill tone={dashboard.readiness.canMonetize ? "good" : "warn"}>{dashboard.readiness.canMonetize ? "Ready" : "Setup needed"}</StatusPill>}
+          eyebrow="Profile"
+          title={dashboard.creator.displayName}
+        >
+          @{dashboard.creator.handle}
+        </PageHeader>
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <Metric label="Creator earnings" value={formatAmount(dashboard.earnings.creatorEarningsMinor)} />
-          <Metric label="Platform fees" value={formatAmount(dashboard.earnings.platformFeesMinor)} />
-          <Metric label="Referral commissions" value={formatAmount(dashboard.earnings.referralCommissionsMinor)} />
-          <Metric label="Readiness score" value={`${dashboard.readiness.readinessScore}%`} />
+          <MetricCard label="Creator earnings" value={formatAmount(dashboard.earnings.creatorEarningsMinor)} />
+          <MetricCard label="Platform fees" value={formatAmount(dashboard.earnings.platformFeesMinor)} />
+          <MetricCard label="Referral commissions" value={formatAmount(dashboard.earnings.referralCommissionsMinor)} />
+          <MetricCard label="Readiness score" value={`${dashboard.readiness.readinessScore}%`} />
         </div>
 
         <section className="grid gap-3">
@@ -91,8 +70,9 @@ function DashboardView({
 
       <aside className="grid content-start gap-3">
         {onboarding.ok ? <CreatorSetup onboarding={onboarding.data} /> : null}
+        <ProfileCapabilityLinks />
 
-        <section className="rounded border border-(--line) bg-(--panel) p-4">
+        <Card className="p-4">
           <p className="text-sm font-medium">Monetisation readiness</p>
           <div className="mt-4 grid gap-3 text-sm">
             <Fact label="Earnings" value={dashboard.readiness.earningState} />
@@ -102,9 +82,9 @@ function DashboardView({
             <Fact label="Can monetize" value={dashboard.readiness.canMonetize ? "yes" : "no"} />
             <Fact label="Boundary" value="no balances or social priority" />
           </div>
-        </section>
+        </Card>
 
-        <section className="rounded border border-(--line) bg-(--panel) p-4">
+        <Card className="p-4">
           <p className="text-sm font-medium">Blocked reasons</p>
           <div className="mt-3 grid gap-2">
             {dashboard.readiness.blockedReasons.map((reason) => (
@@ -116,7 +96,7 @@ function DashboardView({
               </span>
             ))}
           </div>
-        </section>
+        </Card>
       </aside>
     </section>
   );
@@ -130,29 +110,70 @@ function OnboardingOnlyView({
   unavailable: ApiResult<CreatorDashboard>;
 }) {
   return (
-    <section className="mx-auto grid w-full max-w-6xl gap-6 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+    <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
       <section className="grid content-start gap-5">
-        <div>
-          <p className="text-sm font-medium text-(--accent)">Become Creator</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-normal">Creator setup</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-(--muted)">
+        <PageHeader eyebrow="Profile" title="Creator setup">
             Complete the backend-owned readiness checks before monetisation views and creator
             products become available.
-          </p>
-        </div>
+        </PageHeader>
         <CreatorSetup onboarding={onboarding} />
+        <ProfileCapabilityLinks />
       </section>
 
       <aside className="grid content-start gap-3">
-        <UnavailablePanel result={unavailable} title="Creator dashboard unavailable" />
+        <ErrorState result={unavailable} title="Creator dashboard unavailable" context="Creator dashboard" />
       </aside>
     </section>
   );
 }
 
+function ProfileCapabilityLinks() {
+  return (
+    <Card className="p-4">
+      <p className="text-sm font-medium">Profile capabilities</p>
+      <p className="mt-2 text-sm leading-6 text-(--muted)">
+        Studio, Enterprise, and MCP access are profile/tier capabilities. Backend membership,
+        role, and consent checks decide what opens.
+      </p>
+      <div className="mt-4 grid gap-2">
+        <a
+          className="flex min-h-12 items-center justify-between gap-3 rounded border border-(--line) bg-(--background) px-3 py-2 text-sm"
+          href="/app/studio"
+        >
+          <span>
+            <span className="block font-medium">Studio / Enterprise</span>
+            <span className="text-xs text-(--muted)">Organization dashboards for eligible tiers</span>
+          </span>
+          <StatusPill>tier gated</StatusPill>
+        </a>
+        <a
+          className="flex min-h-12 items-center justify-between gap-3 rounded border border-(--line) bg-(--background) px-3 py-2 text-sm"
+          href="/app/settings#mcp"
+        >
+          <span>
+            <span className="block font-medium">MCP connections</span>
+            <span className="text-xs text-(--muted)">External client access and revocation</span>
+          </span>
+          <StatusPill>consent scoped</StatusPill>
+        </a>
+        <a
+          className="flex min-h-12 items-center justify-between gap-3 rounded border border-(--line) bg-(--background) px-3 py-2 text-sm"
+          href="/app/assistant"
+        >
+          <span>
+            <span className="block font-medium">Capability projection</span>
+            <span className="text-xs text-(--muted)">Read-only AI/MCP scopes when enabled</span>
+          </span>
+          <StatusPill>backend gated</StatusPill>
+        </a>
+      </div>
+    </Card>
+  );
+}
+
 function CreatorSetup({ onboarding }: { onboarding: CreatorOnboarding }) {
   return (
-    <section className="rounded border border-(--line) bg-(--panel) p-4">
+    <Card className="p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-medium">Become Creator</p>
@@ -160,9 +181,7 @@ function CreatorSetup({ onboarding }: { onboarding: CreatorOnboarding }) {
             State: {onboarding.state} / {onboarding.readinessScore}%
           </p>
         </div>
-        <span className="rounded bg-(--background) px-2 py-1 text-xs text-(--muted)">
-          {onboarding.canStartEarning ? "ready" : "setup"}
-        </span>
+        <StatusPill tone={onboarding.canStartEarning ? "good" : "warn"}>{onboarding.canStartEarning ? "ready" : "setup"}</StatusPill>
       </div>
 
       <div className="mt-4 grid gap-2">
@@ -176,91 +195,29 @@ function CreatorSetup({ onboarding }: { onboarding: CreatorOnboarding }) {
               <span className="block font-medium">{step.label}</span>
               <span className="text-xs text-(--muted)">{step.required ? "required" : "optional"}</span>
             </span>
-            <span className="rounded bg-(--panel) px-2 py-1 text-xs text-(--muted)">
-              {step.state}
-            </span>
+            <StatusPill>{step.state}</StatusPill>
           </a>
         ))}
       </div>
-    </section>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded border border-(--line) bg-(--panel) p-4">
-      <p className="text-xs uppercase text-(--muted)">{label}</p>
-      <p className="mt-2 text-xl font-semibold tracking-normal">{value}</p>
-    </div>
+    </Card>
   );
 }
 
 function ProductRow({ product }: { product: CreatorDashboard["products"][number] }) {
   return (
-    <article className="rounded border border-(--line) bg-(--panel) p-4">
+    <Card className="p-4">
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="font-medium">{product.productType}</p>
           <p className="mt-1 text-sm text-(--muted)">{product.confirmedPaymentCount} confirmed payments</p>
         </div>
-        <span className="rounded bg-(--background) px-2 py-1 text-xs text-(--muted)">
-          {product.enabled ? "enabled" : "disabled"}
-        </span>
+        <StatusPill tone={product.enabled ? "good" : "warn"}>{product.enabled ? "enabled" : "disabled"}</StatusPill>
       </div>
       <p className="mt-3 text-sm font-medium">{formatAmount(product.amountMinor)}</p>
-    </article>
-  );
-}
-
-function Fact({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-xs uppercase text-(--muted)">{label}</p>
-      <p className="mt-1 font-medium">{value}</p>
-    </div>
+    </Card>
   );
 }
 
 function formatAmount(amountMinor: number) {
   return `${amountMinor.toLocaleString()} SOL`;
-}
-
-function UnavailableState({
-  message,
-  status,
-  title
-}: {
-  message: string;
-  status: number;
-  title: string;
-}) {
-  return (
-    <section className="mx-auto grid min-h-[calc(100vh-73px)] w-full max-w-6xl content-center px-5 py-6">
-      <div className="rounded border border-(--line) bg-(--panel) p-6">
-        <p className="text-sm font-medium text-(--accent)">HTTP {status}</p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-normal">{title}</h1>
-        <p className="mt-3 text-sm leading-6 text-(--muted)">{message}</p>
-      </div>
-    </section>
-  );
-}
-
-function UnavailablePanel({
-  result,
-  title
-}: {
-  result: ApiResult<unknown>;
-  title: string;
-}) {
-  if (result.ok) {
-    return null;
-  }
-
-  return (
-    <section className="rounded border border-(--line) bg-(--panel) p-4">
-      <p className="text-sm font-medium text-(--accent)">HTTP {result.status}</p>
-      <h2 className="mt-2 text-base font-semibold tracking-normal">{title}</h2>
-      <p className="mt-2 text-sm leading-6 text-(--muted)">{result.message}</p>
-    </section>
-  );
 }

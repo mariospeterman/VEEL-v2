@@ -55,17 +55,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/me": {
+    "/v1/auth/wallet/challenges": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Current viewer state */
-        get: operations["getMe"];
+        get?: never;
         put?: never;
-        post?: never;
+        /** Create a wallet-first login challenge */
+        post: operations["createWalletAuthChallenge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/wallet/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify a wallet challenge and create a Veel session */
+        post: operations["createWalletAuthSession"];
         delete?: never;
         options?: never;
         head?: never;
@@ -253,23 +270,6 @@ export interface paths {
         get: operations["getProfileByHandle"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/follows/{userId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Follow or unfollow a creator/profile */
-        post: operations["toggleFollow"];
         delete?: never;
         options?: never;
         head?: never;
@@ -955,7 +955,8 @@ export interface paths {
         /** Server-built wallet transaction request */
         get: operations["getPaymentTransactionRequest"];
         put?: never;
-        post?: never;
+        /** Build unsigned non-custodial creator split transaction for wallet signature */
+        post: operations["createPaymentTransactionRequest"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1468,6 +1469,211 @@ export interface paths {
         put?: never;
         /** Execute or stage a permission-scoped AI/MCP tool call */
         post: operations["createAiToolCall"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mcp/tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List safe external MCP tools available to the current user role */
+        get: operations["listMcpTools"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mcp/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List external MCP client connections without exposing tokens */
+        get: operations["listMcpConnections"];
+        put?: never;
+        /** Create a scoped MCP client connection and return a one-time token */
+        post: operations["createMcpConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mcp/connections/{mcpConnectionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one external MCP client connection without exposing its token */
+        get: operations["getMcpConnection"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mcp/connections/{mcpConnectionId}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke one external MCP client connection */
+        post: operations["revokeMcpConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/.well-known/oauth-protected-resource": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** MCP OAuth protected resource metadata */
+        get: operations["getMcpOAuthProtectedResourceMetadata"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/.well-known/oauth-authorization-server": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** MCP OAuth authorization server metadata */
+        get: operations["getMcpOAuthAuthorizationServerMetadata"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Start MCP OAuth authorization-code flow with PKCE */
+        get: operations["authorizeMcpOAuthConnection"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/consent/{oauthAuthorizationRequestId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a pending MCP OAuth consent request */
+        get: operations["getMcpOAuthConsentRequest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/consent/{oauthAuthorizationRequestId}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve an MCP OAuth consent request and return connector redirect URL */
+        post: operations["approveMcpOAuthConsentRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/consent/{oauthAuthorizationRequestId}/deny": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deny an MCP OAuth consent request and return connector redirect URL */
+        post: operations["denyMcpOAuthConsentRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Exchange one MCP OAuth authorization code for a bearer access token */
+        post: operations["exchangeMcpOAuthCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke an MCP OAuth bearer access token */
+        post: operations["revokeMcpOAuthToken"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2357,7 +2563,49 @@ export interface components {
             isPrimary: boolean;
         };
         /** @enum {string} */
+        WalletProvider: "embedded_privy" | "embedded_turnkey" | "phantom" | "solflare" | "wallet_adapter";
+        /** @enum {string} */
         ExternalWalletProvider: "phantom" | "solflare" | "wallet_adapter";
+        CreateWalletAuthChallengeRequest: {
+            /** @enum {string} */
+            chain: "solana_devnet" | "solana_mainnet";
+            address: string;
+            provider: components["schemas"]["WalletProvider"];
+        };
+        WalletAuthChallenge: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            chain: "solana_devnet" | "solana_mainnet";
+            address: string;
+            provider: components["schemas"]["WalletProvider"];
+            message: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        WalletAuthProof: {
+            /** Format: uuid */
+            challengeId: string;
+            message: string;
+            signature: string;
+            /** @enum {string} */
+            signatureEncoding: "base58" | "base64";
+        };
+        CreateWalletAuthSessionRequest: {
+            provider: components["schemas"]["WalletProvider"];
+            address: string;
+            /** @enum {string} */
+            chain: "solana_devnet" | "solana_mainnet";
+            proof: components["schemas"]["WalletAuthProof"];
+        };
+        WalletAuthSession: {
+            accessToken: string;
+            /** @enum {string} */
+            tokenType: "Bearer";
+            /** Format: date-time */
+            expiresAt: string;
+            wallet: components["schemas"]["Wallet"];
+        };
         CreateWalletLinkChallengeRequest: {
             /** @enum {string} */
             chain: "solana_devnet" | "solana_mainnet";
@@ -2411,13 +2659,6 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             expiresAt?: string | null;
-        };
-        Me: {
-            user: components["schemas"]["User"];
-            ageState: components["schemas"]["AgeState"];
-            walletState: components["schemas"]["WalletState"];
-            appAccessState: components["schemas"]["AppAccessState"];
-            feedPreferences: components["schemas"]["FeedPreferences"];
         };
         User: {
             /** Format: uuid */
@@ -2890,10 +3131,6 @@ export interface components {
             /** Format: uri */
             url?: string | null;
         };
-        FollowState: {
-            following: boolean;
-            followerCount: number;
-        };
         CreateReportRequest: {
             /** @enum {string} */
             subjectType: "content" | "user" | "message" | "live_room" | "event";
@@ -2988,7 +3225,12 @@ export interface components {
             amountMinor: number;
             currency: components["schemas"]["Currency"];
             /** @enum {string} */
-            state: "pending" | "transaction_requested" | "submitted" | "confirmed" | "failed" | "expired";
+            state: "pending" | "transaction_requested" | "submitted" | "confirming" | "confirmed" | "settled" | "failed" | "expired" | "cancelled";
+            /** @enum {string} */
+            settlementKind: "creator_split" | "platform_owned" | "dev_test";
+            creatorAmountMinor: number;
+            platformFeeAmountMinor: number;
+            allocationAmountMinor: number;
             refundPolicy: components["schemas"]["PaymentIntentRefundPolicy"];
         };
         SubmitPaymentSignatureRequest: {
@@ -3039,6 +3281,15 @@ export interface components {
             transactionRequestUrl: string;
             /** Format: date-time */
             expiresAt: string;
+        };
+        TransactionRequestPostRequest: {
+            /** @description Buyer-controlled Solana public key that will sign and pay the transaction */
+            account: string;
+        };
+        TransactionRequestPostResponse: {
+            /** @description Base64 serialized unsigned Solana transaction for wallet signature */
+            transaction: string;
+            message?: string;
         };
         Entitlement: {
             /** Format: uuid */
@@ -3167,10 +3418,17 @@ export interface components {
             /** @enum {string} */
             billingMode: "manual_solana_pay" | "delegated_solana_subscription";
             /** @enum {string} */
-            providerState: "fallback_active" | "staging_required" | "disabled";
+            providerState: "staging_required" | "launch_approved" | "disabled";
+            /** @enum {string} */
+            provider: "official_solana_subscription_program" | "mock_subscription_provider_dev_only";
             tokenMint?: string | null;
             /** @enum {string|null} */
             tokenProgram?: "spl_token" | "token_2022" | null;
+            programId?: string | null;
+            planPda?: string | null;
+            merchantWallet?: string | null;
+            amountAtomic?: number;
+            periodSeconds?: number;
         };
         CreateSubscriptionIntentRequest: {
             planId: string;
@@ -3198,6 +3456,14 @@ export interface components {
             revokedAt?: string | null;
             authorityAddress?: string | null;
             delegationAddress?: string | null;
+            subscriberWallet?: string | null;
+            subscriberTokenAccount?: string | null;
+            tokenMint?: string | null;
+            provider?: string | null;
+            programId?: string | null;
+            planPda?: string | null;
+            subscriptionPda?: string | null;
+            failureReason?: string | null;
         };
         SubscriptionAuthorizationIntent: {
             /** Format: uuid */
@@ -3498,6 +3764,138 @@ export interface components {
         AiSessionScope: "user_self_service" | "creator_helper" | "admin_ops";
         /** @enum {string} */
         AiToolName: "explain_app_state" | "summarize_own_activity" | "find_own_purchases" | "draft_caption" | "suggest_hashtags" | "prepare_event_copy" | "summarize_creator_metrics" | "payment_lookup" | "provider_health_summary" | "moderation_queue_summary" | "draft_support_reply" | "prepare_refund_decision" | "prepare_ban_or_restriction";
+        /** @enum {string} */
+        McpScope: "creator.profile.read" | "creator.profile.draft" | "creator.metrics.read" | "creator.drafts.read" | "creator.drafts.write" | "creator.events.read" | "creator.events.draft" | "creator.media.read" | "creator.media.label" | "creator.publish.request" | "admin.health.read" | "admin.support.read" | "admin.support.draft" | "admin.moderation.read" | "admin.moderation.draft" | "admin.payments.read" | "admin.tasks.create";
+        /** @enum {string} */
+        McpClientType: "claude" | "claude_code" | "cursor" | "openai" | "custom" | "internal";
+        /** @enum {string} */
+        McpRoleType: "creator" | "admin";
+        /** @enum {string} */
+        McpAuthMode: "scoped_token" | "oauth";
+        /** @enum {string} */
+        McpToolRiskLevel: "read" | "draft" | "request";
+        McpToolDefinition: {
+            name: string;
+            version: string;
+            description: string;
+            inputSchema: {
+                [key: string]: unknown;
+            };
+            outputSchema: {
+                [key: string]: unknown;
+            };
+            requiredScopes: components["schemas"]["McpScope"][];
+            roleTypes: components["schemas"]["McpRoleType"][];
+            riskLevel: components["schemas"]["McpToolRiskLevel"];
+        };
+        CreateMcpConnectionRequest: {
+            clientName: string;
+            clientType: components["schemas"]["McpClientType"];
+            roleType: components["schemas"]["McpRoleType"];
+            scopes: components["schemas"]["McpScope"][];
+        };
+        McpConnection: {
+            /** Format: uuid */
+            id: string;
+            clientName: string;
+            clientType: components["schemas"]["McpClientType"];
+            authMode: components["schemas"]["McpAuthMode"];
+            roleType: components["schemas"]["McpRoleType"];
+            /** @enum {string} */
+            state: "active" | "revoked" | "expired";
+            tokenHint: string | null;
+            scopes: components["schemas"]["McpScope"][];
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            lastUsedAt: string | null;
+            /** Format: date-time */
+            revokedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CreatedMcpConnection: components["schemas"]["McpConnection"] & {
+            /** @description Returned once. Only a hash is stored by the API. */
+            token: string;
+        };
+        McpConnectionPage: {
+            items: components["schemas"]["McpConnection"][];
+            nextCursor: string | null;
+        };
+        McpOAuthProtectedResourceMetadata: {
+            /** Format: uri */
+            resource: string;
+            authorization_servers: string[];
+            bearer_methods_supported: string[];
+            scopes_supported: components["schemas"]["McpScope"][];
+            /** Format: uri */
+            resource_documentation?: string;
+            mcp_status?: string;
+        };
+        McpOAuthAuthorizationServerMetadata: {
+            /** Format: uri */
+            issuer: string;
+            /** Format: uri */
+            authorization_endpoint: string;
+            /** Format: uri */
+            token_endpoint: string;
+            /** Format: uri */
+            revocation_endpoint: string;
+            scopes_supported?: components["schemas"]["McpScope"][];
+            response_types_supported: "code"[];
+            grant_types_supported: "authorization_code"[];
+            code_challenge_methods_supported: "S256"[];
+            token_endpoint_auth_methods_supported?: "none"[];
+            revocation_endpoint_auth_methods_supported?: "none"[];
+            /** Format: uri */
+            service_documentation?: string;
+            status?: string;
+        };
+        McpOAuthConsentRequest: {
+            /** Format: uuid */
+            id: string;
+            clientName: string;
+            clientType: components["schemas"]["McpClientType"];
+            roleType: components["schemas"]["McpRoleType"];
+            /** Format: uri */
+            resource: string;
+            requestedScopes: components["schemas"]["McpScope"][];
+            /** @enum {string} */
+            status: "pending" | "approved" | "denied" | "expired" | "exchanged";
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        McpOAuthRedirect: {
+            /** Format: uri */
+            redirectUri: string;
+        };
+        McpOAuthTokenRequest: {
+            /** @enum {string} */
+            grant_type: "authorization_code";
+            client_id: string;
+            /** Format: uri */
+            redirect_uri: string;
+            code: string;
+            code_verifier: string;
+        };
+        McpOAuthRevokeRequest: {
+            token: string;
+            /** @enum {string} */
+            token_type_hint?: "access_token";
+        };
+        McpOAuthTokenResponse: {
+            access_token: string;
+            /** @enum {string} */
+            token_type: "Bearer";
+            expires_in: number;
+            scope: string;
+        };
+        McpOAuthError: {
+            error: string;
+            error_description: string;
+        };
         OrganizationDashboardPage: {
             items: components["schemas"]["OrganizationDashboard"][];
             nextCursor: string | null;
@@ -4257,6 +4655,15 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
+        /** @description Not implemented */
+        NotImplemented: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
         /** @description Service unavailable */
         ServiceUnavailable: {
             headers: {
@@ -4284,15 +4691,6 @@ export interface components {
                 "application/json": components["schemas"]["SessionState"];
             };
         };
-        /** @description Current viewer */
-        Me: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["Me"];
-            };
-        };
         /** @description Age assurance session */
         AgeSession: {
             headers: {
@@ -4309,6 +4707,24 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["AgeStatus"];
+            };
+        };
+        /** @description Wallet auth challenge */
+        WalletAuthChallenge: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["WalletAuthChallenge"];
+            };
+        };
+        /** @description Wallet auth session */
+        WalletAuthSession: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["WalletAuthSession"];
             };
         };
         /** @description Wallet link challenge */
@@ -4583,15 +4999,6 @@ export interface components {
                 "application/json": components["schemas"]["ShareResult"];
             };
         };
-        /** @description Follow state */
-        FollowState: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["FollowState"];
-            };
-        };
         /** @description Moderation intake */
         ModerationIntake: {
             headers: {
@@ -4664,6 +5071,15 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["TransactionRequest"];
+            };
+        };
+        /** @description Unsigned transaction request response */
+        TransactionRequestPost: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["TransactionRequestPostResponse"];
             };
         };
         /** @description Content unlock intent */
@@ -4883,6 +5299,98 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["AiToolCall"];
+            };
+        };
+        /** @description External MCP tools */
+        McpToolList: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    items: components["schemas"]["McpToolDefinition"][];
+                };
+            };
+        };
+        /** @description External MCP connections */
+        McpConnectionPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["McpConnectionPage"];
+            };
+        };
+        /** @description External MCP connection without token */
+        McpConnection: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["McpConnection"];
+            };
+        };
+        /** @description External MCP connection with one-time token */
+        CreatedMcpConnection: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["CreatedMcpConnection"];
+            };
+        };
+        /** @description MCP OAuth protected resource metadata */
+        McpOAuthProtectedResourceMetadata: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["McpOAuthProtectedResourceMetadata"];
+            };
+        };
+        /** @description MCP OAuth authorization server metadata */
+        McpOAuthAuthorizationServerMetadata: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["McpOAuthAuthorizationServerMetadata"];
+            };
+        };
+        /** @description MCP OAuth consent request */
+        McpOAuthConsentRequest: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["McpOAuthConsentRequest"];
+            };
+        };
+        /** @description OAuth connector redirect */
+        McpOAuthRedirect: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["McpOAuthRedirect"];
+            };
+        };
+        /** @description OAuth bearer access token */
+        McpOAuthTokenResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["McpOAuthTokenResponse"];
+            };
+        };
+        /** @description OAuth error response */
+        McpOAuthError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["McpOAuthError"];
             };
         };
         /** @description Organization dashboards */
@@ -5369,6 +5877,8 @@ export interface components {
         SubscriptionId: string;
         SubscriptionAuthorizationIntentId: string;
         AiSessionId: string;
+        McpConnectionId: string;
+        OAuthAuthorizationRequestId: string;
         NotificationId: string;
         NotificationDeviceId: string;
         MutualId: string;
@@ -5391,6 +5901,16 @@ export interface components {
         CreateAgeSession: {
             content: {
                 "application/json": components["schemas"]["CreateAgeSessionRequest"];
+            };
+        };
+        CreateWalletAuthChallenge: {
+            content: {
+                "application/json": components["schemas"]["CreateWalletAuthChallengeRequest"];
+            };
+        };
+        CreateWalletAuthSession: {
+            content: {
+                "application/json": components["schemas"]["CreateWalletAuthSessionRequest"];
             };
         };
         CreateWalletLinkChallenge: {
@@ -5508,6 +6028,11 @@ export interface components {
                 "application/json": components["schemas"]["SubmitPaymentSignatureRequest"];
             };
         };
+        CreateTransactionRequest: {
+            content: {
+                "application/json": components["schemas"]["TransactionRequestPostRequest"];
+            };
+        };
         SolanaIndexerWebhook: {
             content: {
                 "application/json": components["schemas"]["SolanaIndexerWebhookPayload"];
@@ -5581,6 +6106,23 @@ export interface components {
         CreateAiToolCall: {
             content: {
                 "application/json": components["schemas"]["CreateAiToolCallRequest"];
+            };
+        };
+        CreateMcpConnection: {
+            content: {
+                "application/json": components["schemas"]["CreateMcpConnectionRequest"];
+            };
+        };
+        McpOAuthTokenRequest: {
+            content: {
+                "application/json": components["schemas"]["McpOAuthTokenRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["McpOAuthTokenRequest"];
+            };
+        };
+        McpOAuthRevokeRequest: {
+            content: {
+                "application/json": components["schemas"]["McpOAuthRevokeRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["McpOAuthRevokeRequest"];
             };
         };
         AdminReason: {
@@ -5691,17 +6233,38 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
         };
     };
-    getMe: {
+    createWalletAuthChallenge: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: components["requestBodies"]["CreateWalletAuthChallenge"];
         responses: {
-            200: components["responses"]["Me"];
-            401: components["responses"]["Unauthorized"];
+            201: components["responses"]["WalletAuthChallenge"];
+            400: components["responses"]["ValidationFailed"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createWalletAuthSession: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["CreateWalletAuthSession"];
+        responses: {
+            201: components["responses"]["WalletAuthSession"];
+            400: components["responses"]["ValidationFailed"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     createAgeSession: {
@@ -5882,23 +6445,6 @@ export interface operations {
         responses: {
             200: components["responses"]["CreatorProfile"];
             404: components["responses"]["NotFound"];
-        };
-    };
-    toggleFollow: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
-                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
-            };
-            path: {
-                userId: components["parameters"]["UserId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["FollowState"];
         };
     };
     getContentFeed: {
@@ -6713,6 +7259,29 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    createPaymentTransactionRequest: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                paymentIntentId: components["parameters"]["PaymentIntentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["CreateTransactionRequest"];
+        responses: {
+            200: components["responses"]["TransactionRequestPost"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     submitPaymentSignature: {
         parameters: {
             query?: never;
@@ -7227,6 +7796,226 @@ export interface operations {
         requestBody: components["requestBodies"]["CreateAiToolCall"];
         responses: {
             201: components["responses"]["AiToolCall"];
+        };
+    };
+    listMcpTools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["McpToolList"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listMcpConnections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["McpConnectionPage"];
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createMcpConnection: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["CreateMcpConnection"];
+        responses: {
+            201: components["responses"]["CreatedMcpConnection"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            501: components["responses"]["NotImplemented"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getMcpConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mcpConnectionId: components["parameters"]["McpConnectionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["McpConnection"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    revokeMcpConnection: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                mcpConnectionId: components["parameters"]["McpConnectionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["McpConnection"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getMcpOAuthProtectedResourceMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["McpOAuthProtectedResourceMetadata"];
+        };
+    };
+    getMcpOAuthAuthorizationServerMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["McpOAuthAuthorizationServerMetadata"];
+        };
+    };
+    authorizeMcpOAuthConnection: {
+        parameters: {
+            query: {
+                client_id: string;
+                redirect_uri: string;
+                response_type: "code";
+                resource: string;
+                scope: string;
+                state?: string;
+                code_challenge: string;
+                code_challenge_method: "S256";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to authenticated web consent */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationFailed"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getMcpOAuthConsentRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                oauthAuthorizationRequestId: components["parameters"]["OAuthAuthorizationRequestId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["McpOAuthConsentRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    approveMcpOAuthConsentRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                oauthAuthorizationRequestId: components["parameters"]["OAuthAuthorizationRequestId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["McpOAuthRedirect"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    denyMcpOAuthConsentRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                oauthAuthorizationRequestId: components["parameters"]["OAuthAuthorizationRequestId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["McpOAuthRedirect"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    exchangeMcpOAuthCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["McpOAuthTokenRequest"];
+        responses: {
+            200: components["responses"]["McpOAuthTokenResponse"];
+            400: components["responses"]["McpOAuthError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    revokeMcpOAuthToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["McpOAuthRevokeRequest"];
+        responses: {
+            /** @description Revocation accepted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     listMyOrganizationDashboards: {

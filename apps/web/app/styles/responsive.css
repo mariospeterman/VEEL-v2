@@ -1,0 +1,133 @@
+@layer components {
+  @media (max-width: 1023px) {
+    .landing-hero {
+      padding: 16px;
+    }
+
+    .landing-grid {
+      align-items: start;
+      min-height: auto;
+      grid-template-columns: 1fr;
+      padding: 56px 0 22px;
+    }
+
+    .landing-copy h1 {
+      font-size: clamp(72px, 22vw, 112px);
+    }
+
+    .app-shell {
+      display: grid;
+      grid-template-columns: 1fr;
+      grid-template-rows: minmax(0, 1fr) auto;
+      padding-bottom: 0;
+    }
+
+    .app-rail {
+      display: none;
+    }
+
+    .top-bar {
+      min-height: 64px;
+      padding: 10px 16px;
+    }
+
+    .mobile-brand {
+      display: inline-flex;
+    }
+
+    .top-search {
+      display: none;
+    }
+
+    .top-actions {
+      margin-left: auto;
+      max-width: 64vw;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+
+    .top-action,
+    .theme-toggle {
+      min-height: 40px;
+    }
+
+    .page-frame {
+      width: 100%;
+      padding: 18px 16px calc(86px + env(safe-area-inset-bottom));
+    }
+
+    .page-header {
+      display: grid;
+      gap: 14px;
+    }
+
+    .page-header h1 {
+      font-size: 32px;
+    }
+
+    .bottom-nav {
+      position: fixed;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 30;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+      border-top: 1px solid var(--line);
+      background: color-mix(in srgb, var(--background) 90%, transparent);
+      padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+      backdrop-filter: blur(22px);
+    }
+
+    .bottom-link {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      justify-content: center;
+      padding: 0 4px;
+      font-size: 12px;
+      font-weight: 720;
+    }
+
+    .media-layout {
+      grid-template-columns: 1fr;
+      grid-template-rows: minmax(0, 1fr) auto;
+      overflow-y: auto;
+    }
+
+    .media-pane {
+      min-height: 52dvh;
+    }
+
+    .side-pane {
+      overflow: visible;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .landing-nav {
+      align-items: flex-start;
+    }
+
+    .landing-nav-actions {
+      justify-content: flex-end;
+    }
+
+    .landing-status-card {
+      padding: 18px;
+    }
+
+    .top-actions {
+      max-width: 52vw;
+    }
+
+    .top-action {
+      display: none;
+    }
+
+    .theme-toggle {
+      display: inline-flex;
+    }
+  }
+}

@@ -14,7 +14,7 @@ describe("appAccessRedirectForPath", () => {
       "/enter?next=%2Fmessages"
     );
     expect(appAccessRedirectForPath("/messages", "wallet_required")).toBe(
-      "/wallet?next=%2Fmessages"
+      "/app/wallet?next=%2Fmessages"
     );
     expect(appAccessRedirectForPath("/messages", "age_required")).toBe(
       "/age?next=%2Fmessages"

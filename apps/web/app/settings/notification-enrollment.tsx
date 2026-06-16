@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { createSupabaseBrowserClient } from "@/supabase/client";
 import type { ApiResult, NotificationPushConfig } from "@/api-client";
+import { mapApiFailure } from "@/api-errors";
 
 type EnrollmentState = "idle" | "working" | "registered" | "blocked" | "unsupported" | "unavailable";
 
@@ -23,7 +24,7 @@ export function NotificationEnrollment({
   );
 
   if (!pushConfig.ok) {
-    return <EnrollmentStatus state="unavailable" message={`Push config unavailable: HTTP ${pushConfig.status}`} />;
+    return <EnrollmentStatus state="unavailable" message={mapApiFailure(pushConfig, "Browser push").message} />;
   }
 
   if (!pushConfig.data.enabled || !pushConfig.data.vapidPublicKey) {
@@ -79,7 +80,7 @@ export function NotificationEnrollment({
 
       if (!response.ok) {
         setState("unavailable");
-        setMessage(`Device registration failed: HTTP ${response.status}`);
+        setMessage("Device registration is temporarily unavailable.");
         return;
       }
 

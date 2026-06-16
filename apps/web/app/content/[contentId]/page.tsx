@@ -1,5 +1,7 @@
 import { appShellNavItems } from "@veel/ui";
 import { getContentItem, type ContentItem } from "@/api-client";
+import { ProviderPlayback } from "../../provider-playback";
+import { ErrorState } from "../../ui";
 import { ContentUnlockPanel } from "./content-unlock-panel";
 
 export default async function ContentPage({
@@ -11,9 +13,9 @@ export default async function ContentPage({
   const itemResult = await getContentItem(contentId);
 
   return (
-    <main className="min-h-screen bg-(--background) text-(--foreground)">
-      <nav className="mx-auto flex w-full max-w-7xl items-center justify-between border-b border-(--line) px-5 py-4">
-        <a className="text-lg font-semibold tracking-normal" href="/">
+    <main className="media-shell">
+      <nav className="media-nav">
+        <a className="text-lg font-semibold tracking-normal" href="/app/home">
           VEEL
         </a>
         <div className="flex gap-1">
@@ -29,18 +31,20 @@ export default async function ContentPage({
         </div>
       </nav>
 
-      <section className="mx-auto grid min-h-[calc(100vh-73px)] w-full max-w-7xl gap-5 px-5 py-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <section className="media-layout">
         {itemResult.ok ? (
           <>
             <MediaStage item={itemResult.data} />
             <AccessPanel item={itemResult.data} />
           </>
         ) : (
-          <UnavailableState
-            message={itemResult.message}
-            status={itemResult.status}
-            title={itemResult.status === 404 ? "Content not found" : "Content unavailable"}
-          />
+          <section className="lg:col-span-2">
+            <ErrorState
+              context="Content"
+              result={itemResult}
+              title={itemResult.status === 404 ? "Content not found" : "Content unavailable"}
+            />
+          </section>
         )}
       </section>
     </main>
@@ -49,8 +53,8 @@ export default async function ContentPage({
 
 function MediaStage({ item }: { item: ContentItem }) {
   return (
-    <section className="relative min-h-[68vh] overflow-hidden rounded border border-(--line) bg-[#0f1217]">
-      <PlaybackFrame item={item} />
+    <section className="media-pane relative overflow-hidden rounded border border-(--line) bg-[#0f1217]">
+      <ProviderPlayback playback={item.playback} posterUrl={item.posterUrl} title="Veel content playback" />
       <div className="absolute left-4 top-4 rounded bg-(--background)/85 px-2 py-1 text-xs font-medium">
         {item.mediaType.toUpperCase()}
       </div>
@@ -67,60 +71,9 @@ function MediaStage({ item }: { item: ContentItem }) {
   );
 }
 
-function PlaybackFrame({ item }: { item: ContentItem }) {
-  const playback = item.playback;
-
-  if (playback?.state === "full" && playback.url) {
-    if (playback.resourceType === "embed") {
-      return (
-        <iframe
-          allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-          className="absolute inset-0 h-full w-full"
-          src={playback.url}
-          title="Veel content playback"
-        />
-      );
-    }
-
-    return (
-      <video
-        className="absolute inset-0 h-full w-full bg-black object-contain"
-        controls
-        poster={item.posterUrl ?? undefined}
-        preload="metadata"
-        src={playback.url}
-      />
-    );
-  }
-
-  return (
-    <>
-      {item.posterUrl ? (
-        <img alt="" className="absolute inset-0 h-full w-full object-cover" src={item.posterUrl} />
-      ) : null}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/5 to-black/35" />
-      <div className="absolute inset-x-4 top-1/2 mx-auto max-w-sm -translate-y-1/2 rounded border border-white/20 bg-black/55 p-4 text-center text-white backdrop-blur">
-        <p className="text-sm font-semibold">{playbackStateLabel(playback?.state)}</p>
-        <p className="mt-2 text-xs leading-5 text-zinc-200">
-          Playback is rendered only from backend-issued access projection.
-        </p>
-      </div>
-    </>
-  );
-}
-
-function playbackStateLabel(
-  state: NonNullable<ContentItem["playback"]>["state"] | undefined
-) {
-  if (state === "blocked") return "Access required";
-  if (state === "teaser") return "Teaser preview";
-  return "Playback not ready";
-}
-
 function AccessPanel({ item }: { item: ContentItem }) {
   return (
-    <aside className="grid content-start gap-4">
+    <aside className="side-pane grid content-start gap-4">
       <section className="rounded border border-(--line) bg-(--panel) p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -227,25 +180,5 @@ function Metric({ label, value }: { label: string; value: number }) {
       <p className="text-lg font-semibold">{value.toLocaleString()}</p>
       <p className="text-xs text-(--muted)">{label}</p>
     </div>
-  );
-}
-
-function UnavailableState({
-  message,
-  status,
-  title
-}: {
-  message: string;
-  status: number;
-  title: string;
-}) {
-  return (
-    <section className="grid min-h-[68vh] content-center rounded border border-(--line) bg-(--panel) p-6 lg:col-span-2">
-      <div className="max-w-xl">
-        <p className="text-sm font-medium text-(--accent)">HTTP {status}</p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-normal">{title}</h1>
-        <p className="mt-3 text-sm leading-6 text-(--muted)">{message}</p>
-      </div>
-    </section>
   );
 }

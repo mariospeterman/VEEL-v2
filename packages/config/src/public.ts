@@ -11,6 +11,10 @@ export const publicWebEnvSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().optional(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().optional(),
+  NEXT_PUBLIC_PRIVY_APP_ID: z.string().optional(),
+  NEXT_PUBLIC_TURNKEY_ORGANIZATION_ID: z.string().optional(),
+  NEXT_PUBLIC_TURNKEY_API_BASE_URL: z.string().url().optional(),
+  NEXT_PUBLIC_SOLANA_CHAIN: z.enum(["solana:devnet", "solana:mainnet"]).default("solana:devnet"),
   NEXT_PUBLIC_ENABLE_E2E_AUTH: publicBooleanSchema
 });
 

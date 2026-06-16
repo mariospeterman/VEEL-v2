@@ -1,19 +1,18 @@
-import { appShellNavItems } from "@veel/ui";
 import {
   getPaymentActivity,
   getWalletTransactionActivity,
   type ActivityItem,
-  type ApiResult,
-  type WalletTransaction,
-  type WalletTransactionPage
+  type WalletTransaction
 } from "@/api-client";
 import { RefundRequestPanel } from "./refund-request-panel";
 import { requireAppAccess } from "@/supabase/route-guard";
+import { AppShell } from "../app-shell";
+import { Card, EmptyState, ErrorState, Fact, PageHeader, StatusPill } from "../ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function ActivityPage() {
-  await requireAppAccess("/activity");
+  await requireAppAccess("/app/activity");
 
   const [paymentActivity, walletTransactions] = await Promise.all([
     getPaymentActivity(),
@@ -21,40 +20,24 @@ export default async function ActivityPage() {
   ]);
 
   return (
-    <main className="min-h-screen bg-(--background) text-(--foreground)">
-      <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-(--line) px-5 py-4">
-        <a className="text-lg font-semibold tracking-normal" href="/">
-          VEEL
-        </a>
-        <div className="flex gap-1">
-          {appShellNavItems.map((item) => (
-            <a
-              className="rounded px-3 py-2 text-sm text-(--muted) transition hover:bg-(--panel) hover:text-(--foreground)"
-              href={item.href}
-              key={item.href}
-            >
-              {item.label}
-            </a>
-          ))}
-        </div>
-      </nav>
+    <AppShell>
+      <PageHeader eyebrow="Activity" title="Payments and receipts">
+        Backend-derived payment, receipt, wallet transaction, and support review state.
+      </PageHeader>
 
-      <section className="mx-auto grid w-full max-w-6xl gap-5 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <section className="grid content-start gap-4">
-          <div>
-            <p className="text-sm font-medium text-(--accent)">Activity</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-normal">Payments</h1>
-          </div>
-
           <div className="grid gap-3">
             {paymentActivity.ok ? (
               paymentActivity.data.items.length > 0 ? (
                 paymentActivity.data.items.map((item) => <ActivityRow item={item} key={item.id} />)
               ) : (
-                <EmptyState label="No payment activity yet" />
+                <EmptyState title="No payment activity yet">
+                  Receipts and support review options appear after confirmed backend settlement.
+                </EmptyState>
               )
             ) : (
-              <UnavailableState result={paymentActivity} title="Payment activity unavailable" />
+              <ErrorState result={paymentActivity} title="Payment activity unavailable" context="Payment activity" />
             )}
           </div>
         </section>
@@ -69,28 +52,28 @@ export default async function ActivityPage() {
                 <WalletTransactionCard transaction={transaction} key={transaction.id} />
               ))
             ) : (
-              <EmptyState label="No wallet transactions yet" />
+              <EmptyState title="No wallet transactions yet">
+                Wallet transactions appear after backend-visible wallet activity exists.
+              </EmptyState>
             )
           ) : (
-            <UnavailableState result={walletTransactions} title="Wallet transactions unavailable" />
+            <ErrorState result={walletTransactions} title="Wallet transactions unavailable" context="Wallet transactions" />
           )}
         </aside>
       </section>
-    </main>
+    </AppShell>
   );
 }
 
 function ActivityRow({ item }: { item: ActivityItem }) {
   return (
-    <article className="rounded border border-(--line) bg-(--panel) p-4">
+    <Card className="p-4">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="font-medium">{item.title}</p>
           <p className="mt-1 text-sm text-(--muted)">{item.productType}</p>
         </div>
-        <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-semibold text-(--accent-strong)">
-          {item.state}
-        </span>
+        <StatusPill>{item.state}</StatusPill>
       </div>
       <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
         <Fact label="Amount" value={`${item.amountMinor?.toLocaleString() ?? "0"} ${item.currency ?? ""}`} />
@@ -108,37 +91,26 @@ function ActivityRow({ item }: { item: ActivityItem }) {
           paymentIntentId={item.paymentIntentId}
         />
       ) : null}
-    </article>
+    </Card>
   );
 }
 
 function WalletTransactionCard({ transaction }: { transaction: WalletTransaction }) {
   return (
-    <article className="rounded border border-(--line) bg-(--panel) p-4">
+    <Card className="p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-medium">{transaction.direction}</p>
           <p className="mt-1 text-sm text-(--muted)">{transaction.chain}</p>
         </div>
-        <span className="rounded bg-(--background) px-2 py-1 text-xs text-(--muted)">
-          {transaction.state}
-        </span>
+        <StatusPill>{transaction.state}</StatusPill>
       </div>
       <div className="mt-4 grid gap-2 text-sm">
         <Fact label="Amount" value={`${transaction.amountMinor.toLocaleString()} ${transaction.currency}`} />
         <Fact label="Source" value={transaction.source} />
         <Fact label="Signature" value={shorten(transaction.signature)} />
       </div>
-    </article>
-  );
-}
-
-function Fact({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-xs uppercase text-(--muted)">{label}</p>
-      <p className="mt-1 truncate font-medium">{value}</p>
-    </div>
+    </Card>
   );
 }
 
@@ -160,32 +132,4 @@ function withdrawalLabel(status: ActivityItem["withdrawalRightStatus"] | undefin
     default:
       return "not applicable";
   }
-}
-
-function EmptyState({ label }: { label: string }) {
-  return (
-    <div className="rounded border border-(--line) bg-(--panel) p-4 text-sm text-(--muted)">
-      {label}
-    </div>
-  );
-}
-
-function UnavailableState({
-  result,
-  title
-}: {
-  result: ApiResult<unknown> | ApiResult<WalletTransactionPage>;
-  title: string;
-}) {
-  if (result.ok) {
-    return null;
-  }
-
-  return (
-    <div className="rounded border border-(--line) bg-(--panel) p-4">
-      <p className="text-sm font-medium text-(--accent)">HTTP {result.status}</p>
-      <h2 className="mt-2 text-base font-semibold tracking-normal">{title}</h2>
-      <p className="mt-2 text-sm leading-6 text-(--muted)">{result.message}</p>
-    </div>
-  );
 }

@@ -3,11 +3,14 @@
 import { useState } from "react";
 import {
   ApiMutationError,
+  createWalletAuthChallenge,
+  createWalletAuthSession,
   createWalletLinkChallenge,
   linkWallet,
   type LinkWalletRequest
 } from "@/api-mutations";
 import type { WebAuthState } from "@/supabase/auth-state";
+import { saveWalletSession } from "./wallet-session";
 
 type ExternalWalletProvider = LinkWalletRequest["provider"];
 type WalletChain = LinkWalletRequest["chain"];
@@ -39,6 +42,8 @@ export function WalletLinkPanel({ authState, compact = false }: WalletLinkPanelP
   const [state, setState] = useState<"idle" | "linking" | "linked" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [linkedAddress, setLinkedAddress] = useState<string | null>(null);
+  const mobileReturnUrl =
+    typeof window === "undefined" ? "" : encodeURIComponent(window.location.origin);
 
   async function linkInjectedWallet() {
     setState("linking");
@@ -59,6 +64,41 @@ export function WalletLinkPanel({ authState, compact = false }: WalletLinkPanelP
 
       const walletProvider = providerName(provider);
       const chain = walletChain();
+
+      if (!authState.authenticated || authState.method === "wallet") {
+        const challenge = await createWalletAuthChallenge({
+          address,
+          chain,
+          provider: walletProvider
+        });
+        const signed = await provider.signMessage(new TextEncoder().encode(challenge.message), "utf8");
+        const signature = signed instanceof Uint8Array ? signed : signed.signature;
+        const session = await createWalletAuthSession({
+          address,
+          chain,
+          provider: walletProvider,
+          proof: {
+            challengeId: challenge.id,
+            message: challenge.message,
+            signature: bytesToBase64(signature),
+            signatureEncoding: "base64"
+          }
+        });
+
+        saveWalletSession({
+          accessToken: session.accessToken,
+          expiresAt: session.expiresAt,
+          address: session.wallet.address,
+          provider: session.wallet.provider
+        });
+
+        setLinkedAddress(address);
+        setState("linked");
+        setMessage("Wallet session created. Continue with profile and age verification.");
+        window.location.reload();
+        return;
+      }
+
       const challenge = await createWalletLinkChallenge({
         address,
         chain,
@@ -92,9 +132,12 @@ export function WalletLinkPanel({ authState, compact = false }: WalletLinkPanelP
     <section className="grid gap-3 rounded border border-(--line) bg-(--background) p-4">
       <div>
         <p className="text-xs font-semibold uppercase text-(--accent)">Wallet</p>
-        <h2 className="mt-2 text-base font-semibold tracking-normal">Link Solana wallet</h2>
+        <h2 className="mt-2 text-base font-semibold tracking-normal">
+          {authState.method === "supabase" ? "Link Solana wallet" : "Enter with Solana"}
+        </h2>
         <p className="mt-2 text-sm leading-6 text-(--muted)">
-          Sign a backend-issued ownership challenge. This never moves funds and never proves payment.
+          Sign a backend-issued ownership challenge. This creates your Veel session, never moves
+          funds, and never proves payment.
         </p>
       </div>
 
@@ -108,12 +151,21 @@ export function WalletLinkPanel({ authState, compact = false }: WalletLinkPanelP
 
       <button
         className="rounded bg-(--foreground) px-4 py-3 text-sm font-semibold text-(--background) disabled:cursor-not-allowed disabled:opacity-60"
-        disabled={state === "linking" || !authState.authenticated}
+        disabled={state === "linking"}
         onClick={linkInjectedWallet}
         type="button"
       >
-        {state === "linking" ? "Waiting for wallet" : "Connect and sign"}
+        {state === "linking" ? "Waiting for wallet" : authState.method === "supabase" ? "Connect and link" : "Connect wallet"}
       </button>
+
+      <div className="grid gap-2 text-xs text-(--muted)">
+        <a className="underline-offset-4 hover:underline" href={`https://phantom.app/ul/browse/${mobileReturnUrl}`}>
+          Open Phantom on iOS
+        </a>
+        <a className="underline-offset-4 hover:underline" href={`https://solflare.com/ul/v1/browse/${mobileReturnUrl}`}>
+          Open Solflare mobile
+        </a>
+      </div>
 
       {linkedAddress ? <p className="truncate text-sm text-(--muted)">Linked {linkedAddress}</p> : null}
 

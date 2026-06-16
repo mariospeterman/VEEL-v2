@@ -1,8 +1,8 @@
-import { appShellNavItems } from "@veel/ui";
 import type { ReactNode } from "react";
 import {
   getAgeStatus,
   getFeedPreferences,
+  getMcpConnections,
   getNotificationPreferences,
   getNotificationPushConfig,
   getSession,
@@ -16,31 +16,34 @@ import {
   type WalletList
 } from "@/api-client";
 import { requireConfiguredSession } from "@/supabase/route-guard";
+import { AppShell } from "../app-shell";
+import { Card, ErrorState, Fact, PageHeader, StatusPill } from "../ui";
+import { mapApiFailure } from "@/api-errors";
+import { McpConnectionsPanel } from "./mcp-connections-panel";
 import { NotificationEnrollment } from "./notification-enrollment";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  await requireConfiguredSession("/settings");
+  await requireConfiguredSession("/app/settings");
 
-  const [session, ageStatus, wallets, feedPreferences, notificationPreferences, pushConfig] = await Promise.all([
+  const [session, ageStatus, wallets, feedPreferences, notificationPreferences, pushConfig, mcpConnections] = await Promise.all([
     getSession(),
     getAgeStatus(),
     getWallets(),
     getFeedPreferences(),
     getNotificationPreferences(),
-    getNotificationPushConfig()
+    getNotificationPushConfig(),
+    getMcpConnections()
   ]);
 
   return (
-    <main className="min-h-screen bg-(--background) text-(--foreground)">
-      <AppNav />
-
-      <section className="mx-auto grid w-full max-w-6xl gap-5 px-5 py-6 lg:grid-cols-[280px_minmax(0,1fr)]">
+    <AppShell>
+      <section className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
         <aside className="grid content-start gap-2 border-b border-(--line) pb-4 lg:border-b-0 lg:border-r lg:pr-5">
-          {["Profile", "Security", "Feed", "Privacy", "Notifications"].map((item) => (
+          {["Profile", "Security", "MCP", "Feed", "Privacy", "Notifications"].map((item) => (
             <a
-              className="rounded px-3 py-2 text-sm font-medium text-(--muted) transition hover:bg-(--panel) hover:text-(--foreground)"
+              className="rounded px-3 py-3 text-sm font-medium text-(--muted) transition hover:bg-(--glass) hover:text-(--foreground)"
               href={`#${item.toLowerCase()}`}
               key={item}
             >
@@ -50,17 +53,24 @@ export default async function SettingsPage() {
         </aside>
 
         <section className="grid content-start gap-5">
-          <header>
-            <p className="text-sm font-medium text-(--accent)">Settings</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-normal">Account controls</h1>
-          </header>
+          <PageHeader eyebrow="Settings" title="Account controls">
+            Privacy, security, notifications, and connected external MCP clients.
+          </PageHeader>
 
           <SettingsGroup id="profile" title="Profile">
             <ProfileFacts session={session} />
           </SettingsGroup>
 
           <SettingsGroup id="security" title="Security">
-            <SecurityFacts ageStatus={ageStatus} session={session} wallets={wallets} />
+            <SecurityFacts
+              ageStatus={ageStatus}
+              session={session}
+              wallets={wallets}
+            />
+          </SettingsGroup>
+
+          <SettingsGroup id="mcp" title="MCP connections">
+            <McpConnectionsPanel connections={mcpConnections} />
           </SettingsGroup>
 
           <SettingsGroup id="feed" title="Feed">
@@ -81,7 +91,7 @@ export default async function SettingsPage() {
           </SettingsGroup>
         </section>
       </section>
-    </main>
+    </AppShell>
   );
 }
 
@@ -95,7 +105,7 @@ function NotificationFacts({
   if (!notificationPreferences.ok) {
     return (
       <div className="grid gap-4">
-        <UnavailableState result={notificationPreferences} />
+        <ErrorState result={notificationPreferences} title="Notification preferences unavailable" context="Notifications" />
         <NotificationEnrollment pushConfig={pushConfig} />
       </div>
     );
@@ -126,7 +136,7 @@ function NotificationFacts({
 
 function FeedFacts({ feedPreferences }: { feedPreferences: ApiResult<FeedPreferences> }) {
   if (!feedPreferences.ok) {
-    return <UnavailableState result={feedPreferences} />;
+    return <ErrorState result={feedPreferences} title="Feed preferences unavailable" context="Feed preferences" />;
   }
 
   return (
@@ -141,7 +151,7 @@ function FeedFacts({ feedPreferences }: { feedPreferences: ApiResult<FeedPrefere
 
 function ProfileFacts({ session }: { session: ApiResult<SessionState> }) {
   if (!session.ok) {
-    return <UnavailableState result={session} />;
+    return <ErrorState result={session} title="Profile settings unavailable" context="Profile settings" />;
   }
 
   return (
@@ -175,27 +185,6 @@ function SecurityFacts({
   );
 }
 
-function AppNav() {
-  return (
-    <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-(--line) px-5 py-4">
-      <a className="text-lg font-semibold tracking-normal" href="/">
-        VEEL
-      </a>
-      <div className="flex gap-1 overflow-x-auto">
-        {appShellNavItems.map((item) => (
-          <a
-            className="rounded px-3 py-2 text-sm text-(--muted) transition hover:bg-(--panel) hover:text-(--foreground)"
-            href={item.href}
-            key={item.href}
-          >
-            {item.label}
-          </a>
-        ))}
-      </div>
-    </nav>
-  );
-}
-
 function SettingsGroup({
   children,
   id,
@@ -206,37 +195,18 @@ function SettingsGroup({
   title: string;
 }) {
   return (
-    <section className="rounded border border-(--line) bg-(--panel) p-4" id={id}>
+    <Card className="p-4" id={id}>
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-base font-semibold tracking-normal">{title}</h2>
-        <span className="rounded bg-(--background) px-2 py-1 text-xs text-(--muted)">server-owned</span>
+        <StatusPill>server-owned</StatusPill>
       </div>
       {children}
-    </section>
-  );
-}
-
-function Fact({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-xs uppercase text-(--muted)">{label}</p>
-      <p className="mt-1 truncate font-medium">{value}</p>
-    </div>
-  );
-}
-
-function UnavailableState<T>({ result }: { result: Extract<ApiResult<T>, { ok: false }> }) {
-  return (
-    <div className="rounded border border-(--line) bg-(--background) p-3 text-sm">
-      <p className="font-medium">Settings API unavailable</p>
-      <p className="mt-1 text-(--muted)">HTTP {result.status}</p>
-      <p className="mt-1 text-(--muted)">{result.message}</p>
-    </div>
+    </Card>
   );
 }
 
 function resultLabel<T>(result: ApiResult<T>) {
-  return result.ok ? "ready" : `HTTP ${result.status}`;
+  return result.ok ? "ready" : mapApiFailure(result, "Settings").title;
 }
 
 function enabledLabel(enabled: boolean) {

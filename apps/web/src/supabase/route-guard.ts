@@ -24,7 +24,7 @@ export function appAccessRedirectForPath(
   const next = safeNext(path);
 
   if (reason === "wallet_required") {
-    return withNext("/wallet", next);
+    return withNext("/app/wallet", next);
   }
 
   if (reason === "age_required" || reason === "age_pending") {

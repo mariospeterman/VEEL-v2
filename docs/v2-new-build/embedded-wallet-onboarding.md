@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: auth, wallets, onboarding, onramp, conversion
-Last updated: 2026-06-05
+Last updated: 2026-06-14
 Source of truth: yes
 
 Owns:
@@ -24,23 +24,24 @@ This document defines the recommended v2 wallet onboarding model. The goal is to
 
 ## Decision
 
-V2 should support two wallet paths:
+V2 supports wallet-first onboarding with two wallet paths:
 
 1. External wallet connect for web3-native users.
 2. Social/email/passkey signup with a noncustodial embedded Solana wallet for mainstream users.
 
-Wallet ownership remains user-controlled. Veel never holds private keys, never signs payment transactions without explicit user authorization, and never grants access from client-side wallet state.
+Wallet ownership remains user-controlled. Veel never holds private keys, never signs payment transactions without explicit user authorization, and never grants access from client-side wallet state. Supabase email auth is optional account recovery/profile management, not a required onboarding prerequisite.
 
 Protected app access rule:
 
 - Veel is an 18+ platform.
-- Onboarding has two required stages before protected app access:
-  1. identity + wallet path
-  2. age verification
-- The recommended launch default is embedded-wallet-first for mainstream users: email/social/passkey creates or loads a noncustodial embedded wallet.
+- Onboarding has three backend-gated stages before protected app access:
+  1. wallet session from embedded or external noncustodial wallet
+  2. profile setup
+  3. age verification
+- The recommended launch default is wallet-first: create/connect a noncustodial wallet, then optionally add email recovery in profile/settings.
 - External/native wallet connect remains first-class for web3-native users.
 - One wallet path is mandatory; the other path can be added, changed, or selected as primary later in profile/settings.
-- Wallet path must be ready before age verification starts: embedded wallet for identity-first users, native wallet link for wallet-first users.
+- Wallet path must be ready before age verification starts.
 - No user enters the protected app shell until age verification is complete.
 - Wallet existence is required for wallet-native identity/payment readiness, but it is not payment proof.
 
@@ -60,10 +61,12 @@ External wallets remain first-class for crypto-native users.
 
 Use a wallet infrastructure provider instead of building key management.
 
-Provider docs checked for this implementation slice on 2026-06-06:
+Provider docs checked for this implementation slice on 2026-06-14:
 
-- Privy docs: embedded Solana wallet creation and funding support remain the launch-default path to verify in staging.
-- Turnkey docs: embedded wallets support noncustodial user-controlled mode, Solana account creation, import/export, and stronger policy/sub-organization controls.
+- Privy docs: React setup uses a `PrivyProvider` with `appId`; Solana support is exposed through Privy wallet APIs and must be configured with the project app id before embedded-wallet buttons are enabled.
+- Turnkey docs: React Wallet Kit uses organization-scoped configuration; Solana wallet creation/signing must stay user-controlled and staging-proven before launch.
+- Solana Wallet Adapter docs: browser wallet connection should use wallet adapter/injected-wallet support for desktop and Android-compatible browsers, with backend nonce signing for authentication.
+- Solana Mobile Wallet Adapter docs: Android Chrome supports mobile wallet adapter flows through wallet adapter; iOS mobile wallet adapter support is not currently available, so iOS web must use wallet-specific universal/deep links or embedded providers.
 - Dynamic docs: embedded wallets support noncustodial MPC, Solana via EdDSA/FROST, and can remain an evaluated fallback.
 - Coinbase Developer Platform Onramp docs: hosted onramp sessions return a single-use funding URL to the configured destination wallet, support Solana as a destination network, and require server-side CDP JWT authentication generated from a secret API key.
 
@@ -117,27 +120,28 @@ Not allowed:
 sequenceDiagram
   participant User
   participant Web as Next.js PWA
-  participant Auth as Supabase Auth
-  participant Wallet as Embedded Wallet Provider
+  participant Wallet as Wallet Provider
   participant API as Fastify API
   participant DB as Postgres
 
-  User->>Web: Sign up with email/social/passkey
-  Web->>Auth: Create session
-  Auth-->>Web: JWT
-  Web->>Wallet: Create or load embedded wallet
+  User->>Web: Connect or create wallet
+  Web->>Wallet: Request address
   Wallet-->>Web: User-controlled wallet address
-  Web->>API: Link wallet address with JWT
-  API->>API: Verify provider/user proof
-  API->>DB: Store wallet link + audit
-  API-->>Web: Wallet-ready onboarding state
+  Web->>API: Create wallet auth challenge
+  API-->>Web: Domain-bound nonce message
+  Web->>Wallet: Sign challenge
+  Web->>API: Submit signature
+  API->>API: Verify Ed25519 signature
+  API->>DB: Create/reuse user, wallet, hashed wallet session
+  API-->>Web: Veel bearer session
+  Web->>API: Save profile
   Web->>API: Start age verification
   API-->>Web: Age provider session
   Web->>API: Refresh session after provider result
   API-->>Web: Protected app access state
 ```
 
-External wallet flow remains available:
+External wallet flow remains available for adding or changing wallets after an existing session:
 
 ```mermaid
 sequenceDiagram
@@ -158,6 +162,9 @@ sequenceDiagram
 
 Implementation contract:
 
+- `POST /v1/auth/wallet/challenges` creates a short-lived server-owned challenge for a wallet-first login attempt. It does not require Supabase email auth.
+- `POST /v1/auth/wallet/sessions` verifies the Solana message signature, creates or reuses the user/wallet row, stores only a hashed session token, and returns a bearer token for normal authenticated API calls.
+- Wallet auth session tokens authenticate the account session only. They are not payment proof, allowance proof, or entitlement proof.
 - `POST /v1/wallets/link-challenges` creates a short-lived server-owned challenge for one authenticated user, wallet address, provider, and chain.
 - The challenge message must be signed exactly as returned by the API.
 - `POST /v1/wallets/link` verifies the Ed25519 Solana message signature server-side before inserting the wallet.
@@ -166,7 +173,15 @@ Implementation contract:
 - `PATCH /v1/wallets/{walletId}/primary` changes only the authenticated user's primary wallet, requires idempotency, and audits the change.
 - Wallet link completion is an audit event, not payment proof.
 - Current supported external provider values are `phantom`, `solflare`, and `wallet_adapter`.
+- Current supported embedded provider values in schema are `embedded_privy` and `embedded_turnkey`. They are enabled in UI only when `NEXT_PUBLIC_PRIVY_APP_ID` or `NEXT_PUBLIC_TURNKEY_ORGANIZATION_ID` is configured and the provider ADR is staging/launch approved.
 - The current PWA handoff detects injected Solana wallets on `/enter` and `/wallet`, asks the wallet to connect, signs the returned backend challenge using `signMessage`, base64-encodes the signature, and submits it back to the API. The UI must present the signature as ownership-only and must not imply payment, subscription, entitlement, or protected-access completion.
+
+## Device Behavior
+
+- Desktop: prefer injected Solana wallets and wallet-adapter-compatible providers.
+- Android web: use Solana Mobile Wallet Adapter through wallet-adapter where a compatible wallet/browser is present.
+- iOS web: use embedded wallet provider flows or wallet-specific universal/deep links because Solana Mobile Wallet Adapter is not available on iOS web today.
+- All devices: the backend challenge/session flow is identical; device-specific wallet UX never becomes auth truth until the API verifies the signed challenge.
 
 ## Payment Flow With Embedded Wallet
 

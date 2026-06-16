@@ -1,20 +1,18 @@
-import { appShellNavItems } from "@veel/ui";
 import {
   getConversationMessages,
   getConversations,
-  type ApiResult,
   type Conversation,
-  type ConversationList,
   type Message,
-  type MessagePage
 } from "@/api-client";
 import { MessageComposer } from "./message-composer";
 import { requireAppAccess } from "@/supabase/route-guard";
+import { AppShell } from "../app-shell";
+import { Card, EmptyState, ErrorState, PageHeader, StatusPill } from "../ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function MessagesPage() {
-  await requireAppAccess("/messages");
+  await requireAppAccess("/app/messages");
 
   const conversations = await getConversations();
   const selectedConversation = conversations.ok ? (conversations.data.items[0] ?? null) : null;
@@ -23,29 +21,15 @@ export default async function MessagesPage() {
     : null;
 
   return (
-    <main className="min-h-screen bg-(--background) text-(--foreground)">
-      <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-(--line) px-5 py-4">
-        <a className="text-lg font-semibold tracking-normal" href="/">
-          VEEL
-        </a>
-        <div className="flex gap-1">
-          {appShellNavItems.map((item) => (
-            <a
-              className="rounded px-3 py-2 text-sm text-(--muted) transition hover:bg-(--panel) hover:text-(--foreground)"
-              href={item.href}
-              key={item.href}
-            >
-              {item.label}
-            </a>
-          ))}
-        </div>
-      </nav>
+    <AppShell>
+      <PageHeader eyebrow="Messages" title="Inbox">
+        Conversations, requests, Mutual tags, paid messages, and safety controls stay backend-gated.
+      </PageHeader>
 
-      <section className="mx-auto grid w-full max-w-6xl gap-5 px-5 py-6 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <aside className="rounded border border-(--line) bg-(--panel)">
+      <section className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
+        <Card>
           <div className="border-b border-(--line) p-4">
-            <p className="text-sm font-medium text-(--accent)">Messages</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-normal">Inbox</h1>
+            <p className="eyebrow">Threads</p>
           </div>
           {conversations.ok ? (
             conversations.data.items.length > 0 ? (
@@ -57,14 +41,20 @@ export default async function MessagesPage() {
                 />
               ))
             ) : (
-              <EmptyState label="No conversations yet" />
+              <div className="p-4">
+                <EmptyState title="No conversations yet">
+                  Accepted messages and Mutual conversations appear here.
+                </EmptyState>
+              </div>
             )
           ) : (
-            <UnavailableState result={conversations} title="Messages unavailable" />
+            <div className="p-4">
+              <ErrorState result={conversations} title="Messages unavailable" context="Messages" />
+            </div>
           )}
-        </aside>
+        </Card>
 
-        <section className="rounded border border-(--line) bg-(--panel)">
+        <Card>
           {selectedConversation ? (
             <>
               <div className="border-b border-(--line) p-4">
@@ -79,26 +69,30 @@ export default async function MessagesPage() {
                   messages.data.items.length > 0 ? (
                     messages.data.items.map((message) => <MessageBubble message={message} key={message.id} />)
                   ) : (
-                    <EmptyState label="No visible messages yet" />
+                    <EmptyState title="No visible messages yet">
+                      Messages appear after backend delivery and safety checks.
+                    </EmptyState>
                   )
                 ) : messages ? (
-                  <UnavailableState result={messages} title="Conversation unavailable" />
+                  <ErrorState result={messages} title="Conversation unavailable" context="Conversation" />
                 ) : null}
               </div>
               <MessageComposer conversation={selectedConversation} />
             </>
           ) : conversations.ok ? (
             <div className="p-4">
-              <EmptyState label="Select a conversation after one is available" />
+              <EmptyState title="Select a conversation">
+                Choose a thread after one is available.
+              </EmptyState>
             </div>
           ) : (
             <div className="p-4">
-              <UnavailableState result={conversations} title="Conversation unavailable" />
+              <ErrorState result={conversations} title="Conversation unavailable" context="Conversation" />
             </div>
           )}
-        </section>
+        </Card>
       </section>
-    </main>
+    </AppShell>
   );
 }
 
@@ -117,11 +111,7 @@ function ConversationRow({
     >
       <div className="flex items-center justify-between gap-3">
         <p className="font-medium">{conversation.title}</p>
-        {conversation.unreadCount > 0 ? (
-          <span className="rounded bg-(--background) px-2 py-1 text-xs font-semibold text-(--accent-strong)">
-            {conversation.unreadCount}
-          </span>
-        ) : null}
+        {conversation.unreadCount > 0 ? <StatusPill tone="good">{conversation.unreadCount}</StatusPill> : null}
       </div>
       {conversation.lastMessage ? (
         <p className="truncate text-sm text-(--muted)">{conversation.lastMessage.body}</p>
@@ -137,39 +127,9 @@ function MessageBubble({ message }: { message: Message }) {
     <article className="max-w-[640px] rounded border border-(--line) bg-(--background) p-3">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-medium">{message.sender.displayName}</p>
-        <span className="rounded bg-(--panel) px-2 py-1 text-xs text-(--muted)">
-          {message.deliveryState}
-        </span>
+        <StatusPill>{message.deliveryState}</StatusPill>
       </div>
       <p className="mt-2 text-sm leading-6">{message.body}</p>
     </article>
-  );
-}
-
-function EmptyState({ label }: { label: string }) {
-  return (
-    <div className="rounded border border-(--line) bg-(--background) p-4 text-sm text-(--muted)">
-      {label}
-    </div>
-  );
-}
-
-function UnavailableState({
-  result,
-  title
-}: {
-  result: ApiResult<ConversationList> | ApiResult<MessagePage>;
-  title: string;
-}) {
-  if (result.ok) {
-    return null;
-  }
-
-  return (
-    <div className="rounded border border-(--line) bg-(--background) p-4">
-      <p className="text-sm font-medium text-(--accent)">HTTP {result.status}</p>
-      <h2 className="mt-2 text-base font-semibold tracking-normal">{title}</h2>
-      <p className="mt-2 text-sm leading-6 text-(--muted)">{result.message}</p>
-    </div>
   );
 }

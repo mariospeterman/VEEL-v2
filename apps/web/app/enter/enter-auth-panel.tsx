@@ -75,14 +75,14 @@ export function EnterAuthPanel({ initialAuthState, authError, nextPath }: EnterA
   return (
     <div className="grid gap-4 rounded border border-(--line) bg-(--background) p-4">
       <div>
-        <p className="text-xs font-semibold uppercase text-(--accent)">Supabase Auth</p>
+        <p className="text-xs font-semibold uppercase text-(--accent)">Email magic link</p>
         <h2 className="mt-2 text-base font-semibold tracking-normal">
-          {initialAuthState.authenticated ? "Session active" : "Create or restore session"}
+          {initialAuthState.authenticated ? "Session active" : "Sign in or sign up"}
         </h2>
         <p className="mt-2 text-sm leading-6 text-(--muted)">
           {initialAuthState.authenticated
             ? initialAuthState.email ?? "Authenticated session"
-            : "Use email magic link first. Wallet readiness and age assurance stay backend-owned."}
+            : "Use email to continue. Wallet and age checks remain backend verified."}
         </p>
       </div>
 

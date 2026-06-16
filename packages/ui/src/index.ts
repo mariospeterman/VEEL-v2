@@ -1,12 +1,13 @@
 export const appShellNavItems = [
-  { href: "/", label: "Home" },
-  { href: "/discover", label: "Discover" },
-  { href: "/create", label: "Create" },
-  { href: "/messages", label: "Messages" },
-  { href: "/activity", label: "Activity" },
-  { href: "/wallet", label: "Wallet" },
-  { href: "/subscriptions", label: "Subscriptions" },
-  { href: "/studio", label: "Studio" },
-  { href: "/settings", label: "Settings" },
-  { href: "/profile", label: "Profile" }
+  { href: "/app/home", label: "Home" },
+  { href: "/app/bits", label: "Bits" },
+  { href: "/app/create", label: "Create" },
+  { href: "/app/messages", label: "Messages" },
+  { href: "/app/profile", label: "Profile" }
+] as const;
+
+export const appShellTopActionItems = [
+  { href: "/app/wallet", label: "Wallet" },
+  { href: "/app/subscriptions", label: "Subscriptions" },
+  { href: "/app/settings", label: "Settings" }
 ] as const;

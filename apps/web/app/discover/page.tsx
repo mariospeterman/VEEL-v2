@@ -1,10 +1,6 @@
-import { appShellNavItems } from "@veel/ui";
-import {
-  getDiscoverSearch,
-  type ApiResult,
-  type ContentItem,
-  type DiscoverPage
-} from "@/api-client";
+import { getDiscoverSearch, type ContentItem } from "@/api-client";
+import { AppShell } from "../app-shell";
+import { Card, EmptyState, ErrorState, Fact, PageHeader, StatusPill } from "../ui";
 
 export default async function DiscoverPageView({
   searchParams
@@ -16,170 +12,123 @@ export default async function DiscoverPageView({
   const featured = discover.ok ? (discover.data.content[0] ?? null) : null;
 
   return (
-    <main className="min-h-screen bg-(--background) text-(--foreground)">
-      <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-(--line) px-5 py-4">
-        <a className="text-lg font-semibold tracking-normal" href="/">
-          VEEL
-        </a>
-        <div className="flex gap-1">
-          {appShellNavItems.map((item) => (
-            <a
-              className="rounded px-3 py-2 text-sm text-(--muted) transition hover:bg-(--panel) hover:text-(--foreground)"
-              href={item.href}
-              key={item.href}
-            >
-              {item.label}
-            </a>
-          ))}
-        </div>
-      </nav>
+    <AppShell>
+      <PageHeader
+        action={<StatusPill>Search overlay</StatusPill>}
+        eyebrow="Bits"
+        title="Discover creators and media"
+      >
+        Browse content, creators, live rooms, and Event Access surfaces exposed by the backend.
+      </PageHeader>
 
-      <section className="mx-auto grid h-[calc(100vh-65px)] w-full max-w-6xl gap-5 overflow-hidden px-5 py-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="grid min-h-0 gap-4">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium text-(--accent)">Discover</p>
-              <h1 className="mt-1 text-2xl font-semibold tracking-normal">Search and explore</h1>
-            </div>
-            <div className="hidden rounded border border-(--line) bg-(--panel) px-3 py-2 text-sm text-(--muted) sm:block">
-              /v1/discover/search
-            </div>
-          </div>
-
+      <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="grid content-start gap-4">
           {discover.ok ? (
             featured ? (
               <FeaturedDiscoverCard item={featured} />
             ) : (
-              <EmptyState label="No discover content is available" />
+              <EmptyState title="No discover content yet">
+                Search results appear once backend-visible content is available.
+              </EmptyState>
             )
           ) : (
-            <UnavailableState result={discover} title="Discover unavailable" />
+            <ErrorState result={discover} title="Discover needs your session" context="Discover" />
           )}
         </div>
 
-        <aside className="grid min-h-0 content-start gap-4 overflow-hidden">
+        <aside className="grid content-start gap-4">
           {discover.ok ? (
             <>
-              <section className="grid gap-2">
-                <h2 className="text-sm font-semibold tracking-normal text-(--muted)">Hashtags</h2>
-                <div className="flex flex-wrap gap-2">
+              <Card className="p-4">
+                <p className="eyebrow">Hashtags</p>
+                <div className="mt-3 flex flex-wrap gap-2">
                   {discover.data.hashtags.length > 0 ? (
                     discover.data.hashtags.map((hashtag) => (
-                      <a
-                        className="rounded border border-(--line) bg-(--panel) px-3 py-2 text-sm"
-                        href={`/discover?q=${encodeURIComponent(hashtag.slug)}`}
-                        key={hashtag.slug}
-                      >
+                      <a className="status-pill" href={`/discover?q=${encodeURIComponent(hashtag.slug)}`} key={hashtag.slug}>
                         {hashtag.displayName}
                       </a>
                     ))
                   ) : (
-                    <EmptyState label="No hashtags yet" />
+                    <span className="text-sm text-(--muted)">No hashtags yet</span>
                   )}
                 </div>
-              </section>
+              </Card>
 
-              <section className="grid gap-2">
-                <h2 className="text-sm font-semibold tracking-normal text-(--muted)">Creators</h2>
-                {discover.data.creators.length > 0 ? (
-                  discover.data.creators.map((creator) => (
-                    <article className="rounded border border-(--line) bg-(--panel) p-4" key={creator.id}>
-                      <p className="font-medium">{creator.displayName}</p>
-                      <p className="text-sm text-(--muted)">@{creator.handle}</p>
+              <Card className="p-4">
+                <p className="eyebrow">Creators</p>
+                <div className="mt-3 grid gap-2">
+                  {discover.data.creators.length > 0 ? (
+                    discover.data.creators.map((creator) => (
+                      <a className="rounded border border-(--line) bg-(--glass) p-3" href={`/profile/${creator.handle}`} key={creator.id}>
+                        <p className="font-medium">{creator.displayName}</p>
+                        <p className="mt-1 text-sm text-(--muted)">@{creator.handle}</p>
+                      </a>
+                    ))
+                  ) : (
+                    <span className="text-sm text-(--muted)">No creators yet</span>
+                  )}
+                </div>
+              </Card>
+
+              <Card className="p-4">
+                <p className="eyebrow">Events and live</p>
+                <div className="mt-3 grid gap-2">
+                  {discover.data.events.map((event) => (
+                    <article className="rounded border border-(--line) bg-(--glass) p-3" key={event.id}>
+                      <p className="font-medium">{event.title}</p>
+                      <p className="mt-1 text-sm text-(--muted)">{event.accessRule}</p>
                     </article>
-                  ))
-                ) : (
-                  <EmptyState label="No creators yet" />
-                )}
-              </section>
-
-              <section className="grid gap-2">
-                <h2 className="text-sm font-semibold tracking-normal text-(--muted)">Events and live</h2>
-                {discover.data.events.map((event) => (
-                  <article className="rounded border border-(--line) bg-(--panel) p-4" key={event.id}>
-                    <p className="font-medium">{event.title}</p>
-                    <p className="mt-1 text-sm text-(--muted)">{event.accessRule}</p>
-                  </article>
-                ))}
-                {discover.data.liveRooms.map((room) => (
-                  <article className="rounded border border-(--line) bg-(--panel) p-4" key={room.id}>
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-medium">{room.title}</p>
-                      <span className="rounded bg-[#fee2e2] px-2 py-1 text-xs font-semibold text-[#991b1b]">
-                        {room.state}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-sm text-(--muted)">{room.accessState}</p>
-                  </article>
-                ))}
-                {discover.data.events.length === 0 && discover.data.liveRooms.length === 0 ? (
-                  <EmptyState label="No events or live rooms yet" />
-                ) : null}
-              </section>
+                  ))}
+                  {discover.data.liveRooms.map((room) => (
+                    <article className="rounded border border-(--line) bg-(--glass) p-3" key={room.id}>
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-medium">{room.title}</p>
+                        <StatusPill tone={room.state === "live" ? "good" : "warn"}>{room.state}</StatusPill>
+                      </div>
+                      <p className="mt-1 text-sm text-(--muted)">{room.accessState}</p>
+                    </article>
+                  ))}
+                  {discover.data.events.length === 0 && discover.data.liveRooms.length === 0 ? (
+                    <span className="text-sm text-(--muted)">No events or live rooms yet</span>
+                  ) : null}
+                </div>
+              </Card>
             </>
           ) : (
-            <UnavailableState result={discover} title="Discover sidebars unavailable" />
+            <ErrorState result={discover} title="Discover sidebars unavailable" context="Discover sidebars" />
           )}
         </aside>
       </section>
-    </main>
+    </AppShell>
   );
 }
 
 function FeaturedDiscoverCard({ item }: { item: ContentItem }) {
   return (
-    <article className="grid min-h-0 overflow-hidden rounded border border-(--line) bg-(--panel) lg:grid-cols-[minmax(0,1fr)_300px]">
-      <div className="relative min-h-[420px] bg-[#111827]">
-        {item.posterUrl ? <img alt="" className="h-full w-full object-cover" src={item.posterUrl} /> : null}
-        <span className="absolute left-3 top-3 rounded bg-(--background)/85 px-2 py-1 text-xs font-medium">
-          {item.mediaType.toUpperCase()}
-        </span>
+    <Card className="grid overflow-hidden lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="relative min-h-[460px] bg-[#090d15]">
+        {item.posterUrl ? (
+          <img alt="" className="h-full w-full object-cover" src={item.posterUrl} />
+        ) : (
+          <div className="flex h-full items-center justify-center text-sm text-(--muted)">Media preview</div>
+        )}
+        <div className="absolute left-4 top-4 flex gap-2">
+          <StatusPill>{item.mediaType.toUpperCase()}</StatusPill>
+          <StatusPill>{item.accessState}</StatusPill>
+        </div>
       </div>
-      <div className="grid content-between gap-4 p-4">
+      <div className="grid content-between gap-4 p-5">
         <div>
           <p className="text-sm font-medium text-(--muted)">@{item.creator.handle}</p>
-          <h2 className="mt-2 text-xl font-semibold tracking-normal">{item.creator.displayName}</h2>
-          {item.caption ? <p className="mt-4 text-sm leading-6">{item.caption}</p> : null}
+          <h2 className="mt-2 text-2xl font-semibold tracking-normal">{item.creator.displayName}</h2>
+          {item.caption ? <p className="mt-4 text-sm leading-7 text-(--text-soft)">{item.caption}</p> : null}
         </div>
-        <div className="grid gap-2 border-t border-(--line) pt-4 text-sm text-(--muted)">
-          <div className="flex justify-between gap-3">
-            <span>Access</span>
-            <span>{item.accessState}</span>
-          </div>
-          <div className="flex justify-between gap-3">
-            <span>Engagement</span>
-            <span>{item.engagement.likeCount.toLocaleString()} likes</span>
-          </div>
+        <div className="grid gap-3 border-t border-(--line) pt-4 text-sm">
+          <Fact label="Access" value={item.accessState} />
+          <Fact label="Engagement" value={`${item.engagement.likeCount.toLocaleString()} likes`} />
+          <Fact label="Comments" value={item.engagement.commentCount.toLocaleString()} />
         </div>
       </div>
-    </article>
-  );
-}
-
-function EmptyState({ label }: { label: string }) {
-  return (
-    <div className="rounded border border-(--line) bg-(--panel) p-4 text-sm text-(--muted)">
-      {label}
-    </div>
-  );
-}
-
-function UnavailableState({
-  result,
-  title
-}: {
-  result: ApiResult<DiscoverPage>;
-  title: string;
-}) {
-  if (result.ok) {
-    return null;
-  }
-
-  return (
-    <div className="rounded border border-(--line) bg-(--panel) p-4">
-      <p className="text-sm font-medium text-(--accent)">HTTP {result.status}</p>
-      <h2 className="mt-2 text-base font-semibold tracking-normal">{title}</h2>
-      <p className="mt-2 text-sm leading-6 text-(--muted)">{result.message}</p>
-    </div>
+    </Card>
   );
 }

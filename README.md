@@ -27,8 +27,8 @@ Read these first:
 - Wallets: embedded noncustodial wallet provider plus external Solana wallets
 - Media: Bunny Stream for VOD, Livepeer for live/replay
 - Safety: third-party age assurance, KYC/KYB only where needed
-- Package manager: pnpm
-- Runtime: Node.js LTS for launch
+- Package manager: pnpm 10.0.0 through Corepack
+- Runtime: Node.js 22.16.0 for local development and CI
 
 ## Repo Shape
 
@@ -69,6 +69,37 @@ Cursor will automatically pick up `.cursor/rules/veel-v2.mdc`. Claude-style tool
 
 Use the first 10 tickets in [build-plan.md](docs/v2-new-build/build-plan.md#first-10-implementation-tickets).
 
+## Local Toolchain Setup
+
+Use the committed version files as the source of truth:
+
+- Node.js: `22.16.0`
+- pnpm: `10.0.0`
+
+With `nvm`:
+
+```sh
+nvm install
+nvm use
+corepack enable
+corepack prepare pnpm@10.0.0 --activate
+pnpm install --frozen-lockfile
+```
+
+Without `nvm`, install Node.js `22.16.0`, then run the same Corepack and install commands.
+
+The root bootstrap script performs the Corepack activation and frozen install:
+
+```sh
+pnpm bootstrap
+```
+
+Check the active local toolchain without running the full suite:
+
+```sh
+pnpm run doctor
+```
+
 ## Product And Compliance Language
 
 Veel v2 is an 18+ creator media, access, noncustodial settlement, and admin/compliance platform. Product docs use `Mutuals` instead of dating, `Event Access` / `Passes` instead of ticketing, and `Creator Memberships` instead of creator subscriptions.
@@ -81,11 +112,66 @@ Do not start by coding random screens. Start with repo foundation, contracts, da
 
 This scaffold now contains the first foundation slice: workspace packages, contract generation, a Next.js PWA shell, a Fastify API skeleton, a worker entrypoint, and real lint/type/test checks.
 
+Run the local web and API processes from separate terminals:
+
+```sh
+pnpm --filter @veel/api dev
+pnpm --filter @veel/web dev
+```
+
+The web app serves the PWA shell. The API serves Fastify routes, `/healthz`, `/readyz`, OpenAPI, OAuth metadata, and the remote MCP endpoint when its env gates are enabled.
+
+Wallet-first onboarding uses backend-verified Solana signatures:
+
+- `POST /v1/auth/wallet/challenges` creates the signed login challenge.
+- `POST /v1/auth/wallet/sessions` verifies the signature and returns a VEEL bearer session.
+- Supabase email auth remains optional for recovery/profile management and is not required before wallet onboarding.
+- Embedded provider UI is gated by `NEXT_PUBLIC_PRIVY_APP_ID` and `NEXT_PUBLIC_TURNKEY_ORGANIZATION_ID`; keep provider secrets server-only and do not enable provider-dependent production paths before staging/launch approval.
+- `NEXT_PUBLIC_SOLANA_CHAIN` controls the web chain label: `solana:devnet` locally, `solana:mainnet` only when production provider and payment checks are approved.
+
 Current executable validation:
 
 ```sh
+pnpm check
+```
+
+`pnpm check` expands to:
+
+```sh
 pnpm docs:check
+pnpm db:migrations:check
+pnpm deploy:check
 pnpm lint
 pnpm typecheck
 pnpm test
 ```
+
+CI runs the same minimum proof explicitly:
+
+```sh
+node --version
+pnpm --version
+pnpm install --frozen-lockfile
+node scripts/check-docs.mjs
+node packages/database/scripts/check-migrations.mjs
+node scripts/check-deploy-readiness.mjs
+pnpm lint
+pnpm typecheck
+pnpm test
+```
+
+The canonical GitHub Actions proof job is `pinned-toolchain-proof` in `.github/workflows/ci.yml`. It prints `node --version` and `pnpm --version` before installation.
+
+If local macOS rejects a native test-runner binding, do not bypass tests or broaden the Node engine. Use the pinned GitHub Actions proof job as the source of truth and repair the local Node/toolchain separately.
+
+Remote MCP staging proof uses the checked-in scripts:
+
+```sh
+pnpm mcp:seed
+pnpm mcp:oauth:pkce
+pnpm mcp:smoke
+```
+
+`pnpm mcp:seed` pre-registers a local/staging OAuth client, `pnpm mcp:oauth:pkce` prints the authorization URL and token-exchange command, and `pnpm mcp:smoke` verifies OAuth metadata, `/mcp` initialization, scoped tool listing, allowed tool execution, forbidden tool denial, and optional audit rows. Full client proof steps are documented in [mcp-staging-proof.md](docs/v2-new-build/mcp-staging-proof.md).
+
+Production remains blocked until launch-approved provider credentials, staging webhook proof for noncustodial split settlement, subscription allowance verification, remote MCP client proof, production deploy variables, backups, alert routing, and security/compliance gates are complete.

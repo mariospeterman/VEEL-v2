@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: documentation
-Last updated: 2026-06-12
+Last updated: 2026-06-13
 Source of truth: yes
 
 Owns:
@@ -64,9 +64,18 @@ Rules:
 
 ## Mockup-Derived Principles
 
-Reference mockups were inspected from `/Users/maki/Desktop/Veel.v2-Mockups`
-on 2026-06-12. They are inspiration only; production UI must still follow the
-Veel route map, contracts, provider boundaries, and real workflows.
+Reference mockups now live in the repo under
+`apps/web/public/mockup/`, with the local UI/UX contract at
+`apps/web/public/mockup/design.md`. The VEEL logo assets live at
+`apps/web/public/veel-logo-black.png` and
+`apps/web/public/veel-logo-white.png`.
+
+These checked-in assets are the visual reference for frontend refinement:
+screen composition, density, navigation hierarchy, dark/light tone,
+media-first layout, and premium native-app feel should match the mockups as
+closely as the implemented routes and backend-owned workflows allow.
+Production UI must still follow the Veel route map, OpenAPI contracts,
+provider boundaries, and real workflow states.
 
 Useful principles to carry forward:
 
@@ -84,10 +93,28 @@ Useful principles to carry forward:
 - secondary tools, including Assistant, live in menus, Studio/Profile context,
   or admin surfaces; they are not primary mobile navigation items
 
-Do not copy raw mockup assets or layout one-to-one unless a project-owned asset
-is intentionally added and documented. Extract spacing, density, hierarchy, and
-interaction ideas, then adapt them to implemented routes and backend-owned
-capabilities.
+Do not introduce a second design system. Use `apps/web/public/mockup/design.md`
+as the implementation contract, reuse the project-owned VEEL logo assets, and
+adapt each mockup to functional routes with real data, auth gates, loading
+states, error states, and server-owned access/payment/compliance truth.
+
+Every frontend route should be checked against the nearest mockup before UI
+changes are accepted:
+
+- app shell/navigation: `app shell - navigation.png`
+- Home: `home - mixed feed.png`
+- Bits/Discover: `bits - imersive viwer.png` and `discovery - search overlay.png`
+- Create: `create - upload workspace.png`
+- Messages: `message - share flow.png`
+- Profile: `profile - activity.png`
+- Wallet/activity: `wallet - receipts.png`
+- Subscriptions: `subscriptions - plans - membershps (tires).png`
+- Live/Event Access: `live - event access.png`
+- Mutuals: `mutuals - connection flow.png`
+- Studio/enterprise/admin: `studio dashboard.png`,
+  `enterprise dashboard.png`, and `admin dashboard.png`
+- Settings/privacy: `settings privacy.png`
+- Assistant/MCP: `ai assistant - MCP.png`
 
 ## Color system
 
@@ -148,10 +175,16 @@ Do not use:
 
 - the shell stays pinned
 - content swaps inside the shell
-- desktop left rail stays thin, hover-expandable, and quiet at rest
-- mobile dock stays light and integrated
+- desktop left rail uses the canonical primary nav: Home, Bits, Create,
+  Messages, Profile
+- mobile dock uses exactly the same five primary items
+- secondary actions live in the top action area or menus: Wallet,
+  Subscriptions, Studio, Settings, Assistant, and future admin/enterprise
+  affordances where role-gated
 - content is always the visual center of gravity
 - detail state stays layered in sheets, drawers, or overlays
+- top search must navigate to a real discovery/search route until a full search
+  overlay is wired
 
 ## Surface rules
 
@@ -192,3 +225,19 @@ Do not use:
 
 - one managed profile for the current user
 - other creators open contextually as viewer routes
+
+## State And Error Rules
+
+- frontend pages must not surface raw backend/provider error strings such as
+  bearer-token failures, SQL/provider messages, stack text, or opaque `HTTP
+  <status>` labels to users
+- route failures map through the shared web error-state mapper into safe states:
+  unauthenticated, forbidden, not found, validation, conflict, rate limited,
+  service unavailable, network, and unknown
+- developer-only details may be visible in local development for diagnosis, but
+  production copy stays user-safe and action-oriented
+- authenticated pages that require a session should redirect or render the
+  shared auth-required state instead of calling protected feed/search APIs from a
+  signed-out Home shell
+- empty states must explain what real backend-owned data is missing; they must
+  not invent placeholder production data

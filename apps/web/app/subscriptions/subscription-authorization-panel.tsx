@@ -23,7 +23,11 @@ export function SubscriptionAuthorizationPanel({ plan }: SubscriptionAuthorizati
   const [subscriberTokenAccount, setSubscriberTokenAccount] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<"intent" | "submission" | null>(null);
-  const disabled = plan.providerState === "disabled";
+  const disabled =
+    plan.providerState !== "launch_approved" ||
+    !plan.tokenMint ||
+    plan.tokenMint === "SOL" ||
+    plan.currency === "SOL";
 
   async function onCreateIntent() {
     setPending("intent");
@@ -78,9 +82,16 @@ export function SubscriptionAuthorizationPanel({ plan }: SubscriptionAuthorizati
       </button>
 
       <p className="text-sm leading-6 text-(--muted)">
-        This creates a backend-owned delegated subscription setup intent. Access changes only after
-        the backend verifies signed authorization evidence and future collection evidence.
+        This creates a backend-owned subscription setup intent only for launch-approved token plans.
+        Access changes only after backend verification and future collection evidence.
       </p>
+
+      {disabled ? (
+        <p className="text-sm font-medium text-(--muted)">
+          Subscription setup is unavailable until the official token provider, mint, program, and
+          on-chain verification are configured.
+        </p>
+      ) : null}
 
       {intent ? (
         <div className="grid gap-3 rounded border border-(--line) bg-(--background) p-3 text-sm">

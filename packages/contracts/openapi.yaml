@@ -15,7 +15,6 @@ security:
 tags:
   - name: Health
   - name: Auth
-  - name: Me
   - name: Age
   - name: Wallets
   - name: Profiles
@@ -34,6 +33,7 @@ tags:
   - name: Mutuals
   - name: Activity
   - name: AI
+  - name: MCP
   - name: Admin
   - name: Webhooks
 paths:
@@ -62,14 +62,34 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/SessionState" }
         "401": { $ref: "#/components/responses/Unauthorized" }
-  /v1/me:
-    get:
-      operationId: getMe
-      tags: [Me]
-      summary: Current viewer state
+  /v1/auth/wallet/challenges:
+    post:
+      operationId: createWalletAuthChallenge
+      tags: [Auth]
+      security: []
+      summary: Create a wallet-first login challenge
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateWalletAuthChallenge"
       responses:
-        "200": { $ref: "#/components/responses/Me" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
+        "201": { $ref: "#/components/responses/WalletAuthChallenge" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/auth/wallet/sessions:
+    post:
+      operationId: createWalletAuthSession
+      tags: [Auth]
+      security: []
+      summary: Verify a wallet challenge and create a Veel session
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateWalletAuthSession"
+      responses:
+        "201": { $ref: "#/components/responses/WalletAuthSession" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/age/sessions:
     post:
       operationId: createAgeSession
@@ -198,16 +218,6 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/CreatorProfile" }
         "404": { $ref: "#/components/responses/NotFound" }
-  /v1/follows/{userId}:
-    post:
-      operationId: toggleFollow
-      tags: [Engagement]
-      summary: Follow or unfollow a creator/profile
-      parameters:
-        - $ref: "#/components/parameters/UserId"
-        - $ref: "#/components/parameters/RequiredIdempotencyKey"
-      responses:
-        "200": { $ref: "#/components/responses/FollowState" }
   /v1/content/feed:
     get:
       operationId: getContentFeed
@@ -778,6 +788,23 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    post:
+      operationId: createPaymentTransactionRequest
+      tags: [Payments]
+      summary: Build unsigned non-custodial creator split transaction for wallet signature
+      parameters:
+        - $ref: "#/components/parameters/PaymentIntentId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateTransactionRequest"
+      responses:
+        "200": { $ref: "#/components/responses/TransactionRequestPost" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/payments/intents/{paymentIntentId}/submissions:
     post:
       operationId: submitPaymentSignature
@@ -1137,6 +1164,156 @@ paths:
         $ref: "#/components/requestBodies/CreateAiToolCall"
       responses:
         "201": { $ref: "#/components/responses/AiToolCall" }
+  /v1/mcp/tools:
+    get:
+      operationId: listMcpTools
+      tags: [MCP]
+      summary: List safe external MCP tools available to the current user role
+      responses:
+        "200": { $ref: "#/components/responses/McpToolList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /v1/mcp/connections:
+    get:
+      operationId: listMcpConnections
+      tags: [MCP]
+      summary: List external MCP client connections without exposing tokens
+      responses:
+        "200": { $ref: "#/components/responses/McpConnectionPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    post:
+      operationId: createMcpConnection
+      tags: [MCP]
+      summary: Create a scoped MCP client connection and return a one-time token
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateMcpConnection"
+      responses:
+        "201": { $ref: "#/components/responses/CreatedMcpConnection" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "501": { $ref: "#/components/responses/NotImplemented" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/mcp/connections/{mcpConnectionId}:
+    get:
+      operationId: getMcpConnection
+      tags: [MCP]
+      summary: Get one external MCP client connection without exposing its token
+      parameters:
+        - $ref: "#/components/parameters/McpConnectionId"
+      responses:
+        "200": { $ref: "#/components/responses/McpConnection" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/mcp/connections/{mcpConnectionId}/revoke:
+    post:
+      operationId: revokeMcpConnection
+      tags: [MCP]
+      summary: Revoke one external MCP client connection
+      parameters:
+        - $ref: "#/components/parameters/McpConnectionId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "200": { $ref: "#/components/responses/McpConnection" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /.well-known/oauth-protected-resource:
+    get:
+      operationId: getMcpOAuthProtectedResourceMetadata
+      tags: [MCP]
+      summary: MCP OAuth protected resource metadata
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/McpOAuthProtectedResourceMetadata" }
+  /.well-known/oauth-authorization-server:
+    get:
+      operationId: getMcpOAuthAuthorizationServerMetadata
+      tags: [MCP]
+      summary: MCP OAuth authorization server metadata
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/McpOAuthAuthorizationServerMetadata" }
+  /oauth/authorize:
+    get:
+      operationId: authorizeMcpOAuthConnection
+      tags: [MCP]
+      summary: Start MCP OAuth authorization-code flow with PKCE
+      security: []
+      parameters:
+        - { name: client_id, in: query, required: true, schema: { type: string } }
+        - { name: redirect_uri, in: query, required: true, schema: { type: string, format: uri } }
+        - { name: response_type, in: query, required: true, schema: { type: string, enum: [code] } }
+        - { name: resource, in: query, required: true, schema: { type: string, format: uri } }
+        - { name: scope, in: query, required: true, schema: { type: string } }
+        - { name: state, in: query, required: false, schema: { type: string } }
+        - { name: code_challenge, in: query, required: true, schema: { type: string } }
+        - { name: code_challenge_method, in: query, required: true, schema: { type: string, enum: [S256] } }
+      responses:
+        "302": { description: Redirect to authenticated web consent }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /oauth/consent/{oauthAuthorizationRequestId}:
+    get:
+      operationId: getMcpOAuthConsentRequest
+      tags: [MCP]
+      summary: Read a pending MCP OAuth consent request
+      parameters:
+        - $ref: "#/components/parameters/OAuthAuthorizationRequestId"
+      responses:
+        "200": { $ref: "#/components/responses/McpOAuthConsentRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /oauth/consent/{oauthAuthorizationRequestId}/approve:
+    post:
+      operationId: approveMcpOAuthConsentRequest
+      tags: [MCP]
+      summary: Approve an MCP OAuth consent request and return connector redirect URL
+      parameters:
+        - $ref: "#/components/parameters/OAuthAuthorizationRequestId"
+      responses:
+        "200": { $ref: "#/components/responses/McpOAuthRedirect" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /oauth/consent/{oauthAuthorizationRequestId}/deny:
+    post:
+      operationId: denyMcpOAuthConsentRequest
+      tags: [MCP]
+      summary: Deny an MCP OAuth consent request and return connector redirect URL
+      parameters:
+        - $ref: "#/components/parameters/OAuthAuthorizationRequestId"
+      responses:
+        "200": { $ref: "#/components/responses/McpOAuthRedirect" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /oauth/token:
+    post:
+      operationId: exchangeMcpOAuthCode
+      tags: [MCP]
+      summary: Exchange one MCP OAuth authorization code for a bearer access token
+      security: []
+      requestBody:
+        $ref: "#/components/requestBodies/McpOAuthTokenRequest"
+      responses:
+        "200": { $ref: "#/components/responses/McpOAuthTokenResponse" }
+        "400": { $ref: "#/components/responses/McpOAuthError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /oauth/revoke:
+    post:
+      operationId: revokeMcpOAuthToken
+      tags: [MCP]
+      summary: Revoke an MCP OAuth bearer access token
+      security: []
+      requestBody:
+        $ref: "#/components/requestBodies/McpOAuthRevokeRequest"
+      responses:
+        "200": { description: Revocation accepted }
   /v1/organizations:
     get:
       operationId: listMyOrganizationDashboards
@@ -1720,6 +1897,8 @@ components:
     SubscriptionId: { name: subscriptionId, in: path, required: true, schema: { type: string, format: uuid } }
     SubscriptionAuthorizationIntentId: { name: authorizationIntentId, in: path, required: true, schema: { type: string, format: uuid } }
     AiSessionId: { name: aiSessionId, in: path, required: true, schema: { type: string, format: uuid } }
+    McpConnectionId: { name: mcpConnectionId, in: path, required: true, schema: { type: string, format: uuid } }
+    OAuthAuthorizationRequestId: { name: oauthAuthorizationRequestId, in: path, required: true, schema: { type: string, format: uuid } }
     NotificationId: { name: notificationId, in: path, required: true, schema: { type: string, format: uuid } }
     NotificationDeviceId: { name: notificationDeviceId, in: path, required: true, schema: { type: string, format: uuid } }
     MutualId: { name: mutualId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1747,6 +1926,8 @@ components:
       schema: { type: string, enum: [yoti, sumsub, veriff, persona] }
   requestBodies:
     CreateAgeSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateAgeSessionRequest" } } } }
+    CreateWalletAuthChallenge: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateWalletAuthChallengeRequest" } } } }
+    CreateWalletAuthSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateWalletAuthSessionRequest" } } } }
     CreateWalletLinkChallenge: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateWalletLinkChallengeRequest" } } } }
     LinkWallet: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/LinkWalletRequest" } } } }
     CreateOnrampSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateOnrampSessionRequest" } } } }
@@ -1770,6 +1951,7 @@ components:
     CreatePaidMessageIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreatePaidMessageIntentRequest" } } } }
     CreatePaymentIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreatePaymentIntentRequest" }, examples: { support: { value: { productType: support, targetId: "00000000-0000-4000-8000-000000000001", amountMinor: 50000000 } }, tip: { value: { productType: tip, targetId: "00000000-0000-4000-8000-000000000001", amountMinor: 50000000 } } } } } }
     SubmitPaymentSignature: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SubmitPaymentSignatureRequest" } } } }
+    CreateTransactionRequest: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/TransactionRequestPostRequest" } } } }
     SolanaIndexerWebhook: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SolanaIndexerWebhookPayload" } } } }
     CreateReferralToken: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateReferralTokenRequest" } } } }
     CreateRefundDisputeRequest: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateRefundDisputeRequest" } } } }
@@ -1785,6 +1967,21 @@ components:
     MutualsInterest: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/MutualsInterestRequest" } } } }
     CreateAiSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateAiSessionRequest" } } } }
     CreateAiToolCall: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateAiToolCallRequest" } } } }
+    CreateMcpConnection: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateMcpConnectionRequest" } } } }
+    McpOAuthTokenRequest:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/McpOAuthTokenRequest" }
+        application/x-www-form-urlencoded:
+          schema: { $ref: "#/components/schemas/McpOAuthTokenRequest" }
+    McpOAuthRevokeRequest:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/McpOAuthRevokeRequest" }
+        application/x-www-form-urlencoded:
+          schema: { $ref: "#/components/schemas/McpOAuthRevokeRequest" }
     AdminReason: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminReasonRequest" } } } }
     AdminModerationAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminModerationActionRequest" } } } }
     AdminReportAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminReportActionRequest" } } } }
@@ -1815,12 +2012,14 @@ components:
     NotFound: { description: Not found, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     ValidationFailed: { description: Validation failed, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     Conflict: { description: Conflict, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+    NotImplemented: { description: Not implemented, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     ServiceUnavailable: { description: Service unavailable, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     RateLimited: { description: Rate limited, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     SessionState: { description: Session state, content: { application/json: { schema: { $ref: "#/components/schemas/SessionState" } } } }
-    Me: { description: Current viewer, content: { application/json: { schema: { $ref: "#/components/schemas/Me" } } } }
     AgeSession: { description: Age assurance session, content: { application/json: { schema: { $ref: "#/components/schemas/AgeSession" } } } }
     AgeStatus: { description: Age state, content: { application/json: { schema: { $ref: "#/components/schemas/AgeStatus" } } } }
+    WalletAuthChallenge: { description: Wallet auth challenge, content: { application/json: { schema: { $ref: "#/components/schemas/WalletAuthChallenge" } } } }
+    WalletAuthSession: { description: Wallet auth session, content: { application/json: { schema: { $ref: "#/components/schemas/WalletAuthSession" } } } }
     WalletLinkChallenge: { description: Wallet link challenge, content: { application/json: { schema: { $ref: "#/components/schemas/WalletLinkChallenge" } } } }
     WalletList: { description: Wallets, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Wallet" } } } } } } }
     Wallet: { description: Wallet, content: { application/json: { schema: { $ref: "#/components/schemas/Wallet" } } } }
@@ -1850,7 +2049,6 @@ components:
     CommentPage: { description: Comments, content: { application/json: { schema: { $ref: "#/components/schemas/CommentPage" } } } }
     Comment: { description: Comment, content: { application/json: { schema: { $ref: "#/components/schemas/Comment" } } } }
     ShareResult: { description: Share result, content: { application/json: { schema: { $ref: "#/components/schemas/ShareResult" } } } }
-    FollowState: { description: Follow state, content: { application/json: { schema: { $ref: "#/components/schemas/FollowState" } } } }
     ModerationIntake: { description: Moderation intake, content: { application/json: { schema: { $ref: "#/components/schemas/ModerationIntake" } } } }
     BlockState: { description: Block state, content: { application/json: { schema: { $ref: "#/components/schemas/BlockState" } } } }
     ConversationList: { description: Conversations, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Conversation" } } } } } } }
@@ -1859,6 +2057,7 @@ components:
     PaidMessageIntent: { description: Paid message intent, content: { application/json: { schema: { $ref: "#/components/schemas/PaidMessageIntent" } } } }
     PaymentIntent: { description: Payment intent, content: { application/json: { schema: { $ref: "#/components/schemas/PaymentIntent" } } } }
     TransactionRequest: { description: Transaction request, content: { application/json: { schema: { $ref: "#/components/schemas/TransactionRequest" } } } }
+    TransactionRequestPost: { description: Unsigned transaction request response, content: { application/json: { schema: { $ref: "#/components/schemas/TransactionRequestPostResponse" } } } }
     ContentUnlockIntent: { description: Content unlock intent, content: { application/json: { schema: { $ref: "#/components/schemas/ContentUnlockIntent" } } } }
     ReferralToken: { description: Referral token, content: { application/json: { schema: { $ref: "#/components/schemas/ReferralToken" } } } }
     RefundDisputeRequest: { description: Refund or dispute request, content: { application/json: { schema: { $ref: "#/components/schemas/RefundDisputeRequest" } } } }
@@ -1883,6 +2082,16 @@ components:
     AiSession: { description: AI session, content: { application/json: { schema: { $ref: "#/components/schemas/AiSession" } } } }
     AiCapabilities: { description: AI capabilities, content: { application/json: { schema: { $ref: "#/components/schemas/AiCapabilities" } } } }
     AiToolCall: { description: AI tool call, content: { application/json: { schema: { $ref: "#/components/schemas/AiToolCall" } } } }
+    McpToolList: { description: External MCP tools, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/McpToolDefinition" } } } } } } }
+    McpConnectionPage: { description: External MCP connections, content: { application/json: { schema: { $ref: "#/components/schemas/McpConnectionPage" } } } }
+    McpConnection: { description: External MCP connection without token, content: { application/json: { schema: { $ref: "#/components/schemas/McpConnection" } } } }
+    CreatedMcpConnection: { description: External MCP connection with one-time token, content: { application/json: { schema: { $ref: "#/components/schemas/CreatedMcpConnection" } } } }
+    McpOAuthProtectedResourceMetadata: { description: MCP OAuth protected resource metadata, content: { application/json: { schema: { $ref: "#/components/schemas/McpOAuthProtectedResourceMetadata" } } } }
+    McpOAuthAuthorizationServerMetadata: { description: MCP OAuth authorization server metadata, content: { application/json: { schema: { $ref: "#/components/schemas/McpOAuthAuthorizationServerMetadata" } } } }
+    McpOAuthConsentRequest: { description: MCP OAuth consent request, content: { application/json: { schema: { $ref: "#/components/schemas/McpOAuthConsentRequest" } } } }
+    McpOAuthRedirect: { description: OAuth connector redirect, content: { application/json: { schema: { $ref: "#/components/schemas/McpOAuthRedirect" } } } }
+    McpOAuthTokenResponse: { description: OAuth bearer access token, content: { application/json: { schema: { $ref: "#/components/schemas/McpOAuthTokenResponse" } } } }
+    McpOAuthError: { description: OAuth error response, content: { application/json: { schema: { $ref: "#/components/schemas/McpOAuthError" } } } }
     OrganizationDashboardPage: { description: Organization dashboards, content: { application/json: { schema: { $ref: "#/components/schemas/OrganizationDashboardPage" } } } }
     AdminOpsSummary: { description: Admin ops summary, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOpsSummary" } } } }
     AdminNotificationHealth: { description: Admin notification health, content: { application/json: { schema: { $ref: "#/components/schemas/AdminNotificationHealth" } } } }
@@ -1995,9 +2204,53 @@ components:
         address: { type: string }
         provider: { type: string, enum: [embedded_privy, embedded_turnkey, phantom, solflare, wallet_adapter] }
         isPrimary: { type: boolean }
+    WalletProvider:
+      type: string
+      enum: [embedded_privy, embedded_turnkey, phantom, solflare, wallet_adapter]
     ExternalWalletProvider:
       type: string
       enum: [phantom, solflare, wallet_adapter]
+    CreateWalletAuthChallengeRequest:
+      type: object
+      required: [chain, address, provider]
+      properties:
+        chain: { type: string, enum: [solana_devnet, solana_mainnet] }
+        address: { type: string, minLength: 32, maxLength: 64 }
+        provider: { $ref: "#/components/schemas/WalletProvider" }
+    WalletAuthChallenge:
+      type: object
+      required: [id, chain, address, provider, message, expiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        chain: { type: string, enum: [solana_devnet, solana_mainnet] }
+        address: { type: string }
+        provider: { $ref: "#/components/schemas/WalletProvider" }
+        message: { type: string }
+        expiresAt: { type: string, format: date-time }
+    WalletAuthProof:
+      type: object
+      required: [challengeId, message, signature, signatureEncoding]
+      properties:
+        challengeId: { type: string, format: uuid }
+        message: { type: string }
+        signature: { type: string }
+        signatureEncoding: { type: string, enum: [base58, base64] }
+    CreateWalletAuthSessionRequest:
+      type: object
+      required: [provider, address, chain, proof]
+      properties:
+        provider: { $ref: "#/components/schemas/WalletProvider" }
+        address: { type: string }
+        chain: { type: string, enum: [solana_devnet, solana_mainnet] }
+        proof: { $ref: "#/components/schemas/WalletAuthProof" }
+    WalletAuthSession:
+      type: object
+      required: [accessToken, tokenType, expiresAt, wallet]
+      properties:
+        accessToken: { type: string }
+        tokenType: { type: string, enum: [Bearer] }
+        expiresAt: { type: string, format: date-time }
+        wallet: { $ref: "#/components/schemas/Wallet" }
     CreateWalletLinkChallengeRequest:
       type: object
       required: [chain, address, provider]
@@ -2049,15 +2302,6 @@ components:
         state: { type: string, enum: [created, completed, failed, expired, canceled] }
         createdAt: { type: string, format: date-time }
         expiresAt: { type: string, format: date-time, nullable: true }
-    Me:
-      type: object
-      required: [user, ageState, walletState, appAccessState, feedPreferences]
-      properties:
-        user: { $ref: "#/components/schemas/User" }
-        ageState: { $ref: "#/components/schemas/AgeState" }
-        walletState: { $ref: "#/components/schemas/WalletState" }
-        appAccessState: { $ref: "#/components/schemas/AppAccessState" }
-        feedPreferences: { $ref: "#/components/schemas/FeedPreferences" }
     User:
       type: object
       required: [id, handle, displayName, badges]
@@ -2570,12 +2814,6 @@ components:
         id: { type: string, format: uuid }
         mode: { type: string, enum: [internal_message, external_referral_link, copy_link] }
         url: { type: string, format: uri, nullable: true }
-    FollowState:
-      type: object
-      required: [following, followerCount]
-      properties:
-        following: { type: boolean }
-        followerCount: { type: integer }
     CreateReportRequest:
       type: object
       required: [subjectType, subjectId, reason]
@@ -2668,13 +2906,17 @@ components:
         refundValueBasis: { type: string, enum: [original_crypto_amount, fiat_value_at_purchase, manual_resolution] }
     PaymentIntent:
       type: object
-      required: [id, productType, amountMinor, currency, state, refundPolicy]
+      required: [id, productType, amountMinor, currency, state, settlementKind, creatorAmountMinor, platformFeeAmountMinor, allocationAmountMinor, refundPolicy]
       properties:
         id: { type: string, format: uuid }
         productType: { $ref: "#/components/schemas/ProductType" }
         amountMinor: { type: integer }
         currency: { $ref: "#/components/schemas/Currency" }
-        state: { type: string, enum: [pending, transaction_requested, submitted, confirmed, failed, expired] }
+        state: { type: string, enum: [pending, transaction_requested, submitted, confirming, confirmed, settled, failed, expired, cancelled] }
+        settlementKind: { type: string, enum: [creator_split, platform_owned, dev_test] }
+        creatorAmountMinor: { type: integer }
+        platformFeeAmountMinor: { type: integer }
+        allocationAmountMinor: { type: integer }
         refundPolicy: { $ref: "#/components/schemas/PaymentIntentRefundPolicy" }
     SubmitPaymentSignatureRequest:
       type: object
@@ -2731,6 +2973,17 @@ components:
       properties:
         transactionRequestUrl: { type: string, format: uri }
         expiresAt: { type: string, format: date-time }
+    TransactionRequestPostRequest:
+      type: object
+      required: [account]
+      properties:
+        account: { type: string, description: Buyer-controlled Solana public key that will sign and pay the transaction }
+    TransactionRequestPostResponse:
+      type: object
+      required: [transaction]
+      properties:
+        transaction: { type: string, description: Base64 serialized unsigned Solana transaction for wallet signature }
+        message: { type: string }
     Entitlement:
       type: object
       required: [id, targetType, targetId, productType, state, grantedAt]
@@ -2844,7 +3097,7 @@ components:
         items: { type: array, items: { $ref: "#/components/schemas/Subscription" } }
     SubscriptionPlan:
       type: object
-      required: [id, scope, label, amountMinor, currency, periodDays, billingMode, providerState]
+      required: [id, scope, label, amountMinor, currency, periodDays, billingMode, providerState, provider]
       properties:
         id: { type: string }
         scope: { type: string, enum: [platform, creator] }
@@ -2854,9 +3107,15 @@ components:
         currency: { $ref: "#/components/schemas/Currency" }
         periodDays: { type: integer }
         billingMode: { type: string, enum: [manual_solana_pay, delegated_solana_subscription] }
-        providerState: { type: string, enum: [fallback_active, staging_required, disabled] }
+        providerState: { type: string, enum: [staging_required, launch_approved, disabled] }
+        provider: { type: string, enum: [official_solana_subscription_program, mock_subscription_provider_dev_only] }
         tokenMint: { type: string, nullable: true }
         tokenProgram: { type: string, enum: [spl_token, token_2022], nullable: true }
+        programId: { type: string, nullable: true }
+        planPda: { type: string, nullable: true }
+        merchantWallet: { type: string, nullable: true }
+        amountAtomic: { type: integer }
+        periodSeconds: { type: integer }
     CreateSubscriptionIntentRequest:
       type: object
       required: [planId]
@@ -2879,6 +3138,14 @@ components:
         revokedAt: { type: string, format: date-time, nullable: true }
         authorityAddress: { type: string, nullable: true }
         delegationAddress: { type: string, nullable: true }
+        subscriberWallet: { type: string, nullable: true }
+        subscriberTokenAccount: { type: string, nullable: true }
+        tokenMint: { type: string, nullable: true }
+        provider: { type: string, nullable: true }
+        programId: { type: string, nullable: true }
+        planPda: { type: string, nullable: true }
+        subscriptionPda: { type: string, nullable: true }
+        failureReason: { type: string, nullable: true }
     SubscriptionAuthorizationIntent:
       type: object
       required: [id, subscription, authorizationMode, setupReference, providerReadiness]
@@ -3189,6 +3456,191 @@ components:
         - draft_support_reply
         - prepare_refund_decision
         - prepare_ban_or_restriction
+    McpScope:
+      type: string
+      enum:
+        - creator.profile.read
+        - creator.profile.draft
+        - creator.metrics.read
+        - creator.drafts.read
+        - creator.drafts.write
+        - creator.events.read
+        - creator.events.draft
+        - creator.media.read
+        - creator.media.label
+        - creator.publish.request
+        - admin.health.read
+        - admin.support.read
+        - admin.support.draft
+        - admin.moderation.read
+        - admin.moderation.draft
+        - admin.payments.read
+        - admin.tasks.create
+    McpClientType:
+      type: string
+      enum: [claude, claude_code, cursor, openai, custom, internal]
+    McpRoleType:
+      type: string
+      enum: [creator, admin]
+    McpAuthMode:
+      type: string
+      enum: [scoped_token, oauth]
+    McpToolRiskLevel:
+      type: string
+      enum: [read, draft, request]
+    McpToolDefinition:
+      type: object
+      required: [name, version, description, inputSchema, outputSchema, requiredScopes, roleTypes, riskLevel]
+      properties:
+        name: { type: string }
+        version: { type: string }
+        description: { type: string }
+        inputSchema: { type: object, additionalProperties: true }
+        outputSchema: { type: object, additionalProperties: true }
+        requiredScopes:
+          type: array
+          items: { $ref: "#/components/schemas/McpScope" }
+        roleTypes:
+          type: array
+          items: { $ref: "#/components/schemas/McpRoleType" }
+        riskLevel: { $ref: "#/components/schemas/McpToolRiskLevel" }
+    CreateMcpConnectionRequest:
+      type: object
+      required: [clientName, clientType, roleType, scopes]
+      properties:
+        clientName: { type: string, minLength: 1, maxLength: 120 }
+        clientType: { $ref: "#/components/schemas/McpClientType" }
+        roleType: { $ref: "#/components/schemas/McpRoleType" }
+        scopes:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/McpScope" }
+    McpConnection:
+      type: object
+      required: [id, clientName, clientType, authMode, roleType, state, tokenHint, scopes, expiresAt, lastUsedAt, revokedAt, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        clientName: { type: string }
+        clientType: { $ref: "#/components/schemas/McpClientType" }
+        authMode: { $ref: "#/components/schemas/McpAuthMode" }
+        roleType: { $ref: "#/components/schemas/McpRoleType" }
+        state: { type: string, enum: [active, revoked, expired] }
+        tokenHint: { type: string, nullable: true }
+        scopes:
+          type: array
+          items: { $ref: "#/components/schemas/McpScope" }
+        expiresAt: { type: string, format: date-time }
+        lastUsedAt: { type: string, format: date-time, nullable: true }
+        revokedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    CreatedMcpConnection:
+      allOf:
+        - $ref: "#/components/schemas/McpConnection"
+        - type: object
+          required: [token]
+          properties:
+            token: { type: string, description: Returned once. Only a hash is stored by the API. }
+    McpConnectionPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/McpConnection" }
+        nextCursor: { type: string, nullable: true }
+    McpOAuthProtectedResourceMetadata:
+      type: object
+      required: [resource, authorization_servers, bearer_methods_supported, scopes_supported]
+      properties:
+        resource: { type: string, format: uri }
+        authorization_servers:
+          type: array
+          items: { type: string, format: uri }
+        bearer_methods_supported:
+          type: array
+          items: { type: string }
+        scopes_supported:
+          type: array
+          items: { $ref: "#/components/schemas/McpScope" }
+        resource_documentation: { type: string, format: uri }
+        mcp_status: { type: string }
+    McpOAuthAuthorizationServerMetadata:
+      type: object
+      required: [issuer, authorization_endpoint, token_endpoint, revocation_endpoint, response_types_supported, grant_types_supported, code_challenge_methods_supported]
+      properties:
+        issuer: { type: string, format: uri }
+        authorization_endpoint: { type: string, format: uri }
+        token_endpoint: { type: string, format: uri }
+        revocation_endpoint: { type: string, format: uri }
+        scopes_supported:
+          type: array
+          items: { $ref: "#/components/schemas/McpScope" }
+        response_types_supported:
+          type: array
+          items: { type: string, enum: [code] }
+        grant_types_supported:
+          type: array
+          items: { type: string, enum: [authorization_code] }
+        code_challenge_methods_supported:
+          type: array
+          items: { type: string, enum: [S256] }
+        token_endpoint_auth_methods_supported:
+          type: array
+          items: { type: string, enum: [none] }
+        revocation_endpoint_auth_methods_supported:
+          type: array
+          items: { type: string, enum: [none] }
+        service_documentation: { type: string, format: uri }
+        status: { type: string }
+    McpOAuthConsentRequest:
+      type: object
+      required: [id, clientName, clientType, roleType, resource, requestedScopes, status, expiresAt, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        clientName: { type: string }
+        clientType: { $ref: "#/components/schemas/McpClientType" }
+        roleType: { $ref: "#/components/schemas/McpRoleType" }
+        resource: { type: string, format: uri }
+        requestedScopes:
+          type: array
+          items: { $ref: "#/components/schemas/McpScope" }
+        status: { type: string, enum: [pending, approved, denied, expired, exchanged] }
+        expiresAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+    McpOAuthRedirect:
+      type: object
+      required: [redirectUri]
+      properties:
+        redirectUri: { type: string, format: uri }
+    McpOAuthTokenRequest:
+      type: object
+      required: [grant_type, client_id, redirect_uri, code, code_verifier]
+      properties:
+        grant_type: { type: string, enum: [authorization_code] }
+        client_id: { type: string }
+        redirect_uri: { type: string, format: uri }
+        code: { type: string }
+        code_verifier: { type: string, minLength: 43, maxLength: 128 }
+    McpOAuthRevokeRequest:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string }
+        token_type_hint: { type: string, enum: [access_token] }
+    McpOAuthTokenResponse:
+      type: object
+      required: [access_token, token_type, expires_in, scope]
+      properties:
+        access_token: { type: string }
+        token_type: { type: string, enum: [Bearer] }
+        expires_in: { type: integer, minimum: 0 }
+        scope: { type: string }
+    McpOAuthError:
+      type: object
+      required: [error, error_description]
+      properties:
+        error: { type: string }
+        error_description: { type: string }
     OrganizationDashboardPage:
       type: object
       required: [items, nextCursor]
