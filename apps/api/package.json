@@ -12,7 +12,7 @@
   "dependencies": {
     "@coinbase/cdp-sdk": "^1.51.0",
     "@fastify/cors": "^11.1.0",
-    "@fastify/rate-limit": "^10.3.0",
+    "@fastify/rate-limit": "^11.0.0",
     "@fastify/sensible": "^6.0.3",
     "@fastify/swagger": "^9.5.2",
     "@solana/web3.js": "^1.98.4",
