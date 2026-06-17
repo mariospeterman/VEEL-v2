@@ -37,7 +37,7 @@
     "@playwright/test": "^1.51.1",
     "@types/node": "^25.9.3",
     "eslint": "^9.39.1",
-    "globals": "^16.5.0",
+    "globals": "^17.6.0",
     "supabase": "^2.106.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.61.0",
