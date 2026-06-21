@@ -468,6 +468,7 @@
     display: grid;
     width: min(720px, 100%);
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
     gap: 8px;
   }
 
@@ -520,6 +521,7 @@
 
   .landing-wallet-runtime .auth-provider-button-stack {
     display: grid;
+    align-self: start;
     gap: 4px;
   }
 
@@ -527,11 +529,21 @@
   .landing-wallet-runtime .landing-provider-link {
     width: 100%;
     min-height: 40px;
+    height: auto;
     border: 1px solid rgba(248, 250, 252, 0.16);
     border-radius: 999px;
     background: rgba(8, 9, 11, 0.22);
     color: #fff;
     padding: 0 13px;
+  }
+
+  .landing-wallet-runtime .auth-provider-status {
+    cursor: default;
+    opacity: 0.58;
+  }
+
+  .landing-wallet-runtime .auth-provider-status strong {
+    color: rgba(248, 250, 252, 0.78);
   }
 
   .landing-wallet-runtime .auth-provider-button small,

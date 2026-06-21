@@ -12,7 +12,7 @@ const browserE2eAuthEnabled =
 export async function authenticatedGet<T>(path: string): Promise<T> {
   const { token } = await browserSessionToken();
   const env = parsePublicWebEnv(process.env);
-  const response = await fetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
+  const response = await mutationFetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
     cache: "no-store",
     headers: {
       accept: "application/json",
@@ -59,7 +59,7 @@ export async function publicMutation<T>(
   body: unknown
 ): Promise<T> {
   const env = parsePublicWebEnv(process.env);
-  const response = await fetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
+  const response = await mutationFetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
     body: JSON.stringify(body),
     cache: "no-store",
     headers: {
@@ -85,7 +85,7 @@ async function sendAuthenticatedMutation(
   const { token } = await browserSessionToken();
   const env = parsePublicWebEnv(process.env);
 
-  return fetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
+  return mutationFetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
     body: JSON.stringify(body),
     cache: "no-store",
     headers: {
@@ -96,6 +96,14 @@ async function sendAuthenticatedMutation(
     },
     method
   });
+}
+
+async function mutationFetch(input: URL, init: RequestInit) {
+  try {
+    return await fetch(input, init);
+  } catch {
+    throw new ApiMutationError("API is unavailable", 503);
+  }
 }
 
 async function browserSessionToken() {

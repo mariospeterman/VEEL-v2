@@ -39,23 +39,22 @@ export function EmbeddedWalletLoginButton({
 
 function DisabledEmbeddedProvider({ label, provider }: { label: string; provider: EmbeddedProvider }) {
   const envName = provider === "privy" ? "NEXT_PUBLIC_PRIVY_APP_ID" : "NEXT_PUBLIC_TURNKEY_ORGANIZATION_ID";
-  const shortMessage = provider === "privy" ? "Add Privy app ID." : "Add Turnkey org ID.";
+  const shortMessage = provider === "privy" ? "Privy staged" : "Turnkey staged";
 
   return (
     <div className="auth-provider-button-stack">
-      <button
-        className="auth-provider-button auth-provider-button-muted"
+      <div
+        className="auth-provider-button auth-provider-button-muted auth-provider-status"
         aria-describedby={`embedded-${provider}-note`}
-        type="button"
       >
         <ProviderLogo label={label} name={provider} />
         <span>
           <strong>{label}</strong>
-          <small>Configure provider</small>
+          <small>{shortMessage}</small>
         </span>
-      </button>
+      </div>
       <p className="auth-provider-note auth-provider-note-muted" id={`embedded-${provider}-note`} title={`Missing ${envName}.`}>
-        {shortMessage}
+        Enable embedded wallet runtime and configure {envName}.
       </p>
     </div>
   );
