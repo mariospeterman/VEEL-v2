@@ -1,59 +1,22 @@
-import type { ReactNode } from "react";
+import {
+  Card,
+  EmptyState,
+  Fact,
+  Field,
+  IconButton,
+  Input,
+  MediaTile,
+  MetricCard,
+  PageHeader,
+  StatusPill,
+  Tabs,
+  Textarea,
+  Avatar
+} from "@veel/ui";
 import type { ApiResult } from "@/api-client";
 import { mapApiFailure } from "@/api-errors";
 
-export function PageHeader({
-  eyebrow,
-  title,
-  children,
-  action
-}: {
-  eyebrow: string;
-  title: string;
-  children?: ReactNode;
-  action?: ReactNode;
-}) {
-  return (
-    <header className="page-header">
-      <div>
-        <p className="eyebrow">{eyebrow}</p>
-        <h1>{title}</h1>
-        {children ? <p className="page-kicker">{children}</p> : null}
-      </div>
-      {action ? <div className="page-action">{action}</div> : null}
-    </header>
-  );
-}
-
-export function Card({
-  children,
-  className = "",
-  id
-}: {
-  children: ReactNode;
-  className?: string;
-  id?: string;
-}) {
-  return <section className={`ui-card ${className}`} id={id}>{children}</section>;
-}
-
-export function EmptyState({
-  title,
-  children,
-  action
-}: {
-  title: string;
-  children?: ReactNode;
-  action?: ReactNode;
-}) {
-  return (
-    <Card className="empty-state">
-      <h2>{title}</h2>
-      {children ? <p>{children}</p> : null}
-      {action ? <div className="mt-4">{action}</div> : null}
-    </Card>
-  );
-}
+export { Avatar, Card, EmptyState, Fact, Field, IconButton, Input, MediaTile, MetricCard, PageHeader, StatusPill, Tabs, Textarea };
 
 export function ErrorState<T>({
   result,
@@ -97,45 +60,19 @@ export function AuthRequiredState({ next = "/app/home" }: { next?: string }) {
   return (
     <Card className="auth-state">
       <p className="eyebrow">private feed</p>
-      <h2>Enter VEEL to load your feed</h2>
+      <h2>Enter WeVid to load your feed</h2>
       <p>
         Home, live rail, wallet, messages, and receipts use backend-verified session state.
         Sign in to continue without exposing raw API errors.
       </p>
       <div className="mt-5 flex flex-wrap gap-3">
-        <a className="primary-button" href={`/enter?${params.toString()}`}>
-          Enter VEEL
+        <a className="primary-button" href={`/?mode=login&${params.toString()}`}>
+          Enter WeVid
         </a>
         <a className="secondary-button" href="/age">
           Age handoff
         </a>
       </div>
-    </Card>
-  );
-}
-
-export function StatusPill({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "good" | "warn" | "danger" }) {
-  return (
-    <span className="status-pill" data-tone={tone}>
-      {children}
-    </span>
-  );
-}
-
-export function Fact({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="fact">
-      <p>{label}</p>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-export function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <Card className="metric-card">
-      <p>{label}</p>
-      <strong>{value}</strong>
     </Card>
   );
 }

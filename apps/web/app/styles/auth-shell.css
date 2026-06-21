@@ -1,0 +1,166 @@
+@layer components {
+  .auth-shell {
+    position: relative;
+    display: grid;
+    min-height: 100dvh;
+    grid-template-rows: 80px minmax(0, 1fr) auto;
+    overflow: hidden;
+    background:
+      linear-gradient(color-mix(in srgb, var(--foreground) 6%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in srgb, var(--foreground) 6%, transparent) 1px, transparent 1px),
+      linear-gradient(135deg, color-mix(in srgb, var(--accent) 9%, transparent) 0%, transparent 34%, color-mix(in srgb, var(--accent-3) 9%, transparent) 72%, transparent 100%),
+      radial-gradient(circle at 86% 14%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 24rem),
+      radial-gradient(circle at 8% 100%, color-mix(in srgb, var(--accent-3) 22%, transparent), transparent 28rem),
+      var(--background);
+    background-size: 64px 64px, 64px 64px, auto, auto, auto, auto;
+    color: var(--foreground);
+  }
+
+  .auth-shell[data-mode="login"] {
+    overflow: auto;
+  }
+
+  .auth-header {
+    z-index: 2;
+    display: grid;
+    min-height: 80px;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    border-bottom: 1px solid var(--line);
+    padding: 12px clamp(18px, 4vw, 56px);
+  }
+
+  .auth-header > a:first-child {
+    justify-self: start;
+    color: var(--muted);
+    font-weight: 760;
+  }
+
+  .auth-brand,
+  .auth-header-actions,
+  .auth-modal-actions,
+  .auth-flow-actions,
+  .auth-provider-link-grid,
+  .auth-footer {
+    display: flex;
+    align-items: center;
+  }
+
+  .auth-brand {
+    gap: 12px;
+    justify-self: center;
+    color: var(--foreground);
+    font-weight: 900;
+    letter-spacing: 0.14em;
+  }
+
+  .auth-logo-mark {
+    position: relative;
+    display: grid;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+  }
+
+  .auth-logo-mark::before,
+  .auth-logo-mark::after {
+    position: absolute;
+    content: "";
+  }
+
+  .auth-logo-mark::before {
+    inset: 5px 7px 6px 5px;
+    border: 3px solid var(--foreground);
+    border-top-right-radius: 0;
+    border-bottom-left-radius: 7px;
+    border-bottom-right-radius: 7px;
+    border-top-left-radius: 7px;
+    clip-path: polygon(0 0, 78% 0, 78% 17%, 18% 17%, 18% 78%, 84% 78%, 84% 52%, 100% 52%, 100% 100%, 0 100%);
+  }
+
+  .auth-logo-mark::after {
+    top: 3px;
+    right: 3px;
+    width: 10px;
+    height: 10px;
+    border: 2px solid #ff3154;
+    border-radius: 999px;
+    background: var(--background);
+  }
+
+  .auth-logo-mark img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    object-fit: contain;
+  }
+
+  :root[data-theme="dark"] .theme-logo-image-light,
+  :root[data-theme="light"] .theme-logo-image-dark {
+    opacity: 0;
+  }
+
+  .auth-logo-text {
+    font-size: 24px;
+  }
+
+  .auth-header-actions {
+    justify-self: end;
+    gap: 10px;
+  }
+
+  .auth-header-actions button,
+  .auth-help,
+  .auth-mobile-menu-button,
+  .auth-mobile-menu-close,
+  .auth-access-dialog-header button,
+  .auth-modal-actions button,
+  .auth-modal-actions a {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--panel) 72%, transparent);
+    color: var(--foreground);
+  }
+
+  .auth-header-actions .auth-mobile-menu-button {
+    display: none;
+  }
+
+  .auth-login-stage,
+  .auth-flow-stage {
+    display: grid;
+    min-height: 0;
+    overflow: auto;
+    padding: clamp(30px, 6vh, 72px) clamp(20px, 5vw, 64px);
+  }
+
+  .auth-shell[data-mode="login"] .auth-login-stage {
+    align-content: center;
+    padding-block: clamp(16px, 2.4vh, 24px);
+  }
+
+  .auth-footer {
+    min-height: 44px;
+    justify-content: center;
+    gap: clamp(10px, 2vw, 22px);
+    border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+    padding: 8px 16px 14px;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 760;
+  }
+
+  .auth-footer button {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+  }
+}

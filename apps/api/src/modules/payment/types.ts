@@ -1,10 +1,13 @@
 import type { components } from "@veel/contracts";
+import type { SettlementKind } from "./payment-amounts.js";
 
 export type CreatePaymentIntentRequest = components["schemas"]["CreatePaymentIntentRequest"];
 export type PaymentIntent = components["schemas"]["PaymentIntent"];
 export type ProductType = components["schemas"]["ProductType"];
 export type SubmitPaymentSignatureRequest = components["schemas"]["SubmitPaymentSignatureRequest"];
 export type TransactionRequest = components["schemas"]["TransactionRequest"];
+export type TransactionRequestPostRequest = components["schemas"]["TransactionRequestPostRequest"];
+export type TransactionRequestPostResponse = components["schemas"]["TransactionRequestPostResponse"];
 export type WebhookReceipt = components["schemas"]["WebhookReceipt"];
 
 export interface CreatePaymentIntentInput {
@@ -17,6 +20,13 @@ export interface CreatePaymentIntentInput {
   currency: "SOL";
   solanaCluster: "devnet" | "mainnet-beta";
   treasuryWallet: string;
+  platformFeeWallet: string;
+  platformFeeBps: number;
+  settlementKind: SettlementKind;
+  creatorUserId?: string | null;
+  creatorWallet?: string | null;
+  allocationWallet?: string | null;
+  allocationAmountMinor?: number | null;
   referenceAddress: string;
   expiresAt: Date;
   referralToken?: string | null;
@@ -35,6 +45,7 @@ export interface RecordTransactionRequestInput {
   supabaseUserId: string;
   paymentIntentId: string;
   transactionRequestUrl: string;
+  buyerWallet?: string | null;
 }
 
 export interface RecordPaymentSubmissionInput {
@@ -48,6 +59,15 @@ export interface StoredPaymentIntent extends PaymentIntent {
   targetId: string;
   referenceAddress: string;
   treasuryWallet: string;
+  settlementKind: SettlementKind;
+  buyerWallet: string | null;
+  creatorWallet: string;
+  platformFeeWallet: string;
+  allocationWallet: string | null;
+  totalAmountMinor: number;
+  creatorAmountMinor: number;
+  platformFeeAmountMinor: number;
+  allocationAmountMinor: number;
   solanaCluster: "devnet" | "mainnet-beta";
   expiresAt: Date;
   requestHash: string;
@@ -95,8 +115,17 @@ export interface PaymentEvidenceRepository {
 export interface PaymentSettlementInput {
   signature: string;
   referenceAddress: string;
-  treasuryWallet: string;
-  amountMinor: number;
+  memo: string;
+  settlementKind: SettlementKind;
+  buyerWallet?: string | null;
+  creatorWallet: string;
+  platformFeeWallet: string;
+  allocationWallet?: string | null;
+  treasuryWallet?: string | null;
+  totalAmountMinor: number;
+  creatorAmountMinor: number;
+  platformFeeAmountMinor: number;
+  allocationAmountMinor: number;
 }
 
 export interface PaymentSettlementResult {

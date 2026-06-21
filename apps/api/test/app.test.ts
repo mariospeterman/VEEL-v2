@@ -560,6 +560,8 @@ describe("buildApi", () => {
       payload: {
         handle: "maki",
         displayName: "Maki",
+        avatarUrl: "https://media.example.test/avatar.jpg",
+        links: [{ label: "Website", url: "https://veel.example.test/maki" }],
         bio: "Building Veel v2"
       }
     });
@@ -570,7 +572,7 @@ describe("buildApi", () => {
       id: "00000000-0000-4000-8000-000000000010",
       handle: "maki",
       displayName: "Maki",
-      avatarUrl: null,
+      avatarUrl: "https://media.example.test/avatar.jpg",
       badges: []
     });
 
@@ -2992,19 +2994,43 @@ describe("buildApi", () => {
         SOLANA_NETWORK: "solana:devnet",
         SOLANA_RPC_URL: "https://api.devnet.solana.com",
         PAYMENT_DEFAULT_ASSET: "SOL",
+        PAYMENT_PLATFORM_FEE_BPS: 1000,
         SOLANA_SUBSCRIPTION_DELEGATION_PROGRAM_ID: "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
+        SUBSCRIPTIONS_ENABLED: false,
+        SUBSCRIPTIONS_PROVIDER: "disabled",
+        SUBSCRIPTIONS_SOLANA_PROGRAM_ID: "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
+        SUBSCRIPTIONS_SOLANA_NETWORK: "devnet",
+        SUBSCRIPTIONS_REQUIRE_ONCHAIN_VERIFICATION: true,
         HELIUS_CLUSTER: "devnet",
         ONRAMP_PROVIDER: "disabled",
         ONRAMP_PURCHASE_CURRENCY: "SOL",
+        WALLET_AUTH_SESSION_TTL_SECONDS: 604800,
         COINBASE_CDP_API_BASE_URL: "https://api.cdp.coinbase.com",
         COINBASE_ONRAMP_DESTINATION_NETWORK: "solana",
         AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: false,
+        AGE_VERIFICATION_PROVIDER_SELECTION_ENABLED: true,
+        AGE_VERIFICATION_PREFER_REUSABLE_CREDENTIALS: true,
+        AGE_VERIFICATION_REUSABLE_PROVIDERS: "didit_reusable,yoti_digital_id,eudi_wallet,scytales",
+        AGE_VERIFICATION_FALLBACK_PROVIDERS: "didit_age_estimation,persona_document",
+        AGE_VERIFICATION_FALLBACK_ORDER: "reusable_credential,age_estimation,free_document,portable_credential,database_non_doc,document",
+        AGE_VERIFICATION_REVERIFY_MODE: "risk_or_expiry",
+        AGE_VERIFICATION_REVERIFY_DAYS: 365,
         SUMSUB_API_BASE_URL: "https://api.sumsub.com",
         YOTI_API_BASE_URL: "https://age.yoti.com/api/v1",
         YOTI_LAUNCH_BASE_URL: "https://age.yoti.com",
         VERIFF_API_BASE_URL: "https://stationapi.veriff.com",
         PERSONA_API_BASE_URL: "https://api.withpersona.com",
         TRANSACTIONAL_EMAIL_PROVIDER: "disabled",
+        MCP_ENABLED: false,
+        MCP_AUTH_MODE: "oauth",
+        MCP_ALLOWED_CLIENTS: "",
+        MCP_REQUIRE_OAUTH: true,
+        MCP_ALLOW_STATIC_TOKENS_DEV: false,
+        MCP_TOOL_CALL_RATE_LIMIT_PER_MINUTE: 30,
+        MCP_CONNECTION_TOKEN_TTL_SECONDS: 86400,
+        MCP_OAUTH_AUTH_CODE_TTL_SECONDS: 600,
+        MCP_OAUTH_ACCESS_TOKEN_TTL_SECONDS: 3600,
+        MCP_AUDIT_RETENTION_DAYS: 365,
         BUNNY_STREAM_API_KEY: "bunny-secret",
         BUNNY_STREAM_LIBRARY_ID: "library-id",
         BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS: 900
@@ -3056,19 +3082,43 @@ describe("buildApi", () => {
       SOLANA_NETWORK: "solana:devnet",
       SOLANA_RPC_URL: "https://api.devnet.solana.com",
       PAYMENT_DEFAULT_ASSET: "SOL",
+      PAYMENT_PLATFORM_FEE_BPS: 1000,
       SOLANA_SUBSCRIPTION_DELEGATION_PROGRAM_ID: "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
+      SUBSCRIPTIONS_ENABLED: false,
+      SUBSCRIPTIONS_PROVIDER: "disabled",
+      SUBSCRIPTIONS_SOLANA_PROGRAM_ID: "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
+      SUBSCRIPTIONS_SOLANA_NETWORK: "devnet",
+      SUBSCRIPTIONS_REQUIRE_ONCHAIN_VERIFICATION: true,
       HELIUS_CLUSTER: "devnet",
       ONRAMP_PROVIDER: "disabled",
       ONRAMP_PURCHASE_CURRENCY: "SOL",
+      WALLET_AUTH_SESSION_TTL_SECONDS: 604800,
       COINBASE_CDP_API_BASE_URL: "https://api.cdp.coinbase.com",
       COINBASE_ONRAMP_DESTINATION_NETWORK: "solana",
       AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: false,
+      AGE_VERIFICATION_PROVIDER_SELECTION_ENABLED: true,
+      AGE_VERIFICATION_PREFER_REUSABLE_CREDENTIALS: true,
+      AGE_VERIFICATION_REUSABLE_PROVIDERS: "didit_reusable,yoti_digital_id,eudi_wallet,scytales",
+      AGE_VERIFICATION_FALLBACK_PROVIDERS: "didit_age_estimation,persona_document",
+      AGE_VERIFICATION_FALLBACK_ORDER: "reusable_credential,age_estimation,free_document,portable_credential,database_non_doc,document",
+      AGE_VERIFICATION_REVERIFY_MODE: "risk_or_expiry",
+      AGE_VERIFICATION_REVERIFY_DAYS: 365,
       SUMSUB_API_BASE_URL: "https://api.sumsub.com",
       YOTI_API_BASE_URL: "https://age.yoti.com/api/v1",
       YOTI_LAUNCH_BASE_URL: "https://age.yoti.com",
       VERIFF_API_BASE_URL: "https://stationapi.veriff.com",
       PERSONA_API_BASE_URL: "https://api.withpersona.com",
       TRANSACTIONAL_EMAIL_PROVIDER: "disabled",
+      MCP_ENABLED: false,
+      MCP_AUTH_MODE: "oauth",
+      MCP_ALLOWED_CLIENTS: "",
+      MCP_REQUIRE_OAUTH: true,
+      MCP_ALLOW_STATIC_TOKENS_DEV: false,
+      MCP_TOOL_CALL_RATE_LIMIT_PER_MINUTE: 30,
+      MCP_CONNECTION_TOKEN_TTL_SECONDS: 86400,
+      MCP_OAUTH_AUTH_CODE_TTL_SECONDS: 600,
+      MCP_OAUTH_ACCESS_TOKEN_TTL_SECONDS: 3600,
+      MCP_AUDIT_RETENTION_DAYS: 365,
       BUNNY_STREAM_API_KEY: "bunny-secret",
       BUNNY_STREAM_LIBRARY_ID: "759",
       BUNNY_STREAM_EMBED_TOKEN_KEY: "embed-token-secret",
@@ -3160,6 +3210,10 @@ describe("buildApi", () => {
       amountMinor: 10000000,
       currency: "SOL",
       state: "pending",
+      settlementKind: "creator_split",
+      creatorAmountMinor: storedPaymentIntent.creatorAmountMinor,
+      platformFeeAmountMinor: storedPaymentIntent.platformFeeAmountMinor,
+      allocationAmountMinor: storedPaymentIntent.allocationAmountMinor,
       refundPolicy: storedPaymentIntent.refundPolicy
     });
 
@@ -6121,6 +6175,10 @@ describe("buildApi", () => {
         amountMinor: 25000000,
         currency: "SOL",
         state: "pending",
+        settlementKind: "creator_split",
+        creatorAmountMinor: storedPaymentIntent.creatorAmountMinor,
+        platformFeeAmountMinor: storedPaymentIntent.platformFeeAmountMinor,
+        allocationAmountMinor: storedPaymentIntent.allocationAmountMinor,
         refundPolicy: storedPaymentIntent.refundPolicy
       }
     });
@@ -6162,7 +6220,7 @@ describe("buildApi", () => {
     vi.unstubAllEnvs();
   });
 
-  it("returns a Solana Pay transfer request without treating it as settlement", async () => {
+  it("returns a Solana Pay transaction request without treating it as settlement", async () => {
     vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
     const recordedRequests: RecordTransactionRequestInput[] = [];
     const paymentRepository: PaymentRepository = {
@@ -6204,10 +6262,8 @@ describe("buildApi", () => {
 
     expect(response.statusCode).toBe(200);
     const body = response.json() as { transactionRequestUrl: string; expiresAt: string };
-    expect(body.transactionRequestUrl).toContain(`solana:${treasuryWallet}?`);
-    expect(body.transactionRequestUrl).toContain("amount=0.01");
     expect(body.transactionRequestUrl).toContain(
-      `reference=${storedPaymentIntent.referenceAddress}`
+      `solana:http%3A%2F%2Flocalhost%3A4000%2Fv1%2Fpayments%2Fintents%2F${storedPaymentIntent.id}%2Ftransaction-request`
     );
     expect(recordedRequests[0]?.transactionRequestUrl).toBe(body.transactionRequestUrl);
 
@@ -6269,8 +6325,17 @@ describe("buildApi", () => {
       {
         signature: validSolanaSignature,
         referenceAddress: storedPaymentIntent.referenceAddress,
+        memo: `veel:${storedPaymentIntent.id}`,
+        settlementKind: "creator_split",
+        buyerWallet: null,
+        creatorWallet,
+        platformFeeWallet,
+        allocationWallet: null,
         treasuryWallet,
-        amountMinor: storedPaymentIntent.amountMinor
+        totalAmountMinor: storedPaymentIntent.totalAmountMinor,
+        creatorAmountMinor: storedPaymentIntent.creatorAmountMinor,
+        platformFeeAmountMinor: storedPaymentIntent.platformFeeAmountMinor,
+        allocationAmountMinor: storedPaymentIntent.allocationAmountMinor
       }
     ]);
     expect(submissions).toEqual([
@@ -6381,8 +6446,17 @@ describe("buildApi", () => {
       {
         signature: validSolanaSignature,
         referenceAddress: storedPaymentIntent.referenceAddress,
+        memo: `veel:${storedPaymentIntent.id}`,
+        settlementKind: "creator_split",
+        buyerWallet: null,
+        creatorWallet,
+        platformFeeWallet,
+        allocationWallet: null,
         treasuryWallet,
-        amountMinor: storedPaymentIntent.amountMinor
+        totalAmountMinor: storedPaymentIntent.totalAmountMinor,
+        creatorAmountMinor: storedPaymentIntent.creatorAmountMinor,
+        platformFeeAmountMinor: storedPaymentIntent.platformFeeAmountMinor,
+        allocationAmountMinor: storedPaymentIntent.allocationAmountMinor
       }
     ]);
     expect(submissions).toMatchObject([
@@ -7360,6 +7434,15 @@ describe("buildApi", () => {
   });
 
   it("creates delegated subscription intents and keeps activation behind backend verification", async () => {
+    vi.stubEnv("SUBSCRIPTIONS_ENABLED", "true");
+    vi.stubEnv("SUBSCRIPTIONS_PROVIDER", "official_solana_subscription_program");
+    vi.stubEnv("SUBSCRIPTIONS_SOLANA_PROGRAM_ID", "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44");
+    vi.stubEnv("SUBSCRIPTIONS_SOLANA_RPC_URL", "https://api.devnet.solana.com");
+    vi.stubEnv("SUBSCRIPTIONS_SUPPORTED_MINTS", "USDC_MINT_CONFIG_REQUIRED");
+    vi.stubEnv("SUBSCRIPTIONS_DEFAULT_MINT", "USDC_MINT_CONFIG_REQUIRED");
+    vi.stubEnv("SUBSCRIPTIONS_COLLECTOR_WALLET", "11111111111111111111111111111111");
+    vi.stubEnv("SUBSCRIPTIONS_MERCHANT_WALLET", "11111111111111111111111111111111");
+    vi.stubEnv("SUBSCRIPTIONS_REQUIRE_ONCHAIN_VERIFICATION", "true");
     const calls: Array<{ kind: string; input: unknown }> = [];
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -7487,12 +7570,13 @@ describe("buildApi", () => {
         input: {
           authorizationIntentId: "00000000-0000-4000-8000-000000000071",
           idempotencyKey: "sub-submit-1",
-          verification: { verified: false, failureCode: "delegation_verifier_not_configured" }
+          verification: { verified: false, failureCode: "provider_not_configured" }
         }
       }
     ]);
 
     await app.close();
+    vi.unstubAllEnvs();
   });
 
   it("cancels subscriptions server-side without frontend state truth", async () => {
@@ -7651,6 +7735,8 @@ const homeFeedItem: ContentItem = {
 };
 
 const treasuryWallet = "1".repeat(32);
+const creatorWallet = "2".repeat(32);
+const platformFeeWallet = "3".repeat(32);
 const validSolanaSignature =
   "5Pj5fCupXLUePYn18JkY8SrRaWFiUctuDTRwvUy2MLgVFG1FsCeezrWwZsmxkL5YJQFmQpAcY7rc5pN6vrXJt7Qp";
 
@@ -7663,8 +7749,17 @@ const storedPaymentIntent: StoredPaymentIntent = {
   state: "pending",
   referenceAddress: `${"1".repeat(31)}2`,
   treasuryWallet,
+  settlementKind: "creator_split",
+  buyerWallet: null,
+  creatorWallet,
+  platformFeeWallet,
+  allocationWallet: null,
+  totalAmountMinor: 10000000,
+  creatorAmountMinor: 9000000,
+  platformFeeAmountMinor: 1000000,
+  allocationAmountMinor: 0,
   solanaCluster: "devnet",
-  expiresAt: new Date("2026-06-04T23:15:00.000Z"),
+  expiresAt: new Date("2026-07-04T23:15:00.000Z"),
   requestHash: "request-hash",
   refundPolicy: {
     withdrawalWaiverRequired: true,
@@ -7823,8 +7918,14 @@ function subscriptionPlanFixture(overrides: Partial<SubscriptionPlan> = {}): Sub
     periodDays: overrides.periodDays ?? 30,
     billingMode: overrides.billingMode ?? "delegated_solana_subscription",
     providerState: overrides.providerState ?? "staging_required",
+    provider: overrides.provider ?? "official_solana_subscription_program",
     tokenMint: overrides.tokenMint ?? "USDC_MINT_CONFIG_REQUIRED",
-    tokenProgram: overrides.tokenProgram ?? "spl_token"
+    tokenProgram: overrides.tokenProgram ?? "spl_token",
+    programId: overrides.programId ?? "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
+    planPda: overrides.planPda ?? null,
+    merchantWallet: overrides.merchantWallet ?? null,
+    amountAtomic: overrides.amountAtomic ?? overrides.amountMinor ?? 15000000,
+    periodSeconds: overrides.periodSeconds ?? 30 * 86_400
   };
 }
 
@@ -7840,7 +7941,15 @@ function subscriptionFixture(overrides: Partial<Subscription> = {}): Subscriptio
     cancelledAt: overrides.cancelledAt ?? null,
     revokedAt: overrides.revokedAt ?? null,
     authorityAddress: overrides.authorityAddress ?? null,
-    delegationAddress: overrides.delegationAddress ?? null
+    delegationAddress: overrides.delegationAddress ?? null,
+    subscriberWallet: overrides.subscriberWallet ?? null,
+    subscriberTokenAccount: overrides.subscriberTokenAccount ?? null,
+    tokenMint: overrides.tokenMint ?? null,
+    provider: overrides.provider ?? null,
+    programId: overrides.programId ?? null,
+    planPda: overrides.planPda ?? null,
+    subscriptionPda: overrides.subscriptionPda ?? null,
+    failureReason: overrides.failureReason ?? null
   };
 }
 
@@ -7886,10 +7995,17 @@ function fakeSubscriptionRepository(
         setupReference: "00000000-0000-4000-8000-000000000072",
         delegationProgramId: input.delegationProgramId,
         collectorAddress: null,
+        subscriberWallet: "11111111111111111111111111111111",
         tokenMint: "USDC_MINT_CONFIG_REQUIRED",
         tokenProgram: "spl_token",
         amountMinor: 15000000,
-        periodDays: 30
+        periodDays: 30,
+        provider: "official_solana_subscription_program",
+        planId: "platform_plus_monthly",
+        planPda: null,
+        subscriptionPda: null,
+        merchantWallet: null,
+        expiresAt: new Date("2026-07-05T00:15:00.000Z")
       };
     },
     async submitAuthorization(input) {
@@ -7906,7 +8022,7 @@ function fakeSubscriptionAuthorizationVerifier(verified: boolean): SubscriptionA
     async verifyAuthorization() {
       return verified
         ? { verified: true }
-        : { verified: false, failureCode: "delegation_verifier_not_configured" };
+        : { verified: false, failureCode: "provider_not_configured" };
     }
   };
 }
@@ -9431,6 +9547,8 @@ const fakeProfileRepository: ProfileRepository = {
     expect(input).toMatchObject({
       handle: "maki",
       displayName: "Maki",
+      avatarUrl: "https://media.example.test/avatar.jpg",
+      links: [{ label: "Website", url: "https://veel.example.test/maki" }],
       bio: "Building Veel v2"
     });
 
@@ -9438,7 +9556,7 @@ const fakeProfileRepository: ProfileRepository = {
       id: "00000000-0000-4000-8000-000000000010",
       handle: input.handle,
       displayName: input.displayName,
-      avatarUrl: null,
+      avatarUrl: input.avatarUrl ?? null,
       badges: []
     };
   },
@@ -9455,6 +9573,7 @@ const fakeProfileRepository: ProfileRepository = {
       },
       bio: "Building Veel v2",
       locationLabel: "Belgrade",
+      links: [{ label: "Website", url: "https://veel.example.test/maki" }],
       stats: {
         contentCount: 2,
         liveRoomCount: 1,

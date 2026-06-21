@@ -10,6 +10,7 @@ const repositoryKeys = [
   "ageRepository",
   "profileRepository",
   "walletRepository",
+  "walletAuthRepository",
   "contentRepository",
   "mutualsRepository",
   "discoverRepository",

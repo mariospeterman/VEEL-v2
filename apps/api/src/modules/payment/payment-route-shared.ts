@@ -7,6 +7,7 @@ import type { ContentRepository } from "../content/types.js";
 import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
 import type { WalletRepository } from "../wallet/types.js";
 import type { CreatePaymentIntentRequest, PaymentIntent, PaymentEvidenceRepository, PaymentRepository, PaymentSettlementVerifier, ProductType } from "./types.js";
+import type { SettlementKind } from "./payment-amounts.js";
 
 export interface RegisterPaymentRoutesOptions {
   authVerifier: SupabaseAuthVerifier;
@@ -144,6 +145,10 @@ export function toPaymentIntentResponse(intent: {
   termsVersion?: string | null;
   durableConfirmationRequired?: boolean;
   refundValueBasis?: PaymentIntent["refundPolicy"]["refundValueBasis"];
+  settlementKind?: SettlementKind;
+  creatorAmountMinor?: number;
+  platformFeeAmountMinor?: number;
+  allocationAmountMinor?: number;
 }): PaymentIntent {
   return {
     id: intent.id,
@@ -151,6 +156,10 @@ export function toPaymentIntentResponse(intent: {
     amountMinor: intent.amountMinor,
     currency: intent.currency,
     state: intent.state,
+    settlementKind: intent.settlementKind ?? "creator_split",
+    creatorAmountMinor: intent.creatorAmountMinor ?? intent.amountMinor,
+    platformFeeAmountMinor: intent.platformFeeAmountMinor ?? 0,
+    allocationAmountMinor: intent.allocationAmountMinor ?? 0,
     refundPolicy: {
       withdrawalWaiverRequired: intent.withdrawalWaiverRequired ?? true,
       withdrawalWaiverAcceptedAt: intent.withdrawalWaiverAcceptedAt?.toISOString() ?? null,

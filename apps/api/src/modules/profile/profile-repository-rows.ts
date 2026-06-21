@@ -5,6 +5,7 @@ export interface ProfileRow {
   handle: string;
   display_name: string;
   avatar_url: string | null;
+  profile_links?: unknown;
 }
 
 export interface CreatorProfileRow extends ProfileRow {

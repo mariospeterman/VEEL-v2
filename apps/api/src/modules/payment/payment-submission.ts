@@ -20,6 +20,8 @@ export async function recordPaymentSubmission(
       product_type: string;
       target_id: string;
       amount_minor: number;
+      creator_amount_minor: number;
+      platform_fee_amount_minor: number;
       currency: StoredPaymentIntent["currency"];
     }[]>`
             update payment_intents pi
@@ -35,6 +37,15 @@ export async function recordPaymentSubmission(
                 when ${input.settlement.confirmed} then now()
                 else confirmed_at
               end,
+              failed_at = case
+                when ${input.settlement.confirmed} then failed_at
+                when ${input.settlement.failureCode ?? null} is not null then now()
+                else failed_at
+              end,
+              failure_reason = case
+                when ${input.settlement.confirmed} then failure_reason
+                else ${input.settlement.failureCode ?? null}
+              end,
               updated_at = now()
             from users u
             where pi.user_id = u.id
@@ -47,6 +58,8 @@ export async function recordPaymentSubmission(
               pi.product_type,
               pi.target_id,
               pi.amount_minor,
+              pi.creator_amount_minor,
+              pi.platform_fee_amount_minor,
               pi.currency
           `;
 
@@ -79,7 +92,8 @@ export async function recordPaymentSubmission(
         paymentIntentId: updatedIntent.payment_intent_id,
         actorUserId: updatedIntent.user_id,
         creatorUserId: updatedIntent.target_id,
-        amountMinor: Number(updatedIntent.amount_minor),
+        creatorAmountMinor: Number(updatedIntent.creator_amount_minor),
+        platformFeeMinor: Number(updatedIntent.platform_fee_amount_minor),
         currency: updatedIntent.currency,
         productType: updatedIntent.product_type
       });

@@ -16,7 +16,7 @@ export default async function ContentPage({
     <main className="media-shell">
       <nav className="media-nav">
         <a className="text-lg font-semibold tracking-normal" href="/app/home">
-          VEEL
+          WeVid
         </a>
         <div className="flex gap-1">
           {appShellNavItems.map((navItem) => (
@@ -54,7 +54,7 @@ export default async function ContentPage({
 function MediaStage({ item }: { item: ContentItem }) {
   return (
     <section className="media-pane relative overflow-hidden rounded border border-(--line) bg-[#0f1217]">
-      <ProviderPlayback playback={item.playback} posterUrl={item.posterUrl} title="Veel content playback" />
+      <ProviderPlayback playback={item.playback} posterUrl={item.posterUrl} title="WeVid content playback" />
       <div className="absolute left-4 top-4 rounded bg-(--background)/85 px-2 py-1 text-xs font-medium">
         {item.mediaType.toUpperCase()}
       </div>

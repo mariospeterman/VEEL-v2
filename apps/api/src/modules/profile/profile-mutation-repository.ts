@@ -22,7 +22,9 @@ export function createProfileMutationRepositoryMethods(
               user_id,
               handle,
               display_name,
+              avatar_url,
               bio,
+              profile_links,
               location_label,
               updated_at
             )
@@ -30,23 +32,28 @@ export function createProfileMutationRepositoryMethods(
               id,
               ${input.handle},
               ${input.displayName},
+              ${input.avatarUrl ?? null},
               ${input.bio ?? null},
+              ${JSON.stringify(input.links ?? [])}::jsonb,
               ${input.locationLabel ?? null},
               now()
             from target_user
             on conflict (user_id) do update set
               handle = excluded.handle,
               display_name = excluded.display_name,
+              avatar_url = excluded.avatar_url,
               bio = excluded.bio,
+              profile_links = excluded.profile_links,
               location_label = excluded.location_label,
               updated_at = now()
-            returning user_id, handle, display_name, avatar_url
+            returning user_id, handle, display_name, avatar_url, profile_links
           )
           select
             up.user_id as id,
             up.handle,
             up.display_name,
-            up.avatar_url
+            up.avatar_url,
+            up.profile_links
           from upserted_profile up
           limit 1
         `;

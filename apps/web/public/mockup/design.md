@@ -1,10 +1,10 @@
-# VEEL Design Contract — Codex 5.5
+# WeVid Design Contract — Codex 5.5
 
-Use this file as the UI/UX implementation contract for the VEEL PWA frontend. Build a premium creator-first media app: simple, fast, one-screen where possible, native-feeling on mobile and desktop, and never like a backend dashboard.
+Use this file as the UI/UX implementation contract for the WeVid PWA frontend. Build a premium creator-first media app: simple, fast, one-screen where possible, native-feeling on mobile and desktop, and never like a backend dashboard.
 
 ## 1. Product north star
 
-VEEL is a media-first creator platform. The UI must make the next action obvious within one screen: watch, create, message, unlock/support, or manage profile. Media is primary (so keep media on desktop near full screen, on mobile full screen when open), actions are secondary, metadata is tertiary. Every screen should feel calm, trusted, premium, and immediately understandable.
+WeVid is a media-first creator platform. The UI must make the next action obvious within one screen: watch, create, message, unlock/support, or manage profile. Media is primary (so keep media on desktop near full screen, on mobile full screen when open), actions are secondary, metadata is tertiary. Every screen should feel calm, trusted, premium, and immediately understandable.
 
 Avoid: crypto-casino visuals, dense admin-style navigation, excessive redirects, hidden money actions, gesture-only critical actions, and duplicated nav.
 
@@ -15,7 +15,7 @@ Centralize all navigation in one `AppShell/NavConfig`. Do not duplicate nav per 
 ```txt
 Public:
 /                 Landing
-/enter            Login / onboarding start
+/                Landing story, login, and onboarding start
 /age              Age verification handoff
 /auth/confirm     Auth callback
 
@@ -99,7 +99,7 @@ Search, notifications, wallet quick access, settings, subscriptions, Studio, Ent
 
 Usage ratio: 85–90% neutral black/graphite/white, 5–8% glass and borders, 3–5% brand accent, less than 1% warning/danger unless needed.
 
-Gradients are only for the VEEL logo, primary CTA, active nav indicator, wallet/trust proof chip, unlock/support payment CTA, Studio/Enterprise badges, and rare hero moments.
+Gradients are only for the WeVid logo, primary CTA, active nav indicator, wallet/trust proof chip, unlock/support payment CTA, Studio/Enterprise badges, and rare hero moments.
 
 ## 4. Layout rules
 
@@ -194,7 +194,7 @@ Create:
 
 Messages:
 - Thread full-screen on mobile.
-- Share inside VEEL and external share are separate flows.
+- Share inside WeVid and external share are separate flows.
 
 Mutuals:
 - No separate Mutuals discovery screen.
@@ -209,7 +209,7 @@ Mutuals:
 
 Landing:
 - One-screen hero.
-- Header nav: Start, Watch/Create, Why VEEL, Earn, Partners, Trust.
+- Header nav: Start, Watch/Create, Why WeVid, Earn, Partners, Trust.
 - GSAP-style video-frame scroll: scrolling advances hero frames/topics inside the same screen, not many redirects.
 - CTAs: Start onboarding, Log in / Enter.
 - Footer legal links open centered modal; user can expand/open new tab.
@@ -265,13 +265,13 @@ Always make these actions explicit and visible:
 - Wallet connection.
 - Age/KYC/KYB status.
 
-Never imply VEEL custodies user funds. Use language like:
+Never imply WeVid custodies user funds. Use language like:
 
 ```txt
 Your wallet. Your keys.
-VEEL never holds your funds.
+WeVid never holds your funds.
 Access unlocks after confirmed payment.
 Receipts are server-generated records.
 ```
 
-High-converting VEEL UI means: fewer visible choices, clear hierarchy, instant feedback, trusted payment wording, no surprise redirects, and one obvious next action.
+High-converting WeVid UI means: fewer visible choices, clear hierarchy, instant feedback, trusted payment wording, no surprise redirects, and one obvious next action.

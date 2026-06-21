@@ -15,6 +15,7 @@ export function createProfileCreatorRepositoryMethods(
           p.display_name,
           p.avatar_url,
           p.bio,
+          p.profile_links,
           p.location_label,
           coalesce(cms.tips_enabled, true) as tips_enabled,
           coalesce(cms.content_unlocks_enabled, true) as content_unlocks_enabled,

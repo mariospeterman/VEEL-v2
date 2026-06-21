@@ -606,6 +606,7 @@ function dueCollectionFixture(
     subscriberUserId: overrides.subscriberUserId ?? "subscriber-1",
     planId: overrides.planId ?? "platform_plus_monthly",
     amountMinor: overrides.amountMinor ?? 15000000,
+    amountAtomic: overrides.amountAtomic ?? 15000000,
     currency: overrides.currency ?? "USDC",
     periodStartsAt: overrides.periodStartsAt ?? new Date("2026-06-06T00:00:00.000Z"),
     periodEndsAt: overrides.periodEndsAt ?? new Date("2026-07-06T00:00:00.000Z"),
@@ -614,7 +615,10 @@ function dueCollectionFixture(
     subscriberTokenAccount: overrides.subscriberTokenAccount ?? "subscriber-token-account",
     collectorAddress: overrides.collectorAddress ?? "collector-address",
     tokenMint: overrides.tokenMint ?? "usdc-mint",
-    tokenProgram: overrides.tokenProgram ?? "spl_token"
+    tokenProgram: overrides.tokenProgram ?? "spl_token",
+    provider: overrides.provider ?? "official_solana_subscription_program",
+    programId: overrides.programId ?? "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
+    periodSeconds: overrides.periodSeconds ?? 30 * 86_400
   };
 }
 

@@ -6,7 +6,7 @@ import {
 } from "@/api-client";
 import { requireAppAccess } from "@/supabase/route-guard";
 import { AppShell } from "../../app-shell";
-import { Card, EmptyState, ErrorState, Fact, PageHeader, StatusPill } from "../../ui";
+import { Card, EmptyState, ErrorState, Fact, MediaTile, PageHeader, StatusPill } from "../../ui";
 
 export const dynamic = "force-dynamic";
 
@@ -98,36 +98,24 @@ function LiveRoomRailCard({ room }: { room: LiveRoom }) {
 
 function MediaFeature({ item }: { item: ContentItem }) {
   return (
-    <Card className="overflow-hidden">
-      <div className="relative aspect-[16/10] min-h-[420px] bg-[#090d15]">
-        {item.posterUrl ? (
-          <img alt="" className="h-full w-full object-cover" src={item.posterUrl} />
-        ) : (
-          <div className="flex h-full items-center justify-center text-sm text-(--muted)">Media preview</div>
-        )}
-        <div className="absolute left-4 top-4 flex gap-2">
+    <MediaTile
+      action={<a className="secondary-button" href={`/content/${item.id}`}>Open</a>}
+      badges={
+        <>
           <StatusPill>{item.mediaType.toUpperCase()}</StatusPill>
           <StatusPill tone={item.accessState === "unlocked" ? "good" : "neutral"}>{item.accessState}</StatusPill>
-        </div>
-      </div>
-
-      <div className="grid gap-4 p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="text-xl font-semibold tracking-normal">{item.creator.displayName}</h2>
-            <p className="mt-1 text-sm text-(--muted)">@{item.creator.handle}</p>
-          </div>
-          <a className="secondary-button" href={`/content/${item.id}`}>
-            Open
-          </a>
-        </div>
-        {item.caption ? <p className="max-w-3xl text-sm leading-7 text-(--text-soft)">{item.caption}</p> : null}
+        </>
+      }
+      eyebrow={`@${item.creator.handle}`}
+      meta={
         <div className="grid gap-3 border-t border-(--line) pt-4 text-sm sm:grid-cols-3">
           <Fact label="Likes" value={item.engagement.likeCount.toLocaleString()} />
           <Fact label="Comments" value={item.engagement.commentCount.toLocaleString()} />
           <Fact label="Access truth" value="backend entitlement" />
         </div>
-      </div>
-    </Card>
+      }
+      posterUrl={item.posterUrl}
+      title={item.creator.displayName}
+    />
   );
 }

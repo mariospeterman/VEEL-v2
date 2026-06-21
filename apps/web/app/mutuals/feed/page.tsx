@@ -91,7 +91,7 @@ function AppNav() {
   return (
     <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-(--line) px-5 py-4">
       <a className="text-lg font-semibold tracking-normal" href="/">
-        VEEL
+        WeVid
       </a>
       <div className="flex gap-1">
         {appShellNavItems.map((item) => (

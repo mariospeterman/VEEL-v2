@@ -6,6 +6,7 @@ import { PaymentIdempotencyConflictError, PaymentRepositoryConfigurationError } 
 export { PaymentIdempotencyConflictError, PaymentRepositoryConfigurationError } from "./payment-repository-errors.js";
 import { PaymentIntentRow, toStoredPaymentIntent } from "./payment-intent-mapper.js";
 import { recordPaymentSubmission } from "./payment-submission.js";
+import { calculateCreatorSplit } from "./payment-amounts.js";
 
 export function createPostgresPaymentRepository(database?: string | PostgresSql): PaymentRepository {
   if (!database) {
@@ -29,6 +30,11 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
 
   return {
     async createOrReuseIntent(input) {
+      const split = calculateCreatorSplit({
+        totalAmountAtomic: input.amountMinor,
+        platformFeeBps: input.platformFeeBps,
+        allocationAmountAtomic: input.allocationAmountMinor ?? 0
+      });
       const rows = await sql<PaymentIntentRow[]>`
         with target_user as (
           select id
@@ -51,6 +57,46 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
           join target_user tu on true
           where rc.creator_user_id <> tu.id
         ),
+        creator_candidate as (
+          select ${input.creatorUserId ?? null}::uuid as id
+          where ${input.creatorUserId ?? null}::uuid is not null
+          union all
+          select ${input.targetId}::uuid
+          where ${input.productType} in ('tip', 'support')
+          union all
+          select ci.creator_user_id
+          from content_items ci
+          where ${input.productType} = 'content_unlock'
+            and ci.id = ${input.targetId}
+          union all
+          select lr.creator_user_id
+          from live_rooms lr
+          where ${input.productType} = 'live_pass'
+            and lr.id = ${input.targetId}
+          union all
+          select e.creator_user_id
+          from events e
+          where ${input.productType} = 'event_access_pass'
+            and e.id = ${input.targetId}
+          limit 1
+        ),
+        creator_wallet as (
+          select coalesce(${input.creatorWallet ?? null}, w.address) as address
+          from creator_candidate cc
+          left join lateral (
+            select address
+            from wallets
+            where user_id = cc.id
+              and chain = case
+                when ${input.solanaCluster} = 'mainnet-beta' then 'solana_mainnet'::wallet_chain
+                else 'solana_devnet'::wallet_chain
+              end
+            order by is_primary desc, created_at asc
+            limit 1
+          ) w on true
+          where coalesce(${input.creatorWallet ?? null}, w.address) is not null
+          limit 1
+        ),
         existing_intent as (
           select pi.*
           from payment_intents pi
@@ -70,6 +116,14 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
             request_hash,
             solana_cluster,
             treasury_wallet,
+            settlement_kind,
+            creator_wallet,
+            platform_fee_wallet,
+            allocation_wallet,
+            total_amount_minor,
+            creator_amount_minor,
+            platform_fee_amount_minor,
+            allocation_amount_minor,
             reference_address,
             referral_token_id,
             expires_at
@@ -85,10 +139,19 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
             ${input.requestHash},
             ${input.solanaCluster},
             ${input.treasuryWallet},
+            ${input.settlementKind},
+            (select address from creator_wallet),
+            ${input.platformFeeWallet},
+            ${input.allocationWallet ?? null},
+            ${split.totalAmountAtomic},
+            ${split.creatorAmountAtomic},
+            ${split.platformFeeAmountAtomic},
+            ${split.allocationAmountAtomic},
             ${input.referenceAddress},
             (select id from valid_referral),
             ${input.expiresAt}
           from target_user
+          join creator_wallet on true
           where not exists (select 1 from existing_intent)
           returning *
         ),
@@ -121,6 +184,15 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
           state,
           reference_address,
           treasury_wallet,
+          settlement_kind,
+          buyer_wallet,
+          creator_wallet,
+          platform_fee_wallet,
+          allocation_wallet,
+          total_amount_minor,
+          creator_amount_minor,
+          platform_fee_amount_minor,
+          allocation_amount_minor,
           solana_cluster,
           expires_at,
           request_hash,
@@ -141,6 +213,15 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
           state,
           reference_address,
           treasury_wallet,
+          settlement_kind,
+          buyer_wallet,
+          creator_wallet,
+          platform_fee_wallet,
+          allocation_wallet,
+          total_amount_minor,
+          creator_amount_minor,
+          platform_fee_amount_minor,
+          allocation_amount_minor,
           solana_cluster,
           expires_at,
           request_hash,
@@ -177,6 +258,15 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
           pi.state,
           pi.reference_address,
           pi.treasury_wallet,
+          pi.settlement_kind,
+          pi.buyer_wallet,
+          pi.creator_wallet,
+          pi.platform_fee_wallet,
+          pi.allocation_wallet,
+          pi.total_amount_minor,
+          pi.creator_amount_minor,
+          pi.platform_fee_amount_minor,
+          pi.allocation_amount_minor,
           pi.solana_cluster,
           pi.expires_at,
           pi.request_hash,
@@ -204,6 +294,7 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
           state = case when state = 'pending' then 'transaction_requested' else state end,
           transaction_request_url = ${input.transactionRequestUrl},
           transaction_requested_at = now(),
+          buyer_wallet = coalesce(${input.buyerWallet ?? null}, buyer_wallet),
           updated_at = now()
         from users u
         where pi.user_id = u.id

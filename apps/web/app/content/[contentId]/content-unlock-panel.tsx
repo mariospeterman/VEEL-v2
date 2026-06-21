@@ -8,6 +8,7 @@ import {
   type ContentUnlockIntent,
   type TransactionRequest
 } from "@/api-mutations";
+import { safeMutationMessage } from "@/api-errors";
 
 interface ContentUnlockPanelProps {
   contentId: string;
@@ -123,13 +124,5 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 function errorMessage(error: unknown) {
-  if (error instanceof ApiMutationError) {
-    return error.message;
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "Unlock could not be started.";
+  return safeMutationMessage(error, "Unlock");
 }

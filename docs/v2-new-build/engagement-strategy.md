@@ -217,7 +217,6 @@ Do not rank from:
 ## API Surface
 
 ```text
-POST   /v1/follows/:userId
 POST   /v1/engagement/:contentId/like
 POST   /v1/engagement/:contentId/save
 POST   /v1/engagement/:contentId/comments
@@ -229,10 +228,11 @@ POST   /v1/blocks/:userId
 GET    /v1/activity
 ```
 
+Follow/unfollow is intentionally not in the active OpenAPI contract until a real follow graph migration, repository, idempotent route, and feed impact test are added together.
+
 ## Tests
 
-- follow/unfollow idempotent
-- follow affects Home feed
+- follow graph tests ship with the future follow slice, not as contract-only route promises
 - like/save/comment persistence
 - comment blocked by block graph
 - share internal creates message/share event

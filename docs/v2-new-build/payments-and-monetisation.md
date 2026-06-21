@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Solana Pay, monetisation, referrals
-Last updated: 2026-06-12
+Last updated: 2026-06-13
 Source of truth: yes
 
 Owns:
@@ -22,10 +22,11 @@ Non-goals:
 
 Current implementation state:
 
-- `POST /v1/payments/intents` creates a backend-owned native SOL voluntary `support`/`tip` intent for app-ready users when `PAYMENT_PLATFORM_TREASURY_WALLET` is configured. Public creator profiles use this path for voluntary support handoff. It must not accept client-priced access-bearing product types.
-- The intent stores server-owned amount, currency, product target, treasury wallet, Solana cluster, and a unique Solana reference address.
-- `GET /v1/payments/intents/{paymentIntentId}/transaction-request` returns a Solana Pay transfer request URL for native SOL devnet settlement.
-- `POST /v1/payments/intents/{paymentIntentId}/submissions` records the wallet-submitted signature, then marks the intent confirmed only when backend Solana RPC verification finds a successful transaction with the expected reference address, treasury recipient, and lamport amount.
+- `POST /v1/payments/intents` creates a backend-owned native SOL voluntary `support`/`tip` creator-split intent for app-ready users when `PAYMENT_PLATFORM_FEE_WALLET` is configured. Public creator profiles use this path for voluntary support handoff. It must not accept client-priced access-bearing product types.
+- The intent stores server-owned amount, currency, product target, creator wallet, platform fee wallet, split amounts, Solana cluster, and a unique Solana reference address. `PAYMENT_PLATFORM_TREASURY_WALLET` is legacy/platform-owned compatibility only and is not the creator monetization recipient.
+- `GET /v1/payments/intents/{paymentIntentId}/transaction-request` returns a Solana Pay transaction-request URL for native SOL creator split settlement.
+- `POST /v1/payments/intents/{paymentIntentId}/transaction-request` accepts the buyer wallet account and returns a base64 unsigned transaction for wallet signature. The transaction pays buyer wallet -> creator wallet and buyer wallet -> Veel platform fee wallet directly, with optional allocation only when present.
+- `POST /v1/payments/intents/{paymentIntentId}/submissions` records the wallet-submitted signature, then marks the intent confirmed only when backend Solana RPC verification finds a successful transaction with the expected reference address, memo, creator recipient/amount, platform fee recipient/amount, optional allocation recipient/amount, and no full creator payment to the legacy treasury wallet.
 - Wallet approval, frontend success, and submitted signatures remain non-final until backend settlement verification confirms chain evidence.
 - `POST /v1/content/{contentId}/unlock-intents` creates or reuses a backend-priced `content_unlock` intent from active content access rules. Live passes, Event Access Passes, paid messages, platform plans, creator memberships, and content unlocks must use product-specific backend-priced endpoints instead of the generic payment-intent endpoint.
 - `POST /v1/live/rooms/{roomId}/pass-intents` creates or reuses a backend-priced `live_pass` intent from the selected room pass option. The live room page uses that endpoint and the shared transaction-request handoff; wallet approval does not unlock chat or playback until backend settlement grants the pass.
@@ -36,9 +37,9 @@ Current implementation state:
 - Real API/test-DB coverage verifies the `event_access_pass` route sequence through backend intent creation, confirmed settlement submission, wallet transaction and settlement attempt rows, access purchase request state, active Event Access Pass row, audit event, and access-pass activity projection.
 - Real API/test-DB coverage verifies the `paid_message` route sequence through backend intent creation, confirmed settlement submission, wallet transaction and settlement attempt rows, delivered paid-message draft state, visible message row, audit event, and conversation message projection.
 - Real API/test-DB coverage verifies the `live_pass` route sequence through backend intent creation, confirmed settlement submission, wallet transaction and settlement attempt rows, live-pass purchase request, active live pass row, live-room entitlement, audit event, signed playback projection, and pass-gated chat write/list projection.
-- Real API/test-DB coverage verifies delegated subscription authorization through backend plan listing, authorization intent creation, verifier-scoped evidence submission, active subscription projection, authorization intent/event rows, initial confirmed collection row, worker-submitted renewal collection, confirmed collection signature, collection events, and provider-event replay state updates.
+- Real API/test-DB coverage verifies the delegated subscription boundary through backend plan listing, authorization intent creation, verifier-scoped evidence submission, pending subscription projection, authorization intent/event rows, worker collection guards, and provider-event replay state updates. Active recurring access remains fail-closed until official Solana subscription provider verification is configured.
 - Real API/test-DB coverage verifies refund/dispute request behavior after confirmed content unlock settlement: the request is idempotent by persisted request hash, writes one audit event, keeps payment and entitlement truth unchanged, and exposes only the no-custody review boundary.
-- Confirmed `tip` and `support` compatibility settlement posts creator earning and platform fee ledger entries using the documented launch platform fee, but never writes an access grant. UI copy should say support.
+- Confirmed `tip` and `support` settlement posts creator earning and platform fee ledger entries from the stored split facts, but never writes an access grant. UI copy should say support.
 - Confirmed `event_access_pass` settlement grants a backend Event Access Pass entitlement and QR/check-in record. Legacy `event_ticket` rows are normalized by migration and still settle through the same backend path during compatibility windows. Event Access is never created from wallet approval, redirect state, or frontend-computed payment success.
 - `POST /v1/referrals/tokens` creates backend-owned external/internal referral tokens. Optional payment-intent `referralToken` values are resolved server-side, self-referrals are not attributed, and confirmed eligible support settlement creates at most one commission from Veel platform commission net of refunds and tax.
 - `GET /v1/activity`, `GET /v1/activity/payments`, and `GET /v1/activity/wallet-transactions` expose normalized backend activity and wallet transaction history. Wallet transaction records are backend-observed submission/confirmation references, not settlement proof by themselves.
@@ -50,8 +51,8 @@ Current implementation state:
 - Admin reconciliation is available through role-gated read-only projections for payment intents, unlock entitlements, provider events, and operations counts. These projections never expose raw provider payloads, provider secrets, private keys, or frontend-computed payment truth.
 - `GET /v1/subscriptions/plans` and `GET /v1/subscriptions` expose backend-owned plan and current subscription state for app-ready users; `/subscriptions` reads those projections and does not render fixture plans or subscription state.
 - `/subscriptions` can request `POST /v1/subscriptions/intents`, display the backend setup reference/provider readiness, submit signed authorization evidence to `POST /v1/subscriptions/authorizations/{authorizationIntentId}/submissions`, and cancel renewal state through `PATCH /v1/subscriptions/{subscriptionId}/cancel`. The browser never marks a plan active, renews access, or treats wallet setup as payment proof.
-- Membership/platform plan authorizations and recurring collection state are backend-owned. The primary path is auto-renewing Solana delegated subscriptions: the user authorizes bounded token collection once, backend/worker collection runs each period until cancellation/revocation, and access changes only after verified authorization or collection evidence.
-- The worker owns the renewal tick: it leases due delegated subscriptions from `subscriptions_next_collection_idx`, records a `subscription_collections` row, calls the provider collection boundary, and advances access only after confirmed collection evidence. Failed collections enter retry/grace state; verified delegation revocation closes renewal state instead of creating debt or a frontend-granted access claim.
+- Membership/platform plan authorizations and recurring collection state are backend-owned. The supported recurring mode is `official_solana_subscription_program`, token-based only, with SPL Token / Token-2022 mints configured through `SUBSCRIPTIONS_SUPPORTED_MINTS`; native SOL recurring subscriptions are explicitly unsupported until an official path is implemented. If provider/program/RPC/mint/collector/merchant/on-chain verification config is missing, subscription intent creation fails closed.
+- The worker owns the renewal tick: it leases only active, launch-approved, token-based delegated subscriptions from `subscriptions_next_collection_idx`, records a `subscription_collections` row with an idempotency key, calls the provider collection boundary, and advances access only after confirmed collection evidence. Cancelled, revoked, expired, unconfigured, native-SOL, or provider-mismatched subscriptions are not collected.
 
 Official references checked:
 
@@ -167,7 +168,7 @@ Helius is used only for payment/access evidence:
 - paid messages
 - Event Access Passes
 
-Avoid broad `Any transaction` firehose except short fixture capture. Prefer scoped recipient/treasury/reference monitoring where provider supports it.
+Avoid broad `Any transaction` firehose except short fixture capture. Prefer scoped creator, platform-fee, allocation, and reference monitoring where provider supports it.
 
 The API only accepts Helius deliveries when the configured webhook `authHeader` value is present as the request `Authorization` header. The backend records the provider event idempotently, hashes the shared authorization value for audit storage, then still verifies the exact Solana settlement facts before granting access or financial ledger state.
 
@@ -249,6 +250,7 @@ Launch policy:
 POST /v1/payments/intents
 GET  /v1/payments/intents/:id
 GET  /v1/payments/intents/:id/transaction-request
+POST /v1/payments/intents/:id/transaction-request
 POST /v1/payments/intents/:id/submissions
 POST /v1/content/:id/unlock-intents
 POST /v1/webhooks/solana-indexer

@@ -49,16 +49,16 @@ test.beforeEach(async ({ context }) => {
 test("covers authenticated enter to profile wallet age home create and unlock", async ({ page }) => {
   test.setTimeout(70_000);
 
-  await gotoUntilVisible(page, "/enter", () => page.getByRole("link", { name: "VEEL" }));
+  await gotoUntilVisible(page, "/enter", () => page.getByRole("link", { name: "WEVID" }));
   await expect(page.getByText("Sessionactive")).toBeVisible();
   await expect(page.getByText("Walletrequired")).toBeVisible();
 
-  await page.goto("/profile");
+  await page.goto("/app/profile");
   await expect(page.getByRole("heading", { name: "Aria Moon" })).toBeVisible();
   await expect(page.getByText("Readiness score").locator("..")).toContainText("92%");
   await expect(page.getByText("no balances or social priority")).toBeVisible();
 
-  await page.goto("/wallet");
+  await page.goto("/app/wallet");
   await expect(page.getByRole("heading", { name: "Funding and receipts" })).toBeVisible();
   await expect(page.getByText("Primary wallet")).toBeVisible();
   await expect(page.getByText("backend settlement only")).toBeVisible();
@@ -70,12 +70,12 @@ test("covers authenticated enter to profile wallet age home create and unlock", 
   await expect(page.getByText("verified", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Start age verification" })).toBeEnabled();
 
-  await page.goto("/");
+  await page.goto("/app/home");
   await expect(page.getByRole("heading", { name: "Recommended" })).toBeVisible();
   await expect(page.getByText("Studio sunrise session")).toBeVisible();
   await expect(page.getByText("Live now with access-gated chat")).toBeVisible();
 
-  await page.goto("/create");
+  await page.goto("/app/create");
   await page.waitForLoadState("networkidle");
   await expect(page.getByRole("heading", { name: "Upload workspace" })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.cookie.includes("veel_e2e_access_token="))).toBe(true);
@@ -111,7 +111,7 @@ test("covers authenticated enter to profile wallet age home create and unlock", 
     "https://wallet.example.test/request/content-unlock"
   );
 
-  await page.goto("/activity");
+  await page.goto("/app/activity");
   await expect(page.getByRole("heading", { name: "Payments" })).toBeVisible();
   await expect(page.getByText("VEEL-0000000000004000")).toBeVisible();
   await expect(page.getByText("sent", { exact: true })).toHaveCount(2);
@@ -428,8 +428,8 @@ function creatorOnboarding() {
     nextAction: null,
     policyBoundary: "creator_records_only_no_balances_payout_queue_or_social_priority",
     steps: [
-      { key: "profile", label: "Profile", state: "complete", required: true, actionHref: "/profile" },
-      { key: "wallet", label: "Wallet", state: "complete", required: true, actionHref: "/wallet" },
+      { key: "profile", label: "Profile", state: "complete", required: true, actionHref: "/app/profile" },
+      { key: "wallet", label: "Wallet", state: "complete", required: true, actionHref: "/app/wallet" },
       { key: "age", label: "Age", state: "complete", required: true, actionHref: "/age" }
     ]
   };

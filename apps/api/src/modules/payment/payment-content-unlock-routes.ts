@@ -29,15 +29,17 @@ export async function registerContentUnlockPaymentRoutes(
       return reply.code(400).send(validationResponse("contentId is required"));
     }
 
-    if (!app.config.PAYMENT_PLATFORM_TREASURY_WALLET) {
+    const platformFeeWallet = app.config.PAYMENT_PLATFORM_FEE_WALLET ?? app.config.PAYMENT_PLATFORM_TREASURY_WALLET;
+
+    if (!platformFeeWallet) {
       return reply.code(503).send({
         code: "service_unavailable",
-        message: "Payment treasury wallet is not configured"
+        message: "Payment platform fee wallet is not configured"
       });
     }
 
     try {
-      assertSolanaAddress(app.config.PAYMENT_PLATFORM_TREASURY_WALLET);
+      assertSolanaAddress(platformFeeWallet);
       await options.sessionRepository.ensureUserForSupabaseId(access.supabaseUserId);
 
       const offer = await options.contentRepository.findContentUnlockOffer({
@@ -71,7 +73,10 @@ export async function registerContentUnlockPaymentRoutes(
         amountMinor: intentBody.amountMinor,
         currency: offer.currency,
         solanaCluster: app.config.SOLANA_CLUSTER,
-        treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET,
+        treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET ?? platformFeeWallet,
+        platformFeeWallet,
+        platformFeeBps: app.config.PAYMENT_PLATFORM_FEE_BPS,
+        settlementKind: "creator_split",
         referenceAddress: createSolanaReferenceAddress(),
         expiresAt: new Date(Date.now() + paymentIntentTtlMs),
         referralToken: null

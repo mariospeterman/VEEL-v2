@@ -4,6 +4,8 @@ import { parsePublicWebEnv } from "@veel/config/public";
 import { getE2eAccessToken } from "./supabase/e2e-auth";
 import type { ApiResult } from "./api-client-types";
 
+const apiFetchTimeoutMs = 2_500;
+
 export async function getJson<T>(path: string): Promise<ApiResult<T>> {
   const env = parsePublicWebEnv(process.env);
   const url = new URL(path, env.NEXT_PUBLIC_API_BASE_URL);
@@ -17,7 +19,8 @@ export async function getJson<T>(path: string): Promise<ApiResult<T>> {
   try {
     const response = await fetch(url, {
       cache: "no-store",
-      headers
+      headers,
+      signal: AbortSignal.timeout(apiFetchTimeoutMs)
     });
 
     if (!response.ok) {
@@ -114,7 +117,8 @@ export async function patchJson<T>(path: string, body: unknown, idempotencyKey: 
       body: JSON.stringify(body),
       cache: "no-store",
       headers,
-      method: "PATCH"
+      method: "PATCH",
+      signal: AbortSignal.timeout(apiFetchTimeoutMs)
     });
 
     if (!response.ok) {

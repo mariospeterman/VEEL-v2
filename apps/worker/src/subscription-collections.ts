@@ -22,6 +22,7 @@ export interface DueSubscriptionCollection {
   subscriberUserId: string;
   planId: string;
   amountMinor: number;
+  amountAtomic: number;
   currency: "SOL" | "USDC";
   periodStartsAt: Date;
   periodEndsAt: Date;
@@ -31,6 +32,9 @@ export interface DueSubscriptionCollection {
   collectorAddress: string;
   tokenMint: string;
   tokenProgram: "spl_token" | "token_2022";
+  provider: string;
+  programId: string;
+  periodSeconds: number;
 }
 
 export interface SubscriptionCollectionRepository {
@@ -75,7 +79,20 @@ export async function processDueSubscriptionCollections(input: {
   };
 
   for (const dueCollection of dueCollections) {
-    const outcome = await input.provider.collect(dueCollection);
+    const outcome =
+      dueCollection.currency === "SOL"
+        ? {
+            state: "failed" as const,
+            failureCode: "unsupported_native_sol_subscription",
+            retryAt: new Date(now.getTime() + 5 * 60 * 1000)
+          }
+        : !dueCollection.collectorAddress
+          ? {
+              state: "failed" as const,
+              failureCode: "collector_wallet_missing",
+              retryAt: new Date(now.getTime() + 5 * 60 * 1000)
+            }
+          : await input.provider.collect(dueCollection);
     await input.repository.recordCollectionOutcome({
       collectionId: dueCollection.collectionId,
       subscriptionId: dueCollection.subscriptionId,
@@ -180,6 +197,8 @@ export function createPostgresSubscriptionCollectionRepository(
             sp.amount_minor,
             sp.currency,
             sp.period_days,
+            coalesce(s.amount_atomic, sp.amount_atomic, sp.amount_minor) as amount_atomic,
+            coalesce(s.period_seconds, sp.period_seconds, sp.period_days * 86400) as period_seconds,
             coalesce(s.current_period_ends_at, ${input.now}) as period_starts_at,
             coalesce(s.current_period_ends_at, ${input.now}) + (sp.period_days || ' days')::interval as period_ends_at,
             s.authority_address,
@@ -187,12 +206,19 @@ export function createPostgresSubscriptionCollectionRepository(
             s.subscriber_token_account,
             s.collector_address,
             sp.token_mint,
-            sp.token_program
+            sp.token_program,
+            coalesce(s.provider, sp.provider) as provider,
+            coalesce(s.program_id, sp.program_id) as program_id
           from subscriptions s
           join subscription_plans sp on sp.id = s.plan_id
           where s.state in ('active', 'renewal_pending', 'grace_period')
             and s.renewal_mode = 'delegated_solana_subscription'
             and s.cancel_at_period_end = false
+            and (s.expires_at is null or s.expires_at > ${input.now})
+            and sp.state = 'active'
+            and sp.provider_state = 'launch_approved'
+            and sp.provider = 'official_solana_subscription_program'
+            and sp.currency <> 'SOL'
             and s.next_collection_at <= ${input.now}
             and s.authority_address is not null
             and s.delegation_address is not null
@@ -200,6 +226,8 @@ export function createPostgresSubscriptionCollectionRepository(
             and s.collector_address is not null
             and sp.token_mint is not null
             and sp.token_program is not null
+            and coalesce(s.program_id, sp.program_id) is not null
+            and coalesce(s.amount_atomic, sp.amount_atomic, sp.amount_minor) <= sp.amount_atomic
           order by s.next_collection_at asc
           limit ${input.limit}
           for update skip locked
@@ -216,10 +244,14 @@ export function createPostgresSubscriptionCollectionRepository(
               period_starts_at,
               period_ends_at,
               amount_minor,
+              amount_atomic,
               currency,
               state,
+              collector_wallet,
+              idempotency_key,
               due_at,
-              submitted_at
+              submitted_at,
+              attempted_at
             )
             values (
               ${collectionId},
@@ -227,9 +259,13 @@ export function createPostgresSubscriptionCollectionRepository(
               ${row.period_starts_at},
               ${row.period_ends_at},
               ${Number(row.amount_minor)},
+              ${Number(row.amount_atomic)},
               ${row.currency},
               'submitted',
+              ${row.collector_address},
+              ${`${row.subscription_id}:${row.period_starts_at.toISOString()}`},
               ${input.now},
+              now(),
               now()
             )
             on conflict (subscription_id, period_starts_at) do update
@@ -273,6 +309,7 @@ export function createPostgresSubscriptionCollectionRepository(
             subscriberUserId: row.subscriber_user_id,
             planId: row.plan_id,
             amountMinor: Number(row.amount_minor),
+            amountAtomic: Number(row.amount_atomic),
             currency: row.currency,
             periodStartsAt: row.period_starts_at,
             periodEndsAt: row.period_ends_at,
@@ -281,7 +318,10 @@ export function createPostgresSubscriptionCollectionRepository(
             subscriberTokenAccount: row.subscriber_token_account,
             collectorAddress: row.collector_address,
             tokenMint: row.token_mint,
-            tokenProgram: row.token_program
+            tokenProgram: row.token_program,
+            provider: row.provider,
+            programId: row.program_id,
+            periodSeconds: Number(row.period_seconds)
           });
         }
 
@@ -396,8 +436,10 @@ interface DueSubscriptionRow {
   subscriber_user_id: string;
   plan_id: string;
   amount_minor: string | number;
+  amount_atomic: string | number;
   currency: "SOL" | "USDC";
   period_days: number;
+  period_seconds: string | number;
   period_starts_at: Date;
   period_ends_at: Date;
   authority_address: string;
@@ -406,6 +448,8 @@ interface DueSubscriptionRow {
   collector_address: string;
   token_mint: string;
   token_program: "spl_token" | "token_2022";
+  provider: string;
+  program_id: string;
 }
 
 interface CollectionLeaseRow {

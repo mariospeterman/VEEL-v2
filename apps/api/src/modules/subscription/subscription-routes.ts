@@ -17,6 +17,10 @@ import {
   SubscriptionPolicyError,
   SubscriptionRepositoryConfigurationError
 } from "./subscription-repository.js";
+import {
+  checkSubscriptionProviderReadiness,
+  getSubscriptionProviderConfig
+} from "./subscription-provider-config.js";
 import type {
   CreateSubscriptionIntentRequest,
   SubmitSubscriptionAuthorizationRequest
@@ -95,8 +99,15 @@ export async function registerSubscriptionRoutes(
     }
 
     try {
-      if (app.config.SOLANA_SUBSCRIPTION_COLLECTOR_WALLET) {
-        assertSolanaAddress(app.config.SOLANA_SUBSCRIPTION_COLLECTOR_WALLET);
+      const readiness = checkSubscriptionProviderReadiness(app.config);
+      if (!readiness.ok) {
+        return reply
+          .code(503)
+          .send(serviceUnavailableResponse(`Subscriptions are unavailable: ${readiness.reason}`));
+      }
+
+      if (readiness.config.collectorWallet) {
+        assertSolanaAddress(readiness.config.collectorWallet);
       }
 
       await options.sessionRepository.ensureUserForSupabaseId(access.supabaseUserId);
@@ -108,8 +119,10 @@ export async function registerSubscriptionRoutes(
         requestHash: hashJson(intentBody),
         body: intentBody,
         expiresAt: new Date(Date.now() + authorizationIntentTtlMs),
-        collectorAddress: app.config.SOLANA_SUBSCRIPTION_COLLECTOR_WALLET ?? null,
-        delegationProgramId: app.config.SOLANA_SUBSCRIPTION_DELEGATION_PROGRAM_ID
+        collectorAddress: readiness.config.collectorWallet,
+        delegationProgramId: readiness.config.programId,
+        provider: readiness.config.provider,
+        supportedMints: readiness.config.supportedMints
       });
 
       return reply.code(201).send(intent);
@@ -162,11 +175,12 @@ export async function registerSubscriptionRoutes(
     const submitBody = body as SubmitSubscriptionAuthorizationRequest;
 
     try {
+      const providerConfig = getSubscriptionProviderConfig(app.config);
       const verificationContext =
         await options.subscriptionRepository.findAuthorizationVerificationContext({
           supabaseUserId: access.supabaseUserId,
           authorizationIntentId,
-          delegationProgramId: app.config.SOLANA_SUBSCRIPTION_DELEGATION_PROGRAM_ID
+          delegationProgramId: providerConfig.programId
         });
 
       if (!verificationContext) {
@@ -181,10 +195,17 @@ export async function registerSubscriptionRoutes(
         subscriberTokenAccount: submitBody.subscriberTokenAccount,
         delegationProgramId: verificationContext.delegationProgramId,
         collectorAddress: verificationContext.collectorAddress,
+        subscriberWallet: verificationContext.subscriberWallet,
         tokenMint: verificationContext.tokenMint,
         tokenProgram: verificationContext.tokenProgram,
         amountMinor: verificationContext.amountMinor,
-        periodDays: verificationContext.periodDays
+        periodDays: verificationContext.periodDays,
+        provider: verificationContext.provider,
+        planId: verificationContext.planId,
+        planPda: verificationContext.planPda,
+        subscriptionPda: verificationContext.subscriptionPda,
+        merchantWallet: verificationContext.merchantWallet,
+        expiresAt: verificationContext.expiresAt
       });
       const subscription = await options.subscriptionRepository.submitAuthorization({
         supabaseUserId: access.supabaseUserId,

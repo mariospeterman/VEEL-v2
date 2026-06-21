@@ -81,12 +81,18 @@ export async function createAuthorizationIntent(
       sp.scope,
       sp.label,
       sp.amount_minor,
+      sp.amount_atomic,
       sp.currency,
       sp.period_days,
+      sp.period_seconds,
       sp.billing_mode,
       sp.provider_state,
       sp.token_mint,
       sp.token_program,
+      sp.provider,
+      sp.program_id,
+      sp.plan_pda,
+      sp.merchant_wallet,
       sp.creator_user_id,
       p.handle as creator_handle,
       p.display_name as creator_display_name,
@@ -104,7 +110,21 @@ export async function createAuthorizationIntent(
     throw new SubscriptionPolicyError("subscription_plan_not_found");
   }
 
-  assertPlanPolicy(plan, input.body.creatorUserId, actor.id);
+  assertPlanPolicy(plan, input.body.creatorUserId, actor.id, input.supportedMints, input.provider);
+
+  const walletRows = await sql<{ address: string }[]>`
+    select w.address
+    from wallets w
+    where w.user_id = ${actor.id}
+      and w.chain in ('solana_devnet', 'solana_mainnet')
+    order by w.is_primary desc, w.created_at asc
+    limit 1
+  `;
+  const subscriberWallet = walletRows[0]?.address;
+
+  if (!subscriberWallet) {
+    throw new SubscriptionPolicyError("subscriber_wallet_required");
+  }
 
   const subscriptionId = randomUUID();
   const intentId = randomUUID();
@@ -120,7 +140,15 @@ export async function createAuthorizationIntent(
         creator_user_id,
         state,
         renewal_mode,
-        collector_address
+        collector_address,
+        subscriber_wallet,
+        provider,
+        program_id,
+        token_mint,
+        amount_atomic,
+        period_seconds,
+        plan_pda,
+        merchant_wallet
       )
       values (
         ${subscriptionId},
@@ -130,7 +158,15 @@ export async function createAuthorizationIntent(
         ${plan.creator_user_id},
         'authorization_pending',
         'delegated_solana_subscription',
-        ${input.collectorAddress}
+        ${input.collectorAddress},
+        ${subscriberWallet},
+        ${input.provider},
+        ${input.delegationProgramId},
+        ${plan.token_mint},
+        ${Number(plan.amount_atomic ?? plan.amount_minor)},
+        ${plan.period_seconds ?? plan.period_days * 86_400},
+        ${plan.plan_pda},
+        ${plan.merchant_wallet}
       )
       on conflict do nothing
       returning
@@ -145,6 +181,15 @@ export async function createAuthorizationIntent(
         revoked_at,
         authority_address,
         delegation_address,
+        subscriber_wallet,
+        provider,
+        program_id,
+        token_mint,
+        amount_atomic,
+        period_seconds,
+        plan_pda,
+        subscription_pda,
+        merchant_wallet,
         creator_user_id,
         null::text as creator_handle,
         null::text as creator_display_name,
@@ -215,10 +260,28 @@ export async function createAuthorizationIntent(
 function assertPlanPolicy(
   plan: PlanRow,
   requestedCreatorUserId: string | undefined,
-  actorUserId: string
+  actorUserId: string,
+  supportedMints: string[],
+  provider: string
 ) {
   if (plan.billing_mode !== "delegated_solana_subscription") {
     throw new SubscriptionPolicyError("subscription_plan_requires_delegated_billing");
+  }
+
+  if (provider !== "official_solana_subscription_program") {
+    throw new SubscriptionPolicyError("subscription_provider_not_configured");
+  }
+
+  if (plan.currency === "SOL") {
+    throw new SubscriptionPolicyError("unsupported_native_sol_subscription");
+  }
+
+  if (!plan.token_mint || !supportedMints.includes(plan.token_mint)) {
+    throw new SubscriptionPolicyError("unsupported_subscription_mint");
+  }
+
+  if (plan.provider_state !== "launch_approved") {
+    throw new SubscriptionPolicyError("subscription_plan_requires_onchain_verification");
   }
 
   if (plan.scope === "creator") {

@@ -36,8 +36,8 @@ This ADR turns the v2 blueprint into concrete provider defaults for the first im
 | Creator pricing | Creator sets content unlock, paid message, live pass, Event Access Pass, and Creator Membership prices within admin/env guardrails | Preserves creator ownership while preventing abuse, too-low pricing, and compliance issues. |
 | VOD | Bunny Stream/CDN/TUS | Direct uploads and playback provider infrastructure. |
 | Live/replay | Livepeer with JWT playback access from day one for paid streams/replays | Provider-owned live infra and provider-enforced protected playback. |
-| Age assurance | Yoti app/Digital ID first, Sumsub reusable/KYC fallback, Veriff age-assurance fallback, Persona documentary fallback only after privacy/procurement review | User choice, reusable/low-friction first, no raw identity data in core DB. |
-| Creator KYC/KYB | Disabled by default except high-risk/admin-required creators; Sumsub primary candidate | Avoid unnecessary friction while keeping an easy switch for legal/risk expansion. |
+| Age assurance | Didit/Yoti/EUDI/Scytales reusable-first waterfall, then Didit/Persona light fallback after provider-doc and contract validation | User choice, reusable/low-friction first, no raw identity data in core DB. |
+| Creator KYC/KYB | Separate Studio/enterprise/creator compliance flow; Sumsub reusable-first, Didit/Persona cost-control candidates, Veriff heavy/biometric fallback | Avoid viewer onboarding friction while keeping a provider path for creator publishing, tax, fraud, and business workflows. |
 | AI/MCP | Secure MCP connection layer first; external AI clients/LLMs bring the brain, optional BYO in-app assistant later | Avoid overbuilding a model platform; Veel owns data, scopes, policy, rate limits, approvals, and audit. |
 | Create flow | Raw/simple create: record/upload, essential edits, caption/#/@/location, NSFW label, optional event, monetisation, preview, publish | Avoids overbuilt editor while preserving creator conversion controls. |
 | Mutuals | Profile/settings-owned explicit mode; not configured per Create draft | Mutuals appears on creator media only when profile mode is active and viewer also opted in. |
@@ -278,18 +278,18 @@ Token/lifetime defaults must be configurable by environment and admin policy. Ad
 Use a user-choice waterfall:
 
 ```text
-1. Reusable app credential / Digital ID
-2. Reusable KYC network / reusable identity
-3. Non-doc or database check where supported
-4. Facial age estimation
-5. Documentary verification only when required
+1. Reusable age credential / Digital ID
+2. Facial age estimation or other light/free age assurance
+3. Free-tier document proof when reusable proof is unavailable
+4. Regional non-doc or database check where supported
+5. Manual review only when policy requires escalation
 ```
 
 Launch posture:
 
-- Yoti app/Digital ID or Yoti age session as primary reusable/user-choice lane.
-- Sumsub reusable KYC / Sumsub ID / non-doc verification as fallback.
-- Persona as documentary fallback where Yoti/Sumsub coverage is weak.
+- Didit, Yoti Digital ID, EUDI Wallet, and Scytales are reusable-first age-assurance candidates.
+- Didit age estimation and Persona/Didit document proof are light/free fallback candidates when reusable proof is unavailable.
+- Sumsub and Veriff are not default viewer-onboarding providers; keep them for creator/compliance escalation after privacy, security, procurement, and contract review.
 
 Store only:
 
@@ -311,6 +311,22 @@ Default:
 - admin can require KYC/KYB for high-risk creators, earning thresholds, suspicious activity, jurisdiction changes, or future legal policy
 
 The schema must support enabling KYC/KYB for all earning creators later without redesign.
+
+When KYC/KYB is required, use a cost-controlled waterfall:
+
+```text
+1. Reusable provider identity / reusable KYC / copied applicant where contract and consent allow it
+2. Freemium or low-cost KYC/KYB check where coverage is adequate
+3. Returning-user biometric/account-continuity check instead of repeated document upload
+4. Full documentary KYC/KYB only for legal, fraud, merchant, Studio/enterprise, UBO, or provider-required escalation
+```
+
+Provider posture:
+
+- Sumsub is the primary reusable KYC/KYB candidate because its official docs describe reusable identity/KYC and applicant-copy patterns.
+- Veriff is a heavy KYC/KYB and returning-user biometric-authentication candidate, not a default shared reusable identity-wallet candidate.
+- Didit and Persona are cost-control candidates where their current docs, pricing, regional coverage, webhook behavior, and data-retention terms fit the exact KYC/KYB use case.
+- WeVid stores only normalized verification state and audit references; raw documents, selfies, registry files, UBO documents, biometric templates, and raw provider payloads remain provider-owned unless counsel approves a narrow exception.
 
 ## NSFW, Moderation, And Content Checks
 

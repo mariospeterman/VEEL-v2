@@ -22,8 +22,14 @@ export function toSubscriptionPlan(row: PlanRow): SubscriptionPlan {
     periodDays: row.period_days,
     billingMode: row.billing_mode,
     providerState: row.provider_state,
+    provider: toSubscriptionPlanProvider(row.provider),
     tokenMint: row.token_mint,
-    tokenProgram: row.token_program ?? null
+    tokenProgram: row.token_program ?? null,
+    programId: row.program_id,
+    planPda: row.plan_pda,
+    merchantWallet: row.merchant_wallet,
+    amountAtomic: Number(row.amount_atomic ?? row.amount_minor),
+    periodSeconds: row.period_seconds ?? row.period_days * 86_400
   };
 
   return plan;
@@ -52,7 +58,15 @@ export function toSubscription(row: SubscriptionRow): Subscription {
     cancelledAt: row.cancelled_at?.toISOString() ?? null,
     revokedAt: row.revoked_at?.toISOString() ?? null,
     authorityAddress: row.authority_address,
-    delegationAddress: row.delegation_address
+    delegationAddress: row.delegation_address,
+    subscriberWallet: row.subscriber_wallet,
+    subscriberTokenAccount: null,
+    tokenMint: row.token_mint,
+    provider: row.provider,
+    programId: row.program_id,
+    planPda: row.plan_pda,
+    subscriptionPda: row.subscription_pda,
+    failureReason: null
   };
 }
 
@@ -93,5 +107,15 @@ export function providerReadinessFromPlanState(
     return "staging_required";
   }
 
+  if (state === "launch_approved") {
+    return "launch_approved";
+  }
+
   return "candidate";
+}
+
+function toSubscriptionPlanProvider(value: string | null): SubscriptionPlan["provider"] {
+  return value === "mock_subscription_provider_dev_only"
+    ? "mock_subscription_provider_dev_only"
+    : "official_solana_subscription_program";
 }

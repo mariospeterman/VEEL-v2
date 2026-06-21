@@ -139,15 +139,17 @@ export async function registerProfileRoutes(
     }
 
     const updateProfile = body as Required<Pick<UpdateProfileRequest, "handle" | "displayName">> &
-      Pick<UpdateProfileRequest, "bio" | "locationLabel">;
+      Pick<UpdateProfileRequest, "avatarUrl" | "bio" | "locationLabel" | "links">;
 
     try {
       await options.sessionRepository.ensureUserForSupabaseId(verifiedSession.supabaseUserId);
       const user = await options.profileRepository.upsertMyProfile(verifiedSession.supabaseUserId, {
         handle: updateProfile.handle,
         displayName: updateProfile.displayName,
+        avatarUrl: updateProfile.avatarUrl,
         bio: updateProfile.bio,
-        locationLabel: updateProfile.locationLabel
+        locationLabel: updateProfile.locationLabel,
+        links: updateProfile.links
       });
 
       return reply.code(200).send(user);
@@ -214,6 +216,10 @@ function getUpdateProfileValidationError(
     return "Display name is required and must be 80 characters or fewer";
   }
 
+  if (body.avatarUrl !== undefined && body.avatarUrl !== null && !isSafeHttpsUrl(body.avatarUrl)) {
+    return "Avatar URL must be a valid HTTPS URL";
+  }
+
   if (body.bio && body.bio.length > 500) {
     return "Bio must be 500 characters or fewer";
   }
@@ -222,5 +228,38 @@ function getUpdateProfileValidationError(
     return "Location label must be 120 characters or fewer";
   }
 
+  if (body.links !== undefined) {
+    if (!Array.isArray(body.links) || body.links.length > 5) {
+      return "Profile links must include at most 5 links";
+    }
+
+    for (const link of body.links) {
+      if (!link || typeof link !== "object") {
+        return "Profile links must be objects";
+      }
+
+      if (!link.label || link.label.length > 32) {
+        return "Profile link labels must be 32 characters or fewer";
+      }
+
+      if (!isSafeHttpsUrl(link.url)) {
+        return "Profile link URLs must be valid HTTPS URLs";
+      }
+    }
+  }
+
   return null;
+}
+
+function isSafeHttpsUrl(value: string): boolean {
+  if (value.length > 2048) {
+    return false;
+  }
+
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:";
+  } catch {
+    return false;
+  }
 }

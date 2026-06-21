@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: server topology, cost, environments, scaling
-Last updated: 2026-06-07
+Last updated: 2026-06-13
 Source of truth: yes
 
 Owns:
@@ -77,6 +77,8 @@ Use managed provider infrastructure where it clearly removes custom code:
 - Helius for confirmed payment/access evidence
 - third-party age/KYC providers for verification
 
+Recurring subscriptions are a separate token-based Solana provider boundary. Production may leave `SUBSCRIPTIONS_ENABLED=false`; if enabled, deploy readiness requires `SUBSCRIPTIONS_PROVIDER=official_solana_subscription_program`, program id, RPC URL, supported/default SPL or Token-2022 mint, collector wallet, merchant wallet, and `SUBSCRIPTIONS_REQUIRE_ONCHAIN_VERIFICATION=true`. `mock_subscription_provider_dev_only` and native SOL recurring subscriptions are not production deployable.
+
 Use optional edge/serverless functions only for:
 
 - public referral/link redirect
@@ -101,6 +103,7 @@ Staging:
 - Solana devnet or provider staging network
 - staging provider accounts
 - public HTTPS URLs for webhooks
+- public HTTPS API URL for remote MCP proof when `MCP_ENABLED=true`
 - production-like observability and audit logging
 
 Production:
@@ -108,7 +111,7 @@ Production:
 - production Supabase project with backups/PITR
 - dedicated Solana RPC/indexer provider
 - least-privilege provider keys
-- separate treasury/recipient wallets
+- separate creator, platform-fee, allocation, and platform-owned wallets
 - monitored worker queues
 - deployment rollback path
 
@@ -121,7 +124,7 @@ Phase 1:
 - managed Supabase
 - managed Redis only if pg-boss is not enough
 - Bunny/Livepeer on usage-based tiers
-- Helius scoped to relevant payment/treasury addresses
+- Helius scoped to relevant creator, platform-fee, allocation, and payment reference addresses
 
 Phase 2:
 
@@ -194,7 +197,9 @@ The repository now includes an executable deployment skeleton:
 - `infra/observability/README.md` defines required launch signals, redaction rules, dashboards, and alert defaults.
 - `GET /healthz` is the unauthenticated API liveness probe.
 - `GET /readyz` is the unauthenticated API readiness probe and returns `503` when Postgres is missing or unreachable.
-- `pnpm deploy:check` validates the skeleton while deploy is disabled, and checks `API_HEALTH_URL` plus `API_READY_URL` when `DEPLOY_ENABLED=true`.
+- `pnpm deploy:check` validates the skeleton while deploy is disabled, checks `API_HEALTH_URL` plus `API_READY_URL` when `DEPLOY_ENABLED=true`, and performs production env/provider preflight when `DEPLOY_ENV=production` or `NODE_ENV=production`.
+- When production MCP is enabled, `pnpm deploy:check` requires OAuth mode, OAuth enforcement, static dev tokens disabled, bounded token TTLs, and an HTTPS non-localhost `MCP_PUBLIC_BASE_URL`.
+- Remote MCP staging proof is tracked in `mcp-staging-proof.md` and must cover OAuth metadata, PKCE authorization, scoped `/mcp` tool calls, forbidden-tool denial, revocation, and audit-row evidence.
 
 Staging and production workflows remain gates until a real hosting platform is configured through GitHub environment variables. They must not become traffic-shipping workflows until artifact digest pinning, database backup confirmation, provider staging smoke, health checks, and rollback instructions are all present.
 

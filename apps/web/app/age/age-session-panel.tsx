@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ApiMutationError, createAgeSession, type AgeSession } from "@/api-mutations";
+import { createAgeSession, type AgeSession } from "@/api-mutations";
+import { safeMutationMessage } from "@/api-errors";
 import type { WebAuthState } from "@/supabase/auth-state";
 
 interface AgeSessionPanelProps {
@@ -24,7 +25,7 @@ export function AgeSessionPanel({ authState }: AgeSessionPanelProps) {
       });
       setSession(providerSession);
       setState("ready");
-      setMessage("Provider session created. Continue with the provider; Veel waits for the signed webhook.");
+      setMessage("Provider session created. Continue with the provider; WeVid waits for the signed webhook.");
       window.location.assign(providerSession.launchUrl);
     } catch (error) {
       setState("error");
@@ -74,13 +75,5 @@ export function AgeSessionPanel({ authState }: AgeSessionPanelProps) {
 }
 
 function errorMessage(error: unknown) {
-  if (error instanceof ApiMutationError) {
-    return error.message;
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "Age verification could not be started.";
+  return safeMutationMessage(error, "Age verification");
 }

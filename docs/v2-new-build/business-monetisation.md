@@ -247,8 +247,8 @@ Recommended platform tiers for first pricing tests:
 | --- | --- | --- |
 | Free Verified | Free | 18+ verified account, wallet, weekly free watch time up to 60 minutes or 1.5 GB transfer, previews, basic social/media participation, reporting/blocking, and safe discovery controls. |
 | Veel Plus | 8.99 USDC/month or 89 USDC/year | Heavy viewer tier: higher fair-use watch allowance, better collections/activity tools, better notification/feed controls, profile polish, and priority support. No feed/Mutuals boost. |
-| Veel Studio | 29 USDC/month or 290 USDC/year | Creator business tier: creator dashboard upgrades, scheduling, advanced analytics, pricing presets, Event Access tools, KYC/KYB/wallet/tax setup, and AI setup assistant where enabled. |
-| Enterprise | Custom, from 199 USDC/month equivalent | Organization, agency, venue, and partner tier with KYB, RBAC, consolidated reporting, business support, and contract review. |
+| Veel Studio | 29 USDC/month or 290 USDC/year | Creator business tier: creator dashboard upgrades, scheduling, advanced analytics, pricing presets, Event Access tools, reusable-first KYC/wallet/tax setup, and AI setup assistant where enabled. |
+| Enterprise | Custom, from 199 USDC/month equivalent | Organization, agency, venue, and partner tier with reusable-first KYB, RBAC, consolidated reporting, business support, and contract review. |
 
 Tier rules:
 
@@ -347,6 +347,7 @@ Even with direct split transfers, Veel still needs backend-derived earning recor
 Earning-record rules:
 
 - KYC/KYB is required for creator earning features where required by legal/provider policy
+- KYC/KYB should use reusable or low-cost provider paths before paid heavy documentary sessions
 - age gate is separate from creator earning KYC/KYB
 - creator earnings visible in dashboard must be based on confirmed settlement
 - `creator_monetisation_settings` stores readiness/product configuration only; it does not create balances, custody, payout queues, escrow, or receivables

@@ -62,7 +62,7 @@ Avoid:
 Use:
 
 - `Passkey is the easiest start.`
-- `Veel is a safe space.`
+- `WEVID is a safe space.`
 - `Recommended for full functionality.`
 - `Skip for now.`
 
@@ -91,8 +91,8 @@ Product-facing naming:
 - say `Creator Membership`, `Member access`, and `Membership tier`
 - say `Event Access`, `Pass`, `Passes`, `Get Access`, and `Reserve Access`
 - say `Mutuals`, `Show Interest`, `Interested`, `Mutual`, `Mutual chat`, and `Mutuals mode`
-- say `Use Veel wallet`, `Connect my wallet`, and `Pay from wallet`
-- say `Free Verified`, `Veel Plus`, `Veel Studio`, and `Enterprise`
+- say `Use WEVID wallet`, `Connect my wallet`, and `Pay from wallet`
+- say `Free Verified`, `WEVID Plus`, `WEVID Studio`, and `Enterprise`
 - keep `video` as the generic fallback when the duration bucket is not the point of the UI
 
 Avoid:

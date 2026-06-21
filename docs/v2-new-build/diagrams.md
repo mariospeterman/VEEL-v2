@@ -54,7 +54,8 @@ Supabase Platform                 Workers                      Providers
   └─ Storage only if needed         ├─ moderation                ├─ wallet funding path
                                     ├─ notifications             ├─ Bunny Stream/CDN/TUS
                                     └─ retry queues              ├─ Livepeer live/replay
-                                                                 ├─ Yoti/Sumsub/Veriff/Persona
+                                                                 ├─ Didit/Yoti/EUDI/Scytales/Persona
+                                                                 ├─ Sumsub/Veriff creator compliance
                                                                  └─ email/push/observability
 ```
 
@@ -186,13 +187,29 @@ Creator opens live room
 ```text
 Age gate for protected app/media/Mutuals/messages/wallet:
   1. Reusable age credential when supported
-  2. Age estimation provider
-  3. Database / non-document provider check where supported
-  4. Documentary identity flow only when required
-  5. Manual review only if policy requires escalation
+     - Didit reusable ID
+     - Yoti Digital ID
+     - EUDI wallet / Scytales connector where available
+     - user may leave, create a reusable ID, then return to age check
+  2. Light/free age assurance when reusable proof is unavailable
+     - Didit/Yoti age estimation
+     - Persona/Didit free-tier document proof
+  3. Regional non-document/eID check where supported
+  4. Manual review only if policy requires escalation
+
+Studio / enterprise / creator KYC-KYB:
+  - separate from ordinary viewer age gate
+  - required before creator publishing or monetized creator workflows when policy requires it
+  - reusable/provider-owned proof first:
+      1. reusable KYC / copied applicant / reusable business applicant when consent and contract allow it
+      2. freemium or low-cost KYC/KYB check
+      3. returning-user biometric/account-continuity check
+      4. full documentary KYC/KYB only for legal, fraud, UBO, merchant, or enterprise escalation
+  - Sumsub reusable identity/KYC and Copy Applicant are primary candidates
+  - Veriff belongs here as heavy documentary and returning-user biometric fallback, not default viewer onboarding
 
 Creator earning / tax KYC:
-  - separate from ordinary viewer age gate
+  - separate from ordinary viewer age gate and creator age assurance
   - provider session/webhook result
   - minimal stored state
   - no raw biometric/document storage in core DB unless legally required

@@ -83,8 +83,10 @@
     .bottom-link {
       display: flex;
       min-width: 0;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
+      gap: 3px;
       padding: 0 4px;
       font-size: 12px;
       font-weight: 720;

@@ -173,8 +173,8 @@ Implementation contract:
 - `PATCH /v1/wallets/{walletId}/primary` changes only the authenticated user's primary wallet, requires idempotency, and audits the change.
 - Wallet link completion is an audit event, not payment proof.
 - Current supported external provider values are `phantom`, `solflare`, and `wallet_adapter`.
-- Current supported embedded provider values in schema are `embedded_privy` and `embedded_turnkey`. They are enabled in UI only when `NEXT_PUBLIC_PRIVY_APP_ID` or `NEXT_PUBLIC_TURNKEY_ORGANIZATION_ID` is configured and the provider ADR is staging/launch approved.
-- The current PWA handoff detects injected Solana wallets on `/enter` and `/wallet`, asks the wallet to connect, signs the returned backend challenge using `signMessage`, base64-encodes the signature, and submits it back to the API. The UI must present the signature as ownership-only and must not imply payment, subscription, entitlement, or protected-access completion.
+- Current supported embedded provider values in schema are `embedded_privy` and `embedded_turnkey`. They are enabled in UI only when `NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED=true`, the matching public provider env is configured, and the provider ADR is staging/launch approved.
+- The current PWA handoff detects injected Solana wallets on landing onboarding and `/app/wallet`, asks the wallet to connect, signs the returned backend challenge using `signMessage`, base64-encodes the signature, and submits it back to the API. The UI must present the signature as ownership-only and must not imply payment, subscription, entitlement, or protected-access completion.
 
 ## Device Behavior
 

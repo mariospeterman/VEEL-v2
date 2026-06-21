@@ -1,11 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import { QueryProvider } from "@/query-provider";
-import { RealtimeProvider } from "@/realtime-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "VEEL",
-  description: "VEEL v2 creator platform shell",
+  title: "WeVid - Frame Your Way",
+  description: "WeVid - FRAME YOUR WAY",
+  icons: {
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/flavicon.ico" }
+    ]
+  },
   manifest: "/manifest.webmanifest"
 };
 
@@ -20,7 +24,9 @@ const themeScript = `
     const stored = window.localStorage.getItem("veel-theme");
     const theme = stored === "light" || stored === "dark"
       ? stored
-      : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      : window.matchMedia("(prefers-color-scheme: light)").matches
+        ? "light"
+        : "dark";
     document.documentElement.dataset.theme = theme;
   } catch {
     document.documentElement.dataset.theme = "dark";
@@ -34,11 +40,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body>
-        <QueryProvider>
-          <RealtimeProvider />
-          {children}
-        </QueryProvider>
+      <body suppressHydrationWarning>
+        {children}
       </body>
     </html>
   );

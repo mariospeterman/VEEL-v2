@@ -1,0 +1,206 @@
+@layer components {
+  .auth-flow-stage {
+    gap: clamp(16px, 3vh, 28px);
+  }
+
+  .auth-flow-copy {
+    display: grid;
+    max-width: 780px;
+    gap: 12px;
+  }
+
+  .auth-flow-copy h1 {
+    font-size: clamp(42px, 7vw, 84px);
+  }
+
+  .auth-stepper-v2,
+  .auth-flow-actions,
+  .auth-provider-link-grid {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .auth-stepper-v2 {
+    justify-content: end;
+  }
+
+  .auth-stepper-v2 button,
+  .auth-flow-actions button,
+  .auth-flow-actions a,
+  .auth-provider-link-grid a,
+  .auth-provider-link {
+    display: inline-flex;
+    min-height: 42px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 999px;
+    padding: 9px 14px;
+    font-weight: 760;
+  }
+
+  .auth-stepper-v2 button[aria-current="step"] {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+
+  .auth-onboarding-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.55fr);
+    gap: 22px;
+    align-items: start;
+  }
+
+  .auth-focused-card,
+  .auth-helper-card {
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--panel) 68%, transparent);
+    padding: clamp(18px, 3vw, 28px);
+  }
+
+  .auth-side-panel {
+    background: transparent;
+  }
+
+  .auth-focused-heading,
+  .auth-helper-heading,
+  .auth-login-method-heading,
+  .auth-embedded-heading,
+  .auth-method-heading {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+  }
+
+  .auth-focused-heading > span,
+  .auth-helper-heading > span,
+  .auth-login-method-heading > span,
+  .auth-embedded-heading > span,
+  .auth-method-heading > span,
+  .auth-age-icon {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+    border-radius: 999px;
+    color: var(--accent);
+  }
+
+  .auth-profile-links,
+  .auth-oauth-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .auth-email-form,
+  .auth-profile-form label {
+    display: grid;
+    gap: 8px;
+    color: var(--foreground);
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .auth-email-form input,
+  .auth-profile-form input,
+  .auth-profile-form textarea {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--panel) 72%, var(--background));
+    color: var(--foreground);
+    outline: none;
+    padding: 13px 14px;
+  }
+
+  .auth-email-form input:focus,
+  .auth-profile-form input:focus,
+  .auth-profile-form textarea:focus {
+    border-color: var(--accent);
+  }
+
+  .auth-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 760;
+  }
+
+  .auth-divider::before,
+  .auth-divider::after {
+    height: 1px;
+    flex: 1;
+    background: var(--line);
+    content: "";
+  }
+
+  .auth-oauth-grid button {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 10px;
+    font-weight: 760;
+  }
+
+  .auth-oauth-grid svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .auth-age-options {
+    display: grid;
+    gap: 10px;
+  }
+
+  .auth-age-options button {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    border-radius: 14px;
+    padding: 14px;
+    text-align: left;
+  }
+
+  .auth-age-options small {
+    display: block;
+    color: var(--muted);
+  }
+
+  .auth-help-popover,
+  .auth-field-error,
+  .auth-inline-message {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--panel) 76%, transparent);
+    color: var(--muted);
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .auth-field-error,
+  .auth-inline-message-error {
+    border-color: color-mix(in srgb, var(--danger) 50%, transparent);
+    color: #fecaca;
+  }
+
+  :root[data-theme="light"] .auth-field-error,
+  :root[data-theme="light"] .auth-inline-message-error {
+    color: #b91c1c;
+  }
+
+  .auth-help-popover summary {
+    color: var(--foreground);
+    cursor: pointer;
+    font-weight: 760;
+  }
+}

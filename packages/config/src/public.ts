@@ -14,7 +14,11 @@ export const publicWebEnvSchema = z.object({
   NEXT_PUBLIC_PRIVY_APP_ID: z.string().optional(),
   NEXT_PUBLIC_TURNKEY_ORGANIZATION_ID: z.string().optional(),
   NEXT_PUBLIC_TURNKEY_API_BASE_URL: z.string().url().optional(),
+  NEXT_PUBLIC_TURNKEY_AUTH_PROXY_URL: z.string().url().optional(),
+  NEXT_PUBLIC_TURNKEY_AUTH_PROXY_CONFIG_ID: z.string().optional(),
   NEXT_PUBLIC_SOLANA_CHAIN: z.enum(["solana:devnet", "solana:mainnet"]).default("solana:devnet"),
+  NEXT_PUBLIC_SOLANA_RPC_URL: z.string().url().optional(),
+  NEXT_PUBLIC_SOLANA_RPC_SUBSCRIPTIONS_URL: z.string().url().optional(),
   NEXT_PUBLIC_ENABLE_E2E_AUTH: publicBooleanSchema
 });
 

@@ -1,4 +1,7 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
+@source "./";
+@source "../src";
+@source "../../../packages/ui/src";
 @import "./styles/tokens-base.css";
 @import "./styles/landing.css";
 @import "./styles/auth.css";

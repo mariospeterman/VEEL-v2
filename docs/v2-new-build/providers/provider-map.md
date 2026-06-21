@@ -35,9 +35,10 @@ This map defines which provider does which job and what Veel owns. It exists to 
 | Helius | payment/access evidence | normalize/verify event, dedupe, audit | none | signed/authorized webhook or API response |
 | Bunny Stream/CDN/TUS | VOD upload/transcode/playback | content state, access policy, signed/safe playback | safe upload/playback data | provider webhook/status |
 | Livepeer | live streaming/replay infra | room policy, host/viewer split, pass access | playback-safe viewer resource | provider webhook/status |
-| Yoti | age assurance | session creation, minimal result storage | provider redirect/widget only | signed notification/result |
-| Sumsub | age/KYC fallback | applicant/session mapping, minimal state | provider redirect/widget only | signed webhook/result |
-| Persona | identity fallback | inquiry/session mapping, minimal state | provider redirect/widget only | signed webhook/result |
+| Didit/Yoti/EUDI/Scytales | reusable/light age assurance | session creation, minimal result storage | provider redirect/widget/link only | signed notification/result |
+| Persona/Didit | light document age fallback and cost-control KYC/KYB candidate | inquiry/session mapping, minimal state | provider redirect/widget only | signed webhook/result |
+| Sumsub | reusable KYC/KYB and creator compliance candidate | reusable identity, copied applicant, applicant/session mapping, minimal state | provider redirect/widget only | signed webhook/result |
+| Veriff | creator KYC/KYB heavy fallback and returning-user biometric candidate | applicant/session mapping, minimal state | provider redirect/widget only | signed webhook/result |
 | Wallet funding/onramp | user-owned wallet funding only | start session, show funding state | funding widget/session only | provider callback for funding status only |
 | Email/push provider | notifications | notification policy, templates, retries | no secrets | delivery status |
 | OpenTelemetry/logging | observability | traces, logs, redaction | none | trace/log pipeline |

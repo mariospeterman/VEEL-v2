@@ -51,8 +51,6 @@ Money can never buy access to people, visibility, matches, recommendations, or p
 /mutuals/feed                  canonical Mutuals feed
 /mutuals                       canonical Mutual list
 /messages?filter=mutuals       planned
-
-/mutuals/mutuals               compatibility frontend redirect only during migration
 ```
 
 ## Current Implementation State
@@ -70,8 +68,11 @@ Money can never buy access to people, visibility, matches, recommendations, or p
 - `/mutuals/feed` and `/mutuals` use typed API-backed projections through the
   canonical API routes `GET /v1/mutuals/feed` and `GET /v1/mutuals`; they fail
   closed when the API is unavailable instead of rendering fixture Mutuals data.
-- Dating-named frontend routes are removed from launch-facing navigation and redirects.
-- Admin safety should use Mutuals copy and must preserve legacy route aliases only as internal transition details.
+- Dating-named frontend routes and historical aliases such as
+  `/mutuals/mutuals` are removed from launch-facing navigation and route
+  ownership.
+- Admin safety should use Mutuals copy and must preserve legacy API aliases only
+  as internal transition details.
 
 ## Backend Ownership
 

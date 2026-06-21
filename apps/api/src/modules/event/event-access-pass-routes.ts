@@ -98,11 +98,13 @@ export async function registerEventAccessPassRoutes(
         return reply.code(201).send(accessPassIntentResponse("free_granted", accessPass));
       }
 
-      if (!app.config.PAYMENT_PLATFORM_TREASURY_WALLET) {
-        return reply.code(503).send(serviceUnavailableResponse("Payment treasury wallet is not configured"));
+      const platformFeeWallet = app.config.PAYMENT_PLATFORM_FEE_WALLET ?? app.config.PAYMENT_PLATFORM_TREASURY_WALLET;
+
+      if (!platformFeeWallet) {
+        return reply.code(503).send(serviceUnavailableResponse("Payment platform fee wallet is not configured"));
       }
 
-      assertSolanaAddress(app.config.PAYMENT_PLATFORM_TREASURY_WALLET);
+      assertSolanaAddress(platformFeeWallet);
 
       const hasWallet = await options.walletRepository.hasWalletBySupabaseUserId(access.supabaseUserId);
 
@@ -128,7 +130,10 @@ export async function registerEventAccessPassRoutes(
         amountMinor: offer.accessPassType.priceMinor,
         currency: "SOL",
         solanaCluster: app.config.SOLANA_CLUSTER,
-        treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET,
+        treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET ?? platformFeeWallet,
+        platformFeeWallet,
+        platformFeeBps: app.config.PAYMENT_PLATFORM_FEE_BPS,
+        settlementKind: "creator_split",
         referenceAddress: createSolanaReferenceAddress(),
         expiresAt: new Date(Date.now() + paymentIntentTtlMs),
         referralToken: null

@@ -42,6 +42,10 @@ Current implementation state:
 - Sumsub webhook signature verification: https://docs.sumsub.com/docs/webhook-manager
 - Yoti age verification overview: https://developers.yoti.com/age-verification/age-verification-introduction
 - Yoti notifications/signature verification: https://developers.yoti.com/age-verification/notifications
+- Didit docs/pricing: https://docs.didit.me/getting-started/pricing
+- Persona docs: https://docs.withpersona.com/
+- EU age verification / EUDI: https://digital-strategy.ec.europa.eu/en/policies/eu-age-verification
+- Scytales age verification connector: https://www.scytales.com/age-verification-connector
 
 ## Wallet signing
 
@@ -83,9 +87,55 @@ Current implementation state:
   - `Solflare on iPhone`: not implemented
   - `generic multi-wallet iOS signing`: not implemented
 
-## Sumsub
+## Age-Assurance Waterfall
 
-### Required API env
+Landing onboarding should prefer reusable or light/free age assurance:
+
+1. reusable age credential: Didit reusable ID, Yoti Digital ID, EUDI Wallet, Scytales
+2. light/free fallback: Didit age estimation, Persona/Didit document proof
+3. regional non-document/eID checks where supported
+
+Users may leave the landing surface to create a reusable ID and then return to complete age assurance. Wallet connection stays mandatory; profile and Supabase recovery auth stay optional; age assurance stays mandatory for protected app access.
+
+## Creator Compliance Providers
+
+Sumsub and Veriff are not default ordinary viewer onboarding providers. Sumsub is the primary reusable KYC/KYB candidate; Veriff is a heavy documentary and returning-user biometric fallback candidate. Keep both inside Studio, enterprise, creator publishing, creator earning/tax, suspicious activity, merchant, or regulated partner workflows after legal, privacy, security, procurement, and provider-contract approval.
+
+## Creator KYC/KYB Cost-Control Waterfall
+
+Before starting any creator, Studio, enterprise, tax, merchant, or partner KYC/KYB session, the API should choose the least invasive provider path that satisfies the required policy:
+
+1. Reusable provider identity or copied applicant.
+   - Sumsub reusable identity/KYC and Copy Applicant are primary candidates when the provider contract, consent record, entity relationship, and legal basis allow reuse.
+   - This is the lowest-friction path and should be preferred for returning creators, related organizations, UBOs already verified under a related entity, or partner-network reuse.
+2. Freemium or low-cost KYC/KYB check.
+   - Didit and Persona are candidates where current provider docs, pricing, supported regions, webhook behavior, and data-retention terms fit the exact use case.
+   - This path is preferred before premium enterprise document sessions when reusable proof is unavailable.
+3. Returning-user biometric/account-continuity check.
+   - Sumsub face authentication or Veriff biometric authentication can re-check a previously verified creator without repeated document upload when allowed by policy.
+   - This is for returning users inside a verified provider/app context, not a public reusable identity wallet claim.
+4. Full paid documentary KYC/KYB.
+   - Use only for legal, fraud, sanctions/PEP, UBO, merchant/off-ramp, enterprise contract, failed reusable proof, or provider-required escalation.
+
+Every provider adapter must normalize to the same app-facing state:
+
+- `verification_purpose`: creator_publishing, creator_earning, studio, enterprise, tax, merchant, fraud_review, admin_required
+- `entity_type`: person, business, organization, ubo
+- `provider`
+- `provider_reference`
+- `status`
+- `assurance_level`
+- `risk_tier`
+- `country_code`
+- `credential_reusable`
+- `consent_reference`
+- `verified_at`
+- `expires_at`
+- `next_action`
+
+Never store raw identity documents, selfies, registry files, UBO documents, biometric templates, raw provider payloads, or private provider comments in browser resources or core app tables.
+
+### Required API env when explicitly selected
 
 - `AGE_VERIFICATION_DRIVER=sumsub`
 - `SUMSUB_APP_TOKEN`
@@ -96,7 +146,7 @@ Current implementation state:
 
 ### Required dashboard setup
 
-1. Create or select a Sumsub verification level intended for over-18 gating.
+1. Create or select a Sumsub verification level intended for the approved creator/compliance use case.
 2. Set the level name into `SUMSUB_LEVEL_NAME`.
 3. Add the production webhook URL:
    - `POST https://<api-domain>/v1/webhooks/age/{provider}`
@@ -189,9 +239,10 @@ Current implementation state:
 
 ## Go-live checklist
 
-1. Pick one production driver:
-   - `AGE_VERIFICATION_DRIVER=sumsub`
-   - or `AGE_VERIFICATION_DRIVER=yoti_digital_id`
+1. Pick one production age-assurance driver for ordinary viewer access:
+   - `AGE_VERIFICATION_DRIVER=yoti_digital_id`
+   - or another reusable/light provider only after its adapter, contract, webhook, and retention rules are launch-approved
+   - do not use Sumsub or Veriff as default viewer onboarding
 2. Set the matching provider env in the API runtime.
 3. Keep `AGE_VERIFICATION_ALLOW_MOCK_PROVIDER=false` in production.
 4. Configure the provider dashboard webhook to call the correct `/v1/webhooks/age/{provider}` endpoint.

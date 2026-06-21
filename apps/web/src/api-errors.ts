@@ -1,4 +1,5 @@
 import type { ApiResult } from "./api-client";
+import { ApiMutationError } from "./api-mutation-types";
 
 export type ApiErrorKind =
   | "unauthenticated"
@@ -36,9 +37,9 @@ export function mapApiFailure(
       ...base,
       kind: "unauthenticated",
       title: "Sign in to continue",
-      message: `${context} is available after your VEEL session is active.`,
-      actionLabel: "Enter VEEL",
-      actionHref: "/enter",
+      message: `${context} is available after your WeVid session is active.`,
+      actionLabel: "Enter WeVid",
+      actionHref: "/?mode=login",
       retryable: false
     };
   }
@@ -110,4 +111,24 @@ export function mapApiFailure(
     message: "Try again or return to the previous screen.",
     retryable: true
   };
+}
+
+export function safeMutationMessage(error: unknown, context = "This action") {
+  if (error instanceof ApiMutationError) {
+    return mapStatusToMessage(error.status, context);
+  }
+
+  return `${context} could not complete right now. Try again in a moment.`;
+}
+
+function mapStatusToMessage(status: number | undefined, context: string) {
+  if (status === 401) return "Sign in or reconnect your wallet before continuing.";
+  if (status === 403) return "Your account does not currently have access to complete this action.";
+  if (status === 404) return "This item is no longer available.";
+  if (status === 409) return "The state changed. Refresh and try again.";
+  if (status === 400 || status === 422) return "Check the details and try again.";
+  if (status === 429) return "Too many attempts. Pause briefly before trying again.";
+  if (status && status >= 500) return `${context} is temporarily unavailable. Try again in a moment.`;
+
+  return `${context} could not complete right now. Try again in a moment.`;
 }

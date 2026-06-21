@@ -26,17 +26,18 @@ This document defines the locked v2 web design direction.
 
 - Next.js 16, React 19, TypeScript
 - Tailwind CSS v4 with product-owned tokens
-- selected shadcn-style primitives under `apps/web/components/ui`
+- shared project primitives exported from `packages/ui`
 - TanStack Query for server state and Zustand/local state for UI state
 - Livepeer React/player primitives where they reduce custom live/VOD code
 - custom CSS tokens under the v2 app styles are the product design source of truth
-- route-owned React surfaces under `apps/web/features/*`
+- route-owned React surfaces under `apps/web/app/*`, with tightly scoped panels colocated with their routes
 
 ## Primitive Boundary
 
 Repeated controls should use:
 
-- `Button` / `buttonVariants`
+- `Button`, `ButtonLink`, and `buttonClassName`
+- `Card`, `PageHeader`, `EmptyState`, `StatusPill`, `Fact`, and `MetricCard`
 - `Sheet`
 - `Input`, `Textarea`, `Select`
 - `Checkbox`
@@ -50,7 +51,7 @@ Rules:
 
 - do not migrate for fashion alone
 - do not let `shadcn/ui` redefine the product look
-- keep Veel tokens, spacing, motion, and chrome rules product-owned
+- keep WEVID tokens, spacing, motion, and chrome rules product-owned
 - delete unused CSS only after `rg` confirms the selector is no longer referenced
 
 ## Product direction
@@ -66,15 +67,15 @@ Rules:
 
 Reference mockups now live in the repo under
 `apps/web/public/mockup/`, with the local UI/UX contract at
-`apps/web/public/mockup/design.md`. The VEEL logo assets live at
-`apps/web/public/veel-logo-black.png` and
-`apps/web/public/veel-logo-white.png`.
+`apps/web/public/mockup/design.md`. The WEVID logo assets live at
+`apps/web/public/Logo-Dark.png` and
+`apps/web/public/Logo-Light.png`.
 
 These checked-in assets are the visual reference for frontend refinement:
 screen composition, density, navigation hierarchy, dark/light tone,
 media-first layout, and premium native-app feel should match the mockups as
 closely as the implemented routes and backend-owned workflows allow.
-Production UI must still follow the Veel route map, OpenAPI contracts,
+Production UI must still follow the WEVID route map, OpenAPI contracts,
 provider boundaries, and real workflow states.
 
 Useful principles to carry forward:
@@ -93,8 +94,8 @@ Useful principles to carry forward:
 - secondary tools, including Assistant, live in menus, Studio/Profile context,
   or admin surfaces; they are not primary mobile navigation items
 
-Do not introduce a second design system. Use `apps/web/public/mockup/design.md`
-as the implementation contract, reuse the project-owned VEEL logo assets, and
+Do not introduce a second design system. Use `packages/ui` primitives for repeated controls and `apps/web/public/mockup/design.md`
+as the implementation contract, reuse the project-owned WEVID logo assets, and
 adapt each mockup to functional routes with real data, auth gates, loading
 states, error states, and server-owned access/payment/compliance truth.
 

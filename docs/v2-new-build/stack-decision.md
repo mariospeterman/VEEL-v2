@@ -150,7 +150,7 @@ Use edge/serverless later only for isolated stateless endpoints. A full serverle
 
 ## Node 22 / pnpm 10 Decision
 
-Decision: **pin CI and the launch build to Node.js 22 LTS and pnpm 10.**
+Decision: **pin CI and the launch build to Node.js 22.16.0 and pnpm 10.0.0.**
 
 Why Node 22 instead of the newest current runtime:
 
@@ -165,7 +165,7 @@ Why pnpm 10:
 - It avoids changing package-manager strategy while the backend, auth, realtime, and provider architecture are also changing.
 - Upgrading pnpm later is a small controlled ADR/checklist, unlike changing runtime and provider SDK assumptions mid-build.
 
-Use `corepack enable` and `corepack prepare pnpm@10.0.0 --activate` in local/CI setup so agents do not accidentally use host-global pnpm versions.
+Use the committed `.node-version` and `.nvmrc` files, then run `corepack enable` and `corepack prepare pnpm@10.0.0 --activate` in local/CI setup so agents do not accidentally use host-global pnpm versions.
 
 ## Bun vs pnpm Decision
 

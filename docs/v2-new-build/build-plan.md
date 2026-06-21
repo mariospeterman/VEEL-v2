@@ -287,7 +287,7 @@ Deliverables:
 
 First surfaces:
 
-1. landing/enter
+1. landing login/onboarding
 2. auth/access gate
 3. Home
 4. media viewer

@@ -154,14 +154,16 @@ export async function registerMessageRoutes(
       return reply.code(400).send(validationResponse(validationError));
     }
 
-    if (!app.config.PAYMENT_PLATFORM_TREASURY_WALLET) {
-      return reply.code(503).send(serviceUnavailableResponse("Payment treasury wallet is not configured"));
+    const platformFeeWallet = app.config.PAYMENT_PLATFORM_FEE_WALLET ?? app.config.PAYMENT_PLATFORM_TREASURY_WALLET;
+
+    if (!platformFeeWallet) {
+      return reply.code(503).send(serviceUnavailableResponse("Payment platform fee wallet is not configured"));
     }
 
     const conversationId = (request.params as { conversationId?: string }).conversationId ?? "";
 
     try {
-      assertSolanaAddress(app.config.PAYMENT_PLATFORM_TREASURY_WALLET);
+      assertSolanaAddress(platformFeeWallet);
       await options.sessionRepository.ensureUserForSupabaseId(access.supabaseUserId);
       const price = await options.messageRepository.findConversationPrice({
         supabaseUserId: access.supabaseUserId,
@@ -187,7 +189,11 @@ export async function registerMessageRoutes(
         amountMinor: price.amountMinor,
         currency: price.currency,
         solanaCluster: app.config.SOLANA_CLUSTER,
-        treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET,
+        treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET ?? platformFeeWallet,
+        platformFeeWallet,
+        platformFeeBps: app.config.PAYMENT_PLATFORM_FEE_BPS,
+        settlementKind: "creator_split",
+        creatorUserId: price.recipientUserId,
         referenceAddress: createSolanaReferenceAddress(),
         expiresAt: new Date(Date.now() + paymentIntentTtlMs),
         referralToken: null

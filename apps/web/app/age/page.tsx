@@ -17,9 +17,9 @@ export default async function AgePage() {
     <main className="min-h-screen bg-(--background) text-(--foreground)">
       <nav className="mx-auto flex w-full max-w-5xl items-center justify-between border-b border-(--line) px-5 py-4">
         <a className="text-lg font-semibold tracking-normal" href="/">
-          VEEL
+          WeVid
         </a>
-        <a className="rounded px-3 py-2 text-sm text-(--muted) transition hover:bg-(--panel)" href="/enter">
+        <a className="rounded px-3 py-2 text-sm text-(--muted) transition hover:bg-(--panel)" href="/?mode=login">
           Enter
         </a>
       </nav>

@@ -2318,6 +2318,10 @@ components:
         user: { $ref: "#/components/schemas/User" }
         bio: { type: string, nullable: true }
         locationLabel: { type: string, nullable: true }
+        links:
+          type: array
+          maxItems: 5
+          items: { $ref: "#/components/schemas/ProfileLink" }
         stats: { $ref: "#/components/schemas/CreatorProfileStats" }
         monetisation: { $ref: "#/components/schemas/PublicCreatorMonetisation" }
         recentContent: { type: array, items: { $ref: "#/components/schemas/ContentItem" } }
@@ -2406,8 +2410,19 @@ components:
       properties:
         handle: { type: string, pattern: "^[a-zA-Z0-9_]{2,32}$" }
         displayName: { type: string, minLength: 1, maxLength: 80 }
+        avatarUrl: { type: string, format: uri, nullable: true, maxLength: 2048 }
         bio: { type: string, maxLength: 500 }
         locationLabel: { type: string, maxLength: 120 }
+        links:
+          type: array
+          maxItems: 5
+          items: { $ref: "#/components/schemas/ProfileLink" }
+    ProfileLink:
+      type: object
+      required: [label, url]
+      properties:
+        label: { type: string, minLength: 1, maxLength: 32 }
+        url: { type: string, format: uri, maxLength: 2048 }
     AgeState: { type: string, enum: [not_required, required, pending, verified, failed] }
     AppAccessState:
       type: object

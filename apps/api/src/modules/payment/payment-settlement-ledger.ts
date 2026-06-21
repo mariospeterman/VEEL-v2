@@ -2,22 +2,18 @@ import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import type { StoredPaymentIntent } from "./types.js";
 
-const defaultPlatformFeeBps = 1000;
-
 export async function recordTipSupportSettlementLedger(
   transaction: postgres.TransactionSql,
   input: {
     paymentIntentId: string;
     actorUserId: string;
     creatorUserId: string;
-    amountMinor: number;
+    creatorAmountMinor: number;
+    platformFeeMinor: number;
     currency: StoredPaymentIntent["currency"];
     productType: "tip" | "support";
   }
 ): Promise<{ creatorAmountMinor: number; platformFeeMinor: number }> {
-  const platformFeeMinor = Math.floor((input.amountMinor * defaultPlatformFeeBps) / 10_000);
-  const creatorAmountMinor = input.amountMinor - platformFeeMinor;
-
   await transaction`
     insert into payment_ledger_entries (
       id,
@@ -36,7 +32,7 @@ export async function recordTipSupportSettlementLedger(
         'creator_earning',
         ${`creator:${input.creatorUserId}`},
         ${input.creatorUserId},
-        ${creatorAmountMinor},
+        ${input.creatorAmountMinor},
         ${input.currency},
         'credit'
       ),
@@ -46,7 +42,7 @@ export async function recordTipSupportSettlementLedger(
         'platform_fee',
         'platform',
         null,
-        ${platformFeeMinor},
+        ${input.platformFeeMinor},
         ${input.currency},
         'credit'
       )
@@ -71,15 +67,15 @@ export async function recordTipSupportSettlementLedger(
       ${transaction.json({
         productType: input.productType,
         creatorUserId: input.creatorUserId,
-        creatorAmountMinor,
-        platformFeeMinor
+        creatorAmountMinor: input.creatorAmountMinor,
+        platformFeeMinor: input.platformFeeMinor
       })}
     )
   `;
 
   return {
-    creatorAmountMinor,
-    platformFeeMinor
+    creatorAmountMinor: input.creatorAmountMinor,
+    platformFeeMinor: input.platformFeeMinor
   };
 }
 
@@ -199,5 +195,4 @@ export async function recordReferralCommission(
     )
   `;
 }
-
 

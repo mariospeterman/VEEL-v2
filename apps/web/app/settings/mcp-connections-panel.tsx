@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { ApiMutationError, revokeMcpConnection } from "@/api-mutations";
+import { revokeMcpConnection } from "@/api-mutations";
 import type { ApiResult, McpConnectionPage } from "@/api-client";
-import { mapApiFailure } from "@/api-errors";
+import { mapApiFailure, safeMutationMessage } from "@/api-errors";
 
 export function McpConnectionsPanel({ connections }: { connections: ApiResult<McpConnectionPage> }) {
   const [revokingId, setRevokingId] = useState<string | null>(null);
@@ -27,7 +27,7 @@ export function McpConnectionsPanel({ connections }: { connections: ApiResult<Mc
       await revokeMcpConnection(connectionId);
       setRevokedIds((current) => new Set([...current, connectionId]));
     } catch (error) {
-      setMessage(error instanceof ApiMutationError ? error.message : "MCP connector revocation failed.");
+      setMessage(safeMutationMessage(error, "MCP connector revocation"));
     } finally {
       setRevokingId(null);
     }

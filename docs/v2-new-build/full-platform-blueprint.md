@@ -78,7 +78,7 @@ Providers
   Helius for confirmed payment/access evidence
   Bunny Stream/CDN/TUS for VOD
   Livepeer for live/replay
-  Yoti/Sumsub/Veriff/Persona age/KYC waterfall
+  Didit/Yoti/EUDI/Scytales reusable age assurance, Persona/Didit light fallback, Sumsub/Veriff creator compliance escalation
   wallet funding path for user-owned wallets
   email/push provider
 ```
@@ -89,7 +89,7 @@ Providers
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                               Next.js PWA                                   │
 │                                                                             │
-│  Landing/Enter   Age Gate   App Shell   Home/Bits   Media Viewer            │
+│  Landing/Login   Age Gate   App Shell   Home/Bits   Media Viewer            │
 │  Create/Edit     Live Room  Messages    Profile     Activity/Wallet         │
 │  Mutuals         Event Access AI Helper   Admin Gate  Settings              │
 │                                                                             │
@@ -150,7 +150,7 @@ Frontend never computes final access, final commission, final pass state, final 
 
 | Area | V2 docs | Backend module | Frontend surface | Providers |
 | --- | --- | --- | --- | --- |
-| Landing/onboarding | `landing-page-gsap.md`, `embedded-wallet-onboarding.md` | auth, age, wallet | landing, enter, onboarding | Supabase Auth, wallet provider, funding path |
+| Landing/onboarding | `frontend/design-system.md`, `frontend/component-map.md`, `embedded-wallet-onboarding.md` | auth, age, wallet | landing, enter, onboarding | Supabase Auth, wallet provider, funding path |
 | App shell/navigation/gestures | `native-ui-ux-screens.md`, `frontend-architecture.md` | profile/session policy | app shell, nav, gesture layer | none |
 | Home/Bits/media viewer | `product-flows.md`, `native-ui-ux-screens.md`, `recommendation-discovery.md`, `frontend/component-map.md` | content, recommendation, engagement, access | Home, Bits, media viewer | Bunny/Livepeer playback |
 | Create/Edit media | `product-flows.md`, `media-live-providers.md`, `frontend/component-map.md` | content, media, moderation | Create/Edit | Bunny TUS, Livepeer, moderation |
@@ -169,7 +169,7 @@ Frontend never computes final access, final commission, final pass state, final 
 | DAC7/DAC8/VAT | `compliance/dac7-dac8-vat-system.md` | compliance, receipts, invoices, exports | admin compliance | Supabase Postgres, counsel-reviewed exports |
 | AI/MCP | `safety-admin-ai.md`, `ai-mcp-use-cases.md` | MCP connections, scopes, tools, permissions, audit | Capability-gated assistant/admin AI | Secure MCP connection layer first; external clients bring LLMs |
 | Admin/ops | `admin-operations-dashboard.md`, `deployment-topology.md` | admin, audit, ops diagnostics | admin app | all providers via sanitized diagnostics |
-| Adult compliance/age/KYC | `compliance/*`, `providers/identity-provider-wiring.md` | age, KYC/KYB, audit | age gate, creator earning/tax setup | Yoti/Sumsub/Veriff/Persona |
+| Adult compliance/age/KYC | `compliance/*`, `providers/identity-provider-wiring.md` | age, KYC/KYB, audit | age gate, creator earning/tax setup | Didit/Yoti/EUDI/Scytales, Persona, Sumsub/Veriff for creator compliance |
 | Security/content protection | `providers/content-protection.md`, `safety-admin-ai.md` | access policy, signed playback | safe media resources | Bunny, Livepeer |
 | Deployment/ops | `deployment-topology.md`, `slice-workflow.md` | API/worker/observability | health/admin views | Supabase, providers, telemetry |
 
@@ -294,8 +294,9 @@ Live:
   Livepeer
 
 Age/KYC:
-  Yoti primary candidate
-  Sumsub/Veriff/Persona fallback candidates
+  Didit/Yoti/EUDI/Scytales reusable age candidates
+  Persona/Didit light fallback candidates
+  Sumsub/Veriff creator compliance fallback candidates
 
 Realtime:
   Supabase Realtime for selected messages/notifications/live/activity events

@@ -9,6 +9,15 @@ export interface PaymentIntentRow {
   state: StoredPaymentIntent["state"];
   reference_address: string;
   treasury_wallet: string;
+  settlement_kind: StoredPaymentIntent["settlementKind"];
+  buyer_wallet: string | null;
+  creator_wallet: string | null;
+  platform_fee_wallet: string | null;
+  allocation_wallet: string | null;
+  total_amount_minor: number | null;
+  creator_amount_minor: number | null;
+  platform_fee_amount_minor: number | null;
+  allocation_amount_minor: number | null;
   solana_cluster: StoredPaymentIntent["solanaCluster"];
   expires_at: Date;
   request_hash: string;
@@ -40,6 +49,15 @@ export function toStoredPaymentIntent(row: PaymentIntentRow): StoredPaymentInten
     refundPolicy,
     referenceAddress: row.reference_address,
     treasuryWallet: row.treasury_wallet,
+    settlementKind: row.settlement_kind ?? "creator_split",
+    buyerWallet: row.buyer_wallet,
+    creatorWallet: row.creator_wallet ?? row.treasury_wallet,
+    platformFeeWallet: row.platform_fee_wallet ?? row.treasury_wallet,
+    allocationWallet: row.allocation_wallet,
+    totalAmountMinor: Number(row.total_amount_minor ?? row.amount_minor),
+    creatorAmountMinor: Number(row.creator_amount_minor ?? row.amount_minor),
+    platformFeeAmountMinor: Number(row.platform_fee_amount_minor ?? 0),
+    allocationAmountMinor: Number(row.allocation_amount_minor ?? 0),
     solanaCluster: row.solana_cluster,
     expiresAt: row.expires_at,
     requestHash: row.request_hash,

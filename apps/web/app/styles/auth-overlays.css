@@ -1,0 +1,120 @@
+@layer components {
+  .auth-access-dialog-backdrop,
+  .auth-modal-backdrop,
+  .auth-help-dialog-backdrop,
+  .auth-mobile-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 120;
+    display: grid;
+    background: rgba(0, 0, 0, 0.62);
+    backdrop-filter: blur(6px);
+  }
+
+  .auth-access-dialog-backdrop,
+  .auth-modal-backdrop,
+  .auth-help-dialog-backdrop {
+    place-items: center;
+    padding: 20px;
+  }
+
+  .auth-access-dialog,
+  .auth-legal-modal,
+  .auth-help-dialog {
+    display: grid;
+    width: min(100%, 560px);
+    max-height: min(720px, calc(100dvh - 40px));
+    gap: 14px;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--panel);
+    color: var(--foreground);
+    padding: 18px;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
+  }
+
+  .auth-access-dialog-header,
+  .auth-legal-modal header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .auth-access-dialog-header h2,
+  .auth-legal-modal h2,
+  .auth-help-dialog h2 {
+    margin: 0;
+    color: var(--foreground);
+    font-size: 24px;
+    line-height: 1.05;
+  }
+
+  .auth-help-dialog {
+    position: relative;
+  }
+
+  .auth-help-dialog-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+  }
+
+  .auth-help-dialog-copy,
+  .auth-legal-modal p {
+    display: grid;
+    gap: 10px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .auth-mobile-menu {
+    position: fixed;
+    top: calc(66px + env(safe-area-inset-top));
+    right: 14px;
+    display: grid;
+    width: min(calc(100vw - 28px), 330px);
+    max-height: calc(100dvh - 86px - env(safe-area-inset-top));
+    align-content: start;
+    gap: 10px;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background:
+      radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 13rem),
+      color-mix(in srgb, var(--background) 92%, transparent);
+    color: var(--foreground);
+    padding: 12px;
+    box-shadow: 0 28px 88px rgba(0, 0, 0, 0.42);
+    backdrop-filter: blur(24px);
+  }
+
+  .auth-mobile-menu a {
+    display: grid;
+    min-height: 42px;
+    align-items: center;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--panel) 50%, transparent);
+    color: var(--foreground);
+    padding: 9px 12px;
+    font-weight: 760;
+  }
+
+  .auth-mobile-menu div {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .auth-mobile-menu div a {
+    min-height: 38px;
+    justify-items: center;
+    font-size: 12px;
+  }
+
+  .auth-mobile-menu-close {
+    justify-self: end;
+  }
+}

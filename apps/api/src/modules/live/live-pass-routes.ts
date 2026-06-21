@@ -48,16 +48,18 @@ export async function registerLivePassRoutes(
       return reply.code(400).send(validationResponse("durationMinutes must be 30, 60, or 180"));
     }
 
-    if (!app.config.PAYMENT_PLATFORM_TREASURY_WALLET) {
+    const platformFeeWallet = app.config.PAYMENT_PLATFORM_FEE_WALLET ?? app.config.PAYMENT_PLATFORM_TREASURY_WALLET;
+
+    if (!platformFeeWallet) {
       return reply
         .code(503)
-        .send(serviceUnavailableResponse("Payment treasury wallet is not configured"));
+        .send(serviceUnavailableResponse("Payment platform fee wallet is not configured"));
     }
 
     const roomId = (request.params as { roomId?: string }).roomId ?? "";
 
     try {
-      assertSolanaAddress(app.config.PAYMENT_PLATFORM_TREASURY_WALLET);
+      assertSolanaAddress(platformFeeWallet);
       await options.sessionRepository.ensureUserForSupabaseId(access.supabaseUserId);
       const room = await options.liveRepository.findRoom({
         supabaseUserId: access.supabaseUserId,
@@ -90,7 +92,11 @@ export async function registerLivePassRoutes(
         amountMinor: passOption.amountMinor,
         currency: "SOL",
         solanaCluster: app.config.SOLANA_CLUSTER,
-        treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET,
+        treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET ?? platformFeeWallet,
+        platformFeeWallet,
+        platformFeeBps: app.config.PAYMENT_PLATFORM_FEE_BPS,
+        settlementKind: "creator_split",
+        creatorUserId: room.creator.id,
         referenceAddress: createSolanaReferenceAddress(),
         expiresAt: new Date(Date.now() + paymentIntentTtlMs),
         referralToken: null

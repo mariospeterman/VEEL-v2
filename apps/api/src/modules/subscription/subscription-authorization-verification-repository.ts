@@ -18,20 +18,34 @@ export async function findAuthorizationVerificationContext(
       authorization_intent_id: string;
       setup_reference: string;
       collector_address: string | null;
+      subscriber_wallet: string | null;
       token_mint: string | null;
       token_program: "spl_token" | "token_2022" | null;
       amount_minor: string | number;
       period_days: number;
+      provider: string;
+      plan_id: string;
+      plan_pda: string | null;
+      subscription_pda: string | null;
+      merchant_wallet: string | null;
+      expires_at: Date;
     }[]
   >`
     select
       sai.id as authorization_intent_id,
       sai.setup_reference,
       s.collector_address,
+      s.subscriber_wallet,
       sp.token_mint,
       sp.token_program,
       sp.amount_minor,
-      sp.period_days
+      sp.period_days,
+      coalesce(s.provider, sp.provider, 'official_solana_subscription_program') as provider,
+      sp.id as plan_id,
+      coalesce(s.plan_pda, sp.plan_pda) as plan_pda,
+      s.subscription_pda,
+      coalesce(s.merchant_wallet, sp.merchant_wallet) as merchant_wallet,
+      sai.expires_at
     from subscription_authorization_intents sai
     join subscriptions s on s.id = sai.subscription_id
     join subscription_plans sp on sp.id = s.plan_id
@@ -49,10 +63,17 @@ export async function findAuthorizationVerificationContext(
         setupReference: row.setup_reference,
         delegationProgramId: input.delegationProgramId,
         collectorAddress: row.collector_address,
+        subscriberWallet: row.subscriber_wallet,
         tokenMint: row.token_mint,
         tokenProgram: row.token_program,
         amountMinor: Number(row.amount_minor),
-        periodDays: row.period_days
+        periodDays: row.period_days,
+        provider: row.provider,
+        planId: row.plan_id,
+        planPda: row.plan_pda,
+        subscriptionPda: row.subscription_pda,
+        merchantWallet: row.merchant_wallet,
+        expiresAt: row.expires_at
       }
     : null;
 }
@@ -81,6 +102,7 @@ export async function submitAuthorization(
         state = case when ${input.verification.verified} then 'verified' else 'submitted' end,
         submitted_signature = ${input.body.signature},
         verified_signature = case when ${input.verification.verified} then ${input.body.signature} else verified_signature end,
+        failure_reason = case when ${input.verification.verified} then null else ${input.verification.failureCode ?? null} end,
         submitted_at = coalesce(submitted_at, now()),
         verified_at = case when ${input.verification.verified} then now() else verified_at end
       from subscriptions s
@@ -102,6 +124,15 @@ export async function submitAuthorization(
         s.revoked_at,
         s.authority_address,
         s.delegation_address,
+        s.subscriber_wallet,
+        s.provider,
+        s.program_id,
+        s.token_mint,
+        s.amount_atomic,
+        s.period_seconds,
+        s.plan_pda,
+        s.subscription_pda,
+        s.merchant_wallet,
         s.creator_user_id,
         p.handle as creator_handle,
         p.display_name as creator_display_name,
@@ -155,6 +186,14 @@ async function activateSubscriptionAfterVerification(
       authority_address = ${input.body.authorityAddress},
       delegation_address = ${input.body.delegationAddress},
       subscriber_token_account = ${input.body.subscriberTokenAccount},
+      user_token_account = ${input.body.subscriberTokenAccount},
+      subscription_authority_pda = ${input.body.authorityAddress},
+      subscription_pda = coalesce(subscription_pda, ${input.verification.facts?.subscriptionPda ?? null}),
+      plan_pda = coalesce(plan_pda, ${input.verification.facts?.planPda ?? null}),
+      setup_signature = ${input.body.signature},
+      verified_signature = case when ${input.verification.verified} then ${input.body.signature} else verified_signature end,
+      verified_at = case when ${input.verification.verified} then now() else verified_at end,
+      failure_reason = case when ${input.verification.verified} then null else ${input.verification.failureCode ?? null} end,
       current_period_starts_at = case when ${input.verification.verified} then coalesce(current_period_starts_at, now()) else current_period_starts_at end,
       current_period_ends_at = case when ${input.verification.verified} then coalesce(current_period_ends_at, now() + (${row.plan_period_days} || ' days')::interval) else current_period_ends_at end,
       next_collection_at = case when ${input.verification.verified} then coalesce(next_collection_at, now() + (${row.plan_period_days} || ' days')::interval) else next_collection_at end,

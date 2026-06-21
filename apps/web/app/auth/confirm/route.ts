@@ -20,8 +20,9 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  redirectUrl.pathname = "/enter";
+  redirectUrl.pathname = "/";
   redirectUrl.search = "";
+  redirectUrl.searchParams.set("mode", "login");
   redirectUrl.searchParams.set("error", "auth_confirm_failed");
   return NextResponse.redirect(redirectUrl);
 }

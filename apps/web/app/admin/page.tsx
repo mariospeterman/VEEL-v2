@@ -12,7 +12,7 @@ export default async function AdminPage() {
     <main className="min-h-screen bg-(--background) text-(--foreground)">
       <nav className="mx-auto flex w-full max-w-7xl items-center justify-between border-b border-(--line) px-5 py-4">
         <a className="text-lg font-semibold tracking-normal" href="/">
-          VEEL
+          WeVid
         </a>
         <div className="rounded border border-(--line) px-3 py-1 text-xs font-medium text-(--muted)">
           Admin

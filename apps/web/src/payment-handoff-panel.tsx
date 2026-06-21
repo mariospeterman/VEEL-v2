@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import {
-  ApiMutationError,
   getPaymentTransactionRequest,
   type PaymentIntent,
   type TransactionRequest
 } from "@/api-mutations";
+import { safeMutationMessage } from "@/api-errors";
 
 interface PaymentHandoffPanelProps {
   createIntent: () => Promise<PaymentIntent | null>;
@@ -103,13 +103,5 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 function errorMessage(error: unknown) {
-  if (error instanceof ApiMutationError) {
-    return error.message;
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "Payment could not be started.";
+  return safeMutationMessage(error, "Payment");
 }

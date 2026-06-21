@@ -18,17 +18,34 @@ export const serverEnvSchema = z.object({
   SOLANA_NETWORK: z.enum(["solana:devnet", "solana:mainnet"]).default("solana:devnet"),
   SOLANA_RPC_URL: z.string().url().default("https://api.devnet.solana.com"),
   PAYMENT_DEFAULT_ASSET: z.enum(["SOL"]).default("SOL"),
+  PAYMENT_PLATFORM_FEE_WALLET: z.string().optional(),
+  PAYMENT_PLATFORM_FEE_BPS: z.coerce.number().int().min(0).max(10_000).default(1_000),
   PAYMENT_PLATFORM_TREASURY_WALLET: z.string().optional(),
   SOLANA_SUBSCRIPTION_DELEGATION_PROGRAM_ID: z
     .string()
     .default("De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44"),
   SOLANA_SUBSCRIPTION_USDC_MINT: z.string().optional(),
   SOLANA_SUBSCRIPTION_COLLECTOR_WALLET: z.string().optional(),
+  SUBSCRIPTIONS_ENABLED: z.coerce.boolean().default(false),
+  SUBSCRIPTIONS_PROVIDER: z
+    .enum(["disabled", "official_solana_subscription_program", "mock_subscription_provider_dev_only"])
+    .default("disabled"),
+  SUBSCRIPTIONS_SOLANA_PROGRAM_ID: z
+    .string()
+    .default("De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44"),
+  SUBSCRIPTIONS_SOLANA_NETWORK: z.enum(["devnet", "mainnet-beta"]).default("devnet"),
+  SUBSCRIPTIONS_SOLANA_RPC_URL: z.string().url().optional(),
+  SUBSCRIPTIONS_SUPPORTED_MINTS: z.string().optional(),
+  SUBSCRIPTIONS_DEFAULT_MINT: z.string().optional(),
+  SUBSCRIPTIONS_COLLECTOR_WALLET: z.string().optional(),
+  SUBSCRIPTIONS_MERCHANT_WALLET: z.string().optional(),
+  SUBSCRIPTIONS_REQUIRE_ONCHAIN_VERIFICATION: z.coerce.boolean().default(true),
   HELIUS_API_KEY: z.string().optional(),
   HELIUS_WEBHOOK_SECRET: z.string().optional(),
   HELIUS_CLUSTER: z.enum(["devnet", "mainnet-beta"]).default("devnet"),
   ONRAMP_PROVIDER: z.enum(["disabled", "coinbase"]).default("disabled"),
   ONRAMP_PURCHASE_CURRENCY: z.enum(["SOL", "USDC"]).default("SOL"),
+  WALLET_AUTH_SESSION_TTL_SECONDS: z.coerce.number().int().min(300).max(2_592_000).default(604_800),
   COINBASE_CDP_API_KEY_ID: z.string().optional(),
   COINBASE_CDP_API_KEY_SECRET: z.string().optional(),
   COINBASE_CDP_API_BASE_URL: z.string().url().default("https://api.cdp.coinbase.com"),
@@ -46,6 +63,13 @@ export const serverEnvSchema = z.object({
     .enum(["yoti_digital_id", "yoti", "sumsub", "veriff", "persona"])
     .optional(),
   AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: z.coerce.boolean().default(false),
+  AGE_VERIFICATION_PROVIDER_SELECTION_ENABLED: z.coerce.boolean().default(true),
+  AGE_VERIFICATION_PREFER_REUSABLE_CREDENTIALS: z.coerce.boolean().default(true),
+  AGE_VERIFICATION_REUSABLE_PROVIDERS: z.string().default("didit_reusable,yoti_digital_id,eudi_wallet,scytales"),
+  AGE_VERIFICATION_FALLBACK_PROVIDERS: z.string().default("didit_age_estimation,persona_document"),
+  AGE_VERIFICATION_FALLBACK_ORDER: z.string().default("reusable_credential,age_estimation,free_document,portable_credential,database_non_doc,document"),
+  AGE_VERIFICATION_REVERIFY_MODE: z.enum(["risk_or_expiry", "fixed_interval"]).default("risk_or_expiry"),
+  AGE_VERIFICATION_REVERIFY_DAYS: z.coerce.number().int().min(1).max(3650).default(365),
   SUMSUB_APP_TOKEN: z.string().optional(),
   SUMSUB_SECRET_KEY: z.string().optional(),
   SUMSUB_WEBHOOK_SECRET: z.string().optional(),
@@ -71,7 +95,18 @@ export const serverEnvSchema = z.object({
   TRANSACTIONAL_EMAIL_FROM: z.string().optional(),
   TRANSACTIONAL_EMAIL_REPLY_TO: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
-  TRANSACTIONAL_EMAIL_SMOKE_TO: z.string().email().optional()
+  TRANSACTIONAL_EMAIL_SMOKE_TO: z.string().email().optional(),
+  MCP_ENABLED: z.coerce.boolean().default(false),
+  MCP_PUBLIC_BASE_URL: z.string().url().optional(),
+  MCP_AUTH_MODE: z.enum(["oauth", "scoped_token"]).default("oauth"),
+  MCP_ALLOWED_CLIENTS: z.string().default(""),
+  MCP_REQUIRE_OAUTH: z.coerce.boolean().default(true),
+  MCP_ALLOW_STATIC_TOKENS_DEV: z.coerce.boolean().default(false),
+  MCP_TOOL_CALL_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).max(300).default(30),
+  MCP_CONNECTION_TOKEN_TTL_SECONDS: z.coerce.number().int().min(300).max(31_536_000).default(86_400),
+  MCP_OAUTH_AUTH_CODE_TTL_SECONDS: z.coerce.number().int().min(60).max(900).default(600),
+  MCP_OAUTH_ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(300).max(86_400).default(3_600),
+  MCP_AUDIT_RETENTION_DAYS: z.coerce.number().int().min(30).max(2_555).default(365)
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

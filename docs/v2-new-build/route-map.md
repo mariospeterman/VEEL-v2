@@ -38,19 +38,15 @@ Rules:
 
 | Route | Phase | Auth | Age | Wallet | Owner | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| `/` | MVP | no | no | no | web/landing | Public landing, attribution capture, teaser-safe marketing. |
-| `/enter` | MVP | partial | no | no | onboarding | Wallet-first embedded/native wallet path, optional email recovery/login, profile setup, age handoff. |
+| `/` | MVP | no | no | no | web/landing | Public landing, attribution capture, teaser-safe marketing, login, and onboarding story surface. |
 | `/age` | MVP | yes | pending | yes | onboarding | Third-party age verification session/status. |
 | `/app/home` | MVP | yes | yes | yes | home | Recommended/Following/NSFW/SFW feed. |
-| `/app/bits` | MVP | yes | yes | yes | media | Reels-style Bit feed. |
-| `/app/discover` | MVP | yes | yes | yes | discover | Search, hashtags, creators, Event Access; not a redirect alias. |
-| `/create` | MVP | yes | yes | yes | create | Upload/capture, labels, event attach, monetisation, publish. |
+| `/app/bits` | MVP | yes | yes | yes | media/discover | Reels-style Bit and discovery surface for content, creators, live rooms, and Event Access. |
+| `/app/create` | MVP | yes | yes | yes | create | Upload/capture, labels, event attach, monetisation, publish. |
 | `/app/messages` | Phase 2 | yes | yes | yes | messages | Inbox, paid messages, Mutual/Event Access contexts. |
 | `/app/profile` | MVP | yes | yes | yes | profile | Own profile, wallet/activity/settings links. |
-| `/app/profile/:handle` | MVP | yes | yes | yes | profile | Public creator/user profile. |
-| `/app/media/:id` | MVP | yes | yes | yes | media | Viewport-locked media viewer. |
+| `/profile/:handle` | MVP | yes | yes | yes | profile | Public creator/user profile. `/app/profile/:handle` redirects here until the viewer profile route is moved under the app shell. |
 | `/live/:id` | Phase 2 | yes | yes | yes | live | Live room/replay viewer, pass/chat state. |
-| `/app/stream/:id` | migration | yes | yes | yes | live | Compatibility alias until live routes replace stream routes. |
 | `/app/activity` | Phase 2 | yes | yes | yes | activity | Purchases, unlocks, support, passes, wallet, referrals, receipts. |
 | `/app/wallet` | MVP | yes | yes | yes | wallet | Wallet address, top-up, external link, receipts. |
 | `/app/studio` | Phase 2 | yes | yes | yes | organizations | Studio and Enterprise organization dashboards for current members. |
@@ -58,11 +54,9 @@ Rules:
 | `/passes` | Phase 3 | yes | yes | yes | events | Canonical My Passes and QR/access receipt list. |
 | `/passes/:id` | Phase 3 | yes | yes | yes | events | Pass QR/details/check-in status. |
 | `/event-access/:id` | Phase 3 | yes | yes | yes | events | Canonical Event detail/Event Access sheet. |
-| `/app/events/:id`, `/events/:id` | migration | yes | yes | yes | events | Compatibility aliases that redirect to canonical Event Access routes. Ticket-named launch routes are removed. |
 | `/mutuals/activate` | Phase 4 | yes | yes | yes | mutuals | Consent, safety, active-Mutual limits. |
 | `/mutuals/feed` | Phase 4 | yes | yes | yes | mutuals | Explicit Mutuals feed only. |
 | `/mutuals` | Phase 4 | yes | yes | yes | mutuals | Canonical Mutual list and stale/archived state. |
-| `/mutuals/mutuals` | migration | yes | yes | yes | mutuals | Compatibility alias that redirects to canonical Mutuals routes. Dating-named launch routes are removed. |
 | `/app/assistant` | Phase 5 | yes | yes | yes | ai | Capability-gated AI/MCP surface; not primary mobile nav. Permission-scoped tools require confirmation states and audit visibility. |
 | `/admin` | MVP internal | admin | yes | yes | admin | Ops dashboard, role-gated. |
 | `/admin/*` | phased | admin | yes | yes | admin | Users, content, reports, payments, Event Access, Mutuals, providers, compliance. |
@@ -76,6 +70,14 @@ Rules:
 | `/admin/referrals/partner-campaigns` | Phase 2 | admin | yes | yes | admin | Partner campaign governance. |
 | `/admin/tier-waivers` | Phase 2 | admin | yes | yes | admin | Partner/free tier waiver policy. |
 | `/admin/organizations` | Phase 2 | admin | yes | yes | admin | Enterprise organization/KYB/RBAC administration. |
+
+Removed route owners:
+
+- `/enter` and `/enter/wallet`: folded into the landing onboarding story and `/app/wallet` remediation surface.
+- `/activity`, `/assistant`, `/create`, `/discover`, `/messages`, `/settings`, `/studio`, `/subscriptions`, `/wallet`: removed as route owners. Canonical authenticated pages live under `/app/*`.
+- `/app/media/:id`, `/app/stream/:id`, `/app/events/:id`, `/events/:id`: removed as route owners until implemented. Current canonical detail routes are `/content/:id`, `/live/:id`, and `/event-access/:id`.
+- `/mutuals/mutuals`: removed historical alias. Canonical Mutuals routes are `/mutuals` and `/mutuals/feed`.
+- `/profile`: removed as an own-profile route owner. `/app/profile` is the authenticated own-profile route; `/profile/:handle` remains public profile.
 
 ## API Route Groups
 

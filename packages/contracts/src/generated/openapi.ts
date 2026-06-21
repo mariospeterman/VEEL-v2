@@ -2673,6 +2673,7 @@ export interface components {
             user: components["schemas"]["User"];
             bio?: string | null;
             locationLabel?: string | null;
+            links?: components["schemas"]["ProfileLink"][];
             stats: components["schemas"]["CreatorProfileStats"];
             monetisation: components["schemas"]["PublicCreatorMonetisation"];
             recentContent: components["schemas"]["ContentItem"][];
@@ -2751,8 +2752,16 @@ export interface components {
         UpdateProfileRequest: {
             handle: string;
             displayName: string;
+            /** Format: uri */
+            avatarUrl?: string | null;
             bio?: string;
             locationLabel?: string;
+            links?: components["schemas"]["ProfileLink"][];
+        };
+        ProfileLink: {
+            label: string;
+            /** Format: uri */
+            url: string;
         };
         /** @enum {string} */
         AgeState: "not_required" | "required" | "pending" | "verified" | "failed";

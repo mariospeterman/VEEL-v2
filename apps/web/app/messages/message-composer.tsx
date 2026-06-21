@@ -11,6 +11,7 @@ import {
   type PaymentIntent,
   type TransactionRequest
 } from "@/api-mutations";
+import { safeMutationMessage } from "@/api-errors";
 
 interface MessageComposerProps {
   conversation: Conversation;
@@ -158,13 +159,5 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 function errorMessage(error: unknown) {
-  if (error instanceof ApiMutationError) {
-    return error.message;
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "Message action could not be completed.";
+  return safeMutationMessage(error, "Message action");
 }

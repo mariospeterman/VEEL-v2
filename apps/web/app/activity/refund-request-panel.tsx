@@ -2,10 +2,10 @@
 
 import { useState, useTransition } from "react";
 import {
-  ApiMutationError,
   createRefundDisputeRequest,
   type CreateRefundDisputeRequest
 } from "@/api-mutations";
+import { safeMutationMessage } from "@/api-errors";
 
 interface RefundRequestPanelProps {
   paymentIntentId: string;
@@ -48,7 +48,7 @@ export function RefundRequestPanel({
         const created = await createRefundDisputeRequest(body);
         setMessage(`Review request opened: ${created.state}`);
       } catch (error) {
-        setMessage(error instanceof ApiMutationError ? error.message : "Request could not be opened.");
+        setMessage(safeMutationMessage(error, "Review request"));
       }
     });
   }

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ApiMutationError, approveMcpConsentRequest, denyMcpConsentRequest } from "@/api-mutations";
+import { approveMcpConsentRequest, denyMcpConsentRequest } from "@/api-mutations";
+import { safeMutationMessage } from "@/api-errors";
 
 type DecisionState = "idle" | "approving" | "denying" | "failed";
 
@@ -22,7 +23,7 @@ export function McpConsentDecisionPanel({ requestId }: { requestId: string }) {
       window.location.assign(result.redirectUri);
     } catch (error) {
       setState("failed");
-      setMessage(error instanceof ApiMutationError ? error.message : "MCP consent decision failed.");
+      setMessage(safeMutationMessage(error, "MCP consent decision"));
     }
   }
 

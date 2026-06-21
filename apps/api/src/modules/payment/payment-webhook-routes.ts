@@ -5,6 +5,7 @@ import { PaymentRepositoryConfigurationError } from "./payment-repository.js";
 import type { WebhookReceipt } from "./types.js";
 import type { RegisterPaymentRoutesOptions } from "./payment-route-shared.js";
 import { serviceUnavailableResponse } from "./payment-route-shared.js";
+import { paymentMemo } from "./solana-payment.js";
 
 export async function registerSolanaIndexerWebhookRoute(
   app: FastifyInstance,
@@ -56,8 +57,17 @@ export async function registerSolanaIndexerWebhookRoute(
         const settlement = await options.settlementVerifier.verifyNativeSolTransfer({
           signature: event.signature,
           referenceAddress: match.intent.referenceAddress,
+          memo: paymentMemo(match.intent.id),
+          settlementKind: match.intent.settlementKind,
+          buyerWallet: match.intent.buyerWallet,
+          creatorWallet: match.intent.creatorWallet,
+          platformFeeWallet: match.intent.platformFeeWallet,
+          allocationWallet: match.intent.allocationWallet,
           treasuryWallet: match.intent.treasuryWallet,
-          amountMinor: match.intent.amountMinor
+          totalAmountMinor: match.intent.totalAmountMinor,
+          creatorAmountMinor: match.intent.creatorAmountMinor,
+          platformFeeAmountMinor: match.intent.platformFeeAmountMinor,
+          allocationAmountMinor: match.intent.allocationAmountMinor
         });
 
         await options.paymentRepository.recordSubmission({
