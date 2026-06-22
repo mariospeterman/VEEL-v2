@@ -9,6 +9,7 @@ import {
   normalizeAgeWebhook
 } from "./age-webhook-adapter.js";
 import {
+  AgeProviderHttpError,
   AgeProviderIntegrationPendingError,
   AgeProviderUnavailableError
 } from "./age-provider-waterfall.js";
@@ -181,8 +182,10 @@ export async function registerAgeRoutes(
     } catch (error) {
       if (
         error instanceof AgeProviderUnavailableError ||
-        error instanceof AgeProviderIntegrationPendingError
+        error instanceof AgeProviderIntegrationPendingError ||
+        error instanceof AgeProviderHttpError
       ) {
+        request.log.warn({ error }, "Age verification provider is unavailable");
         return reply.code(503).send({
           code: "service_unavailable",
           message: "Age verification provider is not configured"

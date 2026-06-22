@@ -3,6 +3,7 @@
 import { Expand, ExternalLink, KeyRound, Languages, LogIn, MoreVertical, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { safeMutationMessage } from "@/api-errors";
+import { createAgeSession } from "@/api-mutations";
 import { createSupabaseBrowserClient } from "@/supabase/client";
 import type { WebAuthState } from "@/supabase/auth-state";
 import { EmbeddedWalletLoginButton } from "@/wallet/embedded-wallet-login";
@@ -634,6 +635,9 @@ function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
 }
 
 function OnboardingAgeStep() {
+  const [startingProvider, setStartingProvider] = useState<"reusable_first" | "persona" | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const ageWaterfall = [
     {
       eyebrow: "Best first",
@@ -641,7 +645,7 @@ function OnboardingAgeStep() {
       copy: "Use an existing over-18 credential or create one, then return here to pass the age gate.",
       providers: [
         { action: "Use", label: "Didit ID", href: "https://didit.me/" },
-        { action: "Use", label: "Yoti ID", href: "https://www.yoti.com/digital-id/" },
+        { action: "Start", label: "Yoti ID", providerPreference: "reusable_first" as const },
         { action: "Use", label: "EUDI wallet", href: "https://digital-strategy.ec.europa.eu/en/policies/eu-age-verification" },
         { action: "Use", label: "Scytales", href: "https://www.scytales.com/age-verification-connector" }
       ]
@@ -651,11 +655,27 @@ function OnboardingAgeStep() {
       title: "Light age check",
       copy: "Use free-tier age estimation or document proof only when reusable proof is not available.",
       providers: [
-        { action: "Check", label: "Didit" },
-        { action: "Check", label: "Persona" }
+        { action: "Check", label: "Didit", href: "https://didit.me/" },
+        { action: "Check", label: "Persona", providerPreference: "persona" as const }
       ]
     }
   ];
+
+  async function startAgeSession(providerPreference: "reusable_first" | "persona") {
+    setStartingProvider(providerPreference);
+    setMessage(null);
+    setError(null);
+
+    try {
+      const session = await createAgeSession({ providerPreference });
+      setMessage(`Continue with ${session.provider}. WeVid only stores the signed result.`);
+      window.location.assign(session.launchUrl);
+    } catch (reason) {
+      setError(safeMutationMessage(reason, "Age verification"));
+    } finally {
+      setStartingProvider(null);
+    }
+  }
 
   return (
     <div className="landing-age-waterfall" aria-label="Age verification providers">
@@ -681,7 +701,17 @@ function OnboardingAgeStep() {
                   <ExternalLink aria-hidden="true" size={14} />
                 </a>
               ) : (
-                <button className="landing-provider-link" key={provider.label} type="button">
+                <button
+                  className="landing-provider-link"
+                  disabled={!("providerPreference" in provider) || startingProvider === provider.providerPreference}
+                  key={provider.label}
+                  onClick={() => {
+                    if ("providerPreference" in provider) {
+                      void startAgeSession(provider.providerPreference);
+                    }
+                  }}
+                  type="button"
+                >
                   {content}
                 </button>
               );
@@ -693,6 +723,8 @@ function OnboardingAgeStep() {
         <span>Creator KYC/KYB is separate.</span>
         Sumsub and Veriff stay as Studio/enterprise compliance fallbacks before creator publishing, payouts, or business workflows. They are not ordinary viewer onboarding.
       </div>
+      {message ? <p className="landing-auth-message">{message}</p> : null}
+      {error ? <p className="landing-auth-error">{error}</p> : null}
     </div>
   );
 }

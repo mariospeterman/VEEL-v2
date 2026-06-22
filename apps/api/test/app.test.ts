@@ -354,6 +354,199 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("starts a configured Yoti age session through the real provider adapter", async () => {
+    vi.stubEnv("AGE_VERIFICATION_DRIVER", "yoti_digital_id");
+    vi.stubEnv("YOTI_SDK_ID", "yoti-sdk-id");
+    vi.stubEnv("YOTI_API_TOKEN", "yoti-api-token");
+    vi.stubEnv("YOTI_API_BASE_URL", "https://age.yoti.example/api/v1");
+    vi.stubEnv("YOTI_LAUNCH_BASE_URL", "https://age.yoti.example");
+    vi.setSystemTime(new Date("2026-06-03T22:00:00.000Z"));
+    const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        fetchCalls.push(init ? { url, init } : { url });
+        return new Response(JSON.stringify({ session_id: "yoti-session-1" }), {
+          status: 200,
+          headers: {
+            "content-type": "application/json"
+          }
+        });
+      })
+    );
+    const createdPendingVerifications: CreatePendingAgeVerificationInput[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return null;
+        }
+      }),
+      ageRepository: {
+        async findLatestAgeStatusBySupabaseUserId() {
+          return {
+            state: "required",
+            provider: null
+          };
+        },
+        async createPendingAgeVerification(input) {
+          createdPendingVerifications.push(input);
+        },
+        async recordProviderWebhook() {
+          throw new Error("not implemented");
+        },
+        async updateVerificationFromWebhook() {
+          throw new Error("not implemented");
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/age/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "age-yoti-1"
+      },
+      payload: {
+        providerPreference: "reusable_first"
+      }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(201);
+    expect(response.json()).toEqual({
+      id: "yoti-session-1",
+      provider: "yoti",
+      launchUrl: "https://age.yoti.example?sessionId=yoti-session-1&sdkId=yoti-sdk-id",
+      expiresAt: "2026-06-03T22:15:00.000Z"
+    });
+    expect(fetchCalls[0]?.url).toBe("https://age.yoti.example/api/v1/sessions");
+    expect(fetchCalls[0]?.init?.method).toBe("POST");
+    expect(JSON.parse(String(fetchCalls[0]?.init?.body))).toMatchObject({
+      reference_id: "age-yoti-1",
+      notification_url: "http://localhost:4000/v1/webhooks/age/yoti"
+    });
+    expect(createdPendingVerifications).toMatchObject([
+      {
+        provider: "yoti",
+        providerReference: "yoti-session-1",
+        rule: "over_18"
+      }
+    ]);
+
+    await app.close();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("creates Persona and Veriff sessions through the real provider waterfall when explicitly selected", async () => {
+    vi.setSystemTime(new Date("2026-06-03T22:00:00.000Z"));
+    const personaFetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          data: {
+            id: "persona-inquiry-1",
+            attributes: {
+              "expires-at": "2026-06-04T22:00:00.000Z"
+            }
+          },
+          meta: {
+            "one-time-link": "https://withpersona.example/i/persona-inquiry-1"
+          }
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", personaFetch);
+    vi.stubEnv("AGE_VERIFICATION_DRIVER", "persona");
+    vi.stubEnv("PERSONA_API_KEY", "persona-api-key");
+    vi.stubEnv("PERSONA_TEMPLATE_ID", "persona-template-id");
+    vi.stubEnv("PERSONA_API_BASE_URL", "https://withpersona.example");
+
+    const personaApp = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return null;
+        }
+      }),
+      ageRepository: pendingAgeSessionRepository
+    });
+    await personaApp.ready();
+    const personaResponse = await personaApp.inject({
+      method: "POST",
+      url: "/v1/age/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "age-persona-1"
+      },
+      payload: {
+        providerPreference: "persona"
+      }
+    });
+
+    expect(personaResponse.statusCode, JSON.stringify(personaResponse.json())).toBe(201);
+    expect(personaResponse.json()).toMatchObject({
+      id: "persona-inquiry-1",
+      provider: "persona",
+      launchUrl: "https://withpersona.example/i/persona-inquiry-1"
+    });
+    await personaApp.close();
+    vi.unstubAllEnvs();
+
+    const veriffFetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          verification: {
+            id: "veriff-session-1",
+            url: "https://station.veriff.example/v/veriff-session-1"
+          }
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", veriffFetch);
+    vi.stubEnv("AGE_VERIFICATION_DRIVER", "veriff");
+    vi.stubEnv("VERIFF_API_KEY", "veriff-api-key");
+    vi.stubEnv("VERIFF_API_BASE_URL", "https://stationapi.veriff.example");
+
+    const veriffApp = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return null;
+        }
+      }),
+      ageRepository: pendingAgeSessionRepository
+    });
+    await veriffApp.ready();
+    const veriffResponse = await veriffApp.inject({
+      method: "POST",
+      url: "/v1/age/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "age-veriff-1"
+      },
+      payload: {
+        providerPreference: "veriff"
+      }
+    });
+
+    expect(veriffResponse.statusCode, JSON.stringify(veriffResponse.json())).toBe(201);
+    expect(veriffResponse.json()).toMatchObject({
+      id: "veriff-session-1",
+      provider: "veriff",
+      launchUrl: "https://station.veriff.example/v/veriff-session-1"
+    });
+
+    await veriffApp.close();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
   it("accepts a signed Sumsub age webhook and applies normalized verification state", async () => {
     vi.stubEnv("SUMSUB_WEBHOOK_SECRET", "sumsub-test-secret");
     const recordedEvents: unknown[] = [];
@@ -3031,6 +3224,7 @@ describe("buildApi", () => {
         MCP_OAUTH_AUTH_CODE_TTL_SECONDS: 600,
         MCP_OAUTH_ACCESS_TOKEN_TTL_SECONDS: 3600,
         MCP_AUDIT_RETENTION_DAYS: 365,
+        MCP_OAUTH_PUBLIC_CLIENT: true,
         BUNNY_STREAM_API_KEY: "bunny-secret",
         BUNNY_STREAM_LIBRARY_ID: "library-id",
         BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS: 900
@@ -3119,6 +3313,7 @@ describe("buildApi", () => {
       MCP_OAUTH_AUTH_CODE_TTL_SECONDS: 600,
       MCP_OAUTH_ACCESS_TOKEN_TTL_SECONDS: 3600,
       MCP_AUDIT_RETENTION_DAYS: 365,
+      MCP_OAUTH_PUBLIC_CLIENT: true,
       BUNNY_STREAM_API_KEY: "bunny-secret",
       BUNNY_STREAM_LIBRARY_ID: "759",
       BUNNY_STREAM_EMBED_TOKEN_KEY: "embed-token-secret",
@@ -7666,6 +7861,24 @@ const requiredAgeRepository: AgeRepository = {
   },
   async createPendingAgeVerification() {
     throw new Error("not implemented");
+  },
+  async recordProviderWebhook() {
+    throw new Error("not implemented");
+  },
+  async updateVerificationFromWebhook() {
+    throw new Error("not implemented");
+  }
+};
+
+const pendingAgeSessionRepository: AgeRepository = {
+  async findLatestAgeStatusBySupabaseUserId() {
+    return {
+      state: "required",
+      provider: null
+    };
+  },
+  async createPendingAgeVerification() {
+    return undefined;
   },
   async recordProviderWebhook() {
     throw new Error("not implemented");

@@ -28,7 +28,8 @@ Current implementation state:
 
 - `POST /v1/age/sessions` is wired to an injectable backend provider waterfall.
 - `GET /v1/age/status` is the browser-safe age read projection. `/age` reads it through the typed web API helper and starts `POST /v1/age/sessions` only after explicit authenticated user action.
-- The default runtime waterfall fails closed with `503` until a real provider adapter is launch-approved and configured.
+- The runtime waterfall has real HTTP session adapters for Yoti, Persona, Veriff, and Sumsub. Each adapter is inert until its exact env/config is present, and all unconfigured or failing providers fail closed with `503`.
+- The landing reusable-first path tries Yoti/Persona-style age assurance first. Sumsub and Veriff remain explicit fallback/provider choices and creator-compliance candidates, not ordinary viewer onboarding defaults.
 - Successful provider session starts are stored as pending `age_verifications` rows with provider reference, state, rule/jurisdiction metadata, and timestamps only.
 - Raw provider payloads, identity images, document data, and browser-completed age state are not accepted by this route.
 
@@ -96,6 +97,13 @@ Landing onboarding should prefer reusable or light/free age assurance:
 3. regional non-document/eID checks where supported
 
 Users may leave the landing surface to create a reusable ID and then return to complete age assurance. Wallet connection stays mandatory; profile and Supabase recovery auth stay optional; age assurance stays mandatory for protected app access.
+
+Current API behavior:
+
+- `providerPreference=reusable_first` uses the configured reusable/light adapter order and does not silently start Sumsub/Veriff documentary KYC.
+- `providerPreference=yoti|persona|sumsub|veriff` lets the user or policy select a specific configured provider and then falls back only if that provider is temporarily unavailable.
+- Webhooks normalize signed provider events into app-owned states only: `pending`, `verified`, or `failed`.
+- Launch approval still requires live sandbox evidence for the selected provider, webhook signing proof, retention/legal review, and provider-contract approval.
 
 ## Creator Compliance Providers
 
