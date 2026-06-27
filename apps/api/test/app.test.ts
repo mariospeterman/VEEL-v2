@@ -447,6 +447,107 @@ describe("buildApi", () => {
     vi.unstubAllEnvs();
   });
 
+  it("starts a configured Didit age session through the real provider adapter", async () => {
+    vi.stubEnv("DIDIT_API_KEY", "didit-api-key");
+    vi.stubEnv("DIDIT_AGE_WORKFLOW_ID", "didit-age-workflow");
+    vi.stubEnv("DIDIT_API_BASE_URL", "https://verification.didit.example");
+    vi.setSystemTime(new Date("2026-06-03T22:00:00.000Z"));
+    const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        fetchCalls.push(init ? { url, init } : { url });
+        return new Response(
+          JSON.stringify({
+            id: "didit-age-session-1",
+            url: "https://verification.didit.example/session/didit-age-session-1"
+          }),
+          {
+            status: 200,
+            headers: {
+              "content-type": "application/json"
+            }
+          }
+        );
+      })
+    );
+    const createdPendingVerifications: CreatePendingAgeVerificationInput[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return null;
+        }
+      }),
+      ageRepository: {
+        async findLatestAgeStatusBySupabaseUserId() {
+          return {
+            state: "required",
+            provider: null
+          };
+        },
+        async createPendingAgeVerification(input) {
+          createdPendingVerifications.push(input);
+        },
+        async recordProviderWebhook() {
+          throw new Error("not implemented");
+        },
+        async updateVerificationFromWebhook() {
+          throw new Error("not implemented");
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/age/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "age-didit-1"
+      },
+      payload: {
+        providerPreference: "didit"
+      }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(201);
+    expect(response.json()).toEqual({
+      id: "didit-age-session-1",
+      provider: "didit",
+      launchUrl: "https://verification.didit.example/session/didit-age-session-1",
+      expiresAt: "2026-06-04T22:00:00.000Z"
+    });
+    expect(fetchCalls[0]?.url).toBe("https://verification.didit.example/v3/session/");
+    expect(fetchCalls[0]?.init?.method).toBe("POST");
+    expect(fetchCalls[0]?.init?.headers).toMatchObject({
+      "x-api-key": "didit-api-key",
+      "idempotency-key": "age-didit-1"
+    });
+    expect(JSON.parse(String(fetchCalls[0]?.init?.body))).toMatchObject({
+      workflow_id: "didit-age-workflow",
+      callback_url: "http://localhost:3000/age/callback",
+      vendor_data: "user:00000000-0000-4000-8000-000000000001",
+      metadata: {
+        purpose: "age_access",
+        rule: "over_18",
+        webhook_url: "http://localhost:4000/v1/webhooks/age/didit"
+      }
+    });
+    expect(createdPendingVerifications).toMatchObject([
+      {
+        provider: "didit",
+        providerReference: "didit-age-session-1",
+        rule: "over_18"
+      }
+    ]);
+
+    await app.close();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
   it("creates Persona and Veriff sessions through the real provider waterfall when explicitly selected", async () => {
     vi.setSystemTime(new Date("2026-06-03T22:00:00.000Z"));
     const personaFetch = vi.fn(async () =>
@@ -614,6 +715,66 @@ describe("buildApi", () => {
         provider: "sumsub",
         providerEventId: "sumsub-event",
         providerReference: "sumsub-applicant",
+        state: "verified"
+      }
+    ]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("accepts a signed Didit age webhook and applies normalized verification state", async () => {
+    vi.stubEnv("DIDIT_WEBHOOK_SECRET", "didit-webhook-secret");
+    const recordedEvents: unknown[] = [];
+    const appliedEvents: unknown[] = [];
+    const ageRepository: AgeRepository = {
+      ...requiredAgeRepository,
+      async recordProviderWebhook(input) {
+        recordedEvents.push(input);
+        return true;
+      },
+      async updateVerificationFromWebhook(input) {
+        appliedEvents.push(input);
+        return true;
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      ageRepository
+    });
+    await app.ready();
+    const payload = {
+      id: "didit-age-session-1",
+      event: "verification.completed",
+      status: "approved",
+      created_at: "2026-06-06T01:00:00Z"
+    };
+    const rawPayload = JSON.stringify(payload);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/webhooks/age/didit",
+      headers: {
+        "content-type": "application/json",
+        "x-signature-v2": diditV2Signature(payload)
+      },
+      payload: rawPayload
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(202);
+    expect(recordedEvents).toMatchObject([
+      {
+        provider: "didit",
+        providerEventId: "didit-age-session-1",
+        eventType: "verification.completed",
+        normalizedState: "verified"
+      }
+    ]);
+    expect(appliedEvents).toMatchObject([
+      {
+        provider: "didit",
+        providerEventId: "didit-age-session-1",
+        providerReference: "didit-age-session-1",
         state: "verified"
       }
     ]);
@@ -803,6 +964,160 @@ describe("buildApi", () => {
     vi.useRealTimers();
   });
 
+  it("starts Didit creator KYC with the current provider session API shape", async () => {
+    vi.stubEnv("DIDIT_API_KEY", "didit-api-key");
+    vi.stubEnv("DIDIT_KYC_WORKFLOW_ID", "didit-creator-workflow");
+    vi.stubEnv("DIDIT_API_BASE_URL", "https://verification.didit.example");
+    const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) =>
+      new Response(
+        JSON.stringify({
+          id: "didit-session-1",
+          url: "https://verification.didit.example/session/didit-session-1"
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const createdSessions: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      verificationRepository: {
+        ...verificationRepositoryStub(),
+        async createPendingSession(input) {
+          createdSessions.push(input);
+          return "11111111-1111-4111-8111-111111111112";
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/verification/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "didit-creator-1"
+      },
+      payload: {
+        purpose: "creator_kyc",
+        providerPreference: "didit"
+      }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(201);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://verification.didit.example/v3/session/",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "x-api-key": "didit-api-key",
+          "idempotency-key": "didit-creator-1"
+        })
+      })
+    );
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+      workflow_id: "didit-creator-workflow",
+      callback_url: "http://localhost:3000/app/create?verification=callback",
+      vendor_data: "user:00000000-0000-4000-8000-000000000001",
+      metadata: {
+        purpose: "creator_kyc",
+        webhook_url: "http://localhost:4000/v1/webhooks/verification/didit"
+      }
+    });
+    expect(createdSessions).toMatchObject([
+      {
+        purpose: "creator_kyc",
+        providerSession: {
+          provider: "didit",
+          providerReference: "didit-session-1",
+          reusable: true
+        }
+      }
+    ]);
+
+    await app.close();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("starts Persona organization KYB with the organization template", async () => {
+    vi.stubEnv("PERSONA_API_KEY", "persona-api-key");
+    vi.stubEnv("PERSONA_ORG_KYB_TEMPLATE_ID", "persona-org-kyb-template");
+    vi.stubEnv("PERSONA_API_BASE_URL", "https://withpersona.example");
+    const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) =>
+      new Response(
+        JSON.stringify({
+          data: {
+            id: "persona-org-inquiry-1",
+            attributes: {
+              "expires-at": "2026-06-04T22:00:00.000Z"
+            }
+          },
+          meta: {
+            "one-time-link": "https://withpersona.example/i/persona-org-inquiry-1"
+          }
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const createdSessions: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      verificationRepository: {
+        ...verificationRepositoryStub(),
+        async createPendingSession(input) {
+          createdSessions.push(input);
+          return "11111111-1111-4111-8111-111111111113";
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/verification/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "persona-org-kyb-1"
+      },
+      payload: {
+        purpose: "org_kyb",
+        providerPreference: "persona",
+        organizationId: "00000000-0000-4000-8000-000000000090"
+      }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(201);
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+      data: {
+        attributes: {
+          "inquiry-template-id": "persona-org-kyb-template",
+          "reference-id": "org:00000000-0000-4000-8000-000000000090",
+          note: "WeVid organization KYB"
+        }
+      },
+      meta: {
+        "redirect-uri": "http://localhost:3000/app/create?verification=callback"
+      }
+    });
+    expect(createdSessions).toMatchObject([
+      {
+        purpose: "org_kyb",
+        organizationId: "00000000-0000-4000-8000-000000000090",
+        providerSession: {
+          provider: "persona",
+          method: "kyb_registry",
+          assuranceLevel: "business_verified"
+        }
+      }
+    ]);
+
+    await app.close();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
   it("accepts a signed Sumsub creator verification webhook and applies normalized state", async () => {
     vi.stubEnv("SUMSUB_WEBHOOK_SECRET", "sumsub-test-secret");
     const recordedEvents: unknown[] = [];
@@ -863,6 +1178,113 @@ describe("buildApi", () => {
         provider: "sumsub",
         providerEventId: "sumsub-event",
         providerReference: "sumsub-applicant",
+        status: "valid"
+      }
+    ]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("accepts a Didit verification webhook signed with X-Signature-V2", async () => {
+    vi.stubEnv("DIDIT_WEBHOOK_SECRET", "didit-webhook-secret");
+    const appliedEvents: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      verificationRepository: {
+        ...verificationRepositoryStub(),
+        async updateVerificationFromWebhook(input) {
+          appliedEvents.push(input);
+          return true;
+        }
+      }
+    });
+    await app.ready();
+    const payload = {
+      id: "didit-session-1",
+      event: "verification.completed",
+      status: "approved",
+      created_at: "2026-06-06T01:00:00Z"
+    };
+    const rawPayload = JSON.stringify(payload);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/webhooks/verification/didit",
+      headers: {
+        "content-type": "application/json",
+        "x-signature-v2": diditV2Signature(payload)
+      },
+      payload: rawPayload
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(202);
+    expect(appliedEvents).toMatchObject([
+      {
+        provider: "didit",
+        providerReference: "didit-session-1",
+        eventType: "verification.completed",
+        status: "valid"
+      }
+    ]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("accepts a Persona webhook signed with Persona-Signature", async () => {
+    vi.stubEnv("PERSONA_WEBHOOK_SECRET", "persona-webhook-secret");
+    const appliedEvents: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      verificationRepository: {
+        ...verificationRepositoryStub(),
+        async updateVerificationFromWebhook(input) {
+          appliedEvents.push(input);
+          return true;
+        }
+      }
+    });
+    await app.ready();
+    const payload = {
+      data: {
+        id: "evt-persona-1",
+        type: "event",
+        attributes: {
+          name: "inquiry.approved",
+          payload: {
+            data: {
+              id: "inq-persona-1",
+              type: "inquiry",
+              attributes: {
+                status: "approved",
+                "completed-at": "2026-06-06T01:00:00Z"
+              }
+            }
+          }
+        }
+      }
+    };
+    const rawPayload = JSON.stringify(payload);
+    const timestamp = "1780707600";
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/webhooks/verification/persona",
+      headers: {
+        "content-type": "application/json",
+        "persona-signature": personaSignature(timestamp, rawPayload)
+      },
+      payload: rawPayload
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(202);
+    expect(appliedEvents).toMatchObject([
+      {
+        provider: "persona",
+        providerEventId: "evt-persona-1",
+        providerReference: "inq-persona-1",
+        eventType: "inquiry.approved",
         status: "valid"
       }
     ]);
@@ -1411,6 +1833,7 @@ describe("buildApi", () => {
         }
       }),
       ageRepository: verifiedAgeRepository,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       walletRepository: walletRepositoryWithWallet,
       contentRepository
     });
@@ -1482,6 +1905,7 @@ describe("buildApi", () => {
         }
       }),
       ageRepository: verifiedAgeRepository,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       walletRepository: walletRepositoryWithWallet,
       contentRepository
     });
@@ -1566,6 +1990,7 @@ describe("buildApi", () => {
         }
       }),
       ageRepository: verifiedAgeRepository,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       walletRepository: walletRepositoryWithWallet,
       contentRepository,
       mediaUploadProvider
@@ -1648,6 +2073,7 @@ describe("buildApi", () => {
         }
       }),
       ageRepository: verifiedAgeRepository,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       walletRepository: walletRepositoryWithWallet,
       contentRepository,
       mediaUploadProvider
@@ -1718,6 +2144,7 @@ describe("buildApi", () => {
       }),
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       contentRepository
     });
     await app.ready();
@@ -1776,6 +2203,7 @@ describe("buildApi", () => {
       }),
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       contentRepository
     });
     await app.ready();
@@ -1982,6 +2410,7 @@ describe("buildApi", () => {
       }),
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       contentRepository
     });
     await app.ready();
@@ -2048,6 +2477,7 @@ describe("buildApi", () => {
       }),
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       contentRepository
     });
     await app.ready();
@@ -2124,6 +2554,7 @@ describe("buildApi", () => {
       }),
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       contentRepository
     });
     await app.ready();
@@ -2213,6 +2644,7 @@ describe("buildApi", () => {
       }),
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       contentRepository
     });
     await app.ready();
@@ -2431,6 +2863,7 @@ describe("buildApi", () => {
       }),
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       contentRepository
     });
     await app.ready();
@@ -2493,6 +2926,7 @@ describe("buildApi", () => {
       }),
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       contentRepository
     });
     await app.ready();
@@ -2590,6 +3024,7 @@ describe("buildApi", () => {
         }
       }),
       ageRepository: verifiedAgeRepository,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       walletRepository: walletRepositoryWithWallet,
       contentRepository,
       mediaUploadProvider
@@ -2692,6 +3127,7 @@ describe("buildApi", () => {
       }),
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       contentRepository,
       mediaUploadProvider
     });
@@ -2785,6 +3221,7 @@ describe("buildApi", () => {
       }),
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       contentRepository,
       mediaUploadProvider
     });
@@ -8056,6 +8493,28 @@ function sumsubDigest(payload: string): string {
   return createHmac("sha256", "sumsub-test-secret").update(payload).digest("hex");
 }
 
+function diditV2Signature(payload: unknown): string {
+  return createHmac("sha256", "didit-webhook-secret").update(testCanonicalJson(payload)).digest("hex");
+}
+
+function personaSignature(timestamp: string, payload: string): string {
+  const signature = createHmac("sha256", "persona-webhook-secret").update(`${timestamp}.${payload}`).digest("hex");
+  return `t=${timestamp},v1=${signature}`;
+}
+
+function testCanonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map((item) => testCanonicalJson(item)).join(",")}]`;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${testCanonicalJson(record[key])}`)
+      .join(",")}}`;
+  }
+
+  return JSON.stringify(value);
+}
+
 function bunnySignature(payload: string): string {
   return createHmac("sha256", "bunny-readonly-secret").update(payload).digest("hex");
 }
@@ -9950,6 +10409,46 @@ function verificationRepositoryStub(
     },
     async resolveCapabilities() {
       return { ...defaultResolution, ...resolution };
+    }
+  };
+}
+
+function creatorVerifiedVerificationRepository(): VerificationRepository {
+  const repository = verificationRepositoryStub();
+
+  return {
+    ...repository,
+    async resolveCapabilities(input) {
+      const resolution = await repository.resolveCapabilities(input);
+
+      return {
+        ...resolution,
+        capabilities: {
+          ...resolution.capabilities,
+          canUploadMedia: true,
+          canPublishMedia: true,
+          canMonetize: true,
+          canReceivePayouts: true,
+          canAccessCreatorDashboard: true
+        },
+        missingRequirements: [],
+        nextBestAction: "creator_ready",
+        verificationSummary: {
+          ...resolution.verificationSummary,
+          creatorKyc: {
+            subjectType: "user",
+            subjectId: input.supabaseUserId,
+            purpose: "creator_kyc",
+            status: "valid",
+            provider: "sumsub",
+            method: "gov_id_selfie",
+            assuranceLevel: "documentary",
+            verifiedAt: "2026-06-03T22:00:00.000Z",
+            expiresAt: null,
+            reusable: true
+          }
+        }
+      };
     }
   };
 }

@@ -2,9 +2,7 @@ import { createHmac } from "node:crypto";
 import type { ServerEnv } from "@veel/config";
 import type {
   AgeProvider,
-  AgeProviderAdapter,
-  AgeProviderSession,
-  AgeProviderSessionRequest
+  AgeProviderAdapter
 } from "./types.js";
 
 export class AgeProviderHttpError extends Error {
@@ -86,6 +84,55 @@ export function createYotiAgeProviderAdapter(env: ServerEnv): AgeProviderAdapter
         providerReference: sessionId,
         launchUrl: `${env.YOTI_LAUNCH_BASE_URL}?sessionId=${encodeURIComponent(sessionId)}&sdkId=${encodeURIComponent(env.YOTI_SDK_ID)}`,
         expiresAt: expiresInSeconds(900),
+        rule: "over_18"
+      };
+    }
+  };
+}
+
+export function createDiditAgeProviderAdapter(env: ServerEnv): AgeProviderAdapter {
+  return {
+    provider: "didit",
+    isConfigured() {
+      return Boolean(env.DIDIT_API_KEY && env.DIDIT_AGE_WORKFLOW_ID);
+    },
+    async createSession(input) {
+      if (!env.DIDIT_API_KEY || !env.DIDIT_AGE_WORKFLOW_ID) {
+        throw new AgeProviderHttpError("didit", 503, "Didit is not configured");
+      }
+
+      const response = await providerFetch("didit", `${withoutTrailingSlash(env.DIDIT_API_BASE_URL)}/v3/session/`, {
+        method: "POST",
+        headers: {
+          "x-api-key": env.DIDIT_API_KEY,
+          "content-type": "application/json",
+          "idempotency-key": input.idempotencyKey
+        },
+        body: JSON.stringify({
+          workflow_id: env.DIDIT_AGE_WORKFLOW_ID,
+          callback_url: input.callbackUrl,
+          vendor_data: `user:${input.supabaseUserId}`,
+          metadata: {
+            purpose: "age_access",
+            rule: "over_18",
+            webhook_url: `${input.webhookBaseUrl}/didit`
+          }
+        })
+      });
+      const body = objectBody(await response.json());
+      const session = objectBody(body.session, true);
+      const providerReference = firstString(body.id, body.session_id, session?.id, session?.session_id);
+      const launchUrl = firstString(body.url, body.verification_url, body.redirect_url, session?.url, session?.verification_url);
+
+      if (!providerReference || !launchUrl) {
+        throw new AgeProviderHttpError("didit", 502, "Didit response is missing session launch data");
+      }
+
+      return {
+        provider: "didit",
+        providerReference,
+        launchUrl,
+        expiresAt: expiresInSeconds(24 * 60 * 60),
         rule: "over_18"
       };
     }
@@ -298,4 +345,8 @@ function parseDate(value: string | null): Date | null {
 
 function expiresInSeconds(seconds: number): Date {
   return new Date(Date.now() + seconds * 1000);
+}
+
+function withoutTrailingSlash(value: string) {
+  return value.endsWith("/") ? value.slice(0, -1) : value;
 }

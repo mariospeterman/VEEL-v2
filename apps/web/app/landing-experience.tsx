@@ -635,7 +635,7 @@ function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
 }
 
 function OnboardingAgeStep() {
-  const [startingProvider, setStartingProvider] = useState<"reusable_first" | "persona" | null>(null);
+  const [startingProvider, setStartingProvider] = useState<"reusable_first" | "didit" | "persona" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const ageWaterfall = [
@@ -644,7 +644,7 @@ function OnboardingAgeStep() {
       title: "Reusable age ID",
       copy: "Use an existing over-18 credential or create one, then return here to pass the age gate.",
       providers: [
-        { action: "Use", label: "Didit ID", href: "https://didit.me/" },
+        { action: "Start", label: "Didit ID", providerPreference: "didit" as const },
         { action: "Start", label: "Yoti ID", providerPreference: "reusable_first" as const },
         { action: "Use", label: "EUDI wallet", href: "https://digital-strategy.ec.europa.eu/en/policies/eu-age-verification" },
         { action: "Use", label: "Scytales", href: "https://www.scytales.com/age-verification-connector" }
@@ -655,13 +655,13 @@ function OnboardingAgeStep() {
       title: "Light age check",
       copy: "Use free-tier age estimation or document proof only when reusable proof is not available.",
       providers: [
-        { action: "Check", label: "Didit", href: "https://didit.me/" },
+        { action: "Check", label: "Didit", providerPreference: "didit" as const },
         { action: "Check", label: "Persona", providerPreference: "persona" as const }
       ]
     }
   ];
 
-  async function startAgeSession(providerPreference: "reusable_first" | "persona") {
+  async function startAgeSession(providerPreference: "reusable_first" | "didit" | "persona") {
     setStartingProvider(providerPreference);
     setMessage(null);
     setError(null);

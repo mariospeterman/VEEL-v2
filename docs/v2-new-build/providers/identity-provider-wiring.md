@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: documentation
-Last updated: 2026-06-03
+Last updated: 2026-06-27
 Source of truth: yes
 
 Owns:
@@ -32,7 +32,7 @@ Current implementation state:
 - `POST /v1/verification/sessions` starts creator KYC or organization KYB sessions. The browser receives only a hosted provider launch URL; it cannot mark KYC/KYB complete.
 - `POST /v1/webhooks/verification/{provider}` accepts signed KYC/KYB callbacks and writes normalized `verification_records`.
 - The runtime waterfall has real HTTP session adapters for Yoti, Persona, Veriff, and Sumsub. Each adapter is inert until its exact env/config is present, and all unconfigured or failing providers fail closed with `503`.
-- The creator/business verification waterfall has real HTTP session adapters for Didit, Sumsub, Persona, and Veriff. Didit and Sumsub can serve creator KYC and org KYB when their purpose-specific workflows/levels are configured. Persona and Veriff are currently creator KYC documentary fallbacks only.
+- The creator/business verification waterfall has real HTTP session adapters for Didit, Sumsub, Persona, and Veriff. Didit, Sumsub, and Persona can serve creator KYC and org KYB when their purpose-specific workflows/levels/templates are configured. Veriff is currently a creator KYC documentary fallback only unless a Veriff business/KYB product is separately approved and wired.
 - The landing reusable-first path tries Yoti/Persona-style age assurance first. Sumsub and Veriff remain explicit fallback/provider choices and creator-compliance candidates, not ordinary viewer onboarding defaults.
 - Successful provider session starts are stored as pending `age_verifications` rows with provider reference, state, rule/jurisdiction metadata, and timestamps only.
 - Raw provider payloads, identity images, document data, and browser-completed age state are not accepted by this route.
@@ -61,36 +61,31 @@ Current implementation state:
 
 ### Android
 
-- Supported through Solana Mobile Wallet Adapter.
-- The app registers MWA on the client through `@solana-mobile/wallet-standard-mobile`.
+- Supported through Solana wallet-adapter compatible wallets where a wallet exposes the wallet-standard/mobile-wallet flow.
+- `@solana-mobile/wallet-standard-mobile` can be added as a direct web dependency when the package manager is available and Android device QA is scheduled.
 
 ### iOS
 
-- This repo now exposes a Phantom-specific deep-link path behind `NEXT_PUBLIC_PHANTOM_APP_ID`.
-- That path is intended for mobile Safari / browser-based entry where no injected provider exists.
-- It is wallet-specific. There is still no generic multi-wallet iOS standard in this repo.
-- It does not replace Android MWA and it does not provide Solflare parity yet.
+- There is no generic Solana Mobile Wallet Adapter equivalent for iOS web in this repo.
+- iOS support must be proven through injected wallet browsers, wallet-specific universal/deep links, or embedded wallet providers.
+- Privy/Turnkey are the preferred iOS-safe onboarding route once their Solana signing UX is verified on the production domain.
 
-#### Public web env
+### Public web env
 
-- `NEXT_PUBLIC_PHANTOM_APP_ID`
-- `NEXT_PUBLIC_APP_URL`
+- `NEXT_PUBLIC_SOLANA_CHAIN`
+- `NEXT_PUBLIC_SOLANA_RPC_URL`
+- `NEXT_PUBLIC_SOLANA_RPC_SUBSCRIPTIONS_URL`
+- `NEXT_PUBLIC_PRIVY_APP_ID`
+- `NEXT_PUBLIC_TURNKEY_ORGANIZATION_ID`
+- `NEXT_PUBLIC_TURNKEY_API_BASE_URL`
+- `NEXT_PUBLIC_TURNKEY_AUTH_PROXY_URL`
+- `NEXT_PUBLIC_TURNKEY_AUTH_PROXY_CONFIG_ID`
+- `NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED`
 
-#### Production rollout notes
+### Production rollout notes
 
-- Use a real Phantom App ID created for the production domain.
-- Keep `NEXT_PUBLIC_APP_URL` aligned with the public origin that Phantom should return to.
-- Validate the return path on the real iPhone browser/device matrix before rollout.
-- If Solflare parity is required, add a dedicated Solflare deep-link path instead of pretending the Phantom path is generic.
-
-#### Exact remaining iOS blocker
-
-- This repo currently implements a verified Phantom-specific browser deep-link path only.
-- It does not yet implement wallet-specific universal-link or deep-link flows for Solflare or other iOS wallets.
-- Until those paths exist, iPhone production support is:
-  - `Phantom in Safari via Browser SDK deeplink`: supported when `NEXT_PUBLIC_PHANTOM_APP_ID` is configured
-  - `Solflare on iPhone`: not implemented
-  - `generic multi-wallet iOS signing`: not implemented
+- Keep embedded wallet runtime disabled until Privy or Turnkey is staging-proven with Solana wallet creation/unlock, message signing, recovery/export, external wallet linking, and mobile Safari/PWA QA.
+- Do not add wallet-specific iOS copy or support claims until the exact wallet path is implemented and tested on real devices.
 
 ## Age-Assurance Waterfall
 
@@ -104,7 +99,7 @@ Users may leave the landing surface to create a reusable ID and then return to c
 
 Current API behavior:
 
-- `providerPreference=reusable_first` uses the configured reusable/light adapter order and does not silently start Sumsub/Veriff documentary KYC.
+- `providerPreference=reusable_first` uses the configured reusable/light adapter order: Didit, then Yoti, then Persona. It does not silently start Sumsub/Veriff documentary KYC.
 - `providerPreference=yoti|persona|sumsub|veriff` lets the user or policy select a specific configured provider and then falls back only if that provider is temporarily unavailable.
 - Webhooks normalize signed provider events into app-owned states only: `pending`, `verified`, or `failed`.
 - Launch approval still requires live sandbox evidence for the selected provider, webhook signing proof, retention/legal review, and provider-contract approval.
@@ -159,11 +154,22 @@ Never store raw identity documents, selfies, registry files, UBO documents, biom
 - `SUMSUB_API_BASE_URL=https://api.sumsub.com`
 - `DIDIT_API_KEY`
 - `DIDIT_WEBHOOK_SECRET`
+- `DIDIT_AGE_WORKFLOW_ID`
 - `DIDIT_KYC_WORKFLOW_ID`
 - `DIDIT_KYB_WORKFLOW_ID`
 - `DIDIT_API_BASE_URL=https://verification.didit.me`
+- `PERSONA_API_KEY`
+- `PERSONA_WEBHOOK_SECRET`
+- `PERSONA_TEMPLATE_ID`
+- `PERSONA_CREATOR_KYC_TEMPLATE_ID`
+- `PERSONA_ORG_KYB_TEMPLATE_ID`
+- `PERSONA_API_BASE_URL=https://api.withpersona.com`
+- `VERIFF_API_KEY`
+- `VERIFF_SHARED_SECRET`
+- `VERIFF_API_BASE_URL=https://stationapi.veriff.com`
 
 `SUMSUB_LEVEL_NAME` remains a compatibility fallback. Production should prefer separate creator and organization levels so creator KYC does not accidentally satisfy organization KYB or the reverse.
+`PERSONA_TEMPLATE_ID` remains a compatibility fallback. Production should prefer separate creator and organization templates so person KYC and business KYB cannot satisfy the wrong policy.
 
 ### Creator KYC / Org KYB runtime behavior
 
@@ -173,6 +179,13 @@ Never store raw identity documents, selfies, registry files, UBO documents, biom
 - Session creation stores a pending `verification_sessions` row and a pending normalized record.
 - Signed provider webhooks update the pending session and append a normalized record.
 - Raw provider payloads, identity documents, selfies, biometric templates, registry files, and private provider review comments stay out of core app tables and browser resources.
+
+### Provider-specific runtime notes
+
+- Didit age, creator KYC, and org KYB session creation uses the Didit session API with `x-api-key`, a purpose-specific workflow id, callback URL, and opaque `vendor_data`. Didit webhook verification prefers `X-Signature-V2` over canonical sorted JSON and keeps legacy raw-body HMAC support only for older dashboard setups.
+- Persona session creation uses the Persona Inquiries API, `key-inflection: kebab`, purpose-specific template ids, and `meta.redirect-uri`. Persona webhooks verify `Persona-Signature` as timestamped HMAC-SHA256 over `timestamp.rawBody`.
+- Sumsub session creation signs `POST /resources/accessTokens/sdk` with `x-app-token`, `x-app-access-ts`, and `x-app-access-sig`. Creator and organization levels should be separate.
+- Veriff session creation uses the Veriff Sessions API with `x-auth-client`. Veriff webhooks verify `x-hmac-signature` against the raw payload. In this scaffold Veriff is creator KYC only, not organization KYB.
 
 ### Required dashboard setup
 

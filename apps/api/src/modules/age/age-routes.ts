@@ -27,8 +27,8 @@ interface RegisterAgeRoutesOptions {
   ageProviderWaterfall: AgeProviderWaterfall;
 }
 
-const ageProviderPreferences = new Set(["reusable_first", "yoti", "sumsub", "veriff", "persona"]);
-const ageProviders = new Set<AgeProvider>(["yoti", "sumsub", "veriff", "persona"]);
+const ageProviderPreferences = new Set(["reusable_first", "didit", "yoti", "sumsub", "veriff", "persona"]);
+const ageProviders = new Set<AgeProvider>(["didit", "yoti", "sumsub", "veriff", "persona"]);
 
 export async function registerAgeRoutes(
   app: FastifyInstance,

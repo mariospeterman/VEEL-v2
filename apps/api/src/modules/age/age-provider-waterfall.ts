@@ -1,6 +1,7 @@
 import type { ServerEnv } from "@veel/config";
 import {
   AgeProviderHttpError,
+  createDiditAgeProviderAdapter,
   createPersonaAgeProviderAdapter,
   createSumsubAgeProviderAdapter,
   createVeriffAgeProviderAdapter,
@@ -16,8 +17,8 @@ import type {
 
 export { AgeProviderHttpError } from "./age-provider-adapters.js";
 
-const reusableFirstOrder: AgeProvider[] = ["yoti", "persona"];
-const explicitFallbackOrder: AgeProvider[] = ["yoti", "persona", "sumsub", "veriff"];
+const reusableFirstOrder: AgeProvider[] = ["didit", "yoti", "persona"];
+const explicitFallbackOrder: AgeProvider[] = ["didit", "yoti", "persona", "sumsub", "veriff"];
 
 export class AgeProviderUnavailableError extends Error {
   constructor() {
@@ -35,6 +36,7 @@ export class AgeProviderIntegrationPendingError extends Error {
 
 export function createAgeProviderWaterfall(env: ServerEnv): AgeProviderWaterfall {
   return createStaticAgeProviderWaterfall([
+    createDiditAgeProviderAdapter(env),
     createYotiAgeProviderAdapter(env),
     createPersonaAgeProviderAdapter(env),
     createSumsubAgeProviderAdapter(env),

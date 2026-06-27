@@ -1964,7 +1964,7 @@ components:
       name: provider
       in: path
       required: true
-      schema: { type: string, enum: [yoti, sumsub, veriff, persona] }
+      schema: { type: string, enum: [didit, yoti, sumsub, veriff, persona] }
     VerificationProvider:
       name: provider
       in: path
@@ -2230,7 +2230,7 @@ components:
       type: object
       required: [providerPreference]
       properties:
-        providerPreference: { type: string, enum: [reusable_first, yoti, sumsub, veriff, persona] }
+        providerPreference: { type: string, enum: [reusable_first, didit, yoti, sumsub, veriff, persona] }
     AgeSession:
       type: object
       required: [id, provider, launchUrl, expiresAt]
@@ -3055,7 +3055,7 @@ components:
       type: object
       required: [provider, received, processed]
       properties:
-        provider: { type: string, enum: [helius, bunny, livepeer, yoti, sumsub, veriff, persona] }
+        provider: { type: string, enum: [helius, bunny, livepeer, didit, yoti, sumsub, veriff, persona] }
         received: { type: integer, minimum: 0 }
         processed: { type: integer, minimum: 0 }
     SumsubAgeWebhookPayload:

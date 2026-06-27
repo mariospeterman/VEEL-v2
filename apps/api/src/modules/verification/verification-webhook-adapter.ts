@@ -84,15 +84,23 @@ function normalizeDiditWebhook(input: {
   const secret = input.env.DIDIT_WEBHOOK_SECRET;
   if (!secret) throw new VerificationWebhookConfigurationError("didit");
 
-  const signature = headerValue(input.headers["x-didit-signature"]) ?? headerValue(input.headers["didit-signature"]);
-  if (!signature || !secureEqualHex(createHmac("sha256", secret).update(input.rawBody).digest("hex"), signature)) {
+  const signatureV2 = headerValue(input.headers["x-signature-v2"]) ?? headerValue(input.headers["X-Signature-V2"]);
+  const legacySignature = headerValue(input.headers["x-didit-signature"]) ?? headerValue(input.headers["didit-signature"]);
+  if (!verifyDiditSignature(input.body, input.rawBody, secret, signatureV2, legacySignature)) {
     throw new VerificationWebhookSignatureError("didit");
   }
 
   const body = objectBody(input.body);
   const data = objectBody(body.data, true);
   const eventType = firstStringValue(body.event, body.type) ?? "verification.updated";
-  const providerReference = firstStringValue(body.session_id, body.verification_id, data?.id, data?.session_id);
+  const providerReference = firstStringValue(
+    body.session_id,
+    body.verification_id,
+    body.id,
+    data?.id,
+    data?.session_id,
+    data?.verification_id
+  );
   const providerEventId = firstStringValue(body.id, body.event_id, providerReference);
   if (!providerEventId || !providerReference) {
     throw new VerificationWebhookValidationError("Didit webhook is missing required identifiers");
@@ -104,7 +112,7 @@ function normalizeDiditWebhook(input: {
     providerReference,
     eventType,
     status: mapGenericState(firstStringValue(body.status, data?.status, data?.decision)),
-    signatureHash: sha256Hex(signature),
+    signatureHash: sha256Hex(signatureV2 ?? legacySignature ?? ""),
     occurredAt: parseProviderDate(firstStringValue(body.created_at, body.timestamp, data?.created_at)),
     failureReasonCode: firstStringValue(body.reason, data?.reason, data?.failure_reason)
   };
@@ -120,16 +128,26 @@ function normalizePersonaWebhook(input: {
   if (!secret) throw new VerificationWebhookConfigurationError("persona");
 
   const signature = headerValue(input.headers["persona-signature"]) ?? headerValue(input.headers["Persona-Signature"]);
-  if (!signature || !signature.includes(createHmac("sha256", secret).update(input.rawBody).digest("hex"))) {
+  if (!signature || !verifyPersonaSignature(signature, input.rawBody, secret)) {
     throw new VerificationWebhookSignatureError("persona");
   }
 
   const body = objectBody(input.body);
-  const data = objectBody(body.data);
-  const attributes = objectBody(data.attributes, true);
-  const eventType = firstStringValue(body.name, body.type) ?? "inquiry.updated";
-  const providerReference = firstStringValue(data.id, attributes?.["inquiry-id"], attributes?.["reference-id"]);
-  const providerEventId = firstStringValue(body.id, providerReference);
+  const eventData = objectBody(body.data);
+  const eventAttributes = objectBody(eventData.attributes, true);
+  const payload = objectBody(eventAttributes?.payload, true);
+  const payloadData = objectBody(payload?.data, true);
+  const inquiryData = payloadData ?? eventData;
+  const inquiryAttributes = objectBody(inquiryData.attributes, true) ?? eventAttributes;
+  const eventType = firstStringValue(eventAttributes?.name, body.name, body.type) ?? "inquiry.updated";
+  const providerReference = firstStringValue(
+    inquiryData.id,
+    inquiryAttributes?.id,
+    inquiryAttributes?.["inquiry-id"],
+    inquiryAttributes?.["reference-id"],
+    eventData.id
+  );
+  const providerEventId = firstStringValue(eventData.id, body.id, providerReference);
   if (!providerEventId || !providerReference) {
     throw new VerificationWebhookValidationError("Persona webhook is missing required identifiers");
   }
@@ -139,10 +157,10 @@ function normalizePersonaWebhook(input: {
     providerEventId,
     providerReference,
     eventType,
-    status: mapGenericState(firstStringValue(attributes?.status, body.status, eventType)),
+    status: mapGenericState(firstStringValue(inquiryAttributes?.status, body.status, eventType)),
     signatureHash: sha256Hex(signature),
-    occurredAt: parseProviderDate(firstStringValue(attributes?.["completed-at"], attributes?.["created-at"])),
-    failureReasonCode: firstStringValue(attributes?.["failure-reason"], attributes?.["reviewer-comment"])
+    occurredAt: parseProviderDate(firstStringValue(inquiryAttributes?.["completed-at"], inquiryAttributes?.["created-at"])),
+    failureReasonCode: firstStringValue(inquiryAttributes?.["failure-reason"], inquiryAttributes?.["reviewer-comment"])
   };
 }
 
@@ -174,7 +192,7 @@ function normalizeVeriffWebhook(input: {
     providerEventId,
     providerReference,
     eventType,
-    status: mapGenericState(firstStringValue(verification?.status, verification?.decision, body.status)),
+    status: mapVeriffState(firstStringValue(verification?.status, verification?.decision, body.status, verification?.code)),
     signatureHash: sha256Hex(signature),
     occurredAt: parseProviderDate(firstStringValue(body.createdAt, verification?.createdAt)),
     failureReasonCode: firstStringValue(verification?.reason, verification?.reasonCode)
@@ -184,6 +202,32 @@ function normalizeVeriffWebhook(input: {
 function verifyDigest(digest: string, digestAlg: string, rawBody: Buffer, secret: string): boolean {
   const algorithm = digestAlg === "HMAC_SHA1_HEX" ? "sha1" : digestAlg === "HMAC_SHA512_HEX" ? "sha512" : "sha256";
   return secureEqualHex(createHmac(algorithm, secret).update(rawBody).digest("hex"), digest);
+}
+
+function verifyDiditSignature(
+  body: unknown,
+  rawBody: Buffer,
+  secret: string,
+  signatureV2: string | null,
+  legacySignature: string | null
+): boolean {
+  if (signatureV2) {
+    return secureEqualHex(createHmac("sha256", secret).update(canonicalJson(body)).digest("hex"), signatureV2);
+  }
+
+  return Boolean(
+    legacySignature && secureEqualHex(createHmac("sha256", secret).update(rawBody).digest("hex"), legacySignature)
+  );
+}
+
+function verifyPersonaSignature(signatureHeader: string, rawBody: Buffer, secret: string): boolean {
+  const parsed = parseSignatureHeader(signatureHeader);
+  const timestamp = parsed.get("t")?.[0];
+  const signatures = parsed.get("v1") ?? [];
+  if (!timestamp || signatures.length === 0) return false;
+
+  const expected = createHmac("sha256", secret).update(`${timestamp}.${rawBody.toString("utf8")}`).digest("hex");
+  return signatures.some((signature) => secureEqualHex(expected, signature));
 }
 
 function mapReviewState(eventType: string, answer: string | null, reviewStatus: string | null) {
@@ -199,6 +243,43 @@ function mapGenericState(value: string | null): NormalizedVerificationWebhook["s
   if (["approved", "verified", "completed", "passed", "success", "accept"].some((part) => normalized.includes(part))) return "valid";
   if (["declined", "rejected", "failed", "abandoned", "expired"].some((part) => normalized.includes(part))) return "blocked";
   return "pending";
+}
+
+function mapVeriffState(value: string | null): NormalizedVerificationWebhook["status"] {
+  const normalized = value?.toLowerCase();
+  if (!normalized) return "pending";
+  if (normalized === "9001" || normalized.includes("approved")) return "valid";
+  if (normalized === "9102" || normalized.includes("declined") || normalized.includes("abandoned")) return "blocked";
+  if (normalized.includes("resubmission")) return "pending";
+  return mapGenericState(normalized);
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
+      .join(",")}}`;
+  }
+
+  return JSON.stringify(value);
+}
+
+function parseSignatureHeader(value: string): Map<string, string[]> {
+  const parsed = new Map<string, string[]>();
+  for (const part of value.split(",")) {
+    const [key, ...rest] = part.split("=");
+    const trimmedKey = key?.trim();
+    const trimmedValue = rest.join("=").trim();
+    if (!trimmedKey || !trimmedValue) continue;
+    const values = parsed.get(trimmedKey) ?? [];
+    values.push(trimmedValue);
+    parsed.set(trimmedKey, values);
+  }
+
+  return parsed;
 }
 
 function objectBody(input: unknown, optional?: false): Record<string, unknown>;

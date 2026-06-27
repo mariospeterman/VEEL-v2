@@ -5,7 +5,7 @@ export type AgeStatus = components["schemas"]["AgeStatus"];
 export type AgeSession = components["schemas"]["AgeSession"];
 export type CreateAgeSessionRequest = components["schemas"]["CreateAgeSessionRequest"];
 export type WebhookReceipt = components["schemas"]["WebhookReceipt"];
-export type AgeProvider = "yoti" | "sumsub" | "veriff" | "persona";
+export type AgeProvider = "yoti" | "sumsub" | "veriff" | "persona" | "didit";
 export type AgeProviderPreference = CreateAgeSessionRequest["providerPreference"];
 
 export interface CreatePendingAgeVerificationInput {

@@ -132,21 +132,21 @@ function createDiditVerificationProviderAdapter(env: ServerEnv): VerificationPro
         throw new VerificationProviderHttpError("didit", 503, "Didit is not configured");
       }
 
-      const response = await providerFetch("didit", `${env.DIDIT_API_BASE_URL}/v1/sessions`, {
+      const response = await providerFetch("didit", `${withoutTrailingSlash(env.DIDIT_API_BASE_URL)}/v3/session/`, {
         method: "POST",
         headers: {
-          authorization: `Bearer ${env.DIDIT_API_KEY}`,
+          "x-api-key": env.DIDIT_API_KEY,
           "content-type": "application/json",
           "idempotency-key": input.idempotencyKey
         },
         body: JSON.stringify({
           workflow_id: workflowId,
-          reference_id: input.purpose === "org_kyb" ? input.organizationId : input.supabaseUserId,
           callback_url: input.callbackUrl,
-          webhook_url: `${input.webhookBaseUrl}/didit`,
+          vendor_data: providerSubjectReference(input),
           metadata: {
             purpose: input.purpose,
-            subject: input.purpose === "org_kyb" ? "organization" : "user"
+            subject: input.purpose === "org_kyb" ? "organization" : "user",
+            webhook_url: `${input.webhookBaseUrl}/didit`
           }
         })
       });
@@ -177,10 +177,12 @@ function createPersonaVerificationProviderAdapter(env: ServerEnv): VerificationP
   return {
     provider: "persona",
     isConfigured(input) {
-      return input.purpose === "creator_kyc" && Boolean(env.PERSONA_API_KEY && env.PERSONA_TEMPLATE_ID);
+      return Boolean(env.PERSONA_API_KEY && personaTemplateId(env, input));
     },
     async createSession(input) {
-      if (!env.PERSONA_API_KEY || !env.PERSONA_TEMPLATE_ID) {
+      const templateId = personaTemplateId(env, input);
+
+      if (!env.PERSONA_API_KEY || !templateId) {
         throw new VerificationProviderHttpError("persona", 503, "Persona is not configured");
       }
 
@@ -195,9 +197,9 @@ function createPersonaVerificationProviderAdapter(env: ServerEnv): VerificationP
         body: JSON.stringify({
           data: {
             attributes: {
-              "inquiry-template-id": env.PERSONA_TEMPLATE_ID,
-              "reference-id": input.supabaseUserId,
-              note: "WeVid creator KYC"
+              "inquiry-template-id": templateId,
+              "reference-id": providerSubjectReference(input),
+              note: input.purpose === "org_kyb" ? "WeVid organization KYB" : "WeVid creator KYC"
             }
           },
           meta: {
@@ -222,8 +224,8 @@ function createPersonaVerificationProviderAdapter(env: ServerEnv): VerificationP
         providerInquiryId: id,
         launchUrl: url,
         expiresAt: parseDate(firstString(attributes?.["expires-at"], attributes?.["expires_at"])) ?? expiresInSeconds(86_400),
-        method: "gov_id_selfie",
-        assuranceLevel: "documentary"
+        method: input.purpose === "org_kyb" ? "kyb_registry" : "gov_id_selfie",
+        assuranceLevel: input.purpose === "org_kyb" ? "business_verified" : "documentary"
       };
     }
   };
@@ -295,6 +297,19 @@ function sumsubLevelName(env: ServerEnv, input: CreateVerificationSessionInput) 
 
 function diditWorkflowId(env: ServerEnv, input: CreateVerificationSessionInput) {
   return input.purpose === "org_kyb" ? env.DIDIT_KYB_WORKFLOW_ID : env.DIDIT_KYC_WORKFLOW_ID;
+}
+
+function personaTemplateId(env: ServerEnv, input: CreateVerificationSessionInput) {
+  if (input.purpose === "org_kyb") return env.PERSONA_ORG_KYB_TEMPLATE_ID;
+  return env.PERSONA_CREATOR_KYC_TEMPLATE_ID ?? env.PERSONA_TEMPLATE_ID;
+}
+
+function providerSubjectReference(input: CreateVerificationSessionInput) {
+  return input.purpose === "org_kyb" ? `org:${input.organizationId ?? input.supabaseUserId}` : `user:${input.supabaseUserId}`;
+}
+
+function withoutTrailingSlash(value: string) {
+  return value.endsWith("/") ? value.slice(0, -1) : value;
 }
 
 async function providerFetch(provider: VerificationProvider, url: string, init: RequestInit): Promise<Response> {

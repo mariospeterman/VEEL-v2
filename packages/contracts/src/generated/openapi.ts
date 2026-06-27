@@ -2588,7 +2588,7 @@ export interface components {
         };
         CreateAgeSessionRequest: {
             /** @enum {string} */
-            providerPreference: "reusable_first" | "yoti" | "sumsub" | "veriff" | "persona";
+            providerPreference: "reusable_first" | "didit" | "yoti" | "sumsub" | "veriff" | "persona";
         };
         AgeSession: {
             /** Format: uuid */
@@ -3363,7 +3363,7 @@ export interface components {
         };
         WebhookReceipt: {
             /** @enum {string} */
-            provider: "helius" | "bunny" | "livepeer" | "yoti" | "sumsub" | "veriff" | "persona";
+            provider: "helius" | "bunny" | "livepeer" | "didit" | "yoti" | "sumsub" | "veriff" | "persona";
             received: number;
             processed: number;
         };
@@ -6041,7 +6041,7 @@ export interface components {
         Slug: string;
         Handle: string;
         MediaProvider: "bunny" | "livepeer";
-        AgeProvider: "yoti" | "sumsub" | "veriff" | "persona";
+        AgeProvider: "didit" | "yoti" | "sumsub" | "veriff" | "persona";
         VerificationProvider: "sumsub" | "didit" | "persona" | "veriff";
     };
     requestBodies: {

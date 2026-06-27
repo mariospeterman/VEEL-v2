@@ -3,9 +3,7 @@ import type {
   CapabilityKey,
   CapabilityResolution,
   NormalizedVerificationWebhook,
-  ResolveCapabilitiesInput,
   VerificationPurpose,
-  VerificationProviderSession,
   VerificationRecordResource,
   VerificationRepository
 } from "./types.js";
