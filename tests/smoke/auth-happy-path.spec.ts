@@ -46,12 +46,13 @@ test.beforeEach(async ({ context }) => {
   ]);
 });
 
-test("covers authenticated enter to profile wallet age home create and unlock", async ({ page }) => {
+test("covers authenticated app access to profile wallet age home create and unlock", async ({ page }) => {
   test.setTimeout(70_000);
 
-  await gotoUntilVisible(page, "/enter", () => page.getByRole("link", { name: "WEVID" }));
-  await expect(page.getByText("Sessionactive")).toBeVisible();
-  await expect(page.getByText("Walletrequired")).toBeVisible();
+  await gotoUntilVisible(page, "/app/home", () => page.getByRole("link", { name: "WeVid app home" }).first());
+  await expect(page.getByRole("heading", { name: "Mixed media feed" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Aria Moon" })).toBeVisible();
+  await expect(page.getByText("backend entitlement")).toBeVisible();
 
   await page.goto("/app/profile");
   await expect(page.getByRole("heading", { name: "Aria Moon" })).toBeVisible();
@@ -71,8 +72,8 @@ test("covers authenticated enter to profile wallet age home create and unlock", 
   await expect(page.getByRole("button", { name: "Start age verification" })).toBeEnabled();
 
   await page.goto("/app/home");
-  await expect(page.getByRole("heading", { name: "Recommended" })).toBeVisible();
-  await expect(page.getByText("Studio sunrise session")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Mixed media feed" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Aria Moon" })).toBeVisible();
   await expect(page.getByText("Live now with access-gated chat")).toBeVisible();
 
   await page.goto("/app/create");
@@ -180,6 +181,11 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
 
   if (method === "GET" && url.pathname === "/v1/profiles/me/creator-onboarding") {
     sendJson(response, 200, creatorOnboarding());
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/v1/verification/status") {
+    sendJson(response, 200, verificationStatus());
     return;
   }
 
@@ -432,6 +438,52 @@ function creatorOnboarding() {
       { key: "wallet", label: "Wallet", state: "complete", required: true, actionHref: "/app/wallet" },
       { key: "age", label: "Age", state: "complete", required: true, actionHref: "/age" }
     ]
+  };
+}
+
+function verificationStatus() {
+  return {
+    capabilities: {
+      canAccessApp: true,
+      canCreateProfile: true,
+      canViewAgeRestrictedContent: true,
+      canStartCreatorOnboarding: true,
+      canCreateDraft: true,
+      canUploadMedia: true,
+      canPublishMedia: true,
+      canMonetize: true,
+      canReceivePayouts: true,
+      canAccessCreatorDashboard: true,
+      canCreateOrganization: true,
+      canAccessStudio: true,
+      canInviteTeam: false,
+      canUseTeamPublishing: false,
+      canUseAllocationWallets: false,
+      canUseComplianceExports: false,
+      canAccessEnterprise: false
+    },
+    missingRequirements: [],
+    nextBestAction: "creator_ready",
+    verificationSummary: {
+      ageAccess: verificationRecord("age_access", "didit", "portable_age_credential", "age_over_18"),
+      creatorKyc: verificationRecord("creator_kyc", "sumsub", "gov_id_selfie", "documentary"),
+      orgKyb: null
+    }
+  };
+}
+
+function verificationRecord(purpose: string, provider: string, method: string, assuranceLevel: string) {
+  return {
+    subjectType: "user",
+    subjectId: user().id,
+    purpose,
+    status: "valid",
+    provider,
+    method,
+    assuranceLevel,
+    verifiedAt: "2026-06-03T22:00:00.000Z",
+    expiresAt: null,
+    reusable: true
   };
 }
 

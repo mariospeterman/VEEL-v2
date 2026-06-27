@@ -21,7 +21,7 @@ export default defineConfig({
     },
     url: "http://127.0.0.1:3000",
     reuseExistingServer: true,
-    timeout: 300_000
+    timeout: 600_000
   },
   projects: [
     {

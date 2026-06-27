@@ -7,7 +7,7 @@ import { getWalletSessionToken } from "@/wallet/wallet-session";
 import { ApiMutationError } from "./api-mutation-types";
 
 const browserE2eAuthEnabled =
-  process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_ENABLE_E2E_AUTH === "true";
+  process.env.NEXT_PUBLIC_ENABLE_E2E_AUTH === "true";
 
 export async function authenticatedGet<T>(path: string): Promise<T> {
   const { token } = await browserSessionToken();

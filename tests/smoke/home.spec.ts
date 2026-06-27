@@ -1,30 +1,47 @@
 import { expect, test } from "@playwright/test";
+import type { BrowserContext } from "@playwright/test";
 
 const rawBackendCopy = /HTTP (401|403|404|429|500|503)|Missing or invalid bearer token|API is unavailable/;
+const e2eToken = "veel-e2e-token";
 
-test("renders the public landing with the current WEVID visual contract", async ({ page }) => {
+async function addE2eCookie(context: BrowserContext) {
+  await context.addCookies([
+    {
+      name: "veel_e2e_access_token",
+      value: e2eToken,
+      domain: "127.0.0.1",
+      path: "/",
+      httpOnly: false,
+      sameSite: "Lax"
+    }
+  ]);
+}
+
+test("renders the public landing with the current WeVid visual contract", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByRole("link", { name: "WEVID home" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "WeVid home" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Create without asking the algorithm for permission." })).toBeVisible();
-  await expect(page.getByRole("link", { name: /Start onboarding/ }).first()).toHaveAttribute("href", /\/enter\?mode=onboarding/);
-  await expect(page.getByRole("link", { name: "Log in" }).first()).toHaveAttribute("href", /\/enter\?mode=login/);
+  await expect(page.getByRole("button", { name: /Start onboarding/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Log in" }).first()).toBeVisible();
   await expect(page.getByText("Public legal copy here is a product placeholder")).toHaveCount(0);
 });
 
-test("renders login and onboarding entry surfaces", async ({ page }) => {
-  await page.goto("/enter?mode=login&next=%2Fapp%2Fhome", { waitUntil: "domcontentloaded", timeout: 20_000 });
+test("renders inline login and onboarding entry surfaces", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded", timeout: 20_000 });
+  await page.getByRole("button", { name: "Log in" }).first().click();
 
-  await expect(page.getByRole("heading", { name: "Log in to WEVID" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Wallet", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Embedded wallet", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Recovery", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Login to WeVid" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Connect wallet" })).toBeVisible();
+  await expect(page.getByText("Privy", { exact: true })).toBeVisible();
+  await expect(page.getByText("Turnkey", { exact: true })).toBeVisible();
 
-  await page.goto("/enter?mode=onboarding&next=%2Fapp%2Fhome", { waitUntil: "domcontentloaded", timeout: 20_000 });
+  await page.goto("/", { waitUntil: "domcontentloaded", timeout: 20_000 });
+  await page.getByRole("button", { name: /Start onboarding/ }).first().click();
 
-  await expect(page.getByRole("heading", { name: "Connect your wallet", level: 1 })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Continue to profile/ })).toBeDisabled();
-  await expect(page.getByText("Signing proves ownership only.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Set up access." })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Connect wallet" })).toBeVisible();
+  await expect(page.getByText("Required. Choose a Solana wallet, Privy, or Turnkey and sign ownership.")).toBeVisible();
 });
 
 test("renders the standalone age handoff without raw API/provider errors", async ({ page }) => {
@@ -58,11 +75,12 @@ test("enforces canonical app route ownership redirects", async ({ request }) => 
   }
 });
 
-test("renders the canonical protected app home shell through /app", async ({ page }) => {
+test("renders the canonical protected app home shell through /app", async ({ context, page }) => {
+  await addE2eCookie(context);
   await page.goto("/app/home", { waitUntil: "domcontentloaded", timeout: 45_000 });
 
-  await expect(page.getByRole("link", { name: /WEVID/ }).first()).toBeVisible();
-  await expect(page.getByRole("heading", { name: /Mixed media feed|Enter WEVID/ }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "WeVid app home" }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Mixed media feed|Enter WeVid/ }).first()).toBeVisible();
   await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
 });
 
