@@ -9,6 +9,7 @@ import {
   dailyQuotaWindowStart,
   quotaExceededResponse,
   resolveContentCreationAbusePolicy,
+  verifyCreatorCapability,
   verifyAppReadyAccess,
   videoMimeTypes,
   type RegisterContentRoutesOptions
@@ -50,6 +51,16 @@ export async function registerContentUploadRoutes(
     }
 
     try {
+      const creatorAccess = await verifyCreatorCapability(
+        access.supabaseUserId,
+        "canUploadMedia",
+        options
+      );
+
+      if (!creatorAccess.ok) {
+        return reply.code(creatorAccess.statusCode).send(creatorAccess.body);
+      }
+
       const content = await options.contentRepository.findOwnedContentForUpload({
         supabaseUserId: access.supabaseUserId,
         contentId: body.contentId

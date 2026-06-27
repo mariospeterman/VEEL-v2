@@ -15,6 +15,7 @@ interface OrganizationDashboardRow {
   state: OrganizationDashboard["organization"]["state"];
   plan: OrganizationDashboard["organization"]["plan"];
   kyb_state: OrganizationDashboard["organization"]["kybState"];
+  verification_kyb_status: "valid" | "invalid" | "pending" | "expired" | "revoked" | "blocked" | null;
   role: OrganizationDashboard["organization"]["role"];
   membership_state: OrganizationDashboard["organization"]["membershipState"];
   created_at: Date;
@@ -23,6 +24,8 @@ interface OrganizationDashboardRow {
   active_member_count: number;
   tier_waiver_state: OrganizationDashboard["governance"]["tierWaiverState"] | null;
 }
+
+type OrganizationKybState = NonNullable<OrganizationDashboard["organization"]["kybState"]> | null;
 
 export function createPostgresOrganizationRepository(database?: string | PostgresSql): OrganizationRepository {
   if (!database) {
@@ -59,6 +62,21 @@ export function createPostgresOrganizationRepository(database?: string | Postgre
           from tier_waivers
           where subject_type = 'organization'
           order by subject_id, starts_at desc
+        ),
+        latest_org_kyb as (
+          select distinct on (subject_id)
+            subject_id as organization_id,
+            case
+              when status = 'valid' and expires_at is not null and expires_at <= now() then 'expired'
+              else status
+            end as verification_kyb_status
+          from verification_records
+          where subject_type = 'organization'
+            and purpose = 'org_kyb'
+          order by subject_id,
+            case when status = 'valid' and (expires_at is null or expires_at > now()) then 0 else 1 end,
+            verified_at desc nulls last,
+            created_at desc
         )
         select
           om.id as membership_id,
@@ -73,12 +91,14 @@ export function createPostgresOrganizationRepository(database?: string | Postgre
           om.joined_at,
           coalesce(mc.member_count, 0) as member_count,
           coalesce(mc.active_member_count, 0) as active_member_count,
-          atw.tier_waiver_state
+          atw.tier_waiver_state,
+          lok.verification_kyb_status
         from organization_memberships om
         join target_user tu on tu.id = om.user_id
         join organizations o on o.id = om.organization_id
         left join member_counts mc on mc.organization_id = o.id
         left join active_tier_waivers atw on atw.organization_id = o.id
+        left join latest_org_kyb lok on lok.organization_id = o.id
         where om.state in ('active', 'invited')
           and (${input.cursor ?? null}::timestamptz is null or o.created_at < ${input.cursor ?? null}::timestamptz)
         order by o.created_at desc
@@ -106,7 +126,7 @@ function toDashboardPage(rows: OrganizationDashboardRow[], limit: number): Organ
 }
 
 function toDashboard(row: OrganizationDashboardRow): OrganizationDashboard {
-  const kybState = row.kyb_state ?? null;
+  const kybState = kybStateFromVerification(row.verification_kyb_status, row.kyb_state);
   const notices: OrganizationDashboard["notices"] = [];
 
   if (kybState !== "verified") {
@@ -147,8 +167,8 @@ function toDashboard(row: OrganizationDashboardRow): OrganizationDashboard {
     },
     capabilities: {
       rbacEnabled: true,
-      teamPublishingEnabled: row.state === "active",
-      consolidatedReportingEnabled: row.state === "active",
+      teamPublishingEnabled: row.state === "active" && kybState === "verified",
+      consolidatedReportingEnabled: row.state === "active" && kybState === "verified",
       complianceExportsEnabled: row.state === "active" && kybState === "verified"
     },
     rolePermissions: rolePermissions(row, kybState),
@@ -157,9 +177,32 @@ function toDashboard(row: OrganizationDashboardRow): OrganizationDashboard {
   };
 }
 
+function kybStateFromVerification(
+  verificationStatus: OrganizationDashboardRow["verification_kyb_status"],
+  legacyKybState: OrganizationDashboardRow["kyb_state"]
+): OrganizationKybState {
+  if (verificationStatus === "valid") {
+    return "verified";
+  }
+
+  if (verificationStatus === "pending") {
+    return "pending";
+  }
+
+  if (verificationStatus === "blocked" || verificationStatus === "revoked") {
+    return "rejected";
+  }
+
+  if (verificationStatus === "expired" || verificationStatus === "invalid") {
+    return "not_started";
+  }
+
+  return legacyKybState === undefined ? null : legacyKybState;
+}
+
 function rolePermissions(
   row: OrganizationDashboardRow,
-  kybState: OrganizationDashboard["organization"]["kybState"]
+  kybState: OrganizationKybState
 ): OrganizationDashboard["rolePermissions"] {
   return [
     permission(row, kybState, {
@@ -170,12 +213,14 @@ function rolePermissions(
     permission(row, kybState, {
       key: "publish_team_content",
       label: "Publish team content",
-      roles: ["owner", "admin", "member"]
+      roles: ["owner", "admin", "member"],
+      requiresKyb: true
     }),
     permission(row, kybState, {
       key: "view_consolidated_reporting",
       label: "View consolidated reporting",
-      roles: ["owner", "admin", "member", "viewer"]
+      roles: ["owner", "admin", "member", "viewer"],
+      requiresKyb: true
     }),
     permission(row, kybState, {
       key: "export_compliance",
@@ -193,7 +238,7 @@ function rolePermissions(
 
 function permission(
   row: OrganizationDashboardRow,
-  kybState: OrganizationDashboard["organization"]["kybState"],
+  kybState: OrganizationKybState,
   policy: {
     key: OrganizationDashboard["rolePermissions"][number]["key"];
     label: string;

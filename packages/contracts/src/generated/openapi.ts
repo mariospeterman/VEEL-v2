@@ -123,6 +123,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/verification/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Backend-owned verification capability status */
+        get: operations["getVerificationStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/wallets": {
         parameters: {
             query?: never;
@@ -2552,6 +2569,36 @@ export interface components {
             state: components["schemas"]["AgeState"];
             provider?: string | null;
         };
+        VerificationRecordSummary: {
+            /** @enum {string} */
+            subjectType: "user" | "organization" | "organization_person";
+            /** Format: uuid */
+            subjectId: string;
+            /** @enum {string} */
+            purpose: "age_access" | "adult_content_access" | "creator_kyc" | "payout_kyc" | "org_kyb" | "ubo_kyc" | "enterprise_review";
+            /** @enum {string} */
+            status: "valid" | "invalid" | "pending" | "expired" | "revoked" | "blocked";
+            provider: string;
+            method: string;
+            assuranceLevel: string;
+            /** Format: date-time */
+            verifiedAt: string | null;
+            /** Format: date-time */
+            expiresAt: string | null;
+            reusable: boolean;
+        };
+        VerificationStatus: {
+            capabilities: {
+                [key: string]: boolean;
+            };
+            missingRequirements: string[];
+            nextBestAction: string;
+            verificationSummary: {
+                ageAccess: components["schemas"]["VerificationRecordSummary"] | null;
+                creatorKyc: components["schemas"]["VerificationRecordSummary"] | null;
+                orgKyb: components["schemas"]["VerificationRecordSummary"] | null;
+            };
+        };
         Wallet: {
             /** Format: uuid */
             id: string;
@@ -4718,6 +4765,15 @@ export interface components {
                 "application/json": components["schemas"]["AgeStatus"];
             };
         };
+        /** @description Verification capability status */
+        VerificationStatus: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["VerificationStatus"];
+            };
+        };
         /** @description Wallet auth challenge */
         WalletAuthChallenge: {
             headers: {
@@ -6306,6 +6362,22 @@ export interface operations {
         responses: {
             200: components["responses"]["AgeStatus"];
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    getVerificationStatus: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["VerificationStatus"];
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     listWallets: {

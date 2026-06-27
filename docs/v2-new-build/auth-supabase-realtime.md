@@ -235,8 +235,10 @@ Do not connect AI tooling directly to production data. Use a development project
 ## Age/KYC Separation
 
 - Age gate: required for protected viewing/app access.
-- KYC/KYB: required for earning, tax, and compliance flows.
-- Normal viewer access should not require KYC unless product/legal policy says so.
+- Creator KYC: required only when a user attempts creator capabilities such as uploading media, publishing, monetization, payouts, or creator/studio management actions.
+- Organization KYB: required only for Studio, Enterprise, team publishing, allocation wallets, reporting, compliance exports, or business controls.
+- Normal viewer access must not require KYC/KYB unless product/legal policy says so.
+- Valid checks are reused when provider policy, legal basis, expiry, jurisdiction, and consent allow it. A valid creator KYC that proves over-threshold age can derive/refresh age access; age estimation alone cannot satisfy creator KYC.
 - Frontend receives only state/action, never raw provider payload.
 
 ## Locked Onboarding Decision
@@ -253,8 +255,9 @@ Rules:
 
 - No protected app entry without age verification.
 - No protected app entry without a wallet path.
+- No hard viewer/creator/studio fork during default onboarding. Creator and Studio/Enterprise shortcut intent is contextual and optional.
 - No double age verification per media item after the app-level age gate, unless a future jurisdiction/product rule explicitly requires it.
-- KYC/KYB remains separate from age verification and is only required for creator earning, tax/compliance, and risk workflows by default.
+- KYC/KYB remains separate from age verification and is only required for creator, earning, business, tax/compliance, and risk workflows by default.
 
 ## Implementation Decisions Required Before Coding
 

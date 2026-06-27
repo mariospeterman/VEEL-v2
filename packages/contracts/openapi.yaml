@@ -113,6 +113,19 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/AgeStatus" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+  /v1/verification/status:
+    get:
+      operationId: getVerificationStatus
+      tags: [Verification]
+      summary: Backend-owned verification capability status
+      parameters:
+        - in: query
+          name: organizationId
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { $ref: "#/components/responses/VerificationStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/wallets:
     get:
       operationId: listWallets
@@ -2018,6 +2031,7 @@ components:
     SessionState: { description: Session state, content: { application/json: { schema: { $ref: "#/components/schemas/SessionState" } } } }
     AgeSession: { description: Age assurance session, content: { application/json: { schema: { $ref: "#/components/schemas/AgeSession" } } } }
     AgeStatus: { description: Age state, content: { application/json: { schema: { $ref: "#/components/schemas/AgeStatus" } } } }
+    VerificationStatus: { description: Verification capability status, content: { application/json: { schema: { $ref: "#/components/schemas/VerificationStatus" } } } }
     WalletAuthChallenge: { description: Wallet auth challenge, content: { application/json: { schema: { $ref: "#/components/schemas/WalletAuthChallenge" } } } }
     WalletAuthSession: { description: Wallet auth session, content: { application/json: { schema: { $ref: "#/components/schemas/WalletAuthSession" } } } }
     WalletLinkChallenge: { description: Wallet link challenge, content: { application/json: { schema: { $ref: "#/components/schemas/WalletLinkChallenge" } } } }
@@ -2195,6 +2209,38 @@ components:
       properties:
         state: { $ref: "#/components/schemas/AgeState" }
         provider: { type: string, nullable: true }
+    VerificationRecordSummary:
+      type: object
+      required: [subjectType, subjectId, purpose, status, provider, method, assuranceLevel, verifiedAt, expiresAt, reusable]
+      properties:
+        subjectType: { type: string, enum: [user, organization, organization_person] }
+        subjectId: { type: string, format: uuid }
+        purpose: { type: string, enum: [age_access, adult_content_access, creator_kyc, payout_kyc, org_kyb, ubo_kyc, enterprise_review] }
+        status: { type: string, enum: [valid, invalid, pending, expired, revoked, blocked] }
+        provider: { type: string }
+        method: { type: string }
+        assuranceLevel: { type: string }
+        verifiedAt: { type: string, format: date-time, nullable: true }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        reusable: { type: boolean }
+    VerificationStatus:
+      type: object
+      required: [capabilities, missingRequirements, nextBestAction, verificationSummary]
+      properties:
+        capabilities:
+          type: object
+          additionalProperties: { type: boolean }
+        missingRequirements:
+          type: array
+          items: { type: string }
+        nextBestAction: { type: string }
+        verificationSummary:
+          type: object
+          required: [ageAccess, creatorKyc, orgKyb]
+          properties:
+            ageAccess: { oneOf: [{ $ref: "#/components/schemas/VerificationRecordSummary" }, { type: "null" }] }
+            creatorKyc: { oneOf: [{ $ref: "#/components/schemas/VerificationRecordSummary" }, { type: "null" }] }
+            orgKyb: { oneOf: [{ $ref: "#/components/schemas/VerificationRecordSummary" }, { type: "null" }] }
     Wallet:
       type: object
       required: [id, chain, address, provider, isPrimary]

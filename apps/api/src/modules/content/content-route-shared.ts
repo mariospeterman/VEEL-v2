@@ -4,6 +4,8 @@ import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js
 import type { AgeRepository } from "../age/types.js";
 import type { LiveRepository } from "../live/types.js";
 import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
+import { VerificationRepositoryConfigurationError } from "../verification/verification-repository.js";
+import type { VerificationRepository } from "../verification/types.js";
 import type { WalletRepository } from "../wallet/types.js";
 import type {
   ContentRepository,
@@ -19,6 +21,7 @@ export interface RegisterContentRoutesOptions {
   contentRepository: ContentRepository;
   mediaUploadProvider: MediaUploadProviderAdapter;
   liveRepository?: LiveRepository;
+  verificationRepository: VerificationRepository;
 }
 
 export const feedModes = new Set(["recommended", "following", "nsfw", "sfw", "live", "premium"]);
@@ -209,6 +212,60 @@ export async function verifyAppReadyAccess(
     ok: true,
     supabaseUserId: verifiedSession.supabaseUserId
   };
+}
+
+type CreatorCapability = "canUploadMedia" | "canPublishMedia" | "canMonetize";
+
+export async function verifyCreatorCapability(
+  supabaseUserId: string,
+  capability: CreatorCapability,
+  options: RegisterContentRoutesOptions
+): Promise<
+  | { ok: true }
+  | {
+      ok: false;
+      statusCode: 403 | 503;
+      body: {
+        code: string;
+        message: string;
+        missingRequirements?: string[];
+        nextBestAction?: string;
+      };
+    }
+> {
+  try {
+    const resolution = await options.verificationRepository.resolveCapabilities({
+      supabaseUserId
+    });
+
+    if (resolution.capabilities[capability]) {
+      return { ok: true };
+    }
+
+    return {
+      ok: false,
+      statusCode: 403,
+      body: {
+        code: "verification_required",
+        message: "Creator verification unlocks uploads, publishing, monetization, and payouts.",
+        missingRequirements: resolution.missingRequirements,
+        nextBestAction: resolution.nextBestAction
+      }
+    };
+  } catch (error) {
+    if (error instanceof VerificationRepositoryConfigurationError) {
+      return {
+        ok: false,
+        statusCode: 503,
+        body: {
+          code: "service_unavailable",
+          message: "Verification status is not configured"
+        }
+      };
+    }
+
+    throw error;
+  }
 }
 
 function bunnyProviderAssetIdFromPlaybackUrl(url: string): string | null {

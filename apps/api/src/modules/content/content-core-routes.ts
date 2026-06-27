@@ -18,6 +18,7 @@ import {
   nsfwLabels,
   quotaExceededResponse,
   resolveContentCreationAbusePolicy,
+  verifyCreatorCapability,
   verifyAppReadyAccess,
   withSignedPlayback,
   type RegisterContentRoutesOptions
@@ -300,6 +301,16 @@ export async function registerContentCoreRoutes(
     }
 
     try {
+      const creatorAccess = await verifyCreatorCapability(
+        access.supabaseUserId,
+        "canPublishMedia",
+        options
+      );
+
+      if (!creatorAccess.ok) {
+        return reply.code(creatorAccess.statusCode).send(creatorAccess.body);
+      }
+
       if (!options.contentRepository.publishOwnedContent) {
         return reply.code(503).send({
           code: "service_unavailable",

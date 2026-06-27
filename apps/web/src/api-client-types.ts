@@ -37,6 +37,28 @@ export type MutualsFeedPage = components["schemas"]["MutualsFeedPage"];
 export type MutualsMatchPage = components["schemas"]["MutualsPage"];
 export type AiCapabilities = components["schemas"]["AiCapabilities"];
 export type OrganizationDashboardPage = components["schemas"]["OrganizationDashboardPage"];
+export type VerificationStatus = {
+  capabilities: Record<string, boolean>;
+  missingRequirements: string[];
+  nextBestAction: string;
+  verificationSummary: {
+    ageAccess: VerificationRecordSummary | null;
+    creatorKyc: VerificationRecordSummary | null;
+    orgKyb: VerificationRecordSummary | null;
+  };
+};
+export type VerificationRecordSummary = {
+  subjectType: string;
+  subjectId: string;
+  purpose: string;
+  status: string;
+  provider: string;
+  method: string;
+  assuranceLevel: string;
+  verifiedAt: string | null;
+  expiresAt: string | null;
+  reusable: boolean;
+};
 export type AdminOpsSummary = components["schemas"]["AdminOpsSummary"];
 export type AdminNotificationHealth = components["schemas"]["AdminNotificationHealth"];
 export type AdminMutualsSafety = components["schemas"]["AdminMutualsSafety"];

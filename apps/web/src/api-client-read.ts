@@ -59,6 +59,7 @@ import type {
   SessionState,
   SubscriptionPage,
   SubscriptionPlanPage,
+  VerificationStatus,
   WalletList,
   WalletTransactionPage
 } from "./api-client-types";
@@ -175,6 +176,10 @@ export async function getMcpConsentRequest(requestId: string): Promise<ApiResult
 
 export async function getOrganizationDashboards(): Promise<ApiResult<OrganizationDashboardPage>> {
   return getJson<OrganizationDashboardPage>("/v1/organizations");
+}
+
+export async function getVerificationStatus(): Promise<ApiResult<VerificationStatus>> {
+  return getJson<VerificationStatus>("/v1/verification/status");
 }
 
 export async function getAdminOpsSummary(): Promise<ApiResult<AdminOpsSummary>> {

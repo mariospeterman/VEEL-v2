@@ -20,6 +20,7 @@ import { registerReferralRoutes } from "./modules/referral/referral-routes.js";
 import { registerRefundRoutes } from "./modules/refund/refund-routes.js";
 import { registerSessionRoutes } from "./modules/session/session-routes.js";
 import { registerSubscriptionRoutes } from "./modules/subscription/subscription-routes.js";
+import { registerVerificationRoutes } from "./modules/verification/verification-routes.js";
 import { registerWalletRoutes } from "./modules/wallet/wallet-routes.js";
 import { registerWalletAuthRoutes } from "./modules/auth/wallet-auth-routes.js";
 
@@ -56,6 +57,7 @@ export async function registerApiRoutes(
     adminRepository,
     aiRepository,
     mcpRepository,
+    verificationRepository,
     walletAuthRepository,
     onrampProvider
   } = dependencies;
@@ -75,6 +77,10 @@ export async function registerApiRoutes(
     ageProviderWaterfall,
     ageRepository
   });
+  await registerVerificationRoutes(app, {
+    authVerifier,
+    verificationRepository
+  });
   await registerProfileRoutes(app, {
     authVerifier,
     sessionRepository,
@@ -88,7 +94,8 @@ export async function registerApiRoutes(
     walletRepository,
     contentRepository,
     mediaUploadProvider,
-    liveRepository
+    liveRepository,
+    verificationRepository
   });
   await registerDiscoverRoutes(app, {
     authVerifier,

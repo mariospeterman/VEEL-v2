@@ -78,6 +78,19 @@ describe("database migrations", () => {
     expect(sql).not.toMatch(/raw_payload|document|selfie|face_image|identity_image/i);
   });
 
+  it("adds normalized verification records without storing identity media or raw provider payloads", () => {
+    const sql = readMigration("0069_normalized_verification_domain.sql");
+
+    expect(sql).toContain("create table verification_sessions");
+    expect(sql).toContain("create table verification_records");
+    expect(sql).toContain("create table verification_events");
+    expect(sql).toContain("purpose = 'age_access'");
+    expect(sql).toContain("purpose = 'creator_kyc'");
+    expect(sql).toContain("purpose = 'org_kyb'");
+    expect(sql).toContain("raw_payload_hash text");
+    expect(sql).not.toMatch(/raw_payload json|document_image|selfie_image|biometric_template|id_document/i);
+  });
+
   it("adds content feed foundation without playback secrets or entitlement shortcuts", () => {
     const sql = readMigration("0006_content_feed_foundation.sql");
 
