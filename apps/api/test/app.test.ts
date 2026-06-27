@@ -74,6 +74,12 @@ import type {
   SubscriptionPlan,
   SubscriptionRepository
 } from "../src/modules/subscription/types";
+import type {
+  CapabilityResolution,
+  VerificationProviderSession,
+  VerificationProviderWaterfall,
+  VerificationRepository
+} from "../src/modules/verification/types";
 
 describe("buildApi", () => {
   it("boots the Fastify skeleton and loads the OpenAPI document", async () => {
@@ -725,6 +731,144 @@ describe("buildApi", () => {
     });
 
     await app.close();
+  });
+
+  it("starts a creator KYC verification session through the provider waterfall", async () => {
+    vi.setSystemTime(new Date("2026-06-03T22:00:00.000Z"));
+    const createdSessions: unknown[] = [];
+    const providerSession: VerificationProviderSession = {
+      provider: "sumsub",
+      providerReference: "user:00000000-0000-4000-8000-000000000001",
+      providerApplicantId: "sumsub-applicant-1",
+      launchUrl: "https://sumsub.example/sdk?token=token-1",
+      expiresAt: new Date("2026-06-03T22:10:00.000Z"),
+      method: "gov_id_selfie",
+      assuranceLevel: "documentary"
+    };
+    const verificationProviderWaterfall: VerificationProviderWaterfall = {
+      async createSession(input) {
+        expect(input).toMatchObject({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          purpose: "creator_kyc",
+          providerPreference: "provider_first",
+          idempotencyKey: "creator-kyc-1"
+        });
+        return providerSession;
+      }
+    };
+    const verificationRepository: VerificationRepository = {
+      ...verificationRepositoryStub(),
+      async createPendingSession(input) {
+        createdSessions.push(input);
+        return "11111111-1111-4111-8111-111111111111";
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      verificationProviderWaterfall,
+      verificationRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/verification/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "creator-kyc-1"
+      },
+      payload: {
+        purpose: "creator_kyc"
+      }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(201);
+    expect(response.json()).toEqual({
+      id: "11111111-1111-4111-8111-111111111111",
+      provider: "sumsub",
+      providerReference: "user:00000000-0000-4000-8000-000000000001",
+      launchUrl: "https://sumsub.example/sdk?token=token-1",
+      expiresAt: "2026-06-03T22:10:00.000Z",
+      purpose: "creator_kyc"
+    });
+    expect(createdSessions).toMatchObject([
+      {
+        supabaseUserId: "00000000-0000-4000-8000-000000000001",
+        purpose: "creator_kyc",
+        providerSession
+      }
+    ]);
+
+    await app.close();
+    vi.useRealTimers();
+  });
+
+  it("accepts a signed Sumsub creator verification webhook and applies normalized state", async () => {
+    vi.stubEnv("SUMSUB_WEBHOOK_SECRET", "sumsub-test-secret");
+    const recordedEvents: unknown[] = [];
+    const appliedEvents: unknown[] = [];
+    const verificationRepository: VerificationRepository = {
+      ...verificationRepositoryStub(),
+      async recordProviderWebhook(input) {
+        recordedEvents.push(input);
+        return true;
+      },
+      async updateVerificationFromWebhook(input) {
+        appliedEvents.push(input);
+        return true;
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      verificationRepository
+    });
+    await app.ready();
+    const payload = {
+      type: "applicantReviewed",
+      applicantId: "sumsub-applicant",
+      correlationId: "sumsub-event",
+      reviewResult: {
+        reviewAnswer: "GREEN"
+      },
+      createdAt: "2026-06-06 01:00:00+0000"
+    };
+    const rawPayload = JSON.stringify(payload);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/webhooks/verification/sumsub",
+      headers: {
+        "content-type": "application/json",
+        "x-payload-digest": sumsubDigest(rawPayload),
+        "x-payload-digest-alg": "HMAC_SHA256_HEX"
+      },
+      payload: rawPayload
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(202);
+    expect(response.json()).toEqual({
+      provider: "sumsub",
+      received: 1,
+      processed: 1
+    });
+    expect(recordedEvents).toMatchObject([
+      {
+        provider: "sumsub",
+        providerEventId: "sumsub-event",
+        eventType: "applicantReviewed"
+      }
+    ]);
+    expect(appliedEvents).toMatchObject([
+      {
+        provider: "sumsub",
+        providerEventId: "sumsub-event",
+        providerReference: "sumsub-applicant",
+        status: "valid"
+      }
+    ]);
+
+    await app.close();
+    vi.unstubAllEnvs();
   });
 
   it("updates the current profile after bootstrapping the Veel user row", async () => {
@@ -3209,6 +3353,7 @@ describe("buildApi", () => {
         AGE_VERIFICATION_REVERIFY_MODE: "risk_or_expiry",
         AGE_VERIFICATION_REVERIFY_DAYS: 365,
         SUMSUB_API_BASE_URL: "https://api.sumsub.com",
+        DIDIT_API_BASE_URL: "https://verification.didit.me",
         YOTI_API_BASE_URL: "https://age.yoti.com/api/v1",
         YOTI_LAUNCH_BASE_URL: "https://age.yoti.com",
         VERIFF_API_BASE_URL: "https://stationapi.veriff.com",
@@ -3298,6 +3443,7 @@ describe("buildApi", () => {
       AGE_VERIFICATION_REVERIFY_MODE: "risk_or_expiry",
       AGE_VERIFICATION_REVERIFY_DAYS: 365,
       SUMSUB_API_BASE_URL: "https://api.sumsub.com",
+      DIDIT_API_BASE_URL: "https://verification.didit.me",
       YOTI_API_BASE_URL: "https://age.yoti.com/api/v1",
       YOTI_LAUNCH_BASE_URL: "https://age.yoti.com",
       VERIFF_API_BASE_URL: "https://stationapi.veriff.com",
@@ -9751,6 +9897,60 @@ function sessionRepositoryWithProfile(options: {
       await options.onEnsure?.(supabaseUserId);
     },
     findProfileBySupabaseUserId: options.onFind
+  };
+}
+
+function verificationRepositoryStub(
+  resolution: Partial<CapabilityResolution> = {}
+): VerificationRepository {
+  const defaultResolution: CapabilityResolution = {
+    capabilities: {
+      canAccessApp: true,
+      canCreateProfile: true,
+      canViewAgeRestrictedContent: true,
+      canStartCreatorOnboarding: true,
+      canCreateDraft: true,
+      canUploadMedia: false,
+      canPublishMedia: false,
+      canMonetize: false,
+      canReceivePayouts: false,
+      canAccessCreatorDashboard: true,
+      canCreateOrganization: true,
+      canAccessStudio: true,
+      canInviteTeam: false,
+      canUseTeamPublishing: false,
+      canUseAllocationWallets: false,
+      canUseComplianceExports: false,
+      canAccessEnterprise: false
+    },
+    missingRequirements: ["creator_kyc_required"],
+    nextBestAction: "verify_creator_identity",
+    verificationSummary: {
+      ageAccess: null,
+      creatorKyc: null,
+      orgKyb: null
+    }
+  };
+
+  return {
+    async createPendingSession() {
+      return "11111111-1111-4111-8111-111111111111";
+    },
+    async recordProviderWebhook() {
+      return true;
+    },
+    async updateVerificationFromWebhook() {
+      return true;
+    },
+    async findLatestUserVerification() {
+      return null;
+    },
+    async findLatestOrganizationVerification() {
+      return null;
+    },
+    async resolveCapabilities() {
+      return { ...defaultResolution, ...resolution };
+    }
   };
 }
 

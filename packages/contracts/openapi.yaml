@@ -126,6 +126,34 @@ paths:
         "200": { $ref: "#/components/responses/VerificationStatus" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/verification/sessions:
+    post:
+      operationId: createVerificationSession
+      tags: [Verification]
+      summary: Start creator KYC or organization KYB provider session
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateVerificationSession"
+      responses:
+        "201": { $ref: "#/components/responses/VerificationSession" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/webhooks/verification/{provider}:
+    post:
+      operationId: receiveVerificationWebhook
+      tags: [Verification]
+      security: []
+      summary: Receive signed creator KYC or organization KYB provider webhook
+      parameters:
+        - $ref: "#/components/parameters/VerificationProvider"
+      responses:
+        "202": { $ref: "#/components/responses/ProviderWebhookReceipt" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/wallets:
     get:
       operationId: listWallets
@@ -1937,8 +1965,14 @@ components:
       in: path
       required: true
       schema: { type: string, enum: [yoti, sumsub, veriff, persona] }
+    VerificationProvider:
+      name: provider
+      in: path
+      required: true
+      schema: { type: string, enum: [sumsub, didit, persona, veriff] }
   requestBodies:
     CreateAgeSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateAgeSessionRequest" } } } }
+    CreateVerificationSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateVerificationSessionRequest" } } } }
     CreateWalletAuthChallenge: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateWalletAuthChallengeRequest" } } } }
     CreateWalletAuthSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateWalletAuthSessionRequest" } } } }
     CreateWalletLinkChallenge: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateWalletLinkChallengeRequest" } } } }
@@ -2032,6 +2066,8 @@ components:
     AgeSession: { description: Age assurance session, content: { application/json: { schema: { $ref: "#/components/schemas/AgeSession" } } } }
     AgeStatus: { description: Age state, content: { application/json: { schema: { $ref: "#/components/schemas/AgeStatus" } } } }
     VerificationStatus: { description: Verification capability status, content: { application/json: { schema: { $ref: "#/components/schemas/VerificationStatus" } } } }
+    VerificationSession: { description: Verification provider session, content: { application/json: { schema: { $ref: "#/components/schemas/VerificationSession" } } } }
+    ProviderWebhookReceipt: { description: Provider webhook receipt, content: { application/json: { schema: { $ref: "#/components/schemas/ProviderWebhookReceipt" } } } }
     WalletAuthChallenge: { description: Wallet auth challenge, content: { application/json: { schema: { $ref: "#/components/schemas/WalletAuthChallenge" } } } }
     WalletAuthSession: { description: Wallet auth session, content: { application/json: { schema: { $ref: "#/components/schemas/WalletAuthSession" } } } }
     WalletLinkChallenge: { description: Wallet link challenge, content: { application/json: { schema: { $ref: "#/components/schemas/WalletLinkChallenge" } } } }
@@ -2209,6 +2245,30 @@ components:
       properties:
         state: { $ref: "#/components/schemas/AgeState" }
         provider: { type: string, nullable: true }
+    CreateVerificationSessionRequest:
+      type: object
+      required: [purpose]
+      properties:
+        purpose: { type: string, enum: [creator_kyc, org_kyb] }
+        providerPreference: { type: string, enum: [provider_first, sumsub, didit, persona, veriff], default: provider_first }
+        organizationId: { type: string, format: uuid, nullable: true }
+    VerificationSession:
+      type: object
+      required: [id, provider, providerReference, launchUrl, expiresAt, purpose]
+      properties:
+        id: { type: string, format: uuid }
+        provider: { type: string, enum: [sumsub, didit, persona, veriff] }
+        providerReference: { type: string }
+        launchUrl: { type: string, format: uri }
+        expiresAt: { type: string, format: date-time }
+        purpose: { type: string, enum: [creator_kyc, org_kyb] }
+    ProviderWebhookReceipt:
+      type: object
+      required: [provider, received, processed]
+      properties:
+        provider: { type: string }
+        received: { type: integer, minimum: 0 }
+        processed: { type: integer, minimum: 0 }
     VerificationRecordSummary:
       type: object
       required: [subjectType, subjectId, purpose, status, provider, method, assuranceLevel, verifiedAt, expiresAt, reusable]

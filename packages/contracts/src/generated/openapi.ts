@@ -140,6 +140,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/verification/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start creator KYC or organization KYB provider session */
+        post: operations["createVerificationSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/webhooks/verification/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Receive signed creator KYC or organization KYB provider webhook */
+        post: operations["receiveVerificationWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/wallets": {
         parameters: {
             query?: never;
@@ -2569,6 +2603,35 @@ export interface components {
             state: components["schemas"]["AgeState"];
             provider?: string | null;
         };
+        CreateVerificationSessionRequest: {
+            /** @enum {string} */
+            purpose: "creator_kyc" | "org_kyb";
+            /**
+             * @default provider_first
+             * @enum {string}
+             */
+            providerPreference: "provider_first" | "sumsub" | "didit" | "persona" | "veriff";
+            /** Format: uuid */
+            organizationId?: string | null;
+        };
+        VerificationSession: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            provider: "sumsub" | "didit" | "persona" | "veriff";
+            providerReference: string;
+            /** Format: uri */
+            launchUrl: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** @enum {string} */
+            purpose: "creator_kyc" | "org_kyb";
+        };
+        ProviderWebhookReceipt: {
+            provider: string;
+            received: number;
+            processed: number;
+        };
         VerificationRecordSummary: {
             /** @enum {string} */
             subjectType: "user" | "organization" | "organization_person";
@@ -4774,6 +4837,24 @@ export interface components {
                 "application/json": components["schemas"]["VerificationStatus"];
             };
         };
+        /** @description Verification provider session */
+        VerificationSession: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["VerificationSession"];
+            };
+        };
+        /** @description Provider webhook receipt */
+        ProviderWebhookReceipt: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ProviderWebhookReceipt"];
+            };
+        };
         /** @description Wallet auth challenge */
         WalletAuthChallenge: {
             headers: {
@@ -5961,11 +6042,17 @@ export interface components {
         Handle: string;
         MediaProvider: "bunny" | "livepeer";
         AgeProvider: "yoti" | "sumsub" | "veriff" | "persona";
+        VerificationProvider: "sumsub" | "didit" | "persona" | "veriff";
     };
     requestBodies: {
         CreateAgeSession: {
             content: {
                 "application/json": components["schemas"]["CreateAgeSessionRequest"];
+            };
+        };
+        CreateVerificationSession: {
+            content: {
+                "application/json": components["schemas"]["CreateVerificationSessionRequest"];
             };
         };
         CreateWalletAuthChallenge: {
@@ -6376,6 +6463,42 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["VerificationStatus"];
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createVerificationSession: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["CreateVerificationSession"];
+        responses: {
+            201: components["responses"]["VerificationSession"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    receiveVerificationWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: components["parameters"]["VerificationProvider"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: components["responses"]["ProviderWebhookReceipt"];
+            400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             503: components["responses"]["ServiceUnavailable"];
         };

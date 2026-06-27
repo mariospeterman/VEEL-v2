@@ -58,6 +58,7 @@ export async function registerApiRoutes(
     aiRepository,
     mcpRepository,
     verificationRepository,
+    verificationProviderWaterfall,
     walletAuthRepository,
     onrampProvider
   } = dependencies;
@@ -79,7 +80,8 @@ export async function registerApiRoutes(
   });
   await registerVerificationRoutes(app, {
     authVerifier,
-    verificationRepository
+    verificationRepository,
+    verificationProviderWaterfall
   });
   await registerProfileRoutes(app, {
     authVerifier,

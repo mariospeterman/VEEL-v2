@@ -3,6 +3,9 @@ import type { components } from "@veel/contracts";
 export type User = components["schemas"]["User"];
 export type CreateAgeSessionRequest = components["schemas"]["CreateAgeSessionRequest"];
 export type AgeSession = components["schemas"]["AgeSession"];
+export type CreateVerificationSessionRequest =
+  components["schemas"]["CreateVerificationSessionRequest"];
+export type VerificationSession = components["schemas"]["VerificationSession"];
 export type UpdateProfileRequest = components["schemas"]["UpdateProfileRequest"];
 export type CreateWalletAuthChallengeRequest =
   components["schemas"]["CreateWalletAuthChallengeRequest"];

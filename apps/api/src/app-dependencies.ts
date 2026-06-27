@@ -63,7 +63,8 @@ import { createWalletOnrampProvider } from "./modules/wallet/wallet-onramp-adapt
 import { createPostgresWalletRepository } from "./modules/wallet/wallet-repository.js";
 import type { WalletOnrampProviderAdapter, WalletRepository } from "./modules/wallet/types.js";
 import { createPostgresVerificationRepository } from "./modules/verification/verification-repository.js";
-import type { VerificationRepository } from "./modules/verification/types.js";
+import { createVerificationProviderWaterfall } from "./modules/verification/verification-provider-adapters.js";
+import type { VerificationProviderWaterfall, VerificationRepository } from "./modules/verification/types.js";
 import { createPostgresClient, type PostgresSql } from "./shared/postgres.js";
 
 export interface BuildApiOptions {
@@ -98,6 +99,7 @@ export interface BuildApiOptions {
   aiRepository?: AiRepository;
   mcpRepository?: McpRepository;
   verificationRepository?: VerificationRepository;
+  verificationProviderWaterfall?: VerificationProviderWaterfall;
   postgresClient?: PostgresSql;
 }
 
@@ -134,6 +136,7 @@ export interface ApiDependencies {
   aiRepository: AiRepository;
   mcpRepository: McpRepository;
   verificationRepository: VerificationRepository;
+  verificationProviderWaterfall: VerificationProviderWaterfall;
 }
 
 export function createApiDependencies(
@@ -202,6 +205,8 @@ export function createApiDependencies(
     aiRepository: options.aiRepository ?? createPostgresAiRepository(postgresClient),
     mcpRepository: options.mcpRepository ?? createPostgresMcpRepository(postgresClient),
     verificationRepository:
-      options.verificationRepository ?? createPostgresVerificationRepository(postgresClient)
+      options.verificationRepository ?? createPostgresVerificationRepository(postgresClient),
+    verificationProviderWaterfall:
+      options.verificationProviderWaterfall ?? createVerificationProviderWaterfall(app.config)
   };
 }

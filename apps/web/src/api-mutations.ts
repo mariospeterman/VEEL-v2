@@ -14,6 +14,7 @@ export type {
   ContentUnlockIntent,
   CreateAccessPassIntentRequest,
   CreateAgeSessionRequest,
+  CreateVerificationSessionRequest,
   CreateContentRequest,
   CreateLivePassIntentRequest,
   CreateMessageRequest,
@@ -40,6 +41,7 @@ export type {
   UpdateContentRequest,
   UpdateProfileRequest,
   UploadSession,
+  VerificationSession,
   User,
   Wallet,
   WalletAuthChallenge,
@@ -53,6 +55,7 @@ import type {
   ContentUnlockIntent,
   CreateAccessPassIntentRequest,
   CreateAgeSessionRequest,
+  CreateVerificationSessionRequest,
   CreateContentRequest,
   CreateLivePassIntentRequest,
   CreateMessageRequest,
@@ -79,6 +82,7 @@ import type {
   UpdateContentRequest,
   UpdateProfileRequest,
   UploadSession,
+  VerificationSession,
   User,
   Wallet,
   WalletAuthChallenge,
@@ -88,6 +92,12 @@ import type {
 
 export async function createAgeSession(body: CreateAgeSessionRequest): Promise<AgeSession> {
   return authenticatedMutation<AgeSession>("/v1/age/sessions", "POST", body);
+}
+
+export async function createVerificationSession(
+  body: CreateVerificationSessionRequest
+): Promise<VerificationSession> {
+  return authenticatedMutation<VerificationSession>("/v1/verification/sessions", "POST", body);
 }
 
 export async function updateMyProfile(body: UpdateProfileRequest): Promise<User> {

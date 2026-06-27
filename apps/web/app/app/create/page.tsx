@@ -3,6 +3,7 @@ import { requireAppAccess } from "@/supabase/route-guard";
 import { AppShell } from "../../app-shell";
 import { Card, Fact, PageHeader, StatusPill } from "../../ui";
 import { CreateWorkspace } from "../../create/create-workspace";
+import { CreatorVerificationGate } from "./creator-verification-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ export default async function CreatePage() {
   await requireAppAccess("/app/create");
   const verification = await getVerificationStatus();
   const canUpload = verification.ok && verification.data.capabilities.canUploadMedia === true;
+  const verificationData = verification.ok ? verification.data : null;
 
   return (
     <AppShell>
@@ -29,7 +31,7 @@ export default async function CreatePage() {
           </PageHeader>
 
           <section className="grid gap-3">
-            {canUpload ? <CreateWorkspace /> : <CreatorVerificationGate />}
+            {canUpload ? <CreateWorkspace /> : <CreatorVerificationGate verification={verificationData} />}
             {steps.map((step) => (
               <Card className="p-4" key={step.label}>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -67,24 +69,5 @@ export default async function CreatePage() {
         </aside>
       </section>
     </AppShell>
-  );
-}
-
-function CreatorVerificationGate() {
-  return (
-    <Card className="p-5">
-      <p className="text-sm font-medium text-(--accent)">Creator verification</p>
-      <h2 className="mt-2 text-xl font-semibold tracking-normal">Unlock uploads and publishing</h2>
-      <p className="mt-2 text-sm leading-6 text-(--muted)">
-        Creator verification unlocks uploads, publishing, monetization, and payouts. You already
-        passed age verification; WeVid will not ask for that again unless required.
-      </p>
-      <a
-        className="mt-4 inline-flex min-h-11 items-center rounded border border-(--line) px-4 text-sm font-semibold"
-        href="/app/profile"
-      >
-        Verify creator identity
-      </a>
-    </Card>
   );
 }

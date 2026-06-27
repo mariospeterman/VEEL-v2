@@ -28,7 +28,11 @@ Current implementation state:
 
 - `POST /v1/age/sessions` is wired to an injectable backend provider waterfall.
 - `GET /v1/age/status` is the browser-safe age read projection. `/age` reads it through the typed web API helper and starts `POST /v1/age/sessions` only after explicit authenticated user action.
+- `GET /v1/verification/status` is the backend-owned capability projection for app, creator, Studio, and enterprise access.
+- `POST /v1/verification/sessions` starts creator KYC or organization KYB sessions. The browser receives only a hosted provider launch URL; it cannot mark KYC/KYB complete.
+- `POST /v1/webhooks/verification/{provider}` accepts signed KYC/KYB callbacks and writes normalized `verification_records`.
 - The runtime waterfall has real HTTP session adapters for Yoti, Persona, Veriff, and Sumsub. Each adapter is inert until its exact env/config is present, and all unconfigured or failing providers fail closed with `503`.
+- The creator/business verification waterfall has real HTTP session adapters for Didit, Sumsub, Persona, and Veriff. Didit and Sumsub can serve creator KYC and org KYB when their purpose-specific workflows/levels are configured. Persona and Veriff are currently creator KYC documentary fallbacks only.
 - The landing reusable-first path tries Yoti/Persona-style age assurance first. Sumsub and Veriff remain explicit fallback/provider choices and creator-compliance candidates, not ordinary viewer onboarding defaults.
 - Successful provider session starts are stored as pending `age_verifications` rows with provider reference, state, rule/jurisdiction metadata, and timestamps only.
 - Raw provider payloads, identity images, document data, and browser-completed age state are not accepted by this route.
@@ -150,7 +154,25 @@ Never store raw identity documents, selfies, registry files, UBO documents, biom
 - `SUMSUB_SECRET_KEY`
 - `SUMSUB_WEBHOOK_SECRET`
 - `SUMSUB_LEVEL_NAME`
+- `SUMSUB_CREATOR_KYC_LEVEL_NAME`
+- `SUMSUB_ORG_KYB_LEVEL_NAME`
 - `SUMSUB_API_BASE_URL=https://api.sumsub.com`
+- `DIDIT_API_KEY`
+- `DIDIT_WEBHOOK_SECRET`
+- `DIDIT_KYC_WORKFLOW_ID`
+- `DIDIT_KYB_WORKFLOW_ID`
+- `DIDIT_API_BASE_URL=https://verification.didit.me`
+
+`SUMSUB_LEVEL_NAME` remains a compatibility fallback. Production should prefer separate creator and organization levels so creator KYC does not accidentally satisfy organization KYB or the reverse.
+
+### Creator KYC / Org KYB runtime behavior
+
+- Creator upload, publish, monetization, and payout capabilities require `verification_records.purpose=creator_kyc` with `status=valid`.
+- Studio/enterprise business capabilities require `verification_records.purpose=org_kyb` with `status=valid`.
+- Team publishing requires both valid org KYB and a valid human creator KYC for the acting creator.
+- Session creation stores a pending `verification_sessions` row and a pending normalized record.
+- Signed provider webhooks update the pending session and append a normalized record.
+- Raw provider payloads, identity documents, selfies, biometric templates, registry files, and private provider review comments stay out of core app tables and browser resources.
 
 ### Required dashboard setup
 

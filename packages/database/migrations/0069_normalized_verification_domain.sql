@@ -15,7 +15,7 @@ create table verification_sessions (
     'ubo_kyc',
     'enterprise_review'
   )),
-  provider text not null check (provider in ('sumsub', 'yoti', 'persona', 'veriff', 'manual', 'internal')),
+  provider text not null check (provider in ('sumsub', 'yoti', 'persona', 'veriff', 'didit', 'manual', 'internal')),
   provider_session_id text,
   provider_applicant_id text,
   provider_inquiry_id text,
@@ -72,7 +72,7 @@ create table verification_records (
     'enterprise_review'
   )),
   status text not null check (status in ('valid', 'invalid', 'pending', 'expired', 'revoked', 'blocked')),
-  provider text not null check (provider in ('sumsub', 'yoti', 'persona', 'veriff', 'manual', 'internal')),
+  provider text not null check (provider in ('sumsub', 'yoti', 'persona', 'veriff', 'didit', 'manual', 'internal')),
   provider_reference text,
   method text not null check (method in (
     'reusable_age',
@@ -109,7 +109,7 @@ create table verification_records (
 create table verification_events (
   id uuid primary key default gen_random_uuid(),
   session_id uuid references verification_sessions(id),
-  provider text not null check (provider in ('sumsub', 'yoti', 'persona', 'veriff', 'manual', 'internal')),
+  provider text not null check (provider in ('sumsub', 'yoti', 'persona', 'veriff', 'didit', 'manual', 'internal')),
   event_type text not null,
   idempotency_key text,
   payload_hash text not null,
