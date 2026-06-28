@@ -47,7 +47,7 @@ interface WalletLinkPanelProps {
 }
 
 export function WalletLinkPanel({ authState, compact = false, loginSimple = false, onLinked, reloadOnSession = true }: WalletLinkPanelProps) {
-  const { wallets } = useWallet();
+  const { select, wallets } = useWallet();
   const [mounted, setMounted] = useState(false);
   const [chooserOpen, setChooserOpen] = useState(false);
   const [state, setState] = useState<"idle" | "linking" | "linked" | "error">("idle");
@@ -87,6 +87,8 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
       if (wallet.readyState === WalletReadyState.Unsupported) {
         throw new ApiMutationError(`${wallet.adapter.name} is not supported in this browser.`);
       }
+
+      select(wallet.adapter.name);
 
       if (!wallet.adapter.connected) {
         await wallet.adapter.connect();
@@ -338,7 +340,33 @@ function walletNameIncludes(wallet: Wallet, value: string) {
 function isAllowedSolanaWallet(wallet: Wallet) {
   const name = wallet.adapter.name.toLowerCase();
 
-  return name.includes("phantom") || name.includes("solflare") || name.includes("backpack");
+  if (isKnownEvmOnlyWalletName(name)) {
+    return false;
+  }
+
+  return Boolean(getMessageSigner(wallet)) || isKnownSolanaWalletName(name);
+}
+
+function isKnownSolanaWalletName(name: string) {
+  return (
+    name.includes("backpack") ||
+    name.includes("glow") ||
+    name.includes("phantom") ||
+    name.includes("solana mobile") ||
+    name.includes("solflare") ||
+    name.includes("ultimate")
+  );
+}
+
+function isKnownEvmOnlyWalletName(name: string) {
+  return (
+    name.includes("coinbase") ||
+    name.includes("metamask") ||
+    name.includes("rabby") ||
+    name.includes("rainbow") ||
+    name.includes("safepal") ||
+    name.includes("trust wallet")
+  );
 }
 
 function providerForWallet(wallet: Wallet | null): ExternalWalletProvider {

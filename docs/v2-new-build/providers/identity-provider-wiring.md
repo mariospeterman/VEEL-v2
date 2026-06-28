@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: documentation
-Last updated: 2026-06-27
+Last updated: 2026-06-28
 Source of truth: yes
 
 Owns:
@@ -63,11 +63,11 @@ Current implementation state:
 ### Android
 
 - Supported through Solana wallet-adapter compatible wallets where a wallet exposes the wallet-standard/mobile-wallet flow.
-- `@solana-mobile/wallet-standard-mobile` can be added as a direct web dependency when the package manager is available and Android device QA is scheduled.
+- `@solana/wallet-adapter-react` adds wallet-standard adapters and injects Solana Mobile Wallet Adapter on supported mobile web. The custom WeVid chooser must not hardcode only Phantom/Solflare; it should show Solana-capable message-signing adapters while filtering obvious non-Solana/EVM-only wallet names.
 
 ### iOS
 
-- There is no generic Solana Mobile Wallet Adapter equivalent for iOS web in this repo.
+- There is no generic Solana Mobile Wallet Adapter equivalent for iOS web in this repo. Current Solana Mobile Wallet Adapter web support is Android/Chrome-oriented.
 - iOS support must be proven through injected wallet browsers, wallet-specific universal/deep links, or embedded wallet providers.
 - Privy/Turnkey are the preferred iOS-safe onboarding route once their Solana signing UX is verified on the production domain.
 
