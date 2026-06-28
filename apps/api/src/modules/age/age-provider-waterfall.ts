@@ -2,6 +2,7 @@ import type { ServerEnv } from "@veel/config";
 import {
   AgeProviderHttpError,
   createDiditAgeProviderAdapter,
+  createMockAgeProviderAdapter,
   createPersonaAgeProviderAdapter,
   createSumsubAgeProviderAdapter,
   createVeriffAgeProviderAdapter,
@@ -36,6 +37,7 @@ export class AgeProviderIntegrationPendingError extends Error {
 
 export function createAgeProviderWaterfall(env: ServerEnv): AgeProviderWaterfall {
   return createStaticAgeProviderWaterfall([
+    createMockAgeProviderAdapter(env),
     createDiditAgeProviderAdapter(env),
     createYotiAgeProviderAdapter(env),
     createPersonaAgeProviderAdapter(env),
@@ -47,25 +49,34 @@ export function createAgeProviderWaterfall(env: ServerEnv): AgeProviderWaterfall
 export function createStaticAgeProviderWaterfall(
   adapters: AgeProviderAdapter[]
 ): AgeProviderWaterfall {
-  const adaptersByProvider = new Map(adapters.map((adapter) => [adapter.provider, adapter]));
+  const adaptersByProvider = new Map<AgeProvider, AgeProviderAdapter[]>();
+
+  for (const adapter of adapters) {
+    adaptersByProvider.set(adapter.provider, [
+      ...(adaptersByProvider.get(adapter.provider) ?? []),
+      adapter
+    ]);
+  }
 
   return {
     async createSession(input): Promise<AgeProviderSession> {
       for (const provider of providerOrder(input.providerPreference)) {
-        const adapter = adaptersByProvider.get(provider);
+        const providerAdapters = adaptersByProvider.get(provider) ?? [];
 
-        if (!adapter?.isConfigured()) {
-          continue;
-        }
-
-        try {
-          return await adapter.createSession(input);
-        } catch (error) {
-          if (error instanceof AgeProviderHttpError && error.status >= 500) {
+        for (const adapter of providerAdapters) {
+          if (!adapter.isConfigured()) {
             continue;
           }
 
-          throw error;
+          try {
+            return await adapter.createSession(input);
+          } catch (error) {
+            if (error instanceof AgeProviderHttpError && error.status >= 500) {
+              continue;
+            }
+
+            throw error;
+          }
         }
       }
 

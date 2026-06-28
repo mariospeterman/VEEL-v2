@@ -90,6 +90,36 @@ export function createYotiAgeProviderAdapter(env: ServerEnv): AgeProviderAdapter
   };
 }
 
+const mockAgeProviderReferencePrefix = "mock-age:";
+
+export function isMockAgeProviderReference(env: ServerEnv, providerReference: string): boolean {
+  return (
+    env.NODE_ENV !== "production" &&
+    env.AGE_VERIFICATION_ALLOW_MOCK_PROVIDER &&
+    providerReference.startsWith(mockAgeProviderReferencePrefix)
+  );
+}
+
+export function createMockAgeProviderAdapter(env: ServerEnv): AgeProviderAdapter {
+  return {
+    provider: "didit",
+    isConfigured() {
+      return env.NODE_ENV !== "production" && env.AGE_VERIFICATION_ALLOW_MOCK_PROVIDER;
+    },
+    async createSession(input) {
+      const providerReference = `${mockAgeProviderReferencePrefix}${input.supabaseUserId}:${input.idempotencyKey}`;
+
+      return {
+        provider: "didit",
+        providerReference,
+        launchUrl: `${input.callbackUrl}?provider=mock&reference=${encodeURIComponent(providerReference)}`,
+        expiresAt: expiresInSeconds(15 * 60),
+        rule: "over_18"
+      };
+    }
+  };
+}
+
 export function createDiditAgeProviderAdapter(env: ServerEnv): AgeProviderAdapter {
   return {
     provider: "didit",

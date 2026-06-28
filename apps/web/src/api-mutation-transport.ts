@@ -1,6 +1,6 @@
 "use client";
 
-import { parsePublicWebEnv } from "@veel/config/public";
+import { readPublicWebEnv } from "@/public-env";
 import { e2eAuthCookieName } from "@/supabase/auth-cookie";
 import { createSupabaseBrowserClient } from "@/supabase/client";
 import { getWalletSessionToken } from "@/wallet/wallet-session";
@@ -11,7 +11,7 @@ const browserE2eAuthEnabled =
 
 export async function authenticatedGet<T>(path: string): Promise<T> {
   const { token } = await browserSessionToken();
-  const env = parsePublicWebEnv(process.env);
+  const env = readPublicWebEnv();
   const response = await mutationFetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
     cache: "no-store",
     headers: {
@@ -58,7 +58,7 @@ export async function publicMutation<T>(
   method: "POST",
   body: unknown
 ): Promise<T> {
-  const env = parsePublicWebEnv(process.env);
+  const env = readPublicWebEnv();
   const response = await mutationFetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
     body: JSON.stringify(body),
     cache: "no-store",
@@ -83,7 +83,7 @@ async function sendAuthenticatedMutation(
   body: unknown
 ): Promise<Response> {
   const { token } = await browserSessionToken();
-  const env = parsePublicWebEnv(process.env);
+  const env = readPublicWebEnv();
 
   return mutationFetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
     body: JSON.stringify(body),

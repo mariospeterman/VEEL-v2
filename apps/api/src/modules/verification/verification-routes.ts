@@ -2,7 +2,11 @@ import type { FastifyInstance } from "fastify";
 import { createHash } from "node:crypto";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { SupabaseAuthVerifier } from "../session/types.js";
-import { VerificationProviderHttpError, VerificationProviderUnavailableError } from "./verification-provider-adapters.js";
+import {
+  isMockVerificationProviderReference,
+  VerificationProviderHttpError,
+  VerificationProviderUnavailableError
+} from "./verification-provider-adapters.js";
 import { VerificationRepositoryConfigurationError } from "./verification-repository.js";
 import {
   normalizeVerificationWebhook,
@@ -152,6 +156,19 @@ export async function registerVerificationRoutes(
         organizationId: typeof body?.organizationId === "string" ? body.organizationId : null,
         providerSession
       });
+
+      if (isMockVerificationProviderReference(app.config, providerSession.providerReference)) {
+        await options.verificationRepository.updateVerificationFromWebhook({
+          provider: providerSession.provider,
+          providerEventId: `${providerSession.providerReference}:auto-approved`,
+          providerReference: providerSession.providerReference,
+          eventType: "mock.auto_approved",
+          status: "valid",
+          signatureHash: null,
+          occurredAt: new Date(),
+          failureReasonCode: null
+        });
+      }
 
       return reply.code(201).send({
         id: sessionId,

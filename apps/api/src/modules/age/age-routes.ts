@@ -13,6 +13,7 @@ import {
   AgeProviderIntegrationPendingError,
   AgeProviderUnavailableError
 } from "./age-provider-waterfall.js";
+import { isMockAgeProviderReference } from "./age-provider-adapters.js";
 import type {
   AgeProviderWaterfall,
   AgeRepository,
@@ -172,6 +173,17 @@ export async function registerAgeRoutes(
         rule: providerSession.rule ?? null,
         expiresAt: providerSession.expiresAt
       });
+
+      if (isMockAgeProviderReference(app.config, providerSession.providerReference)) {
+        await options.ageRepository.updateVerificationFromWebhook({
+          provider: providerSession.provider,
+          providerEventId: `${providerSession.providerReference}:auto-approved`,
+          providerReference: providerSession.providerReference,
+          state: "verified",
+          verifiedAt: new Date(),
+          failureCode: null
+        });
+      }
 
       return reply.code(201).send({
         id: providerSession.providerReference,

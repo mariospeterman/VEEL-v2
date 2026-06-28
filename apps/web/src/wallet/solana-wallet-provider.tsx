@@ -4,11 +4,11 @@ import { clusterApiUrl } from "@solana/web3.js";
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
 import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
 import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
-import { parsePublicWebEnv } from "@veel/config/public";
+import { readPublicWebEnv } from "@/public-env";
 import { useMemo } from "react";
 
 export function SolanaWalletProvider({ children }: Readonly<{ children: React.ReactNode }>) {
-  const env = useMemo(() => parsePublicWebEnv(process.env), []);
+  const env = useMemo(() => readPublicWebEnv(), []);
   const endpoint = useMemo(() => {
     return (
       env.NEXT_PUBLIC_SOLANA_RPC_URL ??

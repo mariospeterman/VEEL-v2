@@ -6,11 +6,11 @@ import {
   TurnkeyProvider,
   type TurnkeyProviderConfig
 } from "@turnkey/react-wallet-kit";
-import { parsePublicWebEnv } from "@veel/config/public";
+import { readPublicWebEnv } from "@/public-env";
 import { useMemo } from "react";
 
 export function EmbeddedWalletProviders({ children }: Readonly<{ children: React.ReactNode }>) {
-  const env = parsePublicWebEnv(process.env);
+  const env = readPublicWebEnv();
   const solanaChain = env.NEXT_PUBLIC_SOLANA_CHAIN;
   const solanaRpcUrl = env.NEXT_PUBLIC_SOLANA_RPC_URL ?? "https://api.devnet.solana.com";
   const solanaSubscriptionsUrl = env.NEXT_PUBLIC_SOLANA_RPC_SUBSCRIPTIONS_URL ?? toWebSocketRpcUrl(solanaRpcUrl);

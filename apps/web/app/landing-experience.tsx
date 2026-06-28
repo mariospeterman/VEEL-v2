@@ -23,18 +23,18 @@ const supabaseActions: { label: string; provider: OAuthProvider }[] = [
 const onboardingSteps = [
   {
     eyebrow: "1 / 3",
-    title: "Connect wallet",
-    copy: "Required. Choose a Solana wallet, Privy, or Turnkey and sign ownership."
+    title: "Connect or create your wallet",
+    copy: "Required. Use Solana Connect, or create an embedded non-custodial wallet with WeVid."
   },
   {
     eyebrow: "2 / 3",
-    title: "Profile setup",
-    copy: "Optional. Add name, links, bio, and Supabase recovery now or later."
+    title: "Set up your profile",
+    copy: "Optional. Add public details and recovery now, or set them up later in profile settings."
   },
   {
     eyebrow: "3 / 3",
-    title: "Age verification",
-    copy: "Required. Use reusable age proof first; face scan is only the fallback."
+    title: "Verify age for 18+ access",
+    copy: "Required. Choose the least invasive path first. WeVid stores verification state, not raw documents."
   }
 ] as const;
 
@@ -42,10 +42,10 @@ const landingFrames = [
   {
     id: "welcome",
     label: "Welcome",
-    kicker: "WeVid – Frame Your Way",
+    kicker: "WeVid — Frame Your Way",
     title: "Create without asking the algorithm for permission.",
     copy:
-      "A creator network for adults who are tired of censorship, ad dependency, privacy leaks, buried discovery, and payment systems that make direct support feel complicated.",
+      "A creator network for adults tired of censorship, ad dependency, privacy leaks, buried discovery, and payment systems that make direct support feel complicated.",
     primary: "Start onboarding",
     secondary: "Log in",
     visual: "intro"
@@ -53,21 +53,21 @@ const landingFrames = [
   {
     id: "watch-create",
     label: "Watch / Create",
-    kicker: "Responsible access",
-    title: "Everyone can watch. Verified creators can build.",
+    kicker: "Watch freely. Create verified.",
+    title: "Watch freely. Create verified.",
     copy:
-      "WeVid separates viewing, creating, earning, and operating permissions with age, KYC, KYB, and backend-owned trust states that protect minors and keep the community accountable.",
-    primary: "Create account",
-    secondary: "See access model",
+      "Viewers can discover and support. Verified creators can publish, unlock, go live, and build paid access.",
+    primary: "Start onboarding",
+    secondary: "Log in",
     visual: "access"
   },
   {
-    id: "trust",
-    label: "Trust",
-    kicker: "Privacy first",
-    title: "Your identity, wallet, and audience stay yours.",
+    id: "why-wevid",
+    label: "Why WeVid",
+    kicker: "Audience ownership",
+    title: "Your audience should not belong to an ad network.",
     copy:
-      "Non-custodial wallets, transparent access rules, no hidden pay-to-rank boosts, and no raw provider payloads in the browser. WeVid shows safe status, not private documents.",
+      "WeVid gives creators a verified, privacy-first space where access, payments, and community are not controlled by opaque ranking games.",
     primary: "Enter WeVid",
     secondary: "Log in",
     visual: "trust"
@@ -75,24 +75,35 @@ const landingFrames = [
   {
     id: "earn",
     label: "Earn",
-    kicker: "Direct settlement",
-    title: "Instant monetisation without platform custody.",
+    kicker: "Direct support",
+    title: "Get paid without giving up control.",
     copy:
-      "Tips, unlocks, memberships, and Event Access settle through user-owned wallets with near-zero network fees and a clear 10% platform commission for infrastructure and R&D.",
+      "Tips, unlocks, memberships, and event access are tied to user-owned wallets and backend-verified access states. Fast, low-fee Solana settlement.",
     primary: "Start earning",
     secondary: "Log in",
     visual: "earn"
   },
   {
-    id: "partner",
-    label: "Partner",
-    kicker: "Referral engine",
-    title: "Bring creators in. Build the network with us.",
+    id: "partners",
+    label: "Partners",
+    kicker: "Provider-ready",
+    title: "Provider-ready. Not provider-owned.",
     copy:
-      "Create an account to generate your referral URL, or apply for producer referrals when you help onboard creators, studios, and communities responsibly.",
-    primary: "Generate referral URL",
-    secondary: "Producer referral",
+      "Wallet, age, media, live, safety, and recovery providers plug into a WeVid trust layer without becoming the product.",
+    primary: "Start onboarding",
+    secondary: "Log in",
     visual: "partner"
+  },
+  {
+    id: "trust",
+    label: "Trust",
+    kicker: "18+ by design",
+    title: "18+ by design. Private by default.",
+    copy:
+      "Wallet readiness, profile state, and age verification unlock the app. Raw provider documents never become UI data.",
+    primary: "Start onboarding",
+    secondary: "Log in",
+    visual: "trust"
   },
   {
     id: "onboarding",
@@ -117,6 +128,8 @@ const landingFrames = [
     auth: "login"
   }
 ] as const;
+
+const storyNavFrames = landingFrames.filter((frame) => !("auth" in frame));
 
 export function LandingExperience() {
   const shellRef = useRef<HTMLElement | null>(null);
@@ -377,13 +390,13 @@ export function LandingExperience() {
             </div>
             <div className="landing-mobile-nav-group" aria-label="Path navigation">
               <span>Path</span>
-              {landingFrames.slice(0, 5).map((frame, index) => (
+              {storyNavFrames.map((frame) => (
                 <button
                   key={frame.id}
                   data-active={activeFrame.id === frame.id ? "true" : undefined}
                   onClick={() => {
                     setMobileMenuOpen(false);
-                    scrollToFrame(index);
+                    scrollToFrame(landingFrames.findIndex((item) => item.id === frame.id));
                   }}
                   type="button"
                 >
@@ -437,7 +450,7 @@ export function LandingExperience() {
 
           <nav className="landing-progress-rail" aria-label="Landing story sections">
             <span className="landing-progress-percent">{Math.round(progress * 100).toString().padStart(2, "0")}%</span>
-            <div className="landing-progress-track">
+            <div className="landing-progress-track" aria-hidden="true">
               <i />
             </div>
             <span className="landing-progress-topic">{activeFrame.label}</span>
@@ -519,10 +532,12 @@ function LandingLoginForm({ authState }: { authState: WebAuthState }) {
     <>
       <div className="landing-auth-block">
         <p>Wallet</p>
+        <span>Use Solana Connect.</span>
         <LandingWalletList authState={authState} />
       </div>
       <div className="landing-auth-block">
-        <p>Supabase auth</p>
+        <p>Recovery</p>
+        <span>Use Supabase recovery already linked to your profile.</span>
         <LandingSupabaseAuth variant="login" />
       </div>
     </>
@@ -587,8 +602,14 @@ function LandingWalletList({ authState, onLinked }: { authState: WebAuthState; o
   return (
     <WalletRuntimeProviders>
       <div className="landing-wallet-runtime" aria-label="Wallet providers">
-        <WalletLinkPanel authState={authState} compact loginSimple onLinked={onLinked} reloadOnSession={!onLinked} />
-        <div className="landing-embedded-wallets">
+        <div className="landing-wallet-connect-row">
+          <WalletLinkPanel authState={authState} compact loginSimple onLinked={onLinked} reloadOnSession={!onLinked} />
+        </div>
+        <div className="landing-embedded-wallets" aria-label="Embedded wallet providers">
+          <div className="landing-embedded-label">
+            <p>Embedded wallet</p>
+            <span>Use Privy or Turnkey when configured.</span>
+          </div>
           <EmbeddedWalletLoginButton configured={privyConfigured} label="Privy" onLinked={onLinked} provider="privy" />
           <EmbeddedWalletLoginButton configured={turnkeyConfigured} label="Turnkey" onLinked={onLinked} provider="turnkey" />
         </div>
@@ -606,11 +627,19 @@ function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
           <span>Upload picture</span>
         </label>
         <label>
-          <span>Name</span>
+          <span>Handle</span>
+          <input autoComplete="username" name="handle" placeholder="@wevid" type="text" />
+        </label>
+        <label>
+          <span>Display name</span>
           <input autoComplete="name" name="name" placeholder="Display name" type="text" />
         </label>
-        <label className="landing-form-wide">
-          <span>Links</span>
+        <label>
+          <span>Link label</span>
+          <input name="link-label" placeholder="Website" type="text" />
+        </label>
+        <label>
+          <span>Link URL</span>
           <input name="links" placeholder="https://..." type="url" />
         </label>
         <label className="landing-form-wide">
@@ -635,33 +664,53 @@ function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
 }
 
 function OnboardingAgeStep() {
-  const [startingProvider, setStartingProvider] = useState<"reusable_first" | "didit" | "persona" | null>(null);
+  type AgeProviderPreference = "reusable_first" | "didit" | "yoti" | "sumsub" | "veriff" | "persona";
+  type AgeProviderAction = {
+    action: string;
+    label: string;
+    providerPreference: AgeProviderPreference;
+  };
+  const [startingProvider, setStartingProvider] = useState<AgeProviderPreference | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const ageWaterfall = [
+  const ageWaterfall: Array<{
+    eyebrow: string;
+    title: string;
+    copy: string;
+    providers: AgeProviderAction[];
+  }> = [
     {
-      eyebrow: "Best first",
+      eyebrow: "Recommended",
       title: "Reusable age ID",
-      copy: "Use an existing over-18 credential or create one, then return here to pass the age gate.",
+      copy: "Reuse an existing age credential without uploading documents again.",
       providers: [
-        { action: "Start", label: "Didit ID", providerPreference: "didit" as const },
-        { action: "Start", label: "Yoti ID", providerPreference: "reusable_first" as const },
-        { action: "Use", label: "EUDI wallet", href: "https://digital-strategy.ec.europa.eu/en/policies/eu-age-verification" },
-        { action: "Use", label: "Scytales", href: "https://www.scytales.com/age-verification-connector" }
+        { action: "Use", label: "Reusable age ID", providerPreference: "reusable_first" as const },
+        { action: "Get", label: "Didit ID", providerPreference: "didit" as const },
+        { action: "Get", label: "Yoti ID", providerPreference: "yoti" as const }
       ]
     },
     {
       eyebrow: "If needed",
-      title: "Light age check",
-      copy: "Use free-tier age estimation or document proof only when reusable proof is not available.",
+      title: "Face age scan",
+      copy: "Quick age estimate. No ID document if the provider supports it.",
       providers: [
-        { action: "Check", label: "Didit", providerPreference: "didit" as const },
         { action: "Check", label: "Persona", providerPreference: "persona" as const }
+      ]
+    },
+    {
+      eyebrow: "Fallback",
+      title: "Trusted provider ID",
+      copy: "Use document plus face verification when other paths are unavailable.",
+      providers: [
+        { action: "Verify", label: "Yoti", providerPreference: "yoti" as const },
+        { action: "Verify", label: "Sumsub", providerPreference: "sumsub" as const },
+        { action: "Verify", label: "Veriff", providerPreference: "veriff" as const },
+        { action: "Verify", label: "Persona", providerPreference: "persona" as const }
       ]
     }
   ];
 
-  async function startAgeSession(providerPreference: "reusable_first" | "didit" | "persona") {
+  async function startAgeSession(providerPreference: AgeProviderPreference) {
     setStartingProvider(providerPreference);
     setMessage(null);
     setError(null);
@@ -695,21 +744,12 @@ function OnboardingAgeStep() {
                 </>
               );
 
-              return "href" in provider ? (
-                <a className="landing-provider-link" href={provider.href} key={provider.label} rel="noreferrer" target="_blank">
-                  {content}
-                  <ExternalLink aria-hidden="true" size={14} />
-                </a>
-              ) : (
+              return (
                 <button
                   className="landing-provider-link"
-                  disabled={!("providerPreference" in provider) || startingProvider === provider.providerPreference}
+                  disabled={startingProvider === provider.providerPreference}
                   key={provider.label}
-                  onClick={() => {
-                    if ("providerPreference" in provider) {
-                      void startAgeSession(provider.providerPreference);
-                    }
-                  }}
+                  onClick={() => void startAgeSession(provider.providerPreference)}
                   type="button"
                 >
                   {content}
@@ -721,7 +761,7 @@ function OnboardingAgeStep() {
       ))}
       <div className="landing-age-note">
         <span>Creator KYC/KYB is separate.</span>
-        Sumsub and Veriff stay as Studio/enterprise compliance fallbacks before creator publishing, payouts, or business workflows. They are not ordinary viewer onboarding.
+        Viewer onboarding stores normalized age status only. Studio and enterprise checks remain separate before creator publishing, payouts, or business workflows.
       </div>
       {message ? <p className="landing-auth-message">{message}</p> : null}
       {error ? <p className="landing-auth-error">{error}</p> : null}
@@ -758,7 +798,7 @@ function LandingSupabaseAuth({ onSkip, variant }: { onSkip?: () => void; variant
 
     if (!supabase) {
       setSubmitting(null);
-      setError("Supabase auth is not configured.");
+      setError("Recovery auth is unavailable in this build.");
       return;
     }
 
@@ -787,7 +827,7 @@ function LandingSupabaseAuth({ onSkip, variant }: { onSkip?: () => void; variant
 
     if (!supabase) {
       setSubmitting(null);
-      setError("Supabase auth is not configured.");
+      setError("Recovery auth is unavailable in this build.");
       return;
     }
 
@@ -807,33 +847,39 @@ function LandingSupabaseAuth({ onSkip, variant }: { onSkip?: () => void; variant
 
   return (
     <div className="landing-supabase-auth">
-      <form className="landing-email-row" noValidate onSubmit={startEmailSignIn}>
-        <label>
-          <span>Email</span>
-          <input
-            autoComplete="email"
-            inputMode="email"
-            name={`${variant}-email`}
-            onChange={(event) => {
-              setEmail(event.target.value);
-              if (error) setError(null);
-            }}
-            placeholder="you@example.com"
-            type="email"
-            value={email}
-          />
-        </label>
-        <button className="landing-provider-link" disabled={submitting !== null} type="submit">
-          <span>{submitting === "email" ? "Sending" : variant === "profile" ? "Attach email" : "Send link"}</span>
-        </button>
-      </form>
-      <div className="landing-provider-row" aria-label="Supabase social auth providers">
-        {supabaseActions.map((provider) => (
-          <button className="landing-provider-link" disabled={submitting !== null} key={provider.provider} onClick={() => void startOAuthSignIn(provider.provider)} type="button">
-            <span>{submitting === provider.provider ? "Opening" : provider.label}</span>
-          </button>
-        ))}
-      </div>
+      {supabase ? (
+        <>
+          <form className="landing-email-row" noValidate onSubmit={startEmailSignIn}>
+            <label>
+              <span>Email</span>
+              <input
+                autoComplete="email"
+                inputMode="email"
+                name={`${variant}-email`}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  if (error) setError(null);
+                }}
+                placeholder="you@example.com"
+                type="email"
+                value={email}
+              />
+            </label>
+            <button className="landing-provider-link" disabled={submitting !== null} type="submit">
+              <span>{submitting === "email" ? "Sending" : variant === "profile" ? "Attach email" : "Send link"}</span>
+            </button>
+          </form>
+          <div className="landing-provider-row" aria-label="Supabase social auth providers">
+            {supabaseActions.map((provider) => (
+              <button className="landing-provider-link" disabled={submitting !== null} key={provider.provider} onClick={() => void startOAuthSignIn(provider.provider)} type="button">
+                <span>{submitting === provider.provider ? "Opening" : `Continue with ${provider.label}`}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      ) : (
+        <p className="landing-auth-unavailable">Recovery auth is unavailable in this build.</p>
+      )}
       {onSkip ? (
         <button className="landing-inline-link" onClick={onSkip} type="button">
           Skip email. Add later.

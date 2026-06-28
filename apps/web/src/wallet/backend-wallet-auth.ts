@@ -6,7 +6,7 @@ import {
   type CreateWalletAuthChallengeRequest,
   type LinkWalletRequest
 } from "@/api-mutations";
-import { parsePublicWebEnv } from "@veel/config/public";
+import { readPublicWebEnv } from "@/public-env";
 import { saveWalletSession } from "./wallet-session";
 
 export type WalletAuthProvider = CreateWalletAuthChallengeRequest["provider"];
@@ -51,7 +51,7 @@ export async function createBackendWalletSession({
 }
 
 export function walletChain(): WalletChain {
-  return parsePublicWebEnv(process.env).NEXT_PUBLIC_SOLANA_CHAIN === "solana:mainnet" ? "solana_mainnet" : "solana_devnet";
+  return readPublicWebEnv().NEXT_PUBLIC_SOLANA_CHAIN === "solana:mainnet" ? "solana_mainnet" : "solana_devnet";
 }
 
 export function bytesToBase64(bytes: Uint8Array) {

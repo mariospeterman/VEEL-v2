@@ -33,6 +33,7 @@ interface VerificationProviderAdapter {
 
 export function createVerificationProviderWaterfall(env: ServerEnv): VerificationProviderWaterfall {
   return createStaticVerificationProviderWaterfall([
+    createMockVerificationProviderAdapter(env),
     createDiditVerificationProviderAdapter(env),
     createSumsubVerificationProviderAdapter(env),
     createPersonaVerificationProviderAdapter(env),
@@ -40,21 +41,64 @@ export function createVerificationProviderWaterfall(env: ServerEnv): Verificatio
   ]);
 }
 
+const mockVerificationProviderReferencePrefix = "mock-verification:";
+
+export function isMockVerificationProviderReference(env: ServerEnv, providerReference: string): boolean {
+  return (
+    env.NODE_ENV !== "production" &&
+    env.AGE_VERIFICATION_ALLOW_MOCK_PROVIDER &&
+    providerReference.startsWith(mockVerificationProviderReferencePrefix)
+  );
+}
+
+function createMockVerificationProviderAdapter(env: ServerEnv): VerificationProviderAdapter {
+  return {
+    provider: "didit",
+    isConfigured() {
+      return env.NODE_ENV !== "production" && env.AGE_VERIFICATION_ALLOW_MOCK_PROVIDER;
+    },
+    async createSession(input) {
+      const providerReference = `${mockVerificationProviderReferencePrefix}${input.purpose}:${input.organizationId ?? input.supabaseUserId}:${input.idempotencyKey}`;
+      const isOrganization = input.purpose === "org_kyb";
+
+      return {
+        provider: "didit",
+        providerReference,
+        providerSessionId: providerReference,
+        launchUrl: `${input.callbackUrl}&provider=mock&reference=${encodeURIComponent(providerReference)}`,
+        expiresAt: expiresInSeconds(15 * 60),
+        method: isOrganization ? "kyb_registry" : "gov_id_selfie",
+        assuranceLevel: isOrganization ? "business_verified" : "documentary",
+        reusable: true
+      };
+    }
+  };
+}
+
 export function createStaticVerificationProviderWaterfall(
   adapters: VerificationProviderAdapter[]
 ): VerificationProviderWaterfall {
-  const byProvider = new Map(adapters.map((adapter) => [adapter.provider, adapter]));
+  const byProvider = new Map<VerificationProviderAdapter["provider"], VerificationProviderAdapter[]>();
+
+  for (const adapter of adapters) {
+    byProvider.set(adapter.provider, [
+      ...(byProvider.get(adapter.provider) ?? []),
+      adapter
+    ]);
+  }
 
   return {
     async createSession(input) {
       for (const provider of providerOrder(input.providerPreference)) {
-        const adapter = byProvider.get(provider);
+        const providerAdapters = byProvider.get(provider) ?? [];
 
-        if (!adapter?.isConfigured(input)) {
-          continue;
+        for (const adapter of providerAdapters) {
+          if (!adapter.isConfigured(input)) {
+            continue;
+          }
+
+          return adapter.createSession(input);
         }
-
-        return adapter.createSession(input);
       }
 
       throw new VerificationProviderUnavailableError();

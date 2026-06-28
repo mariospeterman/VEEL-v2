@@ -894,6 +894,109 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("starts and completes a local mock age session only when mock providers are enabled", async () => {
+    vi.stubEnv("AGE_VERIFICATION_ALLOW_MOCK_PROVIDER", "true");
+    vi.setSystemTime(new Date("2026-06-03T22:00:00.000Z"));
+    const createdPendingVerifications: CreatePendingAgeVerificationInput[] = [];
+    const appliedEvents: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return null;
+        }
+      }),
+      ageRepository: {
+        async findLatestAgeStatusBySupabaseUserId() {
+          return {
+            state: "required",
+            provider: null
+          };
+        },
+        async createPendingAgeVerification(input) {
+          createdPendingVerifications.push(input);
+        },
+        async recordProviderWebhook() {
+          throw new Error("not implemented");
+        },
+        async updateVerificationFromWebhook(input) {
+          appliedEvents.push(input);
+          return true;
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/age/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "mock-age-1"
+      },
+      payload: {
+        providerPreference: "reusable_first"
+      }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(201);
+    expect(response.json()).toMatchObject({
+      provider: "didit",
+      expiresAt: "2026-06-03T22:15:00.000Z"
+    });
+    expect(response.json().id).toContain("mock-age:");
+    expect(createdPendingVerifications).toMatchObject([
+      {
+        provider: "didit",
+        providerReference: expect.stringContaining("mock-age:"),
+        rule: "over_18"
+      }
+    ]);
+    expect(appliedEvents).toMatchObject([
+      {
+        provider: "didit",
+        providerReference: expect.stringContaining("mock-age:"),
+        state: "verified"
+      }
+    ]);
+
+    await app.close();
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+  });
+
+  it("does not enable mock age providers in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("AGE_VERIFICATION_ALLOW_MOCK_PROVIDER", "true");
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return null;
+        }
+      }),
+      ageRepository: requiredAgeRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/age/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "mock-age-prod"
+      },
+      payload: {
+        providerPreference: "reusable_first"
+      }
+    });
+
+    expect(response.statusCode).toBe(503);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
   it("starts a creator KYC verification session through the provider waterfall", async () => {
     vi.setSystemTime(new Date("2026-06-03T22:00:00.000Z"));
     const createdSessions: unknown[] = [];
@@ -962,6 +1065,126 @@ describe("buildApi", () => {
 
     await app.close();
     vi.useRealTimers();
+  });
+
+  it("starts and completes local mock creator KYC when mock providers are enabled", async () => {
+    vi.stubEnv("AGE_VERIFICATION_ALLOW_MOCK_PROVIDER", "true");
+    vi.setSystemTime(new Date("2026-06-03T22:00:00.000Z"));
+    const createdSessions: unknown[] = [];
+    const appliedEvents: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      verificationRepository: {
+        ...verificationRepositoryStub(),
+        async createPendingSession(input) {
+          createdSessions.push(input);
+          return "11111111-1111-4111-8111-111111111113";
+        },
+        async updateVerificationFromWebhook(input) {
+          appliedEvents.push(input);
+          return true;
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/verification/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "mock-creator-kyc-1"
+      },
+      payload: {
+        purpose: "creator_kyc"
+      }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(201);
+    expect(response.json()).toMatchObject({
+      id: "11111111-1111-4111-8111-111111111113",
+      provider: "didit",
+      expiresAt: "2026-06-03T22:15:00.000Z",
+      purpose: "creator_kyc"
+    });
+    expect(response.json().providerReference).toContain("mock-verification:creator_kyc");
+    expect(createdSessions).toMatchObject([
+      {
+        purpose: "creator_kyc",
+        providerSession: {
+          provider: "didit",
+          providerReference: expect.stringContaining("mock-verification:creator_kyc"),
+          method: "gov_id_selfie",
+          assuranceLevel: "documentary",
+          reusable: true
+        }
+      }
+    ]);
+    expect(appliedEvents).toMatchObject([
+      {
+        provider: "didit",
+        providerReference: expect.stringContaining("mock-verification:creator_kyc"),
+        eventType: "mock.auto_approved",
+        status: "valid"
+      }
+    ]);
+
+    await app.close();
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+  });
+
+  it("starts and completes local mock organization KYB when mock providers are enabled", async () => {
+    vi.stubEnv("AGE_VERIFICATION_ALLOW_MOCK_PROVIDER", "true");
+    vi.setSystemTime(new Date("2026-06-03T22:00:00.000Z"));
+    const createdSessions: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      verificationRepository: {
+        ...verificationRepositoryStub(),
+        async createPendingSession(input) {
+          createdSessions.push(input);
+          return "11111111-1111-4111-8111-111111111114";
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/verification/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "mock-org-kyb-1"
+      },
+      payload: {
+        purpose: "org_kyb",
+        organizationId: "22222222-2222-4222-8222-222222222222"
+      }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(201);
+    expect(response.json()).toMatchObject({
+      id: "11111111-1111-4111-8111-111111111114",
+      provider: "didit",
+      expiresAt: "2026-06-03T22:15:00.000Z",
+      purpose: "org_kyb"
+    });
+    expect(response.json().providerReference).toContain("mock-verification:org_kyb");
+    expect(createdSessions).toMatchObject([
+      {
+        purpose: "org_kyb",
+        organizationId: "22222222-2222-4222-8222-222222222222",
+        providerSession: {
+          method: "kyb_registry",
+          assuranceLevel: "business_verified"
+        }
+      }
+    ]);
+
+    await app.close();
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
   });
 
   it("starts Didit creator KYC with the current provider session API shape", async () => {

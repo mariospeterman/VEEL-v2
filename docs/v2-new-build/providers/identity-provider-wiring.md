@@ -33,6 +33,7 @@ Current implementation state:
 - `POST /v1/webhooks/verification/{provider}` accepts signed KYC/KYB callbacks and writes normalized `verification_records`.
 - The runtime waterfall has real HTTP session adapters for Yoti, Persona, Veriff, and Sumsub. Each adapter is inert until its exact env/config is present, and all unconfigured or failing providers fail closed with `503`.
 - The creator/business verification waterfall has real HTTP session adapters for Didit, Sumsub, Persona, and Veriff. Didit, Sumsub, and Persona can serve creator KYC and org KYB when their purpose-specific workflows/levels/templates are configured. Veriff is currently a creator KYC documentary fallback only unless a Veriff business/KYB product is separately approved and wired.
+- Local/test environments can enable `AGE_VERIFICATION_ALLOW_MOCK_PROVIDER=true` to use API-owned mock adapters for age, creator KYC, and organization KYB. These adapters create normal pending sessions, immediately apply a normalized valid result through the repository boundary, and are disabled when `NODE_ENV=production`.
 - The landing reusable-first path tries Yoti/Persona-style age assurance first. Sumsub and Veriff remain explicit fallback/provider choices and creator-compliance candidates, not ordinary viewer onboarding defaults.
 - Successful provider session starts are stored as pending `age_verifications` rows with provider reference, state, rule/jurisdiction metadata, and timestamps only.
 - Raw provider payloads, identity images, document data, and browser-completed age state are not accepted by this route.
@@ -276,6 +277,7 @@ Never store raw identity documents, selfies, registry files, UBO documents, biom
 ## Production guardrails
 
 - Never enable `AGE_VERIFICATION_ALLOW_MOCK_PROVIDER=true` outside local/test.
+- Mock adapters are not provider integrations and must not be used for staging provider proof, launch approval, legal evidence, or compliance reporting.
 - If a real provider is selected but not configured, fail closed and block access.
 - Keep provider secrets server-side only.
 - Do not store unnecessary identity payloads; the app should keep only the minimum over-18 result fields.

@@ -28,20 +28,18 @@ test("renders the public landing with the current WeVid visual contract", async 
 });
 
 test("renders inline login and onboarding entry surfaces", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded", timeout: 20_000 });
-  await page.getByRole("button", { name: "Log in" }).first().click();
+  await page.goto("/?mode=login", { waitUntil: "domcontentloaded", timeout: 20_000 });
 
   await expect(page.getByRole("heading", { name: "Login to WeVid" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Connect wallet" })).toBeVisible();
   await expect(page.getByText("Privy", { exact: true })).toBeVisible();
   await expect(page.getByText("Turnkey", { exact: true })).toBeVisible();
 
-  await page.goto("/", { waitUntil: "domcontentloaded", timeout: 20_000 });
-  await page.getByRole("button", { name: /Start onboarding/ }).first().click();
+  await page.goto("/?mode=onboarding", { waitUntil: "domcontentloaded", timeout: 20_000 });
 
   await expect(page.getByRole("heading", { name: "Set up access." })).toBeVisible();
   await expect(page.getByRole("button", { name: "Connect wallet" })).toBeVisible();
-  await expect(page.getByText("Required. Choose a Solana wallet, Privy, or Turnkey and sign ownership.")).toBeVisible();
+  await expect(page.getByText("Required. Use Solana Connect, or create an embedded non-custodial wallet with WeVid.")).toBeVisible();
 });
 
 test("renders the standalone age handoff without raw API/provider errors", async ({ page }) => {

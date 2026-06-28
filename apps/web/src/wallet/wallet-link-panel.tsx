@@ -57,6 +57,7 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
   const detectedWallets = useMemo(
     () =>
       wallets
+        .filter(isAllowedSolanaWallet)
         .filter((wallet) => wallet.readyState !== WalletReadyState.Unsupported)
         .map((wallet) => ({ label: wallet.adapter.name, provider: providerForWallet(wallet) })),
     [wallets]
@@ -67,7 +68,7 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
   }, []);
 
   const selectableWallets = useMemo(
-    () => wallets.filter((wallet) => wallet.readyState !== WalletReadyState.Unsupported),
+    () => wallets.filter(isAllowedSolanaWallet).filter((wallet) => wallet.readyState !== WalletReadyState.Unsupported),
     [wallets]
   );
 
@@ -261,11 +262,8 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
 
       {message ? (
         <p
-          className={`rounded border px-3 py-2 text-sm ${
-            state === "error"
-              ? "border-[#7f1d1d] bg-[#450a0a] text-[#fecaca]"
-              : "border-(--line) bg-(--panel) text-(--muted)"
-          }`}
+          className="auth-wallet-message"
+          data-state={state}
         >
           {message}
         </p>
@@ -279,9 +277,11 @@ function findWalletForOption(wallets: Wallet[], option: WalletOption) {
 }
 
 function findFirstReadyWallet(wallets: Wallet[]) {
+  const allowedWallets = wallets.filter(isAllowedSolanaWallet);
+
   return (
-    wallets.find((wallet) => wallet.readyState === WalletReadyState.Installed && getMessageSigner(wallet)) ??
-    wallets.find((wallet) => wallet.readyState === WalletReadyState.Loadable && getMessageSigner(wallet)) ??
+    allowedWallets.find((wallet) => wallet.readyState === WalletReadyState.Installed && getMessageSigner(wallet)) ??
+    allowedWallets.find((wallet) => wallet.readyState === WalletReadyState.Loadable && getMessageSigner(wallet)) ??
     null
   );
 }
@@ -333,6 +333,12 @@ function normalizeInjectedSignature(value: Uint8Array | { signature: Uint8Array 
 
 function walletNameIncludes(wallet: Wallet, value: string) {
   return wallet.adapter.name.toLowerCase().includes(value);
+}
+
+function isAllowedSolanaWallet(wallet: Wallet) {
+  const name = wallet.adapter.name.toLowerCase();
+
+  return name.includes("phantom") || name.includes("solflare") || name.includes("backpack");
 }
 
 function providerForWallet(wallet: Wallet | null): ExternalWalletProvider {
