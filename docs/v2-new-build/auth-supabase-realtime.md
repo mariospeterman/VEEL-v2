@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: auth, DB, realtime
-Last updated: 2026-06-17
+Last updated: 2026-06-29
 Source of truth: yes
 
 Owns:
@@ -24,7 +24,7 @@ Non-goals:
 
 Use Supabase Auth for optional recovery/account-management sessions and Supabase Postgres for data. Use Supabase Realtime selectively. The Fastify backend remains the business policy layer.
 
-V2 onboarding is wallet-first. A user connects an external noncustodial Solana wallet or unlocks a configured noncustodial embedded wallet, sets up the public profile, optionally adds Supabase email/social recovery for profile management, then completes the single age-verification gate before protected app access.
+V2 onboarding is wallet-first. A user connects an external noncustodial Solana wallet or unlocks a configured noncustodial embedded wallet, sets up the public profile, optionally signs into Supabase email/social recovery for profile management, then completes the single age-verification gate before protected app access.
 
 ## Identity Model
 
@@ -74,7 +74,7 @@ erDiagram
 1. User signs a backend-issued wallet challenge through an external Solana wallet or configured embedded wallet provider.
 2. Fastify verifies the wallet signature and creates or restores the Veel wallet session.
 3. User sets the Veel profile handle/display name through `PATCH /v1/profiles/me`.
-4. User may add Supabase email/social recovery for profile management.
+4. User may sign into Supabase email/social recovery for profile management.
 5. User completes third-party age verification before protected app access.
 6. Fastify loads Veel profile, wallet, age, restrictions, monetisation, and app permissions and returns frontend-safe session payloads.
 
@@ -83,13 +83,19 @@ Signup paths and onboarding order:
 - Step 1: user connects an external/native wallet or unlocks a configured embedded wallet.
 - Step 2: Fastify verifies the wallet challenge, bootstraps the Veel `users` row, and audits the wallet session/link.
 - Step 3: user sets the Veel profile handle/display name through `PATCH /v1/profiles/me`.
-- Step 4: user may add Supabase email/social recovery for profile management.
+- Step 4: user may sign into Supabase email/social recovery for profile management.
 - Step 5: third-party age verification completes the app age gate.
-- Supabase email/social/passkey: optional recovery/account-management access for an existing Veel profile; it is not the primary app-access proof.
+- Supabase email/social/passkey: optional recovery/account-management access. It is not the primary app-access proof and is not yet an automatic merge with a wallet-created identity.
 - External wallet: uses signed wallet challenge and can attach to an existing Supabase-authenticated recovery session or become the primary wallet path.
 - Returning user: Fastify resolves profile, primary wallet, linked wallets, age/access, restrictions, and monetisation state.
 
 Protected app access requires both age verification and a wallet path. Supabase Auth alone is not enough to enter the app shell.
+
+Current implementation boundary:
+
+- Supabase Auth login and magic-link recovery are wired through the official SSR callback pattern: OAuth/PKCE callbacks exchange the returned `code` with `exchangeCodeForSession`, and email magic links verify `token_hash` plus `type` with `verifyOtp`.
+- Wallet-first login creates or restores an app-owned wallet session whose bearer token maps to the internal `users.supabase_user_id` compatibility identifier.
+- A backend account-linking endpoint to attach a Supabase Auth identity to an already wallet-created user is still required before the onboarding UI can honestly claim that Supabase recovery is bound to the same wallet-first account. Until then, the UI should present Supabase as login/recovery for Supabase-authenticated profiles, not as completed wallet-account recovery binding.
 
 ## Profile Bootstrap
 

@@ -139,6 +139,7 @@ export function LandingExperience() {
   const [legalExpanded, setLegalExpanded] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [initialOnboardingStep, setInitialOnboardingStep] = useState(0);
+  const [authCallbackError, setAuthCallbackError] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const activeFrame = landingFrames[activeIndex] ?? landingFrames[0];
@@ -163,6 +164,10 @@ export function LandingExperience() {
     const params = new URLSearchParams(window.location.search);
     const mode = params.get("mode");
     const step = params.get("step");
+    const error = params.get("error");
+    if (error === "auth_confirm_failed") {
+      setAuthCallbackError("Login could not be completed. Check the provider redirect allowlist and try again.");
+    }
     if (step === "profile") setInitialOnboardingStep(1);
     if (step === "age") setInitialOnboardingStep(2);
     const targetIndex =
@@ -425,6 +430,9 @@ export function LandingExperience() {
             <p className="landing-eyebrow" data-story-part>{activeFrame.kicker}</p>
             <h1 data-story-part>{activeFrame.title}</h1>
             <p className="landing-copy" data-story-part>{activeFrame.copy}</p>
+            {authCallbackError && activeFrame.id === "login" ? (
+              <p className="landing-auth-error" data-story-part>{authCallbackError}</p>
+            ) : null}
             {!activeAuth ? (
               <div className="landing-cta-row" data-story-part>
                 <button
@@ -817,7 +825,7 @@ function LandingSupabaseAuth({ onSkip, variant }: { onSkip?: () => void; variant
       return;
     }
 
-    setMessage(variant === "profile" ? "Check your email to attach recovery auth." : "Check your email for the login link.");
+    setMessage(variant === "profile" ? "Check your email to continue recovery setup." : "Check your email for the login link.");
   }
 
   async function startOAuthSignIn(provider: OAuthProvider) {
@@ -866,7 +874,7 @@ function LandingSupabaseAuth({ onSkip, variant }: { onSkip?: () => void; variant
               />
             </label>
             <button className="landing-provider-link" disabled={submitting !== null} type="submit">
-              <span>{submitting === "email" ? "Sending" : variant === "profile" ? "Attach email" : "Send link"}</span>
+              <span>{submitting === "email" ? "Sending" : variant === "profile" ? "Email recovery" : "Send link"}</span>
             </button>
           </form>
           <div className="landing-provider-row" aria-label="Supabase social auth providers">
