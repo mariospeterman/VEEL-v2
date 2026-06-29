@@ -115,6 +115,10 @@ export function mapApiFailure(
 
 export function safeMutationMessage(error: unknown, context = "This action") {
   if (error instanceof ApiMutationError) {
+    if (error.message === "API is unavailable") {
+      return `${context} reached the wallet, but the WeVid API is not available. Start the API and try again.`;
+    }
+
     return mapStatusToMessage(error.status, context);
   }
 

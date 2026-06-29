@@ -63,7 +63,7 @@ Current implementation state:
 ### Android
 
 - Supported through Solana wallet-adapter compatible wallets where a wallet exposes the wallet-standard/mobile-wallet flow.
-- `@solana/wallet-adapter-react` adds wallet-standard adapters and injects Solana Mobile Wallet Adapter on supported mobile web. The custom WeVid chooser must not hardcode only Phantom/Solflare; it should show Solana-capable message-signing adapters while filtering obvious non-Solana/EVM-only wallet names.
+- `@solana/wallet-adapter-react` adds wallet-standard adapters and injects Solana Mobile Wallet Adapter on supported mobile web. The custom WeVid chooser must not hardcode only Phantom/Solflare; it should show Solana-capable message-signing adapters while filtering obvious non-Solana/EVM-only wallet names. The web provider follows the current Solana React cookbook pattern by passing an empty explicit wallet list and letting wallet-standard/mobile discovery populate available adapters.
 
 ### iOS
 
@@ -82,6 +82,12 @@ Current implementation state:
 - `NEXT_PUBLIC_TURNKEY_AUTH_PROXY_URL`
 - `NEXT_PUBLIC_TURNKEY_AUTH_PROXY_CONFIG_ID`
 - `NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED`
+
+### Supabase Auth callbacks
+
+- Email magic links use `verifyOtp({ token_hash, type })`.
+- Social/OAuth providers use PKCE and must exchange the returned `code` with `exchangeCodeForSession(code)` in `/auth/confirm`.
+- Local preview on port `3008` requires the local web env and Supabase dashboard redirect allowlist to include `http://localhost:3008/auth/confirm` and, when testing through Playwright or `127.0.0.1`, `http://127.0.0.1:3008/auth/confirm`.
 
 ### Production rollout notes
 

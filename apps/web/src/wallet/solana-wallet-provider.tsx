@@ -2,8 +2,6 @@
 
 import { clusterApiUrl } from "@solana/web3.js";
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
-import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
-import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
 import { readPublicWebEnv } from "@/public-env";
 import { useMemo } from "react";
 
@@ -15,13 +13,7 @@ export function SolanaWalletProvider({ children }: Readonly<{ children: React.Re
       (env.NEXT_PUBLIC_SOLANA_CHAIN === "solana:mainnet" ? clusterApiUrl("mainnet-beta") : clusterApiUrl("devnet"))
     );
   }, [env.NEXT_PUBLIC_SOLANA_CHAIN, env.NEXT_PUBLIC_SOLANA_RPC_URL]);
-  const wallets = useMemo(
-    () => [
-      new PhantomWalletAdapter(),
-      new SolflareWalletAdapter()
-    ],
-    []
-  );
+  const wallets = useMemo(() => [], []);
 
   return (
     <ConnectionProvider endpoint={endpoint}>

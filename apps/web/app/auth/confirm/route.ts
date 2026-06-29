@@ -4,15 +4,16 @@ import { createSupabaseServerClient } from "@/supabase/server";
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
+  const code = requestUrl.searchParams.get("code");
   const tokenHash = requestUrl.searchParams.get("token_hash");
   const type = requestUrl.searchParams.get("type") as EmailOtpType | null;
   const next = safeNextPath(requestUrl.searchParams.get("next"));
   const redirectUrl = new URL(next, requestUrl.origin);
 
-  if (tokenHash && type) {
+  if (code || (tokenHash && type)) {
     const supabase = await createSupabaseServerClient();
     const { error } = supabase
-      ? await supabase.auth.verifyOtp({ token_hash: tokenHash, type })
+      ? await confirmSupabaseAuth(supabase, { code, tokenHash, type })
       : { error: new Error("Supabase is not configured") };
 
     if (!error) {
@@ -29,4 +30,23 @@ export async function GET(request: NextRequest) {
 
 function safeNextPath(value: string | null) {
   return value?.startsWith("/") && !value.startsWith("//") ? value : "/";
+}
+
+async function confirmSupabaseAuth(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  params: { code: string | null; tokenHash: string | null; type: EmailOtpType | null }
+) {
+  if (!supabase) {
+    return { error: new Error("Supabase is not configured") };
+  }
+
+  if (params.code) {
+    return supabase.auth.exchangeCodeForSession(params.code);
+  }
+
+  if (params.tokenHash && params.type) {
+    return supabase.auth.verifyOtp({ token_hash: params.tokenHash, type: params.type });
+  }
+
+  return { error: new Error("Missing Supabase auth confirmation parameters") };
 }

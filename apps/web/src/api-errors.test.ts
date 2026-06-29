@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { mapApiFailure } from "./api-errors";
+import { ApiMutationError } from "./api-mutation-types";
+import { mapApiFailure, safeMutationMessage } from "./api-errors";
 
 describe("mapApiFailure", () => {
   it.each([
@@ -27,5 +28,11 @@ describe("mapApiFailure", () => {
       kind: "network",
       title: "Service temporarily unavailable"
     });
+  });
+
+  it("explains when a wallet action reached the browser but not the API", () => {
+    expect(safeMutationMessage(new ApiMutationError("API is unavailable", 503), "Wallet connection")).toBe(
+      "Wallet connection reached the wallet, but the WeVid API is not available. Start the API and try again."
+    );
   });
 });
