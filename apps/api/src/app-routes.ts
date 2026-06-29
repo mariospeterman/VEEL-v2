@@ -64,6 +64,7 @@ export async function registerApiRoutes(
   } = dependencies;
 
   await registerWalletAuthRoutes(app, {
+    authVerifier,
     walletAuthRepository
   });
   await registerSessionRoutes(app, {

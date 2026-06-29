@@ -1,5 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { FastifyInstance } from "fastify";
+import { extractBearerToken, unauthorizedResponse } from "./http-auth.js";
+import type { SupabaseAuthVerifier } from "../session/types.js";
 import {
   buildWalletLinkMessage,
   hashNonce,
@@ -9,10 +11,12 @@ import type { WalletChain, WalletProvider } from "../wallet/types.js";
 import {
   WalletAuthChallengeInvalidError,
   WalletAuthRepositoryConfigurationError,
+  WalletRecoveryLinkConflictError,
   type WalletAuthRepository
 } from "./wallet-auth-repository.js";
 
 interface RegisterWalletAuthRoutesOptions {
+  authVerifier: SupabaseAuthVerifier;
   walletAuthRepository: WalletAuthRepository;
 }
 
@@ -32,6 +36,10 @@ interface CreateWalletAuthSessionRequest {
     signature: string;
     signatureEncoding: "base58" | "base64";
   };
+}
+
+interface LinkSupabaseRecoveryRequest {
+  walletSessionToken: string;
 }
 
 const walletAuthChallengeTtlMs = 10 * 60 * 1000;
@@ -162,6 +170,64 @@ export async function registerWalletAuthRoutes(
       throw error;
     }
   });
+
+  app.post("/v1/auth/recovery-link", async (request, reply) => {
+    if (!request.headers["idempotency-key"]) {
+      return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
+    }
+
+    const bearerToken = extractBearerToken(request.headers.authorization);
+
+    if (!bearerToken) {
+      return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
+    }
+
+    const verifiedSession = await options.authVerifier.verifyBearerToken(bearerToken);
+
+    if (!verifiedSession) {
+      return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
+    }
+
+    const body = request.body as LinkSupabaseRecoveryRequest | undefined;
+    const validationError = validateRecoveryLinkRequest(body);
+
+    if (validationError) {
+      return reply.code(400).send(validationResponse(validationError));
+    }
+
+    try {
+      await options.walletAuthRepository.linkSupabaseRecovery({
+        walletSessionToken: (body as LinkSupabaseRecoveryRequest).walletSessionToken,
+        supabaseUserId: verifiedSession.supabaseUserId
+      });
+
+      return reply.code(200).send({
+        state: "linked",
+        provider: "supabase"
+      });
+    } catch (error) {
+      if (error instanceof WalletAuthChallengeInvalidError) {
+        return reply.code(401).send(unauthorizedResponse("Wallet session is missing or expired"));
+      }
+
+      if (error instanceof WalletRecoveryLinkConflictError) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: "Supabase recovery is already linked to another WeVid account"
+        });
+      }
+
+      if (error instanceof WalletAuthRepositoryConfigurationError) {
+        request.log.warn({ error }, "Wallet auth repository is not configured");
+        return reply.code(503).send({
+          code: "provider_unavailable",
+          message: "Wallet auth storage is not configured"
+        });
+      }
+
+      throw error;
+    }
+  });
 }
 
 function validateWalletAuthChallengeRequest(
@@ -205,6 +271,18 @@ function validateWalletAuthSessionRequest(
 
   if (body.proof.signatureEncoding !== "base58" && body.proof.signatureEncoding !== "base64") {
     return "Unsupported wallet signature encoding";
+  }
+
+  return null;
+}
+
+function validateRecoveryLinkRequest(body: LinkSupabaseRecoveryRequest | undefined): string | null {
+  if (!body || typeof body !== "object") {
+    return "Request body is required";
+  }
+
+  if (typeof body.walletSessionToken !== "string" || !body.walletSessionToken.startsWith("veel_wallet_")) {
+    return "Wallet session token is required";
   }
 
   return null;

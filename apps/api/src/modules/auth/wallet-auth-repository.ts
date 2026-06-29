@@ -19,6 +19,13 @@ export class WalletAuthChallengeInvalidError extends Error {
   }
 }
 
+export class WalletRecoveryLinkConflictError extends Error {
+  constructor() {
+    super("WALLET_RECOVERY_LINK_CONFLICT");
+    this.name = "WalletRecoveryLinkConflictError";
+  }
+}
+
 export interface WalletAuthChallenge {
   id: string;
   chain: WalletChain;
@@ -43,6 +50,7 @@ export interface WalletAuthRepository {
   createChallenge(input: CreateWalletAuthChallengeInput): Promise<WalletAuthChallenge>;
   findChallenge(input: FindWalletAuthChallengeInput): Promise<WalletAuthChallenge | null>;
   createSessionFromChallenge(input: CreateWalletAuthSessionInput): Promise<WalletAuthSession>;
+  linkSupabaseRecovery(input: LinkSupabaseRecoveryInput): Promise<void>;
   verifySessionToken(token: string): Promise<VerifiedWalletAuthSession | null>;
   close?(): Promise<void>;
 }
@@ -63,6 +71,11 @@ export interface FindWalletAuthChallengeInput {
 export interface CreateWalletAuthSessionInput {
   challengeId: string;
   expiresAt: Date;
+}
+
+export interface LinkSupabaseRecoveryInput {
+  walletSessionToken: string;
+  supabaseUserId: string;
 }
 
 interface WalletAuthChallengeRow {
@@ -237,6 +250,60 @@ export function createPostgresWalletAuthRepository(
       const row = rows[0];
       return row ? { supabaseUserId: row.supabase_user_id } : null;
     },
+    async linkSupabaseRecovery(input) {
+      const walletSessionRows = await sql<{ user_id: string }[]>`
+        select user_id
+        from wallet_auth_sessions
+        where token_hash = ${hashToken(input.walletSessionToken)}
+          and revoked_at is null
+          and expires_at > now()
+        limit 1
+      `;
+      const walletSession = walletSessionRows[0];
+
+      if (!walletSession) {
+        throw new WalletAuthChallengeInvalidError();
+      }
+
+      await sql.begin(async (tx) => {
+        const existingRows = await tx<{ id: string }[]>`
+          select id
+          from users
+          where supabase_user_id = ${input.supabaseUserId}
+          limit 1
+        `;
+        const existing = existingRows[0];
+
+        if (existing && existing.id !== walletSession.user_id) {
+          throw new WalletRecoveryLinkConflictError();
+        }
+
+        await tx`
+          update users
+          set supabase_user_id = ${input.supabaseUserId}
+          where id = ${walletSession.user_id}
+        `;
+
+        await tx`
+          insert into audit_events (
+            id,
+            actor_user_id,
+            subject_type,
+            subject_id,
+            action,
+            metadata
+          )
+          values (
+            ${randomUUID()},
+            ${walletSession.user_id},
+            'user',
+            ${walletSession.user_id},
+            'auth.recovery_linked',
+            ${tx.json({ provider: "supabase" })}
+          )
+        `;
+      });
+    },
     async close() {
       if (ownsClient) {
         await sql.end({ timeout: 5 });
@@ -312,6 +379,9 @@ function createUnavailableWalletAuthRepository(): WalletAuthRepository {
       throw new WalletAuthRepositoryConfigurationError();
     },
     async createSessionFromChallenge() {
+      throw new WalletAuthRepositoryConfigurationError();
+    },
+    async linkSupabaseRecovery() {
       throw new WalletAuthRepositoryConfigurationError();
     },
     async verifySessionToken() {

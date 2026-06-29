@@ -19,6 +19,10 @@ import type {
   CreatePendingAgeVerificationInput
 } from "../src/modules/age/types";
 import type { AiRepository, AiSession, AiToolCall } from "../src/modules/ai/types";
+import {
+  WalletRecoveryLinkConflictError,
+  type WalletAuthRepository
+} from "../src/modules/auth/wallet-auth-repository";
 import type { ProfileRepository } from "../src/modules/profile/types";
 import type { ReferralRepository } from "../src/modules/referral/types";
 import type { RefundRepository } from "../src/modules/refund/types";
@@ -235,6 +239,101 @@ describe("buildApi", () => {
         allowed: false,
         reason: "wallet_required"
       }
+    });
+
+    await app.close();
+  });
+
+  it("links Supabase recovery to a wallet-created account when both sessions are proven", async () => {
+    const links: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      walletAuthRepository: fakeWalletAuthRepository({
+        async linkSupabaseRecovery(input) {
+          links.push(input);
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/recovery-link",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "recovery-link-1"
+      },
+      payload: {
+        walletSessionToken: "veel_wallet_test_session"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      state: "linked",
+      provider: "supabase"
+    });
+    expect(links).toEqual([
+      {
+        walletSessionToken: "veel_wallet_test_session",
+        supabaseUserId: "00000000-0000-4000-8000-000000000001"
+      }
+    ]);
+
+    await app.close();
+  });
+
+  it("rejects recovery linking without a wallet session proof", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      walletAuthRepository: fakeWalletAuthRepository()
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/recovery-link",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "recovery-link-missing-wallet"
+      },
+      payload: {}
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: "validation_failed"
+    });
+
+    await app.close();
+  });
+
+  it("rejects recovery linking when the Supabase identity belongs to another account", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      walletAuthRepository: fakeWalletAuthRepository({
+        async linkSupabaseRecovery() {
+          throw new WalletRecoveryLinkConflictError();
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/recovery-link",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "recovery-link-conflict"
+      },
+      payload: {
+        walletSessionToken: "veel_wallet_test_session"
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: "conflict"
     });
 
     await app.close();
@@ -8639,6 +8738,29 @@ const fakeAuthVerifier: SupabaseAuthVerifier = {
     };
   }
 };
+
+function fakeWalletAuthRepository(
+  overrides: Partial<WalletAuthRepository> = {}
+): WalletAuthRepository {
+  return {
+    async createChallenge() {
+      throw new Error("not implemented");
+    },
+    async findChallenge() {
+      throw new Error("not implemented");
+    },
+    async createSessionFromChallenge() {
+      throw new Error("not implemented");
+    },
+    async linkSupabaseRecovery() {
+      throw new Error("not implemented");
+    },
+    async verifySessionToken() {
+      throw new Error("not implemented");
+    },
+    ...overrides
+  };
+}
 
 const verifiedAgeRepository: AgeRepository = {
   async findLatestAgeStatusBySupabaseUserId() {

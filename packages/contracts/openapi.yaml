@@ -90,6 +90,21 @@ paths:
         "201": { $ref: "#/components/responses/WalletAuthSession" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/auth/recovery-link:
+    post:
+      operationId: linkSupabaseRecovery
+      tags: [Auth]
+      summary: Link a Supabase recovery identity to a wallet-created WeVid account
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/LinkSupabaseRecovery"
+      responses:
+        "200": { $ref: "#/components/responses/AuthRecoveryLink" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/age/sessions:
     post:
       operationId: createAgeSession
@@ -1975,6 +1990,7 @@ components:
     CreateVerificationSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateVerificationSessionRequest" } } } }
     CreateWalletAuthChallenge: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateWalletAuthChallengeRequest" } } } }
     CreateWalletAuthSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateWalletAuthSessionRequest" } } } }
+    LinkSupabaseRecovery: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/LinkSupabaseRecoveryRequest" } } } }
     CreateWalletLinkChallenge: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateWalletLinkChallengeRequest" } } } }
     LinkWallet: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/LinkWalletRequest" } } } }
     CreateOnrampSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateOnrampSessionRequest" } } } }
@@ -2070,6 +2086,7 @@ components:
     ProviderWebhookReceipt: { description: Provider webhook receipt, content: { application/json: { schema: { $ref: "#/components/schemas/ProviderWebhookReceipt" } } } }
     WalletAuthChallenge: { description: Wallet auth challenge, content: { application/json: { schema: { $ref: "#/components/schemas/WalletAuthChallenge" } } } }
     WalletAuthSession: { description: Wallet auth session, content: { application/json: { schema: { $ref: "#/components/schemas/WalletAuthSession" } } } }
+    AuthRecoveryLink: { description: Recovery identity link result, content: { application/json: { schema: { $ref: "#/components/schemas/AuthRecoveryLink" } } } }
     WalletLinkChallenge: { description: Wallet link challenge, content: { application/json: { schema: { $ref: "#/components/schemas/WalletLinkChallenge" } } } }
     WalletList: { description: Wallets, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Wallet" } } } } } } }
     Wallet: { description: Wallet, content: { application/json: { schema: { $ref: "#/components/schemas/Wallet" } } } }
@@ -2357,6 +2374,17 @@ components:
         tokenType: { type: string, enum: [Bearer] }
         expiresAt: { type: string, format: date-time }
         wallet: { $ref: "#/components/schemas/Wallet" }
+    LinkSupabaseRecoveryRequest:
+      type: object
+      required: [walletSessionToken]
+      properties:
+        walletSessionToken: { type: string, minLength: 16 }
+    AuthRecoveryLink:
+      type: object
+      required: [state, provider]
+      properties:
+        state: { type: string, enum: [linked] }
+        provider: { type: string, enum: [supabase] }
     CreateWalletLinkChallengeRequest:
       type: object
       required: [chain, address, provider]

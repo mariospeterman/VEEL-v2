@@ -26,6 +26,7 @@ export type {
   CreateWalletLinkChallengeRequest,
   CreateWalletAuthChallengeRequest,
   CreateWalletAuthSessionRequest,
+  LinkSupabaseRecoveryRequest,
   LinkWalletRequest,
   McpConnection,
   McpOAuthRedirect,
@@ -46,6 +47,7 @@ export type {
   Wallet,
   WalletAuthChallenge,
   WalletAuthSession,
+  AuthRecoveryLink,
   WalletLinkChallenge
 } from "./api-mutation-types";
 import type {
@@ -67,6 +69,7 @@ import type {
   CreateWalletLinkChallengeRequest,
   CreateWalletAuthChallengeRequest,
   CreateWalletAuthSessionRequest,
+  LinkSupabaseRecoveryRequest,
   LinkWalletRequest,
   McpConnection,
   McpOAuthRedirect,
@@ -87,6 +90,7 @@ import type {
   Wallet,
   WalletAuthChallenge,
   WalletAuthSession,
+  AuthRecoveryLink,
   WalletLinkChallenge
 } from "./api-mutation-types";
 
@@ -114,6 +118,12 @@ export async function createWalletAuthSession(
   body: CreateWalletAuthSessionRequest
 ): Promise<WalletAuthSession> {
   return publicMutation<WalletAuthSession>("/v1/auth/wallet/sessions", "POST", body);
+}
+
+export async function linkSupabaseRecovery(
+  body: LinkSupabaseRecoveryRequest
+): Promise<AuthRecoveryLink> {
+  return authenticatedMutation<AuthRecoveryLink>("/v1/auth/recovery-link", "POST", body);
 }
 
 export async function createWalletLinkChallenge(

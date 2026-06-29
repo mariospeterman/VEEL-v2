@@ -89,6 +89,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/recovery-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Link a Supabase recovery identity to a wallet-created WeVid account */
+        post: operations["linkSupabaseRecovery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/age/sessions": {
         parameters: {
             query?: never;
@@ -2716,6 +2733,15 @@ export interface components {
             expiresAt: string;
             wallet: components["schemas"]["Wallet"];
         };
+        LinkSupabaseRecoveryRequest: {
+            walletSessionToken: string;
+        };
+        AuthRecoveryLink: {
+            /** @enum {string} */
+            state: "linked";
+            /** @enum {string} */
+            provider: "supabase";
+        };
         CreateWalletLinkChallengeRequest: {
             /** @enum {string} */
             chain: "solana_devnet" | "solana_mainnet";
@@ -4873,6 +4899,15 @@ export interface components {
                 "application/json": components["schemas"]["WalletAuthSession"];
             };
         };
+        /** @description Recovery identity link result */
+        AuthRecoveryLink: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["AuthRecoveryLink"];
+            };
+        };
         /** @description Wallet link challenge */
         WalletLinkChallenge: {
             headers: {
@@ -6065,6 +6100,11 @@ export interface components {
                 "application/json": components["schemas"]["CreateWalletAuthSessionRequest"];
             };
         };
+        LinkSupabaseRecovery: {
+            content: {
+                "application/json": components["schemas"]["LinkSupabaseRecoveryRequest"];
+            };
+        };
         CreateWalletLinkChallenge: {
             content: {
                 "application/json": components["schemas"]["CreateWalletLinkChallengeRequest"];
@@ -6416,6 +6456,25 @@ export interface operations {
         responses: {
             201: components["responses"]["WalletAuthSession"];
             400: components["responses"]["ValidationFailed"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    linkSupabaseRecovery: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["LinkSupabaseRecovery"];
+        responses: {
+            200: components["responses"]["AuthRecoveryLink"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };

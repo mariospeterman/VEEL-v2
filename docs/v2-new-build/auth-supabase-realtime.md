@@ -85,7 +85,7 @@ Signup paths and onboarding order:
 - Step 3: user sets the Veel profile handle/display name through `PATCH /v1/profiles/me`.
 - Step 4: user may sign into Supabase email/social recovery for profile management.
 - Step 5: third-party age verification completes the app age gate.
-- Supabase email/social/passkey: optional recovery/account-management access. It is not the primary app-access proof and is not yet an automatic merge with a wallet-created identity.
+- Supabase email/social/passkey: optional recovery/account-management access. It is not the primary app-access proof; it can be linked to a wallet-created account only after both wallet-session proof and Supabase-session proof are present.
 - External wallet: uses signed wallet challenge and can attach to an existing Supabase-authenticated recovery session or become the primary wallet path.
 - Returning user: Fastify resolves profile, primary wallet, linked wallets, age/access, restrictions, and monetisation state.
 
@@ -95,7 +95,8 @@ Current implementation boundary:
 
 - Supabase Auth login and magic-link recovery are wired through the official SSR callback pattern: OAuth/PKCE callbacks exchange the returned `code` with `exchangeCodeForSession`, and email magic links verify `token_hash` plus `type` with `verifyOtp`.
 - Wallet-first login creates or restores an app-owned wallet session whose bearer token maps to the internal `users.supabase_user_id` compatibility identifier.
-- A backend account-linking endpoint to attach a Supabase Auth identity to an already wallet-created user is still required before the onboarding UI can honestly claim that Supabase recovery is bound to the same wallet-first account. Until then, the UI should present Supabase as login/recovery for Supabase-authenticated profiles, not as completed wallet-account recovery binding.
+- `POST /v1/auth/recovery-link` links Supabase recovery to a wallet-created account after the browser proves both sessions: a valid Supabase bearer token in `Authorization` and the active wallet session token in the request body. The API updates the existing wallet-owned `users` row to the verified Supabase subject, so future wallet login and future Supabase login resolve to the same profile, wallet, age, creator KYC, and organization KYB state.
+- Recovery linking fails with `409` if that Supabase identity already belongs to a different WeVid account. The API never silently merges two users, profiles, wallets, age records, verification records, payments, or organization memberships.
 
 ## Profile Bootstrap
 

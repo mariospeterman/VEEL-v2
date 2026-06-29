@@ -1,6 +1,9 @@
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
+import { parsePublicWebEnv } from "@veel/config/public";
 import { createSupabaseServerClient } from "@/supabase/server";
+
+const walletSessionCookieName = "veel_wallet_session_token";
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
@@ -12,11 +15,20 @@ export async function GET(request: NextRequest) {
 
   if (code || (tokenHash && type)) {
     const supabase = await createSupabaseServerClient();
-    const { error } = supabase
+    const { data, error } = supabase
       ? await confirmSupabaseAuth(supabase, { code, tokenHash, type })
-      : { error: new Error("Supabase is not configured") };
+      : { data: null, error: new Error("Supabase is not configured") };
 
     if (!error) {
+      const linkError = await linkWalletRecoveryIfPresent(request, data?.session?.access_token ?? null);
+      if (linkError) {
+        redirectUrl.pathname = "/";
+        redirectUrl.search = "";
+        redirectUrl.searchParams.set("mode", "login");
+        redirectUrl.searchParams.set("error", linkError);
+        return NextResponse.redirect(redirectUrl);
+      }
+
       return NextResponse.redirect(redirectUrl);
     }
   }
@@ -48,5 +60,33 @@ async function confirmSupabaseAuth(
     return supabase.auth.verifyOtp({ token_hash: params.tokenHash, type: params.type });
   }
 
-  return { error: new Error("Missing Supabase auth confirmation parameters") };
+  return { data: null, error: new Error("Missing Supabase auth confirmation parameters") };
+}
+
+async function linkWalletRecoveryIfPresent(request: NextRequest, supabaseAccessToken: string | null) {
+  const walletSessionToken = request.cookies.get(walletSessionCookieName)?.value;
+
+  if (!walletSessionToken || !supabaseAccessToken) {
+    return null;
+  }
+
+  const env = parsePublicWebEnv(process.env);
+
+  try {
+    const response = await fetch(new URL("/v1/auth/recovery-link", env.NEXT_PUBLIC_API_BASE_URL), {
+      body: JSON.stringify({ walletSessionToken }),
+      cache: "no-store",
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${supabaseAccessToken}`,
+        "content-type": "application/json",
+        "idempotency-key": crypto.randomUUID()
+      },
+      method: "POST"
+    });
+
+    return response.ok ? null : "recovery_link_failed";
+  } catch {
+    return "recovery_link_failed";
+  }
 }

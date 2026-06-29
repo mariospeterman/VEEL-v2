@@ -167,6 +167,8 @@ export function LandingExperience() {
     const error = params.get("error");
     if (error === "auth_confirm_failed") {
       setAuthCallbackError("Login could not be completed. Check the provider redirect allowlist and try again.");
+    } else if (error === "recovery_link_failed") {
+      setAuthCallbackError("Recovery login worked, but it could not be linked to this wallet account. Start the API and try again.");
     }
     if (step === "profile") setInitialOnboardingStep(1);
     if (step === "age") setInitialOnboardingStep(2);
