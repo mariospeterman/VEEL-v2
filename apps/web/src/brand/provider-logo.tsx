@@ -26,13 +26,9 @@ const providerLogoSources: Partial<Record<ProviderLogoName, string>> = {
   backpack: "/provider-icons/backpack.png",
   didit: "/provider-icons/didit.svg",
   phantom: "/provider-icons/phantom.svg",
-  persona: "/provider-icons/persona.svg",
   privy: "/provider-icons/privy.png",
   solflare: "/provider-icons/solflare.svg",
-  sumsub: "/provider-icons/sumsub.svg",
-  turnkey: "/provider-icons/turnkey.svg",
-  veriff: "/provider-icons/veriff.svg",
-  yoti: "/provider-icons/yoti.svg"
+  turnkey: "/provider-icons/turnkey.svg"
 };
 
 export function ProviderLogo({

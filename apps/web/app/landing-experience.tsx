@@ -180,6 +180,8 @@ export function LandingExperience() {
           : -1;
 
     if (targetIndex >= 0) {
+      setActiveIndex(targetIndex);
+      setProgress(targetIndex / Math.max(1, landingFrames.length - 1));
       window.requestAnimationFrame(() => scrollToFrame(targetIndex, "auto"));
       return;
     }
@@ -601,21 +603,24 @@ function LandingWalletList({ authState, onLinked }: { authState: WebAuthState; o
   const embeddedWalletRuntimeEnabled = process.env.NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED === "true";
   const privyConfigured = embeddedWalletRuntimeEnabled && Boolean(process.env.NEXT_PUBLIC_PRIVY_APP_ID);
   const turnkeyConfigured = embeddedWalletRuntimeEnabled && Boolean(process.env.NEXT_PUBLIC_TURNKEY_ORGANIZATION_ID);
+  const hasEmbeddedWallet = privyConfigured || turnkeyConfigured;
 
   return (
     <WalletRuntimeProviders>
-      <div className="landing-wallet-runtime" aria-label="Wallet providers">
+      <div className="landing-wallet-runtime" aria-label="Wallet providers" data-embedded={hasEmbeddedWallet ? "true" : "false"}>
         <div className="landing-wallet-connect-row">
           <WalletLinkPanel authState={authState} compact loginSimple onLinked={onLinked} reloadOnSession={!onLinked} />
         </div>
-        <div className="landing-embedded-wallets" aria-label="Embedded wallet providers">
-          <div className="landing-embedded-label">
-            <p>Embedded wallet</p>
-            <span>Use Privy or Turnkey when configured.</span>
+        {hasEmbeddedWallet ? (
+          <div className="landing-embedded-wallets" aria-label="Embedded wallet providers">
+            <div className="landing-embedded-label">
+              <p>Embedded wallet</p>
+              <span>Use Privy or Turnkey when configured.</span>
+            </div>
+            {privyConfigured ? <EmbeddedWalletLoginButton configured label="Privy" onLinked={onLinked} provider="privy" /> : null}
+            {turnkeyConfigured ? <EmbeddedWalletLoginButton configured label="Turnkey" onLinked={onLinked} provider="turnkey" /> : null}
           </div>
-          <EmbeddedWalletLoginButton configured={privyConfigured} label="Privy" onLinked={onLinked} provider="privy" />
-          <EmbeddedWalletLoginButton configured={turnkeyConfigured} label="Turnkey" onLinked={onLinked} provider="turnkey" />
-        </div>
+        ) : null}
       </div>
     </WalletRuntimeProviders>
   );
@@ -789,11 +794,14 @@ function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
           </div>
         ))}
       </div>
-      <div className="landing-auth-block landing-recovery-auth">
-        <p>Recovery</p>
-        <span>Add recovery access so you can manage your profile if you change devices.</span>
+      <details className="landing-auth-block landing-recovery-auth">
+        <summary>
+          <span>Recovery</span>
+          <small>Optional email or social login</small>
+        </summary>
+        <p>Add recovery access so you can manage your profile if you change devices.</p>
         <RecoveryAuthPanel mode="profile" next="/?mode=onboarding&step=profile" />
-      </div>
+      </details>
       <div className="landing-step-actions">
         <button className="landing-button" data-tone="primary" disabled={submitting} type="submit">
           {submitting ? "Saving" : "Save and continue"}

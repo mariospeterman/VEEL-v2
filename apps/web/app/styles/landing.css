@@ -311,7 +311,7 @@
   }
 
   .landing-story-auth {
-    top: 52%;
+    top: 54%;
   }
 
   .landing-story-auth .landing-copy {
@@ -549,6 +549,11 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: start;
     gap: 8px;
+  }
+
+  .landing-wallet-runtime[data-embedded="false"] {
+    width: min(280px, 100%);
+    grid-template-columns: 1fr;
   }
 
   .landing-wallet-connect-row,
@@ -830,6 +835,41 @@
     max-width: 650px;
     border-top: 1px solid rgba(248, 250, 252, 0.12);
     padding-top: 8px;
+  }
+
+  .landing-recovery-auth summary {
+    display: flex;
+    width: fit-content;
+    align-items: center;
+    gap: 8px;
+    color: rgba(248, 250, 252, 0.82);
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .landing-recovery-auth summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .landing-recovery-auth summary span {
+    font-size: 10px;
+    font-weight: 760;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .landing-recovery-auth summary small,
+  .landing-recovery-auth > p {
+    margin: 0;
+    color: rgba(248, 250, 252, 0.56);
+    font-size: 11px;
+    font-weight: 640;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .landing-recovery-auth > p {
+    margin-top: 6px;
   }
 
   .landing-auth-inline .auth-wallet-connect-card {
@@ -1544,12 +1584,14 @@
     }
 
     .landing-story-auth {
-      top: 50%;
+      top: 51%;
+      max-height: calc(100svh - 104px);
+      overflow: visible;
     }
 
     .landing-story-auth h1 {
       max-width: 15ch;
-      font-size: clamp(28px, 8vw, 36px);
+      font-size: clamp(24px, 7.5vw, 30px);
       line-height: 1.02;
     }
 
@@ -1580,6 +1622,11 @@
       margin-top: 12px;
     }
 
+    .landing-story-auth .landing-eyebrow {
+      margin-bottom: 8px;
+      font-size: 10px;
+    }
+
     .landing-provider-row {
       gap: 7px;
     }
@@ -1594,9 +1641,17 @@
       display: none;
     }
 
+    .landing-story-auth .landing-step-copy > span {
+      display: none;
+    }
+
     .landing-profile-setup,
     .landing-age-waterfall {
-      gap: 8px;
+      gap: 6px;
+    }
+
+    .landing-profile-setup {
+      max-width: calc(100vw - 34px);
     }
 
     .landing-age-choice-panel {
@@ -1634,8 +1689,9 @@
     }
 
     .landing-profile-setup .landing-form-grid {
-      grid-template-columns: 58px minmax(0, 1fr);
+      grid-template-columns: 46px minmax(0, 1fr);
       max-width: none;
+      gap: 6px 8px;
     }
 
     .landing-profile-setup .landing-form-grid > label:nth-child(3),
@@ -1644,13 +1700,18 @@
       max-width: none;
     }
 
+    .landing-profile-setup .landing-form-grid > label:nth-child(2) {
+      max-width: none;
+    }
+
     .landing-profile-link-row {
       grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr) 32px;
     }
 
     .landing-avatar-upload {
-      width: 52px;
-      height: 52px;
+      width: 40px;
+      height: 40px;
+      align-self: end;
     }
 
     .landing-form-row,
@@ -1661,7 +1722,7 @@
     }
 
     .landing-profile-setup .landing-form-grid {
-      grid-template-columns: 58px minmax(0, 1fr);
+      grid-template-columns: 46px minmax(0, 1fr);
     }
 
     .landing-form-row label:nth-child(2) {
@@ -1674,15 +1735,73 @@
     .landing-form-grid textarea,
     .landing-profile-link-row input,
     .landing-email-row input {
-      min-height: 34px;
+      min-height: 32px;
       font-size: 12px;
+    }
+
+    .landing-form-grid textarea {
+      min-height: 42px;
+      padding-block: 8px;
+    }
+
+    .landing-profile-links {
+      gap: 5px;
+    }
+
+    .landing-profile-links-header p {
+      font-size: 9px;
+    }
+
+    .landing-profile-links-header button,
+    .landing-profile-link-row button {
+      width: 30px;
+      height: 30px;
+    }
+
+    .landing-profile-link-row {
+      grid-template-columns: minmax(72px, 0.48fr) minmax(0, 1fr) 30px;
+      gap: 5px;
+    }
+
+    .landing-recovery-auth {
+      padding-top: 7px;
+    }
+
+    .landing-recovery-auth:not([open]) .landing-supabase-auth,
+    .landing-recovery-auth:not([open]) > p {
+      display: none;
+    }
+
+    .landing-recovery-auth summary {
+      gap: 6px;
+    }
+
+    .landing-recovery-auth summary small {
+      display: none;
+    }
+
+    .landing-step-actions {
+      gap: 8px;
+    }
+
+    .landing-step-actions .landing-button {
+      min-height: 34px;
+      padding-inline: 12px;
     }
 
     .landing-step-copy > span {
       display: block;
-      max-height: 2.9em;
+      max-height: 2.7em;
       overflow: hidden;
       font-size: 12px;
+    }
+
+    .landing-step-copy small {
+      font-size: 11px;
+    }
+
+    .landing-story-auth .landing-inline-link {
+      font-size: 10px;
     }
 
     .landing-provider-link {
