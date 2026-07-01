@@ -23,7 +23,7 @@ export function appAccessRedirectForPath(
 ): string {
   const next = safeNext(path);
 
-  if (reason === "wallet_required") {
+  if (reason === "wallet_required" || reason === "identity_required") {
     return withNext("/", next, { mode: "onboarding", step: "wallet" });
   }
 

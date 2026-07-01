@@ -119,6 +119,10 @@ export function safeMutationMessage(error: unknown, context = "This action") {
       return `${context} reached the wallet, but the WeVid API is not available. Start the API and try again.`;
     }
 
+    if (!error.status && error.message) {
+      return error.message;
+    }
+
     return mapStatusToMessage(error.status, context);
   }
 

@@ -7,6 +7,8 @@ export type CreateVerificationSessionRequest =
   components["schemas"]["CreateVerificationSessionRequest"];
 export type VerificationSession = components["schemas"]["VerificationSession"];
 export type UpdateProfileRequest = components["schemas"]["UpdateProfileRequest"];
+export type UploadProfileAvatarRequest = components["schemas"]["UploadProfileAvatarRequest"];
+export type ProfileAvatarUpload = components["schemas"]["ProfileAvatarUpload"];
 export type CreateWalletAuthChallengeRequest =
   components["schemas"]["CreateWalletAuthChallengeRequest"];
 export type CreateWalletAuthSessionRequest =

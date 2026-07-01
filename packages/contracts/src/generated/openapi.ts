@@ -293,6 +293,23 @@ export interface paths {
         patch: operations["updateMyProfile"];
         trace?: never;
     };
+    "/v1/profiles/me/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload current profile avatar through server-side Supabase Storage */
+        post: operations["uploadMyProfileAvatar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/profiles/me/creator-dashboard": {
         parameters: {
             query?: never;
@@ -2899,6 +2916,16 @@ export interface components {
             /** Format: uri */
             url: string;
         };
+        UploadProfileAvatarRequest: {
+            fileName?: string;
+            /** @enum {string} */
+            contentType: "image/jpeg" | "image/png" | "image/webp";
+            dataBase64: string;
+        };
+        ProfileAvatarUpload: {
+            /** Format: uri */
+            avatarUrl: string;
+        };
         /** @enum {string} */
         AgeState: "not_required" | "required" | "pending" | "verified" | "failed";
         AppAccessState: {
@@ -5096,6 +5123,15 @@ export interface components {
                 "application/json": components["schemas"]["UploadSession"];
             };
         };
+        /** @description Uploaded profile avatar URL */
+        ProfileAvatarUpload: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ProfileAvatarUpload"];
+            };
+        };
         /** @description Live room */
         LiveRoom: {
             headers: {
@@ -6125,6 +6161,11 @@ export interface components {
                 "application/json": components["schemas"]["UpdateProfileRequest"];
             };
         };
+        UploadProfileAvatar: {
+            content: {
+                "application/json": components["schemas"]["UploadProfileAvatarRequest"];
+            };
+        };
         CreateContent: {
             content: {
                 "application/json": components["schemas"]["CreateContentRequest"];
@@ -6665,6 +6706,24 @@ export interface operations {
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    uploadMyProfileAvatar: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["UploadProfileAvatar"];
+        responses: {
+            201: components["responses"]["ProfileAvatarUpload"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     getMyCreatorDashboard: {

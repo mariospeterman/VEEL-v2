@@ -20,6 +20,7 @@ export const serverEnvSchema = z.object({
   SUPABASE_PUBLISHABLE_KEY: optionalStringSchema,
   SUPABASE_SECRET_KEY: optionalStringSchema,
   SUPABASE_SERVICE_ROLE_KEY: optionalStringSchema,
+  PROFILE_AVATAR_BUCKET: z.string().default("profile-avatars"),
   DATABASE_URL: optionalStringSchema,
   PRIVY_APP_SECRET: optionalStringSchema,
   PRIVY_JWKS_ENDPOINT: optionalUrlSchema,

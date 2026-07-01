@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { X } from "lucide-react";
 import { WalletReadyState } from "@solana/wallet-adapter-base";
 import { useWallet, type Wallet } from "@solana/wallet-adapter-react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import {
   ApiMutationError,
   createWalletLinkChallenge,
@@ -16,27 +16,6 @@ import type { WebAuthState } from "@/supabase/auth-state";
 import { bytesToBase64, createBackendWalletSession, walletChain } from "./backend-wallet-auth";
 
 type ExternalWalletProvider = LinkWalletRequest["provider"];
-type MessageSigner = {
-  signMessage(message: Uint8Array): Promise<Uint8Array>;
-};
-type InjectedSolanaProvider = {
-  isBackpack?: boolean;
-  isPhantom?: boolean;
-  isSolflare?: boolean;
-  signMessage?: (message: Uint8Array, display?: "utf8" | "hex") => Promise<Uint8Array | { signature: Uint8Array }>;
-  solana?: InjectedSolanaProvider;
-};
-
-type WalletOption = {
-  key: "solana";
-  label: string;
-  logo: "wallet";
-  provider: ExternalWalletProvider;
-};
-
-const walletOptions: WalletOption[] = [
-  { key: "solana", label: "Connect wallet", logo: "wallet", provider: "wallet_adapter" }
-];
 
 interface WalletLinkPanelProps {
   authState: WebAuthState;
@@ -47,9 +26,10 @@ interface WalletLinkPanelProps {
 }
 
 export function WalletLinkPanel({ authState, compact = false, loginSimple = false, onLinked, reloadOnSession = true }: WalletLinkPanelProps) {
-  const { select, wallets } = useWallet();
+  const { connect, connected, connecting, publicKey, signMessage, wallet, wallets } = useWallet();
+  const { setVisible: setWalletModalVisible } = useWalletModal();
   const [mounted, setMounted] = useState(false);
-  const [chooserOpen, setChooserOpen] = useState(false);
+  const [awaitingWallet, setAwaitingWallet] = useState(false);
   const [state, setState] = useState<"idle" | "linking" | "linked" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [linkedAddress, setLinkedAddress] = useState<string | null>(null);
@@ -67,40 +47,55 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
     setMounted(true);
   }, []);
 
-  const selectableWallets = useMemo(
-    () => wallets.filter(isAllowedSolanaWallet).filter((wallet) => wallet.readyState !== WalletReadyState.Unsupported),
-    [wallets]
-  );
+  useEffect(() => {
+    if (!awaitingWallet || state === "linking" || !wallet) {
+      return;
+    }
 
-  async function linkWalletAdapter(option?: WalletOption, selectedWallet?: Wallet) {
+    if (connected && publicKey) {
+      void completeConnectedWallet(wallet);
+      return;
+    }
+
+    if (!connecting) {
+      void connectSelectedWallet();
+    }
+  }, [awaitingWallet, connected, connecting, publicKey, state, wallet]);
+
+  function startWalletFlow() {
+    setMessage(null);
+    setAwaitingWallet(true);
+
+    if (!connected || !publicKey || !wallet) {
+      setWalletModalVisible(true);
+      return;
+    }
+
+    void completeConnectedWallet(wallet);
+  }
+
+  async function connectSelectedWallet() {
+    try {
+      await connect();
+    } catch (error) {
+      setAwaitingWallet(false);
+      setState("error");
+      setMessage(walletMutationMessage(error));
+    }
+  }
+
+  async function completeConnectedWallet(selectedWallet: Wallet) {
     setState("linking");
     setMessage(null);
 
     try {
-      const wallet = selectedWallet ?? (option ? findWalletForOption(wallets, option) : findFirstReadyWallet(wallets));
-      const walletProvider = providerForWallet(wallet);
+      const walletProvider = providerForWallet(selectedWallet);
 
-      if (!wallet) {
-        throw new ApiMutationError("Install or unlock a supported Solana wallet, then try again.");
+      if (!signMessage) {
+        throw new ApiMutationError(`${selectedWallet.adapter.name} is connected but does not expose message signing.`);
       }
 
-      if (wallet.readyState === WalletReadyState.Unsupported) {
-        throw new ApiMutationError(`${wallet.adapter.name} is not supported in this browser.`);
-      }
-
-      select(wallet.adapter.name);
-
-      if (!wallet.adapter.connected) {
-        await wallet.adapter.connect();
-      }
-
-      const messageSigner = getMessageSigner(wallet) ?? getInjectedMessageSigner();
-
-      if (!messageSigner) {
-        throw new ApiMutationError(`${wallet.adapter.name} is connected but did not expose message signing.`);
-      }
-
-      const address = wallet.adapter.publicKey?.toString();
+      const address = publicKey?.toString();
 
       if (!address) {
         throw new ApiMutationError("Wallet did not return a public address.");
@@ -112,13 +107,13 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
         await createBackendWalletSession({
           address,
           provider: walletProvider,
-          signMessage: (message) => messageSigner.signMessage(new TextEncoder().encode(message))
+          signMessage: (message) => signMessage(new TextEncoder().encode(message))
         });
 
         setLinkedAddress(address);
         setState("linked");
+        setAwaitingWallet(false);
         setMessage("Wallet session created. Continue with profile and age verification.");
-        setChooserOpen(false);
         onLinked?.(address);
         if (reloadOnSession) {
           window.location.reload();
@@ -131,7 +126,7 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
         chain,
         provider: walletProvider
       });
-      const signature = await messageSigner.signMessage(new TextEncoder().encode(challenge.message));
+      const signature = await signMessage(new TextEncoder().encode(challenge.message));
 
       await linkWallet({
         address,
@@ -147,12 +142,13 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
 
       setLinkedAddress(address);
       setState("linked");
-      setChooserOpen(false);
+      setAwaitingWallet(false);
       setMessage("Wallet linked. Access still depends on backend age and policy state.");
       onLinked?.(address);
     } catch (error) {
+      setAwaitingWallet(false);
       setState("error");
-      setMessage(safeMutationMessage(error, "Wallet connection"));
+      setMessage(walletMutationMessage(error));
     }
   }
 
@@ -191,12 +187,10 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
 
       {!loginSimple && (
         <div className="auth-login-wallet-icons" aria-label="Supported wallet options">
-          {walletOptions.map((wallet) => (
-            <span key={wallet.label}>
-              <ProviderLogo label={wallet.label} name={wallet.logo} />
-              <span>{wallet.label}</span>
-            </span>
-          ))}
+          <span>
+            <ProviderLogo label="Connect wallet" name="wallet" />
+            <span>Solana Wallet Adapter</span>
+          </span>
         </div>
       )}
 
@@ -205,58 +199,26 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
           <div className="auth-provider-button-grid auth-provider-button-grid-wallets" aria-label="Wallet login providers">
             <button
               className="auth-provider-button"
-              disabled={state === "linking"}
-              onClick={() => setChooserOpen(true)}
+              disabled={state === "linking" || connecting}
+              onClick={startWalletFlow}
               type="button"
             >
               <ProviderLogo label="Connect wallet" name="wallet" />
               <span>
                 <strong>Connect wallet</strong>
-                <small>{state === "linking" ? "Waiting" : "Choose wallet"}</small>
+                <small>{state === "linking" || connecting ? "Waiting" : "Choose wallet"}</small>
               </span>
             </button>
           </div>
-          {chooserOpen ? (
-            <div className="auth-wallet-choice-backdrop" role="presentation">
-              <section aria-label="Choose wallet" aria-modal="true" className="auth-wallet-choice-modal" role="dialog">
-                <header>
-                  <div>
-                    <p>Solana wallet</p>
-                    <h3>Choose wallet</h3>
-                  </div>
-                  <button aria-label="Close wallet chooser" onClick={() => setChooserOpen(false)} type="button">
-                    <X aria-hidden="true" size={17} />
-                  </button>
-                </header>
-                <div className="auth-wallet-choice-list">
-                  {!mounted ? <p>Detecting wallets...</p> : null}
-                  {mounted && selectableWallets.length === 0 ? (
-                    <p>Install or open a Solana wallet with browser signing support.</p>
-                  ) : null}
-                  {selectableWallets.map((wallet) => (
-                    <button
-                      disabled={state === "linking" || wallet.readyState === WalletReadyState.Unsupported}
-                      key={wallet.adapter.name}
-                      onClick={() => void linkWalletAdapter(undefined, wallet)}
-                      type="button"
-                    >
-                      <span>{wallet.adapter.name}</span>
-                      <small>{wallet.readyState === WalletReadyState.Installed ? "Installed" : wallet.readyState}</small>
-                    </button>
-                  ))}
-                </div>
-              </section>
-            </div>
-          ) : null}
         </>
       ) : (
         <button
           className="auth-wallet-primary-button"
-          disabled={state === "linking"}
-          onClick={() => void linkWalletAdapter()}
+          disabled={state === "linking" || connecting}
+          onClick={startWalletFlow}
           type="button"
         >
-          <span>{state === "linking" ? "Waiting for wallet" : authState.method === "supabase" ? "Connect and link" : "Connect wallet"}</span>
+          <span>{state === "linking" || connecting ? "Waiting for wallet" : authState.method === "supabase" ? "Connect and link" : "Connect wallet"}</span>
         </button>
       )}
 
@@ -274,65 +236,6 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
   );
 }
 
-function findWalletForOption(wallets: Wallet[], option: WalletOption) {
-  return option.key === "solana" ? findFirstReadyWallet(wallets) : null;
-}
-
-function findFirstReadyWallet(wallets: Wallet[]) {
-  const allowedWallets = wallets.filter(isAllowedSolanaWallet);
-
-  return (
-    allowedWallets.find((wallet) => wallet.readyState === WalletReadyState.Installed && getMessageSigner(wallet)) ??
-    allowedWallets.find((wallet) => wallet.readyState === WalletReadyState.Loadable && getMessageSigner(wallet)) ??
-    null
-  );
-}
-
-function getMessageSigner(wallet: Wallet): MessageSigner | null {
-  const adapter = wallet.adapter as typeof wallet.adapter & Partial<MessageSigner>;
-
-  return typeof adapter.signMessage === "function" ? { signMessage: adapter.signMessage.bind(adapter) } : null;
-}
-
-function getInjectedMessageSigner(): MessageSigner | null {
-  const provider = findInjectedProvider();
-
-  if (!provider?.signMessage) {
-    return null;
-  }
-
-  return {
-    signMessage: async (message) => normalizeInjectedSignature(await provider.signMessage?.(message, "utf8"))
-  };
-}
-
-function findInjectedProvider(): InjectedSolanaProvider | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const win = window as typeof window & {
-    backpack?: InjectedSolanaProvider;
-    phantom?: InjectedSolanaProvider;
-    solana?: InjectedSolanaProvider;
-    solflare?: InjectedSolanaProvider;
-  };
-
-  return win.solana ?? null;
-}
-
-function normalizeInjectedSignature(value: Uint8Array | { signature: Uint8Array } | undefined) {
-  if (value instanceof Uint8Array) {
-    return value;
-  }
-
-  if (value?.signature instanceof Uint8Array) {
-    return value.signature;
-  }
-
-  throw new ApiMutationError("Wallet returned an unsupported message signature.");
-}
-
 function walletNameIncludes(wallet: Wallet, value: string) {
   return wallet.adapter.name.toLowerCase().includes(value);
 }
@@ -344,7 +247,7 @@ function isAllowedSolanaWallet(wallet: Wallet) {
     return false;
   }
 
-  return Boolean(getMessageSigner(wallet)) || isKnownSolanaWalletName(name);
+  return isKnownSolanaWalletName(name) || wallet.readyState === WalletReadyState.Installed || wallet.readyState === WalletReadyState.Loadable;
 }
 
 function isKnownSolanaWalletName(name: string) {
@@ -383,6 +286,30 @@ function providerForWallet(wallet: Wallet | null): ExternalWalletProvider {
   }
 
   return "wallet_adapter";
+}
+
+function walletMutationMessage(error: unknown) {
+  if (error instanceof Error) {
+    const name = error.name.toLowerCase();
+
+    if (name.includes("notready")) {
+      return "That wallet is not installed or is not ready in this browser. Install or unlock it, then try again.";
+    }
+
+    if (name.includes("notselected")) {
+      return "Choose a wallet first.";
+    }
+
+    if (name.includes("userreject") || name.includes("rejected")) {
+      return "Wallet request was cancelled.";
+    }
+
+    if (name.includes("connection")) {
+      return error.message || "Wallet connection failed. Unlock the wallet and try again.";
+    }
+  }
+
+  return safeMutationMessage(error, "Wallet connection");
 }
 
 function Fact({ label, value }: { label: string; value: string }) {

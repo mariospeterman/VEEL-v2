@@ -246,6 +246,20 @@ paths:
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /v1/profiles/me/avatar:
+    post:
+      operationId: uploadMyProfileAvatar
+      tags: [Profiles]
+      summary: Upload current profile avatar through server-side Supabase Storage
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/UploadProfileAvatar"
+      responses:
+        "201": { $ref: "#/components/responses/ProfileAvatarUpload" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/profiles/me/creator-dashboard:
     get:
       operationId: getMyCreatorDashboard
@@ -1995,6 +2009,7 @@ components:
     LinkWallet: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/LinkWalletRequest" } } } }
     CreateOnrampSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateOnrampSessionRequest" } } } }
     UpdateProfile: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateProfileRequest" } } } }
+    UploadProfileAvatar: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UploadProfileAvatarRequest" } } } }
     CreateContent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateContentRequest" } } } }
     UpdateContent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateContentRequest" } } } }
     PublishContent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PublishContentRequest" } } } }
@@ -2107,6 +2122,7 @@ components:
     NotificationDevice: { description: Notification device, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationDevice" } } } }
     ContentItem: { description: Content item, content: { application/json: { schema: { $ref: "#/components/schemas/ContentItem" } } } }
     UploadSession: { description: Safe upload session, content: { application/json: { schema: { $ref: "#/components/schemas/UploadSession" } } } }
+    ProfileAvatarUpload: { description: Uploaded profile avatar URL, content: { application/json: { schema: { $ref: "#/components/schemas/ProfileAvatarUpload" } } } }
     LiveRoom: { description: Live room, content: { application/json: { schema: { $ref: "#/components/schemas/LiveRoom" } } } }
     LiveRoomPage: { description: Live rooms, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/LiveRoom" } }, nextCursor: { type: string, nullable: true } } } } } }
     HostConnection: { description: Masked host connection, content: { application/json: { schema: { $ref: "#/components/schemas/HostConnection" } } } }
@@ -2557,6 +2573,18 @@ components:
       properties:
         label: { type: string, minLength: 1, maxLength: 32 }
         url: { type: string, format: uri, maxLength: 2048 }
+    UploadProfileAvatarRequest:
+      type: object
+      required: [contentType, dataBase64]
+      properties:
+        fileName: { type: string, maxLength: 160 }
+        contentType: { type: string, enum: [image/jpeg, image/png, image/webp] }
+        dataBase64: { type: string, maxLength: 2000000 }
+    ProfileAvatarUpload:
+      type: object
+      required: [avatarUrl]
+      properties:
+        avatarUrl: { type: string, format: uri }
     AgeState: { type: string, enum: [not_required, required, pending, verified, failed] }
     AppAccessState:
       type: object

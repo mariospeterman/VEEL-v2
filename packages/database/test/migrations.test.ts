@@ -91,6 +91,19 @@ describe("database migrations", () => {
     expect(sql).not.toMatch(/raw_payload json|document_image|selfie_image|biometric_template|id_document/i);
   });
 
+  it("adds the public profile avatar storage bucket with strict media limits", () => {
+    const sql = readMigration("0070_profile_avatar_storage_bucket.sql");
+
+    expect(sql).toContain("storage.buckets");
+    expect(sql).toContain("'profile-avatars'");
+    expect(sql).toContain("file_size_limit");
+    expect(sql).toContain("1500000");
+    expect(sql).toContain("image/jpeg");
+    expect(sql).toContain("image/png");
+    expect(sql).toContain("image/webp");
+    expect(sql).not.toMatch(/private_key|service_role|secret/i);
+  });
+
   it("adds content feed foundation without playback secrets or entitlement shortcuts", () => {
     const sql = readMigration("0006_content_feed_foundation.sql");
 

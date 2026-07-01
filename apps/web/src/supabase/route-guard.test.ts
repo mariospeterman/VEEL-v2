@@ -11,7 +11,7 @@ describe("signInRedirectForPath", () => {
 describe("appAccessRedirectForPath", () => {
   it("routes incomplete backend app access to the correct remediation surface", () => {
     expect(appAccessRedirectForPath("/app/messages", "identity_required")).toBe(
-      "/?mode=login&next=%2Fapp%2Fmessages"
+      "/?mode=onboarding&step=wallet&next=%2Fapp%2Fmessages"
     );
     expect(appAccessRedirectForPath("/app/messages", "wallet_required")).toBe(
       "/?mode=onboarding&step=wallet&next=%2Fapp%2Fmessages"

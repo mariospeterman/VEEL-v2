@@ -34,6 +34,7 @@ export type {
   PaidMessageIntent,
   PaymentIntent,
   PublishContentRequest,
+  ProfileAvatarUpload,
   RefundDisputeRequest,
   SubmitSubscriptionAuthorizationRequest,
   Subscription,
@@ -41,6 +42,7 @@ export type {
   TransactionRequest,
   UpdateContentRequest,
   UpdateProfileRequest,
+  UploadProfileAvatarRequest,
   UploadSession,
   VerificationSession,
   User,
@@ -77,6 +79,7 @@ import type {
   PaidMessageIntent,
   PaymentIntent,
   PublishContentRequest,
+  ProfileAvatarUpload,
   RefundDisputeRequest,
   SubmitSubscriptionAuthorizationRequest,
   Subscription,
@@ -84,6 +87,7 @@ import type {
   TransactionRequest,
   UpdateContentRequest,
   UpdateProfileRequest,
+  UploadProfileAvatarRequest,
   UploadSession,
   VerificationSession,
   User,
@@ -106,6 +110,12 @@ export async function createVerificationSession(
 
 export async function updateMyProfile(body: UpdateProfileRequest): Promise<User> {
   return authenticatedMutation<User>("/v1/profiles/me", "PATCH", body);
+}
+
+export async function uploadMyProfileAvatar(
+  body: UploadProfileAvatarRequest
+): Promise<ProfileAvatarUpload> {
+  return authenticatedMutation<ProfileAvatarUpload>("/v1/profiles/me/avatar", "POST", body);
 }
 
 export async function createWalletAuthChallenge(

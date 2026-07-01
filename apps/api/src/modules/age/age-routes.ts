@@ -150,10 +150,10 @@ export async function registerAgeRoutes(
         verifiedSession.supabaseUserId
       );
 
-      if (latestAgeStatus.state === "verified" || latestAgeStatus.state === "pending") {
+      if (latestAgeStatus.state === "verified") {
         return reply.code(409).send({
           code: "conflict",
-          message: `Age verification is already ${latestAgeStatus.state}`
+          message: "Age verification is already verified"
         });
       }
 

@@ -83,12 +83,14 @@
   .auth-provider-link-grid a,
   .auth-provider-link,
   .auth-age-options button {
-    border: 1px solid color-mix(in srgb, var(--foreground) 20%, transparent);
-    background: color-mix(in srgb, var(--background) 42%, transparent);
+    border: 1px solid color-mix(in srgb, var(--foreground) 16%, transparent);
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--foreground) 5%, transparent), transparent),
+      color-mix(in srgb, var(--background) 36%, transparent);
     color: var(--foreground);
     cursor: pointer;
     text-decoration: none;
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(18px) saturate(1.08);
   }
 
   .auth-provider-button {
@@ -97,7 +99,7 @@
     grid-template-columns: auto minmax(0, 1fr);
     align-items: center;
     gap: 14px;
-    border-radius: 8px;
+    border-radius: 10px;
     padding: 10px 16px;
     text-align: left;
   }
@@ -106,8 +108,10 @@
   .auth-wallet-primary-button:hover:not(:disabled),
   .auth-email-form button:hover:not(:disabled),
   .auth-oauth-grid button:hover:not(:disabled) {
-    border-color: color-mix(in srgb, var(--foreground) 42%, transparent);
-    background: color-mix(in srgb, var(--panel) 56%, transparent);
+    border-color: color-mix(in srgb, var(--foreground) 34%, transparent);
+    background:
+      linear-gradient(112deg, rgba(20, 241, 149, 0.1), rgba(3, 225, 255, 0.08), rgba(153, 69, 255, 0.1)),
+      color-mix(in srgb, var(--panel) 42%, transparent);
   }
 
   .auth-provider-button:focus-visible,
@@ -209,6 +213,17 @@
     width: 74%;
     height: 74%;
     object-fit: contain;
+  }
+
+  .provider-logo-fallback {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    place-items: center;
+    font-size: 0.64rem;
+    font-weight: 850;
+    letter-spacing: 0;
+    color: #101010;
   }
 
   .provider-logo-backpack img,

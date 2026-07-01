@@ -101,7 +101,7 @@ export function buildWalletLinkMessage(input: {
   expiresAt: Date;
 }): string {
   return [
-    `${input.domain} wants you to link this Solana wallet to Veel.`,
+    `${input.domain} wants you to link this Solana wallet to WeVid.`,
     "",
     "This signature proves wallet ownership. It does not move funds or approve a payment.",
     "",

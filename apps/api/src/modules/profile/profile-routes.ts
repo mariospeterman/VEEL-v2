@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { createClient } from "@supabase/supabase-js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { AgeRepository } from "../age/types.js";
@@ -16,6 +18,14 @@ interface RegisterProfileRoutesOptions {
 }
 
 const handlePattern = /^[a-zA-Z0-9_]{2,32}$/;
+const avatarContentTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+const maxAvatarBytes = 1_500_000;
+
+interface AvatarUploadRequest {
+  contentType?: unknown;
+  dataBase64?: unknown;
+  fileName?: unknown;
+}
 
 export async function registerProfileRoutes(
   app: FastifyInstance,
@@ -129,7 +139,9 @@ export async function registerProfileRoutes(
     }
 
     const body = request.body as UpdateProfileRequest | undefined;
-    const validationError = getUpdateProfileValidationError(body);
+    const validationError = getUpdateProfileValidationError(body, {
+      allowLocalAvatarUrl: app.config.NODE_ENV !== "production"
+    });
 
     if (validationError) {
       return reply.code(400).send({
@@ -169,6 +181,89 @@ export async function registerProfileRoutes(
       throw error;
     }
   });
+
+  app.post(
+    "/v1/profiles/me/avatar",
+    {
+      bodyLimit: Math.ceil(maxAvatarBytes * 1.45)
+    },
+    async (request, reply) => {
+      const verifiedSession = await verifyRequestSession(request, options.authVerifier);
+
+      if (!verifiedSession) {
+        return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
+      }
+
+      if (!request.headers["idempotency-key"]) {
+        return reply.code(400).send({
+          code: "validation_failed",
+          message: "Idempotency-Key header is required"
+        });
+      }
+
+      const body = request.body as AvatarUploadRequest | undefined;
+      const validationError = getAvatarUploadValidationError(body);
+
+      if (validationError) {
+        return reply.code(400).send({
+          code: "validation_failed",
+          message: validationError
+        });
+      }
+
+      const supabaseUrl = app.config.SUPABASE_URL;
+      const supabaseKey = app.config.SUPABASE_SECRET_KEY ?? app.config.SUPABASE_SERVICE_ROLE_KEY;
+
+      if (!supabaseUrl || !supabaseKey) {
+        request.log.warn("Profile avatar upload is not configured");
+        return reply.code(503).send({
+          code: "service_unavailable",
+          message: "Profile avatar upload is not configured"
+        });
+      }
+
+      const contentType = body?.contentType as string;
+      const decoded = Buffer.from(body?.dataBase64 as string, "base64");
+
+      if (decoded.byteLength > maxAvatarBytes) {
+        return reply.code(400).send({
+          code: "validation_failed",
+          message: "Profile picture must be 1.5MB or smaller"
+        });
+      }
+
+      const extension = avatarExtension(contentType);
+      const objectPath = `profiles/${verifiedSession.supabaseUserId}/${randomUUID()}.${extension}`;
+      const supabase = createClient(supabaseUrl, supabaseKey, {
+        auth: {
+          persistSession: false
+        }
+      });
+      const upload = await supabase.storage
+        .from(app.config.PROFILE_AVATAR_BUCKET)
+        .upload(objectPath, decoded, {
+          cacheControl: "31536000",
+          contentType,
+          upsert: false
+        });
+
+      if (upload.error) {
+        request.log.warn({ error: upload.error }, "Profile avatar upload failed");
+        return reply.code(503).send({
+          code: "service_unavailable",
+          message: "Profile avatar upload is unavailable"
+        });
+      }
+
+      const { data } = supabase.storage
+        .from(app.config.PROFILE_AVATAR_BUCKET)
+        .getPublicUrl(objectPath);
+
+      return reply.code(201).send({
+        avatarUrl: data.publicUrl
+      });
+    }
+  );
 }
 
 async function requireCreatorDashboardAccess(
@@ -202,7 +297,8 @@ async function requireCreatorDashboardAccess(
 }
 
 function getUpdateProfileValidationError(
-  body: UpdateProfileRequest | undefined
+  body: UpdateProfileRequest | undefined,
+  options: { allowLocalAvatarUrl: boolean }
 ): string | null {
   if (!body || typeof body !== "object") {
     return "Request body is required";
@@ -216,7 +312,11 @@ function getUpdateProfileValidationError(
     return "Display name is required and must be 80 characters or fewer";
   }
 
-  if (body.avatarUrl !== undefined && body.avatarUrl !== null && !isSafeHttpsUrl(body.avatarUrl)) {
+  if (
+    body.avatarUrl !== undefined &&
+    body.avatarUrl !== null &&
+    !isSafeAvatarUrl(body.avatarUrl, options)
+  ) {
     return "Avatar URL must be a valid HTTPS URL";
   }
 
@@ -262,4 +362,56 @@ function isSafeHttpsUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+function isSafeAvatarUrl(value: string, options: { allowLocalAvatarUrl: boolean }): boolean {
+  if (isSafeHttpsUrl(value)) {
+    return true;
+  }
+
+  if (!options.allowLocalAvatarUrl || value.length > 2048) {
+    return false;
+  }
+
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" && (url.hostname === "localhost" || url.hostname === "127.0.0.1");
+  } catch {
+    return false;
+  }
+}
+
+function getAvatarUploadValidationError(body: AvatarUploadRequest | undefined): string | null {
+  if (!body || typeof body !== "object") {
+    return "Request body is required";
+  }
+
+  if (typeof body.contentType !== "string" || !avatarContentTypes.has(body.contentType)) {
+    return "Profile picture must be JPEG, PNG, or WebP";
+  }
+
+  if (typeof body.dataBase64 !== "string" || body.dataBase64.length === 0) {
+    return "Profile picture data is required";
+  }
+
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(body.dataBase64)) {
+    return "Profile picture data is invalid";
+  }
+
+  const estimatedBytes = Math.floor((body.dataBase64.length * 3) / 4);
+  if (estimatedBytes > maxAvatarBytes + 4) {
+    return "Profile picture must be 1.5MB or smaller";
+  }
+
+  if (body.fileName !== undefined && typeof body.fileName !== "string") {
+    return "Profile picture filename is invalid";
+  }
+
+  return null;
+}
+
+function avatarExtension(contentType: string): "jpg" | "png" | "webp" {
+  if (contentType === "image/png") return "png";
+  if (contentType === "image/webp") return "webp";
+  return "jpg";
 }

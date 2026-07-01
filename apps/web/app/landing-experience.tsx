@@ -1,40 +1,38 @@
 "use client";
 
-import { Expand, ExternalLink, KeyRound, Languages, LogIn, MoreVertical, X } from "lucide-react";
+import { Expand, ExternalLink, KeyRound, Languages, LogIn, MoreVertical, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { safeMutationMessage } from "@/api-errors";
-import { createAgeSession } from "@/api-mutations";
-import { createSupabaseBrowserClient } from "@/supabase/client";
+import { ApiMutationError, createAgeSession, updateMyProfile, uploadMyProfileAvatar } from "@/api-mutations";
+import { ProviderLogo } from "@/brand/provider-logo";
 import type { WebAuthState } from "@/supabase/auth-state";
+import { RecoveryAuthPanel } from "@/supabase/recovery-auth-panel";
 import { EmbeddedWalletLoginButton } from "@/wallet/embedded-wallet-login";
 import { WalletLinkPanel } from "@/wallet/wallet-link-panel";
 import { WalletRuntimeProviders } from "@/wallet/wallet-runtime-providers";
 import { legalDocLabels, legalDocSlugs, legalDocs, type LegalDocSlug } from "./legal-docs";
 
-type OAuthProvider = "google" | "github" | "discord" | "twitter";
-
-const supabaseActions: { label: string; provider: OAuthProvider }[] = [
-  { label: "Google", provider: "google" },
-  { label: "GitHub", provider: "github" },
-  { label: "Discord", provider: "discord" },
-  { label: "X", provider: "twitter" }
-];
+type ProfileLinkDraft = {
+  id: string;
+  label: string;
+  url: string;
+};
 
 const onboardingSteps = [
   {
     eyebrow: "1 / 3",
-    title: "Connect or create your wallet",
-    copy: "Required. Use Solana Connect, or create an embedded non-custodial wallet with WeVid."
+    title: "Connect wallet",
+    copy: "Required. Prove wallet ownership. No payment, no custody."
   },
   {
     eyebrow: "2 / 3",
-    title: "Set up your profile",
-    copy: "Optional. Add public details and recovery now, or set them up later in profile settings."
+    title: "Profile",
+    copy: "Optional. Add public details now, or set them up later."
   },
   {
     eyebrow: "3 / 3",
-    title: "Verify age for 18+ access",
-    copy: "Required. Choose the least invasive path first. WeVid stores verification state, not raw documents."
+    title: "Age check",
+    copy: "Required for 18+ access. Start with reusable proof when possible."
   }
 ] as const;
 
@@ -149,13 +147,13 @@ export function LandingExperience() {
     []
   );
 
-  const scrollToFrame = (index: number) => {
+  const scrollToFrame = (index: number, behavior: ScrollBehavior = "smooth") => {
     const shell = shellRef.current;
     if (!shell) return;
 
     const boundedIndex = Math.min(landingFrames.length - 1, Math.max(0, index));
     const target = (shell.scrollHeight - shell.clientHeight) * (boundedIndex / (landingFrames.length - 1));
-    shell.scrollTo({ behavior: "smooth", top: target });
+    shell.scrollTo({ behavior, top: target });
   };
 
   useEffect(() => {
@@ -169,6 +167,8 @@ export function LandingExperience() {
       setAuthCallbackError("Login could not be completed. Check the provider redirect allowlist and try again.");
     } else if (error === "recovery_link_failed") {
       setAuthCallbackError("Recovery login worked, but it could not be linked to this wallet account. Start the API and try again.");
+    } else if (error === "recovery_needs_wallet") {
+      setAuthCallbackError("Recovery access found no linked WeVid wallet profile. Connect your wallet to continue.");
     }
     if (step === "profile") setInitialOnboardingStep(1);
     if (step === "age") setInitialOnboardingStep(2);
@@ -180,7 +180,7 @@ export function LandingExperience() {
           : -1;
 
     if (targetIndex >= 0) {
-      window.requestAnimationFrame(() => scrollToFrame(targetIndex));
+      window.requestAnimationFrame(() => scrollToFrame(targetIndex, "auto"));
       return;
     }
 
@@ -330,9 +330,8 @@ export function LandingExperience() {
                 className="landing-icon-button"
                 onClick={(event) => {
                   event.preventDefault();
-                  scrollToFrame(landingFrames.findIndex((frame) => frame.id === "login"));
+                  scrollToFrame(landingFrames.findIndex((frame) => frame.id === "login"), "auto");
                 }}
-                title="Log in"
                 type="button"
               >
                 <KeyRound aria-hidden="true" size={18} />
@@ -342,19 +341,13 @@ export function LandingExperience() {
                 className="landing-icon-button"
                 onClick={(event) => {
                   event.preventDefault();
-                  scrollToFrame(landingFrames.findIndex((frame) => frame.id === "onboarding"));
+                  scrollToFrame(landingFrames.findIndex((frame) => frame.id === "onboarding"), "auto");
                 }}
-                title="Start onboarding"
                 type="button"
               >
                 <LogIn aria-hidden="true" size={18} />
               </button>
-              <button
-                aria-label="Language"
-                className="landing-icon-button"
-                title="Language"
-                type="button"
-              >
+              <button aria-label="Language" className="landing-icon-button" type="button">
                 <Languages aria-hidden="true" size={18} />
               </button>
             </div>
@@ -375,7 +368,7 @@ export function LandingExperience() {
                 aria-label="Log in"
                 onClick={() => {
                   setMobileMenuOpen(false);
-                  scrollToFrame(landingFrames.findIndex((frame) => frame.id === "login"));
+                  scrollToFrame(landingFrames.findIndex((frame) => frame.id === "login"), "auto");
                 }}
                 type="button"
               >
@@ -385,7 +378,7 @@ export function LandingExperience() {
                 aria-label="Start onboarding"
                 onClick={() => {
                   setMobileMenuOpen(false);
-                  scrollToFrame(landingFrames.findIndex((frame) => frame.id === "onboarding"));
+                  scrollToFrame(landingFrames.findIndex((frame) => frame.id === "onboarding"), "auto");
                 }}
                 type="button"
               >
@@ -432,7 +425,7 @@ export function LandingExperience() {
             <p className="landing-eyebrow" data-story-part>{activeFrame.kicker}</p>
             <h1 data-story-part>{activeFrame.title}</h1>
             <p className="landing-copy" data-story-part>{activeFrame.copy}</p>
-            {authCallbackError && activeFrame.id === "login" ? (
+            {authCallbackError && activeAuth ? (
               <p className="landing-auth-error" data-story-part>{authCallbackError}</p>
             ) : null}
             {!activeAuth ? (
@@ -440,7 +433,7 @@ export function LandingExperience() {
                 <button
                   className="landing-button"
                   data-tone="primary"
-                  onClick={() => scrollToFrame(landingFrames.findIndex((frame) => frame.id === "onboarding"))}
+                  onClick={() => scrollToFrame(landingFrames.findIndex((frame) => frame.id === "onboarding"), "auto")}
                   type="button"
                 >
                   {activeFrame.primary}
@@ -448,7 +441,7 @@ export function LandingExperience() {
                 <button
                   className="landing-button"
                   data-tone="ghost"
-                  onClick={() => scrollToFrame(landingFrames.findIndex((frame) => frame.id === "login"))}
+                  onClick={() => scrollToFrame(landingFrames.findIndex((frame) => frame.id === "login"), "auto")}
                   type="button"
                 >
                   {activeFrame.secondary}
@@ -547,8 +540,8 @@ function LandingLoginForm({ authState }: { authState: WebAuthState }) {
       </div>
       <div className="landing-auth-block">
         <p>Recovery</p>
-        <span>Use Supabase recovery already linked to your profile.</span>
-        <LandingSupabaseAuth variant="login" />
+        <span>Use recovery access only after it has been linked to your wallet profile.</span>
+        <RecoveryAuthPanel mode="login" />
       </div>
     </>
   );
@@ -629,48 +622,248 @@ function LandingWalletList({ authState, onLinked }: { authState: WebAuthState; o
 }
 
 function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [handle, setHandle] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [bio, setBio] = useState("");
+  const [links, setLinks] = useState<ProfileLinkDraft[]>([
+    { id: "primary", label: "Website", url: "" }
+  ]);
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!avatarFile) {
+      setAvatarPreview(null);
+      return;
+    }
+
+    const nextPreview = URL.createObjectURL(avatarFile);
+    setAvatarPreview(nextPreview);
+    return () => URL.revokeObjectURL(nextPreview);
+  }, [avatarFile]);
+
+  function updateLink(id: string, patch: Partial<Omit<ProfileLinkDraft, "id">>) {
+    setLinks((current) => current.map((link) => (link.id === id ? { ...link, ...patch } : link)));
+  }
+
+  function addLink() {
+    setLinks((current) =>
+      current.length >= 5
+        ? current
+        : [...current, { id: crypto.randomUUID(), label: "", url: "" }]
+    );
+  }
+
+  function removeLink(id: string) {
+    setLinks((current) => current.filter((link) => link.id !== id));
+  }
+
+  async function saveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setMessage(null);
+
+    const normalizedHandle = normalizeHandle(handle);
+    const normalizedDisplayName = displayName.trim();
+
+    if (!normalizedHandle || !/^[a-zA-Z0-9_]{2,32}$/.test(normalizedHandle)) {
+      setError("Add a handle with 2-32 letters, numbers, or underscores.");
+      return;
+    }
+
+    if (!normalizedDisplayName) {
+      setError("Add a display name or skip profile setup.");
+      return;
+    }
+
+    const normalizedLinks = normalizeProfileLinks(links);
+    if (normalizedLinks instanceof Error) {
+      setError(normalizedLinks.message);
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const avatarUrl = avatarFile ? await uploadAvatarFile(avatarFile) : null;
+      const profilePayload = {
+        ...(avatarUrl ? { avatarUrl } : {}),
+        ...(bio.trim() ? { bio: bio.trim() } : {}),
+        displayName: normalizedDisplayName,
+        handle: normalizedHandle,
+        links: normalizedLinks
+      };
+      await updateMyProfile(profilePayload);
+      setMessage("Profile saved.");
+      onContinue();
+    } catch (reason) {
+      setError(reason instanceof Error && !(reason instanceof ApiMutationError) ? reason.message : safeMutationMessage(reason, "Profile setup"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
-    <div className="landing-profile-setup">
+    <form className="landing-profile-setup" noValidate onSubmit={saveProfile}>
       <div className="landing-form-grid">
         <label className="landing-avatar-upload">
-          <input name="profile-picture" type="file" />
-          <span>Upload picture</span>
+          <input
+            accept="image/jpeg,image/png,image/webp"
+            name="profile-picture"
+            onChange={(event) => {
+              setAvatarFile(event.target.files?.[0] ?? null);
+              setError(null);
+            }}
+            type="file"
+          />
+          {avatarPreview ? <img alt="" src={avatarPreview} /> : <span>Upload picture</span>}
         </label>
         <label>
           <span>Handle</span>
-          <input autoComplete="username" name="handle" placeholder="@wevid" type="text" />
+          <input
+            autoComplete="username"
+            name="handle"
+            onChange={(event) => setHandle(event.target.value)}
+            placeholder="@wevid"
+            type="text"
+            value={handle}
+          />
         </label>
         <label>
           <span>Display name</span>
-          <input autoComplete="name" name="name" placeholder="Display name" type="text" />
-        </label>
-        <label>
-          <span>Link label</span>
-          <input name="link-label" placeholder="Website" type="text" />
-        </label>
-        <label>
-          <span>Link URL</span>
-          <input name="links" placeholder="https://..." type="url" />
+          <input
+            autoComplete="name"
+            name="name"
+            onChange={(event) => setDisplayName(event.target.value)}
+            placeholder="Display name"
+            type="text"
+            value={displayName}
+          />
         </label>
         <label className="landing-form-wide">
           <span>Bio</span>
-          <textarea name="bio" placeholder="Short creator bio" rows={3} />
+          <textarea
+            name="bio"
+            onChange={(event) => setBio(event.target.value)}
+            placeholder="Short creator bio"
+            rows={3}
+            value={bio}
+          />
         </label>
       </div>
+      <div className="landing-profile-links" aria-label="Profile links">
+        <div className="landing-profile-links-header">
+          <p>Links</p>
+          <button aria-label="Add profile link" disabled={links.length >= 5} onClick={addLink} type="button">
+            <Plus aria-hidden="true" size={14} />
+          </button>
+        </div>
+        {links.map((link, index) => (
+          <div className="landing-profile-link-row" key={link.id}>
+            <input
+              aria-label={`Link ${index + 1} label`}
+              onChange={(event) => updateLink(link.id, { label: event.target.value })}
+              placeholder="Website"
+              type="text"
+              value={link.label}
+            />
+            <input
+              aria-label={`Link ${index + 1} URL`}
+              inputMode="url"
+              onChange={(event) => updateLink(link.id, { url: event.target.value })}
+              placeholder="https://..."
+              type="url"
+              value={link.url}
+            />
+            <button
+              aria-label={`Remove link ${index + 1}`}
+              disabled={links.length === 1}
+              onClick={() => removeLink(link.id)}
+              type="button"
+            >
+              <Trash2 aria-hidden="true" size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="landing-auth-block landing-recovery-auth">
+        <p>Recovery</p>
+        <span>Add recovery access so you can manage your profile if you change devices.</span>
+        <RecoveryAuthPanel mode="profile" next="/?mode=onboarding&step=profile" />
+      </div>
       <div className="landing-step-actions">
-        <button className="landing-button" data-tone="primary" onClick={onContinue} type="button">
-          Save profile
+        <button className="landing-button" data-tone="primary" disabled={submitting} type="submit">
+          {submitting ? "Saving" : "Save and continue"}
         </button>
-        <button className="landing-inline-link" onClick={onContinue} type="button">
+        <button className="landing-inline-link" disabled={submitting} onClick={onContinue} type="button">
           Skip profile. Set up later.
         </button>
       </div>
-      <div className="landing-auth-block landing-recovery-auth">
-        <p>Recovery auth</p>
-        <LandingSupabaseAuth onSkip={onContinue} variant="profile" />
-      </div>
-    </div>
+      {message ? <p className="landing-auth-message">{message}</p> : null}
+      {error ? <p className="landing-auth-error">{error}</p> : null}
+    </form>
   );
+}
+
+function normalizeHandle(value: string) {
+  return value.trim().replace(/^@+/, "");
+}
+
+function normalizeProfileLinks(links: ProfileLinkDraft[]) {
+  const normalized = links
+    .map((link) => ({
+      label: link.label.trim(),
+      url: link.url.trim()
+    }))
+    .filter((link) => link.label || link.url);
+
+  for (const link of normalized) {
+    if (!link.label) {
+      return new Error("Add a label for each profile link.");
+    }
+
+    if (!link.url.startsWith("https://")) {
+      return new Error("Profile links must start with https://");
+    }
+  }
+
+  return normalized;
+}
+
+async function uploadAvatarFile(file: File) {
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+    throw new Error("Profile picture must be JPEG, PNG, or WebP.");
+  }
+
+  if (file.size > 1_500_000) {
+    throw new Error("Profile picture must be 1.5MB or smaller.");
+  }
+
+  const dataBase64 = await fileToBase64(file);
+  const contentType = file.type as "image/jpeg" | "image/png" | "image/webp";
+  const uploaded = await uploadMyProfileAvatar({
+    contentType,
+    dataBase64,
+    fileName: file.name
+  });
+
+  return uploaded.avatarUrl;
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Profile picture could not be read."));
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      const [, base64 = ""] = result.split(",");
+      resolve(base64);
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 function OnboardingAgeStep() {
@@ -678,47 +871,31 @@ function OnboardingAgeStep() {
   type AgeProviderAction = {
     action: string;
     label: string;
+    logo: "didit" | "persona" | "sumsub" | "veriff" | "yoti";
     providerPreference: AgeProviderPreference;
   };
   const [startingProvider, setStartingProvider] = useState<AgeProviderPreference | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const ageWaterfall: Array<{
-    eyebrow: string;
-    title: string;
-    copy: string;
-    providers: AgeProviderAction[];
-  }> = [
-    {
-      eyebrow: "Recommended",
-      title: "Reusable age ID",
-      copy: "Reuse an existing age credential without uploading documents again.",
-      providers: [
-        { action: "Use", label: "Reusable age ID", providerPreference: "reusable_first" as const },
-        { action: "Get", label: "Didit ID", providerPreference: "didit" as const },
-        { action: "Get", label: "Yoti ID", providerPreference: "yoti" as const }
-      ]
-    },
-    {
-      eyebrow: "If needed",
-      title: "Face age scan",
-      copy: "Quick age estimate. No ID document if the provider supports it.",
-      providers: [
-        { action: "Check", label: "Persona", providerPreference: "persona" as const }
-      ]
-    },
-    {
-      eyebrow: "Fallback",
-      title: "Trusted provider ID",
-      copy: "Use document plus face verification when other paths are unavailable.",
-      providers: [
-        { action: "Verify", label: "Yoti", providerPreference: "yoti" as const },
-        { action: "Verify", label: "Sumsub", providerPreference: "sumsub" as const },
-        { action: "Verify", label: "Veriff", providerPreference: "veriff" as const },
-        { action: "Verify", label: "Persona", providerPreference: "persona" as const }
-      ]
-    }
+  const ageActions: AgeProviderAction[] = [
+    { action: "Recommended", label: "Reusable age ID", logo: "didit", providerPreference: "reusable_first" },
+    { action: "Reusable", label: "Didit", logo: "didit", providerPreference: "didit" },
+    { action: "Reusable", label: "Yoti", logo: "yoti", providerPreference: "yoti" },
+    { action: "Fallback", label: "Persona", logo: "persona", providerPreference: "persona" },
+    { action: "Fallback", label: "Sumsub", logo: "sumsub", providerPreference: "sumsub" },
+    { action: "Fallback", label: "Veriff", logo: "veriff", providerPreference: "veriff" }
   ];
+
+  function ageErrorMessage(reason: unknown) {
+    if (reason instanceof ApiMutationError && reason.status === 409) {
+      return reason.message.toLowerCase().includes("verified")
+        ? "Age is already verified. Continue to WeVid."
+        : "Age check is already in progress. Try again or finish the provider flow.";
+    }
+
+    const message = safeMutationMessage(reason, "Age verification");
+    return message.toLowerCase().includes("state changed") ? "Try again with a new age check." : message;
+  }
 
   async function startAgeSession(providerPreference: AgeProviderPreference) {
     setStartingProvider(providerPreference);
@@ -730,7 +907,7 @@ function OnboardingAgeStep() {
       setMessage(`Continue with ${session.provider}. WeVid only stores the signed result.`);
       window.location.assign(session.launchUrl);
     } catch (reason) {
-      setError(safeMutationMessage(reason, "Age verification"));
+      setError(ageErrorMessage(reason));
     } finally {
       setStartingProvider(null);
     }
@@ -738,165 +915,31 @@ function OnboardingAgeStep() {
 
   return (
     <div className="landing-age-waterfall" aria-label="Age verification providers">
-      {ageWaterfall.map((tier) => (
-        <div className="landing-age-tier" key={tier.title}>
-          <div>
-            <p>{tier.eyebrow}</p>
-            <strong>{tier.title}</strong>
-            <span>{tier.copy}</span>
-          </div>
-          <div className="landing-provider-row">
-            {tier.providers.map((provider) => {
-              const content = (
-                <>
-                  <span>{provider.label}</span>
-                  <small>{provider.action}</small>
-                </>
-              );
-
-              return (
-                <button
-                  className="landing-provider-link"
-                  disabled={startingProvider === provider.providerPreference}
-                  key={provider.label}
-                  onClick={() => void startAgeSession(provider.providerPreference)}
-                  type="button"
-                >
-                  {content}
-                </button>
-              );
-            })}
-          </div>
+      <div className="landing-age-choice-panel">
+        <div className="landing-age-choice-copy">
+          <p>18+ access</p>
+          <strong>Choose age proof.</strong>
+          <span>Start with reusable age ID when available. Fallback checks open only when needed.</span>
         </div>
-      ))}
-      <div className="landing-age-note">
-        <span>Creator KYC/KYB is separate.</span>
-        Viewer onboarding stores normalized age status only. Studio and enterprise checks remain separate before creator publishing, payouts, or business workflows.
+        <div className="landing-age-choice-actions">
+          {ageActions.map((provider, index) => (
+            <button
+              className="landing-provider-link"
+              data-primary={index === 0 ? "true" : undefined}
+              disabled={startingProvider === provider.providerPreference}
+              key={provider.label}
+              onClick={() => void startAgeSession(provider.providerPreference)}
+              type="button"
+            >
+              <ProviderLogo label={provider.label} name={provider.logo} />
+              <span>{provider.label}</span>
+              <small>{startingProvider === provider.providerPreference ? "Opening" : provider.action}</small>
+            </button>
+          ))}
+        </div>
       </div>
       {message ? <p className="landing-auth-message">{message}</p> : null}
       {error ? <p className="landing-auth-error">{error}</p> : null}
-    </div>
-  );
-}
-
-function LandingSupabaseAuth({ onSkip, variant }: { onSkip?: () => void; variant: "login" | "profile" }) {
-  const [email, setEmail] = useState("");
-  const [submitting, setSubmitting] = useState<"email" | OAuthProvider | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const supabase = useMemo(() => {
-    try {
-      return createSupabaseBrowserClient();
-    } catch {
-      return null;
-    }
-  }, []);
-  const redirectTo = typeof window === "undefined" ? "" : `${window.location.origin}/auth/confirm?next=${encodeURIComponent("/app/home")}`;
-
-  async function startEmailSignIn(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const normalizedEmail = email.trim();
-
-    if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-      setError("Enter a valid email address.");
-      return;
-    }
-
-    setSubmitting("email");
-    setError(null);
-    setMessage(null);
-
-    if (!supabase) {
-      setSubmitting(null);
-      setError("Recovery auth is unavailable in this build.");
-      return;
-    }
-
-    const { error: authError } = await supabase.auth.signInWithOtp({
-      email: normalizedEmail,
-      options: {
-        emailRedirectTo: redirectTo,
-        shouldCreateUser: variant === "profile"
-      }
-    });
-
-    setSubmitting(null);
-
-    if (authError) {
-      setError(safeMutationMessage(authError, "Supabase email auth"));
-      return;
-    }
-
-    setMessage(variant === "profile" ? "Check your email to continue recovery setup." : "Check your email for the login link.");
-  }
-
-  async function startOAuthSignIn(provider: OAuthProvider) {
-    setSubmitting(provider);
-    setError(null);
-    setMessage(null);
-
-    if (!supabase) {
-      setSubmitting(null);
-      setError("Recovery auth is unavailable in this build.");
-      return;
-    }
-
-    const { error: authError } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo
-      }
-    });
-
-    setSubmitting(null);
-
-    if (authError) {
-      setError(safeMutationMessage(authError, "Supabase social auth"));
-    }
-  }
-
-  return (
-    <div className="landing-supabase-auth">
-      {supabase ? (
-        <>
-          <form className="landing-email-row" noValidate onSubmit={startEmailSignIn}>
-            <label>
-              <span>Email</span>
-              <input
-                autoComplete="email"
-                inputMode="email"
-                name={`${variant}-email`}
-                onChange={(event) => {
-                  setEmail(event.target.value);
-                  if (error) setError(null);
-                }}
-                placeholder="you@example.com"
-                type="email"
-                value={email}
-              />
-            </label>
-            <button className="landing-provider-link" disabled={submitting !== null} type="submit">
-              <span>{submitting === "email" ? "Sending" : variant === "profile" ? "Email recovery" : "Send link"}</span>
-            </button>
-          </form>
-          <div className="landing-provider-row" aria-label="Supabase social auth providers">
-            {supabaseActions.map((provider) => (
-              <button className="landing-provider-link" disabled={submitting !== null} key={provider.provider} onClick={() => void startOAuthSignIn(provider.provider)} type="button">
-                <span>{submitting === provider.provider ? "Opening" : `Continue with ${provider.label}`}</span>
-              </button>
-            ))}
-          </div>
-        </>
-      ) : (
-        <p className="landing-auth-unavailable">Recovery auth is unavailable in this build.</p>
-      )}
-      {onSkip ? (
-        <button className="landing-inline-link" onClick={onSkip} type="button">
-          Skip email. Add later.
-        </button>
-      ) : null}
-      {message ? <p className="landing-auth-message">{message}</p> : null}
-      {error ? <p className="landing-auth-message" data-error="true">{error}</p> : null}
     </div>
   );
 }

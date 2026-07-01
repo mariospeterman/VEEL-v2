@@ -32,7 +32,7 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
 
   await app.register(sensible);
   await app.register(cors, {
-    origin: process.env.WEB_URL ?? "http://localhost:3000",
+    origin: localWebOrigins(process.env.WEB_URL ?? "http://localhost:3000"),
     credentials: true
   });
   await app.register(rateLimit, {
@@ -55,4 +55,23 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   await app.register(openApiPlugin);
 
   return app;
+}
+
+function localWebOrigins(webUrl: string) {
+  const origins = new Set([webUrl]);
+
+  try {
+    const url = new URL(webUrl);
+    if (url.hostname === "localhost") {
+      url.hostname = "127.0.0.1";
+      origins.add(url.toString().replace(/\/$/, ""));
+    } else if (url.hostname === "127.0.0.1") {
+      url.hostname = "localhost";
+      origins.add(url.toString().replace(/\/$/, ""));
+    }
+  } catch {
+    return webUrl;
+  }
+
+  return [...origins];
 }

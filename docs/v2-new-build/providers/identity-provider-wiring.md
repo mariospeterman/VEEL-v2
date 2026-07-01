@@ -62,13 +62,14 @@ Current implementation state:
 
 ### Android
 
-- Supported through Solana wallet-adapter compatible wallets where a wallet exposes the wallet-standard/mobile-wallet flow.
-- `@solana/wallet-adapter-react` adds wallet-standard adapters and injects Solana Mobile Wallet Adapter on supported mobile web. The custom WeVid chooser must not hardcode only Phantom/Solflare; it should show Solana-capable message-signing adapters while filtering obvious non-Solana/EVM-only wallet names. The web provider follows the current Solana React cookbook pattern by passing an empty explicit wallet list and letting wallet-standard/mobile discovery populate available adapters.
+- Supported through the official Solana Wallet Adapter React stack: `ConnectionProvider`, `WalletProvider`, and `WalletModalProvider`.
+- The web provider follows the current Solana React cookbook pattern: install `@solana/wallet-adapter-base`, `@solana/wallet-adapter-react`, `@solana/wallet-adapter-react-ui`, and `@solana/wallet-adapter-wallets`, pass `wallets={[]}`, and let wallet-standard/mobile discovery populate available adapters.
+- The Wallet Adapter modal owns wallet selection and install/open handling. WeVid does not maintain a second wallet chooser. Account creation starts only after a wallet connects, signs the backend challenge, and the API creates the wallet session.
 
 ### iOS
 
 - There is no generic Solana Mobile Wallet Adapter equivalent for iOS web in this repo. Current Solana Mobile Wallet Adapter web support is Android/Chrome-oriented.
-- iOS support must be proven through injected wallet browsers, wallet-specific universal/deep links, or embedded wallet providers.
+- iOS and macOS support should prefer wallet-standard/Safari Web Extension discovery where available. If the user has no wallet context, send them to the wallet's official install page or the Solana wallet directory, then return to the WeVid wallet chooser.
 - Privy/Turnkey are the preferred iOS-safe onboarding route once their Solana signing UX is verified on the production domain.
 
 ### Public web env
@@ -87,6 +88,7 @@ Current implementation state:
 
 - Email magic links use `verifyOtp({ token_hash, type })`.
 - Social/OAuth providers use PKCE and must exchange the returned `code` with `exchangeCodeForSession(code)` in `/auth/confirm`.
+- Supabase recovery auth is not a second account path. It links to an existing wallet-created account only after the browser proves both sessions: active wallet session token and Supabase bearer token. If the Supabase identity already belongs to another user row, the API returns conflict instead of merging profiles, wallets, age state, payments, creator KYC, or organization KYB.
 - Local preview on port `3008` requires the local web env and Supabase dashboard redirect allowlist to include `http://localhost:3008/auth/confirm` and, when testing through Playwright or `127.0.0.1`, `http://127.0.0.1:3008/auth/confirm`.
 
 ### Production rollout notes
@@ -177,6 +179,18 @@ Never store raw identity documents, selfies, registry files, UBO documents, biom
 
 `SUMSUB_LEVEL_NAME` remains a compatibility fallback. Production should prefer separate creator and organization levels so creator KYC does not accidentally satisfy organization KYB or the reverse.
 `PERSONA_TEMPLATE_ID` remains a compatibility fallback. Production should prefer separate creator and organization templates so person KYC and business KYB cannot satisfy the wrong policy.
+
+### Provider logo assets
+
+Age/KYC/KYB provider buttons must use provider-approved brand files before launch. Store the approved assets in `apps/web/public/provider-icons/` with these exact names:
+
+- `didit.svg`
+- `yoti.svg`
+- `sumsub.svg`
+- `persona.svg`
+- `veriff.svg`
+
+The frontend has neutral monogram fallbacks for local development, but those fallbacks are not official provider logos and should not be used for final production polish. Do not recreate provider logos in React, CSS, or screenshots.
 
 ### Creator KYC / Org KYB runtime behavior
 
