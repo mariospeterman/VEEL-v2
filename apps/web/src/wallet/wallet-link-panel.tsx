@@ -7,6 +7,7 @@ import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import {
   ApiMutationError,
   createWalletLinkChallenge,
+  getCurrentSession,
   linkWallet,
   type LinkWalletRequest
 } from "@/api-mutations";
@@ -116,7 +117,7 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
         setMessage("Wallet session created. Continue with profile and age verification.");
         onLinked?.(address);
         if (reloadOnSession) {
-          window.location.reload();
+          await redirectAfterWalletSession();
         }
         return;
       }
@@ -234,6 +235,32 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
       ) : null}
     </section>
   );
+}
+
+async function redirectAfterWalletSession() {
+  try {
+    const session = await getCurrentSession();
+    const reason = session.appAccessState.reason;
+
+    if (session.appAccessState.allowed) {
+      window.location.assign("/app/home");
+      return;
+    }
+
+    if (reason === "age_required" || reason === "age_pending") {
+      window.location.assign("/?mode=onboarding&step=age&next=%2Fapp%2Fhome");
+      return;
+    }
+
+    if (reason === "identity_required" || reason === "wallet_required") {
+      window.location.assign("/?mode=onboarding&step=profile&next=%2Fapp%2Fhome");
+      return;
+    }
+
+    window.location.assign("/?mode=login&next=%2Fapp%2Fhome");
+  } catch {
+    window.location.assign("/?mode=onboarding&step=profile&next=%2Fapp%2Fhome");
+  }
 }
 
 function walletNameIncludes(wallet: Wallet, value: string) {

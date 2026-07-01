@@ -36,6 +36,7 @@ export type {
   PublishContentRequest,
   ProfileAvatarUpload,
   RefundDisputeRequest,
+  SessionState,
   SubmitSubscriptionAuthorizationRequest,
   Subscription,
   SubscriptionAuthorizationIntent,
@@ -81,6 +82,7 @@ import type {
   PublishContentRequest,
   ProfileAvatarUpload,
   RefundDisputeRequest,
+  SessionState,
   SubmitSubscriptionAuthorizationRequest,
   Subscription,
   SubscriptionAuthorizationIntent,
@@ -100,6 +102,10 @@ import type {
 
 export async function createAgeSession(body: CreateAgeSessionRequest): Promise<AgeSession> {
   return authenticatedMutation<AgeSession>("/v1/age/sessions", "POST", body);
+}
+
+export async function getCurrentSession(): Promise<SessionState> {
+  return authenticatedGet<SessionState>("/v1/session");
 }
 
 export async function createVerificationSession(

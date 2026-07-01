@@ -17,6 +17,10 @@ alter table subscription_plans
 update subscription_plans
 set
   provider_state = case when provider_state = 'fallback_active' then 'disabled' else provider_state end,
+  state = case
+    when state = 'active' and provider_state <> 'launch_approved' then 'disabled'
+    else state
+  end,
   program_id = coalesce(program_id, 'De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44'),
   amount_atomic = coalesce(amount_atomic, amount_minor),
   period_seconds = coalesce(period_seconds, period_days * 86400),
@@ -70,17 +74,17 @@ alter table subscriptions
 
 update subscriptions s
 set
-  user_token_account = coalesce(user_token_account, subscriber_token_account),
-  subscription_authority_pda = coalesce(subscription_authority_pda, authority_address),
-  program_id = coalesce(program_id, sp.program_id),
+  user_token_account = coalesce(s.user_token_account, s.subscriber_token_account),
+  subscription_authority_pda = coalesce(s.subscription_authority_pda, s.authority_address),
+  program_id = coalesce(s.program_id, sp.program_id),
   token_mint = coalesce(s.token_mint, sp.token_mint),
   amount_atomic = coalesce(s.amount_atomic, sp.amount_atomic),
   period_seconds = coalesce(s.period_seconds, sp.period_seconds),
   plan_pda = coalesce(s.plan_pda, sp.plan_pda),
   merchant_wallet = coalesce(s.merchant_wallet, sp.merchant_wallet),
-  start_at = coalesce(start_at, current_period_starts_at),
-  expires_at = coalesce(expires_at, current_period_ends_at),
-  verified_at = coalesce(verified_at, current_period_starts_at)
+  start_at = coalesce(s.start_at, s.current_period_starts_at),
+  expires_at = coalesce(s.expires_at, s.current_period_ends_at),
+  verified_at = coalesce(s.verified_at, s.current_period_starts_at)
 from subscription_plans sp
 where sp.id = s.plan_id;
 
@@ -107,7 +111,7 @@ alter table subscription_authorization_intents
 
 update subscription_authorization_intents sai
 set
-  program_id = coalesce(program_id, s.program_id),
+  program_id = coalesce(sai.program_id, s.program_id),
   subscriber_wallet = coalesce(sai.subscriber_wallet, s.subscriber_wallet),
   subscriber_token_account = coalesce(sai.subscriber_token_account, s.subscriber_token_account),
   token_mint = coalesce(sai.token_mint, s.token_mint),

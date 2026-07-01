@@ -21,19 +21,16 @@ The root `.env` must provide `SUPABASE_PROJECT_REF`, `SUPABASE_ACCESS_TOKEN`, an
 
 Migration commands must use a direct Postgres connection or Supabase session pooler connection. Supabase transaction pooler URLs on port `6543` are valid for many runtime/serverless database clients, but they do not support prepared statements and are not a safe migration connection. When the wrapper sees a Supabase transaction-pooler URL, it rewrites only the CLI invocation to session-pooler port `5432` and prints a non-secret warning. The wrapper also sets `PGCONNECT_TIMEOUT=10` and a 45 second command timeout so an unreachable database fails fast.
 
-The wrapper runs `db` and `migration` commands from a temporary Supabase CLI workdir generated from `packages/database/migrations`. Only forward migration files are linked into that workdir; `.down.sql` rollback files remain available to repository checks without being interpreted as duplicate Supabase CLI migrations.
+The wrapper runs `db` and `migration` commands from a temporary Supabase CLI workdir generated from `packages/database/migrations`. Only forward migration files are linked into that workdir; `.down.sql` rollback files remain available to repository checks without being interpreted as duplicate Supabase CLI migrations. The wrapper also copies local `supabase/.temp` link metadata into the temporary workdir at runtime so `--linked` remote commands use the same linked project and pooler configuration without committing secrets.
 
-The current remote migration history was applied through Supabase MCP and stores timestamped versions in `supabase_migrations.schema_migrations`, while local files use the monorepo sequence names `0001` through `0056`. As a result, `pnpm supabase:migrations` is useful for remote visibility, but `pnpm supabase:push:dry` correctly refuses to plan a push until the migration history is normalized. `pnpm supabase:history:check` reports the exact missing sequential versions and extra remote history rows without printing SQL or secrets. Do not run `pnpm supabase:push` against the shared remote project until that repair is explicitly planned, reviewed, and backed up.
+The current remote migration history is normalized to the committed sequence names `0001` through `0070`. `pnpm supabase:migrations` verifies local/remote version alignment, `pnpm supabase:history:check` reports missing sequential history or extra remote history rows without printing SQL or secrets, and `pnpm supabase:push:dry` must report `Remote database is up to date` before new schema work builds on the shared remote project.
 
 For this Codex workspace, Supabase MCP is the verified remote path when direct `DATABASE_URL` access is unavailable. Use MCP to list/apply migrations and run advisors, then keep the committed SQL files in `packages/database/migrations` as the source of truth.
 
-Remote verification on 2026-06-12:
+Remote verification on 2026-07-01:
 
 - Repo-local Supabase CLI: `2.106.0`.
 - `pnpm supabase:migrations` connects through the session-pooler rewrite and lists remote history.
-- The remote migration history was normalized from MCP-applied timestamped rows to committed sequential versions `0001` through `0056` after a Docker-backed Supabase shadow diff applied every committed migration successfully.
+- The remote migration history is normalized to committed sequential versions `0001` through `0070`.
 - `pnpm supabase:push:dry` reports `Remote database is up to date`.
-- `pnpm supabase:history:check` reports no missing sequential history and no extra remote history rows.
-- `pnpm supabase:advisors` reports no warn-level security or performance issues.
-- Public-table RLS metadata verification shows RLS enabled on every public table.
-- The shadow diff reported only role/default privilege grant noise from local Supabase initialization versus the hosted project; no table/type/index/policy migration SQL drift was applied to the remote.
+- The hosted project now includes wallet-first auth session tables, profile links, normalized verification tables, and the `profile-avatars` Supabase Storage bucket.

@@ -1,6 +1,7 @@
 import type { components } from "@veel/contracts";
 
 export type User = components["schemas"]["User"];
+export type SessionState = components["schemas"]["SessionState"];
 export type CreateAgeSessionRequest = components["schemas"]["CreateAgeSessionRequest"];
 export type AgeSession = components["schemas"]["AgeSession"];
 export type CreateVerificationSessionRequest =
