@@ -8,6 +8,7 @@ import {
 import { requireAppAccess } from "@/supabase/route-guard";
 import { AppShell } from "../../app-shell";
 import { Card, ErrorState, Fact, MetricCard, PageHeader, StatusPill } from "../../ui";
+import { ProfileLogoutButton } from "./profile-logout-button";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +98,8 @@ function DashboardView({
             ))}
           </div>
         </Card>
+
+        <ProfileSessionActions />
       </aside>
     </section>
   );
@@ -122,8 +125,23 @@ function OnboardingOnlyView({
 
       <aside className="grid content-start gap-3">
         <ErrorState result={unavailable} title="Creator dashboard unavailable" context="Creator dashboard" />
+        <ProfileSessionActions />
       </aside>
     </section>
+  );
+}
+
+function ProfileSessionActions() {
+  return (
+    <Card className="p-4">
+      <p className="text-sm font-medium">Session</p>
+      <p className="mt-2 text-sm leading-6 text-(--muted)">
+        Leave the app and return to the public landing page. Wallet and Supabase browser session state are cleared locally.
+      </p>
+      <div className="mt-4">
+        <ProfileLogoutButton />
+      </div>
+    </Card>
   );
 }
 

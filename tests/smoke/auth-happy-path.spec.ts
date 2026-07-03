@@ -124,6 +124,11 @@ test("covers authenticated app access to profile wallet age home create and unlo
   expect(requests.some((request) => request.method === "POST" && request.path === "/v1/content" && request.idempotencyKey)).toBe(true);
   expect(requests.some((request) => request.method === "POST" && request.path === `/v1/content/${contentId}/unlock-intents` && request.idempotencyKey)).toBe(true);
   expect(requests.some((request) => request.method === "GET" && request.path === "/v1/activity/payments")).toBe(true);
+
+  await page.goto("/app/profile");
+  await page.getByRole("button", { name: "Log out" }).click();
+  await expect(page.getByRole("heading", { name: "Create without asking the algorithm for permission." })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.cookie.includes("veel_e2e_access_token="))).toBe(false);
 });
 
 async function gotoUntilVisible(page: Page, path: string, readyLocator: () => Locator) {
