@@ -21,10 +21,6 @@
     display: none;
   }
 
-  .landing-shell[data-auth-active="true"] {
-    overflow-y: hidden;
-  }
-
   .landing-scroll-space {
     height: 800dvh;
   }
@@ -597,8 +593,7 @@
   }
 
   .landing-wallet-runtime[data-embedded="false"] {
-    width: min(280px, 100%);
-    grid-template-columns: 1fr;
+    width: min(720px, 100%);
   }
 
   .landing-wallet-connect-row,
@@ -632,6 +627,14 @@
   .landing-embedded-label span {
     color: rgba(248, 250, 252, 0.56);
     font-size: 12px;
+  }
+
+  .landing-wallet-required {
+    grid-column: 1 / -1;
+    margin: 0;
+    color: rgba(248, 250, 252, 0.7);
+    font-size: 12px;
+    line-height: 1.35;
   }
 
   .landing-provider-link {
@@ -730,7 +733,9 @@
   }
 
   .landing-wallet-runtime .auth-provider-button,
-  .landing-wallet-runtime .landing-provider-link {
+  .landing-wallet-runtime .landing-provider-link,
+  .landing-provider-disabled,
+  .landing-wallet-loading {
     width: 100%;
     min-height: 38px;
     height: auto;
@@ -739,6 +744,35 @@
     background: var(--landing-glass-bg);
     color: #fff;
     padding: 0 12px;
+  }
+
+  .landing-provider-disabled,
+  .landing-wallet-loading {
+    appearance: none;
+    display: grid;
+    align-content: center;
+    gap: 2px;
+    text-align: left;
+  }
+
+  .landing-provider-disabled {
+    cursor: not-allowed;
+    opacity: 0.62;
+  }
+
+  .landing-provider-disabled strong,
+  .landing-wallet-loading strong {
+    font-size: 11px;
+    line-height: 1;
+  }
+
+  .landing-provider-disabled small,
+  .landing-wallet-loading small {
+    color: rgba(248, 250, 252, 0.5);
+    font-size: 9px;
+    font-weight: 740;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
   }
 
   .landing-wallet-runtime .auth-provider-status {
@@ -1008,19 +1042,6 @@
     font-weight: 740;
   }
 
-  .landing-wallet-loading {
-    display: inline-flex;
-    width: fit-content;
-    min-height: 38px;
-    align-items: center;
-    border: 1px solid rgba(248, 250, 252, 0.16);
-    border-radius: 8px;
-    padding: 0 14px;
-    color: rgba(248, 250, 252, 0.68);
-    font-size: 12px;
-    font-weight: 740;
-  }
-
   .landing-auth-block > p,
   .landing-step-copy > p {
     margin: 0;
@@ -1152,6 +1173,8 @@
   .landing-auth-inline .landing-provider-link,
   .landing-wallet-runtime .auth-provider-button,
   .landing-wallet-runtime .landing-provider-link,
+  .landing-provider-disabled,
+  .landing-wallet-loading,
   .landing-email-row input,
   .landing-form-grid input,
   .landing-form-grid textarea {
@@ -1164,6 +1187,8 @@
   .landing-auth-inline .landing-provider-link,
   .landing-wallet-runtime .auth-provider-button,
   .landing-wallet-runtime .landing-provider-link,
+  .landing-provider-disabled,
+  .landing-wallet-loading,
   .landing-email-row button,
   .landing-step-actions .landing-button {
     border: 1px solid rgba(248, 250, 252, 0.2);

@@ -17,7 +17,6 @@ export function LandingExperience() {
   const [initialOnboardingStep, setInitialOnboardingStep] = useState(0);
   const [authCallbackError, setAuthCallbackError] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [lockedAuthIndex, setLockedAuthIndex] = useState<number | null>(null);
   const [progress, setProgress] = useState(0);
   const activeFrame = landingFrames[activeIndex] ?? landingFrames[0];
   const activeAuth = "auth" in activeFrame ? activeFrame.auth : undefined;
@@ -31,8 +30,6 @@ export function LandingExperience() {
     if (!shell) return;
 
     const boundedIndex = Math.min(landingFrames.length - 1, Math.max(0, index));
-    const targetFrame = landingFrames[boundedIndex];
-    setLockedAuthIndex(targetFrame && "auth" in targetFrame ? boundedIndex : null);
     const target = (shell.scrollHeight - shell.clientHeight) * (boundedIndex / (landingFrames.length - 1));
     shell.scrollTo({ behavior, top: target });
   };
@@ -63,7 +60,6 @@ export function LandingExperience() {
 
     if (targetIndex >= 0) {
       const syncTargetFrame = () => {
-        setLockedAuthIndex(targetIndex);
         setActiveIndex(targetIndex);
         setProgress(targetIndex / Math.max(1, landingFrames.length - 1));
         scrollToFrame(targetIndex, "auto");
@@ -90,12 +86,6 @@ export function LandingExperience() {
     let animationFrame = 0;
     const update = () => {
       animationFrame = 0;
-      if (lockedAuthIndex !== null) {
-        setActiveIndex(lockedAuthIndex);
-        setProgress(lockedAuthIndex / Math.max(1, landingFrames.length - 1));
-        return;
-      }
-
       const maxScroll = Math.max(1, shell.scrollHeight - shell.clientHeight);
       const nextProgress = Math.min(1, Math.max(0, shell.scrollTop / maxScroll));
       const nextIndex = Math.min(
@@ -126,7 +116,7 @@ export function LandingExperience() {
       shell.removeEventListener("scroll", requestUpdate);
       if (animationFrame) window.cancelAnimationFrame(animationFrame);
     };
-  }, [lockedAuthIndex]);
+  }, []);
 
   useEffect(() => {
     if (!legalDoc) {
@@ -292,10 +282,9 @@ export function LandingExperience() {
                   key={frame.id}
                   data-active={activeFrame.id === frame.id ? "true" : undefined}
                   onClick={() => {
-                  setMobileMenuOpen(false);
-                  setLockedAuthIndex(null);
-                  scrollToFrame(landingFrames.findIndex((item) => item.id === frame.id));
-                }}
+                    setMobileMenuOpen(false);
+                    scrollToFrame(landingFrames.findIndex((item) => item.id === frame.id));
+                  }}
                   type="button"
                 >
                   {frame.label}

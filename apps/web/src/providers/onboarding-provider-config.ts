@@ -36,6 +36,6 @@ export function embeddedWalletProviderConfig(env: ReturnType<typeof readPublicWe
 
   return {
     enabled: providers.some((provider) => provider.configured),
-    providers: providers.filter((provider) => provider.configured)
+    providers
   };
 }

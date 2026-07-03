@@ -23,7 +23,7 @@ const SupabaseAuthPanel = dynamic(
 );
 const WalletLinkPanel = dynamic(
   () => import("@/wallet/wallet-link-panel").then((mod) => mod.WalletLinkPanel),
-  { ssr: false }
+  { loading: () => <WalletConnectLoading />, ssr: false }
 );
 const EmbeddedWalletLoginButton = dynamic(
   () => import("@/wallet/embedded-wallet-login").then((mod) => mod.EmbeddedWalletLoginButton),
@@ -31,7 +31,7 @@ const EmbeddedWalletLoginButton = dynamic(
 );
 const WalletRuntimeProviders = dynamic(
   () => import("@/wallet/wallet-runtime-providers").then((mod) => mod.WalletRuntimeProviders),
-  { ssr: false }
+  { loading: () => <WalletRuntimeLoading />, ssr: false }
 );
 
 type ProfileLinkDraft = {
@@ -162,27 +162,67 @@ function LandingWalletList({ authState, onLinked }: { authState: WebAuthState; o
   return (
     <WalletRuntimeProviders>
       <div className="landing-wallet-runtime" aria-label="Wallet providers" data-embedded={embeddedWallets.enabled ? "true" : "false"}>
+        <p className="landing-wallet-required">Required. Use Solana Connect, or create an embedded non-custodial wallet with WeVid.</p>
         <div className="landing-wallet-connect-row">
           <WalletLinkPanel authState={authState} compact loginSimple onLinked={onLinked} reloadOnSession={!onLinked} />
         </div>
-        {embeddedWallets.enabled ? (
-          <div className="landing-embedded-wallets" aria-label="Embedded wallet providers">
-            <div className="landing-embedded-label">
-              <p>Embedded wallet</p>
-              <span>Use Privy or Turnkey when configured.</span>
-            </div>
-            {embeddedWallets.providers.map((provider) => (
+        <div className="landing-embedded-wallets" aria-label="Embedded wallet providers">
+          <div className="landing-embedded-label">
+            <p>Embedded wallet</p>
+            <span>{embeddedWallets.enabled ? "Provider login is available." : "Provider login is waiting for runtime configuration."}</span>
+          </div>
+          {embeddedWallets.providers.map((provider) =>
+            provider.configured ? (
               <EmbeddedWalletLoginButton
                 key={provider.provider}
                 label={provider.label}
                 onLinked={onLinked}
                 provider={provider.provider}
               />
-            ))}
-          </div>
-        ) : null}
+            ) : (
+              <button className="landing-provider-disabled" disabled key={provider.provider} type="button">
+                <strong>{provider.label}</strong>
+                <small>Not configured</small>
+              </button>
+            )
+          )}
+        </div>
       </div>
     </WalletRuntimeProviders>
+  );
+}
+
+function WalletRuntimeLoading() {
+  const embeddedWallets = embeddedWalletProviderConfig(readPublicWebEnv());
+
+  return (
+    <div className="landing-wallet-runtime" aria-label="Wallet providers" data-embedded={embeddedWallets.enabled ? "true" : "false"}>
+      <p className="landing-wallet-required">Required. Use Solana Connect, or create an embedded non-custodial wallet with WeVid.</p>
+      <div className="landing-wallet-connect-row">
+        <WalletConnectLoading />
+      </div>
+      <div className="landing-embedded-wallets" aria-label="Embedded wallet providers">
+        <div className="landing-embedded-label">
+          <p>Embedded wallet</p>
+          <span>{embeddedWallets.enabled ? "Loading configured providers." : "Provider login is waiting for runtime configuration."}</span>
+        </div>
+        {embeddedWallets.providers.map((provider) => (
+          <button className="landing-provider-disabled" disabled key={provider.provider} type="button">
+            <strong>{provider.label}</strong>
+            <small>{provider.configured ? "Loading" : "Not configured"}</small>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WalletConnectLoading() {
+  return (
+    <button aria-busy="true" aria-label="Connect wallet" className="landing-button landing-wallet-loading" data-tone="primary" disabled type="button">
+      <strong>Connect wallet</strong>
+      <small>Loading wallet adapters</small>
+    </button>
   );
 }
 

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { createSupabaseBrowserClient } from "@/supabase/client";
 import type { ApiResult, NotificationPushConfig } from "@/api-client";
 import { mapApiFailure } from "@/api-errors";
+import { readPublicWebEnv } from "@/public-env";
 
 type EnrollmentState = "idle" | "working" | "registered" | "blocked" | "unsupported" | "unavailable";
 
@@ -66,7 +67,7 @@ export function NotificationEnrollment({
         return;
       }
 
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+      const apiBaseUrl = readPublicWebEnv().NEXT_PUBLIC_API_BASE_URL;
       const response = await fetch(new URL("/v1/notifications/devices", apiBaseUrl), {
         method: "POST",
         headers: {

@@ -1,16 +1,37 @@
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { expect, test } from "@playwright/test";
 import type { BrowserContext } from "@playwright/test";
 
 const rawBackendCopy = /HTTP (401|403|404|429|500|503)|Missing or invalid bearer token|API is unavailable/;
 const e2eToken = "veel-e2e-token";
+let apiServer: Server;
+
+test.beforeAll(async () => {
+  apiServer = createServer(async (request, response) => {
+    try {
+      await handleApiRequest(request, response);
+    } catch (error) {
+      sendJson(response, 500, { message: error instanceof Error ? error.message : "Mock API error" });
+    }
+  });
+
+  await new Promise<void>((resolve) => {
+    apiServer.listen(4000, "127.0.0.1", resolve);
+  });
+});
+
+test.afterAll(async () => {
+  await new Promise<void>((resolve, reject) => {
+    apiServer.close((error) => (error ? reject(error) : resolve()));
+  });
+});
 
 async function addE2eCookie(context: BrowserContext) {
   await context.addCookies([
     {
       name: "veel_e2e_access_token",
       value: e2eToken,
-      domain: "127.0.0.1",
-      path: "/",
+      url: "http://127.0.0.1:3000",
       httpOnly: false,
       sameSite: "Lax"
     }
@@ -111,3 +132,121 @@ test("serves the browser push service worker with internal click handling", asyn
   expect(source).toContain('self.addEventListener("notificationclick"');
   expect(source).toContain("safeInternalPath");
 });
+
+async function handleApiRequest(request: IncomingMessage, response: ServerResponse) {
+  const method = request.method ?? "GET";
+  const url = new URL(request.url ?? "/", "http://127.0.0.1:4000");
+  setCorsHeaders(response);
+
+  if (method === "OPTIONS") {
+    response.writeHead(204);
+    response.end();
+    return;
+  }
+
+  if (request.headers.authorization !== `Bearer ${e2eToken}`) {
+    sendJson(response, 401, { message: "Missing or invalid bearer token" });
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/v1/session") {
+    sendJson(response, 200, sessionState());
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/v1/content/feed") {
+    sendJson(response, 200, { items: [contentItem()], nextCursor: null });
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/v1/discover/search") {
+    sendJson(response, 200, {
+      content: [contentItem()],
+      creators: [user()],
+      hashtags: [{ slug: "studio", displayName: "Studio", state: "active" }],
+      events: [],
+      liveRooms: [liveRoom()],
+      nextCursor: null
+    });
+    return;
+  }
+
+  sendJson(response, 503, { message: "Route unavailable in smoke API" });
+}
+
+function setCorsHeaders(response: ServerResponse) {
+  response.setHeader("Access-Control-Allow-Origin", "http://127.0.0.1:3000");
+  response.setHeader("Access-Control-Allow-Credentials", "true");
+  response.setHeader("Access-Control-Allow-Headers", "authorization,content-type,idempotency-key,accept");
+  response.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,OPTIONS");
+}
+
+function sendJson(response: ServerResponse, status: number, body: unknown) {
+  response.writeHead(status, { "content-type": "application/json" });
+  response.end(JSON.stringify(body));
+}
+
+function user() {
+  return {
+    id: "00000000-0000-4000-8000-000000000010",
+    handle: "ariamoon",
+    displayName: "Aria Moon",
+    avatarUrl: null,
+    badges: [{ key: "age_verified", label: "Age verified", group: "trust" }]
+  };
+}
+
+function sessionState() {
+  return {
+    authenticated: true,
+    appAccessState: { allowed: true, reason: "ready" },
+    user: user()
+  };
+}
+
+function liveRoom() {
+  return {
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10",
+    title: "Live now with access-gated chat",
+    creator: user(),
+    state: "live",
+    accessState: "pass_required",
+    playback: {
+      state: "teaser",
+      url: null,
+      provider: "livepeer",
+      resourceType: null,
+      expiresAt: null
+    },
+    teaserSecondsRemaining: 45,
+    passOptions: [{ durationMinutes: 30, amountMinor: 10, currency: "SOL" }],
+    chat: { enabled: true, accessState: "pass_required" },
+    replayContentId: null
+  };
+}
+
+function contentItem() {
+  return {
+    id: "00000000-0000-4000-8000-000000000040",
+    creator: user(),
+    mediaType: "clip",
+    caption: "Studio sunrise session",
+    posterUrl: null,
+    playback: {
+      state: "full",
+      url: "https://media.example.test/studio.mp4",
+      provider: "bunny",
+      resourceType: "direct",
+      expiresAt: null
+    },
+    accessState: "free",
+    nsfwLabel: "adult",
+    engagement: {
+      liked: false,
+      saved: false,
+      likeCount: 128,
+      commentCount: 24,
+      shareCount: 8
+    }
+  };
+}

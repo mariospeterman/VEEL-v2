@@ -16,6 +16,7 @@ export default defineConfig({
   webServer: {
     command: "node scripts/run-local-tool.mjs web-build && node scripts/run-local-tool.mjs web-preview",
     env: {
+      ENABLE_E2E_AUTH: "true",
       NEXT_PUBLIC_API_BASE_URL: "http://127.0.0.1:4000",
       NEXT_PUBLIC_ENABLE_E2E_AUTH: "true"
     },
