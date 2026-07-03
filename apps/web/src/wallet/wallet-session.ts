@@ -9,8 +9,14 @@ export interface WalletSessionRecord {
   provider: string;
 }
 
-export function saveWalletSession(session: WalletSessionRecord) {
-  window.localStorage.setItem(walletSessionKey, JSON.stringify(session));
+export interface SaveWalletSessionInput extends WalletSessionRecord {
+  accessToken: string;
+}
+
+export function saveWalletSession(session: SaveWalletSessionInput) {
+  const { accessToken, ...storedSession } = session;
+  window.localStorage.setItem(walletSessionKey, JSON.stringify(storedSession));
+  document.cookie = walletSessionCookie(accessToken, session.expiresAt);
 }
 
 export function getWalletSession(): WalletSessionRecord | null {
@@ -25,4 +31,23 @@ export function getWalletSession(): WalletSessionRecord | null {
 export function clearWalletSession() {
   window.localStorage.removeItem(walletSessionKey);
   document.cookie = `${walletSessionCookieName}=; path=/; max-age=0; samesite=lax`;
+}
+
+function walletSessionCookie(token: string, expiresAt: string) {
+  const expiresAtMs = Date.parse(expiresAt);
+  const maxAge = Number.isFinite(expiresAtMs)
+    ? Math.max(0, Math.floor((expiresAtMs - Date.now()) / 1000))
+    : 0;
+  const parts = [
+    `${walletSessionCookieName}=${encodeURIComponent(token)}`,
+    "path=/",
+    `max-age=${maxAge}`,
+    "samesite=lax"
+  ];
+
+  if (window.location.protocol === "https:") {
+    parts.push("secure");
+  }
+
+  return parts.join("; ");
 }
