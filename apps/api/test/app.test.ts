@@ -118,6 +118,25 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("allows browser profile mutations through CORS preflight", async () => {
+    const app = await buildApi();
+    await app.ready();
+
+    const response = await app.inject({
+      method: "OPTIONS",
+      url: "/v1/profiles/me",
+      headers: {
+        origin: "http://localhost:3000",
+        "access-control-request-method": "PATCH"
+      }
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(response.headers["access-control-allow-methods"]).toContain("PATCH");
+
+    await app.close();
+  });
+
   it("returns a contract-safe session for a verified Supabase user with a Veel profile", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -160,6 +179,55 @@ describe("buildApi", () => {
         displayName: "Maki",
         avatarUrl: null,
         badges: []
+      }
+    });
+
+    await app.close();
+  });
+
+  it("accepts HttpOnly wallet session cookies for protected API access", async () => {
+    const app = await buildApi({
+      authVerifier: {
+        async verifyBearerToken(token) {
+          return token === "veel_wallet_cookie_session"
+            ? {
+                supabaseUserId: "00000000-0000-4000-8000-000000000001",
+                email: null,
+                role: "authenticated"
+              }
+            : null;
+        }
+      },
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/session",
+      headers: {
+        cookie: "veel_wallet_session_token=veel_wallet_cookie_session"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      authenticated: true,
+      appAccessState: {
+        allowed: true,
+        reason: "ready"
       }
     });
 
@@ -283,6 +351,40 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("links Supabase recovery with wallet session cookie proof", async () => {
+    const links: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      walletAuthRepository: fakeWalletAuthRepository({
+        async linkSupabaseRecovery(input) {
+          links.push(input);
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/recovery-link",
+      headers: {
+        authorization: "Bearer valid-token",
+        cookie: "veel_wallet_session_token=veel_wallet_cookie_session",
+        "idempotency-key": "recovery-link-cookie-1"
+      },
+      payload: {}
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(links).toEqual([
+      {
+        walletSessionToken: "veel_wallet_cookie_session",
+        supabaseUserId: "00000000-0000-4000-8000-000000000001"
+      }
+    ]);
+
+    await app.close();
+  });
+
   it("rejects recovery linking without a wallet session proof", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -300,9 +402,9 @@ describe("buildApi", () => {
       payload: {}
     });
 
-    expect(response.statusCode).toBe(400);
+    expect(response.statusCode).toBe(401);
     expect(response.json()).toMatchObject({
-      code: "validation_failed"
+      code: "unauthorized"
     });
 
     await app.close();
@@ -1656,6 +1758,60 @@ describe("buildApi", () => {
       avatarUrl: "https://media.example.test/avatar.jpg",
       badges: []
     });
+
+    await app.close();
+  });
+
+  it("creates a backend-owned starter profile for onboarding", async () => {
+    const upserts: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return null;
+        }
+      }),
+      profileRepository: {
+        ...fakeProfileRepository,
+        async upsertMyProfile(supabaseUserId, input) {
+          upserts.push({ supabaseUserId, input });
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            handle: input.handle,
+            displayName: input.displayName,
+            avatarUrl: null,
+            badges: []
+          };
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/profiles/me/starter",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "profile-starter-1"
+      },
+      payload: {}
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      handle: expect.stringMatching(/^wevid_[a-f0-9]{12}$/),
+      displayName: "WeVid user"
+    });
+    expect(upserts).toMatchObject([
+      {
+        supabaseUserId: "00000000-0000-4000-8000-000000000001",
+        input: {
+          displayName: "WeVid user",
+          handle: expect.stringMatching(/^wevid_[a-f0-9]{12}$/),
+          links: []
+        }
+      }
+    ]);
 
     await app.close();
   });

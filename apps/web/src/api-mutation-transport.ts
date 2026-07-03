@@ -3,7 +3,6 @@
 import { readPublicWebEnv } from "@/public-env";
 import { e2eAuthCookieName } from "@/supabase/auth-cookie";
 import { createSupabaseBrowserClient } from "@/supabase/client";
-import { getWalletSessionToken } from "@/wallet/wallet-session";
 import { ApiMutationError } from "./api-mutation-types";
 
 const browserE2eAuthEnabled =
@@ -12,12 +11,15 @@ const browserE2eAuthEnabled =
 export async function authenticatedGet<T>(path: string): Promise<T> {
   const { token } = await browserSessionToken();
   const env = readPublicWebEnv();
+  const headers = new Headers({ accept: "application/json" });
+  if (token) {
+    headers.set("authorization", `Bearer ${token}`);
+  }
+
   const response = await mutationFetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
     cache: "no-store",
-    headers: {
-      accept: "application/json",
-      authorization: `Bearer ${token}`
-    }
+    credentials: "include",
+    headers
   });
 
   if (!response.ok) {
@@ -62,6 +64,7 @@ export async function publicMutation<T>(
   const response = await mutationFetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
     body: JSON.stringify(body),
     cache: "no-store",
+    credentials: "include",
     headers: {
       accept: "application/json",
       "content-type": "application/json",
@@ -84,16 +87,21 @@ async function sendAuthenticatedMutation(
 ): Promise<Response> {
   const { token } = await browserSessionToken();
   const env = readPublicWebEnv();
+  const headers = new Headers({
+    accept: "application/json",
+    "content-type": "application/json",
+    "idempotency-key": mutationIdempotencyKey()
+  });
+
+  if (token) {
+    headers.set("authorization", `Bearer ${token}`);
+  }
 
   return mutationFetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
     body: JSON.stringify(body),
     cache: "no-store",
-    headers: {
-      accept: "application/json",
-      authorization: `Bearer ${token}`,
-      "content-type": "application/json",
-      "idempotency-key": mutationIdempotencyKey()
-    },
+    credentials: "include",
+    headers,
     method
   });
 }
@@ -107,11 +115,6 @@ async function mutationFetch(input: URL, init: RequestInit) {
 }
 
 async function browserSessionToken() {
-  const walletToken = getWalletSessionToken();
-  if (walletToken) {
-    return { token: walletToken };
-  }
-
   const e2eToken = browserE2eAccessToken();
   if (e2eToken) {
     return { token: e2eToken };
@@ -123,7 +126,7 @@ async function browserSessionToken() {
   } = await supabase.auth.getSession();
 
   if (!session?.access_token) {
-    throw new ApiMutationError("Create or restore a session before continuing.", 401);
+    return { token: null };
   }
 
   return { token: session.access_token };
@@ -134,11 +137,15 @@ function browserE2eAccessToken() {
     return null;
   }
 
+  return browserCookieToken(e2eAuthCookieName);
+}
+
+function browserCookieToken(name: string) {
   const token = document.cookie
     .split(";")
     .map((part) => part.trim())
-    .find((part) => part.startsWith(`${e2eAuthCookieName}=`))
-    ?.slice(e2eAuthCookieName.length + 1);
+    .find((part) => part.startsWith(`${name}=`))
+    ?.slice(name.length + 1);
 
   return token ? decodeURIComponent(token) : null;
 }

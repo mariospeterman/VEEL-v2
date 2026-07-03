@@ -246,6 +246,19 @@ paths:
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /v1/profiles/me/starter:
+    post:
+      operationId: createStarterProfile
+      tags: [Profiles]
+      summary: Create a backend-owned starter profile for onboarding
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "200": { $ref: "#/components/responses/User" }
+        "201": { $ref: "#/components/responses/User" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /v1/profiles/me/avatar:
     post:
       operationId: uploadMyProfileAvatar
@@ -2392,9 +2405,11 @@ components:
         wallet: { $ref: "#/components/schemas/Wallet" }
     LinkSupabaseRecoveryRequest:
       type: object
-      required: [walletSessionToken]
       properties:
-        walletSessionToken: { type: string, minLength: 16 }
+        walletSessionToken:
+          type: string
+          minLength: 16
+          description: Backward-compatible wallet session proof. Prefer the HttpOnly wallet session cookie.
     AuthRecoveryLink:
       type: object
       required: [state, provider]

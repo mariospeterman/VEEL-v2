@@ -118,6 +118,10 @@ export async function updateMyProfile(body: UpdateProfileRequest): Promise<User>
   return authenticatedMutation<User>("/v1/profiles/me", "PATCH", body);
 }
 
+export async function createStarterProfile(): Promise<User> {
+  return authenticatedMutation<User>("/v1/profiles/me/starter", "POST", {});
+}
+
 export async function uploadMyProfileAvatar(
   body: UploadProfileAvatarRequest
 ): Promise<ProfileAvatarUpload> {

@@ -4,21 +4,21 @@ import { useMemo, useState, type FormEvent } from "react";
 import { safeMutationMessage } from "@/api-errors";
 import { ProviderLogo } from "@/brand/provider-logo";
 import { createSupabaseBrowserClient } from "./client";
-import { getRecoveryAuthConfig, type RecoveryAuthProvider } from "./recovery-auth-config";
+import { getSupabaseAuthConfig, type SupabaseAuthProvider } from "./supabase-auth-config";
 
-type RecoveryAuthPanelMode = "login" | "profile";
+type SupabaseAuthPanelMode = "login" | "profile";
 
-interface RecoveryAuthPanelProps {
-  mode: RecoveryAuthPanelMode;
+interface SupabaseAuthPanelProps {
+  mode: SupabaseAuthPanelMode;
   next?: string;
 }
 
-export function RecoveryAuthPanel({ mode, next = "/app/home" }: RecoveryAuthPanelProps) {
+export function SupabaseAuthPanel({ mode, next = "/app/home" }: SupabaseAuthPanelProps) {
   const [email, setEmail] = useState("");
-  const [submitting, setSubmitting] = useState<"email" | RecoveryAuthProvider["provider"] | null>(null);
+  const [submitting, setSubmitting] = useState<"email" | SupabaseAuthProvider["provider"] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const config = useMemo(() => getRecoveryAuthConfig(), []);
+  const config = useMemo(() => getSupabaseAuthConfig(), []);
   const supabase = useMemo(() => {
     if (!config.supabaseConfigured || (!config.emailEnabled && config.oauthProviders.length === 0)) {
       return null;
@@ -31,13 +31,18 @@ export function RecoveryAuthPanel({ mode, next = "/app/home" }: RecoveryAuthPane
     }
   }, [config.emailEnabled, config.oauthProviders.length, config.supabaseConfigured]);
   const isProduction = process.env.NODE_ENV === "production";
+  const isLocalPreview = config.appUrl.includes("localhost") || config.appUrl.includes("127.0.0.1");
   const hasAnyProvider = Boolean(supabase && (config.emailEnabled || config.oauthProviders.length > 0));
 
   if (!hasAnyProvider) {
-    return isProduction ? null : (
-      <p className="landing-auth-unavailable">
-        Recovery access is unavailable in this local build.
-      </p>
+    return isProduction && !isLocalPreview ? null : (
+      <div className="landing-supabase-auth">
+        <p className="landing-auth-unavailable">
+          {config.supabaseConfigured
+            ? "Supabase auth is configured. Enable email or social provider flags to show login methods."
+            : "Supabase auth is unavailable in this local build."}
+        </p>
+      </div>
     );
   }
 
@@ -51,7 +56,7 @@ export function RecoveryAuthPanel({ mode, next = "/app/home" }: RecoveryAuthPane
     }
 
     if (!supabase) {
-      setError("Recovery access is unavailable in this local build.");
+      setError("Supabase auth is unavailable in this local build.");
       return;
     }
 
@@ -62,7 +67,7 @@ export function RecoveryAuthPanel({ mode, next = "/app/home" }: RecoveryAuthPane
     const { error: authError } = await supabase.auth.signInWithOtp({
       email: normalizedEmail,
       options: {
-        emailRedirectTo: recoveryRedirectTo(next),
+        emailRedirectTo: supabaseRedirectTo(next),
         shouldCreateUser: mode === "profile"
       }
     });
@@ -70,16 +75,16 @@ export function RecoveryAuthPanel({ mode, next = "/app/home" }: RecoveryAuthPane
     setSubmitting(null);
 
     if (authError) {
-      setError(safeMutationMessage(authError, "Recovery email"));
+      setError(safeMutationMessage(authError, "Supabase email"));
       return;
     }
 
-    setMessage(mode === "profile" ? "Check your email to add recovery access." : "Check your email for the recovery link.");
+    setMessage(mode === "profile" ? "Check your email to add Supabase auth." : "Check your email for the login link.");
   }
 
-  async function startOAuthSignIn(provider: RecoveryAuthProvider["provider"]) {
+  async function startOAuthSignIn(provider: SupabaseAuthProvider["provider"]) {
     if (!supabase) {
-      setError("Recovery access is unavailable in this local build.");
+      setError("Supabase auth is unavailable in this local build.");
       return;
     }
 
@@ -90,19 +95,19 @@ export function RecoveryAuthPanel({ mode, next = "/app/home" }: RecoveryAuthPane
     const { error: authError } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: recoveryRedirectTo(next)
+        redirectTo: supabaseRedirectTo(next)
       }
     });
 
     setSubmitting(null);
 
     if (authError) {
-      setError(safeMutationMessage(authError, "Recovery login"));
+      setError(safeMutationMessage(authError, "Supabase login"));
     }
   }
 
   return (
-    <div className="landing-supabase-auth" data-recovery-mode={mode}>
+    <div className="landing-supabase-auth" data-supabase-auth-mode={mode}>
       {config.emailEnabled ? (
         <form className="landing-email-row" noValidate onSubmit={startEmailSignIn}>
           <label>
@@ -110,7 +115,7 @@ export function RecoveryAuthPanel({ mode, next = "/app/home" }: RecoveryAuthPane
             <input
               autoComplete="email"
               inputMode="email"
-              name={`${mode}-recovery-email`}
+              name={`${mode}-supabase-email`}
               onChange={(event) => {
                 setEmail(event.target.value);
                 if (error) setError(null);
@@ -122,12 +127,12 @@ export function RecoveryAuthPanel({ mode, next = "/app/home" }: RecoveryAuthPane
           </label>
           <button className="landing-provider-link" disabled={submitting !== null} type="submit">
             <ProviderLogo label="Email" name="email" />
-            <span>{submitting === "email" ? "Sending" : "Email recovery"}</span>
+            <span>{submitting === "email" ? "Sending" : "Email login"}</span>
           </button>
         </form>
       ) : null}
       {config.oauthProviders.length > 0 ? (
-        <div className="landing-provider-row" aria-label="Recovery providers">
+        <div className="landing-provider-row" aria-label="Supabase auth providers">
           {config.oauthProviders.map((provider) => (
             <button
               className="landing-provider-link"
@@ -148,7 +153,7 @@ export function RecoveryAuthPanel({ mode, next = "/app/home" }: RecoveryAuthPane
   );
 }
 
-function recoveryRedirectTo(next: string) {
+function supabaseRedirectTo(next: string) {
   const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/app/home";
   return `${window.location.origin}/auth/confirm?next=${encodeURIComponent(safeNext)}`;
 }

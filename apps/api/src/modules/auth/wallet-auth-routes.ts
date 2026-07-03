@@ -1,6 +1,11 @@
 import { randomBytes } from "node:crypto";
 import type { FastifyInstance } from "fastify";
-import { extractBearerToken, unauthorizedResponse } from "./http-auth.js";
+import {
+  extractBearerToken,
+  extractCookieToken,
+  unauthorizedResponse,
+  walletSessionCookieName
+} from "./http-auth.js";
 import type { SupabaseAuthVerifier } from "../session/types.js";
 import {
   buildWalletLinkMessage,
@@ -39,7 +44,7 @@ interface CreateWalletAuthSessionRequest {
 }
 
 interface LinkSupabaseRecoveryRequest {
-  walletSessionToken: string;
+  walletSessionToken?: string;
 }
 
 const walletAuthChallengeTtlMs = 10 * 60 * 1000;
@@ -152,6 +157,8 @@ export async function registerWalletAuthRoutes(
         expiresAt: new Date(Date.now() + app.config.WALLET_AUTH_SESSION_TTL_SECONDS * 1000)
       });
 
+      reply.header("set-cookie", walletSessionCookie(session.accessToken, session.expiresAt));
+
       return reply.code(201).send({
         accessToken: session.accessToken,
         tokenType: "Bearer",
@@ -196,8 +203,16 @@ export async function registerWalletAuthRoutes(
     }
 
     try {
+      const walletSessionToken =
+        (body as LinkSupabaseRecoveryRequest | undefined)?.walletSessionToken ??
+        extractCookieToken(request.headers.cookie, walletSessionCookieName);
+
+      if (!walletSessionToken) {
+        return reply.code(401).send(unauthorizedResponse("Wallet session is missing or expired"));
+      }
+
       await options.walletAuthRepository.linkSupabaseRecovery({
-        walletSessionToken: (body as LinkSupabaseRecoveryRequest).walletSessionToken,
+        walletSessionToken,
         supabaseUserId: verifiedSession.supabaseUserId
       });
 
@@ -277,15 +292,35 @@ function validateWalletAuthSessionRequest(
 }
 
 function validateRecoveryLinkRequest(body: LinkSupabaseRecoveryRequest | undefined): string | null {
-  if (!body || typeof body !== "object") {
-    return "Request body is required";
+  if (body !== undefined && (!body || typeof body !== "object")) {
+    return "Request body must be an object";
   }
 
-  if (typeof body.walletSessionToken !== "string" || !body.walletSessionToken.startsWith("veel_wallet_")) {
-    return "Wallet session token is required";
+  if (
+    body?.walletSessionToken !== undefined &&
+    (typeof body.walletSessionToken !== "string" || !body.walletSessionToken.startsWith("veel_wallet_"))
+  ) {
+    return "Wallet session token is invalid";
   }
 
   return null;
+}
+
+function walletSessionCookie(token: string, expiresAt: Date) {
+  const maxAge = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
+  const parts = [
+    `${walletSessionCookieName}=${encodeURIComponent(token)}`,
+    "Path=/",
+    `Max-Age=${maxAge}`,
+    "HttpOnly",
+    "SameSite=Lax"
+  ];
+
+  if (process.env.NODE_ENV === "production") {
+    parts.push("Secure");
+  }
+
+  return parts.join("; ");
 }
 
 function isWalletChain(value: string): value is WalletChain {

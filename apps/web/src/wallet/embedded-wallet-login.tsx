@@ -16,48 +16,19 @@ import { createBackendWalletSession } from "./backend-wallet-auth";
 type EmbeddedProvider = "privy" | "turnkey";
 
 export function EmbeddedWalletLoginButton({
-  configured,
   label,
   onLinked,
   provider
 }: {
-  configured: boolean;
   label: string;
   onLinked?: ((address: string) => void) | undefined;
   provider: EmbeddedProvider;
 }) {
-  if (!configured) {
-    return <DisabledEmbeddedProvider label={label} provider={provider} />;
-  }
-
   if (provider === "privy") {
     return <PrivyEmbeddedLoginButton label={label} onLinked={onLinked} />;
   }
 
   return <TurnkeyEmbeddedLoginButton label={label} onLinked={onLinked} />;
-}
-
-function DisabledEmbeddedProvider({ label, provider }: { label: string; provider: EmbeddedProvider }) {
-  const envName = provider === "privy" ? "NEXT_PUBLIC_PRIVY_APP_ID" : "NEXT_PUBLIC_TURNKEY_ORGANIZATION_ID";
-  const shortMessage = provider === "privy" ? "Privy staged" : "Turnkey staged";
-
-  return (
-    <div className="auth-provider-button-stack">
-      <div
-        className="auth-provider-button auth-provider-button-muted auth-provider-status"
-        aria-describedby={`embedded-${provider}-note`}
-      >
-        <ProviderLogo label={label} name={provider} />
-        <span>
-          <strong>{label}</strong>
-          <small>{shortMessage}</small>
-        </span>
-      </div>
-      <p className="auth-provider-note auth-provider-note-muted" id={`embedded-${provider}-note`} title={`Missing ${envName}.`}>
-        Enable embedded wallet runtime and configure {envName}.
-      </p>
-    </div>
-  );
 }
 
 function PrivyEmbeddedLoginButton({ label, onLinked }: { label: string; onLinked?: ((address: string) => void) | undefined }) {
@@ -231,20 +202,28 @@ function hasSignMessage(account: WalletAccount): account is WalletAccount & { si
 }
 
 function signatureStringToBytes(signature: string) {
+  let decoded: Uint8Array;
+
   if (/^[0-9a-f]+$/i.test(signature) && signature.length % 2 === 0) {
-    return Uint8Array.from(signature.match(/.{1,2}/g)?.map((byte) => Number.parseInt(byte, 16)) ?? []);
+    decoded = Uint8Array.from(signature.match(/.{1,2}/g)?.map((byte) => Number.parseInt(byte, 16)) ?? []);
+    return requireSolanaSignature(decoded);
   }
 
   try {
-    const decoded = bs58.decode(signature);
-
-    if (decoded.length === 64) {
-      return decoded;
-    }
+    decoded = bs58.decode(signature);
+    return requireSolanaSignature(decoded);
   } catch {
     // Fall through to base64 decoding.
   }
 
   const binary = atob(signature);
-  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return requireSolanaSignature(Uint8Array.from(binary, (char) => char.charCodeAt(0)));
+}
+
+function requireSolanaSignature(signature: Uint8Array) {
+  if (signature.length !== 64) {
+    throw new ApiMutationError("Embedded wallet returned an invalid Solana signature.");
+  }
+
+  return signature;
 }

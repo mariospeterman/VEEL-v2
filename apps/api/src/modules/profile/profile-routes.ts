@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
@@ -182,6 +182,60 @@ export async function registerProfileRoutes(
     }
   });
 
+  app.post("/v1/profiles/me/starter", async (request, reply) => {
+    const verifiedSession = await verifyRequestSession(request, options.authVerifier);
+
+    if (!verifiedSession) {
+      return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
+    }
+
+    if (!request.headers["idempotency-key"]) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: "Idempotency-Key header is required"
+      });
+    }
+
+    try {
+      await options.sessionRepository.ensureUserForSupabaseId(verifiedSession.supabaseUserId);
+      const existingProfile = await options.sessionRepository.findProfileBySupabaseUserId(
+        verifiedSession.supabaseUserId
+      );
+
+      if (existingProfile?.handle && existingProfile.displayName) {
+        return reply.code(200).send({
+          id: existingProfile.id,
+          handle: existingProfile.handle,
+          displayName: existingProfile.displayName,
+          avatarUrl: existingProfile.avatarUrl,
+          badges: []
+        });
+      }
+
+      const user = await options.profileRepository.upsertMyProfile(verifiedSession.supabaseUserId, {
+        displayName: "WeVid user",
+        handle: starterProfileHandle(verifiedSession.supabaseUserId),
+        links: []
+      });
+
+      return reply.code(201).send(user);
+    } catch (error) {
+      if (error instanceof ProfileHandleConflictError) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: "Starter profile handle is already in use"
+        });
+      }
+
+      if (error instanceof ProfileRepositoryConfigurationError) {
+        request.log.warn({ error }, "Profile repository is not configured");
+        return reply.code(401).send(unauthorizedResponse("Profile storage is not configured"));
+      }
+
+      throw error;
+    }
+  });
+
   app.post(
     "/v1/profiles/me/avatar",
     {
@@ -264,6 +318,11 @@ export async function registerProfileRoutes(
       });
     }
   );
+}
+
+function starterProfileHandle(supabaseUserId: string) {
+  const suffix = createHash("sha256").update(supabaseUserId).digest("hex").slice(0, 12);
+  return `wevid_${suffix}`;
 }
 
 async function requireCreatorDashboardAccess(

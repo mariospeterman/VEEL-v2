@@ -86,11 +86,12 @@ async function linkWalletRecoveryIfPresent(request: NextRequest, supabaseAccessT
 
   try {
     const response = await fetch(new URL("/v1/auth/recovery-link", env.NEXT_PUBLIC_API_BASE_URL), {
-      body: JSON.stringify({ walletSessionToken }),
+      body: JSON.stringify({}),
       cache: "no-store",
       headers: {
         accept: "application/json",
         authorization: `Bearer ${supabaseAccessToken}`,
+        cookie: `${walletSessionCookieName}=${encodeURIComponent(walletSessionToken)}`,
         "content-type": "application/json",
         "idempotency-key": crypto.randomUUID()
       },

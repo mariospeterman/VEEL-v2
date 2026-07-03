@@ -33,7 +33,8 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   await app.register(sensible);
   await app.register(cors, {
     origin: localWebOrigins(process.env.WEB_URL ?? "http://localhost:3000"),
-    credentials: true
+    credentials: true,
+    methods: ["GET", "HEAD", "POST", "PATCH", "OPTIONS"]
   });
   await app.register(rateLimit, {
     max: 100,

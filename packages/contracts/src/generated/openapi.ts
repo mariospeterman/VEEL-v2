@@ -293,6 +293,23 @@ export interface paths {
         patch: operations["updateMyProfile"];
         trace?: never;
     };
+    "/v1/profiles/me/starter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a backend-owned starter profile for onboarding */
+        post: operations["createStarterProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/profiles/me/avatar": {
         parameters: {
             query?: never;
@@ -2751,7 +2768,8 @@ export interface components {
             wallet: components["schemas"]["Wallet"];
         };
         LinkSupabaseRecoveryRequest: {
-            walletSessionToken: string;
+            /** @description Backward-compatible wallet session proof. Prefer the HttpOnly wallet session cookie. */
+            walletSessionToken?: string;
         };
         AuthRecoveryLink: {
             /** @enum {string} */
@@ -6703,6 +6721,25 @@ export interface operations {
         requestBody: components["requestBodies"]["UpdateProfile"];
         responses: {
             200: components["responses"]["User"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    createStarterProfile: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["User"];
+            201: components["responses"]["User"];
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             409: components["responses"]["Conflict"];

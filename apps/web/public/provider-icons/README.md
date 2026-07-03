@@ -1,15 +1,16 @@
 # Provider icon assets
 
-Wallet and embedded-wallet icons in this folder are local brand assets used by the WeVid UI.
+Provider icons in this folder are checked-in brand assets used by the WeVid UI.
+Keep them from provider-owned or provider-approved sources; do not recreate marks in code.
 
-Age and verification providers must use provider-approved assets before launch. Do not recreate
-their logos in code or use unofficial screenshots. Add approved SVG or PNG files with these names:
+Current age/verification assets:
 
-- `didit.svg`
-- `yoti.svg`
-- `sumsub.svg`
-- `persona.svg`
-- `veriff.svg`
+- `didit.svg` - existing Didit asset.
+- `yoti.svg` - Yoti logo guidelines kit.
+- `sumsub.svg` - Sumsub Logos and Brand Guidelines kit.
+- `persona.svg` - first-party Persona website logo asset.
+- `veriff.svg` - first-party Veriff website logo asset.
 
-Until those files are added, the UI intentionally renders neutral fallback symbols for age-provider
-buttons instead of pretending to show official provider marks.
+Before launch, confirm each usage against the provider's latest brand guidelines and contract.
+If a provider requires written approval for marketplace/co-brand placement, keep the button hidden
+or use the neutral fallback until approval is granted.

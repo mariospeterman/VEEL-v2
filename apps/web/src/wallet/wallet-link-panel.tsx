@@ -15,6 +15,7 @@ import { ProviderLogo } from "@/brand/provider-logo";
 import { safeMutationMessage } from "@/api-errors";
 import type { WebAuthState } from "@/supabase/auth-state";
 import { bytesToBase64, createBackendWalletSession, walletChain } from "./backend-wallet-auth";
+import { clearWalletSession } from "./wallet-session";
 
 type ExternalWalletProvider = LinkWalletRequest["provider"];
 
@@ -27,7 +28,7 @@ interface WalletLinkPanelProps {
 }
 
 export function WalletLinkPanel({ authState, compact = false, loginSimple = false, onLinked, reloadOnSession = true }: WalletLinkPanelProps) {
-  const { connect, connected, connecting, publicKey, signMessage, wallet, wallets } = useWallet();
+  const { connect, connected, connecting, disconnect, publicKey, signMessage, wallet, wallets } = useWallet();
   const { setVisible: setWalletModalVisible } = useWalletModal();
   const [mounted, setMounted] = useState(false);
   const [awaitingWallet, setAwaitingWallet] = useState(false);
@@ -38,7 +39,6 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
   const detectedWallets = useMemo(
     () =>
       wallets
-        .filter(isAllowedSolanaWallet)
         .filter((wallet) => wallet.readyState !== WalletReadyState.Unsupported)
         .map((wallet) => ({ label: wallet.adapter.name, provider: providerForWallet(wallet) })),
     [wallets]
@@ -73,6 +73,37 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
     }
 
     void completeConnectedWallet(wallet);
+  }
+
+  async function chooseAnotherWallet() {
+    setMessage(null);
+    setAwaitingWallet(true);
+
+    try {
+      if (connected) {
+        await disconnect();
+      }
+    } catch {
+      // Continue into the modal; the adapter can still present available wallets.
+    } finally {
+      setWalletModalVisible(true);
+    }
+  }
+
+  async function disconnectWallet() {
+    setMessage(null);
+    setAwaitingWallet(false);
+
+    try {
+      if (connected) {
+        await disconnect();
+      }
+    } finally {
+      clearWalletSession();
+      setLinkedAddress(null);
+      setState("idle");
+      setMessage("Wallet disconnected.");
+    }
   }
 
   async function connectSelectedWallet() {
@@ -206,10 +237,38 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
             >
               <ProviderLogo label="Connect wallet" name="wallet" />
               <span>
-                <strong>Connect wallet</strong>
-                <small>{state === "linking" || connecting ? "Waiting" : "Choose wallet"}</small>
+                <strong>{connected && publicKey ? "Continue" : "Connect wallet"}</strong>
+                <small>{state === "linking" || connecting ? "Waiting" : connected && publicKey ? shortWalletAddress(publicKey.toString()) : "Choose wallet"}</small>
               </span>
             </button>
+            {connected ? (
+              <>
+                <button
+                  className="auth-provider-button auth-provider-button-secondary"
+                  disabled={state === "linking" || connecting}
+                  onClick={() => void chooseAnotherWallet()}
+                  type="button"
+                >
+                  <ProviderLogo label="Choose another wallet" name="wallet" />
+                  <span>
+                    <strong>Switch</strong>
+                    <small>Choose another</small>
+                  </span>
+                </button>
+                <button
+                  className="auth-provider-button auth-provider-button-secondary"
+                  disabled={state === "linking" || connecting}
+                  onClick={() => void disconnectWallet()}
+                  type="button"
+                >
+                  <ProviderLogo label="Disconnect wallet" name="wallet" />
+                  <span>
+                    <strong>Disconnect</strong>
+                    <small>Clear session</small>
+                  </span>
+                </button>
+              </>
+            ) : null}
           </div>
         </>
       ) : (
@@ -235,6 +294,10 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
       ) : null}
     </section>
   );
+}
+
+function shortWalletAddress(address: string) {
+  return address.length > 10 ? `${address.slice(0, 4)}...${address.slice(-4)}` : address;
 }
 
 async function redirectAfterWalletSession() {
@@ -265,38 +328,6 @@ async function redirectAfterWalletSession() {
 
 function walletNameIncludes(wallet: Wallet, value: string) {
   return wallet.adapter.name.toLowerCase().includes(value);
-}
-
-function isAllowedSolanaWallet(wallet: Wallet) {
-  const name = wallet.adapter.name.toLowerCase();
-
-  if (isKnownEvmOnlyWalletName(name)) {
-    return false;
-  }
-
-  return isKnownSolanaWalletName(name) || wallet.readyState === WalletReadyState.Installed || wallet.readyState === WalletReadyState.Loadable;
-}
-
-function isKnownSolanaWalletName(name: string) {
-  return (
-    name.includes("backpack") ||
-    name.includes("glow") ||
-    name.includes("phantom") ||
-    name.includes("solana mobile") ||
-    name.includes("solflare") ||
-    name.includes("ultimate")
-  );
-}
-
-function isKnownEvmOnlyWalletName(name: string) {
-  return (
-    name.includes("coinbase") ||
-    name.includes("metamask") ||
-    name.includes("rabby") ||
-    name.includes("rainbow") ||
-    name.includes("safepal") ||
-    name.includes("trust wallet")
-  );
 }
 
 function providerForWallet(wallet: Wallet | null): ExternalWalletProvider {

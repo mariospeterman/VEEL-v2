@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, WalletCards } from "lucide-react";
+import { Mail, ShieldCheck, WalletCards } from "lucide-react";
 import { FaDiscord, FaGithub, FaGoogle, FaXTwitter } from "react-icons/fa6";
 
 type ProviderLogoName =
@@ -26,9 +26,13 @@ const providerLogoSources: Partial<Record<ProviderLogoName, string>> = {
   backpack: "/provider-icons/backpack.png",
   didit: "/provider-icons/didit.svg",
   phantom: "/provider-icons/phantom.svg",
+  persona: "/provider-icons/persona.svg",
   privy: "/provider-icons/privy.png",
   solflare: "/provider-icons/solflare.svg",
-  turnkey: "/provider-icons/turnkey.svg"
+  sumsub: "/provider-icons/sumsub.svg",
+  turnkey: "/provider-icons/turnkey.svg",
+  veriff: "/provider-icons/veriff.svg",
+  yoti: "/provider-icons/yoti.svg"
 };
 
 export function ProviderLogo({
@@ -65,17 +69,8 @@ function ProviderIcon({ label, name }: { label: string; name: ProviderLogoName }
   if (name === "google") return <FaGoogle size={18} />;
   if (name === "x") return <FaXTwitter size={18} />;
   if (name === "didit" || name === "persona" || name === "sumsub" || name === "veriff" || name === "yoti") {
-    return <span className="provider-logo-fallback">{providerInitials(label)}</span>;
+    return <ShieldCheck className="provider-logo-neutral" aria-label={label} size={18} />;
   }
 
   return <WalletCards size={18} />;
-}
-
-function providerInitials(label: string) {
-  return label
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
 }

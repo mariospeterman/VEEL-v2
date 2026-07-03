@@ -21,7 +21,7 @@ export function EmbeddedWalletProviders({ children }: Readonly<{ children: React
         accentColor: "#20eaa4",
         landingHeader: "Enter WeVid",
         loginMessage: "Unlock your embedded Solana wallet.",
-        showWalletLoginFirst: true,
+        showWalletLoginFirst: false,
         theme: "dark",
         walletChainType: "solana-only"
       },

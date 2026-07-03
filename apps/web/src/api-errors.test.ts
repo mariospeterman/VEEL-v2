@@ -32,7 +32,13 @@ describe("mapApiFailure", () => {
 
   it("explains when a wallet action reached the browser but not the API", () => {
     expect(safeMutationMessage(new ApiMutationError("API is unavailable", 503), "Wallet connection")).toBe(
-      "Wallet connection reached the wallet, but the WeVid API is not available. Start the API and try again."
+      "Wallet connected, but the WeVid API is not reachable from the browser. Check the API server and try again."
+    );
+  });
+
+  it("does not claim non-wallet actions reached a wallet", () => {
+    expect(safeMutationMessage(new ApiMutationError("API is unavailable", 503), "Profile setup")).toBe(
+      "Profile setup could not reach the WeVid API from the browser. Check the API server and try again."
     );
   });
 });
