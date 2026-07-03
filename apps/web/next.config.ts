@@ -25,6 +25,7 @@ function loadRepoRootEnv(root: string) {
 }
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: allowedDevOrigins(),
   devIndicators: false,
   reactStrictMode: true,
   turbopack: {
@@ -54,3 +55,15 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
+function allowedDevOrigins() {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (!appUrl) return [];
+
+  try {
+    const { hostname } = new URL(appUrl);
+    return hostname.includes("ngrok-free.app") ? [hostname] : [];
+  } catch {
+    return [];
+  }
+}

@@ -2,7 +2,7 @@
 
 import { Plus, Trash2 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type ComponentType, type FormEvent } from "react";
 import { safeMutationMessage } from "@/api-errors";
 import {
   ApiMutationError,
@@ -21,18 +21,11 @@ const SupabaseAuthPanel = dynamic(
   () => import("@/supabase/supabase-auth-panel").then((mod) => mod.SupabaseAuthPanel),
   { ssr: false }
 );
-const WalletLinkPanel = dynamic(
-  () => import("@/wallet/wallet-link-panel").then((mod) => mod.WalletLinkPanel),
-  { loading: () => <WalletConnectLoading />, ssr: false }
-);
-const EmbeddedWalletLoginButton = dynamic(
-  () => import("@/wallet/embedded-wallet-login").then((mod) => mod.EmbeddedWalletLoginButton),
-  { ssr: false }
-);
-const WalletRuntimeProviders = dynamic(
-  () => import("@/wallet/wallet-runtime-providers").then((mod) => mod.WalletRuntimeProviders),
-  { loading: () => <WalletRuntimeLoading />, ssr: false }
-);
+
+type LandingWalletRuntimeProps = {
+  authState: WebAuthState;
+  onLinked?: ((address: string) => void) | undefined;
+};
 
 type ProfileLinkDraft = {
   id: string;
@@ -158,71 +151,66 @@ function OnboardingWalletStep({ authState, onLinked }: { authState: WebAuthState
 
 function LandingWalletList({ authState, onLinked }: { authState: WebAuthState; onLinked?: (address: string) => void }) {
   const embeddedWallets = embeddedWalletProviderConfig(readPublicWebEnv());
+  const [runtime, setRuntime] = useState<ComponentType<LandingWalletRuntimeProps> | null>(null);
+  const [loadingRuntime, setLoadingRuntime] = useState(false);
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
 
-  return (
-    <WalletRuntimeProviders>
-      <div className="landing-wallet-runtime" aria-label="Wallet providers" data-embedded={embeddedWallets.enabled ? "true" : "false"}>
-        <p className="landing-wallet-required">Required. Use Solana Connect, or create an embedded non-custodial wallet with WeVid.</p>
-        <div className="landing-wallet-connect-row">
-          <WalletLinkPanel authState={authState} compact loginSimple onLinked={onLinked} reloadOnSession={!onLinked} />
-        </div>
-        <div className="landing-embedded-wallets" aria-label="Embedded wallet providers">
-          <div className="landing-embedded-label">
-            <p>Embedded wallet</p>
-            <span>{embeddedWallets.enabled ? "Provider login is available." : "Provider login is waiting for runtime configuration."}</span>
-          </div>
-          {embeddedWallets.providers.map((provider) =>
-            provider.configured ? (
-              <EmbeddedWalletLoginButton
-                key={provider.provider}
-                label={provider.label}
-                onLinked={onLinked}
-                provider={provider.provider}
-              />
-            ) : (
-              <button className="landing-provider-disabled" disabled key={provider.provider} type="button">
-                <strong>{provider.label}</strong>
-                <small>Not configured</small>
-              </button>
-            )
-          )}
-        </div>
-      </div>
-    </WalletRuntimeProviders>
-  );
-}
+  async function loadWalletRuntime() {
+    if (runtime || loadingRuntime) return;
 
-function WalletRuntimeLoading() {
-  const embeddedWallets = embeddedWalletProviderConfig(readPublicWebEnv());
+    setRuntimeError(null);
+    setLoadingRuntime(true);
+    try {
+      const module = await import("./landing-wallet-runtime");
+      setRuntime(() => module.LandingWalletRuntime);
+    } catch {
+      setRuntimeError("Wallet providers could not load. Refresh and try again.");
+    } finally {
+      setLoadingRuntime(false);
+    }
+  }
+
+  if (runtime) {
+    const Runtime = runtime;
+    return <Runtime authState={authState} onLinked={onLinked} />;
+  }
 
   return (
     <div className="landing-wallet-runtime" aria-label="Wallet providers" data-embedded={embeddedWallets.enabled ? "true" : "false"}>
-      <p className="landing-wallet-required">Required. Use Solana Connect, or create an embedded non-custodial wallet with WeVid.</p>
+      <p className="landing-wallet-required">Required. Load wallet providers only when you are ready to connect and sign.</p>
       <div className="landing-wallet-connect-row">
-        <WalletConnectLoading />
+        <button
+          aria-busy={loadingRuntime ? "true" : undefined}
+          className="landing-button"
+          data-tone="primary"
+          disabled={loadingRuntime}
+          onClick={() => void loadWalletRuntime()}
+          type="button"
+        >
+          <strong>{loadingRuntime ? "Loading wallet providers" : "Connect wallet"}</strong>
+          <small>Solana ownership signature only</small>
+        </button>
       </div>
       <div className="landing-embedded-wallets" aria-label="Embedded wallet providers">
         <div className="landing-embedded-label">
           <p>Embedded wallet</p>
-          <span>{embeddedWallets.enabled ? "Loading configured providers." : "Provider login is waiting for runtime configuration."}</span>
+          <span>{embeddedWallets.enabled ? "Available after wallet providers load." : "Provider login is waiting for runtime configuration."}</span>
         </div>
         {embeddedWallets.providers.map((provider) => (
-          <button className="landing-provider-disabled" disabled key={provider.provider} type="button">
+          <button
+            className="landing-provider-disabled"
+            disabled={!provider.configured || loadingRuntime}
+            key={provider.provider}
+            onClick={provider.configured ? () => void loadWalletRuntime() : undefined}
+            type="button"
+          >
             <strong>{provider.label}</strong>
-            <small>{provider.configured ? "Loading" : "Not configured"}</small>
+            <small>{provider.configured ? "Load provider" : "Not configured"}</small>
           </button>
         ))}
       </div>
+      {runtimeError ? <p className="landing-auth-error">{runtimeError}</p> : null}
     </div>
-  );
-}
-
-function WalletConnectLoading() {
-  return (
-    <button aria-busy="true" aria-label="Connect wallet" className="landing-button landing-wallet-loading" data-tone="primary" disabled type="button">
-      <strong>Connect wallet</strong>
-      <small>Loading wallet adapters</small>
-    </button>
   );
 }
 
@@ -347,101 +335,103 @@ function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
   }
 
   return (
-    <form className="landing-profile-setup" noValidate onSubmit={saveProfile}>
-      <div className="landing-form-grid">
-        <label className="landing-avatar-upload">
-          <input
-            accept="image/jpeg,image/png,image/webp"
-            name="profile-picture"
-            onChange={(event) => {
-              setAvatarFile(event.target.files?.[0] ?? null);
-              setError(null);
-            }}
-            type="file"
-          />
-          {avatarPreview ? <img alt="" src={avatarPreview} /> : <span>Add photo</span>}
-        </label>
-        <label>
-          <span>Handle</span>
-          <input
-            autoComplete="username"
-            name="handle"
-            onChange={(event) => setHandle(event.target.value)}
-            placeholder="@wevid"
-            type="text"
-            value={handle}
-          />
-        </label>
-        <label>
-          <span>Display name</span>
-          <input
-            autoComplete="name"
-            name="name"
-            onChange={(event) => setDisplayName(event.target.value)}
-            placeholder="Display name"
-            type="text"
-            value={displayName}
-          />
-        </label>
-        <label className="landing-form-wide">
-          <span>Bio</span>
-          <textarea
-            name="bio"
-            onChange={(event) => setBio(event.target.value)}
-            placeholder="Short creator bio"
-            rows={3}
-            value={bio}
-          />
-        </label>
-      </div>
-      <div className="landing-profile-links" aria-label="Profile links">
-        <div className="landing-profile-links-header">
-          <p>Links</p>
-          <button aria-label="Add profile link" disabled={links.length >= 3} onClick={addLink} type="button">
-            <Plus aria-hidden="true" size={14} />
+    <>
+      <form className="landing-profile-setup" noValidate onSubmit={saveProfile}>
+        <div className="landing-form-grid">
+          <label className="landing-avatar-upload">
+            <input
+              accept="image/jpeg,image/png,image/webp"
+              name="profile-picture"
+              onChange={(event) => {
+                setAvatarFile(event.target.files?.[0] ?? null);
+                setError(null);
+              }}
+              type="file"
+            />
+            {avatarPreview ? <img alt="" src={avatarPreview} /> : <span>Add photo</span>}
+          </label>
+          <label>
+            <span>Handle</span>
+            <input
+              autoComplete="username"
+              name="handle"
+              onChange={(event) => setHandle(event.target.value)}
+              placeholder="@wevid"
+              type="text"
+              value={handle}
+            />
+          </label>
+          <label>
+            <span>Display name</span>
+            <input
+              autoComplete="name"
+              name="name"
+              onChange={(event) => setDisplayName(event.target.value)}
+              placeholder="Display name"
+              type="text"
+              value={displayName}
+            />
+          </label>
+          <label className="landing-form-wide">
+            <span>Bio</span>
+            <textarea
+              name="bio"
+              onChange={(event) => setBio(event.target.value)}
+              placeholder="Short creator bio"
+              rows={3}
+              value={bio}
+            />
+          </label>
+        </div>
+        <div className="landing-profile-links" aria-label="Profile links">
+          <div className="landing-profile-links-header">
+            <p>Links</p>
+            <button aria-label="Add profile link" disabled={links.length >= 3} onClick={addLink} type="button">
+              <Plus aria-hidden="true" size={14} />
+            </button>
+          </div>
+          {links.length > 0 ? (
+            <div className="landing-profile-link-list">
+              {links.map((link, index) => (
+                <div className="landing-profile-link-row" key={link.id}>
+                  <input
+                    aria-label={`Link ${index + 1} label`}
+                    onChange={(event) => updateLink(link.id, { label: event.target.value })}
+                    placeholder="Website"
+                    type="text"
+                    value={link.label}
+                  />
+                  <input
+                    aria-label={`Link ${index + 1} URL`}
+                    inputMode="url"
+                    onChange={(event) => updateLink(link.id, { url: event.target.value })}
+                    placeholder="https://..."
+                    type="url"
+                    value={link.url}
+                  />
+                  <button
+                    aria-label={`Remove link ${index + 1}`}
+                    onClick={() => removeLink(link.id)}
+                    type="button"
+                  >
+                    <Trash2 aria-hidden="true" size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="landing-profile-empty">Add links later or use + for up to 3 now.</p>
+          )}
+        </div>
+        <div className="landing-step-actions">
+          <button className="landing-button" data-tone="primary" disabled={submitting} type="submit">
+            {submitting ? "Saving" : "Save and continue"}
+          </button>
+          <button className="landing-inline-link" disabled={submitting} onClick={() => void createStarter()} type="button">
+            Create starter profile
           </button>
         </div>
-        {links.length > 0 ? (
-          <div className="landing-profile-link-list">
-            {links.map((link, index) => (
-              <div className="landing-profile-link-row" key={link.id}>
-                <input
-                  aria-label={`Link ${index + 1} label`}
-                  onChange={(event) => updateLink(link.id, { label: event.target.value })}
-                  placeholder="Website"
-                  type="text"
-                  value={link.label}
-                />
-                <input
-                  aria-label={`Link ${index + 1} URL`}
-                  inputMode="url"
-                  onChange={(event) => updateLink(link.id, { url: event.target.value })}
-                  placeholder="https://..."
-                  type="url"
-                  value={link.url}
-                />
-                <button
-                  aria-label={`Remove link ${index + 1}`}
-                  onClick={() => removeLink(link.id)}
-                  type="button"
-                >
-                  <Trash2 aria-hidden="true" size={14} />
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="landing-profile-empty">Add links later or use + for up to 3 now.</p>
-        )}
-      </div>
-      <div className="landing-step-actions">
-        <button className="landing-button" data-tone="primary" disabled={submitting} type="submit">
-          {submitting ? "Saving" : "Save and continue"}
-        </button>
-        <button className="landing-inline-link" disabled={submitting} onClick={() => void createStarter()} type="button">
-          Create starter profile
-        </button>
-      </div>
+      </form>
       <details className="landing-auth-block landing-supabase-auth-toggle">
         <summary>
           <span>Supabase auth</span>
@@ -450,7 +440,7 @@ function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
         <SupabaseAuthPanel mode="profile" next="/?mode=onboarding&step=profile" />
       </details>
       {error ? <p className="landing-auth-error">{error}</p> : null}
-    </form>
+    </>
   );
 }
 

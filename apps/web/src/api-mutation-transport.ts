@@ -108,8 +108,13 @@ async function sendAuthenticatedMutation(
 }
 
 async function mutationFetch(input: URL, init: RequestInit) {
+  const headers = new Headers(init.headers);
+  if (input.hostname.endsWith(".ngrok-free.app")) {
+    headers.set("ngrok-skip-browser-warning", "true");
+  }
+
   try {
-    return await fetch(input, init);
+    return await fetch(input, { ...init, headers });
   } catch {
     throw new ApiMutationError("API is unavailable", 503);
   }
