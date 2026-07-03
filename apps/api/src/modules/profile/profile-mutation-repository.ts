@@ -34,7 +34,7 @@ export function createProfileMutationRepositoryMethods(
               ${input.displayName},
               ${input.avatarUrl ?? null},
               ${input.bio ?? null},
-              ${JSON.stringify(input.links ?? [])}::jsonb,
+              ${sql.json(input.links ?? [])},
               ${input.locationLabel ?? null},
               now()
             from target_user
