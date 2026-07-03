@@ -97,10 +97,19 @@ describe("database migrations", () => {
     expect(sql).toContain("storage.buckets");
     expect(sql).toContain("'profile-avatars'");
     expect(sql).toContain("file_size_limit");
-    expect(sql).toContain("1500000");
+    expect(sql).toContain("5000000");
     expect(sql).toContain("image/jpeg");
     expect(sql).toContain("image/png");
     expect(sql).toContain("image/webp");
+    expect(sql).not.toMatch(/private_key|service_role|secret/i);
+  });
+
+  it("keeps already-migrated profile avatar buckets at the 5 MB limit", () => {
+    const sql = readMigration("0071_profile_avatar_storage_limit.sql");
+
+    expect(sql).toContain("storage.buckets");
+    expect(sql).toContain("file_size_limit = 5000000");
+    expect(sql).toContain("id = 'profile-avatars'");
     expect(sql).not.toMatch(/private_key|service_role|secret/i);
   });
 

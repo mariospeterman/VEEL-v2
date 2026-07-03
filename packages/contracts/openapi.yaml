@@ -2594,7 +2594,7 @@ components:
       properties:
         fileName: { type: string, maxLength: 160 }
         contentType: { type: string, enum: [image/jpeg, image/png, image/webp] }
-        dataBase64: { type: string, maxLength: 2000000 }
+        dataBase64: { type: string, maxLength: 6666668 }
     ProfileAvatarUpload:
       type: object
       required: [avatarUrl]

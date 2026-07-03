@@ -137,6 +137,29 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("allows local browser profile mutations when WEB_URL points at a tunnel", async () => {
+    vi.stubEnv("WEB_URL", "https://web-tunnel.example.test");
+    const app = await buildApi();
+    await app.ready();
+
+    const response = await app.inject({
+      method: "OPTIONS",
+      url: "/v1/profiles/me/starter",
+      headers: {
+        origin: "http://127.0.0.1:3008",
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "authorization,content-type,idempotency-key,accept"
+      }
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(response.headers["access-control-allow-origin"]).toBe("http://127.0.0.1:3008");
+    expect(response.headers["access-control-allow-methods"]).toContain("POST");
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
   it("returns a contract-safe session for a verified Supabase user with a Veel profile", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -1812,6 +1835,36 @@ describe("buildApi", () => {
         }
       }
     ]);
+
+    await app.close();
+  });
+
+  it("rejects profile avatar uploads above 5 MB", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier
+    });
+    await app.ready();
+
+    const overLimitBase64 = "A".repeat(Math.ceil(((5_000_000 + 10) * 4) / 3));
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/profiles/me/avatar",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "profile-avatar-limit-1"
+      },
+      payload: {
+        contentType: "image/png",
+        dataBase64: overLimitBase64,
+        fileName: "avatar.png"
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: "validation_failed",
+      message: "Profile picture must be 5MB or smaller"
+    });
 
     await app.close();
   });

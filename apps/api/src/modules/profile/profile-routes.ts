@@ -19,7 +19,7 @@ interface RegisterProfileRoutesOptions {
 
 const handlePattern = /^[a-zA-Z0-9_]{2,32}$/;
 const avatarContentTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
-const maxAvatarBytes = 1_500_000;
+const maxAvatarBytes = 5_000_000;
 
 interface AvatarUploadRequest {
   contentType?: unknown;
@@ -282,7 +282,7 @@ export async function registerProfileRoutes(
       if (decoded.byteLength > maxAvatarBytes) {
         return reply.code(400).send({
           code: "validation_failed",
-          message: "Profile picture must be 1.5MB or smaller"
+          message: "Profile picture must be 5MB or smaller"
         });
       }
 
@@ -459,7 +459,7 @@ function getAvatarUploadValidationError(body: AvatarUploadRequest | undefined): 
 
   const estimatedBytes = Math.floor((body.dataBase64.length * 3) / 4);
   if (estimatedBytes > maxAvatarBytes + 4) {
-    return "Profile picture must be 1.5MB or smaller";
+    return "Profile picture must be 5MB or smaller";
   }
 
   if (body.fileName !== undefined && typeof body.fileName !== "string") {

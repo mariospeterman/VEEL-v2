@@ -17,7 +17,7 @@ begin
         'profile-avatars',
         'profile-avatars',
         true,
-        1500000,
+        5000000,
         array['image/jpeg', 'image/png', 'image/webp']
       )
       on conflict (id) do update

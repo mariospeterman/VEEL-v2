@@ -627,8 +627,8 @@ async function uploadAvatarFile(file: File) {
     throw new Error("Profile picture must be JPEG, PNG, or WebP.");
   }
 
-  if (file.size > 1_500_000) {
-    throw new Error("Profile picture must be 1.5MB or smaller.");
+  if (file.size > 5_000_000) {
+    throw new Error("Profile picture must be 5MB or smaller.");
   }
 
   const dataBase64 = await fileToBase64(file);

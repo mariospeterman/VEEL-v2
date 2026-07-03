@@ -233,7 +233,7 @@ Use these key classes:
 - `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and `DATABASE_URL` in the API.
 - `SUPABASE_SECRET_KEY` only for backend-only provider/admin work that explicitly needs it.
 - `SUPABASE_SERVICE_ROLE_KEY` only for legacy compatibility or narrowly reviewed backend work.
-- `PROFILE_AVATAR_BUCKET=profile-avatars` for server-owned profile avatar uploads. Migration `0070_profile_avatar_storage_bucket.sql` creates this public Supabase Storage bucket with a 1.5 MB limit and JPEG/PNG/WebP MIME allowlist. The browser never receives storage write credentials.
+- `PROFILE_AVATAR_BUCKET=profile-avatars` for server-owned profile avatar uploads. Migrations `0070_profile_avatar_storage_bucket.sql` and `0071_profile_avatar_storage_limit.sql` create or update this public Supabase Storage bucket with a 5 MB limit and JPEG/PNG/WebP MIME allowlist. The browser never receives storage write credentials.
 - `SUPABASE_ACCESS_TOKEN` and `SUPABASE_PROJECT_REF` only for local Supabase CLI/MCP tooling.
 - `ONRAMP_PROVIDER`, `ONRAMP_PURCHASE_CURRENCY`, `COINBASE_CDP_API_KEY_ID`, `COINBASE_CDP_API_KEY_SECRET`, `COINBASE_CDP_API_BASE_URL`, and `COINBASE_ONRAMP_DESTINATION_NETWORK` only in the API/worker environment for user-wallet funding sessions.
 
