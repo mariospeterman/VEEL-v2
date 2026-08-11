@@ -12,6 +12,17 @@ export type {
   AgeSession,
   ContentItem,
   ContentUnlockIntent,
+  BlockState,
+  Comment,
+  CommentPage,
+  CreateCommentRequest,
+  CreateReportRequest,
+  CreateShareRequest,
+  EngagementState,
+  FeedPreferences,
+  HideFeedCreatorRequest,
+  ModerationIntake,
+  ShareResult,
   CreateAccessPassIntentRequest,
   CreateAgeSessionRequest,
   CreateVerificationSessionRequest,
@@ -57,6 +68,17 @@ import type {
   AgeSession,
   ContentItem,
   ContentUnlockIntent,
+  BlockState,
+  Comment,
+  CommentPage,
+  CreateCommentRequest,
+  CreateReportRequest,
+  CreateShareRequest,
+  EngagementState,
+  FeedPreferences,
+  HideFeedCreatorRequest,
+  ModerationIntake,
+  ShareResult,
   CreateAccessPassIntentRequest,
   CreateAgeSessionRequest,
   CreateVerificationSessionRequest,
@@ -208,6 +230,84 @@ export async function createContentUnlockIntent(contentId: string): Promise<Cont
     `/v1/content/${encodeURIComponent(contentId)}/unlock-intents`,
     "POST",
     {}
+  );
+}
+
+export async function toggleContentLike(
+  contentId: string,
+  idempotencyKey: string
+): Promise<EngagementState> {
+  return authenticatedMutation<EngagementState>(
+    `/v1/engagement/${encodeURIComponent(contentId)}/like`,
+    "POST",
+    {},
+    idempotencyKey
+  );
+}
+
+export async function toggleContentSave(
+  contentId: string,
+  idempotencyKey: string
+): Promise<EngagementState> {
+  return authenticatedMutation<EngagementState>(
+    `/v1/engagement/${encodeURIComponent(contentId)}/save`,
+    "POST",
+    {},
+    idempotencyKey
+  );
+}
+
+export async function getContentComments(contentId: string): Promise<CommentPage> {
+  return authenticatedGet<CommentPage>(
+    `/v1/engagement/${encodeURIComponent(contentId)}/comments`
+  );
+}
+
+export async function createContentComment(
+  contentId: string,
+  body: CreateCommentRequest,
+  idempotencyKey: string
+): Promise<Comment> {
+  return authenticatedMutation<Comment>(
+    `/v1/engagement/${encodeURIComponent(contentId)}/comments`,
+    "POST",
+    body,
+    idempotencyKey
+  );
+}
+
+export async function createContentShare(
+  body: CreateShareRequest,
+  idempotencyKey: string
+): Promise<ShareResult> {
+  return authenticatedMutation<ShareResult>("/v1/shares", "POST", body, idempotencyKey);
+}
+
+export async function createSafetyReport(
+  body: CreateReportRequest,
+  idempotencyKey: string
+): Promise<ModerationIntake> {
+  return authenticatedMutation<ModerationIntake>("/v1/reports", "POST", body, idempotencyKey);
+}
+
+export async function hideFeedCreator(
+  body: HideFeedCreatorRequest,
+  idempotencyKey: string
+): Promise<FeedPreferences> {
+  return authenticatedMutation<FeedPreferences>(
+    "/v1/feed/hide-creator",
+    "POST",
+    body,
+    idempotencyKey
+  );
+}
+
+export async function blockUser(userId: string, idempotencyKey: string): Promise<BlockState> {
+  return authenticatedMutation<BlockState>(
+    `/v1/blocks/${encodeURIComponent(userId)}`,
+    "POST",
+    {},
+    idempotencyKey
   );
 }
 

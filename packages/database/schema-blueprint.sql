@@ -1748,9 +1748,14 @@ create table audit_events (
   subject_type text not null,
   subject_id uuid,
   action text not null,
+  idempotency_key text,
   metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
+
+create unique index audit_events_actor_action_idempotency_uidx
+  on audit_events (actor_user_id, action, idempotency_key)
+  where actor_user_id is not null and idempotency_key is not null;
 
 -- Required migration checklist for each implemented slice:
 -- 1. Enable RLS on user-visible tables before exposing direct Supabase access.

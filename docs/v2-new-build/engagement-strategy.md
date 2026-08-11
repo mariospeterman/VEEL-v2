@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: engagement, social graph, activity
-Last updated: 2026-06-05
+Last updated: 2026-08-11
 Source of truth: yes
 
 Owns:
@@ -27,6 +27,7 @@ This document defines how Veel v2 handles social engagement without turning fron
 - Engagement actions are real backend records, not local-only counters.
 - Frontend may optimistically update visible counts, but must reconcile from backend.
 - Every action has a clear owner, state, idempotency rule, and abuse/rate-limit rule.
+- Retrying an engagement command with the same idempotency key replays the original result and creates at most one audit event; reusing that key with changed input returns `409 Conflict`.
 - Monetised engagement is separate from lightweight engagement.
 - Internal sharing and external referral sharing are different products.
 - Product metrics must not optimize only for addictive time-on-feed. Track creator earnings, successful purchases, healthy replies, completed tickets/events, safety reports resolved, and user satisfaction alongside watch time.
@@ -127,8 +128,8 @@ Launch implementation rules:
 - `PATCH /v1/feed/preferences` owns default mode and NSFW/SFW preference server-side.
 - `POST /v1/feed/reset` clears backend-owned recommendation hides and writes an audit event.
 - `POST /v1/feed/hide-creator` and `POST /v1/feed/hide-topic` write private viewer controls that feed ranking must honor before scoring.
-- `POST /v1/reports` writes a safety report, queues it by subject type, and appends an audit event.
-- `POST /v1/blocks/:userId` creates a private block edge, suppresses future engagement visibility where relevant, and appends an audit event.
+- `POST /v1/reports` writes a safety report, queues it by subject type, and appends one idempotent audit event.
+- `POST /v1/blocks/:userId` creates a private block edge, suppresses future engagement visibility where relevant, and appends one idempotent audit event per accepted command.
 - No frontend-only local preference, report, or block state is business truth.
 
 ## Share Strategy

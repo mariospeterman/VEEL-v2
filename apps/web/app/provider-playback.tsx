@@ -3,11 +3,11 @@
 import { useEffect, useRef } from "react";
 import type { Src } from "@livepeer/react";
 import * as Player from "@livepeer/react/player";
-import playerjs from "player.js";
 import type { ContentItem, LiveRoom } from "@/api-client";
 import { usePlaybackUsage } from "@/playback-usage";
 
 type Playback = NonNullable<ContentItem["playback"] | LiveRoom["playback"]>;
+type PlayerJsInstance = InstanceType<(typeof import("player.js"))["default"]["Player"]>;
 
 export function ProviderPlayback({
   playback,
@@ -100,20 +100,27 @@ export function BunnyEmbedPlayer({
   useEffect(() => {
     const frame = frameRef.current;
     if (!frame) return;
-    const player = new playerjs.Player(frame);
+    let disposed = false;
+    let player: PlayerJsInstance | null = null;
     const onPlay = () => onPlayingChange(true);
     const onStop = () => onPlayingChange(false);
-    player.on("play", onPlay);
-    player.on("pause", onStop);
-    player.on("ended", onStop);
-    player.on("error", onStop);
+
+    void import("player.js").then(({ default: PlayerJs }) => {
+      if (disposed) return;
+      player = new PlayerJs.Player(frame);
+      player.on("play", onPlay);
+      player.on("pause", onStop);
+      player.on("ended", onStop);
+      player.on("error", onStop);
+    });
 
     return () => {
+      disposed = true;
       onPlayingChange(false);
-      player.off("play", onPlay);
-      player.off("pause", onStop);
-      player.off("ended", onStop);
-      player.off("error", onStop);
+      player?.off("play", onPlay);
+      player?.off("pause", onStop);
+      player?.off("ended", onStop);
+      player?.off("error", onStop);
     };
   }, [onPlayingChange]);
 

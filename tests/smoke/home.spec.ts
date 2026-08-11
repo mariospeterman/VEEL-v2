@@ -166,6 +166,47 @@ test("keeps content detail route reachable", async ({ page }) => {
   await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
 });
 
+test("runs content engagement actions responsively through canonical API routes", async ({ context, page }) => {
+  await addE2eCookie(context);
+  await page.goto("/content/00000000-0000-4000-8000-000000000040", {
+    waitUntil: "domcontentloaded",
+    timeout: 45_000
+  });
+
+  await expect(page.getByText("Studio sunrise session")).toBeVisible();
+  await page.getByRole("button", { name: "Like" }).click();
+  await expect(page.getByRole("button", { name: "Liked" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText("129", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("button", { name: "Saved" })).toHaveAttribute("aria-pressed", "true");
+
+  await page.getByRole("button", { name: "Comment" }).click();
+  await page.getByRole("textbox", { name: "Comment", exact: true }).fill("Browser-backed comment");
+  await page.getByRole("button", { name: "Post comment" }).click();
+  await expect(page.getByRole("article").getByText("Browser-backed comment")).toBeVisible();
+  await expect(page.getByText("Comment posted.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Share" }).click();
+  await expect(page.getByText(/Link copied\.|Share link ready\./)).toBeVisible();
+
+  await page.getByRole("button", { name: "Report", exact: true }).click();
+  await page.getByLabel("Report reason").fill("Misleading content metadata");
+  await page.getByRole("button", { name: "Submit report" }).click();
+  await expect(page.getByText("Report submitted for review.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Creator controls" }).click();
+  await page.getByRole("button", { name: "Hide from feed" }).click();
+  await expect(page.getByText("Creator hidden from your feed.")).toBeVisible();
+
+  const layout = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth
+  }));
+  expect(layout.scrollWidth).toBe(layout.clientWidth);
+  await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
+});
+
 test("keeps compatibility aliases intentional", async ({ request }) => {
   const mediaResponse = await request.get("/app/media/00000000-0000-4000-8000-000000000040", { maxRedirects: 0 });
   expect(mediaResponse.headers().location ?? "").toMatch(/\/content\/00000000-0000-4000-8000-000000000040$/);
@@ -213,6 +254,91 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
 
   if (method === "GET" && url.pathname === "/v1/content/feed") {
     sendJson(response, 200, { items: [contentItem()], nextCursor: null });
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/v1/content/00000000-0000-4000-8000-000000000040") {
+    sendJson(response, 200, contentItem());
+    return;
+  }
+
+  const engagementMatch = url.pathname.match(
+    /^\/v1\/engagement\/(00000000-0000-4000-8000-000000000040)\/(like|save|comments)$/
+  );
+  if (engagementMatch) {
+    if (method === "GET" && engagementMatch[2] === "comments") {
+      sendJson(response, 200, { items: [], nextCursor: null });
+      return;
+    }
+
+    if (method === "POST" && !hasIdempotencyKey(request)) {
+      sendJson(response, 400, { message: "Idempotency-Key header is required" });
+      return;
+    }
+
+    if (method === "POST" && engagementMatch[2] === "like") {
+      sendJson(response, 200, engagementState({ liked: true, likeCount: 129 }));
+      return;
+    }
+
+    if (method === "POST" && engagementMatch[2] === "save") {
+      sendJson(response, 200, engagementState({ saved: true }));
+      return;
+    }
+
+    if (method === "POST" && engagementMatch[2] === "comments") {
+      const body = await readJsonBody<{ body?: string }>(request);
+      sendJson(response, 201, comment(body.body ?? ""));
+      return;
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/v1/shares") {
+    if (!hasIdempotencyKey(request)) {
+      sendJson(response, 400, { message: "Idempotency-Key header is required" });
+      return;
+    }
+    sendJson(response, 201, {
+      id: "00000000-0000-4000-8000-0000000000c2",
+      mode: "copy_link",
+      url: "http://127.0.0.1:3000/share/content/00000000-0000-4000-8000-000000000040"
+    });
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/v1/reports") {
+    if (!hasIdempotencyKey(request)) {
+      sendJson(response, 400, { message: "Idempotency-Key header is required" });
+      return;
+    }
+    sendJson(response, 201, {
+      id: "00000000-0000-4000-8000-0000000000c3",
+      state: "queued",
+      queue: "content"
+    });
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/v1/feed/hide-creator") {
+    if (!hasIdempotencyKey(request)) {
+      sendJson(response, 400, { message: "Idempotency-Key header is required" });
+      return;
+    }
+    sendJson(response, 200, {
+      defaultMode: "recommended",
+      nsfwPreference: "both",
+      hiddenCreatorIds: [user().id],
+      hiddenTopics: []
+    });
+    return;
+  }
+
+  if (method === "POST" && url.pathname === `/v1/blocks/${user().id}`) {
+    if (!hasIdempotencyKey(request)) {
+      sendJson(response, 400, { message: "Idempotency-Key header is required" });
+      return;
+    }
+    sendJson(response, 200, { blocked: true, blockedUserId: user().id });
     return;
   }
 
@@ -283,6 +409,16 @@ function setCorsHeaders(response: ServerResponse) {
 function sendJson(response: ServerResponse, status: number, body: unknown) {
   response.writeHead(status, { "content-type": "application/json" });
   response.end(JSON.stringify(body));
+}
+
+function hasIdempotencyKey(request: IncomingMessage) {
+  return typeof request.headers["idempotency-key"] === "string";
+}
+
+async function readJsonBody<T>(request: IncomingMessage): Promise<T> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of request) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  return JSON.parse(Buffer.concat(chunks).toString("utf8")) as T;
 }
 
 function user() {
@@ -450,5 +586,19 @@ function contentItem() {
       commentCount: 24,
       shareCount: 8
     }
+  };
+}
+
+function engagementState(overrides: Partial<ReturnType<typeof contentItem>["engagement"]> = {}) {
+  return { ...contentItem().engagement, ...overrides };
+}
+
+function comment(body: string) {
+  return {
+    id: "00000000-0000-4000-8000-0000000000c1",
+    author: user(),
+    body,
+    moderationState: "visible",
+    createdAt: "2026-08-11T12:00:00.000Z"
   };
 }

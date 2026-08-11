@@ -3,6 +3,7 @@ import { getContentItem, type ContentItem } from "@/api-client";
 import { ProviderPlayback } from "../../provider-playback";
 import { ErrorState } from "../../ui";
 import { ContentUnlockPanel } from "./content-unlock-panel";
+import { ContentEngagementPanel } from "./content-engagement-panel";
 
 export default async function ContentPage({
   params
@@ -97,88 +98,12 @@ function AccessPanel({ item }: { item: ContentItem }) {
         </div>
       </section>
 
-      <section className="rounded border border-(--line) bg-(--panel) p-4">
-        <div className="grid grid-cols-3 gap-3 text-center">
-          <Metric label="Likes" value={item.engagement.likeCount} />
-          <Metric label="Comments" value={item.engagement.commentCount} />
-          <Metric label="Shares" value={item.engagement.shareCount} />
-        </div>
-      </section>
-
-      <EngagementActions item={item} />
+      <ContentEngagementPanel
+        contentId={item.id}
+        creatorUserId={item.creator.id}
+        initialEngagement={item.engagement}
+      />
       <ContentUnlockPanel accessState={item.accessState} contentId={item.id} />
     </aside>
-  );
-}
-
-function EngagementActions({ item }: { item: ContentItem }) {
-  return (
-    <section className="rounded border border-(--line) bg-(--panel) p-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-semibold">Engagement</p>
-        <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-medium text-(--accent-strong)">
-          server-owned
-        </span>
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-2">
-        <button
-          className="rounded border border-(--line) px-3 py-2 text-sm font-medium transition hover:bg-(--background)"
-          type="button"
-        >
-          {item.engagement.liked ? "Liked" : "Like"}
-        </button>
-        <button
-          className="rounded border border-(--line) px-3 py-2 text-sm font-medium transition hover:bg-(--background)"
-          type="button"
-        >
-          {item.engagement.saved ? "Saved" : "Save"}
-        </button>
-        <button
-          className="rounded border border-(--line) px-3 py-2 text-sm font-medium transition hover:bg-(--background)"
-          type="button"
-        >
-          Share
-        </button>
-        <button
-          className="rounded border border-(--line) px-3 py-2 text-sm font-medium transition hover:bg-(--background)"
-          type="button"
-        >
-          Comment
-        </button>
-      </div>
-
-      <div className="mt-3 grid gap-2">
-        <button
-          className="rounded border border-[#fca5a5] px-3 py-2 text-sm font-medium text-[#b91c1c] transition hover:bg-[#fef2f2]"
-          type="button"
-        >
-          Report content
-        </button>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            className="rounded border border-(--line) px-3 py-2 text-sm font-medium transition hover:bg-(--background)"
-            type="button"
-          >
-            Hide creator
-          </button>
-          <button
-            className="rounded border border-(--line) px-3 py-2 text-sm font-medium transition hover:bg-(--background)"
-            type="button"
-          >
-            Block creator
-          </button>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: number }) {
-  return (
-    <div>
-      <p className="text-lg font-semibold">{value.toLocaleString()}</p>
-      <p className="text-xs text-(--muted)">{label}</p>
-    </div>
   );
 }

@@ -7,6 +7,7 @@ import { createEngagementIntakeRepositoryMethods } from "./engagement-intake-rep
 import { createEngagementPreferencesRepositoryMethods } from "./engagement-preferences-repository.js";
 
 export {
+  EngagementIdempotencyConflictError,
   EngagementPolicyError,
   EngagementRepositoryConfigurationError
 } from "./engagement-errors.js";

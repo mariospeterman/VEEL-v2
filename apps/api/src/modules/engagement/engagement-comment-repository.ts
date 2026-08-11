@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import type { EngagementRepository } from "./types.js";
-import { EngagementPolicyError } from "./engagement-errors.js";
+import { EngagementIdempotencyConflictError, EngagementPolicyError } from "./engagement-errors.js";
 import { toComment } from "./engagement-repository-mappers.js";
-import type { CommentRow } from "./engagement-repository-rows.js";
+import type { CommentReplayRow, CommentRow } from "./engagement-repository-rows.js";
 import { visibleContentSql } from "./engagement-repository-sql.js";
 
 export function createEngagementCommentRepositoryMethods(
@@ -42,7 +42,7 @@ export function createEngagementCommentRepositoryMethods(
       };
     },
     async createComment(input) {
-      const rows = await sql<CommentRow[]>`
+      const rows = await sql<CommentReplayRow[]>`
         with actor as (
           select id
           from users
@@ -69,11 +69,13 @@ export function createEngagementCommentRepositoryMethods(
             'visible',
             ${input.idempotencyKey}
           from actor, visible_content
-          on conflict (user_id, idempotency_key) do nothing
-          returning id, user_id, body, moderation_state, created_at
+          on conflict (user_id, idempotency_key) do update
+          set idempotency_key = comments.idempotency_key
+          returning id, content_item_id, user_id, body, moderation_state, created_at
         )
         select
           c.id,
+          c.content_item_id,
           c.body,
           c.moderation_state,
           c.created_at,
@@ -81,14 +83,7 @@ export function createEngagementCommentRepositoryMethods(
           p.handle,
           p.display_name,
           p.avatar_url
-        from (
-          select * from inserted
-          union all
-          select id, user_id, body, moderation_state, created_at
-          from comments
-          where user_id = (select id from actor)
-            and idempotency_key = ${input.idempotencyKey}
-        ) c
+        from inserted c
         join users u on u.id = c.user_id
         left join profiles p on p.user_id = u.id
         limit 1
@@ -96,6 +91,9 @@ export function createEngagementCommentRepositoryMethods(
 
       const row = rows[0];
       if (!row) throw new EngagementPolicyError("Comment is not allowed");
+      if (row.content_item_id !== input.contentId || row.body !== input.body.body) {
+        throw new EngagementIdempotencyConflictError();
+      }
       return toComment(row);
     }
   };

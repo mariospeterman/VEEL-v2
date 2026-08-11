@@ -94,7 +94,8 @@
 
     .media-layout {
       grid-template-columns: 1fr;
-      grid-template-rows: minmax(0, 1fr) auto;
+      grid-template-rows: auto auto;
+      align-content: start;
       overflow-y: auto;
     }
 

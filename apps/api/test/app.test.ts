@@ -8868,6 +8868,11 @@ describe("buildApi", () => {
       headers: { authorization: "Bearer valid-token", "idempotency-key": "comment-1" },
       payload: { body: "Server-owned comment" }
     });
+    const malformedCommentCursorResponse = await app.inject({
+      method: "GET",
+      url: "/v1/engagement/00000000-0000-4000-8000-000000000040/comments?cursor=not-a-date",
+      headers: { authorization: "Bearer valid-token" }
+    });
     const shareResponse = await app.inject({
       method: "POST",
       url: "/v1/shares",
@@ -8896,6 +8901,11 @@ describe("buildApi", () => {
 
     expect(likeResponse.statusCode).toBe(200);
     expect(commentResponse.statusCode).toBe(201);
+    expect(malformedCommentCursorResponse.statusCode).toBe(400);
+    expect(malformedCommentCursorResponse.json()).toEqual({
+      code: "validation_failed",
+      message: "cursor must be an ISO timestamp"
+    });
     expect(shareResponse.statusCode).toBe(201);
     expect(reportResponse.statusCode).toBe(201);
     expect(blockResponse.statusCode).toBe(200);

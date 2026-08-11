@@ -2,23 +2,69 @@ import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import type { EngagementRepository } from "./types.js";
 import {
+  EngagementIdempotencyConflictError,
   EngagementPolicyError,
   EngagementRepositoryConfigurationError
 } from "./engagement-errors.js";
 import { queueForSubject, shareUrl } from "./engagement-repository-mappers.js";
-import type { ReportRow, ShareRow } from "./engagement-repository-rows.js";
+import type {
+  BlockReplayRow,
+  ReportReplayRow,
+  ShareReplayRow
+} from "./engagement-repository-rows.js";
 
 export function createEngagementIntakeRepositoryMethods(
   sql: postgres.Sql
 ): Pick<EngagementRepository, "createShare" | "createReport" | "blockUser"> {
   return {
     async createShare(input) {
-      const rows = await sql<ShareRow[]>`
+      const rows = await sql<ShareReplayRow[]>`
         with actor as (
           select id
           from users
           where supabase_user_id = ${input.supabaseUserId}
           limit 1
+        ),
+        valid_target as (
+          select content.id
+          from content_items content
+          join actor on true
+          where ${input.body.targetType} = 'content'
+            and content.id = ${input.body.targetId}
+            and content.state = 'ready'
+            and content.visibility = 'public'
+            and content.moderation_state = 'approved'
+            and not exists (
+              select 1 from blocks block
+              where (block.blocker_user_id = actor.id and block.blocked_user_id = content.creator_user_id)
+                 or (block.blocker_user_id = content.creator_user_id and block.blocked_user_id = actor.id)
+            )
+          union all
+          select target.id
+          from users target
+          join profiles profile on profile.user_id = target.id
+          join actor on true
+          where ${input.body.targetType} = 'profile'
+            and target.id = ${input.body.targetId}
+            and profile.handle is not null
+            and profile.display_name is not null
+            and not exists (
+              select 1 from blocks block
+              where (block.blocker_user_id = actor.id and block.blocked_user_id = target.id)
+                 or (block.blocker_user_id = target.id and block.blocked_user_id = actor.id)
+            )
+          union all
+          select event.id
+          from events event
+          join actor on true
+          where ${input.body.targetType} = 'event'
+            and event.id = ${input.body.targetId}
+            and event.state in ('published', 'sold_out')
+            and not exists (
+              select 1 from blocks block
+              where (block.blocker_user_id = actor.id and block.blocked_user_id = event.creator_user_id)
+                 or (block.blocker_user_id = event.creator_user_id and block.blocked_user_id = actor.id)
+            )
         ),
         inserted as (
           insert into share_records (
@@ -38,40 +84,54 @@ export function createEngagementIntakeRepositoryMethods(
             ${input.body.mode},
             ${shareUrl(input.webUrl, input.body.targetType, input.body.targetId, input.body.mode)},
             ${input.idempotencyKey}
-          from actor
-          on conflict (actor_user_id, idempotency_key) do nothing
+          from actor, valid_target
+          on conflict (actor_user_id, idempotency_key) do update
+          set idempotency_key = share_records.idempotency_key
           returning id, actor_user_id, target_type, target_id, mode, url
-        ),
-        existing as (
-          select id, actor_user_id, target_type, target_id, mode, url
-          from share_records
-          where actor_user_id = (select id from actor)
-            and idempotency_key = ${input.idempotencyKey}
         ),
         selected as (
           select * from inserted
-          union all
-          select * from existing
-          limit 1
         ),
         audit as (
-          insert into audit_events (id, actor_user_id, subject_type, subject_id, action, metadata)
-          select ${randomUUID()}, actor_user_id, target_type, target_id, 'share.created', jsonb_build_object('mode', mode)
+          insert into audit_events (
+            id,
+            actor_user_id,
+            subject_type,
+            subject_id,
+            action,
+            idempotency_key,
+            metadata
+          )
+          select
+            ${randomUUID()},
+            actor_user_id,
+            target_type,
+            target_id,
+            'share.created',
+            ${input.idempotencyKey},
+            jsonb_build_object('mode', mode)
           from selected
           on conflict do nothing
           returning id
         )
-        select id, mode, url
+        select id, target_type, target_id, mode, url
         from selected
       `;
 
       const row = rows[0];
-      if (!row) throw new EngagementRepositoryConfigurationError();
+      if (!row) throw new EngagementPolicyError("Share target is not available");
+      if (
+        row.target_type !== input.body.targetType ||
+        row.target_id !== input.body.targetId ||
+        row.mode !== input.body.mode
+      ) {
+        throw new EngagementIdempotencyConflictError();
+      }
       return { id: row.id, mode: row.mode, url: row.url };
     },
     async createReport(input) {
       const queue = queueForSubject(input.body.subjectType);
-      const rows = await sql<ReportRow[]>`
+      const rows = await sql<ReportReplayRow[]>`
         with actor as (
           select id
           from users
@@ -99,74 +159,123 @@ export function createEngagementIntakeRepositoryMethods(
             'queued',
             ${input.idempotencyKey}
           from actor
-          on conflict (reporter_user_id, idempotency_key) do nothing
-          returning id, reporter_user_id, subject_type, subject_id, state, queue
-        ),
-        existing as (
-          select id, reporter_user_id, subject_type, subject_id, state, queue
-          from reports
-          where reporter_user_id = (select id from actor)
-            and idempotency_key = ${input.idempotencyKey}
+          on conflict (reporter_user_id, idempotency_key) do update
+          set idempotency_key = reports.idempotency_key
+          returning id, reporter_user_id, subject_type, subject_id, reason, state, queue
         ),
         selected as (
           select * from inserted
-          union all
-          select * from existing
-          limit 1
         ),
         audit as (
-          insert into audit_events (id, actor_user_id, subject_type, subject_id, action, metadata)
-          select ${randomUUID()}, reporter_user_id, subject_type, subject_id, 'report.created', jsonb_build_object('queue', queue)
+          insert into audit_events (
+            id,
+            actor_user_id,
+            subject_type,
+            subject_id,
+            action,
+            idempotency_key,
+            metadata
+          )
+          select
+            ${randomUUID()},
+            reporter_user_id,
+            subject_type,
+            subject_id,
+            'report.created',
+            ${input.idempotencyKey},
+            jsonb_build_object('queue', queue)
           from selected
           on conflict do nothing
           returning id
         )
-        select id, state, queue
+        select id, subject_type, subject_id, reason, state, queue
         from selected
       `;
 
       const row = rows[0];
       if (!row) throw new EngagementRepositoryConfigurationError();
+      if (
+        row.subject_type !== input.body.subjectType ||
+        row.subject_id !== input.body.subjectId ||
+        row.reason !== input.body.reason
+      ) {
+        throw new EngagementIdempotencyConflictError();
+      }
       return { id: row.id, state: row.state, queue: row.queue };
     },
     async blockUser(input) {
-      const rows = await sql<{ blocked_user_id: string }[]>`
-        with actor as (
-          select id
-          from users
-          where supabase_user_id = ${input.supabaseUserId}
-          limit 1
-        ),
-        target_user as (
-          select id
-          from users
-          where id = ${input.blockedUserId}
-          limit 1
-        ),
-        inserted as (
+      return sql.begin(async (transaction) => {
+        const insertedRows = await transaction<BlockReplayRow[]>`
+          with actor as (
+            select id
+            from users
+            where supabase_user_id = ${input.supabaseUserId}
+            limit 1
+          ),
+          target_user as (
+            select id
+            from users
+            where id = ${input.blockedUserId}
+            limit 1
+          )
           insert into blocks (blocker_user_id, blocked_user_id, idempotency_key)
           select actor.id, target_user.id, ${input.idempotencyKey}
           from actor, target_user
           where actor.id <> target_user.id
-          on conflict (blocker_user_id, blocked_user_id) do update
-          set idempotency_key = blocks.idempotency_key
-          returning blocker_user_id, blocked_user_id
-        ),
-        audit as (
-          insert into audit_events (id, actor_user_id, subject_type, subject_id, action, metadata)
-          select ${randomUUID()}, blocker_user_id, 'user', blocked_user_id, 'user.blocked', '{}'::jsonb
-          from inserted
           on conflict do nothing
-          returning id
-        )
-        select blocked_user_id
-        from inserted
-        limit 1
-      `;
+          returning blocker_user_id, blocked_user_id, idempotency_key
+        `;
 
-      const row = rows[0];
-      if (!row) throw new EngagementPolicyError("Block is not allowed");
-      return { blocked: true, blockedUserId: row.blocked_user_id };
+        const existingRows = insertedRows.length > 0
+          ? insertedRows
+          : await transaction<BlockReplayRow[]>`
+              with actor as (
+                select id
+                from users
+                where supabase_user_id = ${input.supabaseUserId}
+                limit 1
+              )
+              select blocker_user_id, blocked_user_id, idempotency_key
+              from blocks
+              where blocker_user_id = (select id from actor)
+                and (
+                  idempotency_key = ${input.idempotencyKey}
+                  or blocked_user_id = ${input.blockedUserId}
+                )
+              order by (idempotency_key = ${input.idempotencyKey}) desc
+              limit 1
+            `;
+
+        const row = existingRows[0];
+        if (!row) throw new EngagementPolicyError("Block is not allowed");
+        if (row.idempotency_key === input.idempotencyKey && row.blocked_user_id !== input.blockedUserId) {
+          throw new EngagementIdempotencyConflictError();
+        }
+
+        await transaction`
+          insert into audit_events (
+            id,
+            actor_user_id,
+            subject_type,
+            subject_id,
+            action,
+            idempotency_key,
+            metadata
+          )
+          values (
+            ${randomUUID()},
+            ${row.blocker_user_id},
+            'user',
+            ${row.blocked_user_id},
+            'user.blocked',
+            ${input.idempotencyKey},
+            '{}'::jsonb
+          )
+          on conflict do nothing
+        `;
+
+        return { blocked: true, blockedUserId: row.blocked_user_id };
+      });
     }
   };
 }

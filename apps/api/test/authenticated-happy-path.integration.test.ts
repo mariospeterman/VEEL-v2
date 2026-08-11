@@ -305,6 +305,159 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         creatorUserId: seededCreatorUserId
       });
 
+      const likeIdempotencyKey = `engagement-like-${runId}`;
+      const concurrentLikeResponses = await Promise.all([
+        app.inject({
+          method: "POST",
+          url: `/v1/engagement/${seededFreeContentId}/like`,
+          headers: authenticatedHeaders(likeIdempotencyKey)
+        }),
+        app.inject({
+          method: "POST",
+          url: `/v1/engagement/${seededFreeContentId}/like`,
+          headers: authenticatedHeaders(likeIdempotencyKey)
+        })
+      ]);
+      expect(concurrentLikeResponses.map((response) => response.statusCode)).toEqual([200, 200]);
+      expect(concurrentLikeResponses[0]?.json()).toMatchObject({ liked: true, likeCount: 1 });
+      expect(concurrentLikeResponses[1]?.json()).toMatchObject({ liked: true, likeCount: 1 });
+
+      const conflictingLikeResponse = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/${seededContentId}/like`,
+        headers: authenticatedHeaders(likeIdempotencyKey)
+      });
+      expect(conflictingLikeResponse.statusCode, conflictingLikeResponse.body).toBe(409);
+
+      const commentIdempotencyKey = `engagement-comment-${runId}`;
+      const commentPayload = { body: "Real Postgres engagement comment" };
+      const concurrentCommentResponses = await Promise.all([
+        app.inject({
+          method: "POST",
+          url: `/v1/engagement/${seededFreeContentId}/comments`,
+          headers: authenticatedHeaders(commentIdempotencyKey),
+          payload: commentPayload
+        }),
+        app.inject({
+          method: "POST",
+          url: `/v1/engagement/${seededFreeContentId}/comments`,
+          headers: authenticatedHeaders(commentIdempotencyKey),
+          payload: commentPayload
+        })
+      ]);
+      expect(concurrentCommentResponses.map((response) => response.statusCode)).toEqual([201, 201]);
+      expect(concurrentCommentResponses[0]?.json()).toEqual(concurrentCommentResponses[1]?.json());
+
+      const conflictingCommentResponse = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/${seededFreeContentId}/comments`,
+        headers: authenticatedHeaders(commentIdempotencyKey),
+        payload: { body: "Different comment" }
+      });
+      expect(conflictingCommentResponse.statusCode, conflictingCommentResponse.body).toBe(409);
+
+      const shareIdempotencyKey = `engagement-share-${runId}`;
+      const sharePayload = {
+        targetType: "content",
+        targetId: seededFreeContentId,
+        mode: "copy_link"
+      } as const;
+      const firstShareResponse = await app.inject({
+        method: "POST",
+        url: "/v1/shares",
+        headers: authenticatedHeaders(shareIdempotencyKey),
+        payload: sharePayload
+      });
+      const replayedShareResponse = await app.inject({
+        method: "POST",
+        url: "/v1/shares",
+        headers: authenticatedHeaders(shareIdempotencyKey),
+        payload: sharePayload
+      });
+      expect(firstShareResponse.statusCode, firstShareResponse.body).toBe(201);
+      expect(replayedShareResponse.statusCode, replayedShareResponse.body).toBe(201);
+      expect(replayedShareResponse.json()).toEqual(firstShareResponse.json());
+
+      const conflictingShareResponse = await app.inject({
+        method: "POST",
+        url: "/v1/shares",
+        headers: authenticatedHeaders(shareIdempotencyKey),
+        payload: { ...sharePayload, mode: "external_referral_link" }
+      });
+      expect(conflictingShareResponse.statusCode, conflictingShareResponse.body).toBe(409);
+
+      const reportIdempotencyKey = `engagement-report-${runId}`;
+      const reportPayload = {
+        subjectType: "content",
+        subjectId: seededFreeContentId,
+        reason: "Integration safety review"
+      } as const;
+      const firstReportResponse = await app.inject({
+        method: "POST",
+        url: "/v1/reports",
+        headers: authenticatedHeaders(reportIdempotencyKey),
+        payload: reportPayload
+      });
+      const replayedReportResponse = await app.inject({
+        method: "POST",
+        url: "/v1/reports",
+        headers: authenticatedHeaders(reportIdempotencyKey),
+        payload: reportPayload
+      });
+      expect(firstReportResponse.statusCode, firstReportResponse.body).toBe(201);
+      expect(replayedReportResponse.statusCode, replayedReportResponse.body).toBe(201);
+      expect(replayedReportResponse.json()).toEqual(firstReportResponse.json());
+
+      const conflictingReportResponse = await app.inject({
+        method: "POST",
+        url: "/v1/reports",
+        headers: authenticatedHeaders(reportIdempotencyKey),
+        payload: { ...reportPayload, reason: "A different safety reason" }
+      });
+      expect(conflictingReportResponse.statusCode, conflictingReportResponse.body).toBe(409);
+
+      const engagementRows = await sql<{
+        comment_count: string;
+        like_count: string;
+        report_count: string;
+        report_audit_count: string;
+        share_count: string;
+        share_audit_count: string;
+      }[]>`
+        select
+          (select count(*) from comments where content_item_id = ${seededFreeContentId}) as comment_count,
+          (
+            select count(*) from content_reactions
+            where content_item_id = ${seededFreeContentId} and state = 'active'
+          ) as like_count,
+          (select count(*) from reports where subject_id = ${seededFreeContentId}) as report_count,
+          (
+            select count(*)
+            from audit_events audit
+            join users actor on actor.id = audit.actor_user_id
+            where actor.supabase_user_id = ${buyerSupabaseUserId}
+              and audit.action = 'report.created'
+              and audit.idempotency_key = ${reportIdempotencyKey}
+          ) as report_audit_count,
+          (select count(*) from share_records where target_id = ${seededFreeContentId}) as share_count,
+          (
+            select count(*)
+            from audit_events audit
+            join users actor on actor.id = audit.actor_user_id
+            where actor.supabase_user_id = ${buyerSupabaseUserId}
+              and audit.action = 'share.created'
+              and audit.idempotency_key = ${shareIdempotencyKey}
+          ) as share_audit_count
+      `;
+      expect(engagementRows[0]).toEqual({
+        comment_count: "1",
+        like_count: "1",
+        report_count: "1",
+        report_audit_count: "1",
+        share_count: "1",
+        share_audit_count: "1"
+      });
+
       const adultDraftResponse = await app.inject({
         method: "POST",
         url: "/v1/content",
@@ -1752,6 +1905,45 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         replay_request_count: "1",
         provider_event_count: "1"
       });
+
+      const blockIdempotencyKey = `engagement-block-${runId}`;
+      const concurrentBlockResponses = await Promise.all([
+        app.inject({
+          method: "POST",
+          url: `/v1/blocks/${seededCreatorUserId}`,
+          headers: authenticatedHeaders(blockIdempotencyKey)
+        }),
+        app.inject({
+          method: "POST",
+          url: `/v1/blocks/${seededCreatorUserId}`,
+          headers: authenticatedHeaders(blockIdempotencyKey)
+        })
+      ]);
+      expect(concurrentBlockResponses.map((response) => response.statusCode)).toEqual([200, 200]);
+      expect(concurrentBlockResponses[0]?.json()).toEqual(concurrentBlockResponses[1]?.json());
+
+      const conflictingBlockResponse = await app.inject({
+        method: "POST",
+        url: `/v1/blocks/${buyerUserId!}`,
+        headers: authenticatedHeaders(blockIdempotencyKey)
+      });
+      expect(conflictingBlockResponse.statusCode, conflictingBlockResponse.body).toBe(409);
+
+      const [blockRows] = await sql<{
+        audit_count: string;
+        block_count: string;
+      }[]>`
+        select
+          (select count(*) from blocks where blocker_user_id = ${buyerUserId!}) as block_count,
+          (
+            select count(*)
+            from audit_events
+            where actor_user_id = ${buyerUserId!}
+              and action = 'user.blocked'
+              and idempotency_key = ${blockIdempotencyKey}
+          ) as audit_count
+      `;
+      expect(blockRows).toEqual({ audit_count: "1", block_count: "1" });
     } finally {
       await cleanupRun(sql, {
         buyerHandle,
@@ -2648,6 +2840,11 @@ async function cleanupRun(
         where user_id in ${tx(userIds)}
       `;
       await tx`
+        delete from blocks
+        where blocker_user_id in ${tx(userIds)}
+           or blocked_user_id in ${tx(userIds)}
+      `;
+      await tx`
         delete from audit_events
         where actor_user_id in ${tx(userIds)}
       `;
@@ -2793,6 +2990,32 @@ async function cleanupRun(
           where id in ${tx(contentEntitlementIds)}
         `;
       }
+      await tx`
+        delete from engagement_action_receipts
+        where target_id in ${tx(contentIds)}
+      `;
+      await tx`
+        delete from content_reactions
+        where content_item_id in ${tx(contentIds)}
+      `;
+      await tx`
+        delete from content_saves
+        where content_item_id in ${tx(contentIds)}
+      `;
+      await tx`
+        delete from comments
+        where content_item_id in ${tx(contentIds)}
+      `;
+      await tx`
+        delete from share_records
+        where target_type = 'content'
+          and target_id in ${tx(contentIds)}
+      `;
+      await tx`
+        delete from reports
+        where subject_type = 'content'
+          and subject_id in ${tx(contentIds)}
+      `;
       await tx`
         delete from content_access_rules
         where content_item_id in ${tx(contentIds)}

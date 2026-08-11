@@ -1,10 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import {
   isFeedMode,
+  isIsoTimestamp,
   isNsfwPreference,
   isReportSubjectType,
   isShareMode,
   isShareTargetType,
+  isUuid,
   repositoryReply,
   requireIdempotencyKey,
   requiredIdempotencyKey,
@@ -88,7 +90,9 @@ export async function registerEngagementRoutes(
 
     const body = request.body as Partial<HideFeedCreatorRequest>;
     const creatorUserId = body.creatorUserId;
-    if (!creatorUserId) return reply.code(400).send(validationResponse("creatorUserId is required"));
+    if (!isUuid(creatorUserId)) {
+      return reply.code(400).send(validationResponse("creatorUserId must be a UUID"));
+    }
 
     return repositoryReply(request, reply, async () =>
       options.engagementRepository.hideCreator({
@@ -136,7 +140,10 @@ export async function registerEngagementRoutes(
     const params = request.params as { contentId?: string };
     const query = request.query as { cursor?: string };
     const contentId = params.contentId;
-    if (!contentId) return reply.code(400).send(validationResponse("contentId is required"));
+    if (!isUuid(contentId)) return reply.code(400).send(validationResponse("contentId must be a UUID"));
+    if (query.cursor && !isIsoTimestamp(query.cursor)) {
+      return reply.code(400).send(validationResponse("cursor must be an ISO timestamp"));
+    }
 
     return repositoryReply(request, reply, async () =>
       options.engagementRepository.listComments({
@@ -158,8 +165,8 @@ export async function registerEngagementRoutes(
     const params = request.params as { contentId?: string };
     const body = request.body as Partial<CreateCommentRequest>;
     const contentId = params.contentId;
-    const commentBody = body.body;
-    if (!contentId) return reply.code(400).send(validationResponse("contentId is required"));
+    const commentBody = body.body?.trim();
+    if (!isUuid(contentId)) return reply.code(400).send(validationResponse("contentId must be a UUID"));
     if (!commentBody || commentBody.length > 2000) {
       return reply.code(400).send(validationResponse("comment body is required"));
     }
@@ -189,7 +196,7 @@ export async function registerEngagementRoutes(
     const targetType = body.targetType;
     const targetId = body.targetId;
     const mode = body.mode;
-    if (!isShareTargetType(targetType) || !targetId || !isShareMode(mode)) {
+    if (!isShareTargetType(targetType) || !isUuid(targetId) || !isShareMode(mode)) {
       return reply.code(400).send(validationResponse("Invalid share request"));
     }
 
@@ -221,10 +228,10 @@ export async function registerEngagementRoutes(
     const body = request.body as Partial<CreateReportRequest>;
     const subjectType = body.subjectType;
     const subjectId = body.subjectId;
-    const reason = body.reason;
+    const reason = body.reason?.trim();
     if (
       !isReportSubjectType(subjectType) ||
-      !subjectId ||
+      !isUuid(subjectId) ||
       !reason ||
       reason.length < 3 ||
       reason.length > 500
@@ -258,7 +265,7 @@ export async function registerEngagementRoutes(
     }
     const params = request.params as { userId?: string };
     const blockedUserId = params.userId;
-    if (!blockedUserId) return reply.code(400).send(validationResponse("userId is required"));
+    if (!isUuid(blockedUserId)) return reply.code(400).send(validationResponse("userId must be a UUID"));
 
     return repositoryReply(request, reply, async () =>
       options.engagementRepository.blockUser({
