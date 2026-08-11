@@ -56,7 +56,6 @@ test("renders inline login and onboarding entry surfaces", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Login to WeVid" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Connect wallet" })).toBeVisible();
   await expect(page.getByText("Privy", { exact: true })).toBeVisible();
-  await expect(page.getByText("Turnkey", { exact: true })).toBeVisible();
 
   await page.goto("/?mode=onboarding", { waitUntil: "domcontentloaded", timeout: 20_000 });
 

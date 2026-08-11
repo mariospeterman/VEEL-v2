@@ -78,26 +78,26 @@ test("covers authenticated app access to profile wallet age home create and unlo
 
   await page.goto("/app/create");
   await page.waitForLoadState("networkidle");
-  await expect(page.getByRole("heading", { name: "Upload workspace" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "New post" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Choose media and audience" })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.cookie.includes("veel_e2e_access_token="))).toBe(true);
   await page.getByLabel("Caption").fill("Behind the scenes from today's studio shoot.");
-  await page.getByRole("button", { name: "Create server draft" }).evaluate((element) => {
+  await page.getByRole("button", { name: "Continue" }).evaluate((element) => {
     (element as HTMLButtonElement).click();
   });
-  await expect(page.getByText(draftContentId)).toBeVisible();
-  await expect(page.getByText("backend-owned", { exact: true })).toBeVisible();
+  await expect(page.getByText("Draft ready")).toBeVisible();
 
-  const fileInput = page.getByLabel("Video file");
+  const fileInput = page.getByLabel("Video");
   await fileInput.setInputFiles({
     name: "studio-session.mp4",
     mimeType: "video/mp4",
     buffer: Buffer.from("mock-video")
   });
-  await page.getByRole("button", { name: "Create Bunny upload session" }).evaluate((element) => {
+  await page.getByRole("button", { name: "Prepare upload" }).evaluate((element) => {
     (element as HTMLButtonElement).click();
   });
-  await expect(page.getByText(mediaAssetId)).toBeVisible();
-  await expect(page.getByText("bunny-session-signature")).toBeVisible();
+  await expect(page.getByText("Upload media")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start upload" })).toBeEnabled();
 
   await page.goto(`/content/${contentId}`);
   await expect(page.getByRole("heading", { name: "Media viewer" })).toBeVisible();
@@ -458,6 +458,7 @@ function verificationStatus() {
       canCreateDraft: true,
       canUploadMedia: true,
       canPublishMedia: true,
+      canPublishAdultMedia: true,
       canMonetize: true,
       canReceiveCreatorProceeds: true,
       canAccessCreatorDashboard: true,
@@ -473,7 +474,13 @@ function verificationStatus() {
     nextBestAction: "creator_ready",
     verificationSummary: {
       ageAccess: verificationRecord("age_access", "didit", "portable_age_credential", "age_over_18"),
-      creatorKyc: verificationRecord("creator_kyc", "sumsub", "gov_id_selfie", "documentary"),
+      adultPublisherEligibility: verificationRecord(
+        "adult_publisher_eligibility",
+        "didit",
+        "gov_id_selfie",
+        "documentary"
+      ),
+      creatorKyc: verificationRecord("creator_kyc", "didit", "gov_id_selfie", "documentary"),
       orgKyb: null
     }
   };
