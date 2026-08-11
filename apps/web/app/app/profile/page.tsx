@@ -6,6 +6,7 @@ import {
   type CreatorOnboarding
 } from "@/api-client";
 import { requireAppAccess } from "@/supabase/route-guard";
+import { formatAssetAmount } from "@/format-asset-amount";
 import { AppShell } from "../../app-shell";
 import { Card, ErrorState, Fact, MetricCard, PageHeader, StatusPill } from "../../ui";
 import { ProfileLogoutButton } from "./profile-logout-button";
@@ -55,9 +56,27 @@ function DashboardView({
         </PageHeader>
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <MetricCard label="Creator earnings" value={formatAmount(dashboard.earnings.creatorEarningsMinor)} />
-          <MetricCard label="Platform fees" value={formatAmount(dashboard.earnings.platformFeesMinor)} />
-          <MetricCard label="Referral commissions" value={formatAmount(dashboard.earnings.referralCommissionsMinor)} />
+          <MetricCard
+            label="Creator earnings"
+            value={formatAssetAmount(
+              dashboard.earnings.creatorEarningsMinor,
+              dashboard.earnings.currency
+            )}
+          />
+          <MetricCard
+            label="Platform fees"
+            value={formatAssetAmount(
+              dashboard.earnings.platformFeesMinor,
+              dashboard.earnings.currency
+            )}
+          />
+          <MetricCard
+            label="Referral commissions"
+            value={formatAssetAmount(
+              dashboard.earnings.referralCommissionsMinor,
+              dashboard.earnings.currency
+            )}
+          />
           <MetricCard label="Readiness score" value={`${dashboard.readiness.readinessScore}%`} />
         </div>
 
@@ -231,11 +250,9 @@ function ProductRow({ product }: { product: CreatorDashboard["products"][number]
         </div>
         <StatusPill tone={product.enabled ? "good" : "warn"}>{product.enabled ? "enabled" : "disabled"}</StatusPill>
       </div>
-      <p className="mt-3 text-sm font-medium">{formatAmount(product.amountMinor)}</p>
+      <p className="mt-3 text-sm font-medium">
+        {formatAssetAmount(product.amountMinor, product.currency)}
+      </p>
     </Card>
   );
-}
-
-function formatAmount(amountMinor: number) {
-  return `${amountMinor.toLocaleString()} SOL`;
 }

@@ -54,7 +54,7 @@ export async function registerSolanaIndexerWebhookRoute(
           continue;
         }
 
-        const settlement = await options.settlementVerifier.verifyNativeSolTransfer({
+        const settlement = await options.settlementVerifier.verifyTransfer({
           signature: event.signature,
           referenceAddress: match.intent.referenceAddress,
           memo: paymentMemo(match.intent.id),
@@ -67,7 +67,11 @@ export async function registerSolanaIndexerWebhookRoute(
           totalAmountMinor: match.intent.totalAmountMinor,
           creatorAmountMinor: match.intent.creatorAmountMinor,
           platformFeeAmountMinor: match.intent.platformFeeAmountMinor,
-          allocationAmountMinor: match.intent.allocationAmountMinor
+          allocationAmountMinor: match.intent.allocationAmountMinor,
+          currency: match.intent.currency,
+          tokenMint: match.intent.tokenMint ?? null,
+          tokenDecimals: match.intent.tokenDecimals ?? null,
+          expiresAt: match.intent.expiresAt
         });
 
         await options.paymentRepository.recordSubmission({

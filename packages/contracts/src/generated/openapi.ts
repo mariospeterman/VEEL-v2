@@ -1039,7 +1039,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create or reuse backend-owned voluntary support/tip payment intent */
+        /** Create or reuse a backend-owned voluntary support payment intent */
         post: operations["createPaymentIntent"];
         delete?: never;
         options?: never;
@@ -1074,8 +1074,27 @@ export interface paths {
         /** Server-built wallet transaction request */
         get: operations["getPaymentTransactionRequest"];
         put?: never;
-        /** Build unsigned non-custodial creator split transaction for wallet signature */
-        post: operations["createPaymentTransactionRequest"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/payments/checkout/{checkoutToken}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                checkoutToken: string;
+            };
+            cookie?: never;
+        };
+        /** Wallet-facing Solana Pay checkout metadata */
+        get: operations["getSolanaPayCheckoutMetadata"];
+        put?: never;
+        /** Wallet-facing unsigned non-custodial split transaction */
+        post: operations["createSolanaPayCheckoutTransaction"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2902,7 +2921,7 @@ export interface components {
             followerCount: number;
         };
         PublicCreatorMonetisation: {
-            tipsEnabled: boolean;
+            supportEnabled: boolean;
             contentUnlocksEnabled: boolean;
             livePassesEnabled: boolean;
             paidMessagesEnabled: boolean;
@@ -3447,10 +3466,11 @@ export interface components {
         };
         CreatePaymentIntentRequest: {
             /** @enum {string} */
-            productType: "tip" | "support";
+            productType: "support";
             /** Format: uuid */
             targetId: string;
             amountMinor?: number | null;
+            currency?: components["schemas"]["Currency"];
             referralToken?: string | null;
         };
         PaymentIntentRefundPolicy: {
@@ -3535,6 +3555,11 @@ export interface components {
             /** @description Base64 serialized unsigned Solana transaction for wallet signature */
             transaction: string;
             message?: string;
+        };
+        SolanaPayCheckoutMetadata: {
+            label: string;
+            /** Format: uri */
+            icon: string;
         };
         Entitlement: {
             /** Format: uuid */
@@ -5415,6 +5440,15 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["TransactionRequestPostResponse"];
+            };
+        };
+        /** @description Solana Pay checkout metadata */
+        SolanaPayCheckoutMetadata: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["SolanaPayCheckoutMetadata"];
             };
         };
         /** @description Content unlock intent */
@@ -7744,15 +7778,28 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
-    createPaymentTransactionRequest: {
+    getSolanaPayCheckoutMetadata: {
         parameters: {
             query?: never;
-            header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
-                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
-            };
+            header?: never;
             path: {
-                paymentIntentId: components["parameters"]["PaymentIntentId"];
+                checkoutToken: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["SolanaPayCheckoutMetadata"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createSolanaPayCheckoutTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                checkoutToken: string;
             };
             cookie?: never;
         };
@@ -7760,10 +7807,7 @@ export interface operations {
         responses: {
             200: components["responses"]["TransactionRequestPost"];
             400: components["responses"]["ValidationFailed"];
-            401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };

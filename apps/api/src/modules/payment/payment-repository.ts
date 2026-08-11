@@ -17,7 +17,13 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
       async findIntent() {
         throw new PaymentRepositoryConfigurationError();
       },
+      async findCheckoutIntent() {
+        throw new PaymentRepositoryConfigurationError();
+      },
       async recordTransactionRequest() {
+        throw new PaymentRepositoryConfigurationError();
+      },
+      async recordCheckoutPayer() {
         throw new PaymentRepositoryConfigurationError();
       },
       async recordSubmission() {
@@ -134,6 +140,8 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
             target_id,
             amount_minor,
             currency,
+            token_mint,
+            token_decimals,
             idempotency_key,
             request_hash,
             solana_cluster,
@@ -157,6 +165,8 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
             ${input.targetId},
             ${input.amountMinor},
             ${input.currency},
+            ${input.tokenMint ?? null},
+            ${input.tokenDecimals ?? null},
             ${input.idempotencyKey},
             ${input.requestHash},
             ${input.solanaCluster},
@@ -209,6 +219,8 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
           target_id,
           amount_minor,
           currency,
+          token_mint,
+          token_decimals,
           state,
           reference_address,
           treasury_wallet,
@@ -238,6 +250,8 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
           target_id,
           amount_minor,
           currency,
+          token_mint,
+          token_decimals,
           state,
           reference_address,
           treasury_wallet,
@@ -283,6 +297,8 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
           pi.target_id,
           pi.amount_minor,
           pi.currency,
+          pi.token_mint,
+          pi.token_decimals,
           pi.state,
           pi.reference_address,
           pi.treasury_wallet,
@@ -315,14 +331,26 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
 
       return row ? toStoredPaymentIntent(row) : null;
     },
+    async findCheckoutIntent(input) {
+      const rows = await sql<PaymentIntentRow[]>`
+        select pi.*
+        from payment_intents pi
+        where pi.checkout_token_hash = ${input.checkoutTokenHash}
+          and pi.expires_at > now()
+          and pi.state in ('pending', 'transaction_requested', 'submitted')
+        limit 1
+      `;
+
+      return rows[0] ? toStoredPaymentIntent(rows[0]) : null;
+    },
     async recordTransactionRequest(input) {
       const rows = await sql<{ expires_at: Date }[]>`
         update payment_intents pi
         set
           state = case when state = 'pending' then 'transaction_requested' else state end,
-          transaction_request_url = ${input.transactionRequestUrl},
+          transaction_request_url = ${input.storedTransactionRequestUrl},
+          checkout_token_hash = ${input.checkoutTokenHash},
           transaction_requested_at = now(),
-          buyer_wallet = coalesce(${input.buyerWallet ?? null}, buyer_wallet),
           updated_at = now()
         from users u
         where pi.user_id = u.id
@@ -336,10 +364,25 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
 
       return row
         ? {
-            transactionRequestUrl: input.transactionRequestUrl,
+            transactionRequestUrl: input.publicTransactionRequestUrl,
             expiresAt: row.expires_at.toISOString()
           }
         : null;
+    },
+    async recordCheckoutPayer(input) {
+      const rows = await sql<PaymentIntentRow[]>`
+        update payment_intents pi
+        set
+          buyer_wallet = ${input.buyerWallet},
+          updated_at = now()
+        where pi.checkout_token_hash = ${input.checkoutTokenHash}
+          and pi.expires_at > now()
+          and pi.state in ('pending', 'transaction_requested', 'submitted')
+          and (pi.buyer_wallet is null or pi.buyer_wallet = ${input.buyerWallet})
+        returning pi.*
+      `;
+
+      return rows[0] ? toStoredPaymentIntent(rows[0]) : null;
     },
     async recordSubmission(input) {
       await recordPaymentSubmission(sql, input);

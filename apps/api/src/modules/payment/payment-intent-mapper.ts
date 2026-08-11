@@ -18,6 +18,8 @@ export interface PaymentIntentRow {
   creator_amount_minor: number | null;
   platform_fee_amount_minor: number | null;
   allocation_amount_minor: number | null;
+  token_mint: string | null;
+  token_decimals: number | null;
   solana_cluster: StoredPaymentIntent["solanaCluster"];
   expires_at: Date;
   request_hash: string;
@@ -58,6 +60,8 @@ export function toStoredPaymentIntent(row: PaymentIntentRow): StoredPaymentInten
     creatorAmountMinor: Number(row.creator_amount_minor ?? row.amount_minor),
     platformFeeAmountMinor: Number(row.platform_fee_amount_minor ?? 0),
     allocationAmountMinor: Number(row.allocation_amount_minor ?? 0),
+    tokenMint: row.token_mint,
+    tokenDecimals: row.token_decimals,
     solanaCluster: row.solana_cluster,
     expiresAt: row.expires_at,
     requestHash: row.request_hash,

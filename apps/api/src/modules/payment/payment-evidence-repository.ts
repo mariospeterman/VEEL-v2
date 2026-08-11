@@ -83,17 +83,7 @@ export function createPostgresPaymentEvidenceRepository(
 
       const rows = await sql<(PaymentIntentRow & { supabase_user_id: string })[]>`
         select
-          pi.id,
-          pi.product_type,
-          pi.target_id,
-          pi.amount_minor,
-          pi.currency,
-          pi.state,
-          pi.reference_address,
-          pi.treasury_wallet,
-          pi.solana_cluster,
-          pi.expires_at,
-          pi.request_hash,
+          pi.*,
           u.supabase_user_id::text as supabase_user_id
         from payment_intents pi
         join users u on u.id = pi.user_id

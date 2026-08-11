@@ -74,7 +74,7 @@ function ProfileView({ profile }: { profile: CreatorProfile }) {
         <div className="flex items-center justify-between gap-4 border-b border-(--line) pb-3">
           <h2 className="text-base font-semibold tracking-normal">Media</h2>
           <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs text-(--accent-strong)">
-            tips {profile.monetisation.tipsEnabled ? "enabled" : "disabled"}
+            support {profile.monetisation.supportEnabled ? "enabled" : "disabled"}
           </span>
         </div>
 

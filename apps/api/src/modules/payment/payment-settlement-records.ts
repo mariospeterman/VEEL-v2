@@ -12,14 +12,16 @@ export async function insertSettlementAttempt(
       payment_intent_id,
       signature,
       state,
-      failure_code
+      failure_code,
+      observed_block_time
     )
     values (
       ${randomUUID()},
       ${input.paymentIntentId},
       ${input.signature},
       ${input.settlement.confirmed ? "confirmed" : "submitted"},
-      ${input.settlement.failureCode ?? null}
+      ${input.settlement.failureCode ?? null},
+      ${input.settlement.blockTime ?? null}
     )
   `;
 }

@@ -87,6 +87,15 @@ import type {
   VerificationRepository
 } from "../src/modules/verification/types";
 
+const checkoutPaymentRepositoryMethods = {
+  async findCheckoutIntent() {
+    return null;
+  },
+  async recordCheckoutPayer() {
+    return null;
+  }
+} satisfies Pick<PaymentRepository, "findCheckoutIntent" | "recordCheckoutPayer">;
+
 describe("buildApi", () => {
   it("boots the Fastify skeleton and loads the OpenAPI document", async () => {
     const app = await buildApi();
@@ -1908,7 +1917,7 @@ describe("buildApi", () => {
         followerCount: 0
       },
       monetisation: {
-        tipsEnabled: true,
+        supportEnabled: true,
         subscriptionsEnabled: false
       }
     });
@@ -4310,6 +4319,10 @@ describe("buildApi", () => {
         SOLANA_NETWORK: "solana:devnet",
         SOLANA_RPC_URL: "https://api.devnet.solana.com",
         PAYMENT_DEFAULT_ASSET: "SOL",
+        PAYMENT_USDC_DECIMALS: 6,
+        PAYMENT_SOLANA_FINALITY: "finalized",
+        PAYMENT_MIN_SUPPORT_SOL_LAMPORTS: 1_000_000,
+        PAYMENT_MIN_SUPPORT_USDC_ATOMIC: 500_000,
         PAYMENT_PLATFORM_FEE_BPS: 1000,
         PAYMENT_REFERRAL_SHARE_OF_PLATFORM_FEE_BPS: 2000,
         SOLANA_SUBSCRIPTION_DELEGATION_PROGRAM_ID: "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
@@ -4354,7 +4367,9 @@ describe("buildApi", () => {
         MCP_OAUTH_PUBLIC_CLIENT: true,
         BUNNY_STREAM_API_KEY: "bunny-secret",
         BUNNY_STREAM_LIBRARY_ID: "library-id",
-        BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS: 900
+        BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS: 900,
+        LIVEPEER_API_BASE_URL: "https://livepeer.studio/api",
+        LIVEPEER_HTTP_TIMEOUT_MS: 10_000
       },
       fetchMock
     );
@@ -4404,6 +4419,10 @@ describe("buildApi", () => {
       SOLANA_NETWORK: "solana:devnet",
       SOLANA_RPC_URL: "https://api.devnet.solana.com",
       PAYMENT_DEFAULT_ASSET: "SOL",
+      PAYMENT_USDC_DECIMALS: 6,
+      PAYMENT_SOLANA_FINALITY: "finalized",
+      PAYMENT_MIN_SUPPORT_SOL_LAMPORTS: 1_000_000,
+      PAYMENT_MIN_SUPPORT_USDC_ATOMIC: 500_000,
       PAYMENT_PLATFORM_FEE_BPS: 1000,
       PAYMENT_REFERRAL_SHARE_OF_PLATFORM_FEE_BPS: 2000,
       SOLANA_SUBSCRIPTION_DELEGATION_PROGRAM_ID: "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
@@ -4449,7 +4468,9 @@ describe("buildApi", () => {
       BUNNY_STREAM_API_KEY: "bunny-secret",
       BUNNY_STREAM_LIBRARY_ID: "759",
       BUNNY_STREAM_EMBED_TOKEN_KEY: "embed-token-secret",
-      BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS: 900
+      BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS: 900,
+      LIVEPEER_API_BASE_URL: "https://livepeer.studio/api",
+      LIVEPEER_HTTP_TIMEOUT_MS: 10_000
     });
     const providerAssetId = "eb1c4f77-0cda-46be-b47d-1118ad7c2ffe";
     const expires = 1_780_531_200 + 900;
@@ -4476,11 +4497,12 @@ describe("buildApi", () => {
   it("creates a native SOL payment intent for an app-ready user", async () => {
     vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
     const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
       async createOrReuseIntent(input) {
         expect(input).toMatchObject({
           supabaseUserId: "00000000-0000-4000-8000-000000000001",
           idempotencyKey: "payment-intent-1",
-          productType: "tip",
+          productType: "support",
           targetId: "00000000-0000-4000-8000-000000000010",
           amountMinor: 10000000,
           currency: "SOL",
@@ -4490,6 +4512,7 @@ describe("buildApi", () => {
 
         return {
           ...storedPaymentIntent,
+          productType: input.productType,
           referenceAddress: input.referenceAddress,
           requestHash: input.requestHash,
           expiresAt: input.expiresAt
@@ -4524,7 +4547,7 @@ describe("buildApi", () => {
         "idempotency-key": "payment-intent-1"
       },
       payload: {
-        productType: "tip",
+        productType: "support",
         targetId: "00000000-0000-4000-8000-000000000010",
         amountMinor: 10000000
       }
@@ -4533,7 +4556,7 @@ describe("buildApi", () => {
     expect(response.statusCode).toBe(201);
     expect(response.json()).toEqual({
       id: storedPaymentIntent.id,
-      productType: "tip",
+      productType: "support",
       amountMinor: 10000000,
       currency: "SOL",
       state: "pending",
@@ -4750,7 +4773,7 @@ describe("buildApi", () => {
           kind: "payment_intent",
           title: "Tip",
           state: "confirmed",
-          productType: "tip",
+          productType: "support",
           amountMinor: 10000000,
           currency: "SOL",
           receiptNumber: "VEEL-0000000000004000",
@@ -5237,6 +5260,7 @@ describe("buildApi", () => {
       }
     };
     const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
       async createOrReuseIntent(input) {
         expect(input).toMatchObject({
           productType: "event_access_pass",
@@ -7372,9 +7396,10 @@ describe("buildApi", () => {
   it("passes referral tokens to backend-owned payment intent creation", async () => {
     vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
     const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
       async createOrReuseIntent(input) {
         expect(input).toMatchObject({
-          productType: "tip",
+          productType: "support",
           targetId: "00000000-0000-4000-8000-000000000010",
           amountMinor: 10000000,
           referralToken: "veel_referral_token"
@@ -7382,6 +7407,7 @@ describe("buildApi", () => {
 
         return {
           ...storedPaymentIntent,
+          productType: input.productType,
           referenceAddress: input.referenceAddress,
           requestHash: input.requestHash,
           expiresAt: input.expiresAt
@@ -7415,7 +7441,7 @@ describe("buildApi", () => {
         "idempotency-key": "payment-intent-referral-1"
       },
       payload: {
-        productType: "tip",
+        productType: "support",
         targetId: "00000000-0000-4000-8000-000000000010",
         amountMinor: 10000000,
         referralToken: "veel_referral_token"
@@ -7461,6 +7487,7 @@ describe("buildApi", () => {
       }
     };
     const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
       async createOrReuseIntent(input) {
         expect(input).toMatchObject({
           supabaseUserId: "00000000-0000-4000-8000-000000000001",
@@ -7568,21 +7595,25 @@ describe("buildApi", () => {
     vi.unstubAllEnvs();
   });
 
-  it("returns a Solana Pay transaction request without treating it as settlement", async () => {
+  it("mints a scoped Solana Pay checkout that exposes wallet metadata without Veel auth", async () => {
     vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
     const recordedRequests: RecordTransactionRequestInput[] = [];
     const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
       async createOrReuseIntent() {
         throw new Error("not implemented");
       },
       async findIntent() {
         return storedPaymentIntent;
       },
+      async findCheckoutIntent() {
+        return storedPaymentIntent;
+      },
       async recordTransactionRequest(input) {
         recordedRequests.push(input);
 
         return {
-          transactionRequestUrl: input.transactionRequestUrl,
+          transactionRequestUrl: input.publicTransactionRequestUrl,
           expiresAt: storedPaymentIntent.expiresAt.toISOString()
         };
       },
@@ -7610,10 +7641,22 @@ describe("buildApi", () => {
 
     expect(response.statusCode).toBe(200);
     const body = response.json() as { transactionRequestUrl: string; expiresAt: string };
-    expect(body.transactionRequestUrl).toContain(
-      `solana:http%3A%2F%2Flocalhost%3A4000%2Fv1%2Fpayments%2Fintents%2F${storedPaymentIntent.id}%2Ftransaction-request`
+    expect(body.transactionRequestUrl).toMatch(
+      /^solana:http:\/\/localhost:4000\/v1\/payments\/checkout\/[A-Za-z0-9_-]{43}$/
     );
-    expect(recordedRequests[0]?.transactionRequestUrl).toBe(body.transactionRequestUrl);
+    expect(recordedRequests[0]?.publicTransactionRequestUrl).toBe(body.transactionRequestUrl);
+    expect(recordedRequests[0]?.storedTransactionRequestUrl).toContain("[redacted]");
+    expect(recordedRequests[0]?.checkoutTokenHash).toMatch(/^[a-f0-9]{64}$/);
+
+    const walletMetadata = await app.inject({
+      method: "GET",
+      url: new URL(body.transactionRequestUrl.slice("solana:".length)).pathname
+    });
+    expect(walletMetadata.statusCode).toBe(200);
+    expect(walletMetadata.json()).toEqual({
+      label: "Veel",
+      icon: "http://localhost:3000/favicon.ico"
+    });
 
     await app.close();
     vi.unstubAllEnvs();
@@ -7624,6 +7667,7 @@ describe("buildApi", () => {
     const submissions: RecordPaymentSubmissionInput[] = [];
     const settlementInputs: PaymentSettlementInput[] = [];
     const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
       async createOrReuseIntent() {
         throw new Error("not implemented");
       },
@@ -7638,7 +7682,7 @@ describe("buildApi", () => {
       }
     };
     const settlementVerifier: PaymentSettlementVerifier = {
-      async verifyNativeSolTransfer(input) {
+      async verifyTransfer(input) {
         settlementInputs.push(input);
 
         return {
@@ -7683,7 +7727,11 @@ describe("buildApi", () => {
         totalAmountMinor: storedPaymentIntent.totalAmountMinor,
         creatorAmountMinor: storedPaymentIntent.creatorAmountMinor,
         platformFeeAmountMinor: storedPaymentIntent.platformFeeAmountMinor,
-        allocationAmountMinor: storedPaymentIntent.allocationAmountMinor
+        allocationAmountMinor: storedPaymentIntent.allocationAmountMinor,
+        currency: "SOL",
+        tokenMint: null,
+        tokenDecimals: null,
+        expiresAt: storedPaymentIntent.expiresAt
       }
     ]);
     expect(submissions).toEqual([
@@ -7726,6 +7774,7 @@ describe("buildApi", () => {
       }
     };
     const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
       async createOrReuseIntent() {
         throw new Error("not implemented");
       },
@@ -7740,7 +7789,7 @@ describe("buildApi", () => {
       }
     };
     const settlementVerifier: PaymentSettlementVerifier = {
-      async verifyNativeSolTransfer(input) {
+      async verifyTransfer(input) {
         settlementInputs.push(input);
 
         return {
@@ -7804,7 +7853,11 @@ describe("buildApi", () => {
         totalAmountMinor: storedPaymentIntent.totalAmountMinor,
         creatorAmountMinor: storedPaymentIntent.creatorAmountMinor,
         platformFeeAmountMinor: storedPaymentIntent.platformFeeAmountMinor,
-        allocationAmountMinor: storedPaymentIntent.allocationAmountMinor
+        allocationAmountMinor: storedPaymentIntent.allocationAmountMinor,
+        currency: "SOL",
+        tokenMint: null,
+        tokenDecimals: null,
+        expiresAt: storedPaymentIntent.expiresAt
       }
     ]);
     expect(submissions).toMatchObject([
@@ -7861,6 +7914,7 @@ describe("buildApi", () => {
       }
     };
     const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
       async createOrReuseIntent() {
         throw new Error("not implemented");
       },
@@ -8232,6 +8286,7 @@ describe("buildApi", () => {
         }
       }),
       paymentRepository: {
+        ...checkoutPaymentRepositoryMethods,
         async createOrReuseIntent(input) {
           const intent: StoredPaymentIntent = {
             ...storedPaymentIntent,
@@ -8489,6 +8544,7 @@ describe("buildApi", () => {
         }
       }),
       paymentRepository: {
+        ...checkoutPaymentRepositoryMethods,
         async createOrReuseIntent(input) {
           return {
             ...storedPaymentIntent,
@@ -9640,7 +9696,7 @@ function fakeMessageRepository(
 }
 
 const fakeUnconfirmedSettlementVerifier: PaymentSettlementVerifier = {
-  async verifyNativeSolTransfer() {
+  async verifyTransfer() {
     return {
       confirmed: false,
       failureCode: "not_found"
@@ -11178,7 +11234,7 @@ const fakeProfileRepository: ProfileRepository = {
         followerCount: 0
       },
       monetisation: {
-        tipsEnabled: true,
+        supportEnabled: true,
         contentUnlocksEnabled: true,
         livePassesEnabled: true,
         paidMessagesEnabled: true,

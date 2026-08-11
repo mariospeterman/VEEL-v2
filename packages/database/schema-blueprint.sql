@@ -125,7 +125,7 @@ create table creator_monetisation_settings (
   kyc_state text not null default 'not_required',
   tax_profile_state text not null default 'not_required',
   earnings_recipient_wallet_id uuid references wallets(id),
-  tips_enabled boolean not null default true,
+  support_enabled boolean not null default true,
   content_unlocks_enabled boolean not null default true,
   live_passes_enabled boolean not null default true,
   paid_messages_enabled boolean not null default true,
@@ -278,6 +278,9 @@ create table receipt_lines (
   description text not null,
   amount_minor bigint not null,
   currency text not null,
+  token_mint text,
+  token_decimals smallint,
+  checkout_token_hash text,
   created_at timestamptz not null default now()
 );
 
@@ -791,6 +794,10 @@ create index payment_intents_created_at_idx
 create index payment_intents_submitted_signature_idx
   on payment_intents (submitted_signature)
   where submitted_signature is not null;
+
+create unique index payment_intents_checkout_token_hash_uidx
+  on payment_intents (checkout_token_hash)
+  where checkout_token_hash is not null;
 
 create table payment_splits (
   id uuid primary key,

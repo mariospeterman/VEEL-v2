@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { CreatorProfile } from "@/api-client";
 import { createPaymentIntent } from "@/api-mutations";
+import { formatAssetAmount } from "@/format-asset-amount";
 import { PaymentHandoffPanel } from "@/payment-handoff-panel";
 
 interface CreatorSupportPanelProps {
@@ -13,7 +14,7 @@ const supportPresets = [10_000_000, 50_000_000, 100_000_000] as const;
 
 export function CreatorSupportPanel({ profile }: CreatorSupportPanelProps) {
   const [amountMinor, setAmountMinor] = useState<number>(supportPresets[1]);
-  const supportEnabled = profile.monetisation.tipsEnabled;
+  const supportEnabled = profile.monetisation.supportEnabled;
 
   return (
     <section className="rounded border border-(--line) bg-(--panel) p-4">
@@ -41,7 +42,7 @@ export function CreatorSupportPanel({ profile }: CreatorSupportPanelProps) {
               onClick={() => setAmountMinor(preset)}
               type="button"
             >
-              {formatSolAmount(preset)}
+              {formatAssetAmount(preset, "SOL")}
             </button>
           ))}
         </div>
@@ -63,8 +64,4 @@ export function CreatorSupportPanel({ profile }: CreatorSupportPanelProps) {
       </div>
     </section>
   );
-}
-
-function formatSolAmount(lamports: number) {
-  return `${lamports / 1_000_000_000} SOL`;
 }

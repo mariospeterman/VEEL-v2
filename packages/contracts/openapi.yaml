@@ -846,7 +846,7 @@ paths:
     post:
       operationId: createPaymentIntent
       tags: [Payments]
-      summary: Create or reuse backend-owned voluntary support/tip payment intent
+      summary: Create or reuse a backend-owned voluntary support payment intent
       parameters:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       requestBody:
@@ -879,22 +879,33 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
-    post:
-      operationId: createPaymentTransactionRequest
+  /v1/payments/checkout/{checkoutToken}:
+    parameters:
+      - name: checkoutToken
+        in: path
+        required: true
+        schema: { type: string, minLength: 43, maxLength: 43 }
+    get:
+      operationId: getSolanaPayCheckoutMetadata
       tags: [Payments]
-      summary: Build unsigned non-custodial creator split transaction for wallet signature
-      parameters:
-        - $ref: "#/components/parameters/PaymentIntentId"
-        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      summary: Wallet-facing Solana Pay checkout metadata
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/SolanaPayCheckoutMetadata" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    post:
+      operationId: createSolanaPayCheckoutTransaction
+      tags: [Payments]
+      summary: Wallet-facing unsigned non-custodial split transaction
+      security: []
+      x-idempotency-policy: checkout-capability
       requestBody:
         $ref: "#/components/requestBodies/CreateTransactionRequest"
       responses:
         "200": { $ref: "#/components/responses/TransactionRequestPost" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/Conflict" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/payments/intents/{paymentIntentId}/submissions:
     post:
@@ -2194,6 +2205,7 @@ components:
     PaymentIntent: { description: Payment intent, content: { application/json: { schema: { $ref: "#/components/schemas/PaymentIntent" } } } }
     TransactionRequest: { description: Transaction request, content: { application/json: { schema: { $ref: "#/components/schemas/TransactionRequest" } } } }
     TransactionRequestPost: { description: Unsigned transaction request response, content: { application/json: { schema: { $ref: "#/components/schemas/TransactionRequestPostResponse" } } } }
+    SolanaPayCheckoutMetadata: { description: Solana Pay checkout metadata, content: { application/json: { schema: { $ref: "#/components/schemas/SolanaPayCheckoutMetadata" } } } }
     ContentUnlockIntent: { description: Content unlock intent, content: { application/json: { schema: { $ref: "#/components/schemas/ContentUnlockIntent" } } } }
     ReferralToken: { description: Referral token, content: { application/json: { schema: { $ref: "#/components/schemas/ReferralToken" } } } }
     RefundDisputeRequest: { description: Refund or dispute request, content: { application/json: { schema: { $ref: "#/components/schemas/RefundDisputeRequest" } } } }
@@ -2536,9 +2548,9 @@ components:
         followerCount: { type: integer }
     PublicCreatorMonetisation:
       type: object
-      required: [tipsEnabled, contentUnlocksEnabled, livePassesEnabled, paidMessagesEnabled, subscriptionsEnabled]
+      required: [supportEnabled, contentUnlocksEnabled, livePassesEnabled, paidMessagesEnabled, subscriptionsEnabled]
       properties:
-        tipsEnabled: { type: boolean }
+        supportEnabled: { type: boolean }
         contentUnlocksEnabled: { type: boolean }
         livePassesEnabled: { type: boolean }
         paidMessagesEnabled: { type: boolean }
@@ -3122,9 +3134,10 @@ components:
       type: object
       required: [productType, targetId]
       properties:
-        productType: { type: string, enum: [tip, support] }
+        productType: { type: string, enum: [support] }
         targetId: { type: string, format: uuid }
-        amountMinor: { type: integer, nullable: true }
+        amountMinor: { type: integer, minimum: 1, maximum: 9007199254740991, nullable: true }
+        currency: { $ref: "#/components/schemas/Currency" }
         referralToken: { type: string, nullable: true }
     PaymentIntentRefundPolicy:
       type: object
@@ -3142,13 +3155,13 @@ components:
       properties:
         id: { type: string, format: uuid }
         productType: { $ref: "#/components/schemas/ProductType" }
-        amountMinor: { type: integer }
+        amountMinor: { type: integer, minimum: 1, maximum: 9007199254740991 }
         currency: { $ref: "#/components/schemas/Currency" }
         state: { type: string, enum: [pending, transaction_requested, submitted, confirming, confirmed, settled, failed, expired, cancelled] }
         settlementKind: { type: string, enum: [creator_split, platform_owned, dev_test] }
-        creatorAmountMinor: { type: integer }
-        platformFeeAmountMinor: { type: integer }
-        allocationAmountMinor: { type: integer }
+        creatorAmountMinor: { type: integer, minimum: 1, maximum: 9007199254740991 }
+        platformFeeAmountMinor: { type: integer, minimum: 0, maximum: 9007199254740991 }
+        allocationAmountMinor: { type: integer, minimum: 0, maximum: 9007199254740991 }
         refundPolicy: { $ref: "#/components/schemas/PaymentIntentRefundPolicy" }
     SubmitPaymentSignatureRequest:
       type: object
@@ -3216,6 +3229,12 @@ components:
       properties:
         transaction: { type: string, description: Base64 serialized unsigned Solana transaction for wallet signature }
         message: { type: string }
+    SolanaPayCheckoutMetadata:
+      type: object
+      required: [label, icon]
+      properties:
+        label: { type: string }
+        icon: { type: string, format: uri }
     Entitlement:
       type: object
       required: [id, targetType, targetId, productType, state, grantedAt]

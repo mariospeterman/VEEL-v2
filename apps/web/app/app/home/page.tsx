@@ -5,6 +5,7 @@ import {
   type LiveRoom
 } from "@/api-client";
 import { requireAppAccess } from "@/supabase/route-guard";
+import { formatAssetAmount } from "@/format-asset-amount";
 import { AppShell } from "../../app-shell";
 import { Card, EmptyState, ErrorState, Fact, MediaTile, PageHeader, StatusPill } from "../../ui";
 
@@ -90,7 +91,7 @@ function LiveRoomRailCard({ room }: { room: LiveRoom }) {
           label="Access"
           value={
             room.eventAccess
-              ? `${room.eventAccess.amountMinor.toLocaleString()} ${room.eventAccess.currency}`
+              ? formatAssetAmount(room.eventAccess.amountMinor, room.eventAccess.currency)
               : room.accessMode
           }
         />

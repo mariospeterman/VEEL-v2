@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Solana Pay, monetisation, referrals
-Last updated: 2026-06-13
+Last updated: 2026-08-11
 Source of truth: yes
 
 Owns:
@@ -22,11 +22,13 @@ Non-goals:
 
 Current implementation state:
 
-- `POST /v1/payments/intents` creates a backend-owned native SOL voluntary `support`/`tip` creator-split intent for app-ready users when `PAYMENT_PLATFORM_FEE_WALLET` is configured. Public creator profiles use this path for voluntary support handoff. It must not accept client-priced access-bearing product types.
-- The intent stores server-owned amount, currency, product target, creator wallet, platform fee wallet, split amounts, Solana cluster, and a unique Solana reference address. `PAYMENT_PLATFORM_TREASURY_WALLET` is legacy/platform-owned compatibility only and is not the creator monetization recipient.
-- `GET /v1/payments/intents/{paymentIntentId}/transaction-request` returns a Solana Pay transaction-request URL for native SOL creator split settlement.
-- `POST /v1/payments/intents/{paymentIntentId}/transaction-request` accepts the buyer wallet account and returns a base64 unsigned transaction for wallet signature. The transaction pays buyer wallet -> creator wallet and buyer wallet -> Veel platform fee wallet directly, with optional allocation only when present.
-- `POST /v1/payments/intents/{paymentIntentId}/submissions` records the wallet-submitted signature, then marks the intent confirmed only when backend Solana RPC verification finds a successful transaction with the expected reference address, memo, creator recipient/amount, platform fee recipient/amount, optional allocation recipient/amount, and no full creator payment to the legacy treasury wallet.
+- `POST /v1/payments/intents` creates a backend-owned voluntary `support` creator-split intent for app-ready users when `PAYMENT_PLATFORM_FEE_WALLET` is configured. `support` is the only accepted generic write type; historical `tip` rows remain readable and settle through compatibility logic only.
+- The intent stores server-owned amount, asset, optional token mint/decimals, product target, creator wallet, platform fee wallet, split amounts, Solana cluster, and a unique Solana reference address. `PAYMENT_PLATFORM_TREASURY_WALLET` is legacy/platform-owned compatibility only and is not the creator monetization recipient.
+- `GET /v1/payments/intents/{paymentIntentId}/transaction-request` is authenticated and mints a short-lived, 32-byte checkout capability. Only its SHA-256 hash and a redacted URL are persisted; the raw capability is returned once in the wallet-facing `solana:https://...` URL.
+- Public `GET /v1/payments/checkout/{checkoutToken}` returns standard Solana Pay label/icon metadata. Public `POST /v1/payments/checkout/{checkoutToken}` accepts only the payer `account`, atomically binds that payer to the intent, and returns a base64 unsigned transaction. The capability is unguessable, expires with the pending intent, cannot switch payer, and is excluded from normal request logs.
+- The wallet-facing POST intentionally does not require Veel's custom idempotency header because external Solana Pay wallets do not send application-specific headers. Its explicit `checkout-capability` idempotency policy is the short-lived capability plus atomic same-payer binding; retries by the same payer are safe and a different payer fails closed.
+- The transaction pays buyer wallet -> creator wallet and buyer wallet -> Veel platform fee wallet directly, with optional allocation only when present. Native SOL uses system transfers; one-time USDC uses exact SPL `transferChecked` instructions and idempotent associated-token-account creation.
+- `POST /v1/payments/intents/{paymentIntentId}/submissions` records the wallet-submitted signature, then marks the intent confirmed only when backend Solana RPC verification finds a successful transaction at configured `confirmed` or `finalized` commitment with an on-chain block time no later than intent expiry, exact reference and decoded memo, expected payer, mint/decimals/token accounts where applicable, exact recipients/amounts, and no full creator payment to the legacy treasury wallet.
 - Wallet approval, frontend success, and submitted signatures remain non-final until backend settlement verification confirms chain evidence.
 - `POST /v1/content/{contentId}/unlock-intents` creates or reuses a backend-priced `content_unlock` intent from active content access rules. Paid live events, Event Access Passes, paid messages, platform plans, creator memberships, and content unlocks use product-specific backend-priced endpoints instead of the generic payment-intent endpoint.
 - `POST /v1/live/rooms/{roomId}/event-access-intents` creates or reuses the room's single backend-priced paid-event intent. The internal `live_pass` product key remains a settlement compatibility detail; timed 30/60/180-minute products are not exposed. Wallet approval does not unlock chat or playback until backend settlement grants event access.
@@ -39,7 +41,7 @@ Current implementation state:
 - Real API/test-DB coverage verifies paid live-event access through backend intent creation, confirmed settlement submission, wallet transaction and settlement attempt rows, purchase request, active event-access compatibility row, live-room entitlement, audit event, signed playback projection, and policy-gated chat write/list projection.
 - Real API/test-DB coverage verifies the delegated subscription boundary through backend plan listing, authorization intent creation, verifier-scoped evidence submission, pending subscription projection, authorization intent/event rows, worker collection guards, and provider-event replay state updates. Active recurring access remains fail-closed until official Solana subscription provider verification is configured.
 - Real API/test-DB coverage verifies refund/dispute request behavior after confirmed content unlock settlement: the request is idempotent by persisted request hash, writes one audit event, keeps payment and entitlement truth unchanged, and exposes only the no-custody review boundary.
-- Confirmed `tip` and `support` settlement posts creator earning and platform fee ledger entries from the stored split facts, but never writes an access grant. UI copy should say support.
+- Confirmed `support` settlement posts creator earning and platform fee ledger entries from the stored split facts, but never writes an access grant. Historical `tip` rows are aggregated into Support reporting during compatibility; new writes, audit events, configuration, and UI use Support only.
 - Confirmed `event_access_pass` settlement grants a backend Event Access Pass entitlement and QR/check-in record. Legacy `event_ticket` rows are normalized by migration and still settle through the same backend path during compatibility windows. Event Access is never created from wallet approval, redirect state, or frontend-computed payment success.
 - `POST /v1/referrals/tokens` creates backend-owned external/internal referral tokens. Optional payment-intent `referralToken` values are resolved server-side, self-referrals are not attributed, and confirmed eligible support settlement creates at most one commission from Veel platform commission net of refunds and tax.
 - `GET /v1/activity`, `GET /v1/activity/payments`, and `GET /v1/activity/wallet-transactions` expose normalized backend activity and wallet transaction history. Wallet transaction records are backend-observed submission/confirmation references, not settlement proof by themselves.
@@ -93,7 +95,7 @@ Official references checked:
 ## Product Types
 
 - content unlock for paid clip/post/VOD/replay
-- tip/support
+- support (`tip` is legacy-read-only compatibility)
 - paid message
 - Creator Membership
 - platform plans: Free Verified, Veel Plus, Veel Ultra, Veel Studio, Enterprise
@@ -153,10 +155,14 @@ Mode-specific validation:
 
 | Mode | Required checks |
 | --- | --- |
-| Native SOL | signature, reference, payer, lamports amount, recipient, split recipients, finality |
-| SPL token | signature, reference, payer, token amount, mint, token program, recipient token account/owner, split recipients, finality |
+| Native SOL | signature, exact memo/reference, payer, lamports amount, recipient, split recipients, on-chain block time, configured finality |
+| SPL token | signature, exact memo/reference, payer/authority, atomic token amount, mint, decimals, source/destination associated token accounts, token program, split recipients, on-chain block time, configured finality |
 
 Do not hardcode SOL-only architecture.
+
+Atomic amounts are constrained to JavaScript's safe-integer range until the public contract migrates to decimal strings. Split calculations use `bigint`; the database rejects values that the current numeric API could round. Human-facing surfaces format SOL and USDC using their configured decimals and never display raw atomic values as whole assets.
+
+The default USDC Support minimum is `500000` atomic units at six decimals, exactly 0.50 USDC. The SOL minimum is an operator-configured lamport threshold because a fixed fiat minimum cannot be represented safely without an approved price-oracle policy; production must set it through `PAYMENT_MIN_SUPPORT_SOL_LAMPORTS` or choose USDC as the default asset.
 
 ## Helius Usage
 
@@ -232,7 +238,8 @@ Launch policy:
 POST /v1/payments/intents
 GET  /v1/payments/intents/:id
 GET  /v1/payments/intents/:id/transaction-request
-POST /v1/payments/intents/:id/transaction-request
+GET  /v1/payments/checkout/:checkoutToken
+POST /v1/payments/checkout/:checkoutToken
 POST /v1/payments/intents/:id/submissions
 POST /v1/content/:id/unlock-intents
 POST /v1/webhooks/solana-indexer

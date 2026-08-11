@@ -3,6 +3,7 @@
 import type { LiveRoom } from "@/api-client";
 import { createLiveEventAccessIntent } from "@/api-mutations";
 import { PaymentHandoffPanel } from "@/payment-handoff-panel";
+import { formatAssetAmount } from "@/format-asset-amount";
 
 export function LiveAccessPanel({ room }: { room: LiveRoom }) {
   if (room.accessMode === "public") {
@@ -39,7 +40,7 @@ export function LiveAccessPanel({ room }: { room: LiveRoom }) {
           </p>
         </div>
         <span className="text-sm font-semibold">
-          {offer.amountMinor.toLocaleString()} {offer.currency}
+          {formatAssetAmount(offer.amountMinor, offer.currency)}
         </span>
       </div>
       {offer.membersIncluded ? (

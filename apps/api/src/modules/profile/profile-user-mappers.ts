@@ -28,7 +28,7 @@ export function toCreatorProfile(
       followerCount: 0
     },
     monetisation: {
-      tipsEnabled: row.tips_enabled,
+      supportEnabled: row.support_enabled,
       contentUnlocksEnabled: row.content_unlocks_enabled,
       livePassesEnabled: row.live_passes_enabled,
       paidMessagesEnabled: row.paid_messages_enabled,

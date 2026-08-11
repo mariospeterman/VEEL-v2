@@ -6,6 +6,7 @@ import {
 } from "@/api-client";
 import { RefundRequestPanel } from "../../activity/refund-request-panel";
 import { requireAppAccess } from "@/supabase/route-guard";
+import { formatAssetAmount } from "@/format-asset-amount";
 import { AppShell } from "../../app-shell";
 import { Card, EmptyState, ErrorState, Fact, PageHeader, StatusPill } from "../../ui";
 
@@ -76,7 +77,10 @@ function ActivityRow({ item }: { item: ActivityItem }) {
         <StatusPill>{item.state}</StatusPill>
       </div>
       <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
-        <Fact label="Amount" value={`${item.amountMinor?.toLocaleString() ?? "0"} ${item.currency ?? ""}`} />
+        <Fact
+          label="Amount"
+          value={formatAssetAmount(item.amountMinor ?? 0, item.currency ?? "SOL")}
+        />
         <Fact label="Kind" value={item.kind} />
         <Fact label="Reference" value={shorten(item.referenceAddress)} />
         <Fact label="Receipt" value={item.receiptNumber ?? "pending"} />
@@ -106,7 +110,7 @@ function WalletTransactionCard({ transaction }: { transaction: WalletTransaction
         <StatusPill>{transaction.state}</StatusPill>
       </div>
       <div className="mt-4 grid gap-2 text-sm">
-        <Fact label="Amount" value={`${transaction.amountMinor.toLocaleString()} ${transaction.currency}`} />
+        <Fact label="Amount" value={formatAssetAmount(transaction.amountMinor, transaction.currency)} />
         <Fact label="Source" value={transaction.source} />
         <Fact label="Signature" value={shorten(transaction.signature)} />
       </div>

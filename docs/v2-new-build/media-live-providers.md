@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Bunny, Livepeer, media, live
-Last updated: 2026-06-06
+Last updated: 2026-08-11
 Source of truth: yes
 
 Owns:
@@ -123,6 +123,8 @@ Rules:
 - Use Livepeer React/player primitives where they fit the UX, especially for live/replay playback.
 - Use provider-supported JWT access for paid/pass-gated streams and paid replay assets.
 - Livepeer JWT signing keys stay backend-only.
+- Livepeer access JWTs are signed with the pinned official `@livepeer/core/crypto` `signAccessJwt` helper using P-256 keys. The API does not maintain a parallel JWT implementation.
+- Livepeer API calls honor `LIVEPEER_API_BASE_URL` and the bounded `LIVEPEER_HTTP_TIMEOUT_MS`. Configuration, authentication, not-found, rate-limit, timeout, and provider failures are typed; only provider 404 permits playback lookup fallback, while all other failures remain visible and fail closed.
 - Livepeer stream webhooks require `Livepeer-Signature` with `t=` and `v1=` values; the backend verifies the exact raw request body with `LIVEPEER_WEBHOOK_SECRET` and a five-minute replay window.
 - Livepeer `stream.started`, `stream.idle`, `recording.waiting`, and `recording.ready` events are normalized into live room provider state by provider stream id. Provider payloads and host credentials are not exposed to viewer resources.
 - `recording.ready` handoff links a private, moderation-pending `live_replay` content item and Livepeer media asset to the room. Generic content playback for Livepeer replay rows fails closed until the dedicated signed replay playback slice is implemented.

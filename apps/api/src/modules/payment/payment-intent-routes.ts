@@ -1,10 +1,33 @@
 import type { FastifyInstance } from "fastify";
 import { Connection } from "@solana/web3.js";
 import { PaymentIdempotencyConflictError, PaymentRepositoryConfigurationError } from "./payment-repository.js";
-import { assertSolanaAddress, buildCreatorSplitTransaction, buildSolanaPayTransactionRequestUrl, createSolanaReferenceAddress, paymentMemo, SolanaPaymentConfigurationError } from "./solana-payment.js";
-import type { CreatePaymentIntentRequest, SubmitPaymentSignatureRequest, TransactionRequestPostRequest } from "./types.js";
+import {
+  assertSolanaAddress,
+  buildCreatorSplitTransaction,
+  buildSolanaPayTransactionRequestUrl,
+  buildStoredSolanaPayTransactionRequestUrl,
+  createPaymentCheckoutToken,
+  createSolanaReferenceAddress,
+  hashPaymentCheckoutToken,
+  paymentMemo,
+  SolanaPaymentConfigurationError
+} from "./solana-payment.js";
+import type {
+  CreatePaymentIntentRequest,
+  SubmitPaymentSignatureRequest,
+  TransactionRequestPostRequest
+} from "./types.js";
 import type { RegisterPaymentRoutesOptions } from "./payment-route-shared.js";
-import { hashPaymentIntentRequest, notFoundResponse, paymentIntentTtlMs, requiredIdempotencyKey, toPaymentIntentResponse, validateCreatePaymentIntentRequest, validationResponse, verifyPaymentReadyAccess } from "./payment-route-shared.js";
+import {
+  hashPaymentIntentRequest,
+  notFoundResponse,
+  paymentIntentTtlMs,
+  requiredIdempotencyKey,
+  toPaymentIntentResponse,
+  validateCreatePaymentIntentRequest,
+  validationResponse,
+  verifyPaymentReadyAccess
+} from "./payment-route-shared.js";
 
 export async function registerPaymentIntentRoutes(
   app: FastifyInstance,
@@ -26,7 +49,12 @@ export async function registerPaymentIntentRoutes(
     }
 
     const body = request.body as Partial<CreatePaymentIntentRequest> | undefined;
-    const validationError = validateCreatePaymentIntentRequest(body);
+    const currency = body?.currency ?? app.config.PAYMENT_DEFAULT_ASSET;
+    const minimumAmountMinor =
+      currency === "USDC"
+        ? app.config.PAYMENT_MIN_SUPPORT_USDC_ATOMIC
+        : app.config.PAYMENT_MIN_SUPPORT_SOL_LAMPORTS;
+    const validationError = validateCreatePaymentIntentRequest(body, { minimumAmountMinor });
 
     if (validationError) {
       return reply.code(400).send(validationResponse(validationError));
@@ -41,18 +69,30 @@ export async function registerPaymentIntentRoutes(
       });
     }
 
+    if (currency === "USDC" && !app.config.PAYMENT_USDC_MINT) {
+      return reply.code(503).send({
+        code: "service_unavailable",
+        message: "USDC payments are not configured"
+      });
+    }
+
     try {
       assertSolanaAddress(platformFeeWallet);
+      if (app.config.PAYMENT_USDC_MINT) {
+        assertSolanaAddress(app.config.PAYMENT_USDC_MINT);
+      }
       await options.sessionRepository.ensureUserForSupabaseId(access.supabaseUserId);
       const intentBody = body as CreatePaymentIntentRequest & { amountMinor: number };
       const intent = await options.paymentRepository.createOrReuseIntent({
         supabaseUserId: access.supabaseUserId,
         idempotencyKey,
-        requestHash: hashPaymentIntentRequest(intentBody),
+        requestHash: hashPaymentIntentRequest({ ...intentBody, currency }),
         productType: intentBody.productType,
         targetId: intentBody.targetId,
         amountMinor: intentBody.amountMinor,
-        currency: "SOL",
+        currency,
+        tokenMint: currency === "USDC" ? (app.config.PAYMENT_USDC_MINT ?? null) : null,
+        tokenDecimals: currency === "USDC" ? app.config.PAYMENT_USDC_DECIMALS : null,
         solanaCluster: app.config.SOLANA_CLUSTER,
         treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET ?? platformFeeWallet,
         platformFeeWallet,
@@ -151,14 +191,17 @@ export async function registerPaymentIntentRoutes(
         return reply.code(400).send(validationResponse("Payment intent is expired"));
       }
 
+      const checkoutToken = createPaymentCheckoutToken();
       const transactionRequestUrl = buildSolanaPayTransactionRequestUrl({
         apiUrl: app.config.API_URL,
-        intentId: intent.id
+        checkoutToken
       });
       const transactionRequest = await options.paymentRepository.recordTransactionRequest({
         supabaseUserId: access.supabaseUserId,
         paymentIntentId: intent.id,
-        transactionRequestUrl
+        publicTransactionRequestUrl: transactionRequestUrl,
+        storedTransactionRequestUrl: buildStoredSolanaPayTransactionRequestUrl(app.config.API_URL),
+        checkoutTokenHash: hashPaymentCheckoutToken(checkoutToken)
       });
 
       if (!transactionRequest) {
@@ -182,94 +225,101 @@ export async function registerPaymentIntentRoutes(
     }
   });
 
-  app.post("/v1/payments/intents/:paymentIntentId/transaction-request", async (request, reply) => {
-    const access = await verifyPaymentReadyAccess(request, options);
+  app.get(
+    "/v1/payments/checkout/:checkoutToken",
+    { logLevel: "silent" },
+    async (request, reply) => {
+      const checkoutToken = (request.params as { checkoutToken?: string }).checkoutToken ?? "";
 
-    if (!access.ok) {
-      return reply.code(access.statusCode).send(access.body);
-    }
-
-    const idempotencyKey = requiredIdempotencyKey(request);
-
-    if (!idempotencyKey) {
-      return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
-    }
-
-    const body = request.body as Partial<TransactionRequestPostRequest> | undefined;
-
-    if (!body || typeof body.account !== "string" || body.account.length === 0) {
-      return reply.code(400).send(validationResponse("account is required"));
-    }
-
-    try {
-      assertSolanaAddress(body.account);
-    } catch {
-      return reply.code(400).send(validationResponse("account must be a valid Solana public key"));
-    }
-
-    const params = request.params as { paymentIntentId?: string };
-
-    try {
-      const intent = await options.paymentRepository.findIntent({
-        supabaseUserId: access.supabaseUserId,
-        paymentIntentId: params.paymentIntentId ?? ""
-      });
-
-      if (!intent) {
-        return reply.code(404).send(notFoundResponse("Payment intent was not found"));
+      if (!isValidCheckoutToken(checkoutToken)) {
+        return reply.code(404).send(notFoundResponse("Checkout was not found"));
       }
 
-      if (intent.settlementKind !== "creator_split") {
-        return reply.code(400).send(validationResponse("Only creator_split intents use transaction requests"));
-      }
-
-      if (intent.state === "confirmed") {
-        return reply.code(409).send({
-          code: "conflict",
-          message: "Payment intent is already settled"
+      try {
+        const intent = await options.paymentRepository.findCheckoutIntent({
+          checkoutTokenHash: hashPaymentCheckoutToken(checkoutToken)
         });
-      }
 
-      if (intent.expiresAt <= new Date()) {
-        return reply.code(400).send(validationResponse("Payment intent is expired"));
-      }
+        if (!intent) {
+          return reply.code(404).send(notFoundResponse("Checkout was not found"));
+        }
 
-      const transaction = await buildCreatorSplitTransaction({
-        connection: solanaConnection,
-        intent,
-        buyerWallet: body.account
-      });
-      const transactionRequestUrl = buildSolanaPayTransactionRequestUrl({
-        apiUrl: app.config.API_URL,
-        intentId: intent.id
-      });
-
-      await options.paymentRepository.recordTransactionRequest({
-        supabaseUserId: access.supabaseUserId,
-        paymentIntentId: intent.id,
-        transactionRequestUrl,
-        buyerWallet: body.account
-      });
-
-      return reply.code(200).send({
-        transaction,
-        message: `Sign Veel payment ${intent.id}`
-      });
-    } catch (error) {
-      if (
-        error instanceof PaymentRepositoryConfigurationError ||
-        error instanceof SolanaPaymentConfigurationError
-      ) {
-        request.log.warn({ error }, "Payment transaction request failed");
-        return reply.code(503).send({
-          code: "service_unavailable",
-          message: "Payments are not configured"
+        return reply.code(200).send({
+          label: "Veel",
+          icon: new URL("/favicon.ico", app.config.WEB_URL).toString()
         });
+      } catch (error) {
+        if (error instanceof PaymentRepositoryConfigurationError) {
+          return reply.code(503).send({
+            code: "service_unavailable",
+            message: "Payments are not configured"
+          });
+        }
+
+        throw error;
+      }
+    }
+  );
+
+  app.post(
+    "/v1/payments/checkout/:checkoutToken",
+    { logLevel: "silent" },
+    async (request, reply) => {
+      const checkoutToken = (request.params as { checkoutToken?: string }).checkoutToken ?? "";
+      const body = request.body as Partial<TransactionRequestPostRequest> | undefined;
+
+      if (!isValidCheckoutToken(checkoutToken)) {
+        return reply.code(404).send(notFoundResponse("Checkout was not found"));
       }
 
-      throw error;
+      if (!body || typeof body.account !== "string" || body.account.length === 0) {
+        return reply.code(400).send(validationResponse("account is required"));
+      }
+
+      try {
+        assertSolanaAddress(body.account);
+      } catch {
+        return reply.code(400).send(validationResponse("account must be a valid Solana public key"));
+      }
+
+      try {
+        const intent = await options.paymentRepository.recordCheckoutPayer({
+          checkoutTokenHash: hashPaymentCheckoutToken(checkoutToken),
+          buyerWallet: body.account
+        });
+
+        if (!intent) {
+          return reply.code(404).send(notFoundResponse("Checkout was not found"));
+        }
+
+        if (intent.settlementKind !== "creator_split") {
+          return reply.code(400).send(validationResponse("Only creator_split intents use transaction requests"));
+        }
+
+        const transaction = await buildCreatorSplitTransaction({
+          connection: solanaConnection,
+          intent,
+          buyerWallet: body.account
+        });
+        return reply.code(200).send({
+          transaction,
+          message: `Sign Veel payment ${intent.id}`
+        });
+      } catch (error) {
+        if (
+          error instanceof PaymentRepositoryConfigurationError ||
+          error instanceof SolanaPaymentConfigurationError
+        ) {
+          return reply.code(503).send({
+            code: "service_unavailable",
+            message: "Payments are not configured"
+          });
+        }
+
+        throw error;
+      }
     }
-  });
+  );
 
   app.post("/v1/payments/intents/:paymentIntentId/submissions", async (request, reply) => {
     const access = await verifyPaymentReadyAccess(request, options);
@@ -302,7 +352,7 @@ export async function registerPaymentIntentRoutes(
         return reply.code(404).send(notFoundResponse("Payment intent was not found"));
       }
 
-      const settlement = await options.settlementVerifier.verifyNativeSolTransfer({
+      const settlement = await options.settlementVerifier.verifyTransfer({
         signature: body.signature,
         referenceAddress: intent.referenceAddress,
         memo: paymentMemo(intent.id),
@@ -315,7 +365,11 @@ export async function registerPaymentIntentRoutes(
         totalAmountMinor: intent.totalAmountMinor,
         creatorAmountMinor: intent.creatorAmountMinor,
         platformFeeAmountMinor: intent.platformFeeAmountMinor,
-        allocationAmountMinor: intent.allocationAmountMinor
+        allocationAmountMinor: intent.allocationAmountMinor,
+        currency: intent.currency,
+        tokenMint: intent.tokenMint ?? null,
+        tokenDecimals: intent.tokenDecimals ?? null,
+        expiresAt: intent.expiresAt
       });
 
       await options.paymentRepository.recordSubmission({
@@ -339,4 +393,8 @@ export async function registerPaymentIntentRoutes(
     }
   });
 
+}
+
+function isValidCheckoutToken(token: string): boolean {
+  return /^[A-Za-z0-9_-]{43}$/.test(token);
 }

@@ -14,7 +14,7 @@ export interface CreatorProfileRow extends ProfileRow {
   content_count: string | number;
   live_room_count: string | number;
   confirmed_payment_count: string | number;
-  tips_enabled: boolean;
+  support_enabled: boolean;
   content_unlocks_enabled: boolean;
   live_passes_enabled: boolean;
   paid_messages_enabled: boolean;
@@ -39,7 +39,7 @@ export interface DashboardRow extends ProfileRow {
   kyc_state: "not_required" | "required" | "pending" | "verified" | "failed";
   tax_profile_state: "not_required" | "required" | "pending" | "verified";
   recipient_wallet_state: "missing" | "linked";
-  tips_enabled: boolean;
+  support_enabled: boolean;
   content_unlocks_enabled: boolean;
   live_passes_enabled: boolean;
   paid_messages_enabled: boolean;
@@ -58,7 +58,7 @@ export interface CreatorOnboardingRow {
   kyc_state: "not_required" | "required" | "pending" | "verified" | "failed";
   tax_profile_state: "not_required" | "required" | "pending" | "verified";
   earnings_recipient_wallet_id: string | null;
-  tips_enabled: boolean;
+  support_enabled: boolean;
   content_unlocks_enabled: boolean;
   live_passes_enabled: boolean;
   paid_messages_enabled: boolean;

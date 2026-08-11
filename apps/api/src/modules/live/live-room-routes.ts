@@ -3,7 +3,7 @@ import {
   LiveRepositoryConfigurationError,
   LiveRoomIdempotencyConflictError
 } from "./live-repository.js";
-import { LiveProviderConfigurationError } from "./livepeer-adapter.js";
+import { LiveProviderError } from "./livepeer-adapter.js";
 import type { CreateLiveRoomRequest } from "./types.js";
 import {
   conflictResponse,
@@ -103,7 +103,7 @@ export async function registerLiveRoomRoutes(
     } catch (error) {
       if (
         error instanceof LiveRepositoryConfigurationError ||
-        error instanceof LiveProviderConfigurationError
+        error instanceof LiveProviderError
       ) {
         request.log.warn({ error }, "Live room creation failed");
         return reply.code(503).send(serviceUnavailableResponse("Live rooms are not configured"));
@@ -146,7 +146,7 @@ export async function registerLiveRoomRoutes(
     } catch (error) {
       if (
         error instanceof LiveRepositoryConfigurationError ||
-        error instanceof LiveProviderConfigurationError
+        error instanceof LiveProviderError
       ) {
         request.log.warn({ error }, "Live room lookup failed");
         return reply.code(503).send(serviceUnavailableResponse("Live rooms are not configured"));
@@ -228,7 +228,7 @@ export async function registerLiveRoomRoutes(
     } catch (error) {
       if (
         error instanceof LiveRepositoryConfigurationError ||
-        error instanceof LiveProviderConfigurationError
+        error instanceof LiveProviderError
       ) {
         request.log.warn({ error }, "Live room sync failed");
         return reply.code(503).send(serviceUnavailableResponse("Live rooms are not configured"));

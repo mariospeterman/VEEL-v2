@@ -183,7 +183,11 @@ export function createApiDependencies(
     activityRepository:
       options.activityRepository ?? createPostgresActivityRepository(postgresClient),
     settlementVerifier:
-      options.settlementVerifier ?? createSolanaRpcSettlementVerifier(app.config.SOLANA_RPC_URL),
+      options.settlementVerifier ??
+        createSolanaRpcSettlementVerifier(
+          app.config.SOLANA_RPC_URL,
+          app.config.PAYMENT_SOLANA_FINALITY
+        ),
     referralRepository:
       options.referralRepository ?? createPostgresReferralRepository(postgresClient),
     refundRepository: options.refundRepository ?? createPostgresRefundRepository(postgresClient),

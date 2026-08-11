@@ -1,16 +1,24 @@
 import { describe, expect, it } from "vitest";
+import bs58 from "bs58";
+import { Keypair, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
+import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { calculateCreatorSplit, PaymentAmountError } from "../src/modules/payment/payment-amounts";
-import { verifyNativeSolTransfer } from "../src/modules/payment/solana-payment";
-import type { PaymentSettlementInput } from "../src/modules/payment/types";
+import {
+  buildCreatorSplitTransaction,
+  verifySolanaTransfer
+} from "../src/modules/payment/solana-payment";
+import type { PaymentSettlementInput, StoredPaymentIntent } from "../src/modules/payment/types";
 
 const signature =
   "5Pj5fCupXLUePYn18JkY8SrRaWFiUctuDTRwvUy2MLgVFG1FsCeezrWwZsmxkL5YJQFmQpAcY7rc5pN6vrXJt7Qp";
-const buyerWallet = "1".repeat(32);
-const creatorWallet = "2".repeat(32);
-const platformFeeWallet = "3".repeat(32);
-const treasuryWallet = "4".repeat(32);
-const allocationWallet = "5".repeat(32);
-const referenceAddress = "6".repeat(32);
+const buyerWallet = Keypair.generate().publicKey.toBase58();
+const creatorWallet = Keypair.generate().publicKey.toBase58();
+const platformFeeWallet = Keypair.generate().publicKey.toBase58();
+const treasuryWallet = Keypair.generate().publicKey.toBase58();
+const allocationWallet = Keypair.generate().publicKey.toBase58();
+const referenceAddress = Keypair.generate().publicKey.toBase58();
+const usdcMint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+const blockTime = new Date("2026-01-01T00:00:00.000Z");
 
 describe("payment amount calculation", () => {
   it("calculates an exact creator/platform split in atomic units", () => {
@@ -59,7 +67,7 @@ describe("Solana creator split settlement verification", () => {
       transfer(creatorWallet, 9_000_000),
       transfer(platformFeeWallet, 1_000_000),
       memo("veel:intent-1")
-    ])).resolves.toEqual({ confirmed: true });
+    ])).resolves.toEqual({ confirmed: true, blockTime });
   });
 
   it("rejects wrong creator wallet or amount", async () => {
@@ -115,13 +123,81 @@ describe("Solana creator split settlement verification", () => {
       transfer(platformFeeWallet, 500_000),
       transfer(allocationWallet, 500_000),
       memo("veel:intent-1")
-    ], { input })).resolves.toEqual({ confirmed: true });
+    ], { input })).resolves.toEqual({ confirmed: true, blockTime });
 
     await expect(expectSettlement([
       transfer(creatorWallet, 9_000_000),
       transfer(platformFeeWallet, 500_000),
       memo("veel:intent-1")
     ], { input })).resolves.toEqual({ confirmed: false, failureCode: "transfer_mismatch" });
+  });
+
+  it("requires exact decoded memo content and rejects settlement after intent expiry", async () => {
+    await expect(expectSettlement([
+      transfer(creatorWallet, 9_000_000),
+      transfer(platformFeeWallet, 1_000_000),
+      encodedMemo("wrong-memo")
+    ])).resolves.toEqual({ confirmed: false, failureCode: "memo_missing" });
+
+    await expect(expectSettlement([
+      transfer(creatorWallet, 9_000_000),
+      transfer(platformFeeWallet, 1_000_000),
+      encodedMemo("veel:intent-1")
+    ], {
+      input: settlementInput({ expiresAt: new Date("2025-12-31T23:59:59.000Z") })
+    })).resolves.toEqual({
+      confirmed: false,
+      failureCode: "intent_expired_before_settlement",
+      blockTime
+    });
+  });
+
+  it("confirms exact one-time USDC creator split transfers", async () => {
+    const input = settlementInput({
+      currency: "USDC",
+      tokenMint: usdcMint,
+      tokenDecimals: 6,
+      totalAmountMinor: 1_000_000,
+      creatorAmountMinor: 900_000,
+      platformFeeAmountMinor: 100_000
+    });
+
+    await expect(expectSettlement([
+      tokenTransfer(creatorWallet, 900_000),
+      tokenTransfer(platformFeeWallet, 100_000),
+      memo("veel:intent-1")
+    ], { input })).resolves.toEqual({ confirmed: true, blockTime });
+  });
+});
+
+describe("Solana Pay transaction construction", () => {
+  it("builds an unsigned one-time USDC split with token transfers and no native transfer", async () => {
+    const encoded = await buildCreatorSplitTransaction({
+      connection: {
+        async getLatestBlockhash() {
+          return {
+            blockhash: Keypair.generate().publicKey.toBase58(),
+            lastValidBlockHeight: 1
+          };
+        }
+      },
+      intent: storedUsdcIntent(),
+      buyerWallet
+    });
+    const transaction = Transaction.from(Buffer.from(encoded, "base64"));
+    const tokenInstructions = transaction.instructions.filter((instruction) =>
+      instruction.programId.equals(TOKEN_PROGRAM_ID)
+    );
+
+    expect(transaction.feePayer?.toBase58()).toBe(buyerWallet);
+    expect(tokenInstructions).toHaveLength(2);
+    expect(transaction.instructions.some((instruction) =>
+      instruction.programId.equals(SystemProgram.programId)
+    )).toBe(false);
+    expect(transaction.instructions.at(-1)?.data.toString("utf8")).toBe("veel:intent-1");
+    expect(tokenInstructions.every((instruction) =>
+      instruction.keys.some((key) => key.pubkey.toBase58() === referenceAddress)
+    )).toBe(true);
   });
 });
 
@@ -134,10 +210,11 @@ function expectSettlement(
   } = {}
 ) {
   const includeReference = options.includeReference ?? true;
-  return verifyNativeSolTransfer(
+  return verifySolanaTransfer(
     {
       async getParsedTransaction() {
         return {
+          blockTime: Math.floor(blockTime.getTime() / 1_000),
           meta: options.failed ? { err: { InstructionError: [0, "Custom"] } } : { err: null },
           transaction: {
             message: {
@@ -169,7 +246,52 @@ function settlementInput(overrides: Partial<PaymentSettlementInput> = {}): Payme
     creatorAmountMinor: 9_000_000,
     platformFeeAmountMinor: 1_000_000,
     allocationAmountMinor: 0,
+    currency: "SOL",
+    tokenMint: null,
+    tokenDecimals: null,
+    expiresAt: new Date("2026-01-01T00:15:00.000Z"),
     ...overrides
+  };
+}
+
+function storedUsdcIntent(): StoredPaymentIntent {
+  return {
+    id: "intent-1",
+    productType: "support",
+    targetId: "00000000-0000-4000-8000-000000000001",
+    amountMinor: 1_000_000,
+    currency: "USDC",
+    state: "pending",
+    settlementKind: "creator_split",
+    buyerWallet: null,
+    creatorWallet,
+    platformFeeWallet,
+    allocationWallet: null,
+    treasuryWallet,
+    totalAmountMinor: 1_000_000,
+    creatorAmountMinor: 900_000,
+    platformFeeAmountMinor: 100_000,
+    allocationAmountMinor: 0,
+    tokenMint: usdcMint,
+    tokenDecimals: 6,
+    referenceAddress,
+    solanaCluster: "mainnet-beta",
+    expiresAt: new Date("2026-01-01T00:15:00.000Z"),
+    requestHash: "request-hash",
+    withdrawalWaiverRequired: false,
+    withdrawalWaiverAcceptedAt: null,
+    withdrawalWaiverVersion: null,
+    termsVersion: null,
+    durableConfirmationRequired: true,
+    refundValueBasis: "original_crypto_amount",
+    refundPolicy: {
+      withdrawalWaiverRequired: false,
+      withdrawalWaiverAcceptedAt: null,
+      withdrawalWaiverVersion: "2026-01",
+      termsVersion: "2026-01",
+      durableConfirmationRequired: true,
+      refundValueBasis: "original_crypto_amount"
+    }
   };
 }
 
@@ -191,5 +313,37 @@ function memo(value: string) {
   return {
     program: "spl-memo",
     parsed: value
+  };
+}
+
+function encodedMemo(value: string) {
+  return {
+    programId: {
+      toBase58: () => "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
+    },
+    data: bs58.encode(Buffer.from(value, "utf8"))
+  };
+}
+
+function tokenTransfer(destinationWallet: string, amount: number) {
+  const mint = new PublicKey(usdcMint);
+  return {
+    program: "spl-token",
+    parsed: {
+      type: "transferChecked",
+      info: {
+        authority: buyerWallet,
+        source: getAssociatedTokenAddressSync(mint, new PublicKey(buyerWallet)).toBase58(),
+        destination: getAssociatedTokenAddressSync(
+          mint,
+          new PublicKey(destinationWallet)
+        ).toBase58(),
+        mint: usdcMint,
+        tokenAmount: {
+          amount: String(amount),
+          decimals: 6
+        }
+      }
+    }
   };
 }

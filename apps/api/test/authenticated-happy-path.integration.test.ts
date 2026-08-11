@@ -75,7 +75,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     const ageProviderWaterfall = createIntegrationAgeWaterfall(providerReference);
     const settlementInputs: PaymentSettlementInput[] = [];
     const settlementVerifier: PaymentSettlementVerifier = {
-      async verifyNativeSolTransfer(input) {
+      async verifyTransfer(input) {
         settlementInputs.push(input);
 
         return {

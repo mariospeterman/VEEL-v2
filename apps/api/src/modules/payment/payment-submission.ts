@@ -5,7 +5,7 @@ import { grantContentUnlockEntitlement, grantLivePassEntitlement } from "./payme
 import { grantEventAccessPassEntitlement } from "./payment-event-access-pass-settlement.js";
 import { deliverPaidMessage } from "./payment-paid-message-settlement.js";
 import { recordPaymentDurableConfirmation } from "./payment-durable-confirmation.js";
-import { recordReferralCommission, recordTipSupportSettlementLedger } from "./payment-settlement-ledger.js";
+import { recordReferralCommission, recordSupportSettlementLedger } from "./payment-settlement-ledger.js";
 import { insertSettlementAttempt, recordWalletTransaction } from "./payment-settlement-records.js";
 
 export async function recordPaymentSubmission(
@@ -90,7 +90,7 @@ export async function recordPaymentSubmission(
       input.settlement.confirmed &&
       (updatedIntent?.product_type === "tip" || updatedIntent?.product_type === "support")
     ) {
-      await recordTipSupportSettlementLedger(transaction, {
+      await recordSupportSettlementLedger(transaction, {
         paymentIntentId: updatedIntent.payment_intent_id,
         actorUserId: updatedIntent.user_id,
         creatorUserId: updatedIntent.target_id,

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import type { StoredPaymentIntent } from "./types.js";
 
-export async function recordTipSupportSettlementLedger(
+export async function recordSupportSettlementLedger(
   transaction: postgres.TransactionSql,
   input: {
     paymentIntentId: string;
@@ -63,7 +63,7 @@ export async function recordTipSupportSettlementLedger(
       ${input.actorUserId},
       'payment_intent',
       ${input.paymentIntentId},
-      'tip_support_settlement_posted',
+      'support_settlement_posted',
       ${transaction.json({
         productType: input.productType,
         creatorUserId: input.creatorUserId,

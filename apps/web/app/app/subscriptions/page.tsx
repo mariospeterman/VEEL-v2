@@ -5,6 +5,7 @@ import {
   type SubscriptionPlan
 } from "@/api-client";
 import { requireAppAccess } from "@/supabase/route-guard";
+import { formatAssetAmount } from "@/format-asset-amount";
 import { AppShell } from "../../app-shell";
 import { Card, EmptyState, ErrorState, Fact, PageHeader, StatusPill } from "../../ui";
 import { SubscriptionAuthorizationPanel } from "../../subscriptions/subscription-authorization-panel";
@@ -94,7 +95,7 @@ function PlanRow({ plan }: { plan: SubscriptionPlan }) {
         <div>
           <p className="font-medium">{plan.label}</p>
           <p className="mt-1 text-sm text-(--muted)">
-            {formatAmount(plan.amountMinor, plan.currency)} every {plan.periodDays} days
+            {formatAssetAmount(plan.amountMinor, plan.currency)} every {plan.periodDays} days
           </p>
         </div>
         <StatusPill tone={plan.providerState === "launch_approved" ? "good" : "warn"}>{plan.providerState}</StatusPill>
@@ -107,8 +108,4 @@ function PlanRow({ plan }: { plan: SubscriptionPlan }) {
       <SubscriptionAuthorizationPanel plan={plan} />
     </Card>
   );
-}
-
-function formatAmount(amountMinor: number, currency: string) {
-  return `${(amountMinor / 1_000_000).toLocaleString()} ${currency}`;
 }

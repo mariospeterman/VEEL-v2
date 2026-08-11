@@ -5,7 +5,7 @@ export function toCreatorOnboarding(row: CreatorOnboardingRow): CreatorOnboardin
   const hasProfile = Boolean(row.handle && row.display_name);
   const hasWallet = Boolean(row.primary_wallet_id) || Number(row.wallet_count) > 0;
   const productsEnabled = [
-    row.tips_enabled,
+    row.support_enabled,
     row.content_unlocks_enabled,
     row.live_passes_enabled,
     row.paid_messages_enabled,

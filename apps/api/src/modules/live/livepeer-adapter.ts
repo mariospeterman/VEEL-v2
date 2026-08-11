@@ -1,4 +1,4 @@
-import { createPrivateKey, createSign } from "node:crypto";
+import { signAccessJwt } from "@livepeer/core/crypto";
 import type { ServerEnv } from "@veel/config";
 import type {
   CreatedLiveProviderRoom,
@@ -6,13 +6,25 @@ import type {
   LiveProviderRoomStatus
 } from "./types.js";
 
-const livepeerApiBaseUrl = "https://livepeer.studio/api";
 const livepeerRtmpIngestBaseUrl = "rtmp://rtmp.livepeer.com/live";
 
-export class LiveProviderConfigurationError extends Error {
+export class LiveProviderError extends Error {}
+
+export class LiveProviderConfigurationError extends LiveProviderError {
   constructor() {
     super("LIVEPEER_NOT_CONFIGURED");
     this.name = "LiveProviderConfigurationError";
+  }
+}
+
+export class LiveProviderRequestError extends LiveProviderError {
+  constructor(
+    readonly kind: "timeout" | "authentication" | "not_found" | "rate_limited" | "provider",
+    readonly statusCode: number | null,
+    readonly retryable: boolean
+  ) {
+    super(`LIVEPEER_${kind.toUpperCase()}`);
+    this.name = "LiveProviderRequestError";
   }
 }
 
@@ -34,7 +46,10 @@ interface LivepeerPlaybackResponse {
   };
 }
 
-export function createLivepeerProviderAdapter(env: ServerEnv): LiveProviderAdapter {
+export function createLivepeerProviderAdapter(
+  env: ServerEnv,
+  fetchImpl: typeof fetch = fetch
+): LiveProviderAdapter {
   return {
     isConfigured() {
       return Boolean(env.LIVEPEER_API_KEY);
@@ -46,7 +61,7 @@ export function createLivepeerProviderAdapter(env: ServerEnv): LiveProviderAdapt
         throw new LiveProviderConfigurationError();
       }
 
-      const response = await fetch(`${livepeerApiBaseUrl}/stream`, {
+      const response = await livepeerFetch(env, fetchImpl, "/stream", {
         method: "POST",
         headers: {
           authorization: `Bearer ${apiKey}`,
@@ -61,10 +76,6 @@ export function createLivepeerProviderAdapter(env: ServerEnv): LiveProviderAdapt
           }
         })
       });
-
-      if (!response.ok) {
-        throw new LiveProviderConfigurationError();
-      }
 
       const payload = (await response.json()) as LivepeerStreamResponse;
 
@@ -89,19 +100,22 @@ export function createLivepeerProviderAdapter(env: ServerEnv): LiveProviderAdapt
         throw new LiveProviderConfigurationError();
       }
 
-      const streamResponse = await fetch(`${livepeerApiBaseUrl}/stream/${input.providerStreamId}`, {
-        headers: {
-          authorization: `Bearer ${apiKey}`
+      const streamResponse = await livepeerFetch(
+        env,
+        fetchImpl,
+        `/stream/${encodeURIComponent(input.providerStreamId)}`,
+        {
+          headers: {
+            authorization: `Bearer ${apiKey}`
+          }
         }
-      });
-
-      if (!streamResponse.ok) {
-        throw new LiveProviderConfigurationError();
-      }
+      );
 
       const stream = (await streamResponse.json()) as LivepeerStreamResponse;
       const providerPlaybackId = stream.playbackId ?? input.providerPlaybackId;
-      const playbackUrl = providerPlaybackId ? await findPlaybackUrl(apiKey, providerPlaybackId) : null;
+      const playbackUrl = providerPlaybackId
+        ? await findPlaybackUrl(env, fetchImpl, apiKey, providerPlaybackId)
+        : null;
       const isActive = Boolean(stream.isActive);
       const state: LiveProviderRoomStatus["state"] = isActive
         ? "live"
@@ -125,25 +139,41 @@ export function createLivepeerProviderAdapter(env: ServerEnv): LiveProviderAdapt
         return null;
       }
 
-      return signLivepeerPlaybackJwt({
-        privateKeyPem: env.LIVEPEER_ACCESS_CONTROL_PRIVATE_KEY,
-        issuer: env.API_URL,
-        playbackId: input.playbackId,
-        subject: input.supabaseUserId
-      });
+      try {
+        return await signAccessJwt({
+          privateKey: env.LIVEPEER_ACCESS_CONTROL_PRIVATE_KEY,
+          publicKey: env.LIVEPEER_ACCESS_CONTROL_PUBLIC_KEY,
+          issuer: env.API_URL,
+          playbackId: input.playbackId,
+          expiration: 60 * 60,
+          custom: { userId: input.supabaseUserId }
+        });
+      } catch {
+        throw new LiveProviderConfigurationError();
+      }
     }
   };
 }
 
-async function findPlaybackUrl(apiKey: string, playbackId: string): Promise<string | null> {
-  const response = await fetch(`${livepeerApiBaseUrl}/playback/${playbackId}`, {
-    headers: {
-      authorization: `Bearer ${apiKey}`
+async function findPlaybackUrl(
+  env: ServerEnv,
+  fetchImpl: typeof fetch,
+  apiKey: string,
+  playbackId: string
+): Promise<string | null> {
+  let response: Response;
+  try {
+    response = await livepeerFetch(
+      env,
+      fetchImpl,
+      `/playback/${encodeURIComponent(playbackId)}`,
+      { headers: { authorization: `Bearer ${apiKey}` } }
+    );
+  } catch (error) {
+    if (error instanceof LiveProviderRequestError && error.kind === "not_found") {
+      return playbackUrlFromPlaybackId(playbackId);
     }
-  });
-
-  if (!response.ok) {
-    return playbackUrlFromPlaybackId(playbackId);
+    throw error;
   }
 
   const payload = (await response.json()) as LivepeerPlaybackResponse;
@@ -157,33 +187,47 @@ function playbackUrlFromPlaybackId(playbackId: string | undefined): string | nul
   return playbackId ? `https://livepeercdn.studio/hls/${playbackId}/index.m3u8` : null;
 }
 
-function signLivepeerPlaybackJwt(input: {
-  privateKeyPem: string;
-  issuer: string;
-  playbackId: string;
-  subject: string;
-}): string {
-  const now = Math.floor(Date.now() / 1000);
-  const header = {
-    alg: "ES256",
-    typ: "JWT"
-  };
-  const payload = {
-    iss: input.issuer,
-    sub: input.subject,
-    video: input.playbackId,
-    iat: now,
-    exp: now + 60 * 60
-  };
-  const unsigned = `${base64UrlJson(header)}.${base64UrlJson(payload)}`;
-  const signer = createSign("SHA256");
-  signer.update(unsigned);
-  signer.end();
-  const signature = signer.sign(createPrivateKey(input.privateKeyPem));
+async function livepeerFetch(
+  env: ServerEnv,
+  fetchImpl: typeof fetch,
+  path: string,
+  init: RequestInit
+): Promise<Response> {
+  const baseUrl = env.LIVEPEER_API_BASE_URL.replace(/\/$/, "");
+  let response: Response;
 
-  return `${unsigned}.${signature.toString("base64url")}`;
+  try {
+    response = await fetchImpl(`${baseUrl}${path}`, {
+      ...init,
+      signal: AbortSignal.timeout(env.LIVEPEER_HTTP_TIMEOUT_MS)
+    });
+  } catch (error) {
+    if (isTimeoutError(error)) {
+      throw new LiveProviderRequestError("timeout", null, true);
+    }
+    throw new LiveProviderRequestError("provider", null, true);
+  }
+
+  if (response.ok) {
+    return response;
+  }
+
+  if (response.status === 401 || response.status === 403) {
+    throw new LiveProviderRequestError("authentication", response.status, false);
+  }
+  if (response.status === 404) {
+    throw new LiveProviderRequestError("not_found", response.status, false);
+  }
+  if (response.status === 429) {
+    throw new LiveProviderRequestError("rate_limited", response.status, true);
+  }
+
+  throw new LiveProviderRequestError("provider", response.status, response.status >= 500);
 }
 
-function base64UrlJson(value: unknown): string {
-  return Buffer.from(JSON.stringify(value)).toString("base64url");
+function isTimeoutError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.name === "TimeoutError" || error.name === "AbortError")
+  );
 }

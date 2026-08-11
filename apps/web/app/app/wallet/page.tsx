@@ -5,6 +5,7 @@ import {
   type WalletTransaction
 } from "@/api-client";
 import { requireConfiguredSession } from "@/supabase/route-guard";
+import { formatAssetAmount } from "@/format-asset-amount";
 import { AppShell } from "../../app-shell";
 import { Card, EmptyState, ErrorState, Fact, PageHeader, StatusPill } from "../../ui";
 
@@ -140,7 +141,7 @@ function TransactionRow({ transaction }: { transaction: WalletTransaction }) {
         <StatusPill>{transaction.state}</StatusPill>
       </div>
       <div className="mt-4 grid gap-2 text-sm">
-        <Fact label="Amount" value={`${transaction.amountMinor.toLocaleString()} ${transaction.currency}`} />
+        <Fact label="Amount" value={formatAssetAmount(transaction.amountMinor, transaction.currency)} />
         <Fact label="Signature" value={shorten(transaction.signature)} />
       </div>
     </Card>

@@ -380,6 +380,6 @@ function descriptionForProduct(productType: StoredPaymentIntent["productType"]):
       return "Creator support";
     case "tip":
     default:
-      return "Creator tip";
+      return "Creator support";
   }
 }

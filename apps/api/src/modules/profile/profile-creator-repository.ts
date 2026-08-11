@@ -17,7 +17,7 @@ export function createProfileCreatorRepositoryMethods(
           p.bio,
           p.profile_links,
           p.location_label,
-          coalesce(cms.tips_enabled, true) as tips_enabled,
+          coalesce(cms.support_enabled, true) as support_enabled,
           coalesce(cms.content_unlocks_enabled, true) as content_unlocks_enabled,
           coalesce(cms.live_passes_enabled, true) as live_passes_enabled,
           coalesce(cms.paid_messages_enabled, true) as paid_messages_enabled,
