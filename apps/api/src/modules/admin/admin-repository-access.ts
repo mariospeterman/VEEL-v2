@@ -102,6 +102,15 @@ export function createAccessRepository(
             count(*) filter (where state = 'dead_letter') as dead_letter_count,
             min(next_attempt_at) filter (where state in ('queued', 'failed')) as oldest_pending_at
           from provider_event_replay_requests
+          union all
+          select
+            'media_moderation'::text as name,
+            count(*) filter (where state in ('queued', 'retry')) as pending_count,
+            count(*) filter (where state = 'processing') as processing_count,
+            count(*) filter (where state = 'retry') as failed_count,
+            count(*) filter (where state = 'dead_letter') as dead_letter_count,
+            min(next_attempt_at) filter (where state in ('queued', 'retry')) as oldest_pending_at
+          from media_moderation_jobs
         `
       ]);
 
@@ -251,6 +260,8 @@ export function createAccessRepository(
           return run("payment_confirmation_deliveries", "queued");
         case "provider_event_replays":
           return run("provider_event_replay_requests", "queued");
+        case "media_moderation":
+          return run("media_moderation_jobs", "queued");
       }
     },
     async listUsers(input) {

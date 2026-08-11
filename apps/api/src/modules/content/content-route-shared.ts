@@ -30,6 +30,11 @@ export const feedModes = new Set(["recommended", "following", "nsfw", "sfw", "li
 export const contentMediaTypes = new Set(["bit", "clip", "image", "vod", "live_replay"]);
 export const contentVisibilityValues = new Set(["public", "followers", "subscribers", "private"]);
 export const nsfwLabels = new Set(["none", "adult", "explicit"]);
+export const representationModes = new Set([
+  "no_real_person",
+  "self_only",
+  "declared_performers"
+]);
 export const videoMimeTypes = new Set(["video/mp4", "video/quicktime", "video/webm"]);
 export const dailyContentDraftQuota = 20;
 export const dailyMediaUploadQuota = 30;

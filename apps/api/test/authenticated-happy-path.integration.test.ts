@@ -5,6 +5,7 @@ import nacl from "tweetnacl";
 import { describe, expect, it, vi } from "vitest";
 import { buildApi } from "../src/app";
 import type { AgeProviderWaterfall } from "../src/modules/age/types";
+import { createPostgresAdminRepository } from "../src/modules/admin/admin-repository";
 import type {
   PaymentSettlementInput,
   PaymentSettlementVerifier
@@ -32,6 +33,7 @@ const describeIntegration = enableRealApiIntegration ? describe : describe.skip;
 const buyerSupabaseUserId = "10000000-0000-4000-8000-000000000001";
 const creatorSupabaseUserId = "10000000-0000-4000-8000-000000000002";
 const authToken = "integration-buyer-token";
+const creatorAuthToken = "integration-creator-token";
 const sumsubWebhookSecret = "sumsub-integration-webhook-secret";
 const treasuryWallet = "1".repeat(32);
 const subscriptionCollectorWallet = "1".repeat(32);
@@ -461,17 +463,59 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       const adultDraftResponse = await app.inject({
         method: "POST",
         url: "/v1/content",
-        headers: authenticatedHeaders(`adult-content-denied-${runId}`),
+        headers: creatorAuthenticatedHeaders(`adult-content-create-${runId}`),
         payload: {
           mediaType: "image",
           visibility: "public",
           nsfwLabel: "adult",
+          representationMode: "self_only",
+          contentSafetyPolicyAccepted: true,
           caption: `Adult integration draft ${runId}`
         }
       });
 
       expect(adultDraftResponse.statusCode, adultDraftResponse.body).toBe(201);
       expect(adultDraftResponse.json()).toMatchObject({ nsfwLabel: "adult" });
+      const adultContentId = adultDraftResponse.json().id as string;
+      const adultSafetyRows = await sql<
+        {
+          representation_mode: string;
+          case_state: string;
+          provider_release_allowed: boolean;
+          consent_count: string;
+        }[]
+      >`
+        select
+          csd.representation_mode,
+          msc.state as case_state,
+          msc.provider_release_allowed,
+          (select count(*) from performer_consents pc where pc.content_item_id = ci.id) as consent_count
+        from content_items ci
+        join content_safety_declarations csd on csd.content_item_id = ci.id
+        join media_safety_cases msc on msc.content_item_id = ci.id
+        where ci.id = ${adultContentId}
+      `;
+      expect(adultSafetyRows[0]).toEqual({
+        representation_mode: "self_only",
+        case_state: "quarantined",
+        provider_release_allowed: false,
+        consent_count: "1"
+      });
+
+      const moderationRepository = createPostgresAdminRepository(sql);
+      const moderatedAdultDraft = await moderationRepository.updateContentModeration({
+        supabaseUserId: creatorSupabaseUserId,
+        contentId: adultContentId,
+        body: {
+          action: "restrict",
+          reason: "integration_media_safety_review"
+        },
+        idempotencyKey: `adult-content-restrict-${runId}`
+      });
+      expect(moderatedAdultDraft).toMatchObject({
+        id: adultContentId,
+        moderationState: "review_required"
+      });
 
       const createContentResponse = await app.inject({
         method: "POST",
@@ -2098,17 +2142,30 @@ function authenticatedHeaders(idempotencyKey: string): Record<string, string> {
   };
 }
 
+function creatorAuthenticatedHeaders(idempotencyKey: string): Record<string, string> {
+  return {
+    authorization: `Bearer ${creatorAuthToken}`,
+    "idempotency-key": idempotencyKey
+  };
+}
+
 const integrationAuthVerifier: SupabaseAuthVerifier = {
   async verifyBearerToken(token: string): Promise<VerifiedSupabaseSession | null> {
-    if (token !== authToken) {
-      return null;
+    if (token === authToken) {
+      return {
+        supabaseUserId: buyerSupabaseUserId,
+        email: "integration-buyer@example.test",
+        role: "authenticated"
+      };
     }
-
-    return {
-      supabaseUserId: buyerSupabaseUserId,
-      email: "integration-buyer@example.test",
-      role: "authenticated"
-    };
+    if (token === creatorAuthToken) {
+      return {
+        supabaseUserId: creatorSupabaseUserId,
+        email: "integration-creator@example.test",
+        role: "authenticated"
+      };
+    }
+    return null;
   }
 };
 
@@ -2189,16 +2246,25 @@ async function seedCreatorPaidContent(
       result_over_threshold,
       assurance_level,
       verified_at,
-      reusable
+      reusable,
+      policy_version,
+      terms_accepted_at
     )
     values
       (
         'user', ${input.creatorUserId}, 'age_access', 'valid', 'didit',
-        ${`creator-age-${input.contentId}`}, 'gov_id_selfie', 18, true, 'high', now(), true
+        ${`creator-age-${input.contentId}`}, 'gov_id_selfie', 18, true, 'high', now(), true,
+        null, null
       ),
       (
         'user', ${input.creatorUserId}, 'creator_kyc', 'valid', 'didit',
-        ${`creator-kyc-${input.contentId}`}, 'gov_id_selfie', 18, true, 'high', now(), true
+        ${`creator-kyc-${input.contentId}`}, 'gov_id_selfie', 18, true, 'high', now(), true,
+        null, null
+      ),
+      (
+        'user', ${input.creatorUserId}, 'adult_publisher_eligibility', 'valid', 'didit',
+        ${`creator-adult-${input.contentId}`}, 'gov_id_selfie', 18, true, 'high', now(), true,
+        'adult-publisher-v1', now()
       )
   `;
   await sql`
@@ -2245,12 +2311,12 @@ async function seedCreatorPaidContent(
       ${input.creatorUserId},
       'image',
       'ready',
-      'published',
-      now(),
+      'submitted_for_review',
+      null,
       'Integration paid content',
       'public',
       'adult',
-      'approved'
+      'pending'
     )
   `;
   await sql`
@@ -2277,6 +2343,12 @@ async function seedCreatorPaidContent(
       now()
     )
   `;
+  await approveSeededContent(sql, {
+    contentId: input.contentId,
+    creatorUserId: input.creatorUserId,
+    rating: "adult",
+    representationMode: "no_real_person"
+  });
   await sql`
     insert into content_access_rules (
       id,
@@ -2325,12 +2397,12 @@ async function seedCreatorFreeVideo(
       ${input.creatorUserId},
       'vod',
       'ready',
-      'published',
-      now(),
+      'submitted_for_review',
+      null,
       'Integration free video',
       'public',
       'none',
-      'approved'
+      'pending'
     )
   `;
   await sql`
@@ -2356,6 +2428,72 @@ async function seedCreatorFreeVideo(
       true,
       now()
     )
+  `;
+  await approveSeededContent(sql, {
+    contentId: input.contentId,
+    creatorUserId: input.creatorUserId,
+    rating: "none",
+    representationMode: "not_declared"
+  });
+}
+
+async function approveSeededContent(
+  sql: PostgresSql,
+  input: {
+    contentId: string;
+    creatorUserId: string;
+    rating: "none" | "adult" | "explicit";
+    representationMode: "not_declared" | "no_real_person" | "self_only";
+  }
+): Promise<void> {
+  await sql`
+    insert into content_safety_declarations (
+      content_item_id,
+      uploader_user_id,
+      representation_mode,
+      policy_version,
+      state,
+      accepted_at
+    )
+    values (
+      ${input.contentId},
+      ${input.creatorUserId},
+      ${input.representationMode},
+      'media-safety-v1',
+      'active',
+      ${input.representationMode === "not_declared" ? null : new Date()}
+    )
+  `;
+  await sql`
+    insert into media_safety_cases (
+      content_item_id,
+      declared_rating,
+      state,
+      decision_source,
+      reason_code,
+      policy_version,
+      provider_release_allowed,
+      decided_at
+    )
+    values (
+      ${input.contentId},
+      ${input.rating},
+      'approved',
+      'staff',
+      'integration_fixture_approved',
+      'media-safety-v1',
+      true,
+      now()
+    )
+  `;
+  await sql`
+    update content_items
+    set
+      moderation_state = 'approved',
+      publish_state = 'published',
+      published_at = now(),
+      updated_at = now()
+    where id = ${input.contentId}
   `;
 }
 
@@ -3243,6 +3381,13 @@ async function cleanupRun(
         and webhook_type = 'age-verification'
         and idempotency_key = ${`sumsub-event-${input.providerReference.replace("sumsub-", "")}`}
     `;
+    if (userIds.length > 0) {
+      await tx`
+        delete from performer_subjects
+        where owner_user_id in ${tx(userIds)}
+           or linked_user_id in ${tx(userIds)}
+      `;
+    }
     await tx`
       delete from profiles
       where handle in (${input.buyerHandle}, ${input.creatorHandle})

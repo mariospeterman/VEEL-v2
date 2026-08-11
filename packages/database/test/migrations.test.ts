@@ -900,4 +900,33 @@ describe("database migrations", () => {
     expect(downSql).toContain("drop function if exists private.assert_recipient_monetisation_ready");
     expect(sql).not.toMatch(/creator_balance|withdrawal|payout_queue|escrow|private_key|seed_phrase|mnemonic/i);
   });
+
+  it("adds a canonical fail-closed media safety and performer consent domain", () => {
+    const sql = readMigration("0088_media_safety_and_consent.sql");
+    const downSql = readMigration("0088_media_safety_and_consent.down.sql");
+
+    expect(sql).toContain("create table media_safety_cases");
+    expect(sql).toContain("create table content_safety_declarations");
+    expect(sql).toContain("create table performer_consents");
+    expect(sql).toContain("create table provider_media_scan_events");
+    expect(sql).toContain("create table media_moderation_jobs");
+    expect(sql).toContain("private.content_safety_release_ready");
+    expect(sql).toContain("content_items_safety_release_guard");
+    expect(sql).toContain("alter table media_safety_cases enable row level security");
+    expect(sql).toContain("provider_release_allowed boolean not null default false");
+    expect(downSql).toContain("drop table if exists media_safety_cases");
+    expect(sql).not.toMatch(/raw_provider_payload|identity_document|biometric_template|stream_key|private_key|seed_phrase|mnemonic/i);
+  });
+
+  it("covers media-safety foreign keys used by review and cleanup paths", () => {
+    const sql = readMigration("0089_media_safety_fk_indexes.sql");
+    const downSql = readMigration("0089_media_safety_fk_indexes.down.sql");
+
+    expect(sql).toContain("content_safety_declarations_uploader_idx");
+    expect(sql).toContain("performer_consents_performer_idx");
+    expect(sql).toContain("media_moderation_jobs_case_idx");
+    expect(sql).toContain("media_moderation_jobs_asset_idx");
+    expect(sql).toContain("media_moderation_appeals_appellant_idx");
+    expect(downSql).toContain("drop index if exists media_moderation_jobs_case_idx");
+  });
 });

@@ -80,6 +80,17 @@ export const serverEnvSchema = z.object({
   BUNNY_STREAM_EMBED_TOKEN_KEY: optionalStringSchema,
   BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(900),
   BUNNY_STREAM_WEBHOOK_READONLY_KEY: optionalStringSchema,
+  BUNNY_SHIELD_API_KEY: optionalStringSchema,
+  BUNNY_SHIELD_ZONE_ID: optionalStringSchema,
+  BUNNY_SHIELD_UPLOAD_COVERAGE: z
+    .enum([
+      "not_configured",
+      "app_gateway_only",
+      "stream_tus_provider_confirmed",
+      "dedicated_upload_gateway",
+      "unsupported"
+    ])
+    .default("not_configured"),
   LIVEPEER_API_KEY: optionalStringSchema,
   LIVEPEER_WEBHOOK_SECRET: optionalStringSchema,
   LIVEPEER_ACCESS_CONTROL_PRIVATE_KEY: optionalStringSchema,
@@ -88,6 +99,11 @@ export const serverEnvSchema = z.object({
   LIVEPEER_HTTP_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(60_000).default(10_000),
   LIVEPEER_BROWSER_BROADCAST_REDIRECT_BASE_URL: optionalUrlSchema,
   LIVEPEER_WEBHOOK_ID: optionalStringSchema,
+  LIVEPEER_MODERATION_MULTISTREAM_TARGET_ID: optionalStringSchema,
+  LIVEPEER_ADULT_LIVE_ENABLED: z.coerce.boolean().default(false),
+  MEDIA_MODERATION_MODE: z
+    .enum(["disabled_fail_closed", "shadow", "enforced", "launch_approved"])
+    .default("disabled_fail_closed"),
   AGE_VERIFICATION_DRIVER: z
     .preprocess(emptyToUndefined, z.enum(["didit", "yoti_digital_id", "yoti", "sumsub", "veriff", "persona"]).optional()),
   AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: z.coerce.boolean().default(false),

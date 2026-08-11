@@ -29,6 +29,10 @@ export const nsfwLabels: CreateContentRequest["nsfwLabel"][] = [
   "adult",
   "explicit"
 ];
+export const representationModes: NonNullable<CreateContentRequest["representationMode"]>[] = [
+  "self_only",
+  "no_real_person"
+];
 
 export type PendingState = "draft" | "save" | "publish" | "upload" | "sync" | null;
 export type UploadState = "idle" | "uploading" | "complete" | "failed" | "aborted";
@@ -37,6 +41,10 @@ export function useCreateWorkspaceState() {
   const [mediaType, setMediaType] = useState<CreateContentRequest["mediaType"]>("clip");
   const [visibility, setVisibility] = useState<CreateContentRequest["visibility"]>("private");
   const [nsfwLabel, setNsfwLabel] = useState<CreateContentRequest["nsfwLabel"]>("none");
+  const [representationMode, setRepresentationMode] = useState<
+    NonNullable<CreateContentRequest["representationMode"]>
+  >("self_only");
+  const [contentSafetyPolicyAccepted, setContentSafetyPolicyAccepted] = useState(false);
   const [caption, setCaption] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [draft, setDraft] = useState<ContentItem | null>(null);
@@ -65,6 +73,9 @@ export function useCreateWorkspaceState() {
         mediaType,
         nsfwLabel,
         visibility,
+        ...(nsfwLabel !== "none"
+          ? { representationMode, contentSafetyPolicyAccepted }
+          : {}),
         ...(caption.trim() ? { caption: caption.trim() } : {})
       } satisfies CreateContentRequest;
       const fingerprint = JSON.stringify(draftBody);
@@ -116,6 +127,9 @@ export function useCreateWorkspaceState() {
         caption,
         visibility,
         nsfwLabel,
+        ...(nsfwLabel !== "none"
+          ? { representationMode, contentSafetyPolicyAccepted }
+          : {}),
         teaserStartMs: numericControlValue(teaserStartMs),
         teaserEndMs: numericControlValue(teaserEndMs),
         thumbnailFrameMs: numericControlValue(thumbnailFrameMs)
@@ -243,8 +257,10 @@ export function useCreateWorkspaceState() {
       onStartUpload,
       onSyncProviderStatus,
       setCaption,
+      setContentSafetyPolicyAccepted,
       setMediaType,
       setNsfwLabel,
+      setRepresentationMode,
       setTeaserEndMs,
       setTeaserStartMs,
       setThumbnailFrameMs,
@@ -252,6 +268,7 @@ export function useCreateWorkspaceState() {
     },
     state: {
       caption,
+      contentSafetyPolicyAccepted,
       draft,
       error,
       file,
@@ -260,6 +277,7 @@ export function useCreateWorkspaceState() {
       pending,
       providerSyncedAt,
       publishState,
+      representationMode,
       savedAt,
       teaserEndMs,
       teaserStartMs,

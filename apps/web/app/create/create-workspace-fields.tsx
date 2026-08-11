@@ -60,11 +60,13 @@ export function Select<T extends string>({
   label,
   onChange,
   options,
+  optionLabel,
   value
 }: {
   label: string;
   onChange: (value: T) => void;
   options: T[];
+  optionLabel?: (value: T) => string;
   value: T;
 }) {
   return (
@@ -77,7 +79,7 @@ export function Select<T extends string>({
       >
         {options.map((option) => (
           <option key={option} value={option}>
-            {option}
+            {optionLabel ? optionLabel(option) : option}
           </option>
         ))}
       </select>

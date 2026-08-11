@@ -1503,7 +1503,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [subscription_collections, notification_deliveries, payment_confirmation_emails, provider_event_replays]
+            enum: [subscription_collections, notification_deliveries, payment_confirmation_emails, provider_event_replays, media_moderation]
         - name: jobId
           in: path
           required: true
@@ -2905,6 +2905,8 @@ components:
         caption: { type: string }
         visibility: { type: string, enum: [public, followers, subscribers, private] }
         nsfwLabel: { type: string, enum: [none, adult, explicit] }
+        representationMode: { type: string, enum: [no_real_person, self_only, declared_performers] }
+        contentSafetyPolicyAccepted: { type: boolean }
         eventDraft: { $ref: "#/components/schemas/EventDraft" }
     UpdateContentRequest:
       type: object
@@ -2912,6 +2914,8 @@ components:
         caption: { type: string }
         visibility: { type: string, enum: [public, followers, subscribers, private] }
         nsfwLabel: { type: string, enum: [none, adult, explicit] }
+        representationMode: { type: string, enum: [no_real_person, self_only, declared_performers] }
+        contentSafetyPolicyAccepted: { type: boolean }
         teaserStartMs: { type: integer, nullable: true }
         teaserEndMs: { type: integer, nullable: true }
         thumbnailFrameMs: { type: integer, nullable: true }
@@ -4103,7 +4107,7 @@ components:
       properties:
         name:
           type: string
-          enum: [subscription_collections, notification_deliveries, payment_confirmation_emails, provider_event_replays]
+          enum: [subscription_collections, notification_deliveries, payment_confirmation_emails, provider_event_replays, media_moderation]
         pendingCount: { type: integer }
         processingCount: { type: integer }
         failedCount: { type: integer }

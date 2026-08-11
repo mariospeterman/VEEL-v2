@@ -64,6 +64,7 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 5. [Stack decision](stack-decision.md)
 6. [ADR: Fastify and Supabase decision](adr/0001-fastify-supabase-decision.md)
 7. [ADR: 2026 provider decisions](adr/0002-provider-decisions-2026.md)
+8. [ADR: provider-native media safety and consent](adr/0003-provider-native-media-safety.md)
 8. [Route map](route-map.md)
 9. [Initial contracts and schema](contracts-and-schema.md)
 10. [Infrastructure and research decisions](infra-decisions.md)

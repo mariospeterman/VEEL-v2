@@ -157,7 +157,7 @@ describe("external MCP connector foundation", () => {
           arguments: {
             mediaType: "image",
             visibility: "private",
-            nsfwLabel: "adult",
+            nsfwLabel: "none",
             caption: "Private draft"
           }
         }
@@ -170,7 +170,7 @@ describe("external MCP connector foundation", () => {
       caption: "Private draft"
     });
     expect(contentRepository.createdDrafts).toMatchObject([
-      { visibility: "private", nsfwLabel: "adult" }
+      { visibility: "private", nsfwLabel: "none", representationMode: "not_declared" }
     ]);
     expect(mcpRepository.toolCalls).toMatchObject([{ state: "allowed" }]);
 

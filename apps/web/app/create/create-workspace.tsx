@@ -4,6 +4,7 @@ import { Select, UploadSessionPanel } from "./create-workspace-fields";
 import {
   mediaTypes,
   nsfwLabels,
+  representationModes,
   useCreateWorkspaceState,
   visibilityValues
 } from "./create-workspace-state";
@@ -45,9 +46,32 @@ export function CreateWorkspace({ verification }: { verification: VerificationSt
 
         {isAdultRated && !adultPublishingReady ? <AdultPublisherGate verification={verification} /> : null}
 
+        {isAdultRated ? (
+          <div className="grid gap-3 border-t border-(--line) pt-3 sm:grid-cols-2">
+            <Select
+              label="People shown"
+              onChange={actions.setRepresentationMode}
+              optionLabel={(value) => value === "self_only" ? "Only me" : "No real person"}
+              options={representationModes}
+              value={state.representationMode}
+            />
+            <label className="flex min-h-11 items-center gap-3 self-end rounded border border-(--line) px-3 py-2 text-sm">
+              <input
+                checked={state.contentSafetyPolicyAccepted}
+                onChange={(event) => actions.setContentSafetyPolicyAccepted(event.currentTarget.checked)}
+                type="checkbox"
+              />
+              <span>I confirm this declaration and consent to the listed uses.</span>
+            </label>
+          </div>
+        ) : null}
+
         <button
           className="rounded bg-(--foreground) px-3 py-2 text-sm font-semibold text-(--background) disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={state.pending !== null}
+          disabled={
+            state.pending !== null ||
+            (isAdultRated && !state.contentSafetyPolicyAccepted)
+          }
           type="submit"
         >
           {state.pending === "draft" ? "Creating draft" : "Continue"}

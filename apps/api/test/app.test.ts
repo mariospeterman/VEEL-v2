@@ -3088,6 +3088,8 @@ describe("buildApi", () => {
           caption: "studio cut",
           visibility: "private",
           nsfwLabel: "none",
+          representationMode: "not_declared",
+          contentSafetyPolicyAccepted: false,
           dailyDraftQuota: 20
         });
         expect(input.requestHash).toMatch(/^[a-f0-9]{64}$/);
@@ -3328,6 +3330,8 @@ describe("buildApi", () => {
           captionProvided: true,
           visibility: "followers",
           nsfwLabel: "adult",
+          representationMode: "self_only",
+          contentSafetyPolicyAccepted: true,
           teaserStartMs: 1000,
           teaserStartMsProvided: true,
           teaserEndMs: 5000,
@@ -3376,6 +3380,8 @@ describe("buildApi", () => {
         caption: "updated #studio",
         visibility: "followers",
         nsfwLabel: "adult",
+        representationMode: "self_only",
+        contentSafetyPolicyAccepted: true,
         teaserStartMs: 1000,
         teaserEndMs: 5000,
         thumbnailFrameMs: 1200
@@ -3482,6 +3488,8 @@ describe("buildApi", () => {
           captionProvided: false,
           visibility: undefined,
           nsfwLabel: undefined,
+          representationMode: undefined,
+          contentSafetyPolicyAccepted: false,
           teaserStartMs: undefined,
           teaserStartMsProvided: false,
           teaserEndMs: undefined,
@@ -4548,8 +4556,11 @@ describe("buildApi", () => {
         BUNNY_STREAM_API_KEY: "bunny-secret",
         BUNNY_STREAM_LIBRARY_ID: "library-id",
         BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS: 900,
+        BUNNY_SHIELD_UPLOAD_COVERAGE: "not_configured",
         LIVEPEER_API_BASE_URL: "https://livepeer.studio/api",
-        LIVEPEER_HTTP_TIMEOUT_MS: 10_000
+        LIVEPEER_HTTP_TIMEOUT_MS: 10_000,
+        LIVEPEER_ADULT_LIVE_ENABLED: false,
+        MEDIA_MODERATION_MODE: "disabled_fail_closed"
       },
       fetchMock
     );
@@ -4649,8 +4660,11 @@ describe("buildApi", () => {
       BUNNY_STREAM_LIBRARY_ID: "759",
       BUNNY_STREAM_EMBED_TOKEN_KEY: "embed-token-secret",
       BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS: 900,
+      BUNNY_SHIELD_UPLOAD_COVERAGE: "not_configured",
       LIVEPEER_API_BASE_URL: "https://livepeer.studio/api",
-      LIVEPEER_HTTP_TIMEOUT_MS: 10_000
+      LIVEPEER_HTTP_TIMEOUT_MS: 10_000,
+      LIVEPEER_ADULT_LIVE_ENABLED: false,
+      MEDIA_MODERATION_MODE: "disabled_fail_closed"
     });
     const providerAssetId = "eb1c4f77-0cda-46be-b47d-1118ad7c2ffe";
     const expires = 1_780_531_200 + 900;
@@ -7560,12 +7574,12 @@ describe("buildApi", () => {
 
     const deadLetterRetryResponse = await app.inject({
       method: "POST",
-      url: "/v1/admin/worker-queues/notification_deliveries/jobs/00000000-0000-4000-8000-0000000000b0/retry",
+      url: "/v1/admin/worker-queues/media_moderation/jobs/00000000-0000-4000-8000-0000000000b0/retry",
       headers: {
         authorization: "Bearer valid-token",
-        "idempotency-key": "notification-dead-letter-retry-key"
+        "idempotency-key": "media-moderation-dead-letter-retry-key"
       },
-      payload: { reason: "retry after correcting the notification provider configuration" }
+      payload: { reason: "retry after correcting the moderation provider configuration" }
     });
 
     expect(deadLetterRetryResponse.statusCode).toBe(202);
@@ -11490,6 +11504,7 @@ function creatorVerifiedVerificationRepository(): VerificationRepository {
           ...resolution.capabilities,
           canUploadMedia: true,
           canPublishMedia: true,
+          canPublishAdultMedia: true,
           canMonetize: true,
           canReceiveCreatorProceeds: true,
           canAccessCreatorDashboard: true

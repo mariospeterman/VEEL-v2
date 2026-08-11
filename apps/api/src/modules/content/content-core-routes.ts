@@ -20,6 +20,7 @@ import {
   feedModeFromQuery,
   nsfwLabels,
   quotaExceededResponse,
+  representationModes,
   resolveContentCreationAbusePolicy,
   verifyCreatorCapability,
   verifyAppReadyAccess,
@@ -65,12 +66,40 @@ export async function registerContentCoreRoutes(
     }
 
     try {
+      const isAdultRated = body.nsfwLabel !== "none";
+      if (
+        isAdultRated &&
+        (typeof body.representationMode !== "string" ||
+          !representationModes.has(body.representationMode) ||
+          body.contentSafetyPolicyAccepted !== true)
+      ) {
+        return reply.code(400).send({
+          code: "validation_failed",
+          message: "Adult or explicit media requires a performer declaration and policy acceptance"
+        });
+      }
+
+      if (isAdultRated) {
+        const creatorAccess = await verifyCreatorCapability(
+          access.supabaseUserId,
+          "canPublishAdultMedia",
+          options
+        );
+        if (!creatorAccess.ok) {
+          return reply.code(creatorAccess.statusCode).send(creatorAccess.body);
+        }
+      }
+
       const abusePolicy = await resolveContentCreationAbusePolicy(options.contentRepository);
       const draftBody = {
         mediaType: body.mediaType,
         caption: typeof body.caption === "string" ? body.caption : null,
         visibility: body.visibility,
-        nsfwLabel: body.nsfwLabel
+        nsfwLabel: body.nsfwLabel,
+        representationMode: isAdultRated
+          ? (body.representationMode as NonNullable<CreateContentRequest["representationMode"]>)
+          : "not_declared" as const,
+        contentSafetyPolicyAccepted: isAdultRated
       };
 
       const content = await options.contentRepository.createDraft({
@@ -236,6 +265,20 @@ export async function registerContentCoreRoutes(
         });
       }
 
+      if (
+        body?.representationMode ||
+        (body?.nsfwLabel !== undefined && body.nsfwLabel !== "none")
+      ) {
+        const creatorAccess = await verifyCreatorCapability(
+          access.supabaseUserId,
+          "canPublishAdultMedia",
+          options
+        );
+        if (!creatorAccess.ok) {
+          return reply.code(creatorAccess.statusCode).send(creatorAccess.body);
+        }
+      }
+
       const content = await options.contentRepository.updateOwnedContent({
         supabaseUserId: access.supabaseUserId,
         contentId: params.contentId,
@@ -244,6 +287,8 @@ export async function registerContentCoreRoutes(
         captionProvided: Boolean(body && "caption" in body),
         visibility: body?.visibility,
         nsfwLabel: body?.nsfwLabel,
+        representationMode: body?.representationMode,
+        contentSafetyPolicyAccepted: body?.contentSafetyPolicyAccepted === true,
         teaserStartMs: body && "teaserStartMs" in body ? body.teaserStartMs ?? null : undefined,
         teaserStartMsProvided: Boolean(body && "teaserStartMs" in body),
         teaserEndMs: body && "teaserEndMs" in body ? body.teaserEndMs ?? null : undefined,
@@ -394,6 +439,8 @@ function validateUpdateContentBody(body: Partial<UpdateContentRequest> | undefin
     "caption" in body ||
     "visibility" in body ||
     "nsfwLabel" in body ||
+    "representationMode" in body ||
+    "contentSafetyPolicyAccepted" in body ||
     "teaserStartMs" in body ||
     "teaserEndMs" in body ||
     "thumbnailFrameMs" in body ||
@@ -424,6 +471,28 @@ function validateUpdateContentBody(body: Partial<UpdateContentRequest> | undefin
 
   if ("nsfwLabel" in body && !nsfwLabels.has(body.nsfwLabel ?? "")) {
     return "nsfwLabel is invalid";
+  }
+
+  if (
+    "representationMode" in body &&
+    !representationModes.has(body.representationMode ?? "")
+  ) {
+    return "representationMode is invalid";
+  }
+
+  if (
+    "representationMode" in body &&
+    body.contentSafetyPolicyAccepted !== true
+  ) {
+    return "Changing a performer declaration requires policy acceptance";
+  }
+
+  if (
+    body.nsfwLabel &&
+    body.nsfwLabel !== "none" &&
+    (!body.representationMode || body.contentSafetyPolicyAccepted !== true)
+  ) {
+    return "Adult or explicit media requires a performer declaration and policy acceptance";
   }
 
   for (const [field, value] of [

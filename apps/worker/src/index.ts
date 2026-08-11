@@ -1,6 +1,14 @@
 import { parseServerEnv } from "@veel/config";
 import { pathToFileURL } from "node:url";
 import {
+  createFailClosedMediaModerationAdapter,
+  createPostgresMediaModerationRepository,
+  processMediaModerationJobs,
+  type MediaModerationAdapter,
+  type MediaModerationRepository,
+  type ProcessMediaModerationResult
+} from "./media-moderation.js";
+import {
   createPostgresNotificationDeliveryRepository,
   createUnconfiguredNotificationDeliveryProvider,
   createWebPushNotificationDeliveryProvider,
@@ -45,7 +53,8 @@ export const buildWorkerRuntime = () => {
       "subscription-collections",
       "notification-deliveries",
       "payment-confirmation-emails",
-      "provider-event-replays"
+      "provider-event-replays",
+      "media-moderation"
     ],
     schedules: [
       {
@@ -67,6 +76,11 @@ export const buildWorkerRuntime = () => {
         name: "provider-event-replays",
         cadence: "operator_requested",
         sourceIndex: "provider_event_replay_requests_state_created_idx"
+      },
+      {
+        name: "media-moderation",
+        cadence: "every_minute",
+        sourceIndex: "media_moderation_jobs_lease_idx"
       }
     ]
   };
@@ -191,7 +205,32 @@ export async function runProviderEventReplayTick(input: {
   }
 }
 
+export async function runMediaModerationTick(input: {
+  repository?: MediaModerationRepository;
+  adapter?: MediaModerationAdapter;
+  now?: Date;
+  limit?: number;
+} = {}): Promise<ProcessMediaModerationResult> {
+  const config = parseServerEnv(process.env);
+  const repository = input.repository ?? createPostgresMediaModerationRepository(config.DATABASE_URL);
+  const adapter = input.adapter ?? createFailClosedMediaModerationAdapter();
+
+  try {
+    return await processMediaModerationJobs({
+      repository,
+      adapter,
+      ...(input.now ? { now: input.now } : {}),
+      ...(input.limit ? { limit: input.limit } : {})
+    });
+  } finally {
+    if (!input.repository) {
+      await repository.close?.();
+    }
+  }
+}
+
 export interface ScheduledWorkerTickResult {
+  mediaModeration: "completed" | "failed";
   notificationDeliveries: "completed" | "failed";
   paymentConfirmationEmails: "completed" | "failed";
   subscriptionCollections: "completed" | "failed";
@@ -203,6 +242,7 @@ export interface WorkerLogger {
 }
 
 export interface WorkerTickRunners {
+  mediaModeration(): Promise<unknown>;
   notificationDeliveries(): Promise<unknown>;
   paymentConfirmationEmails(): Promise<unknown>;
   subscriptionCollections(): Promise<unknown>;
@@ -224,11 +264,13 @@ export async function runScheduledWorkerTick(input: {
   const config = parseServerEnv(process.env);
   const logger = input.logger ?? defaultWorkerLogger;
   const runners = input.runners ?? {
+    mediaModeration: () => runMediaModerationTick({ limit: config.WORKER_BATCH_LIMIT }),
     notificationDeliveries: () => runNotificationDeliveryTick({ limit: config.WORKER_BATCH_LIMIT }),
     paymentConfirmationEmails: () => runPaymentConfirmationEmailTick({ limit: config.WORKER_BATCH_LIMIT }),
     subscriptionCollections: () => runSubscriptionCollectionTick({ limit: config.WORKER_BATCH_LIMIT })
   };
   const tasks = [
+    ["mediaModeration", runners.mediaModeration],
     ["notificationDeliveries", runners.notificationDeliveries],
     ["paymentConfirmationEmails", runners.paymentConfirmationEmails],
     ["subscriptionCollections", runners.subscriptionCollections]
@@ -272,6 +314,7 @@ export function startWorkerProcess(input: {
     if (activeTick) return activeTick;
     if (stopping) {
       return Promise.resolve<ScheduledWorkerTickResult>({
+        mediaModeration: "completed",
         notificationDeliveries: "completed",
         paymentConfirmationEmails: "completed",
         subscriptionCollections: "completed"

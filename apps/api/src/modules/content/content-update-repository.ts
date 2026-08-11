@@ -4,6 +4,7 @@ import { ContentEventDraftConflictError } from "./content-errors.js";
 import { extractHashtagSlugs, toContentItem } from "./content-repository-mappers.js";
 import type { ContentRow } from "./content-repository-rows.js";
 import type { ContentRepository, UpdateOwnedContentInput } from "./types.js";
+import { recordContentSafetyDeclaration } from "./content-safety-repository.js";
 
 export function createContentUpdateRepositoryMethods(
   sql: postgres.Sql
@@ -72,6 +73,17 @@ export function createContentUpdateRepositoryMethods(
 
         if (input.captionProvided) {
           await replaceCaptionHashtags(transaction, row.id, input.caption);
+        }
+
+        if (input.nsfwLabel || input.representationMode) {
+          await recordContentSafetyDeclaration(transaction, {
+            contentId: row.id,
+            creatorUserId: row.creator_id,
+            rating: row.nsfw_label ?? "none",
+            representationMode:
+              row.nsfw_label === "none" ? "not_declared" : input.representationMode ?? "not_declared",
+            policyAccepted: row.nsfw_label === "none" ? false : input.contentSafetyPolicyAccepted
+          });
         }
 
         await upsertLinkedEventDraft(transaction, input, row.id, row.creator_id);

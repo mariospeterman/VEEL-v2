@@ -45,6 +45,8 @@ export interface CreateContentDraftInput {
   caption?: string | null | undefined;
   visibility: string;
   nsfwLabel: NonNullable<ContentItem["nsfwLabel"]>;
+  representationMode: "not_declared" | NonNullable<CreateContentRequest["representationMode"]>;
+  contentSafetyPolicyAccepted: boolean;
   quotaWindowStart: Date;
   dailyDraftQuota: number;
 }
@@ -68,6 +70,8 @@ export interface UpdateOwnedContentInput {
   captionProvided: boolean;
   visibility?: string | undefined;
   nsfwLabel?: NonNullable<ContentItem["nsfwLabel"]> | undefined;
+  representationMode?: NonNullable<UpdateContentRequest["representationMode"]> | undefined;
+  contentSafetyPolicyAccepted: boolean;
   teaserStartMs?: number | null | undefined;
   teaserStartMsProvided: boolean;
   teaserEndMs?: number | null | undefined;

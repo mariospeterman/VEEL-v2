@@ -3238,6 +3238,9 @@ export interface components {
             visibility: "public" | "followers" | "subscribers" | "private";
             /** @enum {string} */
             nsfwLabel: "none" | "adult" | "explicit";
+            /** @enum {string} */
+            representationMode?: "no_real_person" | "self_only" | "declared_performers";
+            contentSafetyPolicyAccepted?: boolean;
             eventDraft?: components["schemas"]["EventDraft"];
         };
         UpdateContentRequest: {
@@ -3246,6 +3249,9 @@ export interface components {
             visibility?: "public" | "followers" | "subscribers" | "private";
             /** @enum {string} */
             nsfwLabel?: "none" | "adult" | "explicit";
+            /** @enum {string} */
+            representationMode?: "no_real_person" | "self_only" | "declared_performers";
+            contentSafetyPolicyAccepted?: boolean;
             teaserStartMs?: number | null;
             teaserEndMs?: number | null;
             thumbnailFrameMs?: number | null;
@@ -4347,7 +4353,7 @@ export interface components {
         };
         AdminWorkerQueueHealth: {
             /** @enum {string} */
-            name: "subscription_collections" | "notification_deliveries" | "payment_confirmation_emails" | "provider_event_replays";
+            name: "subscription_collections" | "notification_deliveries" | "payment_confirmation_emails" | "provider_event_replays" | "media_moderation";
             pendingCount: number;
             processingCount: number;
             failedCount: number;
@@ -8748,7 +8754,7 @@ export interface operations {
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
-                queueName: "subscription_collections" | "notification_deliveries" | "payment_confirmation_emails" | "provider_event_replays";
+                queueName: "subscription_collections" | "notification_deliveries" | "payment_confirmation_emails" | "provider_event_replays" | "media_moderation";
                 jobId: string;
             };
             cookie?: never;

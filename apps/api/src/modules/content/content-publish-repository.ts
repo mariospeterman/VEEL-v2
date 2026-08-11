@@ -16,6 +16,7 @@ export function createContentPublishRepositoryMethods(
             publish_state: string;
             moderation_state: string;
             provider_ready: boolean;
+            safety_ready: boolean;
           })[]
         >`
           with actor as (
@@ -31,6 +32,7 @@ export function createContentPublishRepositoryMethods(
               ci.state,
               ci.publish_state,
               ci.moderation_state,
+              private.content_safety_release_ready(ci.id) as safety_ready,
               exists (
                 select 1
                 from media_assets ma
@@ -47,12 +49,12 @@ export function createContentPublishRepositoryMethods(
             update content_items ci
             set
               publish_state = case
-                when cc.moderation_state = 'approved' then 'published'
+                when cc.moderation_state = 'approved' and cc.safety_ready then 'published'
                 else 'submitted_for_review'
               end,
               publish_requested_at = coalesce(ci.publish_requested_at, now()),
               published_at = case
-                when cc.moderation_state = 'approved' then coalesce(ci.published_at, now())
+                when cc.moderation_state = 'approved' and cc.safety_ready then coalesce(ci.published_at, now())
                 else ci.published_at
               end,
               updated_at = now()
@@ -71,7 +73,8 @@ export function createContentPublishRepositoryMethods(
               ci.state as content_state,
               ci.publish_state,
               ci.moderation_state,
-              cc.provider_ready
+              cc.provider_ready,
+              cc.safety_ready
           ),
           audit_insert as (
             insert into audit_events (
@@ -106,6 +109,7 @@ export function createContentPublishRepositoryMethods(
             updated_content.publish_state,
             updated_content.moderation_state,
             updated_content.provider_ready,
+            updated_content.safety_ready,
             u.id as creator_id,
             p.handle,
             p.display_name,

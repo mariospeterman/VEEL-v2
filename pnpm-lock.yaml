@@ -158,9 +158,6 @@ importers:
       '@veel/ui':
         specifier: workspace:*
         version: link:../../packages/ui
-      bs58:
-        specifier: ^6.0.0
-        version: 6.0.0
       gsap:
         specifier: ^3.13.0
         version: 3.15.0

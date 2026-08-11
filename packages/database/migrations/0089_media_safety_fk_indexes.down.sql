@@ -1,0 +1,10 @@
+drop index if exists media_moderation_appeals_reviewed_by_idx;
+drop index if exists media_moderation_appeals_appellant_idx;
+drop index if exists media_moderation_jobs_live_room_idx;
+drop index if exists media_moderation_jobs_asset_idx;
+drop index if exists media_moderation_jobs_case_idx;
+drop index if exists media_safety_cases_reviewed_by_idx;
+drop index if exists performer_consents_recorded_by_idx;
+drop index if exists performer_consents_performer_idx;
+drop index if exists performer_subjects_linked_user_lookup_idx;
+drop index if exists content_safety_declarations_uploader_idx;

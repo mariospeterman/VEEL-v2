@@ -38,7 +38,12 @@ export interface NotificationHealthRow {
 }
 
 export interface WorkerQueueHealthRow {
-  name: "subscription_collections" | "notification_deliveries" | "payment_confirmation_emails" | "provider_event_replays";
+  name:
+    | "subscription_collections"
+    | "notification_deliveries"
+    | "payment_confirmation_emails"
+    | "provider_event_replays"
+    | "media_moderation";
   pending_count: string | number;
   processing_count: string | number;
   failed_count: string | number;

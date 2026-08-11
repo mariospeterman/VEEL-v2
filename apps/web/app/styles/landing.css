@@ -1907,7 +1907,7 @@
     }
 
     .landing-age-choice-actions .landing-provider-link {
-      min-height: 34px;
+      min-height: 44px;
       grid-template-columns: auto minmax(0, 1fr) auto;
       align-content: center;
       align-items: center;
@@ -1923,7 +1923,7 @@
     }
 
     .landing-profile-setup .landing-form-grid {
-      grid-template-columns: 44px minmax(0, 1fr);
+      grid-template-columns: 54px minmax(0, 1fr);
       max-width: none;
       gap: 6px 8px;
     }
@@ -1943,14 +1943,14 @@
     }
 
     .landing-avatar-upload {
-      width: 40px;
-      height: 40px;
+      width: 52px;
+      height: 52px;
       align-self: end;
     }
 
     .landing-avatar-upload span {
-      max-width: 34px;
-      font-size: 6.8px;
+      max-width: 42px;
+      font-size: 8px;
     }
 
     .landing-form-row,
@@ -1961,7 +1961,7 @@
     }
 
     .landing-profile-setup .landing-form-grid {
-      grid-template-columns: 44px minmax(0, 1fr);
+      grid-template-columns: 54px minmax(0, 1fr);
     }
 
     .landing-form-row label:nth-child(2) {
@@ -1974,13 +1974,13 @@
     .landing-form-grid textarea,
     .landing-profile-link-row input,
     .landing-email-row input {
-      min-height: 32px;
-      font-size: 12px;
+      min-height: 42px;
+      font-size: 14px;
     }
 
     .landing-form-grid textarea {
-      min-height: 42px;
-      padding-block: 8px;
+      min-height: 68px;
+      padding-block: 10px;
     }
 
     .landing-profile-links {
@@ -2002,12 +2002,12 @@
 
     .landing-profile-links-header button,
     .landing-profile-link-row button {
-      width: 30px;
-      height: 30px;
+      width: 40px;
+      height: 40px;
     }
 
     .landing-profile-link-row {
-      grid-template-columns: minmax(72px, 0.48fr) minmax(0, 1fr) 30px;
+      grid-template-columns: minmax(72px, 0.48fr) minmax(0, 1fr) 40px;
       gap: 5px;
     }
 
@@ -2026,7 +2026,7 @@
     .landing-supabase-auth-toggle summary {
       gap: 6px;
       width: 100%;
-      min-height: 34px;
+      min-height: 42px;
       padding: 7px 9px;
     }
 
@@ -2047,14 +2047,14 @@
 
     .landing-step-actions .landing-button {
       width: fit-content;
-      min-height: 34px;
+      min-height: 44px;
       padding-inline: 12px;
     }
 
     .landing-step-actions .landing-inline-link {
       display: inline-flex;
       width: fit-content;
-      min-height: 34px;
+      min-height: 44px;
       align-items: center;
       border: 1px solid rgba(248, 250, 252, 0.16);
       border-radius: 8px;
@@ -2082,9 +2082,9 @@
     }
 
     .landing-provider-link {
-      min-height: 32px;
+      min-height: 42px;
       padding-inline: 8px 10px;
-      font-size: 11px;
+      font-size: 12px;
     }
 
     .landing-provider-link img {
@@ -2099,13 +2099,13 @@
 
     .landing-auth-inline .auth-provider-button,
     .landing-wallet-runtime .auth-provider-button {
-      min-height: 34px;
+      min-height: 42px;
       padding-inline: 9px;
     }
 
     .landing-auth-inline .auth-provider-button strong,
     .landing-wallet-runtime .auth-provider-button strong {
-      font-size: 10px;
+      font-size: 12px;
     }
 
     .landing-auth-block {
@@ -2117,7 +2117,7 @@
     .landing-form-single span,
     .landing-form-grid span,
     .landing-email-row span {
-      font-size: 9px;
+      font-size: 10px;
       letter-spacing: 0.12em;
     }
 

@@ -1,12 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildWorkerRuntime,
+  runMediaModerationTick,
   runScheduledWorkerTick,
   runNotificationDeliveryTick,
   runPaymentConfirmationEmailTick,
   runProviderEventReplayTick,
   runSubscriptionCollectionTick
 } from "../src/index";
+import type {
+  MediaModerationOutcome,
+  MediaModerationRepository,
+  QueuedMediaModerationJob
+} from "../src/media-moderation";
 import type {
   DueNotificationDelivery,
   NotificationDeliveryOutcome,
@@ -60,7 +66,8 @@ describe("buildWorkerRuntime", () => {
         "subscription-collections",
         "notification-deliveries",
         "payment-confirmation-emails",
-        "provider-event-replays"
+        "provider-event-replays",
+        "media-moderation"
       ],
       schedules: [
         {
@@ -82,6 +89,11 @@ describe("buildWorkerRuntime", () => {
           name: "provider-event-replays",
           cadence: "operator_requested",
           sourceIndex: "provider_event_replay_requests_state_created_idx"
+        },
+        {
+          name: "media-moderation",
+          cadence: "every_minute",
+          sourceIndex: "media_moderation_jobs_lease_idx"
         }
       ]
     });
@@ -95,6 +107,9 @@ describe("runScheduledWorkerTick", () => {
 
     const result = await runScheduledWorkerTick({
       runners: {
+        async mediaModeration() {
+          calls.push("moderation");
+        },
         async notificationDeliveries() {
           calls.push("notifications");
         },
@@ -114,8 +129,9 @@ describe("runScheduledWorkerTick", () => {
       }
     });
 
-    expect(calls.sort()).toEqual(["email", "notifications", "subscriptions"]);
+    expect(calls.sort()).toEqual(["email", "moderation", "notifications", "subscriptions"]);
     expect(result).toEqual({
+      mediaModeration: "completed",
       notificationDeliveries: "completed",
       paymentConfirmationEmails: "failed",
       subscriptionCollections: "completed"
@@ -124,6 +140,44 @@ describe("runScheduledWorkerTick", () => {
       {
         task: "paymentConfirmationEmails",
         errorName: "Error"
+      }
+    ]);
+  });
+});
+
+describe("runMediaModerationTick", () => {
+  it("routes queued media to review when automated moderation is not launch-approved", async () => {
+    const job: QueuedMediaModerationJob = {
+      jobId: "moderation-job-1",
+      caseId: "safety-case-1",
+      mediaAssetId: "media-asset-1",
+      provider: "bunny",
+      providerAssetId: "bunny-video-1",
+      stage: "provider_scan_reconciliation",
+      attemptCount: 1,
+      maxAttempts: 5,
+      leaseToken: "00000000-0000-4000-8000-000000000099"
+    };
+    const outcomes: MediaModerationOutcome[] = [];
+    const repository: MediaModerationRepository = {
+      async leaseJobs() {
+        return [job];
+      },
+      async recordOutcome(input) {
+        outcomes.push(input.outcome);
+      }
+    };
+
+    await expect(runMediaModerationTick({ repository })).resolves.toEqual({
+      leased: 1,
+      completed: 0,
+      reviewRequired: 1,
+      failed: 0
+    });
+    expect(outcomes).toEqual([
+      {
+        state: "review_required",
+        reasonCode: "automated_media_moderation_not_launch_approved"
       }
     ]);
   });

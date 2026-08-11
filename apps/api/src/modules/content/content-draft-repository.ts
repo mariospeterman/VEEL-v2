@@ -7,6 +7,7 @@ import {
 } from "./content-errors.js";
 import { extractHashtagSlugs, toContentItem } from "./content-repository-mappers.js";
 import type { ContentRow } from "./content-repository-rows.js";
+import { recordContentSafetyDeclaration } from "./content-safety-repository.js";
 import type { ContentRepository } from "./types.js";
 
 export function createContentDraftRepositoryMethods(
@@ -107,6 +108,14 @@ export function createContentDraftRepositoryMethods(
             ${input.nsfwLabel}
           )
         `;
+
+        await recordContentSafetyDeclaration(transaction, {
+          contentId,
+          creatorUserId: user.id,
+          rating: input.nsfwLabel,
+          representationMode: input.representationMode,
+          policyAccepted: input.contentSafetyPolicyAccepted
+        });
 
         if (hashtags.length > 0) {
           for (const slug of hashtags) {
