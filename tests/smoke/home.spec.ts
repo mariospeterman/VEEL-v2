@@ -68,6 +68,18 @@ test("renders inline login and onboarding entry surfaces", async ({ page }) => {
   await expect(page.locator(".landing-progress-topic")).toHaveText("Onboarding");
 });
 
+test("renders a deep-linked onboarding step without an entrance-animation delay", async ({ page }) => {
+  await page.goto("/?mode=onboarding&step=profile&next=%2Fapp%2Fhome", {
+    waitUntil: "domcontentloaded",
+    timeout: 20_000
+  });
+
+  await expect(page.getByRole("heading", { name: "Set up access." })).toBeVisible();
+  await expect(page.getByLabel("Handle")).toBeVisible();
+  await expect(page.locator(".landing-auth-inline")).toHaveCSS("opacity", "1");
+  await expect(page.locator(".landing-auth-inline")).toHaveCSS("visibility", "visible");
+});
+
 test("renders the standalone age handoff without raw API/provider errors", async ({ page }) => {
   await page.goto("/age");
 
@@ -106,6 +118,24 @@ test("renders the canonical protected app home shell through /app", async ({ con
   await expect(page.getByRole("link", { name: "WeVid app home" }).first()).toBeVisible();
   await expect(page.getByRole("heading", { name: /Mixed media feed|Enter WeVid/ }).first()).toBeVisible();
   await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
+});
+
+test("separates platform plans from creator memberships responsively", async ({ context, page }) => {
+  await addE2eCookie(context);
+  await page.goto("/app/subscriptions", { waitUntil: "domcontentloaded", timeout: 45_000 });
+
+  await expect(page.getByRole("heading", { name: "Your WeVid access" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Platform plans" })).toBeVisible();
+  await expect(page.getByRole("heading", { exact: true, name: "Creator memberships" })).toBeVisible();
+  await expect(page.getByText("Free Verified", { exact: true })).toHaveCount(2);
+  await expect(page.getByText("Veel Studio", { exact: true })).toBeVisible();
+  await expect(page.getByText("No joined memberships", { exact: true })).toBeVisible();
+
+  const layout = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth
+  }));
+  expect(layout.scrollWidth).toBe(layout.clientWidth);
 });
 
 test("keeps content detail route reachable", async ({ page }) => {
@@ -164,6 +194,21 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
     return;
   }
 
+  if (method === "GET" && url.pathname === "/v1/platform-access") {
+    sendJson(response, 200, platformAccess());
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/v1/subscriptions/plans") {
+    sendJson(response, 200, { items: subscriptionPlans() });
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/v1/subscriptions") {
+    sendJson(response, 200, { items: [] });
+    return;
+  }
+
   if (method === "GET" && url.pathname === "/v1/discover/search") {
     sendJson(response, 200, {
       content: [contentItem()],
@@ -206,6 +251,74 @@ function sessionState() {
     authenticated: true,
     appAccessState: { allowed: true, reason: "ready" },
     user: user()
+  };
+}
+
+function platformAccess() {
+  const tiers = [
+    platformTier("free_verified", "Free Verified", 0, 0, "included", null),
+    platformTier("veel_plus", "Veel Plus", 1, 500, "available", "platform-plus"),
+    platformTier("veel_ultra", "Veel Ultra", 2, 1_500, "available", "platform-ultra"),
+    platformTier("veel_studio", "Veel Studio", 3, 3_000, "available", "platform-studio"),
+    platformTier("enterprise", "Enterprise", 4, null, "contact_sales", null)
+  ];
+
+  return {
+    currentTier: tiers[0],
+    usage: {
+      windowStartsAt: "2026-08-01T00:00:00.000Z",
+      windowEndsAt: "2026-09-01T00:00:00.000Z",
+      publicMediaSeconds: 7_200,
+      remainingPublicMediaSeconds: 28_800,
+      limitReached: false
+    },
+    tiers,
+    policyBoundary: "platform_tiers_buy_software_and_public_media_allowance_never_social_priority"
+  };
+}
+
+function platformTier(
+  key: string,
+  label: string,
+  rank: number,
+  monthlyPriceMinor: number | null,
+  purchaseState: string,
+  subscriptionPlanId: string | null
+) {
+  return {
+    key,
+    label,
+    rank,
+    monthlyPriceMinor,
+    currency: monthlyPriceMinor === null ? null : "USDC",
+    publicMediaAllowanceSeconds: key === "enterprise" ? null : 36_000 * (rank + 1),
+    capabilities: [],
+    purchaseState,
+    subscriptionPlanId
+  };
+}
+
+function subscriptionPlans() {
+  return [
+    subscriptionPlan("platform-plus", "Veel Plus", 500),
+    subscriptionPlan("platform-ultra", "Veel Ultra", 1_500),
+    subscriptionPlan("platform-studio", "Veel Studio", 3_000)
+  ];
+}
+
+function subscriptionPlan(id: string, label: string, amountMinor: number) {
+  return {
+    id,
+    scope: "platform",
+    label,
+    amountMinor,
+    currency: "USDC",
+    periodDays: 30,
+    billingMode: "delegated_solana_subscription",
+    providerState: "staging_required",
+    provider: "official_solana_subscription_program",
+    tokenMint: null,
+    tokenProgram: null
   };
 }
 

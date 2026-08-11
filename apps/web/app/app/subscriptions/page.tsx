@@ -1,6 +1,8 @@
 import {
+  getPlatformAccess,
   getSubscriptionPlans,
   getSubscriptions,
+  type PlatformAccess,
   type Subscription,
   type SubscriptionPlan
 } from "@/api-client";
@@ -16,29 +18,45 @@ export const dynamic = "force-dynamic";
 export default async function SubscriptionsPage() {
   await requireAppAccess("/app/subscriptions");
 
-  const [plans, subscriptions] = await Promise.all([
+  const [platformAccess, plans, subscriptions] = await Promise.all([
+    getPlatformAccess(),
     getSubscriptionPlans(),
     getSubscriptions()
   ]);
-  const currentSubscription = subscriptions.ok ? (subscriptions.data.items[0] ?? null) : null;
+  const platformPlans = plans.ok ? plans.data.items.filter((plan) => plan.scope === "platform") : [];
+  const creatorPlans = plans.ok ? plans.data.items.filter((plan) => plan.scope === "creator") : [];
+  const platformSubscriptions = subscriptions.ok
+    ? subscriptions.data.items.filter((subscription) => subscription.scope === "platform")
+    : [];
+  const creatorMemberships = subscriptions.ok
+    ? subscriptions.data.items.filter((subscription) => subscription.scope === "creator")
+    : [];
 
   return (
     <AppShell>
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <section className="grid content-start gap-5">
-          <PageHeader eyebrow="Subscriptions" title="Auto-renewing access">
-              Token-based Solana subscriptions authorize bounded collection once, then renew through
-              backend-verified collection only when the provider is configured.
+          <PageHeader eyebrow="Plans" title="Your WeVid access">
+            Choose platform tools separately from memberships you join with individual profiles.
           </PageHeader>
 
           <section className="grid gap-3">
-            <h2 className="text-base font-semibold tracking-normal">Plans</h2>
+            <h2 className="text-base font-semibold tracking-normal">Platform plans</h2>
+            {platformAccess.ok ? (
+              <PlatformTierGrid access={platformAccess.data} plans={platformPlans} />
+            ) : (
+              <ErrorState result={platformAccess} title="Platform plans unavailable" context="Platform access" />
+            )}
+          </section>
+
+          <section className="grid gap-3">
+            <h2 className="text-base font-semibold tracking-normal">Creator memberships</h2>
             {plans.ok ? (
-              plans.data.items.length > 0 ? (
-                plans.data.items.map((plan) => <PlanRow plan={plan} key={plan.id} />)
+              creatorPlans.length > 0 ? (
+                creatorPlans.map((plan) => <PlanRow plan={plan} key={plan.id} />)
               ) : (
-                <EmptyState title="No subscription plans are available">
-                  Platform plans and creator memberships appear after the backend exposes launch-approved plans.
+                <EmptyState title="No creator memberships available">
+                  Membership offers appear when profiles enable a launch-ready recurring plan.
                 </EmptyState>
               )
             ) : (
@@ -49,13 +67,33 @@ export default async function SubscriptionsPage() {
 
         <aside className="grid content-start gap-3">
           <Card className="p-4">
-            <p className="text-sm font-medium">Current subscription</p>
+            <p className="text-sm font-medium">Platform access</p>
+            {platformAccess.ok ? (
+              <div className="mt-4 grid gap-3 text-sm">
+                <Fact label="Current tier" value={platformAccess.data.currentTier.label} />
+                <Fact
+                  label="Public media used"
+                  value={formatUsage(platformAccess.data)}
+                />
+                {platformSubscriptions.map((subscription) => (
+                  <SubscriptionSummary subscription={subscription} key={subscription.id} />
+                ))}
+              </div>
+            ) : (
+              <ErrorState result={platformAccess} title="Platform access unavailable" context="Platform access" />
+            )}
+          </Card>
+
+          <Card className="p-4">
+            <p className="text-sm font-medium">Joined memberships</p>
             {subscriptions.ok ? (
-              currentSubscription ? (
-                <SubscriptionSummary subscription={currentSubscription} />
+              creatorMemberships.length > 0 ? (
+                creatorMemberships.map((subscription) => (
+                  <SubscriptionSummary subscription={subscription} key={subscription.id} />
+                ))
               ) : (
-                <EmptyState title="No active or pending subscriptions">
-                  Subscription access appears here after backend verification.
+                <EmptyState title="No joined memberships">
+                  Profile membership access appears here after backend-verified activation.
                 </EmptyState>
               )
             ) : (
@@ -100,12 +138,60 @@ function PlanRow({ plan }: { plan: SubscriptionPlan }) {
         </div>
         <StatusPill tone={plan.providerState === "launch_approved" ? "good" : "warn"}>{plan.providerState}</StatusPill>
       </div>
-      <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
-        <Fact label="Billing" value={plan.billingMode} />
-        <Fact label="Token" value={plan.tokenProgram ?? "unconfigured"} />
-        <Fact label="Mint" value={plan.tokenMint ?? "unconfigured"} />
-      </dl>
       <SubscriptionAuthorizationPanel plan={plan} />
     </Card>
   );
+}
+
+function PlatformTierGrid({
+  access,
+  plans
+}: {
+  access: PlatformAccess;
+  plans: SubscriptionPlan[];
+}) {
+  const plansById = new Map(plans.map((plan) => [plan.id, plan]));
+
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      {access.tiers.map((tier) => {
+        const plan = tier.subscriptionPlanId ? plansById.get(tier.subscriptionPlanId) : undefined;
+        return (
+          <Card className="p-4" key={tier.key}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-medium">{tier.label}</p>
+                <p className="mt-1 text-sm text-(--muted)">
+                  {tier.monthlyPriceMinor === null
+                    ? "Custom contract"
+                    : tier.monthlyPriceMinor === 0
+                      ? "Included"
+                      : `${formatAssetAmount(tier.monthlyPriceMinor, tier.currency ?? "USDC")} / month`}
+                </p>
+              </div>
+              <StatusPill tone={tier.key === access.currentTier.key ? "good" : "neutral"}>
+                {tier.key === access.currentTier.key ? "Current" : tier.purchaseState.replaceAll("_", " ")}
+              </StatusPill>
+            </div>
+            <p className="mt-3 text-sm text-(--muted)">
+              {tier.publicMediaAllowanceSeconds === null
+                ? "Custom public-media allowance"
+                : `${formatHours(tier.publicMediaAllowanceSeconds)} public-media hours per month`}
+            </p>
+            {plan ? <SubscriptionAuthorizationPanel plan={plan} /> : null}
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+function formatHours(seconds: number) {
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(seconds / 3_600);
+}
+
+function formatUsage(access: PlatformAccess) {
+  const used = formatHours(access.usage.publicMediaSeconds);
+  const allowance = access.currentTier.publicMediaAllowanceSeconds;
+  return allowance === null ? `${used} hours` : `${used} of ${formatHours(allowance)} hours`;
 }

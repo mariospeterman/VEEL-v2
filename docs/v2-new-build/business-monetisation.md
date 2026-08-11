@@ -179,7 +179,6 @@ Native SOL and SPL token modes must share a common intent/split/settlement model
 Launch product type enum:
 
 ```text
-tip
 support
 content_unlock
 paid_message
@@ -188,6 +187,8 @@ event_access_pass
 creator_subscription
 platform_subscription
 ```
+
+`tip` is a legacy-read settlement value only. New contracts, intents, UI copy, and provider requests use `support`; do not create a second tip flow.
 
 Future products such as drops, resale, NFT pass/ticketing, bundles, gifts, or premium-room variants require a separate ADR and must not appear in launch contracts or schema until approved.
 
@@ -249,10 +250,20 @@ Recommended platform tiers for first pricing tests are backend policy rows, not 
 | Free Verified | Free | Full social account, Bits, previews, SFW publishing, public live, purchases, support, and about 20 hours/month of free public long-form/live use. |
 | Veel Plus | 8.99 USDC/month | About 100 hours/month, collections, notification/privacy controls, and profile enhancements. No feed/Mutuals boost. |
 | Veel Ultra | 17.99 USDC/month | About 250 hours/month, highest available playback quality, and advanced playback convenience. No feed/Mutuals boost. |
-| Veel Studio | 29 USDC/month | Includes the Ultra allowance plus professional individual analytics, scheduling, pricing, membership, live-conversion, and AI-assistance capabilities where enabled. |
-| Enterprise | Custom, from 199 USDC/month equivalent | Organization, agency, venue, and partner tier with reusable-first KYB, RBAC, consolidated reporting, business support, and contract review. |
+| Veel Studio | 29 USDC/month | Includes the Ultra allowance plus professional individual analytics, scheduling, pricing, live-conversion, and AI-assistance capabilities where enabled. Creator Membership eligibility is separate. |
+| Enterprise | Custom, from 199 USDC/month equivalent | Organization, agency, venue, and partner tier with RBAC, consolidated reporting, business support, and contract review. KYB is required for organization use but never grants Enterprise without an active contract, subscription, or waiver. |
 
 Only free public long-form VOD and public live viewing consumes the platform allowance. Bits, previews, individually unlocked content, joined-profile membership media, paid Event Access, the user's own media, and promotional excerpts never consume it. Reaching the allowance must not revoke purchased or membership access.
+
+The canonical accounting path is server-owned:
+
+1. The backend decides whether a requested content item or live room qualifies before it issues full playback.
+2. The browser starts one idempotent playback session only after provider playback starts.
+3. Visible, actively playing time is reported in ordered, idempotent heartbeats of at most 30 seconds.
+4. PostgreSQL serializes the current usage window, caps credited time by server-observed elapsed time and remaining allowance, and records the session, heartbeat, and usage update atomically.
+5. Exhaustion blocks only otherwise-free public VOD/live playback. Paid, membership, event, preview, Bits, promotional, and owner playback remain governed by their normal entitlement/access policies.
+
+Bunny iframe state is observed through the official [Bunny Stream Player.js playback API](https://docs.bunny.net/stream/playback-api). Livepeer playback uses the official [`@livepeer/react` player](https://docs.livepeer.org/sdks/react/Player) and native media lifecycle events. Client events initiate usage reports but never own allowance truth.
 
 Tier rules:
 
@@ -260,6 +271,8 @@ Tier rules:
 - platform plans must not boost paid content ranking, Mutuals ranking, or message priority
 - creator content purchases still happen separately unless a specific bundle is implemented and documented
 - creator-facing productivity value should live in Veel Studio, not in a viewer-only upsell
+- creator membership creation is gated by earning/compliance readiness, not ownership of Veel Studio
+- organization KYB establishes business identity; Enterprise authority additionally requires an active Enterprise subscription, contract waiver, or equivalent backend-owned commercial entitlement
 - Mutuals/Event Access/AI limits can be configured by admin, but the free tier must remain usable enough for real network effects
 
 Pricing, allowance limits, Mutual/Event Access limits, paid-live-event guardrails, and platform feature gates must live in backend/admin configuration. Environment variables provide safe defaults; admin configuration can override them without a deploy.

@@ -1238,6 +1238,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/platform-usage/playback-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start backend-accounted qualifying public-media playback */
+        post: operations["createPlatformPlaybackSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform-usage/playback-sessions/{playbackSessionId}/heartbeats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Idempotently account active qualifying playback seconds */
+        post: operations["recordPlatformPlaybackHeartbeat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/subscriptions": {
         parameters: {
             query?: never;
@@ -3176,6 +3210,18 @@ export interface components {
             resourceType?: "embed" | "hls" | "direct" | null;
             /** Format: date-time */
             expiresAt?: string | null;
+            /** @enum {string|null} */
+            blockReason?: "entitlement_required" | "allowance_exhausted" | "provider_unavailable" | null;
+            usage?: components["schemas"]["PlaybackUsageContext"];
+        };
+        PlaybackUsageContext: {
+            /** @enum {string} */
+            policy: "public_media_allowance";
+            /** @enum {string} */
+            targetType: "content" | "live_room";
+            /** Format: uuid */
+            targetId: string;
+            heartbeatIntervalSeconds: number;
         };
         CreateContentRequest: {
             /** @enum {string} */
@@ -3703,6 +3749,25 @@ export interface components {
             tiers: components["schemas"]["PlatformTier"][];
             /** @enum {string} */
             policyBoundary: "platform_tiers_buy_software_and_public_media_allowance_never_social_priority";
+        };
+        CreatePlatformPlaybackSessionRequest: {
+            /** @enum {string} */
+            targetType: "content" | "live_room";
+            /** Format: uuid */
+            targetId: string;
+        };
+        RecordPlatformPlaybackHeartbeatRequest: {
+            sequence: number;
+            playedSeconds: number;
+        };
+        PlatformPlaybackSession: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            state: "active" | "exhausted" | "closed" | "expired";
+            heartbeatIntervalSeconds: number;
+            consumedSeconds: number;
+            usage: components["schemas"]["PlatformUsage"];
         };
         SubscriptionPage: {
             items: components["schemas"]["Subscription"][];
@@ -5505,6 +5570,15 @@ export interface components {
                 "application/json": components["schemas"]["PlatformAccess"];
             };
         };
+        /** @description Public-media playback accounting session */
+        PlatformPlaybackSession: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["PlatformPlaybackSession"];
+            };
+        };
         /** @description Subscriptions */
         SubscriptionPage: {
             headers: {
@@ -6315,6 +6389,16 @@ export interface components {
         CreateOnrampSession: {
             content: {
                 "application/json": components["schemas"]["CreateOnrampSessionRequest"];
+            };
+        };
+        CreatePlatformPlaybackSession: {
+            content: {
+                "application/json": components["schemas"]["CreatePlatformPlaybackSessionRequest"];
+            };
+        };
+        RecordPlatformPlaybackHeartbeat: {
+            content: {
+                "application/json": components["schemas"]["RecordPlatformPlaybackHeartbeatRequest"];
             };
         };
         UpdateProfile: {
@@ -7956,6 +8040,49 @@ export interface operations {
             200: components["responses"]["PlatformAccess"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createPlatformPlaybackSession: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["CreatePlatformPlaybackSession"];
+        responses: {
+            201: components["responses"]["PlatformPlaybackSession"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    recordPlatformPlaybackHeartbeat: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                playbackSessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["RecordPlatformPlaybackHeartbeat"];
+        responses: {
+            200: components["responses"]["PlatformPlaybackSession"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };

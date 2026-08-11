@@ -5,6 +5,7 @@ import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js
 import type { AgeRepository } from "../age/types.js";
 import type { PaymentRepository } from "../payment/types.js";
 import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
+import type { SubscriptionRepository } from "../subscription/types.js";
 import type { WalletRepository } from "../wallet/types.js";
 import type {
   CreateLiveRoomRequest,
@@ -21,12 +22,14 @@ export interface RegisterLiveRoutesOptions {
   paymentRepository: PaymentRepository;
   liveRepository: LiveRepository;
   liveProvider: LiveProviderAdapter;
+  subscriptionRepository: SubscriptionRepository;
 }
 
 type LiveReadyAccessResult =
   | {
       ok: true;
       supabaseUserId: string;
+      appUserId: string;
     }
   | {
       ok: false;
@@ -75,7 +78,8 @@ export async function verifyLiveReadyAccess(
 
   return {
     ok: true,
-    supabaseUserId: verifiedSession.supabaseUserId
+    supabaseUserId: verifiedSession.supabaseUserId,
+    appUserId: profile.id
   };
 }
 
@@ -155,6 +159,8 @@ export async function withSignedLivePlayback(input: {
   room: StoredLiveRoom;
   supabaseUserId: string;
   liveProvider: LiveProviderAdapter;
+  subscriptionRepository: SubscriptionRepository;
+  appUserId: string;
 }) {
   const response = toLiveRoomResponse(input.room);
   const playback = response.playback;
@@ -174,6 +180,46 @@ export async function withSignedLivePlayback(input: {
       ...response,
       playback: blockedPlayback
     };
+  }
+
+  let usage: NonNullable<StoredLiveRoom["playback"]>["usage"] | undefined;
+  const potentiallyAccounted =
+    response.accessMode === "public" && response.creator.id !== input.appUserId;
+
+  if (potentiallyAccounted) {
+    if (!input.subscriptionRepository.getPlatformPlaybackDecision) {
+      return {
+        ...response,
+        playback: { ...blockedPlayback, blockReason: "provider_unavailable" }
+      };
+    }
+
+    try {
+      const decision = await input.subscriptionRepository.getPlatformPlaybackDecision({
+        supabaseUserId: input.supabaseUserId,
+        targetType: "live_room",
+        targetId: response.id
+      });
+      if (decision.limitReached) {
+        return {
+          ...response,
+          playback: { ...blockedPlayback, blockReason: "allowance_exhausted" }
+        };
+      }
+      if (decision.countsTowardAllowance) {
+        usage = {
+          policy: "public_media_allowance",
+          targetType: "live_room",
+          targetId: response.id,
+          heartbeatIntervalSeconds: 15
+        };
+      }
+    } catch {
+      return {
+        ...response,
+        playback: { ...blockedPlayback, blockReason: "provider_unavailable" }
+      };
+    }
   }
 
   try {
@@ -198,7 +244,8 @@ export async function withSignedLivePlayback(input: {
         state: "full",
         url: signedUrl.toString(),
         provider: "livepeer",
-        resourceType: "hls"
+        resourceType: "hls",
+        ...(usage ? { usage } : {})
       }
     };
   } catch {

@@ -1012,6 +1012,43 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/platform-usage/playback-sessions:
+    post:
+      operationId: createPlatformPlaybackSession
+      tags: [Subscriptions]
+      summary: Start backend-accounted qualifying public-media playback
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreatePlatformPlaybackSession"
+      responses:
+        "201": { $ref: "#/components/responses/PlatformPlaybackSession" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/platform-usage/playback-sessions/{playbackSessionId}/heartbeats:
+    post:
+      operationId: recordPlatformPlaybackHeartbeat
+      tags: [Subscriptions]
+      summary: Idempotently account active qualifying playback seconds
+      parameters:
+        - name: playbackSessionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/RecordPlatformPlaybackHeartbeat"
+      responses:
+        "200": { $ref: "#/components/responses/PlatformPlaybackSession" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/subscriptions:
     get:
       operationId: listSubscriptions
@@ -2073,6 +2110,8 @@ components:
     CreateWalletLinkChallenge: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateWalletLinkChallengeRequest" } } } }
     LinkWallet: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/LinkWalletRequest" } } } }
     CreateOnrampSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateOnrampSessionRequest" } } } }
+    CreatePlatformPlaybackSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreatePlatformPlaybackSessionRequest" } } } }
+    RecordPlatformPlaybackHeartbeat: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RecordPlatformPlaybackHeartbeatRequest" } } } }
     UpdateProfile: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateProfileRequest" } } } }
     UploadProfileAvatar: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UploadProfileAvatarRequest" } } } }
     CreateContent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateContentRequest" } } } }
@@ -2212,6 +2251,7 @@ components:
     RefundDisputeRequestPage: { description: Refund or dispute requests, content: { application/json: { schema: { $ref: "#/components/schemas/RefundDisputeRequestPage" } } } }
     SubscriptionPlanPage: { description: Subscription plans, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionPlanPage" } } } }
     PlatformAccess: { description: Current platform tier and catalog, content: { application/json: { schema: { $ref: "#/components/schemas/PlatformAccess" } } } }
+    PlatformPlaybackSession: { description: Public-media playback accounting session, content: { application/json: { schema: { $ref: "#/components/schemas/PlatformPlaybackSession" } } } }
     SubscriptionPage: { description: Subscriptions, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionPage" } } } }
     Subscription: { description: Subscription, content: { application/json: { schema: { $ref: "#/components/schemas/Subscription" } } } }
     SubscriptionAuthorizationIntent: { description: Subscription authorization intent, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionAuthorizationIntent" } } } }
@@ -2843,6 +2883,16 @@ components:
         provider: { type: string, enum: [bunny, livepeer, none] }
         resourceType: { type: string, enum: [embed, hls, direct], nullable: true }
         expiresAt: { type: string, format: date-time, nullable: true }
+        blockReason: { type: string, enum: [entitlement_required, allowance_exhausted, provider_unavailable], nullable: true }
+        usage: { $ref: "#/components/schemas/PlaybackUsageContext" }
+    PlaybackUsageContext:
+      type: object
+      required: [policy, targetType, targetId, heartbeatIntervalSeconds]
+      properties:
+        policy: { type: string, enum: [public_media_allowance] }
+        targetType: { type: string, enum: [content, live_room] }
+        targetId: { type: string, format: uuid }
+        heartbeatIntervalSeconds: { type: integer, minimum: 5, maximum: 30 }
     CreateContentRequest:
       type: object
       required: [mediaType, visibility, nsfwLabel]
@@ -3376,6 +3426,29 @@ components:
         policyBoundary:
           type: string
           enum: [platform_tiers_buy_software_and_public_media_allowance_never_social_priority]
+    CreatePlatformPlaybackSessionRequest:
+      type: object
+      required: [targetType, targetId]
+      additionalProperties: false
+      properties:
+        targetType: { type: string, enum: [content, live_room] }
+        targetId: { type: string, format: uuid }
+    RecordPlatformPlaybackHeartbeatRequest:
+      type: object
+      required: [sequence, playedSeconds]
+      additionalProperties: false
+      properties:
+        sequence: { type: integer, minimum: 1 }
+        playedSeconds: { type: integer, minimum: 1, maximum: 30 }
+    PlatformPlaybackSession:
+      type: object
+      required: [id, state, heartbeatIntervalSeconds, consumedSeconds, usage]
+      properties:
+        id: { type: string, format: uuid }
+        state: { type: string, enum: [active, exhausted, closed, expired] }
+        heartbeatIntervalSeconds: { type: integer }
+        consumedSeconds: { type: integer }
+        usage: { $ref: "#/components/schemas/PlatformUsage" }
     SubscriptionPage:
       type: object
       required: [items]

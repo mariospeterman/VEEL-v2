@@ -64,6 +64,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     const seededContentId = randomUUID();
     const seededMediaAssetId = randomUUID();
     const seededAccessRuleId = randomUUID();
+    const seededFreeContentId = randomUUID();
+    const seededFreeMediaAssetId = randomUUID();
     const seededEventId = randomUUID();
     const seededAccessPassTypeId = randomUUID();
     const seededConversationId = randomUUID();
@@ -71,6 +73,9 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     const seededSubscriptionPlanId = `integration-platform-${shortRunId}`;
     const seededProviderEventId = randomUUID();
     const seededProviderReplayRequestId = randomUUID();
+    const seededOrganizationId = randomUUID();
+    const seededOrganizationMembershipId = randomUUID();
+    const seededEnterpriseWaiverId = randomUUID();
     const providerReference = `sumsub-${runId}`;
     const ageProviderWaterfall = createIntegrationAgeWaterfall(providerReference);
     const settlementInputs: PaymentSettlementInput[] = [];
@@ -144,12 +149,14 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         creatorSupabaseUserId,
         providerReference,
         seededContentId,
+        seededFreeContentId,
         seededEventId,
         seededConversationId,
         seededLiveRoomId,
         seededSubscriptionPlanId,
         seededProviderEventId,
-        seededProviderReplayRequestId
+        seededProviderReplayRequestId,
+        seededOrganizationId
       });
       await seedCreatorPaidContent(sql, {
         creatorUserId: seededCreatorUserId,
@@ -158,6 +165,11 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         contentId: seededContentId,
         mediaAssetId: seededMediaAssetId,
         accessRuleId: seededAccessRuleId
+      });
+      await seedCreatorFreeVideo(sql, {
+        creatorUserId: seededCreatorUserId,
+        contentId: seededFreeContentId,
+        mediaAssetId: seededFreeMediaAssetId
       });
       await seedCreatorPaidEvent(sql, {
         creatorUserId: seededCreatorUserId,
@@ -325,6 +337,152 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         mediaType: "image",
         accessState: "free",
         caption: `Integration draft ${runId}`
+      });
+
+      const playbackSessionResponse = await app.inject({
+        method: "POST",
+        url: "/v1/platform-usage/playback-sessions",
+        headers: authenticatedHeaders(`playback-session-${runId}`),
+        payload: {
+          targetType: "content",
+          targetId: seededFreeContentId
+        }
+      });
+
+      expect(playbackSessionResponse.statusCode, playbackSessionResponse.body).toBe(201);
+      const playbackSession = playbackSessionResponse.json<{ id: string }>();
+      expect(playbackSessionResponse.json()).toMatchObject({
+        state: "active",
+        consumedSeconds: 0,
+        usage: {
+          publicMediaSeconds: 0,
+          limitReached: false
+        }
+      });
+
+      const heartbeatPayload = { sequence: 1, playedSeconds: 1 };
+      const playbackHeartbeatResponse = await app.inject({
+        method: "POST",
+        url: `/v1/platform-usage/playback-sessions/${playbackSession.id}/heartbeats`,
+        headers: authenticatedHeaders(`playback-heartbeat-${runId}`),
+        payload: heartbeatPayload
+      });
+
+      expect(playbackHeartbeatResponse.statusCode, playbackHeartbeatResponse.body).toBe(200);
+      expect(playbackHeartbeatResponse.json()).toMatchObject({
+        id: playbackSession.id,
+        state: "active",
+        consumedSeconds: 1,
+        usage: {
+          publicMediaSeconds: 1
+        }
+      });
+
+      const replayedHeartbeatResponse = await app.inject({
+        method: "POST",
+        url: `/v1/platform-usage/playback-sessions/${playbackSession.id}/heartbeats`,
+        headers: authenticatedHeaders(`playback-heartbeat-${runId}`),
+        payload: heartbeatPayload
+      });
+
+      expect(replayedHeartbeatResponse.statusCode, replayedHeartbeatResponse.body).toBe(200);
+      expect(replayedHeartbeatResponse.json()).toMatchObject({
+        consumedSeconds: 1,
+        usage: { publicMediaSeconds: 1 }
+      });
+
+      const persistedPlaybackRows = await sql<{
+        heartbeat_count: string;
+        session_count: string;
+        usage_seconds: string;
+      }[]>`
+        select
+          (
+            select count(*)
+            from platform_playback_sessions
+            where id = ${playbackSession.id}
+          ) as session_count,
+          (
+            select count(*)
+            from platform_playback_heartbeats
+            where session_id = ${playbackSession.id}
+          ) as heartbeat_count,
+          (
+            select public_media_seconds
+            from platform_usage_windows usage
+            join users actor on actor.id = usage.user_id
+            where actor.supabase_user_id = ${buyerSupabaseUserId}
+            order by usage.window_starts_at desc
+            limit 1
+          ) as usage_seconds
+      `;
+
+      expect(persistedPlaybackRows[0]).toEqual({
+        heartbeat_count: "1",
+        session_count: "1",
+        usage_seconds: "1"
+      });
+
+      const buyerRows = await sql<{ id: string }[]>`
+        select id from users where supabase_user_id = ${buyerSupabaseUserId}
+      `;
+      const buyerUserId = buyerRows[0]?.id;
+      expect(buyerUserId).toBeTruthy();
+      await sql`
+        insert into organizations (id, name, state, kyb_state)
+        values (${seededOrganizationId}, ${`Integration Organization ${runId}`}, 'active', 'verified')
+      `;
+      await sql`
+        insert into organization_memberships (id, organization_id, user_id, role, state, joined_at)
+        values (
+          ${seededOrganizationMembershipId},
+          ${seededOrganizationId},
+          ${buyerUserId!},
+          'owner',
+          'active',
+          now()
+        )
+      `;
+
+      const kybOnlyAccessResponse = await app.inject({
+        method: "GET",
+        url: "/v1/platform-access",
+        headers: authenticatedHeaders(`platform-access-kyb-${runId}`)
+      });
+
+      expect(kybOnlyAccessResponse.statusCode, kybOnlyAccessResponse.body).toBe(200);
+      expect(kybOnlyAccessResponse.json()).toMatchObject({
+        currentTier: { key: "free_verified" }
+      });
+
+      await sql`
+        insert into tier_waivers (
+          id,
+          subject_type,
+          subject_id,
+          tier_key,
+          state,
+          starts_at
+        )
+        values (
+          ${seededEnterpriseWaiverId},
+          'organization',
+          ${seededOrganizationId},
+          'enterprise',
+          'active',
+          now()
+        )
+      `;
+
+      const contractedEnterpriseAccessResponse = await app.inject({
+        method: "GET",
+        url: "/v1/platform-access",
+        headers: authenticatedHeaders(`platform-access-enterprise-${runId}`)
+      });
+
+      expect(contractedEnterpriseAccessResponse.statusCode, contractedEnterpriseAccessResponse.body).toBe(200);
+      expect(contractedEnterpriseAccessResponse.json()).toMatchObject({
+        currentTier: { key: "enterprise" }
       });
 
       const unlockResponse = await app.inject({
@@ -1560,12 +1718,14 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         creatorSupabaseUserId,
         providerReference,
         seededContentId,
+        seededFreeContentId,
         seededEventId,
         seededConversationId,
         seededLiveRoomId,
         seededSubscriptionPlanId,
         seededProviderEventId,
-        seededProviderReplayRequestId
+        seededProviderReplayRequestId,
+        seededOrganizationId
       });
       await app.close();
       vi.unstubAllEnvs();
@@ -1755,6 +1915,66 @@ async function seedCreatorPaidContent(
       25000000,
       'SOL',
       'active'
+    )
+  `;
+}
+
+async function seedCreatorFreeVideo(
+  sql: PostgresSql,
+  input: {
+    creatorUserId: string;
+    contentId: string;
+    mediaAssetId: string;
+  }
+): Promise<void> {
+  await sql`
+    insert into content_items (
+      id,
+      creator_user_id,
+      media_type,
+      state,
+      publish_state,
+      published_at,
+      caption,
+      visibility,
+      nsfw_label,
+      moderation_state
+    )
+    values (
+      ${input.contentId},
+      ${input.creatorUserId},
+      'vod',
+      'ready',
+      'published',
+      now(),
+      'Integration free video',
+      'public',
+      'none',
+      'approved'
+    )
+  `;
+  await sql`
+    insert into media_assets (
+      id,
+      content_item_id,
+      provider,
+      provider_asset_id,
+      provider_state,
+      poster_url,
+      playback_url,
+      provider_playable,
+      ready_at
+    )
+    values (
+      ${input.mediaAssetId},
+      ${input.contentId},
+      'bunny',
+      ${`integration-free-${input.contentId}`},
+      'ready',
+      'https://media.example.test/integration-free-poster.jpg',
+      ${`https://video.example.test/${input.mediaAssetId}/playlist.m3u8`},
+      true,
+      now()
     )
   `;
 }
@@ -2020,12 +2240,14 @@ async function cleanupRun(
     creatorSupabaseUserId: string;
     providerReference: string;
     seededContentId: string;
+    seededFreeContentId: string;
     seededEventId: string;
     seededConversationId: string;
     seededLiveRoomId: string;
     seededSubscriptionPlanId: string;
     seededProviderEventId: string;
     seededProviderReplayRequestId: string;
+    seededOrganizationId: string;
   }
 ): Promise<void> {
   await sql.begin(async (tx) => {
@@ -2071,12 +2293,12 @@ async function cleanupRun(
           select id
           from content_items
           where creator_user_id in ${tx(userIds)}
-             or id = ${input.seededContentId}
+             or id in (${input.seededContentId}, ${input.seededFreeContentId})
         `
       : await tx<{ id: string }[]>`
           select id
           from content_items
-          where id = ${input.seededContentId}
+          where id in (${input.seededContentId}, ${input.seededFreeContentId})
         `;
     const contentIds = contentRows.map((row) => row.id);
     const eventRows = userIds.length
@@ -2150,6 +2372,40 @@ async function cleanupRun(
           where target_id in (${input.seededContentId}, ${input.seededEventId}, ${input.seededConversationId}, ${input.seededLiveRoomId})
         `;
     const paymentIntentIds = paymentIntentRows.map((row) => row.id);
+
+    await tx`
+      delete from platform_playback_heartbeats
+      where session_id in (
+        select id
+        from platform_playback_sessions
+        where (target_type = 'content' and target_id in (${input.seededContentId}, ${input.seededFreeContentId}))
+          ${userIds.length > 0 ? tx`or user_id in ${tx(userIds)}` : tx``}
+      )
+    `;
+    await tx`
+      delete from platform_playback_sessions
+      where (target_type = 'content' and target_id in (${input.seededContentId}, ${input.seededFreeContentId}))
+        ${userIds.length > 0 ? tx`or user_id in ${tx(userIds)}` : tx``}
+    `;
+    if (userIds.length > 0) {
+      await tx`
+        delete from platform_usage_windows
+        where user_id in ${tx(userIds)}
+      `;
+    }
+    await tx`
+      delete from tier_waivers
+      where subject_type = 'organization'
+        and subject_id = ${input.seededOrganizationId}
+    `;
+    await tx`
+      delete from organization_memberships
+      where organization_id = ${input.seededOrganizationId}
+    `;
+    await tx`
+      delete from organizations
+      where id = ${input.seededOrganizationId}
+    `;
 
     if (userIds.length > 0) {
       if (subscriptionIds.length > 0) {

@@ -25,6 +25,7 @@ import type {
   CreateSubscriptionIntentRequest,
   SubmitSubscriptionAuthorizationRequest
 } from "./types.js";
+import { registerPlatformUsageRoutes } from "./platform-usage-routes.js";
 
 const authorizationIntentTtlMs = 15 * 60 * 1000;
 
@@ -32,6 +33,8 @@ export async function registerSubscriptionRoutes(
   app: FastifyInstance,
   options: RegisterSubscriptionRoutesOptions
 ): Promise<void> {
+  await registerPlatformUsageRoutes(app, options);
+
   app.get("/v1/platform-access", async (request, reply) => {
     const access = await verifySubscriptionReadyAccess(request, options);
 

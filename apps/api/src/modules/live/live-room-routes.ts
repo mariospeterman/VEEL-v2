@@ -139,7 +139,9 @@ export async function registerLiveRoomRoutes(
       const response = await withSignedLivePlayback({
         room,
         supabaseUserId: access.supabaseUserId,
-        liveProvider: options.liveProvider
+        appUserId: access.appUserId,
+        liveProvider: options.liveProvider,
+        subscriptionRepository: options.subscriptionRepository
       });
 
       return reply.code(200).send(response);

@@ -3,6 +3,7 @@ import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js
 import type { AgeRepository } from "../age/types.js";
 import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
 import { ActivityRepositoryConfigurationError } from "./activity-repository.js";
+import { normalizeActivityPage } from "./activity-repository-mappers.js";
 import type { ActivityRepository } from "./types.js";
 
 interface RegisterActivityRoutesOptions {
@@ -32,7 +33,7 @@ export async function registerActivityRoutes(
         ...(query.cursor ? { cursor: query.cursor } : {})
       });
 
-      return reply.code(200).send(activity);
+      return reply.code(200).send(normalizeActivityPage(activity));
     } catch (error) {
       if (error instanceof ActivityRepositoryConfigurationError) {
         request.log.warn({ error }, "Activity repository is not configured");
@@ -59,7 +60,7 @@ export async function registerActivityRoutes(
         ...(query.cursor ? { cursor: query.cursor } : {})
       });
 
-      return reply.code(200).send(activity);
+      return reply.code(200).send(normalizeActivityPage(activity));
     } catch (error) {
       if (error instanceof ActivityRepositoryConfigurationError) {
         request.log.warn({ error }, "Activity repository is not configured");

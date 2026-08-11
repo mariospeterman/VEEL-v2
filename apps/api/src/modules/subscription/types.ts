@@ -11,6 +11,16 @@ export type SubscriptionPage = components["schemas"]["SubscriptionPage"];
 export type SubscriptionPlan = components["schemas"]["SubscriptionPlan"];
 export type SubscriptionPlanPage = components["schemas"]["SubscriptionPlanPage"];
 export type PlatformAccess = components["schemas"]["PlatformAccess"];
+export type PlatformPlaybackSession = components["schemas"]["PlatformPlaybackSession"];
+export type CreatePlatformPlaybackSessionRequest =
+  components["schemas"]["CreatePlatformPlaybackSessionRequest"];
+export type RecordPlatformPlaybackHeartbeatRequest =
+  components["schemas"]["RecordPlatformPlaybackHeartbeatRequest"];
+
+export interface PlatformPlaybackDecision {
+  countsTowardAllowance: boolean;
+  limitReached: boolean;
+}
 
 export interface CreateSubscriptionAuthorizationIntentInput {
   supabaseUserId: string;
@@ -58,6 +68,26 @@ export interface SubscriptionAuthorizationVerificationContext {
 
 export interface SubscriptionRepository {
   getPlatformAccess?(input: { supabaseUserId: string }): Promise<PlatformAccess>;
+  getPlatformPlaybackDecision?(input: {
+    supabaseUserId: string;
+    targetType: "content" | "live_room";
+    targetId: string;
+  }): Promise<PlatformPlaybackDecision>;
+  createPlatformPlaybackSession?(input: {
+    supabaseUserId: string;
+    idempotencyKey: string;
+    requestHash: string;
+    targetType: "content" | "live_room";
+    targetId: string;
+  }): Promise<PlatformPlaybackSession>;
+  recordPlatformPlaybackHeartbeat?(input: {
+    supabaseUserId: string;
+    playbackSessionId: string;
+    idempotencyKey: string;
+    requestHash: string;
+    sequence: number;
+    playedSeconds: number;
+  }): Promise<PlatformPlaybackSession | null>;
   listPlans(input: { supabaseUserId: string }): Promise<SubscriptionPlanPage>;
   listSubscriptions(input: { supabaseUserId: string }): Promise<SubscriptionPage>;
   createAuthorizationIntent(

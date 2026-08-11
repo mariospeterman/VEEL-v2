@@ -173,7 +173,13 @@ export async function registerContentCoreRoutes(
         });
       }
 
-      return reply.code(200).send(withSignedPlayback(content, options.mediaUploadProvider));
+      return reply.code(200).send(await withSignedPlayback({
+        content,
+        mediaUploadProvider: options.mediaUploadProvider,
+        subscriptionRepository: options.subscriptionRepository,
+        supabaseUserId: access.supabaseUserId,
+        appUserId: access.appUserId
+      }));
     } catch (error) {
       if (error instanceof ContentRepositoryConfigurationError) {
         request.log.warn({ error }, "Content repository is not configured");

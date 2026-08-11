@@ -98,7 +98,8 @@ export async function registerApiRoutes(
     contentRepository,
     mediaUploadProvider,
     liveRepository,
-    verificationRepository
+    verificationRepository,
+    subscriptionRepository
   });
   await registerDiscoverRoutes(app, {
     authVerifier,
@@ -144,7 +145,8 @@ export async function registerApiRoutes(
     walletRepository,
     paymentRepository,
     liveRepository,
-    liveProvider
+    liveProvider,
+    subscriptionRepository
   });
   await registerMessageRoutes(app, {
     authVerifier,

@@ -863,4 +863,17 @@ describe("database migrations", () => {
     expect(downSql).toContain("add column pass_durations_minutes");
     expect(sql).not.toMatch(/recommendation_boost|visibility_boost|message_priority|mutuals_boost/i);
   });
+
+  it("adds idempotent public-media usage accounting without changing entitlement truth", () => {
+    const sql = readMigration("0083_platform_usage_accounting.sql");
+    const downSql = readMigration("0083_platform_usage_accounting.down.sql");
+
+    expect(sql).toContain("create table platform_playback_sessions");
+    expect(sql).toContain("create table platform_playback_heartbeats");
+    expect(sql).toContain("unique (session_id, sequence)");
+    expect(sql).toContain("capabilities = capabilities - 'profile_membership'");
+    expect(sql).toContain("alter table platform_playback_sessions enable row level security");
+    expect(downSql).toContain("drop table if exists platform_playback_heartbeats");
+    expect(sql).not.toMatch(/entitlement.*update|recommendation_boost|visibility_boost|message_priority|mutuals_boost/i);
+  });
 });

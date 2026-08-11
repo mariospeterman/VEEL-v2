@@ -4,6 +4,7 @@ import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js
 import type { AgeRepository } from "../age/types.js";
 import type { LiveRepository } from "../live/types.js";
 import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
+import type { SubscriptionRepository } from "../subscription/types.js";
 import { VerificationRepositoryConfigurationError } from "../verification/verification-repository.js";
 import type { VerificationRepository } from "../verification/types.js";
 import type { WalletRepository } from "../wallet/types.js";
@@ -22,6 +23,7 @@ export interface RegisterContentRoutesOptions {
   mediaUploadProvider: MediaUploadProviderAdapter;
   liveRepository?: LiveRepository;
   verificationRepository: VerificationRepository;
+  subscriptionRepository: SubscriptionRepository;
 }
 
 export const feedModes = new Set(["recommended", "following", "nsfw", "sfw", "live", "premium"]);
@@ -103,10 +105,14 @@ export async function resolveContentCreationAbusePolicy(
   };
 }
 
-export function withSignedPlayback(
-  content: components["schemas"]["ContentItem"],
-  mediaUploadProvider: MediaUploadProviderAdapter
-): components["schemas"]["ContentItem"] {
+export async function withSignedPlayback(input: {
+  content: components["schemas"]["ContentItem"];
+  mediaUploadProvider: MediaUploadProviderAdapter;
+  subscriptionRepository: SubscriptionRepository;
+  supabaseUserId: string;
+  appUserId: string;
+}): Promise<components["schemas"]["ContentItem"]> {
+  const { content, mediaUploadProvider } = input;
   const playback = content.playback;
 
   if (playback?.state === "full" && playback.provider === "livepeer") {
@@ -130,6 +136,48 @@ export function withSignedPlayback(
     provider: "bunny"
   };
 
+  const potentiallyAccounted =
+    ["vod", "live_replay"].includes(content.mediaType) &&
+    content.accessState === "free" &&
+    content.creator.id !== input.appUserId;
+  let usage: components["schemas"]["PlaybackUsageContext"] | undefined;
+
+  if (potentiallyAccounted) {
+    if (!input.subscriptionRepository.getPlatformPlaybackDecision) {
+      return {
+        ...content,
+        playback: { ...blockedPlayback, blockReason: "provider_unavailable" }
+      };
+    }
+
+    try {
+      const decision = await input.subscriptionRepository.getPlatformPlaybackDecision({
+        supabaseUserId: input.supabaseUserId,
+        targetType: "content",
+        targetId: content.id
+      });
+      if (decision.limitReached) {
+        return {
+          ...content,
+          playback: { ...blockedPlayback, blockReason: "allowance_exhausted" }
+        };
+      }
+      if (decision.countsTowardAllowance) {
+        usage = {
+          policy: "public_media_allowance",
+          targetType: "content",
+          targetId: content.id,
+          heartbeatIntervalSeconds: 15
+        };
+      }
+    } catch {
+      return {
+        ...content,
+        playback: { ...blockedPlayback, blockReason: "provider_unavailable" }
+      };
+    }
+  }
+
   if (!mediaUploadProvider.createPlaybackResource) {
     return {
       ...content,
@@ -149,9 +197,10 @@ export function withSignedPlayback(
   try {
     return {
       ...content,
-      playback: mediaUploadProvider.createPlaybackResource({
-        providerAssetId
-      })
+      playback: {
+        ...mediaUploadProvider.createPlaybackResource({ providerAssetId }),
+        ...(usage ? { usage } : {})
+      }
     };
   } catch {
     return {
@@ -165,6 +214,7 @@ type AppReadyAccessResult =
   | {
       ok: true;
       supabaseUserId: string;
+      appUserId: string;
     }
   | {
       ok: false;
@@ -210,7 +260,8 @@ export async function verifyAppReadyAccess(
 
   return {
     ok: true,
-    supabaseUserId: verifiedSession.supabaseUserId
+    supabaseUserId: verifiedSession.supabaseUserId,
+    appUserId: profile.id
   };
 }
 

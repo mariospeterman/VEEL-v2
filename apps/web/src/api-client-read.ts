@@ -56,6 +56,7 @@ import type {
   NotificationPreferences,
   NotificationPushConfig,
   OrganizationDashboardPage,
+  PlatformAccess,
   SessionState,
   SubscriptionPage,
   SubscriptionPlanPage,
@@ -114,6 +115,10 @@ export async function getSubscriptionPlans(): Promise<ApiResult<SubscriptionPlan
 
 export async function getSubscriptions(): Promise<ApiResult<SubscriptionPage>> {
   return getJson<SubscriptionPage>("/v1/subscriptions");
+}
+
+export async function getPlatformAccess(): Promise<ApiResult<PlatformAccess>> {
+  return getJson<PlatformAccess>("/v1/platform-access");
 }
 
 export async function getDiscoverSearch(query = ""): Promise<ApiResult<DiscoverPage>> {

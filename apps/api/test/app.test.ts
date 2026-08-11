@@ -73,6 +73,7 @@ import type { DiscoverRepository } from "../src/modules/discover/types";
 import type { EngagementRepository } from "../src/modules/engagement/types";
 import type {
   PlatformAccess,
+  PlatformPlaybackSession,
   Subscription,
   SubscriptionAuthorizationIntent,
   SubscriptionAuthorizationVerifier,
@@ -2549,6 +2550,94 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("attaches public-media accounting and blocks signed playback when allowance is exhausted", async () => {
+    const publicVod: ContentItem = {
+      ...homeFeedItem,
+      creator: {
+        ...homeFeedItem.creator,
+        id: "00000000-0000-4000-8000-000000000011"
+      },
+      mediaType: "vod",
+      accessState: "free",
+      playback: {
+        state: "full",
+        url: "https://vz-example.b-cdn.net/11111111-1111-4111-8111-111111111111/playlist.m3u8",
+        provider: "bunny"
+      }
+    };
+    const contentRepository = contentRepositoryWithDetail(publicVod);
+    const mediaUploadProvider: MediaUploadProviderAdapter = {
+      provider: "bunny",
+      isConfigured: () => true,
+      async createUploadSession() {
+        throw new Error("not implemented");
+      },
+      createPlaybackResource() {
+        return {
+          state: "full",
+          url: "https://iframe.mediadelivery.net/embed/123/11111111-1111-4111-8111-111111111111?token=signed&expires=1770000900",
+          provider: "bunny",
+          resourceType: "embed"
+        };
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository,
+      mediaUploadProvider,
+      subscriptionRepository: fakeSubscriptionRepository({
+        async onGetPlatformPlaybackDecision() {
+          return { countsTowardAllowance: true, limitReached: false };
+        }
+      })
+    });
+    await app.ready();
+
+    const accounted = await app.inject({
+      method: "GET",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040",
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(accounted.statusCode).toBe(200);
+    expect(accounted.json().playback.usage).toEqual({
+      policy: "public_media_allowance",
+      targetType: "content",
+      targetId: publicVod.id,
+      heartbeatIntervalSeconds: 15
+    });
+
+    await app.close();
+
+    const exhaustedApp = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository,
+      mediaUploadProvider,
+      subscriptionRepository: fakeSubscriptionRepository({
+        async onGetPlatformPlaybackDecision() {
+          return { countsTowardAllowance: true, limitReached: true };
+        }
+      })
+    });
+    await exhaustedApp.ready();
+    const exhausted = await exhaustedApp.inject({
+      method: "GET",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040",
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(exhausted.json().playback).toMatchObject({
+      state: "blocked",
+      url: null,
+      blockReason: "allowance_exhausted"
+    });
+    await exhaustedApp.close();
+  });
+
   it("fails Bunny playback closed when the signer is unavailable", async () => {
     const unlockedContent: ContentItem = {
       ...homeFeedItem,
@@ -4771,7 +4860,7 @@ describe("buildApi", () => {
       items: [
         {
           kind: "payment_intent",
-          title: "Tip",
+          title: "Support",
           state: "confirmed",
           productType: "support",
           amountMinor: 10000000,
@@ -8884,6 +8973,56 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("creates and advances idempotent public-media playback accounting sessions", async () => {
+    const calls: Array<{ kind: string; input: unknown }> = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      subscriptionRepository: fakeSubscriptionRepository({
+        async onCreatePlatformPlaybackSession(input) {
+          calls.push({ kind: "start", input });
+          return platformPlaybackSessionFixture();
+        },
+        async onRecordPlatformPlaybackHeartbeat(input) {
+          calls.push({ kind: "heartbeat", input });
+          return platformPlaybackSessionFixture({ consumedSeconds: 15 });
+        }
+      })
+    });
+    await app.ready();
+
+    const start = await app.inject({
+      method: "POST",
+      url: "/v1/platform-usage/playback-sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "playback-start-1"
+      },
+      payload: {
+        targetType: "content",
+        targetId: "00000000-0000-4000-8000-000000000040"
+      }
+    });
+    expect(start.statusCode).toBe(201);
+
+    const heartbeat = await app.inject({
+      method: "POST",
+      url: "/v1/platform-usage/playback-sessions/00000000-0000-4000-8000-000000000085/heartbeats",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "playback-heartbeat-1"
+      },
+      payload: { sequence: 1, playedSeconds: 15 }
+    });
+    expect(heartbeat.statusCode).toBe(200);
+    expect(heartbeat.json()).toMatchObject({ consumedSeconds: 15, state: "active" });
+    expect(calls.map((call) => call.kind)).toEqual(["start", "heartbeat"]);
+
+    await app.close();
+  });
+
   it("creates delegated subscription intents and keeps activation behind backend verification", async () => {
     vi.stubEnv("SUBSCRIPTIONS_ENABLED", "true");
     vi.stubEnv("SUBSCRIPTIONS_PROVIDER", "official_solana_subscription_program");
@@ -9251,6 +9390,29 @@ const homeFeedItem: ContentItem = {
   }
 };
 
+function contentRepositoryWithDetail(item: ContentItem): ContentRepository {
+  return {
+    async createDraft() {
+      throw new Error("not implemented");
+    },
+    async createMediaAsset() {
+      throw new Error("not implemented");
+    },
+    async findContentDetail() {
+      return item;
+    },
+    async findContentUnlockOffer() {
+      throw new Error("not implemented");
+    },
+    async findOwnedContentForUpload() {
+      throw new Error("not implemented");
+    },
+    async listHomeFeed() {
+      throw new Error("not implemented");
+    }
+  };
+}
+
 const treasuryWallet = "1".repeat(32);
 const creatorWallet = "2".repeat(32);
 const platformFeeWallet = "3".repeat(32);
@@ -9491,6 +9653,9 @@ function subscriptionAuthorizationIntentFixture(
 function fakeSubscriptionRepository(
   overrides: Partial<{
     onGetPlatformAccess: NonNullable<SubscriptionRepository["getPlatformAccess"]>;
+    onGetPlatformPlaybackDecision: NonNullable<SubscriptionRepository["getPlatformPlaybackDecision"]>;
+    onCreatePlatformPlaybackSession: NonNullable<SubscriptionRepository["createPlatformPlaybackSession"]>;
+    onRecordPlatformPlaybackHeartbeat: NonNullable<SubscriptionRepository["recordPlatformPlaybackHeartbeat"]>;
     onListPlans: SubscriptionRepository["listPlans"];
     onListSubscriptions: SubscriptionRepository["listSubscriptions"];
     onCreateAuthorizationIntent: SubscriptionRepository["createAuthorizationIntent"];
@@ -9501,6 +9666,18 @@ function fakeSubscriptionRepository(
   return {
     async getPlatformAccess(input) {
       return overrides.onGetPlatformAccess?.(input) ?? platformAccessFixture();
+    },
+    async getPlatformPlaybackDecision(input) {
+      return overrides.onGetPlatformPlaybackDecision?.(input) ?? {
+        countsTowardAllowance: false,
+        limitReached: false
+      };
+    },
+    async createPlatformPlaybackSession(input) {
+      return overrides.onCreatePlatformPlaybackSession?.(input) ?? platformPlaybackSessionFixture();
+    },
+    async recordPlatformPlaybackHeartbeat(input) {
+      return overrides.onRecordPlatformPlaybackHeartbeat?.(input) ?? platformPlaybackSessionFixture();
     },
     async listPlans(input) {
       return overrides.onListPlans?.(input) ?? { items: [subscriptionPlanFixture()] };
@@ -9563,6 +9740,18 @@ function platformAccessFixture(): PlatformAccess {
     },
     tiers: [currentTier],
     policyBoundary: "platform_tiers_buy_software_and_public_media_allowance_never_social_priority"
+  };
+}
+
+function platformPlaybackSessionFixture(
+  overrides: Partial<PlatformPlaybackSession> = {}
+): PlatformPlaybackSession {
+  return {
+    id: overrides.id ?? "00000000-0000-4000-8000-000000000085",
+    state: overrides.state ?? "active",
+    heartbeatIntervalSeconds: overrides.heartbeatIntervalSeconds ?? 15,
+    consumedSeconds: overrides.consumedSeconds ?? 0,
+    usage: overrides.usage ?? platformAccessFixture().usage
   };
 }
 

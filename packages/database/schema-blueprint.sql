@@ -1061,6 +1061,37 @@ create table platform_usage_windows (
   unique (user_id, window_starts_at)
 );
 
+create table platform_playback_sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id),
+  target_type text not null,
+  target_id uuid not null,
+  state text not null default 'active',
+  window_starts_at timestamptz not null,
+  window_ends_at timestamptz not null,
+  consumed_seconds bigint not null default 0,
+  last_sequence integer not null default 0,
+  last_heartbeat_at timestamptz not null default now(),
+  idempotency_key text not null,
+  request_hash text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, idempotency_key)
+);
+
+create table platform_playback_heartbeats (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references platform_playback_sessions(id),
+  sequence integer not null,
+  reported_seconds integer not null,
+  credited_seconds integer not null,
+  idempotency_key text not null,
+  request_hash text not null,
+  created_at timestamptz not null default now(),
+  unique (session_id, sequence),
+  unique (session_id, idempotency_key)
+);
+
 create table subscription_authorization_intents (
   id uuid primary key,
   subscription_id uuid not null references subscriptions(id),

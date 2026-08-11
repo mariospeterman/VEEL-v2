@@ -1,8 +1,11 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import type { Src } from "@livepeer/react";
 import * as Player from "@livepeer/react/player";
+import playerjs from "player.js";
 import type { ContentItem, LiveRoom } from "@/api-client";
+import { usePlaybackUsage } from "@/playback-usage";
 
 type Playback = NonNullable<ContentItem["playback"] | LiveRoom["playback"]>;
 
@@ -15,13 +18,49 @@ export function ProviderPlayback({
   posterUrl?: string | null | undefined;
   title: string;
 }) {
+  const playbackKey = playback?.usage
+    ? `${playback.usage.targetType}:${playback.usage.targetId}`
+    : `${playback?.provider ?? "none"}:${playback?.url ?? playback?.state ?? "missing"}`;
+
+  return (
+    <ProviderPlaybackResource
+      key={playbackKey}
+      playback={playback}
+      posterUrl={posterUrl}
+      title={title}
+    />
+  );
+}
+
+function ProviderPlaybackResource({
+  playback,
+  posterUrl,
+  title
+}: {
+  playback: Playback | null | undefined;
+  posterUrl?: string | null | undefined;
+  title: string;
+}) {
+  const usage = usePlaybackUsage(playback?.usage);
+
+  if (usage.exhausted) {
+    return <ProviderPlaceholder state="blocked" message="Your public-media allowance is used for this month." />;
+  }
+
   if (playback?.state !== "full" || !playback.url) {
-    return <ProviderPlaceholder state={playback?.state ?? "not_ready"} />;
+    return (
+      <ProviderPlaceholder
+        state={playback?.state ?? "not_ready"}
+        message={playback?.blockReason === "allowance_exhausted"
+          ? "Your public-media allowance is used for this month."
+          : undefined}
+      />
+    );
   }
 
   if (playback.provider === "bunny") {
     if (playback.resourceType === "embed") {
-      return <BunnyEmbedPlayer src={playback.url} title={title} />;
+      return <BunnyEmbedPlayer onPlayingChange={usage.setPlaying} src={playback.url} title={title} />;
     }
 
     return (
@@ -35,6 +74,7 @@ export function ProviderPlayback({
   if (playback.provider === "livepeer") {
     return (
       <LivepeerOfficialPlayer
+        onPlayingChange={usage.setPlaying}
         posterUrl={posterUrl}
         resourceType={playback.resourceType}
         src={playback.url}
@@ -46,7 +86,37 @@ export function ProviderPlayback({
   return <ProviderPlaceholder state="not_ready" />;
 }
 
-export function BunnyEmbedPlayer({ src, title }: { src: string; title: string }) {
+export function BunnyEmbedPlayer({
+  onPlayingChange,
+  src,
+  title
+}: {
+  onPlayingChange: (playing: boolean) => void;
+  src: string;
+  title: string;
+}) {
+  const frameRef = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    const player = new playerjs.Player(frame);
+    const onPlay = () => onPlayingChange(true);
+    const onStop = () => onPlayingChange(false);
+    player.on("play", onPlay);
+    player.on("pause", onStop);
+    player.on("ended", onStop);
+    player.on("error", onStop);
+
+    return () => {
+      onPlayingChange(false);
+      player.off("play", onPlay);
+      player.off("pause", onStop);
+      player.off("ended", onStop);
+      player.off("error", onStop);
+    };
+  }, [onPlayingChange]);
+
   return (
     <iframe
       allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
@@ -54,6 +124,7 @@ export function BunnyEmbedPlayer({ src, title }: { src: string; title: string })
       className="provider-frame"
       loading="lazy"
       referrerPolicy="strict-origin-when-cross-origin"
+      ref={frameRef}
       sandbox="allow-scripts allow-same-origin allow-presentation"
       src={src}
       title={title}
@@ -62,11 +133,13 @@ export function BunnyEmbedPlayer({ src, title }: { src: string; title: string })
 }
 
 export function LivepeerOfficialPlayer({
+  onPlayingChange,
   posterUrl,
   resourceType,
   src,
   title
 }: {
+  onPlayingChange: (playing: boolean) => void;
   posterUrl?: string | null | undefined;
   resourceType: Playback["resourceType"];
   src: string;
@@ -77,7 +150,18 @@ export function LivepeerOfficialPlayer({
   return (
     <Player.Root src={source} aspectRatio={null}>
       <Player.Container className="absolute inset-0 h-full w-full overflow-hidden bg-black">
-        <Player.Video className="h-full w-full object-contain" poster={posterUrl ?? null} title={title} />
+        <Player.Video
+          className="h-full w-full object-contain"
+          onEnded={() => onPlayingChange(false)}
+          onError={() => onPlayingChange(false)}
+          onPause={() => onPlayingChange(false)}
+          onPlay={() => onPlayingChange(true)}
+          onPlaying={() => onPlayingChange(true)}
+          onStalled={() => onPlayingChange(false)}
+          onWaiting={() => onPlayingChange(false)}
+          poster={posterUrl ?? null}
+          title={title}
+        />
         <Player.LoadingIndicator className="provider-placeholder data-[visible=false]:hidden">
           <div>
             <p className="text-sm font-semibold">Loading Livepeer playback</p>
@@ -103,7 +187,7 @@ function ProviderPlaceholder({
   message,
   state
 }: {
-  message?: string;
+  message?: string | undefined;
   state: Playback["state"];
 }) {
   return (

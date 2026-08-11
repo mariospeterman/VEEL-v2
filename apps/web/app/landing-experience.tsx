@@ -152,9 +152,10 @@ export function LandingExperience() {
 
   useEffect(() => {
     let cancelled = false;
+    let animation: { kill(): void } | undefined;
 
     async function animateCopy() {
-      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      if (activeAuth || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         return;
       }
 
@@ -168,7 +169,7 @@ export function LandingExperience() {
         return;
       }
 
-      gsap.fromTo(
+      animation = gsap.fromTo(
         target.querySelectorAll("[data-story-part]"),
         {
           autoAlpha: 0,
@@ -190,8 +191,9 @@ export function LandingExperience() {
     void animateCopy();
     return () => {
       cancelled = true;
+      animation?.kill();
     };
-  }, [activeIndex]);
+  }, [activeAuth, activeIndex]);
 
   const cssVars = useMemo(
     () =>
@@ -324,7 +326,12 @@ export function LandingExperience() {
             </div>
           </div>
 
-          <section className={`landing-story ${activeAuth ? "landing-story-auth" : ""}`} id={activeFrame.id} ref={copyRef}>
+          <section
+            className={`landing-story ${activeAuth ? "landing-story-auth" : ""}`}
+            id={activeFrame.id}
+            key={activeFrame.id}
+            ref={copyRef}
+          >
             <p className="landing-eyebrow" data-story-part>{activeFrame.kicker}</p>
             <h1 data-story-part>{activeFrame.title}</h1>
             <p className="landing-copy" data-story-part>{activeFrame.copy}</p>
