@@ -85,7 +85,7 @@ test("covers authenticated app access to profile wallet age home create and unlo
   await page.getByRole("button", { name: "Continue" }).evaluate((element) => {
     (element as HTMLButtonElement).click();
   });
-  await expect(page.getByText("Draft ready")).toBeVisible();
+  await expect(page.getByText("Draft saved")).toBeVisible();
 
   const fileInput = page.getByLabel("Video");
   await fileInput.setInputFiles({
