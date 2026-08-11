@@ -1,5 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { ServerEnv } from "@veel/config";
+import { verifyDiditV3Webhook } from "./didit-webhook.js";
 import type { NormalizedVerificationWebhook, VerificationProvider } from "./types.js";
 
 export class VerificationWebhookConfigurationError extends Error {
@@ -84,15 +85,15 @@ function normalizeDiditWebhook(input: {
   const secret = input.env.DIDIT_WEBHOOK_SECRET;
   if (!secret) throw new VerificationWebhookConfigurationError("didit");
 
-  const signatureV2 = headerValue(input.headers["x-signature-v2"]) ?? headerValue(input.headers["X-Signature-V2"]);
-  const legacySignature = headerValue(input.headers["x-didit-signature"]) ?? headerValue(input.headers["didit-signature"]);
-  if (!verifyDiditSignature(input.body, input.rawBody, secret, signatureV2, legacySignature)) {
+  const signatureV2 = verifyDiditV3Webhook({ body: input.body, headers: input.headers, secret });
+  if (!signatureV2) {
     throw new VerificationWebhookSignatureError("didit");
   }
 
   const body = objectBody(input.body);
   const data = objectBody(body.data, true);
-  const eventType = firstStringValue(body.event, body.type) ?? "verification.updated";
+  const decision = objectBody(body.decision, true);
+  const eventType = firstStringValue(body.webhook_type, body.event, body.type) ?? "verification.updated";
   const providerReference = firstStringValue(
     body.session_id,
     body.verification_id,
@@ -101,7 +102,7 @@ function normalizeDiditWebhook(input: {
     data?.session_id,
     data?.verification_id
   );
-  const providerEventId = firstStringValue(body.id, body.event_id, providerReference);
+  const providerEventId = firstStringValue(body.event_id, body.id, providerReference);
   if (!providerEventId || !providerReference) {
     throw new VerificationWebhookValidationError("Didit webhook is missing required identifiers");
   }
@@ -112,9 +113,14 @@ function normalizeDiditWebhook(input: {
     providerReference,
     eventType,
     status: mapGenericState(firstStringValue(body.status, data?.status, data?.decision)),
-    signatureHash: sha256Hex(signatureV2 ?? legacySignature ?? ""),
-    occurredAt: parseProviderDate(firstStringValue(body.created_at, body.timestamp, data?.created_at)),
-    failureReasonCode: firstStringValue(body.reason, data?.reason, data?.failure_reason)
+    signatureHash: sha256Hex(signatureV2),
+    occurredAt: parseProviderDate(firstStringValue(body.created_at, data?.created_at)) ?? parseUnixSeconds(body.created_at, body.timestamp),
+    failureReasonCode: firstStringValue(body.reason, data?.reason, data?.failure_reason),
+    identityEvidence: decision ? {
+      documentApproved: hasApprovedDecision(decision.id_verifications),
+      livenessApproved: hasApprovedDecision(decision.liveness_checks),
+      faceMatchApproved: hasApprovedDecision(decision.face_matches)
+    } : null
   };
 }
 
@@ -204,22 +210,6 @@ function verifyDigest(digest: string, digestAlg: string, rawBody: Buffer, secret
   return secureEqualHex(createHmac(algorithm, secret).update(rawBody).digest("hex"), digest);
 }
 
-function verifyDiditSignature(
-  body: unknown,
-  rawBody: Buffer,
-  secret: string,
-  signatureV2: string | null,
-  legacySignature: string | null
-): boolean {
-  if (signatureV2) {
-    return secureEqualHex(createHmac("sha256", secret).update(canonicalJson(body)).digest("hex"), signatureV2);
-  }
-
-  return Boolean(
-    legacySignature && secureEqualHex(createHmac("sha256", secret).update(rawBody).digest("hex"), legacySignature)
-  );
-}
-
 function verifyPersonaSignature(signatureHeader: string, rawBody: Buffer, secret: string): boolean {
   const parsed = parseSignatureHeader(signatureHeader);
   const timestamp = parsed.get("t")?.[0];
@@ -237,6 +227,13 @@ function mapReviewState(eventType: string, answer: string | null, reviewStatus: 
   return "pending";
 }
 
+function hasApprovedDecision(value: unknown): boolean {
+  return Array.isArray(value) && value.some((entry) => {
+    const record = objectBody(entry, true);
+    return firstStringValue(record?.status)?.toLowerCase() === "approved";
+  });
+}
+
 function mapGenericState(value: string | null): NormalizedVerificationWebhook["status"] {
   const normalized = value?.toLowerCase();
   if (!normalized) return "pending";
@@ -252,19 +249,6 @@ function mapVeriffState(value: string | null): NormalizedVerificationWebhook["st
   if (normalized === "9102" || normalized.includes("declined") || normalized.includes("abandoned")) return "blocked";
   if (normalized.includes("resubmission")) return "pending";
   return mapGenericState(normalized);
-}
-
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
-  if (value && typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    return `{${Object.keys(record)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
-      .join(",")}}`;
-  }
-
-  return JSON.stringify(value);
 }
 
 function parseSignatureHeader(value: string): Map<string, string[]> {
@@ -310,6 +294,13 @@ function parseProviderDate(value: string | null): Date | null {
   if (!value) return null;
   const parsed = Date.parse(value.replace(" ", "T"));
   return Number.isFinite(parsed) ? new Date(parsed) : null;
+}
+
+function parseUnixSeconds(...values: unknown[]): Date | null {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value)) return new Date(value * 1000);
+  }
+  return null;
 }
 
 function sha256Hex(value: string): string {

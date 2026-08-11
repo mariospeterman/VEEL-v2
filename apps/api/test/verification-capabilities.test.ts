@@ -24,7 +24,7 @@ describe("universal account capability policy", () => {
   it("allows an age-verified account to publish SFW media without KYC", () => {
     const resolution = resolveCapabilitiesFromRecords({
       ageAccess: validRecord("age_access"),
-      adultContentAccess: null,
+      adultPublisherEligibility: null,
       creatorKyc: null,
       orgKyb: null
     });
@@ -35,17 +35,17 @@ describe("universal account capability policy", () => {
       canPublishMedia: true,
       canPublishAdultMedia: false,
       canMonetize: false,
-      canReceivePayouts: false
+      canReceiveCreatorProceeds: false
     });
     expect(resolution.missingRequirements).not.toContain("age_access_required");
-    expect(resolution.missingRequirements).toContain("adult_verification_required_for_nsfw");
+    expect(resolution.missingRequirements).toContain("adult_publisher_eligibility_required");
     expect(resolution.missingRequirements).toContain("creator_kyc_required_for_earning");
   });
 
   it("requires adult-content verification only for adult-rated publishing", () => {
     const resolution = resolveCapabilitiesFromRecords({
       ageAccess: validRecord("age_access"),
-      adultContentAccess: validRecord("adult_content_access"),
+      adultPublisherEligibility: validRecord("adult_publisher_eligibility"),
       creatorKyc: null,
       orgKyb: null
     });
@@ -58,7 +58,7 @@ describe("universal account capability policy", () => {
   it("does not infer paid plan or organization capabilities from identity checks", () => {
     const resolution = resolveCapabilitiesFromRecords({
       ageAccess: validRecord("age_access"),
-      adultContentAccess: validRecord("adult_content_access"),
+      adultPublisherEligibility: validRecord("adult_publisher_eligibility"),
       creatorKyc: validRecord("creator_kyc"),
       orgKyb: {
         ...validRecord("org_kyb"),
@@ -68,7 +68,7 @@ describe("universal account capability policy", () => {
 
     expect(resolution.capabilities).toMatchObject({
       canMonetize: true,
-      canReceivePayouts: true,
+      canReceiveCreatorProceeds: true,
       canAccessStudio: false,
       canInviteTeam: false,
       canUseTeamPublishing: false,

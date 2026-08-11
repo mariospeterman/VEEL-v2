@@ -28,21 +28,17 @@ export function LandingWalletRuntime({
             <p>Embedded wallet</p>
             <span>{embeddedWallets.enabled ? "Optional provider setup can be added after access is created." : "Provider login is waiting for runtime configuration."}</span>
           </div>
-          {embeddedWallets.providers.map((provider) =>
-            provider.configured ? (
+          {embeddedWallets.provider.configured ? (
               <EmbeddedWalletLoginButton
-                key={provider.provider}
-                label={provider.label}
+                label={embeddedWallets.provider.label}
                 onLinked={onLinked}
-                provider={provider.provider}
               />
             ) : (
-              <button className="landing-provider-disabled" disabled key={provider.provider} type="button">
-                <strong>{provider.label}</strong>
+              <button className="landing-provider-disabled" disabled type="button">
+                <strong>{embeddedWallets.provider.label}</strong>
                 <small>Not configured</small>
               </button>
-            )
-          )}
+            )}
         </div>
       </div>
     </WalletRuntimeProviders>

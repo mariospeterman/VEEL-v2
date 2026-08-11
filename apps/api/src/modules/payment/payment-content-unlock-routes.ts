@@ -1,7 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { ContentRepositoryConfigurationError } from "../content/content-repository.js";
 import type { ContentUnlockIntent } from "../content/types.js";
-import { PaymentIdempotencyConflictError, PaymentRepositoryConfigurationError } from "./payment-repository.js";
+import {
+  PaymentIdempotencyConflictError,
+  PaymentRecipientNotReadyError,
+  PaymentRepositoryConfigurationError
+} from "./payment-repository.js";
 import { assertSolanaAddress, createSolanaReferenceAddress, SolanaPaymentConfigurationError } from "./solana-payment.js";
 import type { RegisterPaymentRoutesOptions } from "./payment-route-shared.js";
 import { hashPaymentIntentRequest, notFoundResponse, paymentIntentTtlMs, toPaymentIntentResponse, validationResponse, verifyPaymentReadyAccess } from "./payment-route-shared.js";
@@ -93,6 +97,13 @@ export async function registerContentUnlockPaymentRoutes(
         return reply.code(409).send({
           code: "conflict",
           message: "Idempotency key was already used for a different content unlock intent"
+        });
+      }
+
+      if (error instanceof PaymentRecipientNotReadyError) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: "This creator cannot receive payments yet"
         });
       }
 

@@ -23,6 +23,7 @@ interface OrganizationDashboardRow {
   member_count: number;
   active_member_count: number;
   tier_waiver_state: OrganizationDashboard["governance"]["tierWaiverState"] | null;
+  has_enterprise_entitlement: boolean;
 }
 
 type OrganizationKybState = NonNullable<OrganizationDashboard["organization"]["kybState"]> | null;
@@ -63,6 +64,15 @@ export function createPostgresOrganizationRepository(database?: string | Postgre
           where subject_type = 'organization'
           order by subject_id, starts_at desc
         ),
+        active_enterprise_entitlements as (
+          select distinct subject_id as organization_id
+          from tier_waivers
+          where subject_type = 'organization'
+            and tier_key = 'enterprise'
+            and state = 'active'
+            and starts_at <= now()
+            and (ends_at is null or ends_at > now())
+        ),
         latest_org_kyb as (
           select distinct on (subject_id)
             subject_id as organization_id,
@@ -92,12 +102,14 @@ export function createPostgresOrganizationRepository(database?: string | Postgre
           coalesce(mc.member_count, 0) as member_count,
           coalesce(mc.active_member_count, 0) as active_member_count,
           atw.tier_waiver_state,
+          (aee.organization_id is not null) as has_enterprise_entitlement,
           lok.verification_kyb_status
         from organization_memberships om
         join target_user tu on tu.id = om.user_id
         join organizations o on o.id = om.organization_id
         left join member_counts mc on mc.organization_id = o.id
         left join active_tier_waivers atw on atw.organization_id = o.id
+        left join active_enterprise_entitlements aee on aee.organization_id = o.id
         left join latest_org_kyb lok on lok.organization_id = o.id
         where om.state in ('active', 'invited')
           and (${input.cursor ?? null}::timestamptz is null or o.created_at < ${input.cursor ?? null}::timestamptz)
@@ -127,6 +139,8 @@ function toDashboardPage(rows: OrganizationDashboardRow[], limit: number): Organ
 
 function toDashboard(row: OrganizationDashboardRow): OrganizationDashboard {
   const kybState = kybStateFromVerification(row.verification_kyb_status, row.kyb_state);
+  const organizationActive = row.state === "active";
+  const enterpriseActive = organizationActive && row.has_enterprise_entitlement;
   const notices: OrganizationDashboard["notices"] = [];
 
   if (kybState !== "verified") {
@@ -134,6 +148,14 @@ function toDashboard(row: OrganizationDashboardRow): OrganizationDashboard {
       kind: "kyb_required",
       title: "KYB review required",
       state: kybState === "rejected" ? "open" : "pending"
+    });
+  }
+
+  if (!row.has_enterprise_entitlement) {
+    notices.push({
+      kind: "compliance_review",
+      title: "Enterprise entitlement required",
+      state: "open"
     });
   }
 
@@ -163,13 +185,13 @@ function toDashboard(row: OrganizationDashboardRow): OrganizationDashboard {
       memberCount: row.member_count,
       activeMemberCount: row.active_member_count,
       tierWaiverState: row.tier_waiver_state ?? "none",
-      supportState: row.state === "active" && kybState === "verified" ? "priority" : "enterprise_review"
+      supportState: enterpriseActive ? "priority" : "enterprise_review"
     },
     capabilities: {
-      rbacEnabled: true,
-      teamPublishingEnabled: row.state === "active" && kybState === "verified",
-      consolidatedReportingEnabled: row.state === "active" && kybState === "verified",
-      complianceExportsEnabled: row.state === "active" && kybState === "verified"
+      rbacEnabled: enterpriseActive,
+      teamPublishingEnabled: enterpriseActive && kybState === "verified",
+      consolidatedReportingEnabled: enterpriseActive,
+      complianceExportsEnabled: enterpriseActive && kybState === "verified"
     },
     rolePermissions: rolePermissions(row, kybState),
     financeBoundary: "no_custody_no_payout_queue",
@@ -208,30 +230,34 @@ function rolePermissions(
     permission(row, kybState, {
       key: "manage_members",
       label: "Manage members",
-      roles: ["owner", "admin"]
+      roles: ["owner", "admin"],
+      requiresEnterprise: true
     }),
     permission(row, kybState, {
       key: "publish_team_content",
       label: "Publish team content",
       roles: ["owner", "admin", "member"],
+      requiresEnterprise: true,
       requiresKyb: true
     }),
     permission(row, kybState, {
       key: "view_consolidated_reporting",
       label: "View consolidated reporting",
       roles: ["owner", "admin", "member", "viewer"],
-      requiresKyb: true
+      requiresEnterprise: true
     }),
     permission(row, kybState, {
       key: "export_compliance",
       label: "Export compliance",
       roles: ["owner", "admin"],
+      requiresEnterprise: true,
       requiresKyb: true
     }),
     permission(row, kybState, {
       key: "manage_support",
       label: "Manage support",
-      roles: ["owner", "admin"]
+      roles: ["owner", "admin"],
+      requiresEnterprise: true
     })
   ];
 }
@@ -243,6 +269,7 @@ function permission(
     key: OrganizationDashboard["rolePermissions"][number]["key"];
     label: string;
     roles: OrganizationDashboard["organization"]["role"][];
+    requiresEnterprise?: boolean;
     requiresKyb?: boolean;
   }
 ): OrganizationDashboard["rolePermissions"][number] {
@@ -251,11 +278,13 @@ function permission(
       ? "membership_not_active"
       : row.state !== "active"
         ? "organization_not_active"
-        : policy.requiresKyb && kybState !== "verified"
-          ? "kyb_not_verified"
-          : policy.roles.includes(row.role)
-            ? "allowed"
-            : "role_not_permitted";
+        : policy.requiresEnterprise && !row.has_enterprise_entitlement
+          ? "enterprise_entitlement_required"
+          : policy.requiresKyb && kybState !== "verified"
+            ? "kyb_not_verified"
+            : policy.roles.includes(row.role)
+              ? "allowed"
+              : "role_not_permitted";
 
   return {
     key: policy.key,

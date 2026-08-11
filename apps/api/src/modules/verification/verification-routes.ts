@@ -23,8 +23,10 @@ interface RegisterVerificationRoutesOptions {
 }
 
 const verificationProviders = new Set<VerificationProvider>(["sumsub", "didit", "persona", "veriff"]);
-const verificationPurposes = new Set(["adult_content_access", "creator_kyc", "org_kyb"]);
+const verificationPurposes = new Set(["adult_publisher_eligibility", "creator_kyc", "org_kyb"]);
 const providerPreferences = new Set(["provider_first", "sumsub", "didit", "persona", "veriff"]);
+const verificationSources = new Set(["onboarding", "create", "earnings", "organization"]);
+const adultPublisherPolicyVersion = "adult-publisher-2026-08-v1";
 
 export async function registerVerificationRoutes(
   app: FastifyInstance,
@@ -110,9 +112,13 @@ export async function registerVerificationRoutes(
       });
     }
 
-    const body = request.body as Partial<CreateVerificationSessionInput> | undefined;
+    const body = request.body as (Partial<CreateVerificationSessionInput> & {
+      source?: string;
+      adultPublisherTermsAccepted?: boolean;
+    }) | undefined;
     const purpose = body?.purpose;
     const providerPreference = body?.providerPreference ?? "provider_first";
+    const source = body?.source ?? "create";
 
     if (typeof purpose !== "string" || !verificationPurposes.has(purpose)) {
       return reply.code(400).send({
@@ -128,21 +134,41 @@ export async function registerVerificationRoutes(
       });
     }
 
+    if (typeof source !== "string" || !verificationSources.has(source)) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: "source is invalid"
+      });
+    }
+
+    if (purpose === "adult_publisher_eligibility" && body?.adultPublisherTermsAccepted !== true) {
+      return reply.code(422).send({
+        code: "validation_failed",
+        message: "Adult publisher terms must be accepted before identity verification"
+      });
+    }
+
     try {
+      const termsAcceptedAt = purpose === "adult_publisher_eligibility" ? new Date() : null;
+      const policyVersion = purpose === "adult_publisher_eligibility" ? adultPublisherPolicyVersion : null;
       const providerSession = await options.verificationProviderWaterfall.createSession({
         supabaseUserId: verifiedSession.supabaseUserId,
         purpose,
         providerPreference,
         organizationId: typeof body?.organizationId === "string" ? body.organizationId : null,
         idempotencyKey,
-        callbackUrl: `${app.config.WEB_URL}/app/create?verification=callback`,
-        webhookBaseUrl: `${app.config.API_URL}/v1/webhooks/verification`
+        callbackUrl: verificationCallbackUrl(app.config.WEB_URL, purpose, source),
+        webhookBaseUrl: `${app.config.API_URL}/v1/webhooks/verification`,
+        policyVersion,
+        termsAcceptedAt
       });
       const sessionId = await options.verificationRepository.createPendingSession({
         supabaseUserId: verifiedSession.supabaseUserId,
         purpose,
         organizationId: typeof body?.organizationId === "string" ? body.organizationId : null,
-        providerSession
+        providerSession,
+        policyVersion,
+        termsAcceptedAt
       });
 
       if (isMockVerificationProviderReference(app.config, providerSession.providerReference)) {
@@ -232,6 +258,15 @@ export async function registerVerificationRoutes(
       throw error;
     }
   });
+}
+
+function verificationCallbackUrl(webUrl: string, purpose: string, source: string): string {
+  if (purpose === "adult_publisher_eligibility" && source === "onboarding") {
+    return `${webUrl}/age/callback?intent=adult`;
+  }
+  if (purpose === "adult_publisher_eligibility") return `${webUrl}/app/create?verification=return`;
+  if (purpose === "org_kyb") return `${webUrl}/app/profile?verification=organization`;
+  return `${webUrl}/app/profile?verification=earnings`;
 }
 
 function rawBodyBuffer(rawBody: string | Buffer | undefined): Buffer {

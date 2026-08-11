@@ -97,7 +97,7 @@ export function createPostgresAgeRepository(database?: string | PostgresSql): Ag
             ${input.jurisdiction ?? null},
             18,
             ${assurance},
-            ${input.provider === "didit" || input.provider === "yoti"},
+            ${input.provider === "yoti"},
             ${input.expiresAt}
           )
         `;
@@ -130,7 +130,7 @@ export function createPostgresAgeRepository(database?: string | PostgresSql): Ag
             18,
             ${assurance},
             ${input.expiresAt},
-            ${input.provider === "didit" || input.provider === "yoti"},
+            ${input.provider === "yoti"},
             ${tx.json({ source: "age_session", rule: input.rule ?? "over_18" })}
           )
         `;
@@ -315,7 +315,8 @@ function toSessionStatus(state: Extract<AgeState, "pending" | "verified" | "fail
 }
 
 function ageMethod(provider: AgeProvider) {
-  if (provider === "didit" || provider === "yoti") return "reusable_age";
+  if (provider === "didit") return "age_estimation";
+  if (provider === "yoti") return "reusable_age";
   if (provider === "persona") return "doc_scan";
   return "gov_id_selfie";
 }

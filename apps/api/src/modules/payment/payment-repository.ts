@@ -2,8 +2,17 @@ import { randomUUID } from "node:crypto";
 import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import type { PaymentRepository } from "./types.js";
 export { createPostgresPaymentEvidenceRepository } from "./payment-evidence-repository.js";
-import { PaymentIdempotencyConflictError, PaymentRepositoryConfigurationError } from "./payment-repository-errors.js";
-export { PaymentIdempotencyConflictError, PaymentRepositoryConfigurationError } from "./payment-repository-errors.js";
+import {
+  isRecipientMonetisationPolicyError,
+  PaymentIdempotencyConflictError,
+  PaymentRecipientNotReadyError,
+  PaymentRepositoryConfigurationError
+} from "./payment-repository-errors.js";
+export {
+  PaymentIdempotencyConflictError,
+  PaymentRecipientNotReadyError,
+  PaymentRepositoryConfigurationError
+} from "./payment-repository-errors.js";
 import { PaymentIntentRow, toStoredPaymentIntent } from "./payment-intent-mapper.js";
 import { recordPaymentSubmission } from "./payment-submission.js";
 import { calculateCreatorSplit } from "./payment-amounts.js";
@@ -46,7 +55,9 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
         referralShareOfPlatformFeeBps: input.referralShareOfPlatformFeeBps
       });
       const referralAllocationIsPayable = splitWithReferral.allocationAmountAtomic > 0;
-      const rows = await sql<PaymentIntentRow[]>`
+      let rows: PaymentIntentRow[];
+      try {
+        rows = await sql<PaymentIntentRow[]>`
         with target_user as (
           select id
           from users
@@ -109,20 +120,17 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
           limit 1
         ),
         creator_wallet as (
-          select coalesce(${input.creatorWallet ?? null}, w.address) as address
+          select readiness.address
           from creator_candidate cc
-          left join lateral (
-            select address
-            from wallets
-            where user_id = cc.id
-              and chain = case
-                when ${input.solanaCluster} = 'mainnet-beta' then 'solana_mainnet'::wallet_chain
-                else 'solana_devnet'::wallet_chain
-              end
-            order by is_primary desc, created_at asc
-            limit 1
-          ) w on true
-          where coalesce(${input.creatorWallet ?? null}, w.address) is not null
+          cross join lateral private.assert_recipient_monetisation_ready(
+            cc.id,
+            ${input.productType},
+            case
+              when ${input.solanaCluster} = 'mainnet-beta' then 'solana_mainnet'::wallet_chain
+              else 'solana_devnet'::wallet_chain
+            end,
+            null
+          ) readiness
           limit 1
         ),
         existing_intent as (
@@ -274,8 +282,15 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
           durable_confirmation_required,
           refund_value_basis
         from existing_intent
+        cross join creator_wallet
         limit 1
-      `;
+        `;
+      } catch (error) {
+        if (isRecipientMonetisationPolicyError(error)) {
+          throw new PaymentRecipientNotReadyError(error.message);
+        }
+        throw error;
+      }
 
       const row = rows[0];
 

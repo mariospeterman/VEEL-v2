@@ -162,6 +162,9 @@ export async function registerSubscriptionRoutes(
       }
 
       if (error instanceof SubscriptionPolicyError) {
+        if (error.message.startsWith("recipient_")) {
+          return reply.code(409).send(conflictResponse("This creator cannot receive subscriptions yet"));
+        }
         const statusCode = error.message === "subscription_plan_not_found" ? 404 : 400;
         return reply.code(statusCode).send(validationResponse(error.message));
       }

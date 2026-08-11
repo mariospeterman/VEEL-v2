@@ -26,7 +26,6 @@ export const visibilityValues: CreateContentRequest["visibility"][] = [
 ];
 export const nsfwLabels: CreateContentRequest["nsfwLabel"][] = [
   "none",
-  "sensitive",
   "adult",
   "explicit"
 ];

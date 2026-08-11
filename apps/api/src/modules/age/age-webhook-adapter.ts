@@ -50,10 +50,6 @@ export function normalizeAgeWebhook(input: {
     return normalizeYotiWebhook(input);
   }
 
-  if (input.provider === "didit") {
-    return normalizeDiditWebhook(input);
-  }
-
   throw new AgeWebhookConfigurationError(input.provider);
 }
 
@@ -143,58 +139,6 @@ function normalizeYotiWebhook(input: {
   };
 }
 
-function normalizeDiditWebhook(input: {
-  provider: AgeProvider;
-  body: unknown;
-  rawBody: Buffer;
-  headers: Record<string, string | string[] | undefined>;
-  env: ServerEnv;
-}): NormalizedAgeWebhook {
-  const secret = input.env.DIDIT_WEBHOOK_SECRET;
-
-  if (!secret) {
-    throw new AgeWebhookConfigurationError("didit");
-  }
-
-  const signatureV2 = headerValue(input.headers["x-signature-v2"]) ?? headerValue(input.headers["X-Signature-V2"]);
-  const legacySignature = headerValue(input.headers["x-didit-signature"]) ?? headerValue(input.headers["didit-signature"]);
-
-  if (!verifyDiditSignature(input.body, input.rawBody, secret, signatureV2, legacySignature)) {
-    throw new AgeWebhookSignatureError("didit");
-  }
-
-  const body = objectBody(input.body);
-  const data = objectBody(body.data, true);
-  const eventType = firstStringValue(body.event, body.type) ?? "age_verification.updated";
-  const providerReference = firstStringValue(
-    body.session_id,
-    body.verification_id,
-    body.id,
-    data?.id,
-    data?.session_id,
-    data?.verification_id
-  );
-  const providerEventId = firstStringValue(body.id, body.event_id, providerReference);
-
-  if (!providerEventId || !providerReference) {
-    throw new AgeWebhookValidationError("Didit webhook is missing required event identifiers");
-  }
-
-  const status = firstStringValue(body.status, data?.status, data?.decision, eventType);
-  const state = mapDiditAgeState(status);
-
-  return {
-    provider: "didit",
-    providerEventId,
-    providerReference,
-    eventType,
-    state,
-    signatureHash: sha256Hex(signatureV2 ?? legacySignature ?? ""),
-    occurredAt: parseProviderDate(firstStringValue(body.created_at, body.timestamp, data?.created_at)),
-    failureCode: state === "failed" ? firstStringValue(body.reason, data?.reason, data?.failure_reason, status) : null
-  };
-}
-
 function verifySumsubDigest(input: {
   digest: string;
   digestAlg: string;
@@ -238,22 +182,6 @@ function verifyYotiSignature(publicKeyPath: string, body: Record<string, unknown
   }
 }
 
-function verifyDiditSignature(
-  body: unknown,
-  rawBody: Buffer,
-  secret: string,
-  signatureV2: string | null,
-  legacySignature: string | null
-): boolean {
-  if (signatureV2) {
-    return secureEqualHex(createHmac("sha256", secret).update(canonicalJson(body)).digest("hex"), signatureV2);
-  }
-
-  return Boolean(
-    legacySignature && secureEqualHex(createHmac("sha256", secret).update(rawBody).digest("hex"), legacySignature)
-  );
-}
-
 function mapSumsubState(
   eventType: string,
   reviewAnswer: string | null,
@@ -284,31 +212,6 @@ function mapYotiState(state: string): Extract<AgeState, "pending" | "verified" |
   }
 
   return "pending";
-}
-
-function mapDiditAgeState(value: string | null): Extract<AgeState, "pending" | "verified" | "failed"> {
-  const normalized = value?.toLowerCase();
-  if (!normalized) return "pending";
-  if (["approved", "verified", "completed", "passed", "success"].some((part) => normalized.includes(part))) {
-    return "verified";
-  }
-  if (["declined", "rejected", "failed", "abandoned", "expired"].some((part) => normalized.includes(part))) {
-    return "failed";
-  }
-  return "pending";
-}
-
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
-  if (value && typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    return `{${Object.keys(record)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
-      .join(",")}}`;
-  }
-
-  return JSON.stringify(value);
 }
 
 function objectBody(input: unknown, optional?: false): Record<string, unknown>;
@@ -357,6 +260,7 @@ function parseProviderDate(value: string | null): Date | null {
   const parsed = Date.parse(value.replace(" ", "T"));
   return Number.isFinite(parsed) ? new Date(parsed) : null;
 }
+
 
 function sha256Hex(value: string): string {
   return createHash("sha256").update(value).digest("hex");

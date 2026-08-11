@@ -459,7 +459,7 @@ function verificationStatus() {
       canUploadMedia: true,
       canPublishMedia: true,
       canMonetize: true,
-      canReceivePayouts: true,
+      canReceiveCreatorProceeds: true,
       canAccessCreatorDashboard: true,
       canCreateOrganization: true,
       canAccessStudio: true,

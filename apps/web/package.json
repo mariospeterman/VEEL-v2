@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "next dev --webpack --port 3000",
+    "dev": "next dev --port 3000",
     "build": "next build",
     "start": "next start --port 3000",
     "typecheck": "tsc --noEmit -p tsconfig.json"
@@ -21,11 +21,9 @@
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.107.0",
     "@tanstack/react-query": "^5.90.10",
-    "@turnkey/react-wallet-kit": "^2.1.0",
     "@veel/config": "workspace:*",
     "@veel/contracts": "workspace:*",
     "@veel/ui": "workspace:*",
-    "bs58": "^6.0.0",
     "gsap": "^3.13.0",
     "lucide-react": "^1.18.0",
     "next": "16.3.0",

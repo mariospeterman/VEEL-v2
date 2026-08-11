@@ -1,4 +1,3 @@
-import type { UploadSession } from "@/api-mutations";
 import type { UploadState } from "./create-workspace-state";
 
 export function UploadSessionPanel({
@@ -8,9 +7,7 @@ export function UploadSessionPanel({
   syncDisabled,
   syncLabel,
   uploadProgress,
-  uploadSession,
-  uploadState,
-  uploadedUrl
+  uploadState
 }: {
   onAbortUpload: () => Promise<void>;
   onStartUpload: () => Promise<void>;
@@ -18,29 +15,16 @@ export function UploadSessionPanel({
   syncDisabled: boolean;
   syncLabel: string;
   uploadProgress: number;
-  uploadSession: UploadSession;
   uploadState: UploadState;
-  uploadedUrl: string | null;
 }) {
-  const headers = Object.entries(uploadSession.headers ?? {});
-
   return (
-    <div className="mt-4 grid gap-3 rounded border border-(--line) bg-(--background) p-3 text-sm">
-      <Fact label="Provider" value={uploadSession.provider} />
-      <Fact label="Media asset" value={uploadSession.mediaAssetId} />
-      <Fact label="Upload URL" value={uploadSession.uploadUrl} />
-      <Fact label="Expires" value={uploadSession.expiresAt} />
-      <p className="leading-6 text-(--muted)">
-        Use these server-issued headers with the Bunny TUS endpoint. The browser never receives the
-        Bunny API key, and publish/playback remains blocked until provider status and moderation are
-        backend-approved.
-      </p>
+    <div className="mt-4 grid gap-3 border-t border-(--line) pt-4 text-sm">
+      <p className="font-medium">Upload media</p>
       <div className="grid gap-2">
         <div className="h-2 overflow-hidden rounded bg-(--line)">
           <div className="h-full bg-(--accent)" style={{ width: `${uploadProgress}%` }} />
         </div>
-        <Fact label="Upload state" value={`${uploadState} ${uploadProgress}%`} />
-        {uploadedUrl ? <Fact label="TUS upload URL" value={uploadedUrl} /> : null}
+        <p className="text-sm text-(--muted)">{uploadState === "complete" ? "Upload complete" : `${uploadProgress}% uploaded`}</p>
         <div className="flex flex-wrap gap-2">
           <button
             className="rounded bg-(--foreground) px-3 py-2 font-semibold text-(--background) disabled:cursor-not-allowed disabled:opacity-50"
@@ -67,11 +51,6 @@ export function UploadSessionPanel({
             {syncLabel}
           </button>
         </div>
-      </div>
-      <div className="grid gap-2">
-        {headers.map(([key, value]) => (
-          <Fact key={key} label={key} value={value} />
-        ))}
       </div>
     </div>
   );

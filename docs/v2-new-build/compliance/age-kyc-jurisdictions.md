@@ -126,10 +126,10 @@ Do not store:
 
 Do not run KYC or KYB for ordinary viewers at signup.
 
-Trigger KYC or KYB only for:
+Trigger individual KYC or organization KYB only for:
 
 - suspicious account activity
-- Studio, enterprise, or creator-content setup before publishing or monetized creator actions when policy requires it
+- creator earning setup when the recipient enables Support, paid unlocks, memberships, paid live/Event Access, or another creator-proceeds product
 - creator earning/tax setup only when a partner, regulator, bank, or operator workflow truly requires it
 - regulated fiat off-ramp or merchant partner handoff
 - business or merchant onboarding
@@ -138,7 +138,7 @@ Keep earning, tax, and partner risk separate from age-gate state:
 
 - a user can be age-verified and still be reviewed for earning, tax, partner, or merchant risk
 - a user can fail or skip KYC without losing ordinary viewer access unless another policy requires restriction
-- direct non-custodial creator monetization should stay open by default when settlement is wallet-to-wallet and no regulated partner handoff is involved
+- noncustodial settlement does not remove recipient identity, tax, sanctions, partner, or jurisdiction requirements; the server-owned monetisation policy decides readiness before a paid product is activated
 - admin tooling should be able to request KYC or KYB for a specific account and reason without turning that into a universal onboarding requirement
 - if an account needs review, the safer non-custodial response is to pause new paid actions before signature and pause entitlement issuance where needed, not to custody or “freeze” user funds inside the platform
 

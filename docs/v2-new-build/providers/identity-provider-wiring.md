@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: documentation
-Last updated: 2026-06-28
+Last updated: 2026-08-11
 Source of truth: yes
 
 Owns:
@@ -20,7 +20,7 @@ Launch scope:
 Non-goals:
 - historical-context inference, duplicate systems, and unapproved provider/product expansion
 
-This repo now enforces server-owned verification for wallet sign-in, age-gate completion, adult-content publishing assurance, creator KYC, and organization KYB.
+This repo now enforces server-owned verification for wallet sign-in, age-gate completion, adult-publisher eligibility, creator KYC, and organization KYB.
 Local mock flows remain useful for development, but real provider launches and real provider
 webhooks must be configured before production rollout.
 
@@ -29,12 +29,13 @@ Current implementation state:
 - `POST /v1/age/sessions` is wired to an injectable backend provider waterfall.
 - `GET /v1/age/status` is the browser-safe age read projection. `/age` reads it through the typed web API helper and starts `POST /v1/age/sessions` only after explicit authenticated user action.
 - `GET /v1/verification/status` is the backend-owned capability projection for app, creator, Studio, and enterprise access.
-- `POST /v1/verification/sessions` starts creator KYC or organization KYB sessions. The browser receives only a hosted provider launch URL; it cannot mark KYC/KYB complete.
+- `POST /v1/verification/sessions` starts adult-publisher eligibility, creator KYC, or organization KYB sessions. Adult-publisher sessions require an explicit versioned terms acceptance. The browser receives only a hosted provider launch URL and cannot mark any verification complete.
 - `POST /v1/webhooks/verification/{provider}` accepts signed age, adult-content, KYC, and KYB callbacks and writes normalized `verification_records`.
 - The runtime waterfall has real HTTP session adapters for Yoti, Persona, Veriff, and Sumsub. Each adapter is inert until its exact env/config is present, and all unconfigured or failing providers fail closed with `503`.
 - The creator/business verification waterfall has real HTTP session adapters for Didit, Sumsub, Persona, and Veriff. Didit, Sumsub, and Persona can serve creator KYC and org KYB when their purpose-specific workflows/levels/templates are configured. Veriff is currently a creator KYC documentary fallback only unless a Veriff business/KYB product is separately approved and wired.
 - Local/test environments can enable `AGE_VERIFICATION_ALLOW_MOCK_PROVIDER=true` to use API-owned mock adapters for age, creator KYC, and organization KYB. These adapters create normal pending sessions, immediately apply a normalized valid result through the repository boundary, and are disabled when `NODE_ENV=production`.
-- The landing reusable-first path tries Yoti/Persona-style age assurance first. Sumsub and Veriff remain explicit fallback/provider choices and creator-compliance candidates, not ordinary viewer onboarding defaults.
+- The landing path exposes one recommended age action and lets the server choose the lowest-friction configured method. Didit Adaptive Age Verification is the preferred low-friction path; Yoti Digital ID is the reusable credential candidate. The UI does not hardcode provider availability.
+- A user may optionally declare adult-publishing intent during onboarding. That starts one stronger documentary identity/liveness flow whose approved over-18 result can derive ordinary age access. Ordinary users see only the lightweight age path, and adult eligibility can always be completed later in Create.
 - Successful provider session starts are stored in `verification_sessions` with a matching pending `verification_records` entry. `verification_records` is the sole application authority; `age_verifications` is a revoked historical archive after migration `0077`.
 - Raw provider payloads, identity images, document data, and browser-completed age state are not accepted by this route.
 
@@ -48,6 +49,8 @@ Current implementation state:
 - Sumsub webhook signature verification: https://docs.sumsub.com/docs/webhook-manager
 - Yoti age verification overview: https://developers.yoti.com/age-verification/age-verification-introduction
 - Yoti notifications/signature verification: https://developers.yoti.com/age-verification/notifications
+- Didit Sessions API: https://docs.didit.me/integration/api-full-flow
+- Didit Adaptive Age Verification: https://docs.didit.me/core-technology/age-estimation/overview
 - Didit docs/pricing: https://docs.didit.me/getting-started/pricing
 - Persona docs: https://docs.withpersona.com/
 - EU age verification / EUDI: https://digital-strategy.ec.europa.eu/en/policies/eu-age-verification
@@ -71,8 +74,8 @@ Current implementation state:
 
 - There is no generic Solana Mobile Wallet Adapter equivalent for iOS web in this repo. Current Solana Mobile Wallet Adapter web support is Android/Chrome-oriented.
 - iOS and macOS support should prefer wallet-standard/Safari Web Extension discovery where available. If the user has no wallet context, send them to the wallet's official install page or the Solana wallet directory, then return to the WeVid wallet chooser.
-- Privy/Turnkey are the preferred iOS-safe onboarding route once their Solana signing UX is verified on the production domain.
-- When configured for staging, provider login and teardown stay inside the official SDK boundaries: Privy `logout` and Turnkey `clearAllSessions`. Neither embedded provider is launch-approved until the production-domain checks below pass.
+- Privy is the selected iOS-safe embedded onboarding candidate once its Solana signing UX is verified on the production domain. Turnkey remains an unbundled ADR fallback.
+- When configured for staging, Privy login and teardown stay inside the official SDK boundary, including `logout`. Privy is not launch-approved until the production-domain checks below pass.
 
 ### Public web env
 
@@ -80,10 +83,6 @@ Current implementation state:
 - `NEXT_PUBLIC_SOLANA_RPC_URL`
 - `NEXT_PUBLIC_SOLANA_RPC_SUBSCRIPTIONS_URL`
 - `NEXT_PUBLIC_PRIVY_APP_ID`
-- `NEXT_PUBLIC_TURNKEY_ORGANIZATION_ID`
-- `NEXT_PUBLIC_TURNKEY_API_BASE_URL`
-- `NEXT_PUBLIC_TURNKEY_AUTH_PROXY_URL`
-- `NEXT_PUBLIC_TURNKEY_AUTH_PROXY_CONFIG_ID`
 - `NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED`
 
 ### Supabase Auth callbacks
@@ -95,22 +94,22 @@ Current implementation state:
 
 ### Production rollout notes
 
-- Keep embedded wallet runtime disabled until Privy or Turnkey is staging-proven with Solana wallet creation/unlock, message signing, recovery/export, external wallet linking, and mobile Safari/PWA QA.
+- Keep embedded wallet runtime disabled until Privy is staging-proven with Solana wallet creation/unlock, message signing, recovery/export, external wallet linking, and mobile Safari/PWA QA.
 - Do not add wallet-specific iOS copy or support claims until the exact wallet path is implemented and tested on real devices.
 
 ## Age-Assurance Waterfall
 
 Landing onboarding should prefer reusable or light/free age assurance:
 
-1. reusable age credential: Didit reusable ID, Yoti Digital ID, EUDI Wallet, Scytales
-2. light/free fallback: Didit age estimation, Persona/Didit document proof
+1. reusable age credential: Yoti Digital ID and future launch-approved EUDI-compatible proof
+2. light fallback: Didit Adaptive Age Verification with document fallback
 3. regional non-document/eID checks where supported
 
 Users may leave the landing surface to create a reusable ID and then return to complete age assurance. Wallet connection stays mandatory; profile and Supabase recovery auth stay optional; age assurance stays mandatory for protected app access.
 
 Current API behavior:
 
-- `providerPreference=reusable_first` uses the configured reusable/light adapter order: Didit, then Yoti, then Persona. It does not silently start Sumsub/Veriff documentary KYC.
+- `providerPreference=reusable_first` uses the configured light/reusable adapter order: Didit Adaptive Age Verification, then Yoti, then Persona. It does not silently treat ordinary onboarding as creator KYC.
 - `providerPreference=yoti|persona|sumsub|veriff` lets the user or policy select a specific configured provider and then falls back only if that provider is temporarily unavailable.
 - Webhooks normalize signed provider events into app-owned states only: `pending`, `verified`, or `failed`.
 - Launch approval still requires live sandbox evidence for the selected provider, webhook signing proof, retention/legal review, and provider-contract approval.
@@ -166,6 +165,7 @@ Never store raw identity documents, selfies, registry files, UBO documents, biom
 - `DIDIT_API_KEY`
 - `DIDIT_WEBHOOK_SECRET`
 - `DIDIT_AGE_WORKFLOW_ID`
+- `DIDIT_ADULT_PUBLISHER_WORKFLOW_ID`
 - `DIDIT_KYC_WORKFLOW_ID`
 - `DIDIT_KYB_WORKFLOW_ID`
 - `DIDIT_API_BASE_URL=https://verification.didit.me`
@@ -196,16 +196,26 @@ The frontend has neutral monogram fallbacks for local development, but those fal
 
 ### Creator KYC / Org KYB runtime behavior
 
-- Creator upload, publish, monetization, and payout capabilities require `verification_records.purpose=creator_kyc` with `status=valid`.
-- Studio/enterprise business capabilities require `verification_records.purpose=org_kyb` with `status=valid`.
-- Team publishing requires both valid org KYB and a valid human creator KYC for the acting creator.
+- SFW upload and publishing require valid age access, not creator KYC.
+- Adult/explicit publishing requires `verification_records.purpose=adult_publisher_eligibility` with `status=valid`, valid age access, and media-specific performer/consent readiness.
+- Creator KYC affects creator proceeds only. It does not grant adult publishing, Studio, Enterprise, or team tools.
+- Organization KYB verifies a legal entity only. It never grants a paid plan or software capability by itself.
 - Session creation stores a pending `verification_sessions` row and a pending normalized record.
 - Signed provider webhooks update the pending session and append a normalized record.
 - Raw provider payloads, identity documents, selfies, biometric templates, registry files, and private provider review comments stay out of core app tables and browser resources.
 
 ### Provider-specific runtime notes
 
-- Didit age, creator KYC, and org KYB session creation uses the Didit session API with `x-api-key`, a purpose-specific workflow id, callback URL, and opaque `vendor_data`. Didit webhook verification prefers `X-Signature-V2` over canonical sorted JSON and keeps legacy raw-body HMAC support only for older dashboard setups.
+- Didit age, adult-publisher, creator KYC, and org KYB session creation uses `POST /v3/session/` with `x-api-key`, a purpose-specific workflow ID, `callback`, `callback_method=completer`, opaque `vendor_data`, and non-sensitive metadata. Didit V3 webhooks use one application-level destination at `POST /v1/webhooks/verification/{provider}` with `provider=didit`; the API requires `X-Signature-V2` and a fresh `X-Timestamp` within five minutes, keys idempotency on `event_id`, and normalizes the documented plural decision arrays. Adult-publisher and creator-KYC approval fails closed unless document, liveness, and face-match nodes are all approved.
+
+Didit launch approval requires four separately published workflows in the Business Console:
+
+- adaptive age verification with an over-18 threshold and document fallback;
+- adult publisher identity with government ID, liveness, face match, and jurisdictional over-18 rules;
+- individual creator KYC for earning-policy requirements;
+- organization KYB for legal-entity workflows.
+
+The production webhook destination must subscribe to `status.updated`, use webhook version V3, and point to the verification webhook route with the `didit` provider path parameter. Console-issued credentials and a signed sandbox fixture remain mandatory launch evidence; mock approval is disabled in production.
 - Persona session creation uses the Persona Inquiries API, `key-inflection: kebab`, purpose-specific template ids, and `meta.redirect-uri`. Persona webhooks verify `Persona-Signature` as timestamped HMAC-SHA256 over `timestamp.rawBody`.
 - Sumsub session creation signs `POST /resources/accessTokens/sdk` with `x-app-token`, `x-app-access-ts`, and `x-app-access-sig`. Creator and organization levels should be separate.
 - Veriff session creation uses the Veriff Sessions API with `x-auth-client`. Veriff webhooks verify `x-hmac-signature` against the raw payload. In this scaffold Veriff is creator KYC only, not organization KYB.

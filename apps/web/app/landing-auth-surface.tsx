@@ -7,13 +7,13 @@ import { safeMutationMessage } from "@/api-errors";
 import {
   ApiMutationError,
   createAgeSession,
+  createVerificationSession,
   createStarterProfile,
   getCurrentSession,
   updateMyProfile,
   uploadMyProfileAvatar
 } from "@/api-mutations";
-import { ProviderLogo } from "@/brand/provider-logo";
-import { ageProviderActions, type AgeProviderPreference, embeddedWalletProviderConfig } from "@/providers/onboarding-provider-config";
+import { embeddedWalletProviderConfig } from "@/providers/onboarding-provider-config";
 import { readPublicWebEnv } from "@/public-env";
 import type { WebAuthState } from "@/supabase/auth-state";
 
@@ -181,7 +181,7 @@ function LandingWalletList({ authState, onLinked }: { authState: WebAuthState; o
       <div className="landing-wallet-connect-row">
         <button
           aria-busy={loadingRuntime ? "true" : undefined}
-          className="landing-button"
+          className="landing-button landing-wallet-launch"
           data-tone="primary"
           disabled={loadingRuntime}
           onClick={() => void loadWalletRuntime()}
@@ -196,18 +196,15 @@ function LandingWalletList({ authState, onLinked }: { authState: WebAuthState; o
           <p>Embedded wallet</p>
           <span>{embeddedWallets.enabled ? "Available after wallet providers load." : "Provider login is waiting for runtime configuration."}</span>
         </div>
-        {embeddedWallets.providers.map((provider) => (
-          <button
-            className="landing-provider-disabled"
-            disabled={!provider.configured || loadingRuntime}
-            key={provider.provider}
-            onClick={provider.configured ? () => void loadWalletRuntime() : undefined}
-            type="button"
-          >
-            <strong>{provider.label}</strong>
-            <small>{provider.configured ? "Load provider" : "Not configured"}</small>
-          </button>
-        ))}
+        <button
+          className="landing-provider-disabled"
+          disabled={!embeddedWallets.provider.configured || loadingRuntime}
+          onClick={embeddedWallets.provider.configured ? () => void loadWalletRuntime() : undefined}
+          type="button"
+        >
+          <strong>{embeddedWallets.provider.label}</strong>
+          <small>{embeddedWallets.provider.configured ? "Load provider" : "Not configured"}</small>
+        </button>
       </div>
       {runtimeError ? <p className="landing-auth-error">{runtimeError}</p> : null}
     </div>
@@ -445,10 +442,48 @@ function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
 }
 
 function OnboardingAgeStep() {
-  const [startingProvider, setStartingProvider] = useState<AgeProviderPreference | null>(null);
+  const [startingAction, setStartingAction] = useState<"age" | "adult" | "return" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [canContinue, setCanContinue] = useState(false);
+  const [adultIntent, setAdultIntent] = useState(false);
+  const [adultTermsAccepted, setAdultTermsAccepted] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("verification") !== "return") return;
+
+    let cancelled = false;
+    setStartingAction("return");
+    setMessage("Confirming your verification...");
+
+    async function waitForWebhook() {
+      for (let attempt = 0; attempt < 12 && !cancelled; attempt += 1) {
+        try {
+          const session = await getCurrentSession();
+          if (session.appAccessState.allowed) {
+            window.location.assign(resolveSafeNextPath());
+            return;
+          }
+        } catch {
+          // Provider callbacks can arrive just before the signed webhook.
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 1_000));
+      }
+
+      if (!cancelled) {
+        setStartingAction(null);
+        setMessage(null);
+        setError("Verification is still processing. Try again in a moment.");
+        setCanContinue(true);
+      }
+    }
+
+    void waitForWebhook();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function ageErrorMessage(reason: unknown) {
     if (reason instanceof ApiMutationError && reason.status === 409) {
@@ -464,15 +499,15 @@ function OnboardingAgeStep() {
     return message.toLowerCase().includes("state changed") ? "Try again with a new age check." : message;
   }
 
-  async function startAgeSession(providerPreference: AgeProviderPreference) {
-    setStartingProvider(providerPreference);
+  async function startAgeSession() {
+    setStartingAction("age");
     setMessage(null);
     setError(null);
     setCanContinue(false);
 
     try {
-      const session = await createAgeSession({ providerPreference });
-      setMessage(`Continue with ${session.provider}. WeVid only stores the signed result.`);
+      const session = await createAgeSession({ providerPreference: "reusable_first" });
+      setMessage("Opening the secure age check. WeVid stores only the signed result.");
       window.location.assign(session.launchUrl);
     } catch (reason) {
       const nextError = ageErrorMessage(reason);
@@ -482,12 +517,38 @@ function OnboardingAgeStep() {
         window.location.assign(resolveSafeNextPath());
       }
     } finally {
-      setStartingProvider(null);
+      setStartingAction(null);
+    }
+  }
+
+  async function startAdultCreatorVerification() {
+    if (!adultTermsAccepted) {
+      setError("Accept the Adult Publisher Terms to continue.");
+      return;
+    }
+
+    setStartingAction("adult");
+    setMessage(null);
+    setError(null);
+    setCanContinue(false);
+    try {
+      const session = await createVerificationSession({
+        purpose: "adult_publisher_eligibility",
+        providerPreference: "provider_first",
+        source: "onboarding",
+        adultPublisherTermsAccepted: true
+      });
+      setMessage("Opening one secure identity and age check. WeVid stores only the result.");
+      window.location.assign(session.launchUrl);
+    } catch (reason) {
+      setError(safeMutationMessage(reason, "Adult creator verification"));
+    } finally {
+      setStartingAction(null);
     }
   }
 
   async function continueToWeVid() {
-    setStartingProvider("reusable_first");
+    setStartingAction("return");
     setError(null);
     setMessage(null);
 
@@ -519,7 +580,7 @@ function OnboardingAgeStep() {
     } catch (reason) {
       setError(safeMutationMessage(reason, "App access"));
     } finally {
-      setStartingProvider(null);
+      setStartingAction(null);
     }
   }
 
@@ -528,30 +589,42 @@ function OnboardingAgeStep() {
       <div className="landing-age-choice-panel">
         <div className="landing-age-choice-copy">
           <p>18+ access</p>
-          <strong>Choose age proof.</strong>
-          <span>Reusable proof first. Document or face checks are fallback paths.</span>
+          <strong>Confirm you are 18+.</strong>
+          <span>We choose the lowest-friction approved method and only keep the result.</span>
         </div>
         <div className="landing-age-choice-actions">
-          {ageProviderActions.map((provider, index) => (
-            <button
-              className="landing-provider-link"
-              data-primary={index === 0 ? "true" : undefined}
-              disabled={startingProvider === provider.providerPreference}
-              key={provider.label}
-              onClick={() => void startAgeSession(provider.providerPreference)}
-              type="button"
-            >
-              <ProviderLogo label={provider.label} name={provider.logo} />
-              <span>{provider.label}</span>
-              <small>{startingProvider === provider.providerPreference ? "Opening" : provider.action}</small>
-            </button>
-          ))}
+          <button className="landing-button" data-tone="primary" disabled={startingAction !== null} onClick={() => void startAgeSession()} type="button">
+            <strong>{startingAction === "age" ? "Opening age check" : "Verify age"}</strong>
+          </button>
         </div>
+        <label className="landing-adult-intent">
+          <input
+            checked={adultIntent}
+            onChange={(event) => {
+              setAdultIntent(event.target.checked);
+              setAdultTermsAccepted(false);
+              setError(null);
+            }}
+            type="checkbox"
+          />
+          <span><strong>I plan to publish adult content</strong><small>Optional. Complete identity and age once now, or do it later when you publish.</small></span>
+        </label>
+        {adultIntent ? (
+          <div className="landing-adult-verification">
+            <label>
+              <input checked={adultTermsAccepted} onChange={(event) => setAdultTermsAccepted(event.target.checked)} type="checkbox" />
+              <span>I am 18+ and agree to the Adult Publisher Terms.</span>
+            </label>
+            <button className="landing-button" disabled={startingAction !== null || !adultTermsAccepted} onClick={() => void startAdultCreatorVerification()} type="button">
+              <strong>{startingAction === "adult" ? "Opening identity check" : "Verify identity and age"}</strong>
+            </button>
+          </div>
+        ) : null}
       </div>
       {message ? <p className="landing-auth-message">{message}</p> : null}
       {error ? <p className="landing-auth-error">{error}</p> : null}
       {canContinue ? (
-        <button className="landing-button landing-age-continue" disabled={startingProvider !== null} onClick={() => void continueToWeVid()} type="button">
+        <button className="landing-button landing-age-continue" disabled={startingAction !== null} onClick={() => void continueToWeVid()} type="button">
           Continue to WeVid
         </button>
       ) : null}

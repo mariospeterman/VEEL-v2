@@ -886,4 +886,18 @@ describe("database migrations", () => {
     expect(downSql).toContain("drop table if exists platform_playback_heartbeats");
     expect(sql).not.toMatch(/entitlement.*update|recommendation_boost|visibility_boost|message_priority|mutuals_boost/i);
   });
+
+  it("adds one noncustodial recipient monetisation policy", () => {
+    const sql = readMigration("0087_recipient_monetisation_policy.sql");
+    const downSql = readMigration("0087_recipient_monetisation_policy.down.sql");
+
+    expect(sql).toContain("private.assert_recipient_monetisation_ready");
+    expect(sql).toContain("purpose = 'age_access'");
+    expect(sql).toContain("purpose = 'creator_kyc'");
+    expect(sql).toContain("earnings_recipient_wallet_id");
+    expect(sql).toContain("tax_profile_state not in ('not_required', 'verified')");
+    expect(sql).toContain("recipient_product_not_enabled");
+    expect(downSql).toContain("drop function if exists private.assert_recipient_monetisation_ready");
+    expect(sql).not.toMatch(/creator_balance|withdrawal|payout_queue|escrow|private_key|seed_phrase|mnemonic/i);
+  });
 });

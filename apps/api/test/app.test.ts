@@ -685,7 +685,7 @@ describe("buildApi", () => {
         fetchCalls.push(init ? { url, init } : { url });
         return new Response(
           JSON.stringify({
-            id: "didit-age-session-1",
+            session_id: "didit-age-session-1",
             url: "https://verification.didit.example/session/didit-age-session-1"
           }),
           {
@@ -747,17 +747,16 @@ describe("buildApi", () => {
     expect(fetchCalls[0]?.url).toBe("https://verification.didit.example/v3/session/");
     expect(fetchCalls[0]?.init?.method).toBe("POST");
     expect(fetchCalls[0]?.init?.headers).toMatchObject({
-      "x-api-key": "didit-api-key",
-      "idempotency-key": "age-didit-1"
+      "x-api-key": "didit-api-key"
     });
     expect(JSON.parse(String(fetchCalls[0]?.init?.body))).toMatchObject({
       workflow_id: "didit-age-workflow",
-      callback_url: "http://localhost:3000/age/callback",
+      callback: "http://localhost:3000/age/callback",
+      callback_method: "completer",
       vendor_data: "user:00000000-0000-4000-8000-000000000001",
       metadata: {
         purpose: "age_access",
-        rule: "over_18",
-        webhook_url: "http://localhost:4000/v1/webhooks/age/didit"
+        rule: "over_18"
       }
     });
     expect(createdPendingVerifications).toMatchObject([
@@ -946,56 +945,48 @@ describe("buildApi", () => {
     vi.unstubAllEnvs();
   });
 
-  it("accepts a signed Didit age webhook and applies normalized verification state", async () => {
+  it("routes a signed Didit age workflow event through the shared verification webhook", async () => {
     vi.stubEnv("DIDIT_WEBHOOK_SECRET", "didit-webhook-secret");
-    const recordedEvents: unknown[] = [];
     const appliedEvents: unknown[] = [];
-    const ageRepository: AgeRepository = {
-      ...requiredAgeRepository,
-      async applyProviderWebhook(input) {
-        recordedEvents.push(input);
-        appliedEvents.push(input);
-        return "applied";
-      }
-    };
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
-      ageRepository
+      verificationRepository: {
+        ...verificationRepositoryStub(),
+        async applyProviderWebhook(input) {
+          appliedEvents.push(input);
+          return "applied";
+        }
+      }
     });
     await app.ready();
     const payload = {
-      id: "didit-age-session-1",
-      event: "verification.completed",
-      status: "approved",
-      created_at: "2026-06-06T01:00:00Z"
+      event_id: "didit-age-event-1",
+      webhook_type: "status.updated",
+      session_id: "didit-age-session-1",
+      status: "Approved",
+      timestamp: Math.floor(Date.now() / 1000)
     };
     const rawPayload = JSON.stringify(payload);
 
     const response = await app.inject({
       method: "POST",
-      url: "/v1/webhooks/age/didit",
+      url: "/v1/webhooks/verification/didit",
       headers: {
         "content-type": "application/json",
-        "x-signature-v2": diditV2Signature(payload)
+        "x-signature-v2": diditV2Signature(payload),
+        "x-timestamp": String(payload.timestamp)
       },
       payload: rawPayload
     });
 
     expect(response.statusCode, JSON.stringify(response.json())).toBe(202);
-    expect(recordedEvents).toMatchObject([
-      {
-        provider: "didit",
-        providerEventId: "didit-age-session-1",
-        eventType: "verification.completed",
-        state: "verified"
-      }
-    ]);
     expect(appliedEvents).toMatchObject([
       {
         provider: "didit",
-        providerEventId: "didit-age-session-1",
+        providerEventId: "didit-age-event-1",
         providerReference: "didit-age-session-1",
-        state: "verified"
+        eventType: "status.updated",
+        status: "valid"
       }
     ]);
 
@@ -1354,6 +1345,77 @@ describe("buildApi", () => {
     vi.unstubAllEnvs();
   });
 
+  it("requires explicit adult publisher terms before starting identity verification", async () => {
+    vi.stubEnv("AGE_VERIFICATION_ALLOW_MOCK_PROVIDER", "true");
+    const app = await buildApi({ authVerifier: fakeAuthVerifier });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/verification/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "adult-without-terms"
+      },
+      payload: {
+        purpose: "adult_publisher_eligibility",
+        source: "onboarding"
+      }
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toMatchObject({ code: "validation_failed" });
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("starts one adult publisher identity and age flow from onboarding", async () => {
+    vi.stubEnv("AGE_VERIFICATION_ALLOW_MOCK_PROVIDER", "true");
+    const createdSessions: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      verificationRepository: {
+        ...verificationRepositoryStub(),
+        async createPendingSession(input) {
+          createdSessions.push(input);
+          return "11111111-1111-4111-8111-111111111115";
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/verification/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "adult-onboarding-1"
+      },
+      payload: {
+        purpose: "adult_publisher_eligibility",
+        source: "onboarding",
+        adultPublisherTermsAccepted: true
+      }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(201);
+    expect(response.json()).toMatchObject({
+      purpose: "adult_publisher_eligibility",
+      provider: "didit"
+    });
+    expect(response.json().launchUrl).toContain("/age/callback?intent=adult");
+    expect(createdSessions).toMatchObject([
+      {
+        purpose: "adult_publisher_eligibility",
+        policyVersion: "adult-publisher-2026-08-v1",
+        termsAcceptedAt: expect.any(Date)
+      }
+    ]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
   it("starts and completes local mock organization KYB when mock providers are enabled", async () => {
     vi.stubEnv("AGE_VERIFICATION_ALLOW_MOCK_PROVIDER", "true");
     vi.setSystemTime(new Date("2026-06-03T22:00:00.000Z"));
@@ -1414,7 +1476,7 @@ describe("buildApi", () => {
     const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) =>
       new Response(
         JSON.stringify({
-          id: "didit-session-1",
+          session_id: "didit-session-1",
           url: "https://verification.didit.example/session/didit-session-1"
         }),
         { status: 200, headers: { "content-type": "application/json" } }
@@ -1453,19 +1515,16 @@ describe("buildApi", () => {
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({
-          "x-api-key": "didit-api-key",
-          "idempotency-key": "didit-creator-1"
+          "x-api-key": "didit-api-key"
         })
       })
     );
     expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
       workflow_id: "didit-creator-workflow",
-      callback_url: "http://localhost:3000/app/create?verification=callback",
+      callback: "http://localhost:3000/app/profile?verification=earnings",
+      callback_method: "completer",
       vendor_data: "user:00000000-0000-4000-8000-000000000001",
-      metadata: {
-        purpose: "creator_kyc",
-        webhook_url: "http://localhost:4000/v1/webhooks/verification/didit"
-      }
+      metadata: { purpose: "creator_kyc" }
     });
     expect(createdSessions).toMatchObject([
       {
@@ -1473,7 +1532,7 @@ describe("buildApi", () => {
         providerSession: {
           provider: "didit",
           providerReference: "didit-session-1",
-          reusable: true
+          reusable: false
         }
       }
     ]);
@@ -1541,7 +1600,7 @@ describe("buildApi", () => {
         }
       },
       meta: {
-        "redirect-uri": "http://localhost:3000/app/create?verification=callback"
+        "redirect-uri": "http://localhost:3000/app/profile?verification=organization"
       }
     });
     expect(createdSessions).toMatchObject([
@@ -1641,10 +1700,11 @@ describe("buildApi", () => {
     });
     await app.ready();
     const payload = {
-      id: "didit-session-1",
-      event: "verification.completed",
-      status: "approved",
-      created_at: "2026-06-06T01:00:00Z"
+      event_id: "didit-event-1",
+      webhook_type: "status.updated",
+      session_id: "didit-session-1",
+      status: "Approved",
+      timestamp: Math.floor(Date.now() / 1000)
     };
     const rawPayload = JSON.stringify(payload);
 
@@ -1653,7 +1713,8 @@ describe("buildApi", () => {
       url: "/v1/webhooks/verification/didit",
       headers: {
         "content-type": "application/json",
-        "x-signature-v2": diditV2Signature(payload)
+        "x-signature-v2": diditV2Signature(payload),
+        "x-timestamp": String(payload.timestamp)
       },
       payload: rawPayload
     });
@@ -1663,11 +1724,40 @@ describe("buildApi", () => {
       {
         provider: "didit",
         providerReference: "didit-session-1",
-        eventType: "verification.completed",
+        eventType: "status.updated",
         status: "valid"
       }
     ]);
 
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("rejects a correctly signed but stale Didit webhook", async () => {
+    vi.stubEnv("DIDIT_WEBHOOK_SECRET", "didit-webhook-secret");
+    const app = await buildApi({ authVerifier: fakeAuthVerifier });
+    await app.ready();
+    const staleTimestamp = Math.floor(Date.now() / 1000) - 301;
+    const payload = {
+      event_id: "didit-stale-event",
+      webhook_type: "status.updated",
+      session_id: "didit-session-1",
+      status: "Approved",
+      timestamp: staleTimestamp
+    };
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/webhooks/verification/didit",
+      headers: {
+        "content-type": "application/json",
+        "x-signature-v2": diditV2Signature(payload),
+        "x-timestamp": String(staleTimestamp)
+      },
+      payload: JSON.stringify(payload)
+    });
+
+    expect(response.statusCode).toBe(401);
     await app.close();
     vi.unstubAllEnvs();
   });
@@ -11344,7 +11434,7 @@ function verificationRepositoryStub(
       canPublishMedia: false,
       canPublishAdultMedia: false,
       canMonetize: false,
-      canReceivePayouts: false,
+      canReceiveCreatorProceeds: false,
       canAccessCreatorDashboard: true,
       canCreateOrganization: true,
       canAccessStudio: true,
@@ -11358,7 +11448,7 @@ function verificationRepositoryStub(
     nextBestAction: "verify_creator_identity",
     verificationSummary: {
       ageAccess: null,
-      adultContentAccess: null,
+      adultPublisherEligibility: null,
       creatorKyc: null,
       orgKyb: null
     }
@@ -11401,7 +11491,7 @@ function creatorVerifiedVerificationRepository(): VerificationRepository {
           canUploadMedia: true,
           canPublishMedia: true,
           canMonetize: true,
-          canReceivePayouts: true,
+          canReceiveCreatorProceeds: true,
           canAccessCreatorDashboard: true
         },
         missingRequirements: [],

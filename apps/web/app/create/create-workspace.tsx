@@ -1,25 +1,29 @@
 "use client";
 
-import { Fact, NumberInput, Select, UploadSessionPanel } from "./create-workspace-fields";
+import { Select, UploadSessionPanel } from "./create-workspace-fields";
 import {
   mediaTypes,
   nsfwLabels,
   useCreateWorkspaceState,
   visibilityValues
 } from "./create-workspace-state";
+import type { VerificationStatus } from "@/api-client";
+import { AdultPublisherGate } from "../app/create/adult-publisher-gate";
 
-export function CreateWorkspace() {
+export function CreateWorkspace({ verification }: { verification: VerificationStatus | null }) {
   const { actions, state } = useCreateWorkspaceState();
+  const isAdultRated = state.nsfwLabel === "adult" || state.nsfwLabel === "explicit";
+  const adultPublishingReady = verification?.capabilities.canPublishAdultMedia === true;
 
   return (
     <section className="rounded border border-(--line) bg-(--panel) p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-sm font-medium text-(--accent)">Workspace</p>
-          <h2 className="mt-1 text-lg font-semibold tracking-normal">Draft and upload session</h2>
+          <p className="text-sm font-medium text-(--accent)">Post details</p>
+          <h2 className="mt-1 text-lg font-semibold tracking-normal">Choose media and audience</h2>
         </div>
         <span className="rounded bg-(--background) px-2 py-1 text-xs text-(--muted)">
-          backend-owned
+          Draft
         </span>
       </div>
 
@@ -39,17 +43,19 @@ export function CreateWorkspace() {
           <Select label="Content rating" onChange={actions.setNsfwLabel} options={nsfwLabels} value={state.nsfwLabel} />
         </div>
 
+        {isAdultRated && !adultPublishingReady ? <AdultPublisherGate verification={verification} /> : null}
+
         <button
           className="rounded bg-(--foreground) px-3 py-2 text-sm font-semibold text-(--background) disabled:cursor-not-allowed disabled:opacity-50"
           disabled={state.pending !== null}
           type="submit"
         >
-          {state.pending === "draft" ? "Creating draft" : "Create server draft"}
+          {state.pending === "draft" ? "Creating draft" : "Continue"}
         </button>
       </form>
 
       {state.draft ? (
-        <DraftPanel actions={actions} state={state} />
+        <DraftPanel actions={actions} adultPublishingReady={!isAdultRated || adultPublishingReady} state={state} />
       ) : null}
 
       {state.uploadSession ? (
@@ -57,12 +63,10 @@ export function CreateWorkspace() {
           onAbortUpload={actions.onAbortUpload}
           onStartUpload={actions.onStartUpload}
           uploadProgress={state.uploadProgress}
-          uploadSession={state.uploadSession}
           uploadState={state.uploadState}
-          uploadedUrl={state.uploadedUrl}
           onSyncProviderStatus={actions.onSyncProviderStatus}
           syncDisabled={!state.draft || state.pending !== null || state.uploadState !== "complete"}
-          syncLabel={state.pending === "sync" ? "Syncing provider" : "Sync provider status"}
+          syncLabel={state.pending === "sync" ? "Preparing preview" : "Prepare preview"}
         />
       ) : null}
       {state.error ? <p className="mt-3 text-sm font-medium text-red-400">{state.error}</p> : null}
@@ -72,30 +76,19 @@ export function CreateWorkspace() {
 
 function DraftPanel({
   actions,
+  adultPublishingReady,
   state
 }: {
   actions: ReturnType<typeof useCreateWorkspaceState>["actions"];
+  adultPublishingReady: boolean;
   state: ReturnType<typeof useCreateWorkspaceState>["state"];
 }) {
   const draft = state.draft;
   if (!draft) return null;
 
   return (
-    <div className="mt-4 grid gap-3 rounded border border-(--line) bg-(--background) p-3 text-sm">
-      <Fact label="Draft" value={draft.id} />
-      <Fact label="Access" value={draft.accessState} />
-      <Fact label="Playback" value={draft.playback?.state ?? "not_ready"} />
-      <Fact label="Provider" value={draft.playback?.provider ?? state.uploadSession?.provider ?? "not_synced"} />
-      <Fact label="Visibility" value={state.visibility} />
-      <Fact label="Label" value={state.nsfwLabel} />
-      <Fact label="Publish" value={state.publishState} />
-      {state.providerSyncedAt ? <Fact label="Provider synced" value={state.providerSyncedAt} /> : null}
-      {state.savedAt ? <Fact label="Last saved" value={state.savedAt} /> : null}
-      <div className="grid gap-3 sm:grid-cols-3">
-        <NumberInput label="Teaser start ms" onChange={actions.setTeaserStartMs} value={state.teaserStartMs} />
-        <NumberInput label="Teaser end ms" onChange={actions.setTeaserEndMs} value={state.teaserEndMs} />
-        <NumberInput label="Thumbnail frame ms" onChange={actions.setThumbnailFrameMs} value={state.thumbnailFrameMs} />
-      </div>
+    <div className="mt-4 grid gap-3 border-t border-(--line) pt-4 text-sm">
+      <p className="text-(--muted)">{state.savedAt ? "Draft saved" : "Draft ready"}</p>
       <button
         className="rounded border border-(--line) px-3 py-2 font-semibold disabled:cursor-not-allowed disabled:opacity-50"
         disabled={state.pending !== null}
@@ -107,6 +100,7 @@ function DraftPanel({
       <button
         className="rounded bg-(--foreground) px-3 py-2 font-semibold text-(--background) disabled:cursor-not-allowed disabled:opacity-50"
         disabled={
+          !adultPublishingReady ||
           state.pending !== null ||
           state.uploadState !== "complete" ||
           draft.playback?.state !== "full" ||
@@ -118,16 +112,16 @@ function DraftPanel({
         {state.pending === "publish" ? "Submitting for review" : "Submit for review"}
       </button>
       <label className="grid gap-1">
-        <span className="text-(--muted)">Video file</span>
+        <span className="text-(--muted)">Video</span>
         <input accept="video/mp4,video/quicktime,video/webm" onChange={actions.onFileChange} type="file" />
       </label>
       <button
         className="rounded border border-(--line) px-3 py-2 font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-        disabled={!state.file || state.pending !== null}
+        disabled={!adultPublishingReady || !state.file || state.pending !== null}
         onClick={actions.onCreateUploadSession}
         type="button"
       >
-        {state.pending === "upload" ? "Creating upload session" : "Create Bunny upload session"}
+        {state.pending === "upload" ? "Preparing upload" : "Prepare upload"}
       </button>
     </div>
   );

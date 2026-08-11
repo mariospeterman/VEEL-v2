@@ -69,7 +69,7 @@ export const mcpToolDefinitions: McpToolDefinition[] = [
       mediaType: { type: "string", enum: ["bit", "clip", "image", "vod", "live_replay"] },
       caption: { type: "string", maxLength: 2_000 },
       visibility: { type: "string", enum: ["public", "followers", "subscribers", "private"] },
-      nsfwLabel: { type: "string", enum: ["none", "adult", "explicit", "sensitive"] }
+      nsfwLabel: { type: "string", enum: ["none", "adult", "explicit"] }
     }),
     outputSchema: objectSchema({ content: { type: "object" } }),
     requiredScopes: ["creator.drafts.write"],
@@ -228,12 +228,12 @@ function contentDraftInput(value: unknown): {
   mediaType: "bit" | "clip" | "image" | "vod" | "live_replay";
   caption: string | null;
   visibility: "public" | "followers" | "subscribers" | "private";
-  nsfwLabel: "none" | "adult" | "explicit" | "sensitive";
+  nsfwLabel: "none" | "adult" | "explicit";
 } {
   const body = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
   const mediaType = stringEnum(body.mediaType, ["bit", "clip", "image", "vod", "live_replay"]);
   const visibility = stringEnum(body.visibility, ["public", "followers", "subscribers", "private"]);
-  const nsfwLabel = stringEnum(body.nsfwLabel, ["none", "adult", "explicit", "sensitive"]);
+  const nsfwLabel = stringEnum(body.nsfwLabel, ["none", "adult", "explicit"]);
   const caption = typeof body.caption === "string" ? body.caption.slice(0, 2_000) : null;
 
   if (!mediaType || !visibility || !nsfwLabel) {

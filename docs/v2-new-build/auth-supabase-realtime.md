@@ -129,7 +129,7 @@ Wallet linking is not Supabase Auth by itself.
 
 Embedded wallets are also linked to the Veel profile, but they are not a backend custody account. The selected wallet provider must support a noncustodial/user-controlled model where Veel cannot move funds without user approval.
 
-The web app mounts embedded-wallet SDK providers only when their browser-safe public env is configured and `NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED=true`. Privy uses `NEXT_PUBLIC_PRIVY_APP_ID` and Solana RPC settings, creates or unlocks a Solana embedded wallet through the official Privy React/Solana SDK, then signs the backend wallet-auth challenge as `embedded_privy`. Turnkey uses `NEXT_PUBLIC_TURNKEY_ORGANIZATION_ID` plus optional auth-proxy settings and must expose a Solana account capable of message signing before Veel can complete backend auth as `embedded_turnkey`. If a Turnkey session authenticates but does not expose Solana `signMessage`, the UI must fail closed and the provider configuration remains a staging blocker.
+The web app mounts the Privy embedded-wallet SDK only when its browser-safe app id is configured and `NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED=true`. Privy uses `NEXT_PUBLIC_PRIVY_APP_ID` and Solana RPC settings, creates or unlocks a Solana embedded wallet through the official Privy React/Solana SDK, selects the Privy wallet explicitly from the connected Solana wallet list, then signs the backend wallet-auth challenge as `embedded_privy`. Turnkey remains an ADR fallback, not a bundled browser runtime or launch path.
 
 Wallet path is mandatory before protected app access because Veel is wallet-native and every user must be able to receive or approve noncustodial Solana actions.
 

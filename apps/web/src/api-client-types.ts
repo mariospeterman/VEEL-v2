@@ -45,6 +45,7 @@ export type VerificationStatus = {
   nextBestAction: string;
   verificationSummary: {
     ageAccess: VerificationRecordSummary | null;
+    adultPublisherEligibility: VerificationRecordSummary | null;
     creatorKyc: VerificationRecordSummary | null;
     orgKyb: VerificationRecordSummary | null;
   };

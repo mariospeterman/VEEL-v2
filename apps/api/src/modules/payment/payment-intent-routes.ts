@@ -1,6 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { Connection } from "@solana/web3.js";
-import { PaymentIdempotencyConflictError, PaymentRepositoryConfigurationError } from "./payment-repository.js";
+import {
+  PaymentIdempotencyConflictError,
+  PaymentRecipientNotReadyError,
+  PaymentRepositoryConfigurationError
+} from "./payment-repository.js";
 import {
   assertSolanaAddress,
   buildCreatorSplitTransaction,
@@ -110,6 +114,13 @@ export async function registerPaymentIntentRoutes(
         return reply.code(409).send({
           code: "conflict",
           message: "Idempotency key was already used for a different payment intent"
+        });
+      }
+
+      if (error instanceof PaymentRecipientNotReadyError) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: "This creator cannot receive payments yet"
         });
       }
 

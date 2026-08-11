@@ -29,7 +29,10 @@ interface RegisterAgeRoutesOptions {
 }
 
 const ageProviderPreferences = new Set(["reusable_first", "didit", "yoti", "sumsub", "veriff", "persona"]);
-const ageProviders = new Set<AgeProvider>(["didit", "yoti", "sumsub", "veriff", "persona"]);
+// Didit V3 uses one application-level webhook destination across workflows.
+// Route every Didit event through the normalized verification webhook so age,
+// adult eligibility, KYC, and KYB sessions share one idempotency boundary.
+const ageProviders = new Set<AgeProvider>(["yoti", "sumsub", "veriff", "persona"]);
 
 export async function registerAgeRoutes(
   app: FastifyInstance,

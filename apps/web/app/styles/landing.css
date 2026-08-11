@@ -641,6 +641,30 @@
     line-height: 1.35;
   }
 
+  .landing-wallet-launch {
+    display: grid;
+    min-height: 46px;
+    align-content: center;
+    justify-items: start;
+    gap: 3px;
+    padding: 7px 12px;
+    text-align: left;
+    white-space: normal;
+  }
+
+  .landing-wallet-launch strong,
+  .landing-wallet-launch small {
+    position: relative;
+    z-index: 1;
+  }
+
+  .landing-wallet-launch small {
+    color: rgba(248, 250, 252, 0.56);
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
   .landing-provider-link {
     position: relative;
     appearance: none;
@@ -1116,9 +1140,59 @@
 
   .landing-age-choice-actions {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 240px);
     gap: 8px;
     max-width: 560px;
+  }
+
+  .landing-adult-intent,
+  .landing-adult-verification > label {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    align-items: start;
+    gap: 9px;
+    max-width: 560px;
+    cursor: pointer;
+  }
+
+  .landing-adult-intent input,
+  .landing-adult-verification input {
+    width: 16px;
+    height: 16px;
+    margin: 1px 0 0;
+    accent-color: #14f195;
+  }
+
+  .landing-adult-intent > span {
+    display: grid;
+    gap: 3px;
+  }
+
+  .landing-adult-intent strong,
+  .landing-adult-verification span {
+    color: rgba(255, 255, 255, 0.88);
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1.35;
+  }
+
+  .landing-adult-intent small {
+    color: rgba(248, 250, 252, 0.58);
+    font-size: 10.5px;
+    font-weight: 520;
+    line-height: 1.35;
+  }
+
+  .landing-adult-verification {
+    display: grid;
+    gap: 9px;
+    max-width: 560px;
+    padding: 11px 0 0 27px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .landing-adult-verification .landing-button {
+    width: fit-content;
   }
 
   .landing-age-choice-actions .landing-provider-link {
@@ -1821,6 +1895,15 @@
       grid-template-columns: 1fr;
       gap: 6px;
       max-width: min(358px, 100%);
+    }
+
+    .landing-adult-intent,
+    .landing-adult-verification {
+      max-width: min(358px, 100%);
+    }
+
+    .landing-adult-verification {
+      padding-left: 0;
     }
 
     .landing-age-choice-actions .landing-provider-link {

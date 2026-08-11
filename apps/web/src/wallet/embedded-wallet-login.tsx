@@ -1,41 +1,28 @@
 "use client";
 
-import { useCreateWallet, usePrivy, useLogin } from "@privy-io/react-auth";
+import { usePrivy, useLogin } from "@privy-io/react-auth";
 import {
+  useCreateWallet,
   useSignMessage as usePrivySolanaSignMessage,
   useWallets as usePrivySolanaWallets
 } from "@privy-io/react-auth/solana";
-import { useTurnkey, type WalletAccount } from "@turnkey/react-wallet-kit";
-import bs58 from "bs58";
 import { useState } from "react";
 import { ApiMutationError } from "@/api-mutations";
 import { safeMutationMessage } from "@/api-errors";
 import { ProviderLogo } from "@/brand/provider-logo";
 import { createBackendWalletSession } from "./backend-wallet-auth";
 
-type EmbeddedProvider = "privy" | "turnkey";
-
 export function EmbeddedWalletLoginButton({
   label,
-  onLinked,
-  provider
+  onLinked
 }: {
   label: string;
   onLinked?: ((address: string) => void) | undefined;
-  provider: EmbeddedProvider;
 }) {
-  if (provider === "privy") {
-    return <PrivyEmbeddedLoginButton label={label} onLinked={onLinked} />;
-  }
-
-  return <TurnkeyEmbeddedLoginButton label={label} onLinked={onLinked} />;
-}
-
-function PrivyEmbeddedLoginButton({ label, onLinked }: { label: string; onLinked?: ((address: string) => void) | undefined }) {
   const { authenticated, ready } = usePrivy();
   const { login } = useLogin();
   const { createWallet } = useCreateWallet();
-  const { wallets } = usePrivySolanaWallets();
+  const { ready: walletsReady, wallets } = usePrivySolanaWallets();
   const { signMessage } = usePrivySolanaSignMessage();
   const [state, setState] = useState<"idle" | "working" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
@@ -45,7 +32,7 @@ function PrivyEmbeddedLoginButton({ label, onLinked }: { label: string; onLinked
     setMessage(null);
 
     try {
-      if (!ready) {
+      if (!ready || !walletsReady) {
         throw new ApiMutationError("Privy is still loading.");
       }
 
@@ -56,7 +43,7 @@ function PrivyEmbeddedLoginButton({ label, onLinked }: { label: string; onLinked
         return;
       }
 
-      const wallet = wallets[0];
+      const wallet = wallets.find((candidate) => candidate.standardWallet.name === "Privy");
 
       if (!wallet) {
         await createWallet();
@@ -101,59 +88,6 @@ function PrivyEmbeddedLoginButton({ label, onLinked }: { label: string; onLinked
   );
 }
 
-function TurnkeyEmbeddedLoginButton({ label, onLinked }: { label: string; onLinked?: ((address: string) => void) | undefined }) {
-  const { authState, handleLogin, refreshWallets, wallets } = useTurnkey();
-  const [state, setState] = useState<"idle" | "working" | "error">("idle");
-  const [message, setMessage] = useState<string | null>(null);
-
-  async function start() {
-    setState("working");
-    setMessage(null);
-
-    try {
-      if (authState !== "authenticated") {
-        await handleLogin({ title: "Enter WeVid" });
-        setState("idle");
-        setMessage("Finish Turnkey login, then continue.");
-        return;
-      }
-
-      const latestWallets = await refreshWallets();
-      const account = findTurnkeySolanaSigner(latestWallets.length > 0 ? latestWallets : wallets);
-
-      if (!account) {
-        throw new ApiMutationError("Turnkey did not expose a Solana signing account for this session.");
-      }
-
-      await createBackendWalletSession({
-        address: account.address,
-        provider: "embedded_turnkey",
-        signMessage: async (challenge) => signatureStringToBytes(await account.signMessage(challenge))
-      });
-
-      onLinked?.(account.address);
-      if (!onLinked) {
-        window.location.reload();
-      }
-    } catch (error) {
-      setState("error");
-      setMessage(safeMutationMessage(error, "Embedded wallet login"));
-    }
-  }
-
-  return (
-    <EmbeddedButtonFrame
-      disabled={state === "working"}
-      label={label}
-      logo="turnkey"
-      message={message}
-      onClick={() => void start()}
-      status={state === "working" ? "Opening" : "Connect and sign"}
-      tone={state === "error" ? "error" : "muted"}
-    />
-  );
-}
-
 function EmbeddedButtonFrame({
   disabled,
   label,
@@ -165,7 +99,7 @@ function EmbeddedButtonFrame({
 }: {
   disabled: boolean;
   label: string;
-  logo: EmbeddedProvider;
+  logo: "privy";
   message: string | null;
   onClick: () => void;
   status: string;
@@ -183,47 +117,4 @@ function EmbeddedButtonFrame({
       {message ? <p className={`auth-provider-note auth-provider-note-${tone}`}>{message}</p> : null}
     </div>
   );
-}
-
-function findTurnkeySolanaSigner(wallets: Array<{ accounts: WalletAccount[] }>) {
-  for (const wallet of wallets) {
-    for (const account of wallet.accounts) {
-      if (account.addressFormat === "ADDRESS_FORMAT_SOLANA" && hasSignMessage(account)) {
-        return account;
-      }
-    }
-  }
-
-  return null;
-}
-
-function hasSignMessage(account: WalletAccount): account is WalletAccount & { signMessage: (message: string) => Promise<string> } {
-  return typeof (account as { signMessage?: unknown }).signMessage === "function";
-}
-
-function signatureStringToBytes(signature: string) {
-  let decoded: Uint8Array;
-
-  if (/^[0-9a-f]+$/i.test(signature) && signature.length % 2 === 0) {
-    decoded = Uint8Array.from(signature.match(/.{1,2}/g)?.map((byte) => Number.parseInt(byte, 16)) ?? []);
-    return requireSolanaSignature(decoded);
-  }
-
-  try {
-    decoded = bs58.decode(signature);
-    return requireSolanaSignature(decoded);
-  } catch {
-    // Fall through to base64 decoding.
-  }
-
-  const binary = atob(signature);
-  return requireSolanaSignature(Uint8Array.from(binary, (char) => char.charCodeAt(0)));
-}
-
-function requireSolanaSignature(signature: Uint8Array) {
-  if (signature.length !== 64) {
-    throw new ApiMutationError("Embedded wallet returned an invalid Solana signature.");
-  }
-
-  return signature;
 }

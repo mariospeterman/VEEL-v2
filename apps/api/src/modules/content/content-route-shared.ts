@@ -29,7 +29,7 @@ export interface RegisterContentRoutesOptions {
 export const feedModes = new Set(["recommended", "following", "nsfw", "sfw", "live", "premium"]);
 export const contentMediaTypes = new Set(["bit", "clip", "image", "vod", "live_replay"]);
 export const contentVisibilityValues = new Set(["public", "followers", "subscribers", "private"]);
-export const nsfwLabels = new Set(["none", "adult", "explicit", "sensitive"]);
+export const nsfwLabels = new Set(["none", "adult", "explicit"]);
 export const videoMimeTypes = new Set(["video/mp4", "video/quicktime", "video/webm"]);
 export const dailyContentDraftQuota = 20;
 export const dailyMediaUploadQuota = 30;
@@ -304,7 +304,7 @@ export async function verifyCreatorCapability(
         code: "verification_required",
         message:
           capability === "canPublishAdultMedia"
-            ? "Enhanced adult verification is required for media labeled adult, explicit, or sensitive."
+            ? "Adult publisher verification is required for adult or explicit media."
             : capability === "canMonetize"
               ? "Identity, tax, and wallet readiness are required before earning."
               : "Age verification is required before publishing media.",

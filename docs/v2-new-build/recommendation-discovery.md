@@ -61,7 +61,7 @@ Home should expose simple controls, not too many categories:
 - `Recommended`: recommended mixed media, default.
 - `Following`: creators the viewer follows.
 - `NSFW`: adult/protected media preference.
-- `SFW`: hides adult/explicit/sensitive media.
+- `SFW`: hides adult and explicit media.
 
 Do not make dozens of top-level categories at launch. Use hashtags, search, and Discover for finer navigation.
 
@@ -169,7 +169,7 @@ Creator Create/Edit:
 Publishing policy is capability-based on one universal account:
 
 - age assurance permits SFW upload and publishing
-- adult-content assurance is required only for `adult`, `explicit`, or `sensitive` media
+- adult-publisher eligibility is required only for `adult` or `explicit` media
 - creator KYC controls earning readiness, not ordinary SFW publishing
 - Studio and Enterprise access comes from backend plan/organization policy, never from KYC alone
 
@@ -179,7 +179,6 @@ NSFW states:
 none
 adult
 explicit
-sensitive
 restricted
 blocked
 ```
@@ -324,7 +323,7 @@ Admin cannot:
 ## Tests
 
 - unverified user cannot enter protected app/feed
-- `SFW` mode excludes adult/explicit/sensitive media
+- `SFW` mode excludes adult and explicit media
 - `NSFW` mode is available only after the platform's required 18+ access and wallet setup
 - following mode returns followed creators only or primarily, depending fallback policy
 - blocked creators/content do not appear

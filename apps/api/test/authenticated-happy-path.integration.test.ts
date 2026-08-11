@@ -608,6 +608,32 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         currentTier: { key: "free_verified" }
       });
 
+      const kybOnlyOrganizationResponse = await app.inject({
+        method: "GET",
+        url: "/v1/organizations",
+        headers: authenticatedHeaders(`organization-kyb-only-${runId}`)
+      });
+      expect(kybOnlyOrganizationResponse.statusCode, kybOnlyOrganizationResponse.body).toBe(200);
+      expect(kybOnlyOrganizationResponse.json()).toMatchObject({
+        items: [
+          {
+            capabilities: {
+              rbacEnabled: false,
+              teamPublishingEnabled: false,
+              consolidatedReportingEnabled: false,
+              complianceExportsEnabled: false
+            },
+            rolePermissions: expect.arrayContaining([
+              expect.objectContaining({
+                key: "publish_team_content",
+                allowed: false,
+                reason: "enterprise_entitlement_required"
+              })
+            ])
+          }
+        ]
+      });
+
       await sql`
         insert into tier_waivers (
           id,
@@ -638,6 +664,53 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         currentTier: { key: "enterprise" }
       });
 
+      const enterpriseOrganizationResponse = await app.inject({
+        method: "GET",
+        url: "/v1/organizations",
+        headers: authenticatedHeaders(`organization-enterprise-${runId}`)
+      });
+      expect(enterpriseOrganizationResponse.statusCode, enterpriseOrganizationResponse.body).toBe(200);
+      expect(enterpriseOrganizationResponse.json()).toMatchObject({
+        items: [
+          {
+            capabilities: {
+              rbacEnabled: true,
+              teamPublishingEnabled: true,
+              consolidatedReportingEnabled: true,
+              complianceExportsEnabled: true
+            },
+            rolePermissions: expect.arrayContaining([
+              expect.objectContaining({
+                key: "publish_team_content",
+                allowed: true,
+                reason: "allowed"
+              })
+            ])
+          }
+        ]
+      });
+
+      await sql`
+        update creator_monetisation_settings
+        set earning_state = 'held', updated_at = now()
+        where user_id = ${seededCreatorUserId}
+      `;
+      const heldCreatorUnlockResponse = await app.inject({
+        method: "POST",
+        url: `/v1/content/${seededContentId}/unlock-intents`,
+        headers: authenticatedHeaders(`content-unlock-held-${runId}`)
+      });
+      expect(heldCreatorUnlockResponse.statusCode, heldCreatorUnlockResponse.body).toBe(409);
+      expect(heldCreatorUnlockResponse.json()).toMatchObject({
+        code: "conflict",
+        message: "This creator cannot receive payments yet"
+      });
+      await sql`
+        update creator_monetisation_settings
+        set earning_state = 'ready', updated_at = now()
+        where user_id = ${seededCreatorUserId}
+      `;
+
       const unlockResponse = await app.inject({
         method: "POST",
         url: `/v1/content/${seededContentId}/unlock-intents`,
@@ -661,6 +734,27 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           amountMinor: number;
         };
       }>();
+
+      await sql`
+        update creator_monetisation_settings
+        set earning_state = 'held', updated_at = now()
+        where user_id = ${seededCreatorUserId}
+      `;
+      const heldCreatorRetryResponse = await app.inject({
+        method: "POST",
+        url: `/v1/content/${seededContentId}/unlock-intents`,
+        headers: authenticatedHeaders(`content-unlock-${runId}`)
+      });
+      expect(heldCreatorRetryResponse.statusCode, heldCreatorRetryResponse.body).toBe(409);
+      expect(heldCreatorRetryResponse.json()).toMatchObject({
+        code: "conflict",
+        message: "This creator cannot receive payments yet"
+      });
+      await sql`
+        update creator_monetisation_settings
+        set earning_state = 'ready', updated_at = now()
+        where user_id = ${seededCreatorUserId}
+      `;
 
       const submissionResponse = await app.inject({
         method: "POST",
@@ -2052,6 +2146,7 @@ async function seedCreatorPaidContent(
     accessRuleId: string;
   }
 ): Promise<void> {
+  const recipientWalletId = randomUUID();
   await sql`
     insert into users (id, supabase_user_id)
     values (${input.creatorUserId}, ${input.creatorSupabaseUserId})
@@ -2069,7 +2164,7 @@ async function seedCreatorPaidContent(
   await sql`
     insert into wallets (id, user_id, provider, address, chain, is_primary)
     values (
-      ${randomUUID()},
+      ${recipientWalletId},
       ${input.creatorUserId},
       'wallet_adapter',
       ${creatorSettlementWallet},
@@ -2080,6 +2175,57 @@ async function seedCreatorPaidContent(
       user_id = excluded.user_id,
       is_primary = true,
       updated_at = now()
+  `;
+  await sql`
+    insert into verification_records (
+      subject_type,
+      subject_id,
+      purpose,
+      status,
+      provider,
+      provider_reference,
+      method,
+      threshold_age,
+      result_over_threshold,
+      assurance_level,
+      verified_at,
+      reusable
+    )
+    values
+      (
+        'user', ${input.creatorUserId}, 'age_access', 'valid', 'didit',
+        ${`creator-age-${input.contentId}`}, 'gov_id_selfie', 18, true, 'high', now(), true
+      ),
+      (
+        'user', ${input.creatorUserId}, 'creator_kyc', 'valid', 'didit',
+        ${`creator-kyc-${input.contentId}`}, 'gov_id_selfie', 18, true, 'high', now(), true
+      )
+  `;
+  await sql`
+    insert into creator_monetisation_settings (
+      user_id,
+      state,
+      earning_state,
+      kyc_state,
+      tax_profile_state,
+      earnings_recipient_wallet_id,
+      support_enabled,
+      content_unlocks_enabled,
+      live_passes_enabled,
+      paid_messages_enabled
+    )
+    values (
+      ${input.creatorUserId},
+      'active',
+      'ready',
+      'verified',
+      'not_required',
+      ${recipientWalletId},
+      true,
+      true,
+      true,
+      true
+    )
   `;
   await sql`
     insert into content_items (
@@ -2833,6 +2979,10 @@ async function cleanupRun(
       `;
       await tx`
         delete from wallet_link_challenges
+        where user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from creator_monetisation_settings
         where user_id in ${tx(userIds)}
       `;
       await tx`

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
+import { isRecipientMonetisationPolicyError } from "../payment/payment-repository-errors.js";
 import type { SubscriptionRepository } from "./types.js";
 import {
   SubscriptionIdempotencyConflictError,
@@ -131,6 +132,30 @@ export async function createAuthorizationIntent(
   const setupReference = randomUUID();
 
   const result = await sql.begin(async (transaction) => {
+    if (plan.creator_user_id) {
+      let recipientWalletRows: { address: string }[];
+      try {
+        recipientWalletRows = await transaction<{ address: string }[]>`
+          select address
+          from private.assert_recipient_monetisation_ready(
+            ${plan.creator_user_id},
+            'creator_subscription',
+            null,
+            null
+          )
+        `;
+      } catch (error) {
+        if (isRecipientMonetisationPolicyError(error)) {
+          throw new SubscriptionPolicyError(error.message);
+        }
+        throw error;
+      }
+
+      if (recipientWalletRows[0]?.address !== plan.merchant_wallet) {
+        throw new SubscriptionPolicyError("recipient_wallet_mismatch");
+      }
+    }
+
     const subscriptionRows = await transaction<SubscriptionRow[]>`
       insert into subscriptions (
         id,

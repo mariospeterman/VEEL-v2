@@ -193,18 +193,18 @@ function createDiditVerificationProviderAdapter(env: ServerEnv): VerificationPro
         method: "POST",
         headers: {
           "x-api-key": env.DIDIT_API_KEY,
-          "content-type": "application/json",
-          "idempotency-key": input.idempotencyKey
+          "content-type": "application/json"
         },
         body: JSON.stringify({
           workflow_id: workflowId,
-          callback_url: input.callbackUrl,
+          callback: input.callbackUrl,
+          callback_method: "completer",
           vendor_data: providerSubjectReference(input),
           metadata: {
             purpose: input.purpose,
             subject: input.purpose === "org_kyb" ? "organization" : "user",
             ...(input.purpose === "age_access" ? { rule: "over_18" } : {}),
-            webhook_url: `${input.webhookBaseUrl}/didit`
+            ...(input.policyVersion ? { policy_version: input.policyVersion } : {})
           }
         })
       });
@@ -225,7 +225,7 @@ function createDiditVerificationProviderAdapter(env: ServerEnv): VerificationPro
         expiresAt: expiresInSeconds(24 * 60 * 60),
         method: verificationMethod(input, "didit"),
         assuranceLevel: verificationAssurance(input, "didit"),
-        reusable: true
+        reusable: false
       };
     }
   };
@@ -430,6 +430,7 @@ function sumsubLevelName(env: ServerEnv, input: CreateVerificationSessionInput) 
 
 function diditWorkflowId(env: ServerEnv, input: CreateVerificationSessionInput) {
   if (input.purpose === "age_access") return env.DIDIT_AGE_WORKFLOW_ID;
+  if (input.purpose === "adult_publisher_eligibility") return env.DIDIT_ADULT_PUBLISHER_WORKFLOW_ID;
   return input.purpose === "org_kyb" ? env.DIDIT_KYB_WORKFLOW_ID : env.DIDIT_KYC_WORKFLOW_ID;
 }
 
@@ -449,7 +450,8 @@ function verificationMethod(
 ): VerificationProviderSession["method"] {
   if (input.purpose === "org_kyb") return "kyb_registry";
   if (input.purpose !== "age_access") return "gov_id_selfie";
-  if (provider === "didit" || provider === "yoti") return "reusable_age";
+  if (provider === "didit") return "age_estimation";
+  if (provider === "yoti") return "reusable_age";
   if (provider === "persona") return "doc_scan";
   return "gov_id_selfie";
 }

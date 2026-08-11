@@ -126,7 +126,7 @@ Wallet-first onboarding uses backend-verified Solana signatures:
 - `POST /v1/auth/wallet/challenges` creates the signed login challenge.
 - `POST /v1/auth/wallet/sessions` verifies the signature and returns a VEEL bearer session.
 - Supabase email auth remains optional for recovery/profile management and is not required before wallet onboarding.
-- Embedded provider UI is gated by `NEXT_PUBLIC_PRIVY_APP_ID` and `NEXT_PUBLIC_TURNKEY_ORGANIZATION_ID`; keep provider secrets server-only and do not enable provider-dependent production paths before staging/launch approval.
+- Embedded provider UI is gated by `NEXT_PUBLIC_PRIVY_APP_ID`; keep provider secrets server-only and do not enable the Privy production path before staging/launch approval.
 - `NEXT_PUBLIC_SOLANA_CHAIN` controls the web chain label: `solana:devnet` locally, `solana:mainnet` only when production provider and payment checks are approved.
 
 Current executable validation:

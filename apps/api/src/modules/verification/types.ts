@@ -1,7 +1,7 @@
 export type VerificationSubjectType = "user" | "organization" | "organization_person";
 export type VerificationPurpose =
   | "age_access"
-  | "adult_content_access"
+  | "adult_publisher_eligibility"
   | "creator_kyc"
   | "payout_kyc"
   | "org_kyb"
@@ -28,7 +28,7 @@ export type CapabilityKey =
   | "canPublishMedia"
   | "canPublishAdultMedia"
   | "canMonetize"
-  | "canReceivePayouts"
+  | "canReceiveCreatorProceeds"
   | "canAccessCreatorDashboard"
   | "canCreateOrganization"
   | "canAccessStudio"
@@ -64,7 +64,7 @@ export interface CreateVerificationSessionInput {
   supabaseUserId: string;
   purpose: Extract<
     VerificationPurpose,
-    "age_access" | "adult_content_access" | "creator_kyc" | "org_kyb"
+    "age_access" | "adult_publisher_eligibility" | "creator_kyc" | "org_kyb"
   >;
   providerPreference:
     | "provider_first"
@@ -78,6 +78,8 @@ export interface CreateVerificationSessionInput {
   organizationId?: string | null;
   callbackUrl: string;
   webhookBaseUrl: string;
+  policyVersion?: string | null;
+  termsAcceptedAt?: Date | null;
 }
 
 export interface VerificationProviderSession {
@@ -107,6 +109,11 @@ export interface NormalizedVerificationWebhook {
   signatureHash: string | null;
   occurredAt?: Date | null;
   failureReasonCode?: string | null;
+  identityEvidence?: {
+    documentApproved: boolean;
+    livenessApproved: boolean;
+    faceMatchApproved: boolean;
+  } | null;
 }
 
 export interface CapabilityResolution {
@@ -115,7 +122,7 @@ export interface CapabilityResolution {
   nextBestAction: string;
   verificationSummary: {
     ageAccess: VerificationRecordResource | null;
-    adultContentAccess: VerificationRecordResource | null;
+    adultPublisherEligibility: VerificationRecordResource | null;
     creatorKyc: VerificationRecordResource | null;
     orgKyb: VerificationRecordResource | null;
   };
@@ -131,10 +138,12 @@ export interface VerificationRepository {
     supabaseUserId: string;
     purpose: Extract<
       VerificationPurpose,
-      "age_access" | "adult_content_access" | "creator_kyc" | "org_kyb"
+      "age_access" | "adult_publisher_eligibility" | "creator_kyc" | "org_kyb"
     >;
     organizationId?: string | null;
     providerSession: VerificationProviderSession;
+    policyVersion?: string | null;
+    termsAcceptedAt?: Date | null;
   }): Promise<string>;
   applyProviderWebhook(input: NormalizedVerificationWebhook & {
     payloadHash: string;

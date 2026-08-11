@@ -77,7 +77,9 @@ export function createPostgresVerificationRepository(database?: string | Postgre
           status,
           assurance_level,
           reusable,
-          expires_at
+          expires_at,
+          policy_version,
+          terms_accepted_at
         )
         values (
           ${subject.subjectType},
@@ -92,7 +94,9 @@ export function createPostgresVerificationRepository(database?: string | Postgre
           'pending',
           ${providerSession.assuranceLevel},
           ${providerSession.reusable ?? false},
-          ${providerSession.expiresAt}
+          ${providerSession.expiresAt},
+          ${input.policyVersion ?? null},
+          ${input.termsAcceptedAt ?? null}
         )
         returning id
       `;
@@ -109,6 +113,8 @@ export function createPostgresVerificationRepository(database?: string | Postgre
           assurance_level,
           expires_at,
           reusable,
+          policy_version,
+          terms_accepted_at,
           metadata
         )
         values (
@@ -122,6 +128,8 @@ export function createPostgresVerificationRepository(database?: string | Postgre
           ${providerSession.assuranceLevel},
           ${providerSession.expiresAt},
           ${providerSession.reusable ?? false},
+          ${input.policyVersion ?? null},
+          ${input.termsAcceptedAt ?? null},
           ${JSON.stringify({ source: "verification_session" })}::jsonb
         )
       `;
@@ -211,14 +219,14 @@ export function createPostgresVerificationRepository(database?: string | Postgre
       return rows[0] ? toRecord(rows[0]) : null;
     },
     async resolveCapabilities(input) {
-      const [ageAccess, adultContentAccess, creatorKyc, orgKyb] = await Promise.all([
+      const [ageAccess, adultPublisherEligibility, creatorKyc, orgKyb] = await Promise.all([
         this.findLatestUserVerification({
           supabaseUserId: input.supabaseUserId,
           purpose: "age_access"
         }),
         this.findLatestUserVerification({
           supabaseUserId: input.supabaseUserId,
-          purpose: "adult_content_access"
+          purpose: "adult_publisher_eligibility"
         }),
         this.findLatestUserVerification({
           supabaseUserId: input.supabaseUserId,
@@ -234,7 +242,7 @@ export function createPostgresVerificationRepository(database?: string | Postgre
 
       return resolveCapabilitiesFromRecords({
         ageAccess,
-        adultContentAccess,
+        adultPublisherEligibility,
         creatorKyc,
         orgKyb
       });
@@ -261,10 +269,12 @@ async function applyVerificationWebhookDecision(
     assurance_level: VerificationRecordResource["assuranceLevel"];
     reusable: boolean;
     expires_at: Date | null;
+    policy_version: string | null;
+    terms_accepted_at: Date | null;
   }>>`
     select
       id, subject_type, subject_id, purpose, requested_method,
-      assurance_level, reusable, expires_at
+      assurance_level, reusable, expires_at, policy_version, terms_accepted_at
     from verification_sessions
     where provider = ${input.provider}
       and (
@@ -291,12 +301,14 @@ async function applyVerificationWebhookDecision(
     return false;
   }
 
+  const decision = verificationDecisionForSession(input, session.purpose);
+
   await tx`
     update verification_sessions
     set
-      status = ${sessionStatus(input.status)},
+      status = ${sessionStatus(decision.status)},
       updated_at = now(),
-      completed_at = case when ${input.status} in ('valid', 'invalid', 'blocked') then coalesce(${input.occurredAt ?? null}, now()) else completed_at end
+      completed_at = case when ${decision.status} in ('valid', 'invalid', 'blocked') then coalesce(${input.occurredAt ?? null}, now()) else completed_at end
     where id = ${session.id}
   `;
 
@@ -304,19 +316,44 @@ async function applyVerificationWebhookDecision(
     insert into verification_records (
       subject_type, subject_id, purpose, status, provider, provider_reference,
       method, assurance_level, verified_at, expires_at, reusable,
-      raw_payload_hash, failure_reason_code, metadata
+      raw_payload_hash, failure_reason_code, policy_version, terms_accepted_at, metadata
     )
     values (
-      ${session.subject_type}, ${session.subject_id}, ${session.purpose}, ${input.status},
+      ${session.subject_type}, ${session.subject_id}, ${session.purpose}, ${decision.status},
       ${input.provider}, ${input.providerReference}, ${session.requested_method},
       ${session.assurance_level},
-      case when ${input.status} = 'valid' then coalesce(${input.occurredAt ?? null}, now()) else null end,
+      case when ${decision.status} = 'valid' then coalesce(${input.occurredAt ?? null}, now()) else null end,
       ${session.expires_at}, ${session.reusable}, ${input.signatureHash},
-      ${input.failureReasonCode ?? null},
+      ${decision.failureReasonCode},
+      ${session.policy_version}, ${session.terms_accepted_at},
       ${tx.json({ source: "provider_webhook", eventType: input.eventType })}
     )
     returning id
   `;
+
+  const recordId = records[0]?.id ?? null;
+  if (
+    recordId &&
+    decision.status === "valid" &&
+    session.purpose === "adult_publisher_eligibility" &&
+    ["gov_id_selfie", "doc_scan"].includes(session.requested_method) &&
+    ["high", "documentary"].includes(session.assurance_level)
+  ) {
+    await tx`
+      insert into verification_records (
+        subject_type, subject_id, purpose, status, provider, provider_reference,
+        method, threshold_age, result_over_threshold, assurance_level,
+        verified_at, expires_at, reusable, derived_from_record_id, metadata
+      )
+      values (
+        ${session.subject_type}, ${session.subject_id}, 'age_access', 'valid',
+        ${input.provider}, ${input.providerReference}, ${session.requested_method},
+        18, true, ${session.assurance_level}, coalesce(${input.occurredAt ?? null}, now()),
+        ${session.expires_at}, ${session.reusable}, ${recordId},
+        ${tx.json({ source: "adult_publisher_eligibility", eventType: input.eventType })}
+      )
+    `;
+  }
 
   if (trackEvent) {
     await tx`
@@ -336,7 +373,7 @@ async function applyVerificationWebhookDecision(
         provider: input.provider,
         providerEventId: input.providerEventId,
         purpose: session.purpose,
-        status: input.status
+        status: decision.status
       })}
     )
   `;
@@ -350,7 +387,7 @@ async function resolveSessionSubject(
     supabaseUserId: string;
     purpose: Extract<
       VerificationPurpose,
-      "age_access" | "adult_content_access" | "creator_kyc" | "org_kyb"
+      "age_access" | "adult_publisher_eligibility" | "creator_kyc" | "org_kyb"
     >;
     organizationId?: string | null;
   }
@@ -397,14 +434,38 @@ function sessionStatus(status: NormalizedVerificationWebhook["status"]) {
   return "pending";
 }
 
+function verificationDecisionForSession(
+  input: NormalizedVerificationWebhook,
+  purpose: VerificationPurpose
+): { status: NormalizedVerificationWebhook["status"]; failureReasonCode: string | null } {
+  const requiresIdentityEvidence =
+    input.provider === "didit" &&
+    input.eventType !== "mock.auto_approved" &&
+    (purpose === "adult_publisher_eligibility" || purpose === "creator_kyc");
+  const evidence = input.identityEvidence;
+
+  if (
+    input.status === "valid" &&
+    requiresIdentityEvidence &&
+    (!evidence?.documentApproved || !evidence.livenessApproved || !evidence.faceMatchApproved)
+  ) {
+    return {
+      status: "invalid",
+      failureReasonCode: "didit_required_identity_evidence_missing"
+    };
+  }
+
+  return { status: input.status, failureReasonCode: input.failureReasonCode ?? null };
+}
+
 export function resolveCapabilitiesFromRecords(input: {
   ageAccess: VerificationRecordResource | null;
-  adultContentAccess?: VerificationRecordResource | null;
+  adultPublisherEligibility?: VerificationRecordResource | null;
   creatorKyc: VerificationRecordResource | null;
   orgKyb: VerificationRecordResource | null;
 }): CapabilityResolution {
   const hasAge = isValid(input.ageAccess);
-  const hasAdultContentAccess = hasAge && isValid(input.adultContentAccess ?? null);
+  const hasAdultPublisherEligibility = hasAge && isValid(input.adultPublisherEligibility ?? null);
   const hasCreatorKyc = isValid(input.creatorKyc);
   const capabilities: Record<CapabilityKey, boolean> = {
     canAccessApp: hasAge,
@@ -414,9 +475,9 @@ export function resolveCapabilitiesFromRecords(input: {
     canCreateDraft: hasAge,
     canUploadMedia: hasAge,
     canPublishMedia: hasAge,
-    canPublishAdultMedia: hasAdultContentAccess,
+    canPublishAdultMedia: hasAdultPublisherEligibility,
     canMonetize: hasAge && hasCreatorKyc,
-    canReceivePayouts: hasAge && hasCreatorKyc,
+    canReceiveCreatorProceeds: hasAge && hasCreatorKyc,
     canAccessCreatorDashboard: hasAge,
     canCreateOrganization: hasAge,
     canAccessStudio: false,
@@ -434,7 +495,7 @@ export function resolveCapabilitiesFromRecords(input: {
     nextBestAction: nextBestAction(capabilities),
     verificationSummary: {
       ageAccess: input.ageAccess,
-      adultContentAccess: input.adultContentAccess ?? null,
+      adultPublisherEligibility: input.adultPublisherEligibility ?? null,
       creatorKyc: input.creatorKyc,
       orgKyb: input.orgKyb
     }
@@ -460,7 +521,7 @@ function missingFromCapabilities(capabilities: Record<CapabilityKey, boolean>): 
     missing.add("age_access_required");
   }
   if (!capabilities.canPublishAdultMedia) {
-    missing.add("adult_verification_required_for_nsfw");
+    missing.add("adult_publisher_eligibility_required");
   }
   if (!capabilities.canMonetize) {
     missing.add("creator_kyc_required_for_earning");

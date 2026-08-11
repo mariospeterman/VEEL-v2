@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   PaymentIdempotencyConflictError,
+  PaymentRecipientNotReadyError,
   PaymentRepositoryConfigurationError
 } from "../payment/payment-repository.js";
 import {
@@ -156,6 +157,10 @@ export async function registerEventAccessPassRoutes(
     } catch (error) {
       if (error instanceof PaymentIdempotencyConflictError) {
         return reply.code(409).send(conflictResponse("Idempotency key was already used"));
+      }
+
+      if (error instanceof PaymentRecipientNotReadyError) {
+        return reply.code(409).send(conflictResponse("This creator cannot receive payments yet"));
       }
 
       if (

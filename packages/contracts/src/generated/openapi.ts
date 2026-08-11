@@ -2760,7 +2760,7 @@ export interface components {
         };
         CreateVerificationSessionRequest: {
             /** @enum {string} */
-            purpose: "adult_content_access" | "creator_kyc" | "org_kyb";
+            purpose: "adult_publisher_eligibility" | "creator_kyc" | "org_kyb";
             /**
              * @default provider_first
              * @enum {string}
@@ -2768,6 +2768,13 @@ export interface components {
             providerPreference: "provider_first" | "sumsub" | "didit" | "persona" | "veriff";
             /** Format: uuid */
             organizationId?: string | null;
+            /**
+             * @default create
+             * @enum {string}
+             */
+            source: "onboarding" | "create" | "earnings" | "organization";
+            /** @default false */
+            adultPublisherTermsAccepted: boolean;
         };
         VerificationSession: {
             /** Format: uuid */
@@ -2780,7 +2787,7 @@ export interface components {
             /** Format: date-time */
             expiresAt: string;
             /** @enum {string} */
-            purpose: "creator_kyc" | "org_kyb";
+            purpose: "adult_publisher_eligibility" | "creator_kyc" | "org_kyb";
         };
         ProviderWebhookReceipt: {
             provider: string;
@@ -2793,7 +2800,7 @@ export interface components {
             /** Format: uuid */
             subjectId: string;
             /** @enum {string} */
-            purpose: "age_access" | "adult_content_access" | "creator_kyc" | "payout_kyc" | "org_kyb" | "ubo_kyc" | "enterprise_review";
+            purpose: "age_access" | "adult_publisher_eligibility" | "creator_kyc" | "payout_kyc" | "org_kyb" | "ubo_kyc" | "enterprise_review";
             /** @enum {string} */
             status: "valid" | "invalid" | "pending" | "expired" | "revoked" | "blocked";
             provider: string;
@@ -2813,7 +2820,7 @@ export interface components {
             nextBestAction: string;
             verificationSummary: {
                 ageAccess: components["schemas"]["VerificationRecordSummary"] | null;
-                adultContentAccess: components["schemas"]["VerificationRecordSummary"] | null;
+                adultPublisherEligibility: components["schemas"]["VerificationRecordSummary"] | null;
                 creatorKyc: components["schemas"]["VerificationRecordSummary"] | null;
                 orgKyb: components["schemas"]["VerificationRecordSummary"] | null;
             };
@@ -3196,7 +3203,7 @@ export interface components {
             /** @enum {string} */
             accessState: "free" | "teaser" | "locked" | "unlocked" | "subscribed" | "pass_required";
             /** @enum {string} */
-            nsfwLabel?: "none" | "adult" | "explicit" | "sensitive";
+            nsfwLabel?: "none" | "adult" | "explicit";
             engagement: components["schemas"]["EngagementState"];
         };
         PlaybackResource: {
@@ -3230,7 +3237,7 @@ export interface components {
             /** @enum {string} */
             visibility: "public" | "followers" | "subscribers" | "private";
             /** @enum {string} */
-            nsfwLabel: "none" | "adult" | "explicit" | "sensitive";
+            nsfwLabel: "none" | "adult" | "explicit";
             eventDraft?: components["schemas"]["EventDraft"];
         };
         UpdateContentRequest: {
@@ -3238,7 +3245,7 @@ export interface components {
             /** @enum {string} */
             visibility?: "public" | "followers" | "subscribers" | "private";
             /** @enum {string} */
-            nsfwLabel?: "none" | "adult" | "explicit" | "sensitive";
+            nsfwLabel?: "none" | "adult" | "explicit";
             teaserStartMs?: number | null;
             teaserEndMs?: number | null;
             thumbnailFrameMs?: number | null;
@@ -4316,7 +4323,7 @@ export interface components {
             label: string;
             allowed: boolean;
             /** @enum {string} */
-            reason: "allowed" | "role_not_permitted" | "organization_not_active" | "membership_not_active" | "kyb_not_verified";
+            reason: "allowed" | "role_not_permitted" | "organization_not_active" | "membership_not_active" | "enterprise_entitlement_required" | "kyb_not_verified";
         };
         OrganizationDashboard: {
             organization: components["schemas"]["OrganizationMembership"];
