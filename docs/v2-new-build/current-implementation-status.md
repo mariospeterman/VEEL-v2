@@ -101,7 +101,7 @@ The controlling branch evidence is recorded in `production-branch-inventory.md`.
 - [ ] Use atomic integer-safe values across intent creation, transaction composition, settlement verification, ledger, and contracts.
 - [ ] Add product-specific price floors, backend-owned fee policy, quote freshness, and audited overrides without browser-owned recipients or rates.
 - [ ] Add one-time USDC split settlement through the canonical payment intent system while retaining native SOL support.
-- [ ] Add an executable worker scheduler plus lease expiry/reclamation, bounded backoff, attempt ceilings, dead-letter state, and admin visibility.
+- [x] Add an executable worker scheduler plus tokenized lease expiry/reclamation, bounded jittered backoff, attempt ceilings, dead-letter state, queue-age/admin visibility, and audited idempotent dead-letter recovery. Subscription retries reconcile provider state before any repeat collection call.
 - [x] Run the complete bootstrap, doctor, docs, contract-generation drift, database, lint, typecheck, unit, build, and smoke gates for the integration baseline; rerun after each subsequent production slice.
 
 ### P1 Universal Account, Plans, Memberships, And Usage

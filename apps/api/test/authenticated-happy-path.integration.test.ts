@@ -241,7 +241,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         reviewResult: {
           reviewAnswer: "GREEN"
         },
-        createdAt: "2026-06-12 12:00:00+0000"
+        createdAt: new Date().toISOString()
       });
       const ageWebhookResponse = await app.inject({
         method: "POST",
@@ -260,6 +260,15 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         received: 1,
         processed: 1
       });
+
+      const ageStatusResponse = await app.inject({
+        method: "GET",
+        url: "/v1/age/status",
+        headers: authenticatedHeaders(`age-status-${runId}`)
+      });
+
+      expect(ageStatusResponse.statusCode, ageStatusResponse.body).toBe(200);
+      expect(ageStatusResponse.json()).toMatchObject({ state: "verified", provider: "sumsub" });
 
       const profileResponse = await app.inject({
         method: "PATCH",
@@ -284,6 +293,21 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         creatorUserId: seededCreatorUserId
       });
 
+      const adultDraftResponse = await app.inject({
+        method: "POST",
+        url: "/v1/content",
+        headers: authenticatedHeaders(`adult-content-denied-${runId}`),
+        payload: {
+          mediaType: "image",
+          visibility: "public",
+          nsfwLabel: "adult",
+          caption: `Adult integration draft ${runId}`
+        }
+      });
+
+      expect(adultDraftResponse.statusCode, adultDraftResponse.body).toBe(201);
+      expect(adultDraftResponse.json()).toMatchObject({ nsfwLabel: "adult" });
+
       const createContentResponse = await app.inject({
         method: "POST",
         url: "/v1/content",
@@ -291,7 +315,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         payload: {
           mediaType: "image",
           visibility: "public",
-          nsfwLabel: "adult",
+          nsfwLabel: "none",
           caption: `Integration draft ${runId}`
         }
       });
@@ -1380,12 +1404,15 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           now: new Date(),
           limit: 5,
           provider: {
+            async reconcile() {
+              return { state: "not_found" };
+            },
             async collect(input) {
               expect(input).toEqual(
                 expect.objectContaining({
                   subscriptionId: subscriptionIntent.subscription.id,
                   planId: seededSubscriptionPlanId,
-                  amountMinor: 19000000,
+                  amountMinor: 19000000n,
                   currency: "USDC",
                   authorityAddress: subscriptionAuthorityAddress,
                   delegationAddress: subscriptionDelegationAddress,
@@ -1474,6 +1501,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
             async replay(input) {
               expect(input).toEqual({
                 replayRequestId: seededProviderReplayRequestId,
+                leaseToken: expect.any(String),
+                attemptCount: 1,
                 providerEventId: seededProviderEventId,
                 provider: "solana_indexer",
                 eventType: "payment.confirmed",
@@ -1602,7 +1631,7 @@ function createIntegrationAgeWaterfall(providerReference: string): AgeProviderWa
         provider: "sumsub",
         providerReference,
         launchUrl: `https://age.example.test/sumsub/${providerReference}`,
-        expiresAt: new Date("2026-06-12T12:15:00.000Z"),
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
         jurisdiction: "US",
         rule: "over_18"
       };
@@ -2018,6 +2047,18 @@ async function cleanupRun(
           from age_verifications
           where provider_reference = ${input.providerReference}
         `;
+    const verificationSessionRows = await tx<{ id: string }[]>`
+      select id
+      from verification_sessions
+      where provider_session_id = ${input.providerReference}
+        ${userIds.length > 0 ? tx`or subject_id in ${tx(userIds)}` : tx``}
+    `;
+    const verificationRecordRows = await tx<{ id: string }[]>`
+      select id
+      from verification_records
+      where provider_reference = ${input.providerReference}
+        ${userIds.length > 0 ? tx`or subject_id in ${tx(userIds)}` : tx``}
+    `;
     const walletRows = userIds.length
       ? await tx<{ id: string }[]>`
           select id
@@ -2093,6 +2134,8 @@ async function cleanupRun(
         `;
     const subscriptionIds = subscriptionRows.map((row) => row.id);
     const ageIds = ageRows.map((row) => row.id);
+    const verificationSessionIds = verificationSessionRows.map((row) => row.id);
+    const verificationRecordIds = verificationRecordRows.map((row) => row.id);
     const walletIds = walletRows.map((row) => row.id);
     const paymentIntentRows = userIds.length
       ? await tx<{ id: string }[]>`
@@ -2483,6 +2526,32 @@ async function cleanupRun(
         delete from age_verifications
         where id in ${tx(ageIds)}
       `;
+    }
+
+    if (verificationSessionIds.length > 0 || verificationRecordIds.length > 0) {
+      const verificationSubjectIds = [...verificationSessionIds, ...verificationRecordIds];
+      await tx`
+        delete from audit_events
+        where subject_type = 'verification_record'
+          and subject_id in ${tx(verificationSubjectIds)}
+      `;
+      await tx`
+        delete from verification_events
+        where idempotency_key = ${`sumsub-event-${input.providerReference.replace("sumsub-", "")}`}
+          ${verificationSessionIds.length > 0 ? tx`or session_id in ${tx(verificationSessionIds)}` : tx``}
+      `;
+      if (verificationRecordIds.length > 0) {
+        await tx`
+          delete from verification_records
+          where id in ${tx(verificationRecordIds)}
+        `;
+      }
+      if (verificationSessionIds.length > 0) {
+        await tx`
+          delete from verification_sessions
+          where id in ${tx(verificationSessionIds)}
+        `;
+      }
     }
 
     if (walletIds.length > 0) {

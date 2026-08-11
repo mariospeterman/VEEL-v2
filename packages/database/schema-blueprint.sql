@@ -288,7 +288,7 @@ create table payment_confirmation_deliveries (
   user_id uuid not null references users(id),
   channel text not null check (channel in ('in_app', 'email')),
   state text not null default 'queued'
-    check (state in ('queued', 'processing', 'sent', 'provider_not_configured', 'failed')),
+    check (state in ('queued', 'processing', 'sent', 'provider_not_configured', 'failed', 'dead_letter')),
   durable_medium boolean not null default true,
   confirmation_version text not null default 'payment-confirmation-v1',
   terms_version text not null,
@@ -296,6 +296,9 @@ create table payment_confirmation_deliveries (
   payload jsonb not null default '{}'::jsonb,
   attempt_count integer not null default 0 check (attempt_count >= 0),
   leased_at timestamptz,
+  lease_token uuid,
+  leased_until timestamptz,
+  next_attempt_at timestamptz not null default now(),
   failure_code text,
   provider_message_id text,
   delivered_at timestamptz,
@@ -1097,6 +1100,10 @@ create table subscription_collections (
   idempotency_key text,
   due_at timestamptz not null,
   attempted_at timestamptz,
+  attempt_count integer not null default 0 check (attempt_count >= 0),
+  lease_token uuid,
+  leased_until timestamptz,
+  next_attempt_at timestamptz not null default now(),
   submitted_at timestamptz,
   confirmed_at timestamptz,
   created_at timestamptz not null default now(),
@@ -1346,6 +1353,9 @@ create table provider_event_replay_requests (
   state text not null default 'queued',
   attempt_count integer not null default 0,
   leased_at timestamptz,
+  lease_token uuid,
+  leased_until timestamptz,
+  next_attempt_at timestamptz not null default now(),
   processed_at timestamptz,
   failure_code text,
   created_at timestamptz not null default now(),
@@ -1466,11 +1476,38 @@ create table notification_delivery_attempts (
   attempt_count integer not null default 0,
   next_attempt_at timestamptz not null default now(),
   leased_at timestamptz,
+  lease_token uuid,
+  leased_until timestamptz,
   delivered_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (notification_id, device_id)
 );
+
+create table worker_queue_recovery_requests (
+  id uuid primary key,
+  queue_name text not null,
+  job_id uuid not null,
+  requested_by_user_id uuid references users(id),
+  idempotency_key text not null,
+  reason text not null,
+  created_at timestamptz not null default now(),
+  unique (queue_name, job_id, idempotency_key)
+);
+
+alter table worker_queue_recovery_requests enable row level security;
+revoke all on table worker_queue_recovery_requests from anon, authenticated;
+
+create policy worker_queue_recovery_requests_browser_deny
+  on worker_queue_recovery_requests
+  for all
+  to anon, authenticated
+  using (false)
+  with check (false);
+
+create index worker_queue_recovery_requests_requested_by_user_idx
+  on worker_queue_recovery_requests (requested_by_user_id)
+  where requested_by_user_id is not null;
 
 create table moderation_reviews (
   id uuid primary key,

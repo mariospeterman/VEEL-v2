@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: admin, business operations, support, devops visibility
-Last updated: 2026-06-05
+Last updated: 2026-08-11
 Source of truth: yes
 
 Owns:
@@ -24,7 +24,8 @@ This document defines the admin and operations surface required to run Veel as a
 
 Current implementation state:
 
-- `GET /v1/admin/ops/summary` returns role-gated payment, unlock, provider event, report, provider health, and queue health counts.
+- `GET /v1/admin/ops/summary` returns role-gated payment, unlock, provider event, report, provider health, and per-worker queue health. Queue projections include pending, processing, failed, dead-letter, and oldest-pending state for subscription collections, notification delivery, payment confirmation email, and provider-event replay.
+- `POST /v1/admin/worker-queues/{queueName}/jobs/{jobId}/retry` is the only API recovery boundary for exhausted worker jobs. It accepts only `dead_letter` jobs, requires a reason and `Idempotency-Key`, restores the queue-specific initial state, clears stale lease/failure state, records `worker_queue_recovery_requests`, and writes an audit event. It never marks provider work successful and never bypasses subscription reconciliation or access/payment authority.
 - `GET /v1/admin/payments/intents` returns sanitized payment intent reconciliation rows with server-owned product, amount, state, reference address, submitted/confirmed signatures, settlement attempt count, and linked entitlement ID.
 - `GET /v1/admin/unlocks` returns sanitized entitlement rows for content unlock and access investigation.
 - `GET /v1/admin/provider-events` returns sanitized provider event status, timing, and latest replay-request state only.
@@ -127,7 +128,7 @@ The admin landing dashboard should show:
 - webhook health and queue lag
 - provider status summary
 - incident banner when provider or deploy health is degraded
-- notification projection, device health, and delivery queue health are visible through `GET /v1/admin/notifications/health`; the worker can send browser push through server-only VAPID Web Push configuration, and production ops must verify real VAPID delivery across target browsers before user-facing delivery claims
+- notification projection, device health, and delivery queue health, including dead-letter count, are visible through `GET /v1/admin/notifications/health`; the worker can send browser push through server-only VAPID Web Push configuration, and production ops must verify real VAPID delivery across target browsers before user-facing delivery claims
 - deeper Studio/Enterprise organization health and contract status after later organization slices land
 - `PATCH /v1/admin/organizations/{organizationId}/kyb` updates KYB review state server-side, derives active/pending organization state, requires `Idempotency-Key`, and writes an `audit_events` record with reason and before/after state
 - `GET /v1/admin/organizations/{organizationId}/members` and `PATCH /v1/admin/organizations/{organizationId}/members/{membershipId}` expose the admin organization member governance workflow. Member mutations are role/state changes only, require `Idempotency-Key`, preserve at least one active owner, and write `audit_events`; they never create balances, payout queues, payment truth, recommendation priority, Mutuals preference, or preferential social treatment.

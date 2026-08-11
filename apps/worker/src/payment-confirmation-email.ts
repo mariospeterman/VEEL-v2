@@ -16,6 +16,8 @@ export type PaymentConfirmationEmailOutcome =
 
 export interface QueuedPaymentConfirmationEmail {
   deliveryId: string;
+  leaseToken: string;
+  attemptCount: number;
   paymentIntentId: string;
   receiptId: string | null;
   userId: string;
@@ -34,9 +36,14 @@ export interface PaymentConfirmationEmailRepository {
     now: Date;
     limit: number;
     includeProviderNotConfigured: boolean;
+    leaseDurationMs: number;
+    maxAttempts: number;
   }): Promise<QueuedPaymentConfirmationEmail[]>;
   recordDeliveryOutcome(input: {
     deliveryId: string;
+    leaseToken: string;
+    now: Date;
+    maxAttempts: number;
     outcome: PaymentConfirmationEmailOutcome;
   }): Promise<void>;
   close?(): Promise<void>;
@@ -67,13 +74,19 @@ export async function processPaymentConfirmationEmails(input: {
   provider: PaymentConfirmationEmailProvider;
   now?: Date;
   limit?: number;
+  leaseDurationMs?: number;
+  maxAttempts?: number;
 }): Promise<ProcessPaymentConfirmationEmailsResult> {
   const now = input.now ?? new Date();
   const limit = input.limit ?? 50;
+  const leaseDurationMs = input.leaseDurationMs ?? 5 * 60 * 1000;
+  const maxAttempts = input.maxAttempts ?? 8;
   const deliveries = await input.repository.leaseDueConfirmations({
     now,
     limit,
-    includeProviderNotConfigured: input.provider.isConfigured
+    includeProviderNotConfigured: input.provider.isConfigured,
+    leaseDurationMs,
+    maxAttempts
   });
   const result: ProcessPaymentConfirmationEmailsResult = {
     leased: deliveries.length,
@@ -86,6 +99,9 @@ export async function processPaymentConfirmationEmails(input: {
     const outcome = await input.provider.send(delivery);
     await input.repository.recordDeliveryOutcome({
       deliveryId: delivery.deliveryId,
+      leaseToken: delivery.leaseToken,
+      now,
+      maxAttempts,
       outcome
     });
 
@@ -186,11 +202,26 @@ export function createPostgresPaymentConfirmationEmailRepository(
         : ["queued"];
 
       return sql.begin(async (transaction) => {
+        await transaction`
+          update payment_confirmation_deliveries
+          set
+            state = 'dead_letter',
+            failure_code = coalesce(failure_code, 'email_attempt_limit_exceeded'),
+            lease_token = null,
+            leased_until = null,
+            updated_at = now()
+          where state in ('queued', 'processing', 'provider_not_configured', 'failed')
+            and attempt_count >= ${input.maxAttempts}
+            and (state <> 'processing' or leased_until is null or leased_until <= ${input.now})
+        `;
+
         const rows = await transaction<PaymentConfirmationEmailRow[]>`
           update payment_confirmation_deliveries delivery
           set
             state = 'processing',
             leased_at = ${input.now},
+            lease_token = gen_random_uuid(),
+            leased_until = ${new Date(input.now.getTime() + input.leaseDurationMs)},
             attempt_count = delivery.attempt_count + 1,
             failure_code = null,
             updated_at = now()
@@ -198,7 +229,11 @@ export function createPostgresPaymentConfirmationEmailRepository(
             select due.id
             from payment_confirmation_deliveries due
             where due.channel = 'email'
-              and due.state in ${transaction(states)}
+              and (
+                (due.state in ${transaction(states)} and due.next_attempt_at <= ${input.now})
+                or (due.state = 'processing' and (due.leased_until is null or due.leased_until <= ${input.now}))
+              )
+              and due.attempt_count < ${input.maxAttempts}
             order by due.created_at asc
             limit ${input.limit}
             for update skip locked
@@ -211,6 +246,8 @@ export function createPostgresPaymentConfirmationEmailRepository(
             and auth_user.email is not null
           returning
             delivery.id as delivery_id,
+            delivery.lease_token,
+            delivery.attempt_count,
             delivery.payment_intent_id,
             delivery.receipt_id,
             delivery.user_id,
@@ -226,6 +263,8 @@ export function createPostgresPaymentConfirmationEmailRepository(
 
         return rows.map((row) => ({
           deliveryId: row.delivery_id,
+          leaseToken: row.lease_token,
+          attemptCount: row.attempt_count,
           paymentIntentId: row.payment_intent_id,
           receiptId: row.receipt_id,
           userId: row.user_id,
@@ -249,12 +288,16 @@ export function createPostgresPaymentConfirmationEmailRepository(
             delivered_at = now(),
             failure_code = null,
             provider_message_id = ${input.outcome.providerMessageId},
+            lease_token = null,
+            leased_until = null,
             payload = payload || ${sql.json({
               provider: "resend",
               providerMessageId: input.outcome.providerMessageId
             })}::jsonb,
             updated_at = now()
           where id = ${input.deliveryId}
+            and state = 'processing'
+            and lease_token = ${input.leaseToken}
         `;
         return;
       }
@@ -262,10 +305,18 @@ export function createPostgresPaymentConfirmationEmailRepository(
       await sql`
         update payment_confirmation_deliveries
         set
-          state = ${input.outcome.state},
+          state = case when attempt_count >= ${input.maxAttempts} then 'dead_letter' else ${input.outcome.state} end,
           failure_code = ${input.outcome.failureCode},
+          next_attempt_at = ${input.now} + make_interval(
+            secs => least(3600, 30 * power(2, least(attempt_count, 7)))::integer
+              + floor(random() * 30)::integer
+          ),
+          lease_token = null,
+          leased_until = null,
           updated_at = now()
         where id = ${input.deliveryId}
+          and state = 'processing'
+          and lease_token = ${input.leaseToken}
       `;
     },
     async close() {
@@ -320,6 +371,8 @@ function escapeHtml(value: string): string {
 
 interface PaymentConfirmationEmailRow {
   delivery_id: string;
+  lease_token: string;
+  attempt_count: number;
   payment_intent_id: string;
   receipt_id: string | null;
   user_id: string;

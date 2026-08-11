@@ -418,6 +418,8 @@ describe("runSubscriptionCollectionTick", () => {
       {
         collectionId: "collection-1",
         subscriptionId: "subscription-1",
+        leaseToken: "lease-1",
+        maxAttempts: 8,
         outcome: {
           state: "confirmed",
           collectionSignature: "renewal-signature"
@@ -490,6 +492,29 @@ describe("runSubscriptionCollectionTick", () => {
         state: "revoked",
         failureCode: "delegation_revoked"
       }
+    });
+  });
+
+  it("reconciles a stale lease before considering another provider collection", async () => {
+    const repository = fakeSubscriptionCollectionRepository({
+      dueCollections: [dueCollectionFixture({ attemptCount: 2 })]
+    });
+    const collect = vi.fn();
+    const provider: SubscriptionCollectionProvider = {
+      async reconcile(input) {
+        expect(input.providerIdempotencyKey).toBe("subscription-1:2026-06-06T00:00:00.000Z");
+        return { state: "confirmed", collectionSignature: "reconciled-signature" };
+      },
+      collect
+    };
+
+    const result = await runSubscriptionCollectionTick({ repository, provider });
+
+    expect(result.confirmed).toBe(1);
+    expect(collect).not.toHaveBeenCalled();
+    expect(repository.outcomes[0]?.outcome).toEqual({
+      state: "confirmed",
+      collectionSignature: "reconciled-signature"
     });
   });
 });
@@ -643,11 +668,15 @@ function dueCollectionFixture(
 ): DueSubscriptionCollection {
   return {
     collectionId: overrides.collectionId ?? "collection-1",
+    leaseToken: overrides.leaseToken ?? "lease-1",
+    attemptCount: overrides.attemptCount ?? 1,
+    providerIdempotencyKey:
+      overrides.providerIdempotencyKey ?? "subscription-1:2026-06-06T00:00:00.000Z",
     subscriptionId: overrides.subscriptionId ?? "subscription-1",
     subscriberUserId: overrides.subscriberUserId ?? "subscriber-1",
     planId: overrides.planId ?? "platform_plus_monthly",
-    amountMinor: overrides.amountMinor ?? 15000000,
-    amountAtomic: overrides.amountAtomic ?? 15000000,
+    amountMinor: overrides.amountMinor ?? 15000000n,
+    amountAtomic: overrides.amountAtomic ?? 15000000n,
     currency: overrides.currency ?? "USDC",
     periodStartsAt: overrides.periodStartsAt ?? new Date("2026-06-06T00:00:00.000Z"),
     periodEndsAt: overrides.periodEndsAt ?? new Date("2026-07-06T00:00:00.000Z"),
@@ -670,6 +699,9 @@ function fakeSubscriptionCollectionProvider(
 
   return {
     inputs,
+    async reconcile() {
+      return { state: "not_found" };
+    },
     async collect(input) {
       inputs.push(input);
 
@@ -713,6 +745,8 @@ function paymentConfirmationEmailFixture(
 ): QueuedPaymentConfirmationEmail {
   return {
     deliveryId: overrides.deliveryId ?? "confirmation-delivery-1",
+    leaseToken: overrides.leaseToken ?? "email-lease-1",
+    attemptCount: overrides.attemptCount ?? 1,
     paymentIntentId: overrides.paymentIntentId ?? "00000000-0000-4000-8000-000000000050",
     receiptId: overrides.receiptId ?? "00000000-0000-4000-8000-000000000051",
     userId: overrides.userId ?? "buyer-1",
@@ -778,6 +812,8 @@ function notificationDeliveryFixture(
 ): DueNotificationDelivery {
   return {
     attemptId: overrides.attemptId ?? "attempt-1",
+    leaseToken: overrides.leaseToken ?? "notification-lease-1",
+    attemptCount: overrides.attemptCount ?? 1,
     notificationId: overrides.notificationId ?? "notification-1",
     deviceId: overrides.deviceId ?? "device-1",
     userId: overrides.userId ?? "user-1",
@@ -841,6 +877,8 @@ function providerEventReplayFixture(
 ): QueuedProviderEventReplay {
   return {
     replayRequestId: overrides.replayRequestId ?? "replay-request-1",
+    leaseToken: overrides.leaseToken ?? "replay-lease-1",
+    attemptCount: overrides.attemptCount ?? 1,
     providerEventId: overrides.providerEventId ?? "00000000-0000-4000-8000-000000000050",
     provider: overrides.provider ?? "helius",
     eventType: overrides.eventType ?? "payment.confirmed",

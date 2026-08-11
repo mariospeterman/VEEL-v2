@@ -29,11 +29,21 @@ export interface NotificationHealthRow {
   leased_delivery_count: string | number;
   delivered_delivery_count: string | number;
   failed_delivery_count: string | number;
+  dead_letter_delivery_count: string | number;
   skipped_delivery_count: string | number;
   revoked_delivery_count: string | number;
   latest_notification_at: Date | null;
   latest_device_seen_at: Date | null;
   latest_delivery_at: Date | null;
+}
+
+export interface WorkerQueueHealthRow {
+  name: "subscription_collections" | "notification_deliveries" | "payment_confirmation_emails" | "provider_event_replays";
+  pending_count: string | number;
+  processing_count: string | number;
+  failed_count: string | number;
+  dead_letter_count: string | number;
+  oldest_pending_at: Date | null;
 }
 
 export interface AdminUserRow {
@@ -137,11 +147,23 @@ export function toNotificationHealth(row: NotificationHealthRow | undefined): Ad
     leasedDeliveryCount: Number(row?.leased_delivery_count ?? 0),
     deliveredDeliveryCount: Number(row?.delivered_delivery_count ?? 0),
     failedDeliveryCount: Number(row?.failed_delivery_count ?? 0),
+    deadLetterDeliveryCount: Number(row?.dead_letter_delivery_count ?? 0),
     skippedDeliveryCount: Number(row?.skipped_delivery_count ?? 0),
     revokedDeliveryCount: Number(row?.revoked_delivery_count ?? 0),
     latestNotificationAt: row?.latest_notification_at?.toISOString() ?? null,
     latestDeviceSeenAt: row?.latest_device_seen_at?.toISOString() ?? null,
     latestDeliveryAt: row?.latest_delivery_at?.toISOString() ?? null
+  };
+}
+
+export function toWorkerQueueHealth(row: WorkerQueueHealthRow): AdminOpsSummary["workerQueues"][number] {
+  return {
+    name: row.name,
+    pendingCount: Number(row.pending_count),
+    processingCount: Number(row.processing_count),
+    failedCount: Number(row.failed_count),
+    deadLetterCount: Number(row.dead_letter_count),
+    oldestPendingAt: row.oldest_pending_at?.toISOString() ?? null
   };
 }
 

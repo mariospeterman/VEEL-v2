@@ -1442,6 +1442,29 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/AdminNotificationHealth" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/worker-queues/{queueName}/jobs/{jobId}/retry:
+    post:
+      operationId: retryAdminWorkerQueueJob
+      tags: [Admin]
+      summary: Retry one dead-letter worker job through its durable queue
+      parameters:
+        - name: queueName
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [subscription_collections, notification_deliveries, payment_confirmation_emails, provider_event_replays]
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/AdminReason"
+      responses:
+        "202": { $ref: "#/components/responses/Accepted" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /v1/admin/audit:
     get:
       operationId: listAdminAuditEvents
@@ -3966,14 +3989,29 @@ components:
           items: { $ref: "#/components/schemas/OrganizationNotice" }
     AdminOpsSummary:
       type: object
-      required: [providerHealth, queueHealth, openReports, paymentCounts, unlockCounts, providerEventCounts]
+      required: [providerHealth, queueHealth, workerQueues, openReports, paymentCounts, unlockCounts, providerEventCounts]
       properties:
         providerHealth: { type: string, enum: [ok, degraded, down] }
         queueHealth: { type: string, enum: [ok, degraded, down] }
+        workerQueues:
+          type: array
+          items: { $ref: "#/components/schemas/AdminWorkerQueueHealth" }
         openReports: { type: integer }
         paymentCounts: { $ref: "#/components/schemas/AdminStateCounts" }
         unlockCounts: { $ref: "#/components/schemas/AdminStateCounts" }
         providerEventCounts: { $ref: "#/components/schemas/AdminStateCounts" }
+    AdminWorkerQueueHealth:
+      type: object
+      required: [name, pendingCount, processingCount, failedCount, deadLetterCount, oldestPendingAt]
+      properties:
+        name:
+          type: string
+          enum: [subscription_collections, notification_deliveries, payment_confirmation_emails, provider_event_replays]
+        pendingCount: { type: integer }
+        processingCount: { type: integer }
+        failedCount: { type: integer }
+        deadLetterCount: { type: integer }
+        oldestPendingAt: { type: string, format: date-time, nullable: true }
     AdminNotificationHealth:
       type: object
       required:
@@ -3988,6 +4026,7 @@ components:
           leasedDeliveryCount,
           deliveredDeliveryCount,
           failedDeliveryCount,
+          deadLetterDeliveryCount,
           skippedDeliveryCount,
           revokedDeliveryCount,
           latestNotificationAt,
@@ -4005,6 +4044,7 @@ components:
         leasedDeliveryCount: { type: integer }
         deliveredDeliveryCount: { type: integer }
         failedDeliveryCount: { type: integer }
+        deadLetterDeliveryCount: { type: integer }
         skippedDeliveryCount: { type: integer }
         revokedDeliveryCount: { type: integer }
         latestNotificationAt: { type: string, format: date-time, nullable: true }

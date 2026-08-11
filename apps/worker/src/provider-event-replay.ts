@@ -6,6 +6,8 @@ export type ProviderEventReplayOutcome =
 
 export interface QueuedProviderEventReplay {
   replayRequestId: string;
+  leaseToken: string;
+  attemptCount: number;
   providerEventId: string;
   provider: string;
   eventType: string;
@@ -13,10 +15,18 @@ export interface QueuedProviderEventReplay {
 }
 
 export interface ProviderEventReplayRepository {
-  leaseQueuedReplayRequests(input: { now: Date; limit: number }): Promise<QueuedProviderEventReplay[]>;
+  leaseQueuedReplayRequests(input: {
+    now: Date;
+    limit: number;
+    leaseDurationMs: number;
+    maxAttempts: number;
+  }): Promise<QueuedProviderEventReplay[]>;
   recordReplayOutcome(input: {
     replayRequestId: string;
     providerEventId: string;
+    leaseToken: string;
+    now: Date;
+    maxAttempts: number;
     outcome: ProviderEventReplayOutcome;
   }): Promise<void>;
   close?(): Promise<void>;
@@ -74,10 +84,19 @@ export async function processProviderEventReplays(input: {
   adapter: ProviderEventReplayAdapter;
   now?: Date;
   limit?: number;
+  leaseDurationMs?: number;
+  maxAttempts?: number;
 }): Promise<ProcessProviderEventReplaysResult> {
   const now = input.now ?? new Date();
   const limit = input.limit ?? 25;
-  const requests = await input.repository.leaseQueuedReplayRequests({ now, limit });
+  const leaseDurationMs = input.leaseDurationMs ?? 5 * 60 * 1000;
+  const maxAttempts = input.maxAttempts ?? 8;
+  const requests = await input.repository.leaseQueuedReplayRequests({
+    now,
+    limit,
+    leaseDurationMs,
+    maxAttempts
+  });
   const result: ProcessProviderEventReplaysResult = {
     leased: requests.length,
     replayed: 0,
@@ -92,6 +111,9 @@ export async function processProviderEventReplays(input: {
     await input.repository.recordReplayOutcome({
       replayRequestId: request.replayRequestId,
       providerEventId: request.providerEventId,
+      leaseToken: request.leaseToken,
+      now,
+      maxAttempts,
       outcome
     });
 
@@ -181,18 +203,37 @@ export function createPostgresProviderEventReplayRepository(
   return {
     async leaseQueuedReplayRequests(input) {
       return sql.begin(async (transaction) => {
+        await transaction`
+          update provider_event_replay_requests
+          set
+            state = 'dead_letter',
+            failure_code = coalesce(failure_code, 'provider_replay_attempt_limit_exceeded'),
+            lease_token = null,
+            leased_until = null,
+            updated_at = now()
+          where state in ('queued', 'processing', 'failed')
+            and attempt_count >= ${input.maxAttempts}
+            and (state <> 'processing' or leased_until is null or leased_until <= ${input.now})
+        `;
+
         const rows = await transaction<QueuedProviderEventReplayRow[]>`
           update provider_event_replay_requests perr
           set
             state = 'processing',
             leased_at = ${input.now},
+            lease_token = gen_random_uuid(),
+            leased_until = ${new Date(input.now.getTime() + input.leaseDurationMs)},
             attempt_count = perr.attempt_count + 1,
             updated_at = now()
           from (
             select id
             from provider_event_replay_requests
-            where state = 'queued'
-            order by created_at asc
+            where (
+                (state in ('queued', 'failed') and next_attempt_at <= ${input.now})
+                or (state = 'processing' and (leased_until is null or leased_until <= ${input.now}))
+              )
+              and attempt_count < ${input.maxAttempts}
+            order by next_attempt_at asc, created_at asc
             limit ${input.limit}
             for update skip locked
           ) due,
@@ -201,6 +242,8 @@ export function createPostgresProviderEventReplayRepository(
             and pe.id = perr.provider_event_id
           returning
             perr.id as replay_request_id,
+            perr.lease_token,
+            perr.attempt_count,
             pe.id as provider_event_id,
             pe.provider,
             pe.event_type,
@@ -209,6 +252,8 @@ export function createPostgresProviderEventReplayRepository(
 
         return rows.map((row) => ({
           replayRequestId: row.replay_request_id,
+          leaseToken: row.lease_token,
+          attemptCount: row.attempt_count,
           providerEventId: row.provider_event_id,
           provider: row.provider,
           eventType: row.event_type,
@@ -220,15 +265,21 @@ export function createPostgresProviderEventReplayRepository(
     async recordReplayOutcome(input) {
       if (input.outcome.state === "replayed") {
         await sql.begin(async (transaction) => {
-          await transaction`
+          const rows = await transaction<{ provider_event_id: string }[]>`
             update provider_event_replay_requests
             set
               state = 'replayed',
               processed_at = now(),
               failure_code = null,
+              lease_token = null,
+              leased_until = null,
               updated_at = now()
             where id = ${input.replayRequestId}
+              and state = 'processing'
+              and lease_token = ${input.leaseToken}
+            returning provider_event_id
           `;
+          if (rows.length === 0) return;
           await transaction`
             update provider_events
             set
@@ -243,11 +294,19 @@ export function createPostgresProviderEventReplayRepository(
       await sql`
         update provider_event_replay_requests
         set
-          state = 'failed',
-          processed_at = now(),
+          state = case when attempt_count >= ${input.maxAttempts} then 'dead_letter' else 'failed' end,
+          processed_at = case when attempt_count >= ${input.maxAttempts} then now() else processed_at end,
           failure_code = ${input.outcome.failureCode},
+          next_attempt_at = ${input.now} + make_interval(
+            secs => least(3600, 30 * power(2, least(attempt_count, 7)))::integer
+              + floor(random() * 30)::integer
+          ),
+          lease_token = null,
+          leased_until = null,
           updated_at = now()
         where id = ${input.replayRequestId}
+          and state = 'processing'
+          and lease_token = ${input.leaseToken}
       `;
     },
 
@@ -259,6 +318,8 @@ export function createPostgresProviderEventReplayRepository(
 
 interface QueuedProviderEventReplayRow {
   replay_request_id: string;
+  lease_token: string;
+  attempt_count: number;
   provider_event_id: string;
   provider: string;
   event_type: string;

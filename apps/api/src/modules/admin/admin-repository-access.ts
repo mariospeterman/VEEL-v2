@@ -3,17 +3,19 @@ import type { AdminRepository } from "./types.js";
 import {
   CountRow,
   NotificationHealthRow,
+  WorkerQueueHealthRow,
   AdminUserRow,
   pageSize,
   page,
   toCounts,
   toNotificationHealth,
+  toWorkerQueueHealth,
   toAdminUser
 } from "./admin-repository-mappers.js";
 
 export function createAccessRepository(
   sql: postgres.Sql
-): Pick<AdminRepository, "hasAdminAccess" | "getOpsSummary" | "getNotificationHealth" | "listUsers" | "getUser"> {
+): Pick<AdminRepository, "hasAdminAccess" | "getOpsSummary" | "getNotificationHealth" | "retryDeadLetterJob" | "listUsers" | "getUser"> {
   return {
     async hasAdminAccess(supabaseUserId) {
       const rows = await sql<{ allowed: boolean }[]>`
@@ -31,7 +33,7 @@ export function createAccessRepository(
       return Boolean(rows[0]?.allowed);
     },
     async getOpsSummary() {
-      const [paymentRows, unlockRows, providerRows, reportRows] = await Promise.all([
+      const [paymentRows, unlockRows, providerRows, reportRows, workerQueueRows] = await Promise.all([
         sql<CountRow[]>`
           select
             count(*) as total,
@@ -61,14 +63,58 @@ export function createAccessRepository(
         `,
         sql<{ open_reports: string | number }[]>`
           select 0 as open_reports
+        `,
+        sql<WorkerQueueHealthRow[]>`
+          select
+            'subscription_collections'::text as name,
+            count(*) filter (where state in ('due', 'failed')) as pending_count,
+            count(*) filter (where state = 'processing') as processing_count,
+            count(*) filter (where state = 'failed') as failed_count,
+            count(*) filter (where state = 'dead_letter') as dead_letter_count,
+            min(next_attempt_at) filter (where state in ('due', 'failed')) as oldest_pending_at
+          from subscription_collections
+          union all
+          select
+            'notification_deliveries'::text as name,
+            count(*) filter (where state in ('queued', 'failed')) as pending_count,
+            count(*) filter (where state = 'leased') as processing_count,
+            count(*) filter (where state = 'failed') as failed_count,
+            count(*) filter (where state = 'dead_letter') as dead_letter_count,
+            min(next_attempt_at) filter (where state in ('queued', 'failed')) as oldest_pending_at
+          from notification_delivery_attempts
+          union all
+          select
+            'payment_confirmation_emails'::text as name,
+            count(*) filter (where state in ('queued', 'provider_not_configured', 'failed')) as pending_count,
+            count(*) filter (where state = 'processing') as processing_count,
+            count(*) filter (where state = 'failed') as failed_count,
+            count(*) filter (where state = 'dead_letter') as dead_letter_count,
+            min(next_attempt_at) filter (
+              where state in ('queued', 'provider_not_configured', 'failed')
+            ) as oldest_pending_at
+          from payment_confirmation_deliveries
+          union all
+          select
+            'provider_event_replays'::text as name,
+            count(*) filter (where state in ('queued', 'failed')) as pending_count,
+            count(*) filter (where state = 'processing') as processing_count,
+            count(*) filter (where state = 'failed') as failed_count,
+            count(*) filter (where state = 'dead_letter') as dead_letter_count,
+            min(next_attempt_at) filter (where state in ('queued', 'failed')) as oldest_pending_at
+          from provider_event_replay_requests
         `
       ]);
 
       const providerCounts = toCounts(providerRows[0]);
+      const workerQueues = workerQueueRows.map(toWorkerQueueHealth);
+      const queueHealth = workerQueues.some((queue) => queue.failedCount > 0 || queue.deadLetterCount > 0)
+        ? "degraded"
+        : "ok";
 
       return {
         providerHealth: providerCounts.failed > 0 ? "degraded" : "ok",
-        queueHealth: "ok",
+        queueHealth,
+        workerQueues,
         openReports: Number(reportRows[0]?.open_reports ?? 0),
         paymentCounts: toCounts(paymentRows[0]),
         unlockCounts: toCounts(unlockRows[0]),
@@ -88,6 +134,7 @@ export function createAccessRepository(
           (select count(*) from notification_delivery_attempts where state = 'leased') as leased_delivery_count,
           (select count(*) from notification_delivery_attempts where state = 'delivered') as delivered_delivery_count,
           (select count(*) from notification_delivery_attempts where state = 'failed') as failed_delivery_count,
+          (select count(*) from notification_delivery_attempts where state = 'dead_letter') as dead_letter_delivery_count,
           (select count(*) from notification_delivery_attempts where state = 'skipped') as skipped_delivery_count,
           (select count(*) from notification_delivery_attempts where state = 'revoked') as revoked_delivery_count,
           (select max(created_at) from notifications) as latest_notification_at,
@@ -96,6 +143,115 @@ export function createAccessRepository(
       `;
 
       return toNotificationHealth(rows[0]);
+    },
+    async retryDeadLetterJob(input) {
+      const reason = input.body.reason.trim();
+      const run = async (
+        table: string,
+        queuedState: string,
+        stateType: "text" | "notification_delivery_state" = "text"
+      ) => {
+        const queuedStateSql = stateType === "notification_delivery_state"
+          ? sql`${queuedState}::notification_delivery_state`
+          : sql`${queuedState}::text`;
+        const rows = await sql<{ accepted: boolean }[]>`
+          with actor as (
+            select u.id
+            from users u
+            join staff_memberships sm on sm.user_id = u.id
+            where u.supabase_user_id = ${input.supabaseUserId}::uuid
+              and u.state = 'active'
+              and sm.state = 'active'
+              and sm.role in ('owner', 'admin', 'ops')
+          ),
+          existing_request as (
+            select id
+            from worker_queue_recovery_requests
+            where queue_name = ${input.queueName}
+              and job_id = ${input.jobId}::uuid
+              and idempotency_key = ${input.idempotencyKey}
+          ),
+          target as (
+            select id
+            from ${sql(table)}
+            where id = ${input.jobId}::uuid
+              and state = 'dead_letter'
+          ),
+          request_insert as (
+            insert into worker_queue_recovery_requests (
+              id,
+              queue_name,
+              job_id,
+              requested_by_user_id,
+              idempotency_key,
+              reason
+            )
+            select
+              gen_random_uuid(),
+              ${input.queueName},
+              target.id,
+              actor.id,
+              ${input.idempotencyKey},
+              ${reason}
+            from target
+            cross join actor
+            on conflict (queue_name, job_id, idempotency_key) do nothing
+            returning id
+          ),
+          recovered as (
+            update ${sql(table)}
+            set
+              state = ${queuedStateSql},
+              attempt_count = 0,
+              lease_token = null,
+              leased_until = null,
+              next_attempt_at = now(),
+              failure_code = null
+            where id in (select id from target)
+              and exists (select 1 from request_insert)
+            returning id
+          ),
+          audit_insert as (
+            insert into audit_events (
+              id,
+              actor_user_id,
+              subject_type,
+              subject_id,
+              action,
+              metadata
+            )
+            select
+              gen_random_uuid(),
+              actor.id,
+              'worker_queue_job',
+              recovered.id,
+              'worker_queue.dead_letter_retried',
+              jsonb_build_object(
+                'queueName', ${input.queueName}::text,
+                'reason', ${reason}::text,
+                'idempotencyKey', ${input.idempotencyKey}::text
+              )
+            from recovered
+            cross join actor
+            returning id
+          )
+          select
+            exists(select 1 from recovered) or exists(select 1 from existing_request) as accepted
+        `;
+
+        return rows[0]?.accepted ?? false;
+      };
+
+      switch (input.queueName) {
+        case "subscription_collections":
+          return run("subscription_collections", "due");
+        case "notification_deliveries":
+          return run("notification_delivery_attempts", "queued", "notification_delivery_state");
+        case "payment_confirmation_emails":
+          return run("payment_confirmation_deliveries", "queued");
+        case "provider_event_replays":
+          return run("provider_event_replay_requests", "queued");
+      }
     },
     async listUsers(input) {
       const rows = await sql<AdminUserRow[]>`

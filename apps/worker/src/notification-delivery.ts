@@ -18,6 +18,8 @@ export type NotificationDeliveryOutcome =
 
 export interface DueNotificationDelivery {
   attemptId: string;
+  leaseToken: string;
+  attemptCount: number;
   notificationId: string;
   deviceId: string;
   userId: string;
@@ -32,10 +34,17 @@ export interface DueNotificationDelivery {
 
 export interface NotificationDeliveryRepository {
   enqueueDueDeliveries(input: { now: Date; limit: number }): Promise<number>;
-  leaseDueDeliveries(input: { now: Date; limit: number }): Promise<DueNotificationDelivery[]>;
+  leaseDueDeliveries(input: {
+    now: Date;
+    limit: number;
+    leaseDurationMs: number;
+    maxAttempts: number;
+  }): Promise<DueNotificationDelivery[]>;
   recordDeliveryOutcome(input: {
     attemptId: string;
     deviceId: string;
+    leaseToken: string;
+    maxAttempts: number;
     outcome: NotificationDeliveryOutcome;
   }): Promise<void>;
   close?(): Promise<void>;
@@ -66,11 +75,20 @@ export async function processNotificationDeliveries(input: {
   provider: NotificationDeliveryProvider;
   now?: Date;
   limit?: number;
+  leaseDurationMs?: number;
+  maxAttempts?: number;
 }): Promise<ProcessNotificationDeliveriesResult> {
   const now = input.now ?? new Date();
   const limit = input.limit ?? 50;
+  const leaseDurationMs = input.leaseDurationMs ?? 5 * 60 * 1000;
+  const maxAttempts = input.maxAttempts ?? 8;
   const enqueued = await input.repository.enqueueDueDeliveries({ now, limit });
-  const deliveries = await input.repository.leaseDueDeliveries({ now, limit });
+  const deliveries = await input.repository.leaseDueDeliveries({
+    now,
+    limit,
+    leaseDurationMs,
+    maxAttempts
+  });
   const result: ProcessNotificationDeliveriesResult = {
     enqueued,
     leased: deliveries.length,
@@ -84,6 +102,8 @@ export async function processNotificationDeliveries(input: {
     await input.repository.recordDeliveryOutcome({
       attemptId: delivery.attemptId,
       deviceId: delivery.deviceId,
+      leaseToken: delivery.leaseToken,
+      maxAttempts,
       outcome
     });
 
@@ -236,19 +256,37 @@ export function createPostgresNotificationDeliveryRepository(input: {
       if (!encryptionKey) return [];
 
       return sql.begin(async (transaction) => {
+        await transaction`
+          update notification_delivery_attempts
+          set
+            state = 'dead_letter',
+            failure_code = coalesce(failure_code, 'notification_attempt_limit_exceeded'),
+            lease_token = null,
+            leased_until = null,
+            updated_at = now()
+          where state in ('queued', 'failed', 'leased')
+            and attempt_count >= ${input.maxAttempts}
+            and (state <> 'leased' or leased_until is null or leased_until <= ${input.now})
+        `;
+
         const rows = await transaction<DeliveryLeaseRow[]>`
           update notification_delivery_attempts attempt
           set
             state = 'leased',
             leased_at = now(),
+            lease_token = gen_random_uuid(),
+            leased_until = ${new Date(input.now.getTime() + input.leaseDurationMs)},
             attempt_count = attempt.attempt_count + 1,
             updated_at = now()
           where attempt.id in (
             select due.id
             from notification_delivery_attempts due
             join notification_devices device on device.id = due.device_id
-            where due.state in ('queued', 'failed')
-              and due.next_attempt_at <= ${input.now}
+            where (
+                (due.state in ('queued', 'failed') and due.next_attempt_at <= ${input.now})
+                or (due.state = 'leased' and (due.leased_until is null or due.leased_until <= ${input.now}))
+              )
+              and due.attempt_count < ${input.maxAttempts}
               and device.state = 'active'
               and device.endpoint_ciphertext is not null
               and device.endpoint_iv is not null
@@ -265,6 +303,8 @@ export function createPostgresNotificationDeliveryRepository(input: {
           )
           returning
             attempt.id as attempt_id,
+            attempt.lease_token,
+            attempt.attempt_count,
             attempt.notification_id,
             attempt.device_id,
             attempt.user_id,
@@ -295,21 +335,31 @@ export function createPostgresNotificationDeliveryRepository(input: {
               state = 'delivered',
               failure_code = null,
               delivered_at = now(),
+              lease_token = null,
+              leased_until = null,
               updated_at = now()
             where id = ${input.attemptId}
+              and state = 'leased'
+              and lease_token = ${input.leaseToken}
           `;
           return;
         }
 
         if (input.outcome.state === "revoked") {
-          await transaction`
+          const rows = await transaction<{ id: string }[]>`
             update notification_delivery_attempts
             set
               state = 'revoked',
               failure_code = ${input.outcome.failureCode},
+              lease_token = null,
+              leased_until = null,
               updated_at = now()
             where id = ${input.attemptId}
+              and state = 'leased'
+              and lease_token = ${input.leaseToken}
+            returning id
           `;
+          if (rows.length === 0) return;
           await transaction`
             update notification_devices
             set state = 'revoked', updated_at = now()
@@ -321,11 +371,15 @@ export function createPostgresNotificationDeliveryRepository(input: {
         await transaction`
           update notification_delivery_attempts
           set
-            state = 'failed',
+            state = case when attempt_count >= ${input.maxAttempts} then 'dead_letter' else 'failed' end,
             failure_code = ${input.outcome.failureCode},
             next_attempt_at = ${input.outcome.retryAt},
+            lease_token = null,
+            leased_until = null,
             updated_at = now()
           where id = ${input.attemptId}
+            and state = 'leased'
+            and lease_token = ${input.leaseToken}
         `;
       });
     },
@@ -337,6 +391,8 @@ export function createPostgresNotificationDeliveryRepository(input: {
 
 interface DeliveryLeaseRow {
   attempt_id: string;
+  lease_token: string;
+  attempt_count: number;
   notification_id: string;
   device_id: string;
   user_id: string;
@@ -358,6 +414,8 @@ interface DeliveryLeaseRow {
 function toDueDelivery(row: DeliveryLeaseRow, key: Buffer): DueNotificationDelivery {
   return {
     attemptId: row.attempt_id,
+    leaseToken: row.lease_token,
+    attemptCount: row.attempt_count,
     notificationId: row.notification_id,
     deviceId: row.device_id,
     userId: row.user_id,

@@ -1867,6 +1867,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/worker-queues/{queueName}/jobs/{jobId}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry one dead-letter worker job through its durable queue */
+        post: operations["retryAdminWorkerQueueJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/audit": {
         parameters: {
             query?: never;
@@ -4225,10 +4242,21 @@ export interface components {
             providerHealth: "ok" | "degraded" | "down";
             /** @enum {string} */
             queueHealth: "ok" | "degraded" | "down";
+            workerQueues: components["schemas"]["AdminWorkerQueueHealth"][];
             openReports: number;
             paymentCounts: components["schemas"]["AdminStateCounts"];
             unlockCounts: components["schemas"]["AdminStateCounts"];
             providerEventCounts: components["schemas"]["AdminStateCounts"];
+        };
+        AdminWorkerQueueHealth: {
+            /** @enum {string} */
+            name: "subscription_collections" | "notification_deliveries" | "payment_confirmation_emails" | "provider_event_replays";
+            pendingCount: number;
+            processingCount: number;
+            failedCount: number;
+            deadLetterCount: number;
+            /** Format: date-time */
+            oldestPendingAt: string | null;
         };
         AdminNotificationHealth: {
             unreadCount: number;
@@ -4241,6 +4269,7 @@ export interface components {
             leasedDeliveryCount: number;
             deliveredDeliveryCount: number;
             failedDeliveryCount: number;
+            deadLetterDeliveryCount: number;
             skippedDeliveryCount: number;
             revokedDeliveryCount: number;
             /** Format: date-time */
@@ -8529,6 +8558,26 @@ export interface operations {
         responses: {
             200: components["responses"]["AdminNotificationHealth"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    retryAdminWorkerQueueJob: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                queueName: "subscription_collections" | "notification_deliveries" | "payment_confirmation_emails" | "provider_event_replays";
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["AdminReason"];
+        responses: {
+            202: components["responses"]["Accepted"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listAdminAuditEvents: {

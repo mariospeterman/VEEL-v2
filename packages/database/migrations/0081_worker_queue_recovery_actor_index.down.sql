@@ -1,0 +1,1 @@
+drop index if exists worker_queue_recovery_requests_requested_by_user_idx;

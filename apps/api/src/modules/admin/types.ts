@@ -48,6 +48,7 @@ export type AdminModerationActionRequest =
   components["schemas"]["AdminModerationActionRequest"];
 export type AdminReportActionRequest = components["schemas"]["AdminReportActionRequest"];
 export type AdminReasonRequest = components["schemas"]["AdminReasonRequest"];
+export type AdminWorkerQueueName = components["schemas"]["AdminWorkerQueueHealth"]["name"];
 export type Event = components["schemas"]["Event"];
 export type EventAccessPassType = components["schemas"]["EventAccessPassType"];
 export type AccessPass = components["schemas"]["AccessPass"];
@@ -61,6 +62,13 @@ export interface AdminRepository {
   hasAdminAccess(supabaseUserId: string): Promise<boolean>;
   getOpsSummary(): Promise<AdminOpsSummary>;
   getNotificationHealth(): Promise<AdminNotificationHealth>;
+  retryDeadLetterJob(input: {
+    supabaseUserId: string;
+    queueName: AdminWorkerQueueName;
+    jobId: string;
+    body: AdminReasonRequest;
+    idempotencyKey: string;
+  }): Promise<boolean>;
   listUsers(input: { query?: string; cursor?: string }): Promise<AdminPage<AdminUser>>;
   getUser(input: { userId: string }): Promise<AdminUser | null>;
   listContent(input: { cursor?: string }): Promise<AdminPage<AdminContentItem>>;

@@ -5801,6 +5801,9 @@ describe("buildApi", () => {
         async getNotificationHealth() {
           throw new Error("not implemented");
         },
+        async retryDeadLetterJob() {
+          throw new Error("not implemented");
+        },
         async listUsers() {
           throw new Error("not implemented");
         },
@@ -5938,6 +5941,9 @@ describe("buildApi", () => {
         async getNotificationHealth() {
           throw new Error("not implemented");
         },
+        async retryDeadLetterJob() {
+          throw new Error("not implemented");
+        },
         async listUsers() {
           throw new Error("not implemented");
         },
@@ -6071,6 +6077,9 @@ describe("buildApi", () => {
           throw new Error("not implemented");
         },
         async getNotificationHealth() {
+          throw new Error("not implemented");
+        },
+        async retryDeadLetterJob() {
           throw new Error("not implemented");
         },
         async listUsers() {
@@ -7344,6 +7353,18 @@ describe("buildApi", () => {
     });
 
     expect(replayResponse.statusCode).toBe(202);
+
+    const deadLetterRetryResponse = await app.inject({
+      method: "POST",
+      url: "/v1/admin/worker-queues/notification_deliveries/jobs/00000000-0000-4000-8000-0000000000b0/retry",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "notification-dead-letter-retry-key"
+      },
+      payload: { reason: "retry after correcting the notification provider configuration" }
+    });
+
+    expect(deadLetterRetryResponse.statusCode).toBe(202);
 
     await app.close();
   });
@@ -9942,6 +9963,7 @@ const fakeAdminRepository: AdminRepository = {
     return {
       providerHealth: "ok",
       queueHealth: "ok",
+      workerQueues: [],
       openReports: 0,
       paymentCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 },
       unlockCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 },
@@ -9960,12 +9982,16 @@ const fakeAdminRepository: AdminRepository = {
       leasedDeliveryCount: 0,
       deliveredDeliveryCount: 7,
       failedDeliveryCount: 1,
+      deadLetterDeliveryCount: 0,
       skippedDeliveryCount: 0,
       revokedDeliveryCount: 0,
       latestNotificationAt: "2026-06-06T10:00:00.000Z",
       latestDeviceSeenAt: "2026-06-06T10:01:00.000Z",
       latestDeliveryAt: "2026-06-06T10:02:00.000Z"
     };
+  },
+  async retryDeadLetterJob() {
+    return true;
   },
   async listUsers() {
     return {

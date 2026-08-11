@@ -41,7 +41,7 @@ Use Supabase Realtime selectively. Do not build a custom websocket server unless
 
 - The notification foundation includes OpenAPI routes, RLS-protected notification/preference/device tables, a Fastify notification module, backend tests, and settings-page preference reads.
 - Web push device registration stores hashes for lookup and optional encrypted endpoint/key material for server-only delivery. API/admin/frontend responses return only sanitized device projections.
-- Notification delivery attempts are queued and leased by the worker through `notification_delivery_attempts`; the delivery provider boundary records delivered, failed, and revoked outcomes without frontend truth.
+- Notification delivery attempts are queued and token-leased by the worker through `notification_delivery_attempts`; stale leases are reclaimed, retries use bounded backoff with jitter and an attempt ceiling, and exhausted attempts become `dead_letter`. The delivery provider boundary records delivered, failed, revoked, and dead-letter outcomes without frontend truth. Admin health exposes counts and queue age, while recovery requires an audited idempotent admin command.
 - Admin notification health counts are exposed through a staff-only sanitized projection, including delivery queue state counts.
 - Settings includes browser service-worker enrollment. Enrollment is gated by `GET /v1/notifications/push-config`, browser Push API support, browser permission, and a Supabase session.
 - The worker includes a server-only VAPID Web Push send-provider boundary. It uses encrypted browser subscription material, sends sanitized notification payloads, retries transient push failures, and revokes devices when push services return expired subscription responses.
