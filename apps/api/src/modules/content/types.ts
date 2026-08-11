@@ -39,10 +39,14 @@ export interface ContentRepository {
 
 export interface CreateContentDraftInput {
   supabaseUserId: string;
+  idempotencyKey: string;
+  requestHash: string;
   mediaType: ContentItem["mediaType"];
   caption?: string | null | undefined;
   visibility: string;
   nsfwLabel: NonNullable<ContentItem["nsfwLabel"]>;
+  quotaWindowStart: Date;
+  dailyDraftQuota: number;
 }
 
 export interface CountContentQuotaInput {

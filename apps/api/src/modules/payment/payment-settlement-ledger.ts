@@ -79,18 +79,16 @@ export async function recordTipSupportSettlementLedger(
   };
 }
 
-const defaultReferralShareOfPlatformFeeBps = 2000;
-
 export async function recordReferralCommission(
   transaction: postgres.TransactionSql,
   input: {
     paymentIntentId: string;
     actorUserId: string;
-    platformFeeMinor: number;
+    allocationAmountMinor: number;
     currency: StoredPaymentIntent["currency"];
   }
 ): Promise<void> {
-  if (input.platformFeeMinor <= 0) {
+  if (input.allocationAmountMinor <= 0) {
     return;
   }
 
@@ -116,14 +114,6 @@ export async function recordReferralCommission(
     return;
   }
 
-  const commissionAmountMinor = Math.floor(
-    (input.platformFeeMinor * defaultReferralShareOfPlatformFeeBps) / 10_000
-  );
-
-  if (commissionAmountMinor <= 0) {
-    return;
-  }
-
   await transaction`
     insert into referral_commissions (
       id,
@@ -142,7 +132,7 @@ export async function recordReferralCommission(
       ${input.paymentIntentId},
       ${attribution.referrer_user_id},
       ${attribution.referred_user_id},
-      ${commissionAmountMinor},
+      ${input.allocationAmountMinor},
       ${input.currency}
     )
     on conflict (payment_intent_id, referral_token_id) do nothing
@@ -165,7 +155,7 @@ export async function recordReferralCommission(
       'referral_commission',
       ${`referrer:${attribution.referrer_user_id}`},
       ${attribution.referrer_user_id},
-      ${commissionAmountMinor},
+      ${input.allocationAmountMinor},
       ${input.currency},
       'credit'
     )
@@ -190,9 +180,8 @@ export async function recordReferralCommission(
       ${transaction.json({
         referralTokenId: attribution.referral_token_id,
         referrerUserId: attribution.referrer_user_id,
-        commissionAmountMinor
+        commissionAmountMinor: input.allocationAmountMinor
       })}
     )
   `;
 }
-

@@ -74,8 +74,6 @@ export default async function AppHomePage() {
 }
 
 function LiveRoomRailCard({ room }: { room: LiveRoom }) {
-  const lowestPass = room.passOptions[0];
-
   return (
     <Card className="overflow-hidden">
       <div className="aspect-video bg-[#080b11] p-4">
@@ -88,7 +86,14 @@ function LiveRoomRailCard({ room }: { room: LiveRoom }) {
         </div>
       </div>
       <div className="grid gap-3 p-4 text-sm">
-        <Fact label="Pass" value={lowestPass ? `${lowestPass.amountMinor.toLocaleString()} ${lowestPass.currency}` : "closed"} />
+        <Fact
+          label="Access"
+          value={
+            room.eventAccess
+              ? `${room.eventAccess.amountMinor.toLocaleString()} ${room.eventAccess.currency}`
+              : room.accessMode
+          }
+        />
         <Fact label="Playback" value={room.playback?.state ?? "not ready"} />
         <Fact label="Chat" value={room.chat.accessState} />
       </div>

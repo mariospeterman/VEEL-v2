@@ -117,6 +117,7 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 45. [Infrastructure and research decisions](infra-decisions.md)
 46. [Deployment topology](deployment-topology.md)
 47. [Slice workflow](slice-workflow.md)
+48. [Production branch inventory](production-branch-inventory.md)
 
 ## How To Use In A New Repo
 

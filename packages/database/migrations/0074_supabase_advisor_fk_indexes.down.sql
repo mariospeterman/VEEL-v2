@@ -1,0 +1,11 @@
+drop index if exists wallet_auth_sessions_wallet_idx;
+drop index if exists verification_sessions_source_session_idx;
+drop index if exists verification_records_derived_from_idx;
+drop index if exists refund_remediation_evidence_recorded_by_idx;
+drop index if exists payment_confirmation_deliveries_receipt_idx;
+drop index if exists oauth_authorization_requests_denied_by_idx;
+drop index if exists oauth_authorization_requests_approved_by_idx;
+drop index if exists oauth_authorization_codes_request_idx;
+drop index if exists oauth_authorization_codes_actor_idx;
+drop index if exists oauth_access_tokens_code_idx;
+drop index if exists mcp_connections_revoked_by_user_idx;

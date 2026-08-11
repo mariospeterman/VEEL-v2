@@ -1,7 +1,9 @@
 "use client";
 
+import { walletSessionCookieName } from "./wallet-session-cookie";
+
 const walletSessionKey = "veel-wallet-session";
-export const walletSessionCookieName = "veel_wallet_session_token";
+export { walletSessionCookieName };
 
 export interface WalletSessionRecord {
   expiresAt: string;
@@ -30,7 +32,7 @@ export function getWalletSession(): WalletSessionRecord | null {
 
 export function clearWalletSession() {
   window.localStorage.removeItem(walletSessionKey);
-  document.cookie = `${walletSessionCookieName}=; path=/; max-age=0; samesite=lax`;
+  document.cookie = expiredWalletSessionCookie();
 }
 
 function walletSessionCookie(token: string, expiresAt: string) {
@@ -44,6 +46,16 @@ function walletSessionCookie(token: string, expiresAt: string) {
     `max-age=${maxAge}`,
     "samesite=lax"
   ];
+
+  if (window.location.protocol === "https:") {
+    parts.push("secure");
+  }
+
+  return parts.join("; ");
+}
+
+function expiredWalletSessionCookie() {
+  const parts = [`${walletSessionCookieName}=`, "path=/", "max-age=0", "samesite=lax"];
 
   if (window.location.protocol === "https:") {
     parts.push("secure");

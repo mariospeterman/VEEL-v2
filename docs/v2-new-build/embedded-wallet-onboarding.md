@@ -61,7 +61,7 @@ External wallets remain first-class for crypto-native users.
 
 Use a wallet infrastructure provider instead of building key management.
 
-Provider docs checked for this implementation slice on 2026-06-14, with Privy login-method behavior rechecked on 2026-07-03:
+Provider docs checked for this implementation slice on 2026-06-14, with login and session teardown behavior rechecked on 2026-08-11:
 
 - Privy docs: React setup uses a `PrivyProvider` with `appId`; Solana support is exposed through Privy wallet APIs and must be configured with the project app id before embedded-wallet buttons are enabled.
 - Privy login configuration should not set wallet-first modal ordering unless external wallet login is also enabled in Privy login methods. Veel uses Privy email/social/passkey login to create or unlock a noncustodial embedded Solana wallet, while external wallet ownership remains handled by the Solana Wallet Adapter plus backend challenge flow.
@@ -75,6 +75,12 @@ External wallet docs checked for the browser wallet-link handoff on 2026-06-07:
 
 - Phantom Solana signing docs: `signMessage` signs UTF-8 bytes, returns an Ed25519 signature, does not move funds, and can be verified with tweetnacl. Veel uses this only for wallet ownership proof against a backend-issued challenge.
 - Phantom Wallet Standard docs: injected wallets expose standardized app/wallet registration and wallet-adapter-compatible APIs. Veel keeps the launch browser handoff minimal and uses the existing backend challenge contract rather than introducing a second auth or payment source of truth.
+
+Runtime/session behavior:
+
+- Landing dynamically loads one canonical wallet runtime only after explicit user action. Configured Privy and Turnkey choices call their official React SDK login and Solana signing APIs; Solana Wallet Adapter remains the single external-wallet chooser.
+- The authenticated app mounts the same provider boundary so profile logout can terminate active provider state with supported SDK methods. Logout calls Privy `logout`, Turnkey `clearAllSessions`, and Solana Wallet Adapter `disconnect`, then clears the app-owned wallet session and local Supabase session and expires server cookies before redirecting to `/`.
+- Provider SDK storage keys are not guessed or deleted by application code. Provider teardown errors are isolated so one unavailable SDK cannot prevent other sessions from closing or block the landing redirect.
 
 Provider decision:
 

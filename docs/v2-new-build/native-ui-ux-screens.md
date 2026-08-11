@@ -183,8 +183,8 @@ Mobile:
 Mobile:
 
 - video/live stage first
-- pass CTA compact
-- pass options in bottom sheet
+- one mode-specific access CTA, compact
+- paid event details or profile-membership conversion in one bottom sheet
 - chat as sheet/panel
 - creator metadata compact
 - no overlapping text

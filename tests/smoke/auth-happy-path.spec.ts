@@ -127,6 +127,7 @@ test("covers authenticated app access to profile wallet age home create and unlo
 
   await page.goto("/app/profile");
   await page.getByRole("button", { name: "Log out" }).click();
+  await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("heading", { name: "Create without asking the algorithm for permission." })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.cookie.includes("veel_e2e_access_token="))).toBe(false);
 });

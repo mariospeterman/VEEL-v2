@@ -1,9 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import {
+  ContentDraftIdempotencyConflictError,
+  ContentDraftQuotaExceededError,
   ContentEventDraftConflictError,
   ContentPublishConflictError,
   ContentRepositoryConfigurationError
 } from "./content-repository.js";
+import { hashIdempotencyPayload, readIdempotencyKey } from "../../shared/idempotency.js";
 import { validateEventDraft } from "../event/event-route-shared.js";
 import type {
   CreateContentRequest,
@@ -35,9 +38,9 @@ export async function registerContentCoreRoutes(
       return reply.code(access.statusCode).send(access.body);
     }
 
-    const idempotencyKey = request.headers["idempotency-key"];
+    const idempotencyKey = readIdempotencyKey(request);
 
-    if (typeof idempotencyKey !== "string" || idempotencyKey.length === 0) {
+    if (!idempotencyKey) {
       return reply.code(400).send({
         code: "validation_failed",
         message: "Idempotency-Key header is required"
@@ -62,30 +65,38 @@ export async function registerContentCoreRoutes(
     }
 
     try {
-      if (options.contentRepository.countContentDraftsCreatedSince) {
-        const abusePolicy = await resolveContentCreationAbusePolicy(options.contentRepository);
-        const draftCount = await options.contentRepository.countContentDraftsCreatedSince({
-          supabaseUserId: access.supabaseUserId,
-          since: dailyQuotaWindowStart(new Date(), abusePolicy.rollingWindowHours)
-        });
-
-        if (draftCount >= abusePolicy.dailyContentDraftQuota) {
-          return reply
-            .code(429)
-            .send(quotaExceededResponse("Daily content draft quota has been reached"));
-        }
-      }
-
-      const content = await options.contentRepository.createDraft({
-        supabaseUserId: access.supabaseUserId,
+      const abusePolicy = await resolveContentCreationAbusePolicy(options.contentRepository);
+      const draftBody = {
         mediaType: body.mediaType,
         caption: typeof body.caption === "string" ? body.caption : null,
         visibility: body.visibility,
         nsfwLabel: body.nsfwLabel
+      };
+
+      const content = await options.contentRepository.createDraft({
+        supabaseUserId: access.supabaseUserId,
+        idempotencyKey,
+        requestHash: hashIdempotencyPayload(draftBody),
+        ...draftBody,
+        quotaWindowStart: dailyQuotaWindowStart(new Date(), abusePolicy.rollingWindowHours),
+        dailyDraftQuota: abusePolicy.dailyContentDraftQuota
       });
 
       return reply.code(201).send(content);
     } catch (error) {
+      if (error instanceof ContentDraftIdempotencyConflictError) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: "Idempotency key was already used for a different content draft"
+        });
+      }
+
+      if (error instanceof ContentDraftQuotaExceededError) {
+        return reply
+          .code(429)
+          .send(quotaExceededResponse("Daily content draft quota has been reached"));
+      }
+
       if (error instanceof ContentRepositoryConfigurationError) {
         request.log.warn({ error }, "Content repository is not configured");
         return reply.code(503).send({

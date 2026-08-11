@@ -1,4 +1,5 @@
 import { parseServerEnv } from "@veel/config";
+import { pathToFileURL } from "node:url";
 import {
   createPostgresNotificationDeliveryRepository,
   createUnconfiguredNotificationDeliveryProvider,
@@ -41,7 +42,6 @@ export const buildWorkerRuntime = () => {
     name: "veel-worker",
     environment: config.NODE_ENV,
     queues: [
-      "subscription-authorizations",
       "subscription-collections",
       "notification-deliveries",
       "payment-confirmation-emails",
@@ -191,7 +191,138 @@ export async function runProviderEventReplayTick(input: {
   }
 }
 
-if (process.env.NODE_ENV !== "test") {
+export interface ScheduledWorkerTickResult {
+  notificationDeliveries: "completed" | "failed";
+  paymentConfirmationEmails: "completed" | "failed";
+  subscriptionCollections: "completed" | "failed";
+}
+
+export interface WorkerLogger {
+  info(fields: Record<string, unknown>, message: string): void;
+  error(fields: Record<string, unknown>, message: string): void;
+}
+
+export interface WorkerTickRunners {
+  notificationDeliveries(): Promise<unknown>;
+  paymentConfirmationEmails(): Promise<unknown>;
+  subscriptionCollections(): Promise<unknown>;
+}
+
+const defaultWorkerLogger: WorkerLogger = {
+  info(fields, message) {
+    console.log(JSON.stringify({ level: "info", message, ...fields }));
+  },
+  error(fields, message) {
+    console.error(JSON.stringify({ level: "error", message, ...fields }));
+  }
+};
+
+export async function runScheduledWorkerTick(input: {
+  runners?: WorkerTickRunners;
+  logger?: WorkerLogger;
+} = {}): Promise<ScheduledWorkerTickResult> {
+  const config = parseServerEnv(process.env);
+  const logger = input.logger ?? defaultWorkerLogger;
+  const runners = input.runners ?? {
+    notificationDeliveries: () => runNotificationDeliveryTick({ limit: config.WORKER_BATCH_LIMIT }),
+    paymentConfirmationEmails: () => runPaymentConfirmationEmailTick({ limit: config.WORKER_BATCH_LIMIT }),
+    subscriptionCollections: () => runSubscriptionCollectionTick({ limit: config.WORKER_BATCH_LIMIT })
+  };
+  const tasks = [
+    ["notificationDeliveries", runners.notificationDeliveries],
+    ["paymentConfirmationEmails", runners.paymentConfirmationEmails],
+    ["subscriptionCollections", runners.subscriptionCollections]
+  ] as const;
+  const results = await Promise.all(
+    tasks.map(async ([name, run]) => {
+      try {
+        await run();
+        return [name, "completed"] as const;
+      } catch (error) {
+        logger.error(
+          {
+            task: name,
+            errorName: error instanceof Error ? error.name : "UnknownError"
+          },
+          "worker_tick_task_failed"
+        );
+        return [name, "failed"] as const;
+      }
+    })
+  );
+
+  return Object.fromEntries(results) as unknown as ScheduledWorkerTickResult;
+}
+
+export function startWorkerProcess(input: {
+  intervalMs?: number;
+  runners?: WorkerTickRunners;
+  logger?: WorkerLogger;
+} = {}): {
+  ready: Promise<ScheduledWorkerTickResult>;
+  runNow: () => Promise<ScheduledWorkerTickResult>;
+  stop: () => Promise<void>;
+} {
+  const config = parseServerEnv(process.env);
+  const logger = input.logger ?? defaultWorkerLogger;
+  let activeTick: Promise<ScheduledWorkerTickResult> | null = null;
+  let stopping = false;
+
+  const runNow = () => {
+    if (activeTick) return activeTick;
+    if (stopping) {
+      return Promise.resolve<ScheduledWorkerTickResult>({
+        notificationDeliveries: "completed",
+        paymentConfirmationEmails: "completed",
+        subscriptionCollections: "completed"
+      });
+    }
+
+    activeTick = runScheduledWorkerTick({
+      ...(input.runners ? { runners: input.runners } : {}),
+      logger
+    }).finally(() => {
+      activeTick = null;
+    });
+    return activeTick;
+  };
+
+  const ready = runNow();
+  const timer = setInterval(() => {
+    void runNow();
+  }, input.intervalMs ?? config.WORKER_TICK_INTERVAL_MS);
+
+  return {
+    ready,
+    runNow,
+    async stop() {
+      stopping = true;
+      clearInterval(timer);
+      await activeTick;
+    }
+  };
+}
+
+function isDirectExecution(): boolean {
+  const entrypoint = process.argv[1];
+  return Boolean(entrypoint && pathToFileURL(entrypoint).href === import.meta.url);
+}
+
+if (isDirectExecution()) {
   const runtime = buildWorkerRuntime();
-  console.log(`${runtime.name} ready in ${runtime.environment}`);
+  const worker = startWorkerProcess();
+  void worker.ready.then((result) => {
+    defaultWorkerLogger.info(
+      { name: runtime.name, environment: runtime.environment, result },
+      "worker_ready"
+    );
+  });
+
+  const shutdown = async (signal: NodeJS.Signals) => {
+    defaultWorkerLogger.info({ signal }, "worker_shutdown_started");
+    await worker.stop();
+    defaultWorkerLogger.info({ signal }, "worker_shutdown_completed");
+  };
+  process.once("SIGINT", () => void shutdown("SIGINT"));
+  process.once("SIGTERM", () => void shutdown("SIGTERM"));
 }

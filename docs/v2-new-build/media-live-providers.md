@@ -129,41 +129,33 @@ Rules:
 
 ## Live Monetisation Model
 
-Live streams are paid products by default.
+Every verified account can create a public live. The host selects exactly one primary mode:
 
-Viewer experience:
-
-1. User opens live room.
-2. First minute is a free teaser preview where the creator/product policy allows it.
-3. After the teaser, playback and chat require a creator live pass.
-4. Pass duration templates default to:
-   - 30 minutes
-   - 1 hour
-   - 3 hours
-5. Creator chooses which allowed durations to offer and sets pass prices above admin/env minimums.
-6. Pass duration templates, minimum prices, teaser seconds, and chat access policy are configurable by environment and admin settings.
-7. Admin policy can override environment defaults; environment remains the fallback.
+1. `public`: everyone can watch; chat may optionally require an active profile membership.
+2. `profile_members`: active members of the host profile can watch and chat.
+3. `paid_event`: one event price includes the live and a disclosed replay window; active profile members may optionally be included.
 
 Rules:
 
-- Backend validates creator-selected pass price/duration against policy and owns entitlement, expiry, and chat access.
-- Wallet approval is not access proof; pass entitlement begins only after backend-confirmed payment.
-- Livepeer JWT is issued only for the active entitlement window.
-- Chat access follows live pass state unless a product-specific override is configured.
+- Backend validates the selected mode and paid-event price, then owns membership, event entitlement, replay expiry, and chat access.
+- Timed 30/60/180-minute live passes are removed from contracts and user interfaces.
+- Wallet approval is not access proof; paid-event access begins only after backend-confirmed payment.
+- Livepeer JWT is issued only when the backend access projection is `allowed`.
+- Public/member/event countdown, metadata, thumbnail, and policy-safe preview remain discoverable without exposing protected playback.
 - Viewer never receives stream key or ingest URL.
 - Live replays are content items: they can have a free Bit/teaser segment and then follow normal replay/VOD monetisation chosen by the creator.
 
 Current implementation slice:
 
 - `POST /v1/live/rooms` creates a Livepeer stream with JWT playback policy through the backend provider adapter.
-- `GET /v1/live/rooms/:id` returns viewer-safe room, playback, pass, chat, and replay projection.
+- `GET /v1/live/rooms/:id` returns viewer-safe mode, playback, membership/event access, chat, and replay projection.
 - `/live/[liveRoomId]` consumes that live-room projection through the web API helper and renders fail-closed unavailable state when the API or authorization path cannot return a viewer-safe resource.
-- Active-pass Livepeer playback is signed server-side and returned as a short-lived HLS resource with a JWT query parameter. If JWT signing keys are unavailable, full playback fails closed as `blocked` even when the database pass projection is active.
+- Allowed Livepeer playback is signed server-side and returned as a short-lived HLS resource with a JWT query parameter. If JWT signing keys are unavailable, full playback fails closed as `blocked` even when backend access is active.
 - `GET /v1/live/rooms/:id/host-connection` returns masked host connection details only.
 - `POST /v1/live/rooms/:id/sync` refreshes provider state and replay projection.
-- `POST /v1/live/rooms/:id/pass-intents` creates a server-priced `live_pass` payment intent.
-- Confirmed payment settlement creates active live pass access server-side.
-- `GET/POST /v1/live/rooms/:id/messages` gates chat on backend pass state.
+- `POST /v1/live/rooms/:id/event-access-intents` creates the room's one server-priced paid-event intent.
+- Confirmed payment settlement creates active event access server-side and closes its replay window from the backend room end time.
+- `GET/POST /v1/live/rooms/:id/messages` gates chat on backend access and optional members-only-chat policy.
 - Livepeer remains launch-gated until staging keys, JWT policy, and real provider smoke are validated.
 
 ## Media Access Resource
@@ -231,5 +223,5 @@ Moderation can block:
 - Livepeer creator host connection authorized
 - Livepeer JWT/protected playback path works for paid streams
 - replay resource safe
-- live pass access controls playback/chat
-- first-minute live teaser expires into pass-required state
+- public, profile-member, and paid-event access controls playback/chat
+- protected live preview expires into membership-required or event-access-required state

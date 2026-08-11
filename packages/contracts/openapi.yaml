@@ -661,16 +661,14 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
-  /v1/live/rooms/{roomId}/pass-intents:
+  /v1/live/rooms/{roomId}/event-access-intents:
     post:
-      operationId: createLivePassIntent
+      operationId: createLiveEventAccessIntent
       tags: [Live]
-      summary: Create live-pass payment intent for a room
+      summary: Create the single paid-event access intent for a live room
       parameters:
         - $ref: "#/components/parameters/RoomId"
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
-      requestBody:
-        $ref: "#/components/requestBodies/CreateLivePassIntent"
       responses:
         "201": { $ref: "#/components/responses/PaymentIntent" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
@@ -983,6 +981,16 @@ paths:
       summary: Platform and creator subscription plans
       responses:
         "200": { $ref: "#/components/responses/SubscriptionPlanPage" }
+  /v1/platform-access:
+    get:
+      operationId: getPlatformAccess
+      tags: [Subscriptions]
+      summary: Backend-owned platform tier, capabilities, and public-media allowance
+      responses:
+        "200": { $ref: "#/components/responses/PlatformAccess" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/subscriptions:
     get:
       operationId: listSubscriptions
@@ -2033,7 +2041,6 @@ components:
     RegisterNotificationDevice: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RegisterNotificationDeviceRequest" } } } }
     CreateUpload: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateUploadRequest" } } } }
     CreateLiveRoom: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateLiveRoomRequest" } } } }
-    CreateLivePassIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateLivePassIntentRequest" } } } }
     CreateLiveChatMessage: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateLiveChatMessageRequest" } } } }
     CreateComment: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateCommentRequest" } } } }
     CreateShare: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateShareRequest" } } } }
@@ -2159,6 +2166,7 @@ components:
     RefundDisputeRequest: { description: Refund or dispute request, content: { application/json: { schema: { $ref: "#/components/schemas/RefundDisputeRequest" } } } }
     RefundDisputeRequestPage: { description: Refund or dispute requests, content: { application/json: { schema: { $ref: "#/components/schemas/RefundDisputeRequestPage" } } } }
     SubscriptionPlanPage: { description: Subscription plans, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionPlanPage" } } } }
+    PlatformAccess: { description: Current platform tier and catalog, content: { application/json: { schema: { $ref: "#/components/schemas/PlatformAccess" } } } }
     SubscriptionPage: { description: Subscriptions, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionPage" } } } }
     Subscription: { description: Subscription, content: { application/json: { schema: { $ref: "#/components/schemas/Subscription" } } } }
     SubscriptionAuthorizationIntent: { description: Subscription authorization intent, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionAuthorizationIntent" } } } }
@@ -2902,34 +2910,38 @@ components:
       required: [title]
       properties:
         title: { type: string, minLength: 1, maxLength: 120 }
-        teaserSeconds: { type: integer, minimum: 0, maximum: 300, default: 60 }
-        passPriceMinor: { type: integer, minimum: 1 }
+        accessMode: { type: string, enum: [public, profile_members, paid_event], default: public }
+        previewSeconds: { type: integer, minimum: 0, maximum: 300, default: 60 }
+        eventPriceMinor: { type: integer, minimum: 1 }
+        membersOnlyChat: { type: boolean, default: false }
+        membersIncludedInPaidEvent: { type: boolean, default: false }
+        replayWindowHours: { type: integer, minimum: 0, maximum: 720, default: 48 }
     LiveRoom:
       type: object
-      required: [id, title, creator, state, accessState, passOptions, chat]
+      required: [id, title, creator, state, accessMode, accessState, previewSecondsRemaining, eventAccess, chat]
       properties:
         id: { type: string, format: uuid }
         title: { type: string }
         creator: { $ref: "#/components/schemas/User" }
         state: { type: string, enum: [scheduled, waiting, live, ended, replay_ready] }
-        accessState: { type: string, enum: [free, locked, pass_required, pass_active] }
+        accessMode: { type: string, enum: [public, profile_members, paid_event] }
+        accessState: { type: string, enum: [allowed, membership_required, event_access_required] }
         playback: { $ref: "#/components/schemas/PlaybackResource" }
-        teaserSecondsRemaining: { type: integer, nullable: true }
-        passOptions: { type: array, items: { $ref: "#/components/schemas/LivePassOption" } }
+        previewSecondsRemaining: { type: integer, nullable: true }
+        eventAccess:
+          oneOf:
+            - $ref: "#/components/schemas/LiveEventAccessOffer"
+            - type: "null"
         chat: { $ref: "#/components/schemas/LiveChatState" }
         replayContentId: { type: string, format: uuid, nullable: true }
-    CreateLivePassIntentRequest:
+    LiveEventAccessOffer:
       type: object
-      required: [durationMinutes]
+      required: [amountMinor, currency, replayWindowHours, membersIncluded]
       properties:
-        durationMinutes: { type: integer, enum: [30, 60, 180] }
-    LivePassOption:
-      type: object
-      required: [durationMinutes, amountMinor, currency]
-      properties:
-        durationMinutes: { type: integer, enum: [30, 60, 180] }
         amountMinor: { type: integer }
         currency: { $ref: "#/components/schemas/Currency" }
+        replayWindowHours: { type: integer }
+        membersIncluded: { type: boolean }
     HostConnection:
       type: object
       required: [maskedIngestUrl, streamKeyHint, provider]
@@ -2942,7 +2954,7 @@ components:
       required: [enabled, accessState]
       properties:
         enabled: { type: boolean }
-        accessState: { type: string, enum: [closed, pass_required, allowed] }
+        accessState: { type: string, enum: [closed, members_only, allowed] }
     CreateLiveChatMessageRequest:
       type: object
       required: [body]
@@ -3282,6 +3294,41 @@ components:
       required: [items]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/SubscriptionPlan" } }
+    PlatformTierKey:
+      type: string
+      enum: [free_verified, veel_plus, veel_ultra, veel_studio, enterprise]
+    PlatformTier:
+      type: object
+      required: [key, label, rank, monthlyPriceMinor, currency, publicMediaAllowanceSeconds, capabilities, purchaseState]
+      properties:
+        key: { $ref: "#/components/schemas/PlatformTierKey" }
+        label: { type: string }
+        rank: { type: integer }
+        monthlyPriceMinor: { type: integer, nullable: true }
+        currency: { type: string, enum: [USDC], nullable: true }
+        publicMediaAllowanceSeconds: { type: integer, nullable: true }
+        capabilities: { type: array, items: { type: string } }
+        purchaseState: { type: string, enum: [included, available, unavailable, contact_sales] }
+        subscriptionPlanId: { type: string, nullable: true }
+    PlatformUsage:
+      type: object
+      required: [windowStartsAt, windowEndsAt, publicMediaSeconds, remainingPublicMediaSeconds, limitReached]
+      properties:
+        windowStartsAt: { type: string, format: date-time }
+        windowEndsAt: { type: string, format: date-time }
+        publicMediaSeconds: { type: integer }
+        remainingPublicMediaSeconds: { type: integer, nullable: true }
+        limitReached: { type: boolean }
+    PlatformAccess:
+      type: object
+      required: [currentTier, usage, tiers, policyBoundary]
+      properties:
+        currentTier: { $ref: "#/components/schemas/PlatformTier" }
+        usage: { $ref: "#/components/schemas/PlatformUsage" }
+        tiers: { type: array, items: { $ref: "#/components/schemas/PlatformTier" } }
+        policyBoundary:
+          type: string
+          enum: [platform_tiers_buy_software_and_public_media_allowance_never_social_priority]
     SubscriptionPage:
       type: object
       required: [items]
@@ -4106,7 +4153,7 @@ components:
         socialMoneyBoundary: { type: string, enum: [money_never_buys_people_visibility_matches_or_social_priority] }
     AdminLiveRoom:
       type: object
-      required: [id, creatorUserId, title, provider, providerState, state, accessRule, passPriceMinor, currency, hasPlaybackUrl, hasHostStreamKey, createdAt]
+      required: [id, creatorUserId, title, provider, providerState, state, accessMode, eventPriceMinor, currency, membersOnlyChat, membersIncludedInPaidEvent, replayWindowHours, hasPlaybackUrl, hasHostStreamKey, createdAt]
       properties:
         id: { type: string, format: uuid }
         creatorUserId: { type: string, format: uuid }
@@ -4116,9 +4163,12 @@ components:
         providerPlaybackId: { type: string, nullable: true }
         providerState: { type: string }
         state: { type: string, enum: [scheduled, waiting, live, ended, replay_ready] }
-        accessRule: { type: string, enum: [free, pass_required] }
-        passPriceMinor: { type: integer }
+        accessMode: { type: string, enum: [public, profile_members, paid_event] }
+        eventPriceMinor: { type: integer, nullable: true }
         currency: { $ref: "#/components/schemas/Currency" }
+        membersOnlyChat: { type: boolean }
+        membersIncludedInPaidEvent: { type: boolean }
+        replayWindowHours: { type: integer }
         hasPlaybackUrl: { type: boolean }
         hasHostStreamKey: { type: boolean }
         startsAt: { type: string, format: date-time, nullable: true }
@@ -4318,7 +4368,7 @@ components:
         id: { type: string, format: uuid }
         subjectType: { type: string, enum: [user, creator, organization, partner_campaign] }
         subjectId: { type: string, format: uuid }
-        tierKey: { type: string, enum: [free_verified, veel_plus, veel_studio, enterprise] }
+        tierKey: { $ref: "#/components/schemas/PlatformTierKey" }
         state: { type: string, enum: [active, expired, revoked] }
         startsAt: { type: string, format: date-time }
         endsAt: { type: string, format: date-time, nullable: true }

@@ -823,7 +823,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/live/rooms/{roomId}/pass-intents": {
+    "/v1/live/rooms/{roomId}/event-access-intents": {
         parameters: {
             query?: never;
             header?: never;
@@ -832,8 +832,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create live-pass payment intent for a room */
-        post: operations["createLivePassIntent"];
+        /** Create the single paid-event access intent for a live room */
+        post: operations["createLiveEventAccessIntent"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1177,6 +1177,23 @@ export interface paths {
         };
         /** Platform and creator subscription plans */
         get: operations["listSubscriptionPlans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Backend-owned platform tier, capabilities, and public-media allowance */
+        get: operations["getPlatformAccess"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3223,9 +3240,20 @@ export interface components {
         };
         CreateLiveRoomRequest: {
             title: string;
+            /**
+             * @default public
+             * @enum {string}
+             */
+            accessMode: "public" | "profile_members" | "paid_event";
             /** @default 60 */
-            teaserSeconds: number;
-            passPriceMinor?: number;
+            previewSeconds: number;
+            eventPriceMinor?: number;
+            /** @default false */
+            membersOnlyChat: boolean;
+            /** @default false */
+            membersIncludedInPaidEvent: boolean;
+            /** @default 48 */
+            replayWindowHours: number;
         };
         LiveRoom: {
             /** Format: uuid */
@@ -3235,23 +3263,21 @@ export interface components {
             /** @enum {string} */
             state: "scheduled" | "waiting" | "live" | "ended" | "replay_ready";
             /** @enum {string} */
-            accessState: "free" | "locked" | "pass_required" | "pass_active";
+            accessMode: "public" | "profile_members" | "paid_event";
+            /** @enum {string} */
+            accessState: "allowed" | "membership_required" | "event_access_required";
             playback?: components["schemas"]["PlaybackResource"];
-            teaserSecondsRemaining?: number | null;
-            passOptions: components["schemas"]["LivePassOption"][];
+            previewSecondsRemaining: number | null;
+            eventAccess: components["schemas"]["LiveEventAccessOffer"] | null;
             chat: components["schemas"]["LiveChatState"];
             /** Format: uuid */
             replayContentId?: string | null;
         };
-        CreateLivePassIntentRequest: {
-            /** @enum {integer} */
-            durationMinutes: 30 | 60 | 180;
-        };
-        LivePassOption: {
-            /** @enum {integer} */
-            durationMinutes: 30 | 60 | 180;
+        LiveEventAccessOffer: {
             amountMinor: number;
             currency: components["schemas"]["Currency"];
+            replayWindowHours: number;
+            membersIncluded: boolean;
         };
         HostConnection: {
             maskedIngestUrl: string;
@@ -3262,7 +3288,7 @@ export interface components {
         LiveChatState: {
             enabled: boolean;
             /** @enum {string} */
-            accessState: "closed" | "pass_required" | "allowed";
+            accessState: "closed" | "members_only" | "allowed";
         };
         CreateLiveChatMessageRequest: {
             body: string;
@@ -3592,6 +3618,37 @@ export interface components {
         };
         SubscriptionPlanPage: {
             items: components["schemas"]["SubscriptionPlan"][];
+        };
+        /** @enum {string} */
+        PlatformTierKey: "free_verified" | "veel_plus" | "veel_ultra" | "veel_studio" | "enterprise";
+        PlatformTier: {
+            key: components["schemas"]["PlatformTierKey"];
+            label: string;
+            rank: number;
+            monthlyPriceMinor: number | null;
+            /** @enum {string|null} */
+            currency: "USDC" | null;
+            publicMediaAllowanceSeconds: number | null;
+            capabilities: string[];
+            /** @enum {string} */
+            purchaseState: "included" | "available" | "unavailable" | "contact_sales";
+            subscriptionPlanId?: string | null;
+        };
+        PlatformUsage: {
+            /** Format: date-time */
+            windowStartsAt: string;
+            /** Format: date-time */
+            windowEndsAt: string;
+            publicMediaSeconds: number;
+            remainingPublicMediaSeconds: number | null;
+            limitReached: boolean;
+        };
+        PlatformAccess: {
+            currentTier: components["schemas"]["PlatformTier"];
+            usage: components["schemas"]["PlatformUsage"];
+            tiers: components["schemas"]["PlatformTier"][];
+            /** @enum {string} */
+            policyBoundary: "platform_tiers_buy_software_and_public_media_allowance_never_social_priority";
         };
         SubscriptionPage: {
             items: components["schemas"]["Subscription"][];
@@ -4383,9 +4440,12 @@ export interface components {
             /** @enum {string} */
             state: "scheduled" | "waiting" | "live" | "ended" | "replay_ready";
             /** @enum {string} */
-            accessRule: "free" | "pass_required";
-            passPriceMinor: number;
+            accessMode: "public" | "profile_members" | "paid_event";
+            eventPriceMinor: number | null;
             currency: components["schemas"]["Currency"];
+            membersOnlyChat: boolean;
+            membersIncludedInPaidEvent: boolean;
+            replayWindowHours: number;
             hasPlaybackUrl: boolean;
             hasHostStreamKey: boolean;
             /** Format: date-time */
@@ -4649,8 +4709,7 @@ export interface components {
             subjectType: "user" | "creator" | "organization" | "partner_campaign";
             /** Format: uuid */
             subjectId?: string;
-            /** @enum {string} */
-            tierKey: "free_verified" | "veel_plus" | "veel_studio" | "enterprise";
+            tierKey: components["schemas"]["PlatformTierKey"];
             /** @enum {string} */
             state: "active" | "expired" | "revoked";
             /** Format: date-time */
@@ -5360,6 +5419,15 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["SubscriptionPlanPage"];
+            };
+        };
+        /** @description Current platform tier and catalog */
+        PlatformAccess: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["PlatformAccess"];
             };
         };
         /** @description Subscriptions */
@@ -6232,11 +6300,6 @@ export interface components {
         CreateLiveRoom: {
             content: {
                 "application/json": components["schemas"]["CreateLiveRoomRequest"];
-            };
-        };
-        CreateLivePassIntent: {
-            content: {
-                "application/json": components["schemas"]["CreateLivePassIntentRequest"];
             };
         };
         CreateLiveChatMessage: {
@@ -7316,7 +7379,7 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
-    createLivePassIntent: {
+    createLiveEventAccessIntent: {
         parameters: {
             query?: never;
             header: {
@@ -7328,7 +7391,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["CreateLivePassIntent"];
+        requestBody?: never;
         responses: {
             201: components["responses"]["PaymentIntent"];
             400: components["responses"]["ValidationFailed"];
@@ -7772,6 +7835,21 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["SubscriptionPlanPage"];
+        };
+    };
+    getPlatformAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["PlatformAccess"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     listSubscriptions: {

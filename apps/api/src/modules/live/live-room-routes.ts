@@ -51,8 +51,13 @@ export async function registerLiveRoomRoutes(
 
     const normalizedBody = {
       title: body?.title?.trim() ?? "",
-      teaserSeconds: body?.teaserSeconds ?? 60,
-      passPriceMinor: body?.passPriceMinor ?? 50_000_000
+      accessMode: body?.accessMode ?? "public",
+      previewSeconds: body?.previewSeconds ?? 60,
+      eventPriceMinor: body?.accessMode === "paid_event" ? (body.eventPriceMinor ?? null) : null,
+      membersOnlyChat: body?.membersOnlyChat ?? false,
+      membersIncludedInPaidEvent:
+        body?.accessMode === "paid_event" ? (body.membersIncludedInPaidEvent ?? false) : false,
+      replayWindowHours: body?.replayWindowHours ?? 48
     };
     const requestHash = hashLiveRequest(normalizedBody);
 

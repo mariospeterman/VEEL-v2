@@ -10,6 +10,8 @@ import { createContentUpdateRepositoryMethods } from "./content-update-repositor
 import type { ContentRepository } from "./types.js";
 
 export {
+  ContentDraftIdempotencyConflictError,
+  ContentDraftQuotaExceededError,
   ContentEventDraftConflictError,
   ContentPublishConflictError,
   ContentRepositoryConfigurationError

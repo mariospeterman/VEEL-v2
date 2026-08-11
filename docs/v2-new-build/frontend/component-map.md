@@ -64,7 +64,7 @@ This document describes current v2 route and component ownership.
 
 - live room projection
 - Livepeer playback resource rendering
-- live pass payment handoff panel
+- public, profile-member, or single paid-event access panel
 
 ### `app/app/messages/page.tsx`
 

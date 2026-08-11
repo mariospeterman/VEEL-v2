@@ -47,9 +47,9 @@ Operational tables, caches, notifications, admin projections, receipts, exports,
 
 Veel earns through:
 
-- platform fee on content unlocks, paid messages, live passes, Event Access Passes, and support
+- platform fee on content unlocks, paid messages, paid live events, Event Access Passes, and support
 - Creator Membership platform fee
-- platform plans: Free Verified, Veel Plus, Veel Studio, and Enterprise
+- platform plans: Free Verified, Veel Plus, Veel Ultra, Veel Studio, and Enterprise
 - optional referral commission sourced only from Veel platform commission net of refunds and tax
 - optional wallet-funding referral revenue only if legal/provider review approves it and it is never product checkout revenue
 
@@ -59,7 +59,7 @@ Creators earn through:
 - support
 - paid messages
 - Creator Memberships
-- live passes
+- paid live events
 - Event Access Passes
 - referral earnings where product rules allow creator-as-referrer flows
 
@@ -114,7 +114,7 @@ Creators own monetisation pricing for creator products:
 - content unlocks
 - paid messages
 - support presets where creator offers presets
-- live pass prices and available durations from allowed duration templates
+- one paid-event price and replay window for a paid live room
 - Event Access Passes
 - Creator Memberships
 
@@ -125,7 +125,7 @@ Admin/env owns guardrails:
 - allowed assets/currencies
 - platform fee bps
 - referral share bps and eligibility
-- allowed live pass duration templates
+- paid-live-event minimums and replay-window limits
 - event capacity/date limits
 - refund/revocation policy
 
@@ -135,8 +135,8 @@ Examples:
 
 - Admin sets minimum paid message price to `0.01 SOL` or USDC equivalent.
 - Creator sets a paid message price above that minimum.
-- Admin sets live pass duration templates to `30`, `60`, and `180` minutes.
-- Creator chooses which durations to offer and sets prices above the minimum.
+- Admin sets the paid-live-event minimum and replay-window limits.
+- Creator sets one event price and a disclosed replay window within those guardrails.
 - Admin sets minimum Event Access price; creator sets actual pass price and capacity within policy.
 
 ## Money Movement Modes
@@ -168,8 +168,9 @@ Native SOL and SPL token modes must share a common intent/split/settlement model
 | Support | Preset/custom amount or campaign amount | Creator share | Platform fee | No access grant unless explicitly attached |
 | Paid message | Message price | Creator share | Platform fee | Message delivery/open entitlement |
 | Creator Membership | Recurring plan price | Creator share | Platform fee | Creator-specific access plan |
-| Veel Plus | 8.99 USDC/month or 89 USDC/year | No creator share unless bundled | Platform revenue | Heavy-user platform entitlement |
-| Veel Studio | 29 USDC/month or 290 USDC/year | No creator share unless bundled | Platform revenue | Creator business/tool entitlement |
+| Veel Plus | 8.99 USDC/month | No creator share unless bundled | Platform revenue | Regular-user platform entitlement |
+| Veel Ultra | 17.99 USDC/month | No creator share unless bundled | Platform revenue | High-usage viewing entitlement |
+| Veel Studio | 29 USDC/month | No creator share unless bundled | Platform revenue | Creator business/tool entitlement |
 | Enterprise | Custom, from 199 USDC/month equivalent | No creator share unless contracted | Platform revenue | Organization/agency/venue entitlement |
 | Live pass | Duration/pass price | Creator share | Platform fee | Live playback/chat access |
 | Event Access Pass | Pass price | Creator/event owner share | Platform fee | Access entitlement/QR |
@@ -241,14 +242,17 @@ Platform plans:
 - is managed by platform billing policy and admin operations
 - must not grant paid access to people, visibility, matches, recommendations, message priority, social ranking, or preferential social treatment
 
-Recommended platform tiers for first pricing tests:
+Recommended platform tiers for first pricing tests are backend policy rows, not browser constants:
 
 | Tier | Suggested price | Position |
 | --- | --- | --- |
-| Free Verified | Free | 18+ verified account, wallet, weekly free watch time up to 60 minutes or 1.5 GB transfer, previews, basic social/media participation, reporting/blocking, and safe discovery controls. |
-| Veel Plus | 8.99 USDC/month or 89 USDC/year | Heavy viewer tier: higher fair-use watch allowance, better collections/activity tools, better notification/feed controls, profile polish, and priority support. No feed/Mutuals boost. |
-| Veel Studio | 29 USDC/month or 290 USDC/year | Creator business tier: creator dashboard upgrades, scheduling, advanced analytics, pricing presets, Event Access tools, reusable-first KYC/wallet/tax setup, and AI setup assistant where enabled. |
+| Free Verified | Free | Full social account, Bits, previews, SFW publishing, public live, purchases, support, and about 20 hours/month of free public long-form/live use. |
+| Veel Plus | 8.99 USDC/month | About 100 hours/month, collections, notification/privacy controls, and profile enhancements. No feed/Mutuals boost. |
+| Veel Ultra | 17.99 USDC/month | About 250 hours/month, highest available playback quality, and advanced playback convenience. No feed/Mutuals boost. |
+| Veel Studio | 29 USDC/month | Includes the Ultra allowance plus professional individual analytics, scheduling, pricing, membership, live-conversion, and AI-assistance capabilities where enabled. |
 | Enterprise | Custom, from 199 USDC/month equivalent | Organization, agency, venue, and partner tier with reusable-first KYB, RBAC, consolidated reporting, business support, and contract review. |
+
+Only free public long-form VOD and public live viewing consumes the platform allowance. Bits, previews, individually unlocked content, joined-profile membership media, paid Event Access, the user's own media, and promotional excerpts never consume it. Reaching the allowance must not revoke purchased or membership access.
 
 Tier rules:
 
@@ -258,13 +262,13 @@ Tier rules:
 - creator-facing productivity value should live in Veel Studio, not in a viewer-only upsell
 - Mutuals/Event Access/AI limits can be configured by admin, but the free tier must remain usable enough for real network effects
 
-Pricing, allowance limits, Mutual/Event Access limits, live pass defaults, and platform feature gates must live in backend/admin configuration. Environment variables provide safe defaults; admin configuration can override them without a deploy.
+Pricing, allowance limits, Mutual/Event Access limits, paid-live-event guardrails, and platform feature gates must live in backend/admin configuration. Environment variables provide safe defaults; admin configuration can override them without a deploy.
 
 Creator Membership:
 
-- belongs to a creator and plan
+- belongs to a profile and has one active offer per profile at launch
 - grants creator-specific benefits such as subscriber-only media, premium posts, live access tiers, or message privileges
-- can have plan tiers, renewal state, grace period, cancellation, and failed-renewal recovery
+- has renewal state, grace period, cancellation, and failed-renewal recovery
 - must be auditable per creator, subscriber, plan, billing event, entitlement, and settlement
 
 Platform plans and Creator Memberships use the same recurring authorization/collection state machine but different entitlement scopes.
@@ -435,7 +439,7 @@ audit_required
 - tip settlement without access grant
 - content unlock settlement with access grant
 - paid message settlement with message entitlement
-- live pass settlement with room access
+- paid-live-event settlement with room and replay-window access
 - Event Access Pass settlement with backend Access Pass entitlement
 - creator subscription create/renew/cancel/fail/recover
 - platform subscription create/renew/cancel/fail/recover

@@ -94,6 +94,10 @@ export async function submitAuthorization(
         authorization_intent_id: string;
         plan_period_days: number;
         plan_amount_minor: string | number;
+        plan_amount_atomic: string | number;
+        plan_creator_amount_atomic: string | number;
+        plan_platform_fee_amount_atomic: string | number;
+        plan_allocation_amount_atomic: string | number;
         plan_currency: SubscriptionPlan["currency"];
       })[]
     >`
@@ -101,10 +105,10 @@ export async function submitAuthorization(
       set
         state = case when ${input.verification.verified} then 'verified' else 'submitted' end,
         submitted_signature = ${input.body.signature},
-        verified_signature = case when ${input.verification.verified} then ${input.body.signature} else verified_signature end,
-        failure_reason = case when ${input.verification.verified} then null else ${input.verification.failureCode ?? null} end,
-        submitted_at = coalesce(submitted_at, now()),
-        verified_at = case when ${input.verification.verified} then now() else verified_at end
+        verified_signature = case when ${input.verification.verified} then ${input.body.signature} else sai.verified_signature end,
+        failure_reason = case when ${input.verification.verified} then null else ${input.verification.failureCode ?? null}::text end,
+        submitted_at = coalesce(sai.submitted_at, now()),
+        verified_at = case when ${input.verification.verified} then now() else sai.verified_at end
       from subscriptions s
       join subscription_plans sp on sp.id = s.plan_id
       left join profiles p on p.user_id = s.creator_user_id
@@ -140,6 +144,10 @@ export async function submitAuthorization(
         sai.id as authorization_intent_id,
         sp.period_days as plan_period_days,
         sp.amount_minor as plan_amount_minor,
+        sp.amount_atomic as plan_amount_atomic,
+        sp.creator_amount_atomic as plan_creator_amount_atomic,
+        sp.platform_fee_amount_atomic as plan_platform_fee_amount_atomic,
+        sp.allocation_amount_atomic as plan_allocation_amount_atomic,
         sp.currency as plan_currency
     `;
     const row = rows[0];
@@ -175,6 +183,10 @@ async function activateSubscriptionAfterVerification(
   row: SubscriptionRow & {
     plan_period_days: number;
     plan_amount_minor: string | number;
+    plan_amount_atomic: string | number;
+    plan_creator_amount_atomic: string | number;
+    plan_platform_fee_amount_atomic: string | number;
+    plan_allocation_amount_atomic: string | number;
     plan_currency: SubscriptionPlan["currency"];
   },
   input: Parameters<SubscriptionRepository["submitAuthorization"]>[0]
@@ -188,15 +200,15 @@ async function activateSubscriptionAfterVerification(
       subscriber_token_account = ${input.body.subscriberTokenAccount},
       user_token_account = ${input.body.subscriberTokenAccount},
       subscription_authority_pda = ${input.body.authorityAddress},
-      subscription_pda = coalesce(subscription_pda, ${input.verification.facts?.subscriptionPda ?? null}),
-      plan_pda = coalesce(plan_pda, ${input.verification.facts?.planPda ?? null}),
+      subscription_pda = coalesce(s.subscription_pda, ${input.verification.facts?.subscriptionPda ?? null}::text),
+      plan_pda = coalesce(s.plan_pda, ${input.verification.facts?.planPda ?? null}::text),
       setup_signature = ${input.body.signature},
-      verified_signature = case when ${input.verification.verified} then ${input.body.signature} else verified_signature end,
-      verified_at = case when ${input.verification.verified} then now() else verified_at end,
-      failure_reason = case when ${input.verification.verified} then null else ${input.verification.failureCode ?? null} end,
-      current_period_starts_at = case when ${input.verification.verified} then coalesce(current_period_starts_at, now()) else current_period_starts_at end,
-      current_period_ends_at = case when ${input.verification.verified} then coalesce(current_period_ends_at, now() + (${row.plan_period_days} || ' days')::interval) else current_period_ends_at end,
-      next_collection_at = case when ${input.verification.verified} then coalesce(next_collection_at, now() + (${row.plan_period_days} || ' days')::interval) else next_collection_at end,
+      verified_signature = case when ${input.verification.verified} then ${input.body.signature} else s.verified_signature end,
+      verified_at = case when ${input.verification.verified} then now() else s.verified_at end,
+      failure_reason = case when ${input.verification.verified} then null else ${input.verification.failureCode ?? null}::text end,
+      current_period_starts_at = case when ${input.verification.verified} then coalesce(s.current_period_starts_at, now()) else s.current_period_starts_at end,
+      current_period_ends_at = case when ${input.verification.verified} then coalesce(s.current_period_ends_at, now() + (${row.plan_period_days} || ' days')::interval) else s.current_period_ends_at end,
+      next_collection_at = case when ${input.verification.verified} then coalesce(s.next_collection_at, now() + (${row.plan_period_days} || ' days')::interval) else s.next_collection_at end,
       updated_at = now()
     where s.id = ${row.id}
   `;
@@ -209,6 +221,10 @@ async function activateSubscriptionAfterVerification(
         period_starts_at,
         period_ends_at,
         amount_minor,
+        amount_atomic,
+        creator_amount_atomic,
+        platform_fee_amount_atomic,
+        allocation_amount_atomic,
         currency,
         state,
         due_at
@@ -219,6 +235,10 @@ async function activateSubscriptionAfterVerification(
         now(),
         now() + (${row.plan_period_days} || ' days')::interval,
         ${Number(row.plan_amount_minor)},
+        ${Number(row.plan_amount_atomic)},
+        ${Number(row.plan_creator_amount_atomic)},
+        ${Number(row.plan_platform_fee_amount_atomic)},
+        ${Number(row.plan_allocation_amount_atomic)},
         ${row.plan_currency},
         'confirmed',
         now()

@@ -16,7 +16,6 @@ export type {
   CreateAgeSessionRequest,
   CreateVerificationSessionRequest,
   CreateContentRequest,
-  CreateLivePassIntentRequest,
   CreateMessageRequest,
   CreatePaidMessageIntentRequest,
   CreatePaymentIntentRequest,
@@ -62,7 +61,6 @@ import type {
   CreateAgeSessionRequest,
   CreateVerificationSessionRequest,
   CreateContentRequest,
-  CreateLivePassIntentRequest,
   CreateMessageRequest,
   CreatePaidMessageIntentRequest,
   CreatePaymentIntentRequest,
@@ -156,8 +154,11 @@ export async function linkWallet(body: LinkWalletRequest): Promise<Wallet> {
   return authenticatedMutation<Wallet>("/v1/wallets/link", "POST", body);
 }
 
-export async function createContentDraft(body: CreateContentRequest): Promise<ContentItem> {
-  return authenticatedMutation<ContentItem>("/v1/content", "POST", body);
+export async function createContentDraft(
+  body: CreateContentRequest,
+  idempotencyKey?: string
+): Promise<ContentItem> {
+  return authenticatedMutation<ContentItem>("/v1/content", "POST", body, idempotencyKey);
 }
 
 export async function updateContent(
@@ -206,14 +207,11 @@ export async function createContentUnlockIntent(contentId: string): Promise<Cont
   );
 }
 
-export async function createLivePassIntent(
-  liveRoomId: string,
-  body: CreateLivePassIntentRequest
-): Promise<PaymentIntent> {
+export async function createLiveEventAccessIntent(liveRoomId: string): Promise<PaymentIntent> {
   return authenticatedMutation<PaymentIntent>(
-    `/v1/live/rooms/${encodeURIComponent(liveRoomId)}/pass-intents`,
+    `/v1/live/rooms/${encodeURIComponent(liveRoomId)}/event-access-intents`,
     "POST",
-    body
+    {}
   );
 }
 

@@ -21,6 +21,10 @@
     display: none;
   }
 
+  .landing-shell[data-auth-active="true"] {
+    overflow-y: hidden;
+  }
+
   .landing-scroll-space {
     height: 800dvh;
   }

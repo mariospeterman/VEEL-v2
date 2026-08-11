@@ -30,11 +30,16 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
 
   return {
     async createOrReuseIntent(input) {
-      const split = calculateCreatorSplit({
+      const splitWithoutReferral = calculateCreatorSplit({
+        totalAmountAtomic: input.amountMinor,
+        platformFeeBps: input.platformFeeBps
+      });
+      const splitWithReferral = calculateCreatorSplit({
         totalAmountAtomic: input.amountMinor,
         platformFeeBps: input.platformFeeBps,
-        allocationAmountAtomic: input.allocationAmountMinor ?? 0
+        referralShareOfPlatformFeeBps: input.referralShareOfPlatformFeeBps
       });
+      const referralAllocationIsPayable = splitWithReferral.allocationAmountAtomic > 0;
       const rows = await sql<PaymentIntentRow[]>`
         with target_user as (
           select id
@@ -56,6 +61,23 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
           from referral_candidate rc
           join target_user tu on true
           where rc.creator_user_id <> tu.id
+        ),
+        referral_wallet as (
+          select vr.id, vr.creator_user_id, w.address
+          from valid_referral vr
+          join lateral (
+            select address
+            from wallets
+            where user_id = vr.creator_user_id
+              and chain = case
+                when ${input.solanaCluster} = 'mainnet-beta' then 'solana_mainnet'::wallet_chain
+                else 'solana_devnet'::wallet_chain
+              end
+            order by is_primary desc, created_at asc
+            limit 1
+          ) w on true
+          where ${referralAllocationIsPayable}
+          limit 1
         ),
         creator_candidate as (
           select ${input.creatorUserId ?? null}::uuid as id
@@ -142,13 +164,19 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
             ${input.settlementKind},
             (select address from creator_wallet),
             ${input.platformFeeWallet},
-            ${input.allocationWallet ?? null},
-            ${split.totalAmountAtomic},
-            ${split.creatorAmountAtomic},
-            ${split.platformFeeAmountAtomic},
-            ${split.allocationAmountAtomic},
+            (select address from referral_wallet),
+            ${splitWithoutReferral.totalAmountAtomic},
+            ${splitWithoutReferral.creatorAmountAtomic},
+            case
+              when exists (select 1 from referral_wallet) then ${splitWithReferral.platformFeeAmountAtomic}::bigint
+              else ${splitWithoutReferral.platformFeeAmountAtomic}::bigint
+            end::bigint,
+            case
+              when exists (select 1 from referral_wallet) then ${splitWithReferral.allocationAmountAtomic}::bigint
+              else 0::bigint
+            end::bigint,
             ${input.referenceAddress},
-            (select id from valid_referral),
+            (select id from referral_wallet),
             ${input.expiresAt}
           from target_user
           join creator_wallet on true
@@ -170,7 +198,7 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
             tu.id,
             ii.id
           from inserted_intent ii
-          join valid_referral vr on true
+          join referral_wallet vr on true
           join target_user tu on true
           on conflict (payment_intent_id) do nothing
           returning id

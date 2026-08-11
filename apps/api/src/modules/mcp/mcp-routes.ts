@@ -1,5 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { hashIdempotencyPayload } from "../../shared/idempotency.js";
 import type { AdminRepository } from "../admin/types.js";
 import type { AgeRepository } from "../age/types.js";
 import { extractBearerToken, unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
@@ -547,6 +548,10 @@ async function handleToolCall(input: {
       connection: input.connection,
       tool,
       params: parsed.arguments,
+      idempotencyKey: `mcp:${input.connection.id}:${hashIdempotencyPayload({
+        requestId: input.id,
+        tool: tool.name
+      })}`,
       profileRepository: input.options.profileRepository,
       contentRepository: input.options.contentRepository,
       adminRepository: input.options.adminRepository

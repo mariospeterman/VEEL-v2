@@ -133,6 +133,7 @@ export async function registerEventAccessPassRoutes(
         treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET ?? platformFeeWallet,
         platformFeeWallet,
         platformFeeBps: app.config.PAYMENT_PLATFORM_FEE_BPS,
+        referralShareOfPlatformFeeBps: app.config.PAYMENT_REFERRAL_SHARE_OF_PLATFORM_FEE_BPS,
         settlementKind: "creator_split",
         referenceAddress: createSolanaReferenceAddress(),
         expiresAt: new Date(Date.now() + paymentIntentTtlMs),

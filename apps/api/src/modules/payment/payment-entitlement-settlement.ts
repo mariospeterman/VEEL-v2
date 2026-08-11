@@ -102,13 +102,12 @@ export async function grantLivePassEntitlement(
     live_pass_id: string;
     room_id: string;
     entitlement_id: string;
-    expires_at: Date;
+    expires_at: Date | null;
   }[]>`
     with purchase as (
       select
         room_id,
-        buyer_user_id,
-        duration_minutes
+        buyer_user_id
       from live_pass_purchase_requests
       where payment_intent_id = ${input.paymentIntentId}
         and buyer_user_id = ${input.userId}
@@ -120,7 +119,6 @@ export async function grantLivePassEntitlement(
         room_id,
         user_id,
         payment_intent_id,
-        duration_minutes,
         expires_at
       )
       select
@@ -128,9 +126,12 @@ export async function grantLivePassEntitlement(
         room_id,
         buyer_user_id,
         ${input.paymentIntentId},
-        duration_minutes,
-        now() + (duration_minutes::text || ' minutes')::interval
+        case
+          when lr.ended_at is null then null
+          else lr.ended_at + make_interval(hours => lr.replay_window_hours)
+        end
       from purchase
+      join live_rooms lr on lr.id = purchase.room_id
       on conflict (payment_intent_id) do update
       set state = live_passes.state
       returning id, room_id, user_id, payment_intent_id, expires_at
@@ -204,11 +205,11 @@ export async function grantLivePassEntitlement(
       ${input.userId},
       'live_room',
       ${livePass.room_id},
-      'live_pass_entitlement_granted',
+      'live_event_access_entitlement_granted',
       ${transaction.json({
         paymentIntentId: input.paymentIntentId,
         livePassId: livePass.live_pass_id,
-        expiresAt: livePass.expires_at.toISOString()
+        expiresAt: livePass.expires_at?.toISOString() ?? null
       })}
     )
   `;

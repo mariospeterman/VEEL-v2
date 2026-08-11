@@ -192,6 +192,7 @@ export async function registerMessageRoutes(
         treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET ?? platformFeeWallet,
         platformFeeWallet,
         platformFeeBps: app.config.PAYMENT_PLATFORM_FEE_BPS,
+        referralShareOfPlatformFeeBps: app.config.PAYMENT_REFERRAL_SHARE_OF_PLATFORM_FEE_BPS,
         settlementKind: "creator_split",
         creatorUserId: price.recipientUserId,
         referenceAddress: createSolanaReferenceAddress(),

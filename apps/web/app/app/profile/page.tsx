@@ -136,7 +136,7 @@ function ProfileSessionActions() {
     <Card className="p-4">
       <p className="text-sm font-medium">Session</p>
       <p className="mt-2 text-sm leading-6 text-(--muted)">
-        Leave the app and return to the public landing page. Wallet and Supabase browser session state are cleared locally.
+        Leave the app and return to the public landing page. Wallet, Supabase, and provider browser session state are cleared.
       </p>
       <div className="mt-4">
         <ProfileLogoutButton />

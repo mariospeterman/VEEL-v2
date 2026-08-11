@@ -61,9 +61,12 @@ export interface LiveRoomRow {
   provider_playback_id: string | null;
   provider_state: string;
   state: AdminLiveRoom["state"];
-  access_rule: AdminLiveRoom["accessRule"];
-  pass_price_minor: string | number;
+  access_rule: AdminLiveRoom["accessMode"];
+  event_price_minor: string | number | null;
   currency: AdminLiveRoom["currency"];
+  members_only_chat: boolean;
+  members_included_in_paid_event: boolean;
+  replay_window_hours: number;
   has_playback_url: boolean;
   has_host_stream_key: boolean;
   starts_at: Date | null;
@@ -152,9 +155,12 @@ export function toLiveRoom(row: LiveRoomRow): AdminLiveRoom {
     providerPlaybackId: row.provider_playback_id,
     providerState: row.provider_state,
     state: row.state,
-    accessRule: row.access_rule,
-    passPriceMinor: Number(row.pass_price_minor),
+    accessMode: row.access_rule,
+    eventPriceMinor: nullableNumber(row.event_price_minor),
     currency: row.currency,
+    membersOnlyChat: row.members_only_chat,
+    membersIncludedInPaidEvent: row.members_included_in_paid_event,
+    replayWindowHours: row.replay_window_hours,
     hasPlaybackUrl: row.has_playback_url,
     hasHostStreamKey: row.has_host_stream_key,
     startsAt: row.starts_at?.toISOString() ?? null,

@@ -28,15 +28,15 @@ Current implementation state:
 - `POST /v1/payments/intents/{paymentIntentId}/transaction-request` accepts the buyer wallet account and returns a base64 unsigned transaction for wallet signature. The transaction pays buyer wallet -> creator wallet and buyer wallet -> Veel platform fee wallet directly, with optional allocation only when present.
 - `POST /v1/payments/intents/{paymentIntentId}/submissions` records the wallet-submitted signature, then marks the intent confirmed only when backend Solana RPC verification finds a successful transaction with the expected reference address, memo, creator recipient/amount, platform fee recipient/amount, optional allocation recipient/amount, and no full creator payment to the legacy treasury wallet.
 - Wallet approval, frontend success, and submitted signatures remain non-final until backend settlement verification confirms chain evidence.
-- `POST /v1/content/{contentId}/unlock-intents` creates or reuses a backend-priced `content_unlock` intent from active content access rules. Live passes, Event Access Passes, paid messages, platform plans, creator memberships, and content unlocks must use product-specific backend-priced endpoints instead of the generic payment-intent endpoint.
-- `POST /v1/live/rooms/{roomId}/pass-intents` creates or reuses a backend-priced `live_pass` intent from the selected room pass option. The live room page uses that endpoint and the shared transaction-request handoff; wallet approval does not unlock chat or playback until backend settlement grants the pass.
+- `POST /v1/content/{contentId}/unlock-intents` creates or reuses a backend-priced `content_unlock` intent from active content access rules. Paid live events, Event Access Passes, paid messages, platform plans, creator memberships, and content unlocks use product-specific backend-priced endpoints instead of the generic payment-intent endpoint.
+- `POST /v1/live/rooms/{roomId}/event-access-intents` creates or reuses the room's single backend-priced paid-event intent. The internal `live_pass` product key remains a settlement compatibility detail; timed 30/60/180-minute products are not exposed. Wallet approval does not unlock chat or playback until backend settlement grants event access.
 - `POST /v1/events/{eventId}/access-passes/intents` creates or reuses a backend-priced `event_access_pass` intent, grants free passes server-side when eligible, or returns an approval-required state for private events. The Event Access page uses this endpoint and the shared transaction-request handoff; QR/check-in access changes only after backend pass grant or confirmed settlement.
 - `POST /v1/messages/conversations/{conversationId}/paid-message-intents` creates or reuses a backend-priced `paid_message` intent from the conversation policy and message body hash. The messages composer uses the normal message route for visible messages and this product-specific route for paid-message wallet handoff; delivery changes only after backend settlement.
 - Confirmed `content_unlock` settlement grants an active content entitlement in the same backend transaction, and media/feed access projection returns `unlocked` only from backend entitlement state.
 - Real API/test-DB coverage verifies the `content_unlock` route sequence through backend intent creation, confirmed settlement submission, wallet transaction and settlement attempt rows, active entitlement and entitlement event rows, content detail `unlocked` projection, and already-unlocked response.
 - Real API/test-DB coverage verifies the `event_access_pass` route sequence through backend intent creation, confirmed settlement submission, wallet transaction and settlement attempt rows, access purchase request state, active Event Access Pass row, audit event, and access-pass activity projection.
 - Real API/test-DB coverage verifies the `paid_message` route sequence through backend intent creation, confirmed settlement submission, wallet transaction and settlement attempt rows, delivered paid-message draft state, visible message row, audit event, and conversation message projection.
-- Real API/test-DB coverage verifies the `live_pass` route sequence through backend intent creation, confirmed settlement submission, wallet transaction and settlement attempt rows, live-pass purchase request, active live pass row, live-room entitlement, audit event, signed playback projection, and pass-gated chat write/list projection.
+- Real API/test-DB coverage verifies paid live-event access through backend intent creation, confirmed settlement submission, wallet transaction and settlement attempt rows, purchase request, active event-access compatibility row, live-room entitlement, audit event, signed playback projection, and policy-gated chat write/list projection.
 - Real API/test-DB coverage verifies the delegated subscription boundary through backend plan listing, authorization intent creation, verifier-scoped evidence submission, pending subscription projection, authorization intent/event rows, worker collection guards, and provider-event replay state updates. Active recurring access remains fail-closed until official Solana subscription provider verification is configured.
 - Real API/test-DB coverage verifies refund/dispute request behavior after confirmed content unlock settlement: the request is idempotent by persisted request hash, writes one audit event, keeps payment and entitlement truth unchanged, and exposes only the no-custody review boundary.
 - Confirmed `tip` and `support` settlement posts creator earning and platform fee ledger entries from the stored split facts, but never writes an access grant. UI copy should say support.
@@ -95,8 +95,8 @@ Official references checked:
 - tip/support
 - paid message
 - Creator Membership
-- platform plans: Free Verified, Veel Plus, Veel Studio, Enterprise
-- live pass
+- platform plans: Free Verified, Veel Plus, Veel Ultra, Veel Studio, Enterprise
+- paid live event (internal settlement compatibility key: `live_pass`)
 - Event Access Pass
 - external referral commission
 
@@ -163,7 +163,7 @@ Helius is used only for payment/access evidence:
 
 - content unlocks
 - subscriptions
-- live passes
+- paid live events
 - support if chosen for reconciliation
 - paid messages
 - Event Access Passes
@@ -184,30 +184,11 @@ Recommended:
 - include support in Helius/reconciliation if it creates referral commission, creator earning records, platform revenue state, or compliance ledger state
 - if Helius cost becomes high, batch/reconcile support with RPC/indexer polling, but do not mark financial totals final from client alone
 
-## Live Pass Product
+## Live Access Product
 
-Live streams are monetised live rooms by default.
+Any verified account can host public live video. A room has one backend-owned primary access mode: `public`, `profile_members`, or `paid_event`. Public rooms may use members-only chat. Profile-member rooms retain a safe public countdown, thumbnail, and preview. Paid events have one event price and a disclosed replay window; existing profile members may be included by explicit room policy. Ordinary 30/60/180-minute pass choices are retired rather than exposed as a competing access model.
 
-Default viewer flow:
-
-1. User opens live room.
-2. First minute can be free teaser playback.
-3. After teaser, playback and chat require a creator live pass.
-4. Allowed pass duration templates default to 30 minutes, 1 hour, and 3 hours.
-5. Creator chooses offered durations and pass prices within admin/env guardrails.
-6. Backend confirms payment before issuing active pass entitlement and Livepeer JWT playback.
-
-Config:
-
-- live teaser seconds
-- allowed pass duration templates
-- minimum pass prices
-- whether chat requires active pass
-- grace period after pass expiry
-
-These values are environment defaults with admin-configurable overrides. Creators own their live pass prices above policy minimums.
-
-Live replays are ordinary content items after the stream ends. They can use a free Bit/teaser segment and creator-selected replay/VOD monetisation.
+Every room supports Support, Share, Join, and Report, but the client renders one primary access action. Backend-confirmed membership or Event Access entitlement is required before Livepeer JWT playback. Replays inherit room access unless the host explicitly publishes a safe public highlight.
 
 ## Referral Policy
 
@@ -234,7 +215,7 @@ Launch policy:
 
 - Checkout copy may say purchases are final after immediate digital access is delivered, except where required by law or where the seller, provider, or platform failed to deliver the purchased access.
 - For EU/EEA consumer distance contracts, the change-of-mind withdrawal right can be treated as lost for digital content/service access only when the user gave prior express consent to immediate supply, acknowledged that withdrawal rights are lost once access begins, access actually begins, and Veel/seller sends durable confirmation of that consent/acknowledgement.
-- Creator content, paid messages, live passes, Event Access Passes, creator Memberships, and creator support are creator-sold products where the creator/event owner is the seller/responsible party where legally supportable.
+- Creator content, paid messages, paid live events, Event Access Passes, creator Memberships, and creator support are creator-sold products where the creator/event owner is the seller/responsible party where legally supportable.
 - Platform plans and platform software features are Veel-sold products, so Veel owns cancellation, non-delivery, support, and legally required remedy obligations for those products.
 - Refund/dispute routes create audited review state only. They do not execute a refund, debit a creator wallet, create a Veel balance, create a creator balance, create escrow, create a payout queue, or revoke access by themselves.
 - Admin refund/dispute resolution can record evidence-only remediation facts such as creator refund attestation, replacement access, access revocation, technical remediation, or no-refund denial. These records are idempotent, audited, tied to the original payment intent, and constrained by `evidence_only_no_platform_custody_no_payout_queue`; they are not settlement proof, custody, balances, or a payout workflow.

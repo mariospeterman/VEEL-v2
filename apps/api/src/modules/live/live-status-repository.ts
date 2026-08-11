@@ -26,6 +26,10 @@ export function createLiveStatusRepositoryMethods(
           where id = ${input.roomId}
         `;
 
+        if (input.status.state === "ended" || input.status.state === "replay_ready") {
+          await closeLiveEventAccessWindow(transaction, input.roomId);
+        }
+
         if (input.status.replayProviderAssetId || input.status.replayProviderPlaybackId) {
           const replayProviderAssetId =
             input.status.replayProviderAssetId ?? input.status.replayProviderPlaybackId;
@@ -131,6 +135,10 @@ export function createLiveStatusRepositoryMethods(
         `;
         const roomId = updated[0]?.id;
 
+        if (roomId && (input.state === "ended" || input.state === "replay_ready")) {
+          await closeLiveEventAccessWindow(transaction, roomId);
+        }
+
         if (roomId && input.state === "replay_ready" && input.providerPlaybackId) {
           await ensureLiveReplayContent(transaction, {
             roomId,
@@ -155,6 +163,36 @@ export function createLiveStatusRepositoryMethods(
       return rows.length > 0;
     }
   };
+}
+
+async function closeLiveEventAccessWindow(
+  transaction: postgres.TransactionSql,
+  roomId: string
+): Promise<void> {
+  await transaction`
+    with access_window as (
+      select
+        id,
+        ended_at + make_interval(hours => replay_window_hours) as expires_at
+      from live_rooms
+      where id = ${roomId}
+        and access_rule = 'paid_event'
+        and ended_at is not null
+    ),
+    updated_passes as (
+      update live_passes lp
+      set expires_at = aw.expires_at
+      from access_window aw
+      where lp.room_id = aw.id
+        and lp.state = 'active'
+      returning lp.payment_intent_id, lp.expires_at
+    )
+    update entitlements e
+    set ends_at = up.expires_at
+    from updated_passes up
+    where e.payment_intent_id = up.payment_intent_id
+      and e.product_type = 'live_pass'
+  `;
 }
 
 function toJsonObject(value: Record<string, unknown>): JsonObject {

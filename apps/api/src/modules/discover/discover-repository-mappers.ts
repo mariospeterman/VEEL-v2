@@ -72,8 +72,18 @@ export function toEvent(row: EventRow): Event {
 }
 
 export function toLiveRoom(row: LiveRoomRow): LiveRoom {
-  const accessState = row.has_active_pass ? "pass_active" : "pass_required";
-  const allowedDurations = new Set([30, 60, 180]);
+  const membershipGrantsAccess =
+    row.has_active_membership &&
+    (row.access_rule === "profile_members" || row.members_included_in_paid_event);
+  const accessAllowed =
+    row.is_creator || row.access_rule === "public" || row.has_active_pass || membershipGrantsAccess;
+  const accessState = accessAllowed
+    ? "allowed"
+    : row.access_rule === "profile_members"
+      ? "membership_required"
+      : "event_access_required";
+  const chatAllowed =
+    accessAllowed && (!row.members_only_chat || row.is_creator || row.has_active_membership);
 
   return {
     id: row.id,
@@ -85,21 +95,24 @@ export function toLiveRoom(row: LiveRoomRow): LiveRoom {
       avatar_url: row.avatar_url
     }),
     state: row.state,
+    accessMode: row.access_rule,
     accessState,
-    playback: row.playback_url && row.has_active_pass
+    playback: row.playback_url && accessAllowed
       ? { state: "full", url: row.playback_url, provider: "livepeer" }
       : { state: "blocked", url: null, provider: "livepeer" },
-    teaserSecondsRemaining: accessState === "pass_required" ? row.teaser_seconds : 0,
-    passOptions: row.pass_durations_minutes
-      .filter((durationMinutes): durationMinutes is 30 | 60 | 180 => allowedDurations.has(durationMinutes))
-      .map((durationMinutes) => ({
-        durationMinutes,
-        amountMinor: Number(row.pass_price_minor),
-        currency: row.currency
-      })),
+    previewSecondsRemaining: accessAllowed ? null : row.preview_seconds,
+    eventAccess:
+      row.access_rule === "paid_event" && row.event_price_minor !== null
+        ? {
+            amountMinor: Number(row.event_price_minor),
+            currency: row.currency,
+            replayWindowHours: row.replay_window_hours,
+            membersIncluded: row.members_included_in_paid_event
+          }
+        : null,
     chat: {
       enabled: true,
-      accessState: accessState === "pass_active" ? "allowed" : "pass_required"
+      accessState: chatAllowed ? "allowed" : "members_only"
     },
     replayContentId: row.replay_content_item_id
   };

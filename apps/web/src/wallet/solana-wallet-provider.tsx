@@ -1,10 +1,11 @@
 "use client";
 
 import { clusterApiUrl } from "@solana/web3.js";
-import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
+import { ConnectionProvider, useWallet, WalletProvider } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { readPublicWebEnv } from "@/public-env";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
+import { useProviderSessionLogoutRegistration } from "./provider-session-logout";
 
 export function SolanaWalletProvider({ children }: Readonly<{ children: React.ReactNode }>) {
   const env = useMemo(() => readPublicWebEnv(), []);
@@ -18,8 +19,22 @@ export function SolanaWalletProvider({ children }: Readonly<{ children: React.Re
   return (
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider autoConnect wallets={[]}>
-        <WalletModalProvider>{children}</WalletModalProvider>
+        <WalletModalProvider>
+          <SolanaSessionLogoutRegistration />
+          {children}
+        </WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>
   );
+}
+
+function SolanaSessionLogoutRegistration() {
+  const { disconnect, wallet } = useWallet();
+  const logoutSession = useCallback(async () => {
+    if (wallet) {
+      await disconnect();
+    }
+  }, [disconnect, wallet]);
+  useProviderSessionLogoutRegistration("solana-wallet-adapter", logoutSession);
+  return null;
 }

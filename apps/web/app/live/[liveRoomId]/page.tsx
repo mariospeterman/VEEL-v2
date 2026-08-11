@@ -2,7 +2,7 @@ import { appShellNavItems } from "@veel/ui";
 import { getLiveRoom, type LiveRoom } from "@/api-client";
 import { ProviderPlayback } from "../../provider-playback";
 import { ErrorState } from "../../ui";
-import { LivePassPanel } from "./live-pass-panel";
+import { LiveAccessPanel as LiveAccessOfferPanel } from "./live-access-panel";
 
 export default async function LiveRoomPage({
   params
@@ -92,17 +92,20 @@ function LiveAccessPanel({ room }: { room: LiveRoom }) {
         <div className="mt-5 grid gap-3 border-t border-(--line) pt-4">
           <Fact label="Playback" value={room.playback?.state ?? "not_ready"} />
           <Fact label="Provider" value={room.playback?.provider ?? "none"} />
-          <Fact label="Teaser" value={`${room.teaserSecondsRemaining ?? 0}s remaining`} />
+          <Fact label="Access" value={room.accessMode} />
+          <Fact label="Preview" value={`${room.previewSecondsRemaining ?? 0}s remaining`} />
           <Fact label="Chat" value={room.chat.accessState} />
         </div>
       </section>
 
-      <LivePassPanel room={room} />
+      <LiveAccessOfferPanel room={room} />
 
       <section className="rounded border border-(--line) bg-(--panel) p-4">
         <h2 className="text-sm font-semibold">Live chat</h2>
         <div className="mt-4 rounded border border-(--line) bg-(--background) p-3 text-sm text-(--muted)">
-          Chat unlocks only after backend-confirmed live pass settlement.
+          {room.chat.accessState === "members_only"
+            ? "Chat is reserved for active profile members."
+            : "Chat access follows the host's live policy and backend access state."}
         </div>
       </section>
     </aside>

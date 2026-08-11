@@ -2,8 +2,20 @@ import type { LiveChatMessage, StoredLiveRoom } from "./types.js";
 import type { LiveChatMessageRow, LiveRoomRow } from "./live-repository-rows.js";
 
 export function toLiveRoom(row: LiveRoomRow): StoredLiveRoom {
-  const passActive = row.has_active_pass || row.is_creator;
-  const isPlayable = row.state === "live" && Boolean(row.playback_url);
+  const membershipGrantsAccess =
+    row.has_active_membership &&
+    (row.access_rule === "profile_members" || row.members_included_in_paid_event);
+  const accessAllowed =
+    row.is_creator || row.access_rule === "public" || row.has_active_pass || membershipGrantsAccess;
+  const isPlayable =
+    (row.state === "live" || row.state === "replay_ready") && Boolean(row.playback_url);
+  const accessState = accessAllowed
+    ? "allowed"
+    : row.access_rule === "profile_members"
+      ? "membership_required"
+      : "event_access_required";
+  const chatAllowed =
+    accessAllowed && (!row.members_only_chat || row.is_creator || row.has_active_membership);
   const room: StoredLiveRoom = {
     id: row.id,
     title: row.title,
@@ -15,9 +27,10 @@ export function toLiveRoom(row: LiveRoomRow): StoredLiveRoom {
       badges: []
     },
     state: row.state,
-    accessState: passActive ? "pass_active" : "pass_required",
+    accessMode: row.access_rule as StoredLiveRoom["accessMode"],
+    accessState,
     playback:
-      isPlayable && passActive
+      isPlayable && accessAllowed
         ? {
             state: "full",
             url: row.playback_url,
@@ -28,15 +41,20 @@ export function toLiveRoom(row: LiveRoomRow): StoredLiveRoom {
             url: null,
             provider: "livepeer"
           },
-    teaserSecondsRemaining: passActive ? null : row.teaser_seconds,
-    passOptions: row.pass_durations_minutes.map((durationMinutes) => ({
-      durationMinutes: durationMinutes as 30 | 60 | 180,
-      amountMinor: Number(row.pass_price_minor),
-      currency: row.currency
-    })),
+    previewSecondsRemaining: accessAllowed ? null : row.preview_seconds,
+    eventAccess:
+      row.access_rule === "paid_event" && row.event_price_minor !== null
+        ? {
+            amountMinor: Number(row.event_price_minor),
+            currency: row.currency,
+            replayWindowHours: row.replay_window_hours,
+            membersIncluded: row.members_included_in_paid_event
+          }
+        : null,
     chat: {
       enabled: row.state === "live",
-      accessState: row.state === "live" ? (passActive ? "allowed" : "pass_required") : "closed"
+      accessState:
+        row.state !== "live" ? "closed" : chatAllowed ? "allowed" : "members_only"
     },
     replayContentId: row.replay_content_item_id,
     providerStreamId: row.provider_stream_id,

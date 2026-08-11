@@ -3,8 +3,9 @@
 import { embeddedWalletProviderConfig } from "@/providers/onboarding-provider-config";
 import { readPublicWebEnv } from "@/public-env";
 import type { WebAuthState } from "@/supabase/auth-state";
-import { SolanaWalletProvider } from "@/wallet/solana-wallet-provider";
+import { EmbeddedWalletLoginButton } from "@/wallet/embedded-wallet-login";
 import { WalletLinkPanel } from "@/wallet/wallet-link-panel";
+import { WalletRuntimeProviders } from "@/wallet/wallet-runtime-providers";
 
 export function LandingWalletRuntime({
   authState,
@@ -16,7 +17,7 @@ export function LandingWalletRuntime({
   const embeddedWallets = embeddedWalletProviderConfig(readPublicWebEnv());
 
   return (
-    <SolanaWalletProvider>
+    <WalletRuntimeProviders>
       <div className="landing-wallet-runtime" aria-label="Wallet providers" data-embedded={embeddedWallets.enabled ? "true" : "false"}>
         <p className="landing-wallet-required">Required. Connect a Solana wallet and sign the backend ownership challenge.</p>
         <div className="landing-wallet-connect-row">
@@ -27,14 +28,23 @@ export function LandingWalletRuntime({
             <p>Embedded wallet</p>
             <span>{embeddedWallets.enabled ? "Optional provider setup can be added after access is created." : "Provider login is waiting for runtime configuration."}</span>
           </div>
-          {embeddedWallets.providers.map((provider) => (
-            <button className="landing-provider-disabled" disabled key={provider.provider} type="button">
-              <strong>{provider.label}</strong>
-              <small>{provider.configured ? "Add later" : "Not configured"}</small>
-            </button>
-          ))}
+          {embeddedWallets.providers.map((provider) =>
+            provider.configured ? (
+              <EmbeddedWalletLoginButton
+                key={provider.provider}
+                label={provider.label}
+                onLinked={onLinked}
+                provider={provider.provider}
+              />
+            ) : (
+              <button className="landing-provider-disabled" disabled key={provider.provider} type="button">
+                <strong>{provider.label}</strong>
+                <small>Not configured</small>
+              </button>
+            )
+          )}
         </div>
       </div>
-    </SolanaWalletProvider>
+    </WalletRuntimeProviders>
   );
 }

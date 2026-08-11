@@ -30,7 +30,6 @@ export type ContentItem = components["schemas"]["ContentItem"];
 export type CreateUploadRequest = components["schemas"]["CreateUploadRequest"];
 export type UploadSession = components["schemas"]["UploadSession"];
 export type ContentUnlockIntent = components["schemas"]["ContentUnlockIntent"];
-export type CreateLivePassIntentRequest = components["schemas"]["CreateLivePassIntentRequest"];
 export type CreateAccessPassIntentRequest = components["schemas"]["CreateAccessPassIntentRequest"];
 export type AccessPassIntent = components["schemas"]["AccessPassIntent"];
 export type CreateMessageRequest = components["schemas"]["CreateMessageRequest"];

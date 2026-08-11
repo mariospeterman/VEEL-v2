@@ -10,7 +10,6 @@ import {
 } from "../payment/solana-payment.js";
 import { toPaymentIntentResponse } from "../payment/payment-route-shared.js";
 import { LiveRepositoryConfigurationError } from "./live-repository.js";
-import type { CreateLivePassIntentRequest } from "./types.js";
 import {
   conflictResponse,
   hashLiveRequest,
@@ -23,13 +22,11 @@ import {
 } from "./live-route-shared.js";
 
 const paymentIntentTtlMs = 15 * 60 * 1000;
-const livePassDurations = new Set([30, 60, 180]);
-
 export async function registerLivePassRoutes(
   app: FastifyInstance,
   options: RegisterLiveRoutesOptions
 ): Promise<void> {
-  app.post("/v1/live/rooms/:roomId/pass-intents", async (request, reply) => {
+  app.post("/v1/live/rooms/:roomId/event-access-intents", async (request, reply) => {
     const access = await verifyLiveReadyAccess(request, options);
 
     if (!access.ok) {
@@ -40,12 +37,6 @@ export async function registerLivePassRoutes(
 
     if (!idempotencyKey) {
       return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
-    }
-
-    const body = request.body as Partial<CreateLivePassIntentRequest> | undefined;
-
-    if (!body || !livePassDurations.has(Number(body.durationMinutes))) {
-      return reply.code(400).send(validationResponse("durationMinutes must be 30, 60, or 180"));
     }
 
     const platformFeeWallet = app.config.PAYMENT_PLATFORM_FEE_WALLET ?? app.config.PAYMENT_PLATFORM_TREASURY_WALLET;
@@ -70,18 +61,18 @@ export async function registerLivePassRoutes(
         return reply.code(404).send(notFoundResponse("Live room was not found"));
       }
 
-      const durationMinutes = body.durationMinutes as 30 | 60 | 180;
-      const passOption = room.passOptions.find((option) => option.durationMinutes === durationMinutes);
+      if (room.accessMode !== "paid_event" || !room.eventAccess) {
+        return reply.code(400).send(validationResponse("Live room is not a paid event"));
+      }
 
-      if (!passOption) {
-        return reply.code(400).send(validationResponse("durationMinutes is not available"));
+      if (room.accessState === "allowed") {
+        return reply.code(409).send(conflictResponse("Live event access is already active"));
       }
 
       const intentBody = {
         productType: "live_pass" as const,
         targetId: room.id,
-        amountMinor: passOption.amountMinor,
-        durationMinutes
+        amountMinor: room.eventAccess.amountMinor
       };
       const intent = await options.paymentRepository.createOrReuseIntent({
         supabaseUserId: access.supabaseUserId,
@@ -89,12 +80,13 @@ export async function registerLivePassRoutes(
         requestHash: hashLiveRequest(intentBody),
         productType: "live_pass",
         targetId: room.id,
-        amountMinor: passOption.amountMinor,
+        amountMinor: room.eventAccess.amountMinor,
         currency: "SOL",
         solanaCluster: app.config.SOLANA_CLUSTER,
         treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET ?? platformFeeWallet,
         platformFeeWallet,
         platformFeeBps: app.config.PAYMENT_PLATFORM_FEE_BPS,
+        referralShareOfPlatformFeeBps: app.config.PAYMENT_REFERRAL_SHARE_OF_PLATFORM_FEE_BPS,
         settlementKind: "creator_split",
         creatorUserId: room.creator.id,
         referenceAddress: createSolanaReferenceAddress(),
@@ -106,8 +98,7 @@ export async function registerLivePassRoutes(
         supabaseUserId: access.supabaseUserId,
         roomId: room.id,
         paymentIntentId: intent.id,
-        durationMinutes,
-        amountMinor: passOption.amountMinor,
+        amountMinor: room.eventAccess.amountMinor,
         currency: "SOL"
       });
 
@@ -127,10 +118,10 @@ export async function registerLivePassRoutes(
         error instanceof PaymentRepositoryConfigurationError ||
         error instanceof SolanaPaymentConfigurationError
       ) {
-        request.log.warn({ error }, "Live pass intent failed");
+        request.log.warn({ error }, "Live event access intent failed");
         return reply
           .code(503)
-          .send(serviceUnavailableResponse("Live pass payments are not configured"));
+          .send(serviceUnavailableResponse("Live event access payments are not configured"));
       }
 
       throw error;

@@ -65,12 +65,14 @@ Current implementation state:
 - Supported through the official Solana Wallet Adapter React stack: `ConnectionProvider`, `WalletProvider`, and `WalletModalProvider`.
 - The web provider follows the current Solana React cookbook pattern: install `@solana/wallet-adapter-base`, `@solana/wallet-adapter-react`, `@solana/wallet-adapter-react-ui`, and `@solana/wallet-adapter-wallets`, pass `wallets={[]}`, and let wallet-standard/mobile discovery populate available adapters.
 - The Wallet Adapter modal owns wallet selection and install/open handling. WeVid does not maintain a second wallet chooser. Account creation starts only after a wallet connects, signs the backend challenge, and the API creates the wallet session.
+- Profile logout calls Wallet Adapter `disconnect` through the mounted runtime before app-owned wallet state and cookies are expired. It does not infer provider state from browser storage keys.
 
 ### iOS
 
 - There is no generic Solana Mobile Wallet Adapter equivalent for iOS web in this repo. Current Solana Mobile Wallet Adapter web support is Android/Chrome-oriented.
 - iOS and macOS support should prefer wallet-standard/Safari Web Extension discovery where available. If the user has no wallet context, send them to the wallet's official install page or the Solana wallet directory, then return to the WeVid wallet chooser.
 - Privy/Turnkey are the preferred iOS-safe onboarding route once their Solana signing UX is verified on the production domain.
+- When configured for staging, provider login and teardown stay inside the official SDK boundaries: Privy `logout` and Turnkey `clearAllSessions`. Neither embedded provider is launch-approved until the production-domain checks below pass.
 
 ### Public web env
 

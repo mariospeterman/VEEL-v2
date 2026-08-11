@@ -11,6 +11,7 @@ export function LandingExperience() {
   const shellRef = useRef<HTMLElement | null>(null);
   const copyRef = useRef<HTMLElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const authFrameLockRef = useRef<number | null>(null);
   const [legalDoc, setLegalDoc] = useState<LegalDocSlug | null>(null);
   const [legalExpanded, setLegalExpanded] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -30,7 +31,8 @@ export function LandingExperience() {
     if (!shell) return;
 
     const boundedIndex = Math.min(landingFrames.length - 1, Math.max(0, index));
-    const target = (shell.scrollHeight - shell.clientHeight) * (boundedIndex / (landingFrames.length - 1));
+    authFrameLockRef.current = "auth" in landingFrames[boundedIndex]! ? boundedIndex : null;
+    const target = storyMaxScroll(shell) * (boundedIndex / (landingFrames.length - 1));
     shell.scrollTo({ behavior, top: target });
   };
 
@@ -59,6 +61,7 @@ export function LandingExperience() {
           : -1;
 
     if (targetIndex >= 0) {
+      authFrameLockRef.current = targetIndex;
       const syncTargetFrame = () => {
         setActiveIndex(targetIndex);
         setProgress(targetIndex / Math.max(1, landingFrames.length - 1));
@@ -86,7 +89,20 @@ export function LandingExperience() {
     let animationFrame = 0;
     const update = () => {
       animationFrame = 0;
-      const maxScroll = Math.max(1, shell.scrollHeight - shell.clientHeight);
+      const maxScroll = storyMaxScroll(shell);
+      const lockedIndex = authFrameLockRef.current;
+
+      if (lockedIndex !== null) {
+        const lockedProgress = lockedIndex / Math.max(1, landingFrames.length - 1);
+        const lockedTop = maxScroll * lockedProgress;
+        if (Math.abs(shell.scrollTop - lockedTop) > 1) {
+          shell.scrollTo({ top: lockedTop });
+        }
+        setProgress(lockedProgress);
+        setActiveIndex(lockedIndex);
+        return;
+      }
+
       const nextProgress = Math.min(1, Math.max(0, shell.scrollTop / maxScroll));
       const nextIndex = Math.min(
         landingFrames.length - 1,
@@ -396,4 +412,8 @@ export function LandingExperience() {
       </div>
     </main>
   );
+}
+
+function storyMaxScroll(shell: HTMLElement) {
+  return Math.max(1, shell.clientHeight * (landingFrames.length - 1));
 }

@@ -22,11 +22,10 @@ export interface CreatePaymentIntentInput {
   treasuryWallet: string;
   platformFeeWallet: string;
   platformFeeBps: number;
+  referralShareOfPlatformFeeBps: number;
   settlementKind: SettlementKind;
   creatorUserId?: string | null;
   creatorWallet?: string | null;
-  allocationWallet?: string | null;
-  allocationAmountMinor?: number | null;
   referenceAddress: string;
   expiresAt: Date;
   referralToken?: string | null;

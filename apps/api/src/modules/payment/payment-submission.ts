@@ -22,6 +22,7 @@ export async function recordPaymentSubmission(
       amount_minor: number;
       creator_amount_minor: number;
       platform_fee_amount_minor: number;
+      allocation_amount_minor: number;
       currency: StoredPaymentIntent["currency"];
     }[]>`
             update payment_intents pi
@@ -39,12 +40,12 @@ export async function recordPaymentSubmission(
               end,
               failed_at = case
                 when ${input.settlement.confirmed} then failed_at
-                when ${input.settlement.failureCode ?? null} is not null then now()
+                when ${input.settlement.failureCode ?? null}::text is not null then now()
                 else failed_at
               end,
               failure_reason = case
                 when ${input.settlement.confirmed} then failure_reason
-                else ${input.settlement.failureCode ?? null}
+                else ${input.settlement.failureCode ?? null}::text
               end,
               updated_at = now()
             from users u
@@ -60,6 +61,7 @@ export async function recordPaymentSubmission(
               pi.amount_minor,
               pi.creator_amount_minor,
               pi.platform_fee_amount_minor,
+              pi.allocation_amount_minor,
               pi.currency
           `;
 
@@ -88,7 +90,7 @@ export async function recordPaymentSubmission(
       input.settlement.confirmed &&
       (updatedIntent?.product_type === "tip" || updatedIntent?.product_type === "support")
     ) {
-      const ledger = await recordTipSupportSettlementLedger(transaction, {
+      await recordTipSupportSettlementLedger(transaction, {
         paymentIntentId: updatedIntent.payment_intent_id,
         actorUserId: updatedIntent.user_id,
         creatorUserId: updatedIntent.target_id,
@@ -101,7 +103,7 @@ export async function recordPaymentSubmission(
         paymentIntentId: updatedIntent.payment_intent_id,
         actorUserId: updatedIntent.user_id,
         currency: updatedIntent.currency,
-        platformFeeMinor: ledger.platformFeeMinor
+        allocationAmountMinor: Number(updatedIntent.allocation_amount_minor)
       });
     }
 

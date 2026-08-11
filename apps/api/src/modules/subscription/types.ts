@@ -10,6 +10,7 @@ export type SubscriptionAuthorizationIntent =
 export type SubscriptionPage = components["schemas"]["SubscriptionPage"];
 export type SubscriptionPlan = components["schemas"]["SubscriptionPlan"];
 export type SubscriptionPlanPage = components["schemas"]["SubscriptionPlanPage"];
+export type PlatformAccess = components["schemas"]["PlatformAccess"];
 
 export interface CreateSubscriptionAuthorizationIntentInput {
   supabaseUserId: string;
@@ -56,6 +57,7 @@ export interface SubscriptionAuthorizationVerificationContext {
 }
 
 export interface SubscriptionRepository {
+  getPlatformAccess?(input: { supabaseUserId: string }): Promise<PlatformAccess>;
   listPlans(input: { supabaseUserId: string }): Promise<SubscriptionPlanPage>;
   listSubscriptions(input: { supabaseUserId: string }): Promise<SubscriptionPage>;
   createAuthorizationIntent(

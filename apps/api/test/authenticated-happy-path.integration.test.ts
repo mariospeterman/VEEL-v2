@@ -9,6 +9,7 @@ import type {
   PaymentSettlementInput,
   PaymentSettlementVerifier
 } from "../src/modules/payment/types";
+import { createPostgresLiveRepository } from "../src/modules/live/live-repository";
 import type {
   SupabaseAuthVerifier,
   VerifiedSupabaseSession
@@ -38,6 +39,10 @@ const subscriptionTokenMint = "3".repeat(32);
 const subscriptionAuthorityAddress = "4".repeat(32);
 const subscriptionDelegationAddress = "5".repeat(32);
 const subscriptionTokenAccount = "6".repeat(32);
+const subscriptionPlanPda = "7".repeat(32);
+const subscriptionMerchantWallet = "8".repeat(32);
+const subscriptionProgramId = "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44";
+const creatorSettlementWallet = "2".repeat(32);
 const validSolanaSignature =
   "5Pj5fCupXLUePYn18JkY8SrRaWFiUctuDTRwvUy2MLgVFG1FsCeezrWwZsmxkL5YJQFmQpAcY7rc5pN6vrXJt7Qp";
 const validEventAccessSolanaSignature = deterministicBase58Signature(41);
@@ -46,7 +51,7 @@ const validLivePassSolanaSignature = deterministicBase58Signature(127);
 const validSubscriptionAuthorizationSignature = deterministicBase58Signature(149);
 
 describeIntegration("authenticated API happy path against Postgres", () => {
-  it("links wallet, verifies age, creates content, unlocks content, buys Event Access, sends a paid message, buys a live pass, and verifies subscriptions", async () => {
+  it("links wallet, verifies age, creates content, unlocks content, buys Event Access, sends a paid message, buys paid live event access, and verifies subscriptions", async () => {
     const databaseUrl = integrationDatabaseUrl();
     assertIntegrationDatabaseIsAllowed(databaseUrl);
 
@@ -83,6 +88,13 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     vi.stubEnv("SUMSUB_WEBHOOK_SECRET", sumsubWebhookSecret);
     vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
     vi.stubEnv("SOLANA_SUBSCRIPTION_COLLECTOR_WALLET", subscriptionCollectorWallet);
+    vi.stubEnv("SUBSCRIPTIONS_ENABLED", "true");
+    vi.stubEnv("SUBSCRIPTIONS_PROVIDER", "official_solana_subscription_program");
+    vi.stubEnv("SUBSCRIPTIONS_SOLANA_RPC_URL", "https://api.devnet.solana.com");
+    vi.stubEnv("SUBSCRIPTIONS_SUPPORTED_MINTS", subscriptionTokenMint);
+    vi.stubEnv("SUBSCRIPTIONS_DEFAULT_MINT", subscriptionTokenMint);
+    vi.stubEnv("SUBSCRIPTIONS_COLLECTOR_WALLET", subscriptionCollectorWallet);
+    vi.stubEnv("SUBSCRIPTIONS_MERCHANT_WALLET", subscriptionMerchantWallet);
 
     const subscriptionVerificationInputs: Parameters<
       SubscriptionAuthorizationVerifier["verifyAuthorization"]
@@ -97,11 +109,13 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       }
     };
 
+    const liveRepository = createPostgresLiveRepository(sql);
     const app = await buildApi({
       authVerifier: integrationAuthVerifier,
       ageProviderWaterfall,
       settlementVerifier,
       subscriptionAuthorizationVerifier,
+      liveRepository,
       liveProvider: {
         isConfigured: () => true,
         async createRoom() {
@@ -339,7 +353,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         expect.objectContaining({
           signature: validSolanaSignature,
           treasuryWallet,
-          amountMinor: unlock.paymentIntent.amountMinor
+          totalAmountMinor: unlock.paymentIntent.amountMinor
         })
       );
       expect(settlementInputs[0]?.referenceAddress).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
@@ -680,7 +694,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         expect.objectContaining({
           signature: validEventAccessSolanaSignature,
           treasuryWallet,
-          amountMinor: accessPassIntent.paymentIntent.amountMinor
+          totalAmountMinor: accessPassIntent.paymentIntent.amountMinor
         })
       );
       expect(settlementInputs[1]?.referenceAddress).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
@@ -831,7 +845,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         expect.objectContaining({
           signature: validPaidMessageSolanaSignature,
           treasuryWallet,
-          amountMinor: paidMessageIntent.paymentIntent.amountMinor
+          totalAmountMinor: paidMessageIntent.paymentIntent.amountMinor
         })
       );
       expect(settlementInputs[2]?.referenceAddress).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
@@ -935,7 +949,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(lockedLiveRoomResponse.json()).toMatchObject({
         id: seededLiveRoomId,
         state: "live",
-        accessState: "pass_required",
+        accessMode: "paid_event",
+        accessState: "event_access_required",
         playback: {
           state: "blocked",
           url: null,
@@ -943,17 +958,14 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         },
         chat: {
           enabled: true,
-          accessState: "pass_required"
+          accessState: "members_only"
         }
       });
 
       const livePassIntentResponse = await app.inject({
         method: "POST",
-        url: `/v1/live/rooms/${seededLiveRoomId}/pass-intents`,
-        headers: authenticatedHeaders(`live-pass-${runId}`),
-        payload: {
-          durationMinutes: 60
-        }
+        url: `/v1/live/rooms/${seededLiveRoomId}/event-access-intents`,
+        headers: authenticatedHeaders(`live-event-access-${runId}`)
       });
 
       expect(livePassIntentResponse.statusCode, livePassIntentResponse.body).toBe(201);
@@ -996,7 +1008,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         expect.objectContaining({
           signature: validLivePassSolanaSignature,
           treasuryWallet,
-          amountMinor: livePassIntent.amountMinor
+          totalAmountMinor: livePassIntent.amountMinor
         })
       );
       expect(settlementInputs[3]?.referenceAddress).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
@@ -1011,7 +1023,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(activeLiveRoomResponse.json()).toMatchObject({
         id: seededLiveRoomId,
         state: "live",
-        accessState: "pass_active",
+        accessState: "allowed",
         playback: {
           state: "full",
           provider: "livepeer",
@@ -1103,7 +1115,6 @@ describeIntegration("authenticated API happy path against Postgres", () => {
             where u.supabase_user_id = ${buyerSupabaseUserId}
               and lppr.payment_intent_id = ${livePassIntent.id}
               and lppr.room_id = ${seededLiveRoomId}
-              and lppr.duration_minutes = 60
           ) as purchase_request_count,
           (
             select count(*)
@@ -1112,10 +1123,9 @@ describeIntegration("authenticated API happy path against Postgres", () => {
             where u.supabase_user_id = ${buyerSupabaseUserId}
               and lp.payment_intent_id = ${livePassIntent.id}
               and lp.room_id = ${seededLiveRoomId}
-              and lp.duration_minutes = 60
               and lp.state = 'active'
               and lp.starts_at <= now()
-              and lp.expires_at > now()
+              and lp.expires_at is null
           ) as live_pass_count,
           (
             select count(*)
@@ -1127,7 +1137,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
               and e.target_id = ${seededLiveRoomId}
               and e.product_type = 'live_pass'
               and e.state = 'active'
-              and e.ends_at > now()
+              and e.ends_at is null
           ) as entitlement_count,
           (
             select count(*)
@@ -1135,7 +1145,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
             join users u on u.id = ae.actor_user_id
             where u.supabase_user_id = ${buyerSupabaseUserId}
               and ae.subject_id = ${seededLiveRoomId}
-              and ae.action = 'live_pass_entitlement_granted'
+              and ae.action = 'live_event_access_entitlement_granted'
           ) as audit_event_count,
           (
             select count(*)
@@ -1157,6 +1167,40 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         entitlement_count: "1",
         audit_event_count: "1",
         chat_message_count: "1"
+      });
+
+      await liveRepository.updateRoomStatus({
+        roomId: seededLiveRoomId,
+        status: {
+          providerStreamId: `livepeer-stream-${shortRunId}`,
+          providerPlaybackId: `livepeer-playback-${shortRunId}`,
+          providerState: "idle",
+          state: "ended",
+          playbackUrl: null
+        }
+      });
+
+      const [closedLiveAccess] = await sql<{
+        room_ended: boolean;
+        pass_matches_entitlement: boolean;
+        replay_window_is_48_hours: boolean;
+      }[]>`
+        select
+          lr.state = 'ended' and lr.ended_at is not null as room_ended,
+          lp.expires_at = e.ends_at as pass_matches_entitlement,
+          lp.expires_at = lr.ended_at + interval '48 hours' as replay_window_is_48_hours
+        from live_rooms lr
+        join live_passes lp on lp.room_id = lr.id
+        join entitlements e on e.payment_intent_id = lp.payment_intent_id
+        where lr.id = ${seededLiveRoomId}
+          and lp.payment_intent_id = ${livePassIntent.id}
+          and e.product_type = 'live_pass'
+      `;
+
+      expect(closedLiveAccess).toEqual({
+        room_ended: true,
+        pass_matches_entitlement: true,
+        replay_window_is_48_hours: true
       });
 
       const subscriptionPlansResponse = await app.inject({
@@ -1600,6 +1644,21 @@ async function seedCreatorPaidContent(
       updated_at = now()
   `;
   await sql`
+    insert into wallets (id, user_id, provider, address, chain, is_primary)
+    values (
+      ${randomUUID()},
+      ${input.creatorUserId},
+      'wallet_adapter',
+      ${creatorSettlementWallet},
+      'solana_devnet',
+      true
+    )
+    on conflict (chain, address) do update set
+      user_id = excluded.user_id,
+      is_primary = true,
+      updated_at = now()
+  `;
+  await sql`
     insert into content_items (
       id,
       creator_user_id,
@@ -1793,10 +1852,12 @@ async function seedCreatorLiveRoom(
       provider_state,
       state,
       access_rule,
-      teaser_seconds,
-      pass_price_minor,
+      preview_seconds,
+      event_price_minor,
       currency,
-      pass_durations_minutes,
+      members_only_chat,
+      members_included_in_paid_event,
+      replay_window_hours,
       host_ingest_url,
       host_stream_key,
       playback_url,
@@ -1811,11 +1872,13 @@ async function seedCreatorLiveRoom(
       ${`livepeer-playback-${input.shortRunId}`},
       'active',
       'live',
-      'pass_required',
+      'paid_event',
       60,
       50000000,
       'SOL',
-      array[30, 60, 180],
+      false,
+      false,
+      48,
       'rtmp://rtmp.livepeer.com/live/integration',
       'integration-stream-key',
       ${`https://livepeercdn.studio/hls/livepeer-playback-${input.shortRunId}/index.m3u8`},
@@ -1843,6 +1906,14 @@ async function seedPlatformSubscriptionPlan(
       provider_state,
       token_mint,
       token_program,
+      provider,
+      program_id,
+      plan_pda,
+      onchain_plan_id,
+      merchant_wallet,
+      amount_atomic,
+      period_seconds,
+      platform_fee_amount_atomic,
       state
     )
     values (
@@ -1853,9 +1924,17 @@ async function seedPlatformSubscriptionPlan(
       'USDC',
       30,
       'delegated_solana_subscription',
-      'staging_required',
+      'launch_approved',
       ${subscriptionTokenMint},
       'spl_token',
+      'official_solana_subscription_program',
+      ${subscriptionProgramId},
+      ${subscriptionPlanPda},
+      ${input.planId},
+      ${subscriptionMerchantWallet},
+      19000000,
+      2592000,
+      19000000,
       'active'
     )
   `;
@@ -2431,6 +2510,10 @@ async function cleanupRun(
     `;
 
     if (userIds.length > 0) {
+      await tx`
+        delete from idempotency_keys
+        where actor_user_id in ${tx(userIds)}
+      `;
       await tx`
         delete from users
         where id in ${tx(userIds)}

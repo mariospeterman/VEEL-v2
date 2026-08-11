@@ -7,6 +7,7 @@ import { AdminRepositoryStateConflictError } from "../src/modules/admin/admin-re
 import type { AdminRepository } from "../src/modules/admin/types";
 import type { ActivityRepository } from "../src/modules/activity/types";
 import { createBunnyStreamUploadAdapter } from "../src/modules/content/media-upload-adapter";
+import { ContentDraftQuotaExceededError } from "../src/modules/content/content-repository";
 import type {
   ContentItem,
   ContentRepository,
@@ -71,6 +72,7 @@ import type { MutualsRepository } from "../src/modules/mutuals/types";
 import type { DiscoverRepository } from "../src/modules/discover/types";
 import type { EngagementRepository } from "../src/modules/engagement/types";
 import type {
+  PlatformAccess,
   Subscription,
   SubscriptionAuthorizationIntent,
   SubscriptionAuthorizationVerifier,
@@ -2855,7 +2857,7 @@ describe("buildApi", () => {
       creators: [homeFeedItem.creator],
       hashtags: [{ slug: "studio", displayName: "#studio", state: "active" }],
       events: [eventFixture()],
-      liveRooms: [{ title: "Live room", accessState: "pass_required" }],
+      liveRooms: [{ title: "Live room", accessState: "event_access_required" }],
       nextCursor: null
     });
 
@@ -2900,13 +2902,17 @@ describe("buildApi", () => {
   it("creates a content draft for an app-ready user", async () => {
     const contentRepository: ContentRepository = {
       async createDraft(input) {
-        expect(input).toEqual({
+        expect(input).toMatchObject({
           supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          idempotencyKey: "content-draft-1",
           mediaType: "vod",
           caption: "studio cut",
           visibility: "private",
-          nsfwLabel: "none"
+          nsfwLabel: "none",
+          dailyDraftQuota: 20
         });
+        expect(input.requestHash).toMatch(/^[a-f0-9]{64}$/);
+        expect(input.quotaWindowStart).toBeInstanceOf(Date);
 
         return homeFeedItem;
       },
@@ -2969,16 +2975,16 @@ describe("buildApi", () => {
 
   it("blocks content draft creation when the daily server quota is reached", async () => {
     const contentRepository: ContentRepository = {
-      async createDraft() {
-        throw new Error("quota should be checked before draft creation");
+      async createDraft(input) {
+        expect(input).toMatchObject({
+          idempotencyKey: "content-draft-quota-1",
+          dailyDraftQuota: 20
+        });
+        expect(input.quotaWindowStart).toBeInstanceOf(Date);
+        throw new ContentDraftQuotaExceededError();
       },
       async createMediaAsset() {
         throw new Error("not implemented");
-      },
-      async countContentDraftsCreatedSince(input) {
-        expect(input.supabaseUserId).toBe("00000000-0000-4000-8000-000000000001");
-        expect(input.since).toBeInstanceOf(Date);
-        return 20;
       },
       async findContentDetail() {
         throw new Error("not implemented");
@@ -3039,16 +3045,16 @@ describe("buildApi", () => {
 
   it("uses the active admin content abuse policy for draft quota enforcement", async () => {
     const contentRepository: ContentRepository = {
-      async createDraft() {
-        throw new Error("admin safety policy should be checked before draft creation");
+      async createDraft(input) {
+        expect(input).toMatchObject({
+          idempotencyKey: "content-draft-policy-1",
+          dailyDraftQuota: 2
+        });
+        expect(input.quotaWindowStart).toBeInstanceOf(Date);
+        throw new ContentDraftQuotaExceededError();
       },
       async createMediaAsset() {
         throw new Error("not implemented");
-      },
-      async countContentDraftsCreatedSince(input) {
-        expect(input.supabaseUserId).toBe("00000000-0000-4000-8000-000000000001");
-        expect(input.since).toBeInstanceOf(Date);
-        return 2;
       },
       async getContentCreationAbusePolicy() {
         return {
@@ -4301,6 +4307,7 @@ describe("buildApi", () => {
         SOLANA_RPC_URL: "https://api.devnet.solana.com",
         PAYMENT_DEFAULT_ASSET: "SOL",
         PAYMENT_PLATFORM_FEE_BPS: 1000,
+        PAYMENT_REFERRAL_SHARE_OF_PLATFORM_FEE_BPS: 2000,
         SOLANA_SUBSCRIPTION_DELEGATION_PROGRAM_ID: "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
         SUBSCRIPTIONS_ENABLED: false,
         SUBSCRIPTIONS_PROVIDER: "disabled",
@@ -4328,6 +4335,8 @@ describe("buildApi", () => {
         VERIFF_API_BASE_URL: "https://stationapi.veriff.com",
         PERSONA_API_BASE_URL: "https://api.withpersona.com",
         TRANSACTIONAL_EMAIL_PROVIDER: "disabled",
+        WORKER_TICK_INTERVAL_MS: 60_000,
+        WORKER_BATCH_LIMIT: 25,
         MCP_ENABLED: false,
         MCP_AUTH_MODE: "oauth",
         MCP_ALLOWED_CLIENTS: "",
@@ -4392,6 +4401,7 @@ describe("buildApi", () => {
       SOLANA_RPC_URL: "https://api.devnet.solana.com",
       PAYMENT_DEFAULT_ASSET: "SOL",
       PAYMENT_PLATFORM_FEE_BPS: 1000,
+      PAYMENT_REFERRAL_SHARE_OF_PLATFORM_FEE_BPS: 2000,
       SOLANA_SUBSCRIPTION_DELEGATION_PROGRAM_ID: "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
       SUBSCRIPTIONS_ENABLED: false,
       SUBSCRIPTIONS_PROVIDER: "disabled",
@@ -4419,6 +4429,8 @@ describe("buildApi", () => {
       VERIFF_API_BASE_URL: "https://stationapi.veriff.com",
       PERSONA_API_BASE_URL: "https://api.withpersona.com",
       TRANSACTIONAL_EMAIL_PROVIDER: "disabled",
+      WORKER_TICK_INTERVAL_MS: 60_000,
+      WORKER_BATCH_LIMIT: 25,
       MCP_ENABLED: false,
       MCP_AUTH_MODE: "oauth",
       MCP_ALLOWED_CLIENTS: "",
@@ -7933,8 +7945,10 @@ describe("buildApi", () => {
       },
       payload: {
         title: "Friday live room",
-        teaserSeconds: 45,
-        passPriceMinor: 75000000
+        accessMode: "paid_event",
+        previewSeconds: 45,
+        eventPriceMinor: 75000000,
+        replayWindowHours: 72
       }
     });
 
@@ -8013,8 +8027,9 @@ describe("buildApi", () => {
       },
       payload: {
         title: "Provider fail room",
-        teaserSeconds: 45,
-        passPriceMinor: 75000000
+        accessMode: "paid_event",
+        previewSeconds: 45,
+        eventPriceMinor: 75000000
       }
     });
 
@@ -8063,7 +8078,7 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("returns signed Livepeer playback only for an active pass", async () => {
+  it("returns signed Livepeer playback only when backend access is allowed", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       sessionRepository: appReadySessionRepository,
@@ -8164,10 +8179,10 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("creates a server-priced live pass payment intent and records the pass purchase request", async () => {
+  it("creates one server-priced live event access intent and records the purchase request", async () => {
     vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
     const paymentCreates: StoredPaymentIntent[] = [];
-    const passRequests: Array<{ paymentIntentId: string; durationMinutes: number }> = [];
+    const passRequests: Array<{ paymentIntentId: string; amountMinor: number }> = [];
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       sessionRepository: appReadySessionRepository,
@@ -8179,13 +8194,15 @@ describe("buildApi", () => {
             id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa12",
             state: "live",
             hasPass: false,
+            accessMode: "paid_event",
+            accessState: "event_access_required",
             playbackUrl: "https://livepeercdn.studio/hls/playback-12/index.m3u8"
           });
         },
         async onRecordLivePassPurchaseRequest(input) {
           passRequests.push({
             paymentIntentId: input.paymentIntentId,
-            durationMinutes: input.durationMinutes
+            amountMinor: input.amountMinor
           });
         }
       }),
@@ -8219,12 +8236,11 @@ describe("buildApi", () => {
 
     const response = await app.inject({
       method: "POST",
-      url: "/v1/live/rooms/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa12/pass-intents",
+      url: "/v1/live/rooms/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa12/event-access-intents",
       headers: {
         authorization: "Bearer valid-token",
-        "idempotency-key": "live-pass-intent-1"
-      },
-      payload: { durationMinutes: 60 }
+        "idempotency-key": "live-event-access-intent-1"
+      }
     });
 
     expect(response.statusCode).toBe(201);
@@ -8236,7 +8252,7 @@ describe("buildApi", () => {
     });
     expect(paymentCreates[0]?.productType).toBe("live_pass");
     expect(passRequests).toEqual([
-      { paymentIntentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa50", durationMinutes: 60 }
+      { paymentIntentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa50", amountMinor: 50000000 }
     ]);
 
     await app.close();
@@ -8744,6 +8760,49 @@ describe("buildApi", () => {
     vi.unstubAllEnvs();
   });
 
+  it("returns backend-owned platform tier capabilities and allowance state", async () => {
+    const calls: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      subscriptionRepository: fakeSubscriptionRepository({
+        async onGetPlatformAccess(input) {
+          calls.push(input);
+          return platformAccessFixture();
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/platform-access",
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      currentTier: {
+        key: "free_verified",
+        publicMediaAllowanceSeconds: 72000,
+        purchaseState: "included"
+      },
+      usage: {
+        publicMediaSeconds: 0,
+        remainingPublicMediaSeconds: 72000,
+        limitReached: false
+      },
+      policyBoundary: "platform_tiers_buy_software_and_public_media_allowance_never_social_priority"
+    });
+    expect(calls).toEqual([
+      { supabaseUserId: "00000000-0000-4000-8000-000000000001" }
+    ]);
+
+    await app.close();
+  });
+
   it("creates delegated subscription intents and keeps activation behind backend verification", async () => {
     vi.stubEnv("SUBSCRIPTIONS_ENABLED", "true");
     vi.stubEnv("SUBSCRIPTIONS_PROVIDER", "official_solana_subscription_program");
@@ -9133,7 +9192,7 @@ const storedPaymentIntent: StoredPaymentIntent = {
   platformFeeAmountMinor: 1000000,
   allocationAmountMinor: 0,
   solanaCluster: "devnet",
-  expiresAt: new Date("2026-07-04T23:15:00.000Z"),
+  expiresAt: new Date("2099-07-04T23:15:00.000Z"),
   requestHash: "request-hash",
   refundPolicy: {
     withdrawalWaiverRequired: true,
@@ -9168,7 +9227,8 @@ function liveRoomFixture(
     title: overrides.title ?? "Live room",
     creator: overrides.creator ?? homeFeedItem.creator,
     state,
-    accessState: hasPass ? "pass_active" : "pass_required",
+    accessMode: overrides.accessMode ?? "paid_event",
+    accessState: overrides.accessState ?? (hasPass ? "allowed" : "event_access_required"),
     playback:
       state === "live" && hasPass && playbackUrl
         ? {
@@ -9181,17 +9241,17 @@ function liveRoomFixture(
             url: null,
             provider: "livepeer"
           },
-    teaserSecondsRemaining: hasPass ? null : 60,
-    passOptions:
-      overrides.passOptions ??
-      [30, 60, 180].map((durationMinutes) => ({
-        durationMinutes: durationMinutes as 30 | 60 | 180,
+    previewSecondsRemaining: hasPass ? null : 60,
+    eventAccess:
+      overrides.eventAccess ?? {
         amountMinor: 50000000,
-        currency: "SOL" as const
-      })),
+        currency: "SOL",
+        replayWindowHours: 48,
+        membersIncluded: false
+      },
     chat: {
       enabled: state === "live",
-      accessState: state === "live" ? (hasPass ? "allowed" : "pass_required") : "closed"
+      accessState: state === "live" ? (hasPass ? "allowed" : "members_only") : "closed"
     },
     replayContentId: overrides.replayContentId ?? null,
     providerStreamId: overrides.providerStreamId ?? "livepeer-stream",
@@ -9346,6 +9406,7 @@ function subscriptionAuthorizationIntentFixture(
 
 function fakeSubscriptionRepository(
   overrides: Partial<{
+    onGetPlatformAccess: NonNullable<SubscriptionRepository["getPlatformAccess"]>;
     onListPlans: SubscriptionRepository["listPlans"];
     onListSubscriptions: SubscriptionRepository["listSubscriptions"];
     onCreateAuthorizationIntent: SubscriptionRepository["createAuthorizationIntent"];
@@ -9354,6 +9415,9 @@ function fakeSubscriptionRepository(
   }> = {}
 ): SubscriptionRepository {
   return {
+    async getPlatformAccess(input) {
+      return overrides.onGetPlatformAccess?.(input) ?? platformAccessFixture();
+    },
     async listPlans(input) {
       return overrides.onListPlans?.(input) ?? { items: [subscriptionPlanFixture()] };
     },
@@ -9388,6 +9452,33 @@ function fakeSubscriptionRepository(
     async cancel(input) {
       return overrides.onCancel?.(input) ?? subscriptionFixture({ id: input.subscriptionId });
     }
+  };
+}
+
+function platformAccessFixture(): PlatformAccess {
+  const currentTier: PlatformAccess["currentTier"] = {
+    key: "free_verified",
+    label: "Free Verified",
+    rank: 0,
+    monthlyPriceMinor: 0,
+    currency: "USDC",
+    publicMediaAllowanceSeconds: 72000,
+    capabilities: ["social", "bits", "publish_sfw", "public_live", "buy", "support"],
+    purchaseState: "included",
+    subscriptionPlanId: null
+  };
+
+  return {
+    currentTier,
+    usage: {
+      windowStartsAt: "2026-08-01T00:00:00.000Z",
+      windowEndsAt: "2026-09-01T00:00:00.000Z",
+      publicMediaSeconds: 0,
+      remainingPublicMediaSeconds: 72000,
+      limitReached: false
+    },
+    tiers: [currentTier],
+    policyBoundary: "platform_tiers_buy_software_and_public_media_allowance_never_social_priority"
   };
 }
 
@@ -10240,9 +10331,12 @@ const fakeAdminRepository: AdminRepository = {
           providerPlaybackId: "livepeer-playback-1",
           providerState: "active",
           state: "live",
-          accessRule: "pass_required",
-          passPriceMinor: 50000000,
+          accessMode: "paid_event",
+          eventPriceMinor: 50000000,
           currency: "SOL",
+          membersOnlyChat: false,
+          membersIncludedInPaidEvent: false,
+          replayWindowHours: 48,
           hasPlaybackUrl: true,
           hasHostStreamKey: true,
           startsAt: "2026-06-06T15:00:00.000Z",

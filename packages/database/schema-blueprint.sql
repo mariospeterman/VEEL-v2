@@ -596,15 +596,53 @@ create table media_assets (
 create table live_rooms (
   id uuid primary key,
   creator_user_id uuid not null references users(id),
-  content_item_id uuid references content_items(id),
   provider media_provider not null default 'livepeer',
   provider_stream_id text unique,
-  state text not null default 'scheduled',
-  access_rule text not null default 'pass_required',
-  teaser_seconds integer not null default 60,
-  pass_durations_minutes integer[] not null default array[30, 60, 180],
+  provider_playback_id text,
+  provider_state text not null default 'created',
+  state text not null default 'waiting',
+  access_rule text not null default 'public',
+  preview_seconds integer not null default 60,
+  event_price_minor bigint,
+  currency text not null default 'SOL',
+  members_only_chat boolean not null default false,
+  members_included_in_paid_event boolean not null default false,
+  replay_window_hours integer not null default 48,
+  playback_url text,
+  replay_content_item_id uuid references content_items(id),
+  idempotency_key text not null,
+  request_hash text not null,
   starts_at timestamptz,
   ended_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (access_rule in ('public', 'profile_members', 'paid_event')),
+  check (
+    (access_rule = 'paid_event' and event_price_minor is not null and event_price_minor > 0)
+    or (access_rule <> 'paid_event' and event_price_minor is null)
+  ),
+  check (not members_included_in_paid_event or access_rule = 'paid_event'),
+  check (replay_window_hours between 0 and 720),
+  unique (creator_user_id, idempotency_key)
+);
+
+create table live_pass_purchase_requests (
+  payment_intent_id uuid primary key references payment_intents(id),
+  room_id uuid not null references live_rooms(id),
+  buyer_user_id uuid not null references users(id),
+  amount_minor bigint not null,
+  currency text not null,
+  created_at timestamptz not null default now()
+);
+
+create table live_passes (
+  id uuid primary key,
+  room_id uuid not null references live_rooms(id),
+  user_id uuid not null references users(id),
+  payment_intent_id uuid unique not null references payment_intents(id),
+  state text not null default 'active',
+  starts_at timestamptz not null default now(),
+  expires_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -944,6 +982,20 @@ create table subscription_plans (
   updated_at timestamptz not null default now()
 );
 
+create table platform_tier_policies (
+  tier_key text primary key,
+  label text not null,
+  rank integer not null unique,
+  monthly_price_minor bigint,
+  currency text,
+  public_media_allowance_seconds bigint,
+  subscription_plan_id text references subscription_plans(id),
+  capabilities jsonb not null default '[]'::jsonb,
+  state text not null default 'active',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table subscriptions (
   id uuid primary key,
   subscriber_user_id uuid not null references users(id),
@@ -986,6 +1038,17 @@ create table subscriptions (
 
 create index subscriptions_plan_id_idx
   on subscriptions (plan_id);
+
+create table platform_usage_windows (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id),
+  window_starts_at timestamptz not null,
+  window_ends_at timestamptz not null,
+  public_media_seconds bigint not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, window_starts_at)
+);
 
 create table subscription_authorization_intents (
   id uuid primary key,

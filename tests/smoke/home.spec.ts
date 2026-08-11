@@ -61,6 +61,11 @@ test("renders inline login and onboarding entry surfaces", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Set up access." })).toBeVisible();
   await expect(page.getByRole("button", { name: "Connect wallet" })).toBeVisible();
   await expect(page.getByText("Required. Load wallet providers only when you are ready to connect and sign.")).toBeVisible();
+
+  await page.getByRole("button", { name: /Connect wallet Solana ownership signature only/ }).click();
+  await expect(page.getByText("Required. Connect a Solana wallet and sign the backend ownership challenge.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Set up access." })).toBeVisible();
+  await expect(page.locator(".landing-progress-topic")).toHaveText("Onboarding");
 });
 
 test("renders the standalone age handoff without raw API/provider errors", async ({ page }) => {

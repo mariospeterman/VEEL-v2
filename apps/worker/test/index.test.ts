@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildWorkerRuntime,
+  runScheduledWorkerTick,
   runNotificationDeliveryTick,
   runPaymentConfirmationEmailTick,
   runProviderEventReplayTick,
@@ -56,7 +57,6 @@ describe("buildWorkerRuntime", () => {
     expect(runtime).toMatchObject({
       name: "veel-worker",
       queues: [
-        "subscription-authorizations",
         "subscription-collections",
         "notification-deliveries",
         "payment-confirmation-emails",
@@ -85,6 +85,47 @@ describe("buildWorkerRuntime", () => {
         }
       ]
     });
+  });
+});
+
+describe("runScheduledWorkerTick", () => {
+  it("runs every scheduled queue and isolates task failures", async () => {
+    const calls: string[] = [];
+    const errors: Array<Record<string, unknown>> = [];
+
+    const result = await runScheduledWorkerTick({
+      runners: {
+        async notificationDeliveries() {
+          calls.push("notifications");
+        },
+        async paymentConfirmationEmails() {
+          calls.push("email");
+          throw new Error("provider unavailable");
+        },
+        async subscriptionCollections() {
+          calls.push("subscriptions");
+        }
+      },
+      logger: {
+        info() {},
+        error(fields) {
+          errors.push(fields);
+        }
+      }
+    });
+
+    expect(calls.sort()).toEqual(["email", "notifications", "subscriptions"]);
+    expect(result).toEqual({
+      notificationDeliveries: "completed",
+      paymentConfirmationEmails: "failed",
+      subscriptionCollections: "completed"
+    });
+    expect(errors).toEqual([
+      {
+        task: "paymentConfirmationEmails",
+        errorName: "Error"
+      }
+    ]);
   });
 });
 

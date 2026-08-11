@@ -32,6 +32,31 @@ export async function registerSubscriptionRoutes(
   app: FastifyInstance,
   options: RegisterSubscriptionRoutesOptions
 ): Promise<void> {
+  app.get("/v1/platform-access", async (request, reply) => {
+    const access = await verifySubscriptionReadyAccess(request, options);
+
+    if (!access.ok) {
+      return reply.code(access.statusCode).send(access.body);
+    }
+
+    if (!options.subscriptionRepository.getPlatformAccess) {
+      return reply.code(503).send(serviceUnavailableResponse("Platform access is not configured"));
+    }
+
+    try {
+      return reply.code(200).send(await options.subscriptionRepository.getPlatformAccess({
+        supabaseUserId: access.supabaseUserId
+      }));
+    } catch (error) {
+      if (error instanceof SubscriptionRepositoryConfigurationError) {
+        request.log.warn({ error }, "Platform access lookup failed");
+        return reply.code(503).send(serviceUnavailableResponse("Platform access is not configured"));
+      }
+
+      throw error;
+    }
+  });
+
   app.get("/v1/subscriptions/plans", async (request, reply) => {
     const access = await verifySubscriptionReadyAccess(request, options);
 

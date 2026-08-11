@@ -1,5 +1,10 @@
 import type { AdminRepository } from "../admin/types.js";
+import {
+  dailyQuotaWindowStart,
+  resolveContentCreationAbusePolicy
+} from "../content/content-route-shared.js";
 import type { ContentRepository } from "../content/types.js";
+import { hashIdempotencyPayload } from "../../shared/idempotency.js";
 import type { ProfileRepository } from "../profile/types.js";
 import type {
   McpConnection,
@@ -131,6 +136,7 @@ export async function runMcpTool(input: {
   connection: McpConnection & { supabaseUserId: string };
   tool: McpToolDefinition;
   params: unknown;
+  idempotencyKey: string;
   profileRepository: ProfileRepository;
   contentRepository: ContentRepository;
   adminRepository: AdminRepository;
@@ -151,12 +157,17 @@ export async function runMcpTool(input: {
     }
     case "creator_create_content_draft": {
       const body = contentDraftInput(input.params);
+      const abusePolicy = await resolveContentCreationAbusePolicy(input.contentRepository);
       const content = await input.contentRepository.createDraft({
         supabaseUserId: input.connection.supabaseUserId,
+        idempotencyKey: input.idempotencyKey,
+        requestHash: hashIdempotencyPayload(body),
         mediaType: body.mediaType,
         caption: body.caption,
         visibility: body.visibility,
-        nsfwLabel: body.nsfwLabel
+        nsfwLabel: body.nsfwLabel,
+        quotaWindowStart: dailyQuotaWindowStart(new Date(), abusePolicy.rollingWindowHours),
+        dailyDraftQuota: abusePolicy.dailyContentDraftQuota
       });
       return { content };
     }

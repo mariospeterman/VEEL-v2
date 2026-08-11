@@ -99,17 +99,40 @@ export function validateCreateLiveRoomRequest(
   }
 
   if (
-    body.teaserSeconds !== undefined &&
-    (!Number.isInteger(body.teaserSeconds) || body.teaserSeconds < 0 || body.teaserSeconds > 300)
+    body.accessMode !== undefined &&
+    !["public", "profile_members", "paid_event"].includes(body.accessMode)
   ) {
-    return "teaserSeconds must be between 0 and 300";
+    return "accessMode must be public, profile_members, or paid_event";
   }
 
   if (
-    body.passPriceMinor !== undefined &&
-    (!Number.isInteger(body.passPriceMinor) || body.passPriceMinor <= 0)
+    body.previewSeconds !== undefined &&
+    (!Number.isInteger(body.previewSeconds) || body.previewSeconds < 0 || body.previewSeconds > 300)
   ) {
-    return "passPriceMinor must be positive";
+    return "previewSeconds must be between 0 and 300";
+  }
+
+  const accessMode = body.accessMode ?? "public";
+
+  if (accessMode === "paid_event") {
+    if (!Number.isInteger(body.eventPriceMinor) || Number(body.eventPriceMinor) <= 0) {
+      return "eventPriceMinor is required for paid_event access";
+    }
+  } else if (body.eventPriceMinor !== undefined) {
+    return "eventPriceMinor is only allowed for paid_event access";
+  }
+
+  if (body.membersIncludedInPaidEvent && accessMode !== "paid_event") {
+    return "membersIncludedInPaidEvent is only allowed for paid_event access";
+  }
+
+  if (
+    body.replayWindowHours !== undefined &&
+    (!Number.isInteger(body.replayWindowHours) ||
+      body.replayWindowHours < 0 ||
+      body.replayWindowHours > 720)
+  ) {
+    return "replayWindowHours must be between 0 and 720";
   }
 
   return null;
@@ -146,7 +169,7 @@ export async function withSignedLivePlayback(input: {
     provider: "livepeer"
   };
 
-  if (response.accessState !== "pass_active" || !input.room.providerPlaybackId) {
+  if (response.accessState !== "allowed" || !input.room.providerPlaybackId) {
     return {
       ...response,
       playback: blockedPlayback

@@ -2,6 +2,7 @@
 
 import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import * as tus from "tus-js-client";
+import { createMutationIdempotencyKey } from "@/api-mutation-transport";
 import {
   ApiMutationError,
   createContentDraft,
@@ -48,6 +49,7 @@ export function useCreateWorkspaceState() {
   const [providerSyncedAt, setProviderSyncedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const uploadRef = useRef<tus.Upload | null>(null);
+  const draftMutationRef = useRef<{ fingerprint: string; idempotencyKey: string } | null>(null);
 
   async function onCreateDraft(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -55,12 +57,23 @@ export function useCreateWorkspaceState() {
     setError(null);
 
     try {
-      const nextDraft = await createContentDraft({
+      const draftBody = {
         mediaType,
         nsfwLabel,
         visibility,
         ...(caption.trim() ? { caption: caption.trim() } : {})
-      });
+      } satisfies CreateContentRequest;
+      const fingerprint = JSON.stringify(draftBody);
+      if (draftMutationRef.current?.fingerprint !== fingerprint) {
+        draftMutationRef.current = {
+          fingerprint,
+          idempotencyKey: createMutationIdempotencyKey()
+        };
+      }
+      const nextDraft = await createContentDraft(
+        draftBody,
+        draftMutationRef.current.idempotencyKey
+      );
       setDraft(nextDraft);
       setUploadSession(null);
       setSavedAt(new Date().toISOString());

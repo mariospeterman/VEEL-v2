@@ -31,6 +31,7 @@ export const serverEnvSchema = z.object({
   PAYMENT_DEFAULT_ASSET: z.enum(["SOL"]).default("SOL"),
   PAYMENT_PLATFORM_FEE_WALLET: optionalStringSchema,
   PAYMENT_PLATFORM_FEE_BPS: z.coerce.number().int().min(0).max(10_000).default(1_000),
+  PAYMENT_REFERRAL_SHARE_OF_PLATFORM_FEE_BPS: z.coerce.number().int().min(0).max(10_000).default(2_000),
   PAYMENT_PLATFORM_TREASURY_WALLET: optionalStringSchema,
   SOLANA_SUBSCRIPTION_DELEGATION_PROGRAM_ID: z
     .string()
@@ -124,6 +125,8 @@ export const serverEnvSchema = z.object({
   TRANSACTIONAL_EMAIL_REPLY_TO: optionalStringSchema,
   RESEND_API_KEY: optionalStringSchema,
   TRANSACTIONAL_EMAIL_SMOKE_TO: optionalEmailSchema,
+  WORKER_TICK_INTERVAL_MS: z.coerce.number().int().min(1_000).max(3_600_000).default(60_000),
+  WORKER_BATCH_LIMIT: z.coerce.number().int().min(1).max(250).default(25),
   MCP_ENABLED: z.coerce.boolean().default(false),
   MCP_PUBLIC_BASE_URL: optionalUrlSchema,
   MCP_AUTH_MODE: z.enum(["oauth", "scoped_token"]).default("oauth"),

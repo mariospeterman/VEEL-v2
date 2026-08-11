@@ -3,7 +3,7 @@ export type SettlementKind = "creator_split" | "platform_owned" | "dev_test";
 export interface PaymentSplitInput {
   totalAmountAtomic: number;
   platformFeeBps: number;
-  allocationAmountAtomic?: number | null;
+  referralShareOfPlatformFeeBps?: number | null;
 }
 
 export interface PaymentSplit {
@@ -23,23 +23,20 @@ export class PaymentAmountError extends Error {
 export function calculateCreatorSplit(input: PaymentSplitInput): PaymentSplit {
   assertSafeAtomicAmount(input.totalAmountAtomic, "invalid_total");
   assertSafeBasisPoints(input.platformFeeBps);
-
-  const allocationAmountAtomic = input.allocationAmountAtomic ?? 0;
-  assertSafeNonNegativeAtomicAmount(allocationAmountAtomic, "invalid_allocation");
+  const referralShareOfPlatformFeeBps = input.referralShareOfPlatformFeeBps ?? 0;
+  assertSafeBasisPoints(referralShareOfPlatformFeeBps);
 
   const total = BigInt(input.totalAmountAtomic);
-  const platformFee = (total * BigInt(input.platformFeeBps)) / 10_000n;
-  const allocation = BigInt(allocationAmountAtomic);
+  const platformFeeGross = (total * BigInt(input.platformFeeBps)) / 10_000n;
+  const allocation =
+    (platformFeeGross * BigInt(referralShareOfPlatformFeeBps)) / 10_000n;
+  const platformFeeNet = platformFeeGross - allocation;
 
-  if (platformFee > total) {
+  if (platformFeeGross > total) {
     throw new PaymentAmountError("fee_greater_than_total");
   }
 
-  if (platformFee + allocation > total) {
-    throw new PaymentAmountError("split_greater_than_total");
-  }
-
-  const creator = total - platformFee - allocation;
+  const creator = total - platformFeeGross;
 
   if (creator <= 0n) {
     throw new PaymentAmountError("creator_amount_not_positive");
@@ -48,19 +45,13 @@ export function calculateCreatorSplit(input: PaymentSplitInput): PaymentSplit {
   return {
     totalAmountAtomic: Number(total),
     creatorAmountAtomic: Number(creator),
-    platformFeeAmountAtomic: Number(platformFee),
+    platformFeeAmountAtomic: Number(platformFeeNet),
     allocationAmountAtomic: Number(allocation)
   };
 }
 
 function assertSafeAtomicAmount(value: number, code: string): void {
   if (!Number.isSafeInteger(value) || value <= 0) {
-    throw new PaymentAmountError(code);
-  }
-}
-
-function assertSafeNonNegativeAtomicAmount(value: number, code: string): void {
-  if (!Number.isSafeInteger(value) || value < 0) {
     throw new PaymentAmountError(code);
   }
 }

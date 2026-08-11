@@ -31,11 +31,24 @@ describe("payment amount calculation", () => {
     });
   });
 
-  it("rejects invalid totals, fees, and allocations", () => {
+  it("pays referral allocation from the platform fee without reducing creator share", () => {
+    expect(calculateCreatorSplit({
+      totalAmountAtomic: 10_000_000,
+      platformFeeBps: 1_000,
+      referralShareOfPlatformFeeBps: 2_000
+    })).toEqual({
+      totalAmountAtomic: 10_000_000,
+      creatorAmountAtomic: 9_000_000,
+      platformFeeAmountAtomic: 800_000,
+      allocationAmountAtomic: 200_000
+    });
+  });
+
+  it("rejects invalid totals, fees, and referral shares", () => {
     expect(() => calculateCreatorSplit({ totalAmountAtomic: 0, platformFeeBps: 1_000 })).toThrow(PaymentAmountError);
     expect(() => calculateCreatorSplit({ totalAmountAtomic: 100, platformFeeBps: 10_001 })).toThrow(PaymentAmountError);
     expect(() =>
-      calculateCreatorSplit({ totalAmountAtomic: 100, platformFeeBps: 9_000, allocationAmountAtomic: 20 })
+      calculateCreatorSplit({ totalAmountAtomic: 100, platformFeeBps: 1_000, referralShareOfPlatformFeeBps: 10_001 })
     ).toThrow(PaymentAmountError);
   });
 });
@@ -93,19 +106,20 @@ describe("Solana creator split settlement verification", () => {
     const input = settlementInput({
       allocationWallet,
       allocationAmountMinor: 500_000,
-      creatorAmountMinor: 8_500_000
+      creatorAmountMinor: 9_000_000,
+      platformFeeAmountMinor: 500_000
     });
 
     await expect(expectSettlement([
-      transfer(creatorWallet, 8_500_000),
-      transfer(platformFeeWallet, 1_000_000),
+      transfer(creatorWallet, 9_000_000),
+      transfer(platformFeeWallet, 500_000),
       transfer(allocationWallet, 500_000),
       memo("veel:intent-1")
     ], { input })).resolves.toEqual({ confirmed: true });
 
     await expect(expectSettlement([
-      transfer(creatorWallet, 8_500_000),
-      transfer(platformFeeWallet, 1_000_000),
+      transfer(creatorWallet, 9_000_000),
+      transfer(platformFeeWallet, 500_000),
       memo("veel:intent-1")
     ], { input })).resolves.toEqual({ confirmed: false, failureCode: "transfer_mismatch" });
   });

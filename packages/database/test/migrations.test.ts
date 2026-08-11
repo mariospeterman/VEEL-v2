@@ -113,6 +113,29 @@ describe("database migrations", () => {
     expect(sql).not.toMatch(/private_key|service_role|secret/i);
   });
 
+  it("covers foreign keys reported by the Supabase performance advisor", () => {
+    const sql = readMigration("0074_supabase_advisor_fk_indexes.sql");
+
+    expect(sql).toContain("mcp_connections_revoked_by_user_idx");
+    expect(sql).toContain("oauth_access_tokens_code_idx");
+    expect(sql).toContain("oauth_authorization_codes_actor_idx");
+    expect(sql).toContain("oauth_authorization_codes_request_idx");
+    expect(sql).toContain("oauth_authorization_requests_approved_by_idx");
+    expect(sql).toContain("oauth_authorization_requests_denied_by_idx");
+    expect(sql).toContain("payment_confirmation_deliveries_receipt_idx");
+    expect(sql).toContain("refund_remediation_evidence_recorded_by_idx");
+    expect(sql).toContain("verification_records_derived_from_idx");
+    expect(sql).toContain("verification_sessions_source_session_idx");
+    expect(sql).toContain("wallet_auth_sessions_wallet_idx");
+  });
+
+  it("covers the platform tier policy plan foreign key", () => {
+    const sql = readMigration("0075_platform_tier_policy_plan_index.sql");
+
+    expect(sql).toContain("platform_tier_policies_subscription_plan_idx");
+    expect(sql).toContain("platform_tier_policies (subscription_plan_id)");
+  });
+
   it("adds content feed foundation without playback secrets or entitlement shortcuts", () => {
     const sql = readMigration("0006_content_feed_foundation.sql");
 
@@ -811,5 +834,33 @@ describe("database migrations", () => {
     expect(sql).toContain("alter table refund_remediation_evidence enable row level security");
     expect(sql).toContain("refund_remediation_evidence_select_self_or_staff");
     expect(sql).not.toMatch(/private_key|seed_phrase|mnemonic|raw_payload|service_role|creator_balance|withdrawal|automatic_refund|platform_balance|escrow/i);
+  });
+
+  it("adds backend-owned five-tier policy and one active profile membership offer", () => {
+    const sql = readMigration("0072_platform_tier_authority.sql");
+    const downSql = readMigration("0072_platform_tier_authority.down.sql");
+
+    expect(sql).toContain("'veel_ultra'");
+    expect(sql).toContain("create table platform_tier_policies");
+    expect(sql).toContain("create table platform_usage_windows");
+    expect(sql).toContain("subscription_plans_one_active_creator_offer_idx");
+    expect(sql).toContain("public_media_allowance_seconds");
+    expect(downSql).toContain("drop table if exists platform_usage_windows");
+    expect(downSql).toContain("drop table if exists platform_tier_policies");
+    expect(sql).not.toMatch(/recommendation_boost|visibility_boost|message_priority|mutuals_boost/i);
+  });
+
+  it("replaces timed live passes with three canonical live access modes", () => {
+    const sql = readMigration("0073_live_access_modes.sql");
+    const downSql = readMigration("0073_live_access_modes.down.sql");
+
+    expect(sql).toContain("'public', 'profile_members', 'paid_event'");
+    expect(sql).toContain("drop column pass_durations_minutes");
+    expect(sql).toContain("drop column duration_minutes");
+    expect(sql).toContain("members_only_chat boolean not null default false");
+    expect(sql).toContain("members_included_in_paid_event boolean not null default false");
+    expect(sql).toContain("replay_window_hours integer not null default 48");
+    expect(downSql).toContain("add column pass_durations_minutes");
+    expect(sql).not.toMatch(/recommendation_boost|visibility_boost|message_priority|mutuals_boost/i);
   });
 });

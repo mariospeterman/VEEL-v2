@@ -59,6 +59,6 @@ describe("wallet session storage", () => {
     clearWalletSession();
 
     expect(storage.size).toBe(0);
-    expect(cookieWrites.at(-1)).toBe(`${walletSessionCookieName}=; path=/; max-age=0; samesite=lax`);
+    expect(cookieWrites.at(-1)).toBe(`${walletSessionCookieName}=; path=/; max-age=0; samesite=lax; secure`);
   });
 });

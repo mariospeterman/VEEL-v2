@@ -33,9 +33,10 @@ export async function authenticatedGet<T>(path: string): Promise<T> {
 export async function authenticatedMutation<T>(
   path: string,
   method: "PATCH" | "POST",
-  body: unknown
+  body: unknown,
+  idempotencyKey?: string
 ): Promise<T> {
-  const response = await sendAuthenticatedMutation(path, method, body);
+  const response = await sendAuthenticatedMutation(path, method, body, idempotencyKey);
 
   if (!response.ok) {
     throw new ApiMutationError(await errorMessage(response), response.status);
@@ -69,7 +70,7 @@ export async function publicMutation<T>(
     headers: {
       accept: "application/json",
       "content-type": "application/json",
-      "idempotency-key": mutationIdempotencyKey()
+      "idempotency-key": createMutationIdempotencyKey()
     },
     method
   });
@@ -84,14 +85,15 @@ export async function publicMutation<T>(
 async function sendAuthenticatedMutation(
   path: string,
   method: "PATCH" | "POST",
-  body: unknown
+  body: unknown,
+  idempotencyKey?: string
 ): Promise<Response> {
   const { token } = await browserSessionToken();
   const env = readPublicWebEnv();
   const headers = new Headers({
     accept: "application/json",
     "content-type": "application/json",
-    "idempotency-key": mutationIdempotencyKey()
+    "idempotency-key": idempotencyKey ?? createMutationIdempotencyKey()
   });
 
   if (token) {
@@ -161,7 +163,7 @@ function browserCookieToken(name: string) {
   return token ? decodeURIComponent(token) : null;
 }
 
-function mutationIdempotencyKey() {
+export function createMutationIdempotencyKey() {
   return typeof crypto.randomUUID === "function"
     ? crypto.randomUUID()
     : `web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
