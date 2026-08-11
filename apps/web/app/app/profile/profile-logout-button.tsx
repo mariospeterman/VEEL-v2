@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { revokeWalletAuthSession } from "@/api-mutations";
 import { createSupabaseBrowserClient } from "@/supabase/client";
 import { e2eAuthCookieName } from "@/supabase/auth-cookie";
 import { useProviderSessionLogout } from "@/wallet/provider-session-logout";
@@ -22,6 +23,7 @@ export function ProfileLogoutButton() {
 
     try {
       await Promise.allSettled([
+        withTimeout(revokeWalletAuthSession(), 1_200),
         withTimeout(logoutProviderSessions(), 1_800),
         withTimeout(logoutSupabase(), 1_200),
         withTimeout(clearServerSession(), 1_200)

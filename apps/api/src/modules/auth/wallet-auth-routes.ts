@@ -43,9 +43,7 @@ interface CreateWalletAuthSessionRequest {
   };
 }
 
-interface LinkSupabaseRecoveryRequest {
-  walletSessionToken?: string;
-}
+type LinkSupabaseRecoveryRequest = Record<string, never>;
 
 const walletAuthChallengeTtlMs = 10 * 60 * 1000;
 
@@ -157,14 +155,45 @@ export async function registerWalletAuthRoutes(
         expiresAt: new Date(Date.now() + app.config.WALLET_AUTH_SESSION_TTL_SECONDS * 1000)
       });
 
-      reply.header("set-cookie", walletSessionCookie(session.accessToken, session.expiresAt));
+      reply.header(
+        "set-cookie",
+        walletSessionCookie(session.accessToken, session.expiresAt, app.config.WALLET_AUTH_COOKIE_DOMAIN)
+      );
 
       return reply.code(201).send({
-        accessToken: session.accessToken,
-        tokenType: "Bearer",
         expiresAt: session.expiresAt.toISOString(),
         wallet: session.wallet
       });
+    } catch (error) {
+      if (error instanceof WalletAuthRepositoryConfigurationError) {
+        request.log.warn({ error }, "Wallet auth repository is not configured");
+        return reply.code(503).send({
+          code: "provider_unavailable",
+          message: "Wallet auth storage is not configured"
+        });
+      }
+
+      throw error;
+    }
+  });
+
+  app.post("/v1/auth/wallet/logout", async (request, reply) => {
+    if (!request.headers["idempotency-key"]) {
+      return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
+    }
+
+    const token = extractCookieToken(request.headers.cookie, walletSessionCookieName);
+
+    try {
+      if (token) {
+        await options.walletAuthRepository.revokeSessionToken(token);
+      }
+
+      reply.header(
+        "set-cookie",
+        expiredWalletSessionCookie(app.config.WALLET_AUTH_COOKIE_DOMAIN)
+      );
+      return reply.code(204).send();
     } catch (error) {
       if (error instanceof WalletAuthRepositoryConfigurationError) {
         request.log.warn({ error }, "Wallet auth repository is not configured");
@@ -203,9 +232,10 @@ export async function registerWalletAuthRoutes(
     }
 
     try {
-      const walletSessionToken =
-        (body as LinkSupabaseRecoveryRequest | undefined)?.walletSessionToken ??
-        extractCookieToken(request.headers.cookie, walletSessionCookieName);
+      const walletSessionToken = extractCookieToken(
+        request.headers.cookie,
+        walletSessionCookieName
+      );
 
       if (!walletSessionToken) {
         return reply.code(401).send(unauthorizedResponse("Wallet session is missing or expired"));
@@ -296,17 +326,14 @@ function validateRecoveryLinkRequest(body: LinkSupabaseRecoveryRequest | undefin
     return "Request body must be an object";
   }
 
-  if (
-    body?.walletSessionToken !== undefined &&
-    (typeof body.walletSessionToken !== "string" || !body.walletSessionToken.startsWith("veel_wallet_"))
-  ) {
-    return "Wallet session token is invalid";
+  if (body && Object.keys(body).length > 0) {
+    return "Request body must be empty";
   }
 
   return null;
 }
 
-function walletSessionCookie(token: string, expiresAt: Date) {
+function walletSessionCookie(token: string, expiresAt: Date, domain?: string) {
   const maxAge = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
   const parts = [
     `${walletSessionCookieName}=${encodeURIComponent(token)}`,
@@ -315,6 +342,30 @@ function walletSessionCookie(token: string, expiresAt: Date) {
     "HttpOnly",
     "SameSite=Lax"
   ];
+
+  if (domain) {
+    parts.push(`Domain=${domain}`);
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    parts.push("Secure");
+  }
+
+  return parts.join("; ");
+}
+
+function expiredWalletSessionCookie(domain?: string) {
+  const parts = [
+    `${walletSessionCookieName}=`,
+    "Path=/",
+    "Max-Age=0",
+    "HttpOnly",
+    "SameSite=Lax"
+  ];
+
+  if (domain) {
+    parts.push(`Domain=${domain}`);
+  }
 
   if (process.env.NODE_ENV === "production") {
     parts.push("Secure");

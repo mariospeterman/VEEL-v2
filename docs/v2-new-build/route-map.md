@@ -85,7 +85,7 @@ All routes use `/v1`.
 
 | Group | Routes | Phase | Notes |
 | --- | --- | --- | --- |
-| Auth/session | `POST /v1/auth/wallet/challenges`, `POST /v1/auth/wallet/sessions`, `POST /v1/auth/recovery-link`, `GET /v1/session` | MVP | Wallet-first session creation plus frontend-safe app access, wallet, age, badges, prefs. Supabase email/social auth can be linked as recovery after both wallet-session proof and Supabase-session proof are present. |
+| Auth/session | `POST /v1/auth/wallet/challenges`, `POST /v1/auth/wallet/sessions`, `POST /v1/auth/wallet/logout`, `POST /v1/auth/recovery-link`, `GET /v1/session` | MVP | Wallet-first session creation plus frontend-safe app access, wallet, age, badges, prefs. The wallet token exists only in a server-issued HttpOnly cookie and is revoked on logout. Supabase email/social auth can be linked as recovery after both cookie proof and Supabase-session proof are present. |
 | Age | `POST /v1/age/sessions`, `GET /v1/age/status`, `POST /v1/webhooks/age/:provider` | MVP | Provider sessions/webhooks; minimal stored result. |
 | Verification | `GET /v1/verification/status`, `POST /v1/verification/sessions`, `POST /v1/webhooks/verification/:provider` | MVP | Backend-owned capability resolver plus provider session/webhook flow across age access, creator KYC, and organization KYB. Frontend reads next action and launches hosted provider URLs; it never computes verification truth. |
 | Wallets | `GET /v1/wallets`, `POST /v1/wallets/link-challenges`, `POST /v1/wallets/link`, `PATCH /v1/wallets/:id/primary`, `POST /v1/wallets/onramp-sessions` | MVP | Embedded/native wallet path, primary wallet selection, and user-owned wallet funding session. Onramp is not payment proof. |

@@ -106,13 +106,13 @@ The controlling branch evidence is recorded in `production-branch-inventory.md`.
 
 ### P1 Universal Account, Plans, Memberships, And Usage
 
-- [ ] Keep one account and profile; model publishing, live, earning, buying, memberships, and organization access as capabilities/readiness states.
+- [x] Keep one account and profile; model app access, SFW/adult publishing, earning, and identity readiness as server-owned capabilities. Live, buying, memberships, organization, and paid-plan capability composition still requires completion.
 - [ ] Separate VEEL platform plans from `Join @handle` creator membership in schema, contracts, API, entitlements, copy, and tests.
 - [x] Implement backend-configurable Free Verified, Plus, Ultra, Studio, and Enterprise policy projection without browser-owned commercial truth; paid provider plans remain fail-closed until launch-approved configuration.
 - [ ] Meter only free public long-form VOD and public live delivery; exclude Bits, previews, paid unlocks, joined-profile media, paid events, own uploads, and promotional excerpts.
 - [ ] Preserve purchased and membership access when public viewing allowance is exhausted.
 - [x] Enforce at most one active membership offer per profile and resolve live membership access server-side; creator eligibility setup remains a separate incomplete slice.
-- [ ] Apply KYC to individual earning readiness, enhanced verification/consent to NSFW publishing, and KYB only to legal-entity organization workflows.
+- [x] Apply creator KYC only to individual earning readiness, adult-content assurance only to adult-rated publishing, and KYB only to legal-entity organization workflows. SFW/NSFW remains per-media metadata plus a viewer filter, never an account type.
 
 ### P2 Engagement, Feed, Bits, Media, And Live
 

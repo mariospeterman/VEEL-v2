@@ -36,7 +36,7 @@ export function CreateWorkspace() {
         <div className="grid gap-3 sm:grid-cols-3">
           <Select label="Media" onChange={actions.setMediaType} options={mediaTypes} value={state.mediaType} />
           <Select label="Visibility" onChange={actions.setVisibility} options={visibilityValues} value={state.visibility} />
-          <Select label="Label" onChange={actions.setNsfwLabel} options={nsfwLabels} value={state.nsfwLabel} />
+          <Select label="Content rating" onChange={actions.setNsfwLabel} options={nsfwLabels} value={state.nsfwLabel} />
         </div>
 
         <button

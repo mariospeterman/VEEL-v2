@@ -85,6 +85,7 @@ create table wallets (
   unique (chain, address)
 );
 
+-- Legacy migration archive only. Application roles are revoked and verification_records owns decisions.
 create table age_verifications (
   id uuid primary key,
   user_id uuid not null references users(id),
@@ -506,7 +507,7 @@ create table ranking_snapshots (
 create table viewer_feed_preferences (
   user_id uuid primary key references users(id),
   default_feed_mode text not null default 'recommended',
-  nsfw_preference text not null default 'recommended',
+  nsfw_preference text not null default 'both',
   updated_at timestamptz not null default now()
 );
 

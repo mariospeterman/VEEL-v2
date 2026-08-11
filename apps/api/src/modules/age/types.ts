@@ -20,16 +20,15 @@ export interface CreatePendingAgeVerificationInput {
 export interface AgeRepository {
   findLatestAgeStatusBySupabaseUserId(supabaseUserId: string): Promise<AgeStatus>;
   createPendingAgeVerification(input: CreatePendingAgeVerificationInput): Promise<void>;
-  recordProviderWebhook(input: RecordAgeProviderWebhookInput): Promise<boolean>;
+  applyProviderWebhook(input: ApplyAgeProviderWebhookInput): Promise<ProviderWebhookApplyResult>;
   updateVerificationFromWebhook(input: UpdateAgeVerificationFromWebhookInput): Promise<boolean>;
   close?(): Promise<void>;
 }
 
-export interface RecordAgeProviderWebhookInput {
-  provider: AgeProvider;
-  providerEventId: string;
+export type ProviderWebhookApplyResult = "applied" | "duplicate" | "unmatched";
+
+export interface ApplyAgeProviderWebhookInput extends UpdateAgeVerificationFromWebhookInput {
   eventType: string;
-  normalizedState: AgeState;
   signatureHash: string | null;
 }
 
@@ -57,12 +56,6 @@ export interface AgeProviderSession {
   expiresAt: Date;
   jurisdiction?: string | null;
   rule?: string | null;
-}
-
-export interface AgeProviderAdapter {
-  provider: AgeProvider;
-  isConfigured(): boolean;
-  createSession(input: AgeProviderSessionRequest): Promise<AgeProviderSession>;
 }
 
 export interface AgeProviderWaterfall {

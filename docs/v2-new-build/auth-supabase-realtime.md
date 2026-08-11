@@ -33,7 +33,7 @@ erDiagram
   auth_users ||--|| users : maps_to
   users ||--|| profiles : has
   users ||--o{ wallets : owns
-  users ||--o{ age_verifications : has
+  users ||--o{ verification_records : has
   users ||--o{ staff_memberships : may_have
   users ||--o{ sessions_audit : creates
 
@@ -67,6 +67,13 @@ erDiagram
     string address
     boolean primary
   }
+  verification_records {
+    uuid id
+    uuid subject_id
+    string purpose
+    string status
+    string provider
+  }
 ```
 
 ## Auth Flow
@@ -97,7 +104,8 @@ Current implementation boundary:
 - Wallet-first login creates or restores an app-owned wallet session whose bearer token maps to the internal `users.supabase_user_id` compatibility identifier.
 - Supabase Auth remains recovery/account-management only. The browser renders email/social recovery providers only when Supabase browser config exists and the matching `NEXT_PUBLIC_SUPABASE_AUTH_*_ENABLED` flag is set for a provider that is also enabled in the Supabase Auth dashboard.
 - Supabase recovery callbacks resolve `/v1/session` before entering `/app/*`. If the Supabase identity has no linked wallet/profile state, the user is routed back to wallet onboarding instead of being treated as wallet-authenticated.
-- `POST /v1/auth/recovery-link` links Supabase recovery to a wallet-created account after the browser proves both sessions: a valid Supabase bearer token in `Authorization` and the active wallet session token in the request body. The API updates the existing wallet-owned `users` row to the verified Supabase subject, so future wallet login and future Supabase login resolve to the same profile, wallet, age, creator KYC, and organization KYB state.
+- `POST /v1/auth/recovery-link` links Supabase recovery to a wallet-created account after the server proves both sessions: a valid Supabase bearer token in `Authorization` and the active wallet session in its HttpOnly cookie. The wallet token is never accepted in the JSON body. The API updates the existing wallet-owned `users` row to the verified Supabase subject, so future wallet login and future Supabase login resolve to the same profile, wallet, age, creator KYC, and organization KYB state.
+- `POST /v1/auth/wallet/logout` revokes the hashed wallet session server-side and expires the HttpOnly cookie. Provider SDK logout and Supabase local sign-out remain frontend orchestration steps around this backend authority.
 - Recovery linking fails with `409` if that Supabase identity already belongs to a different WeVid account. The API never silently merges two users, profiles, wallets, age records, verification records, payments, or organization memberships.
 
 ## Profile Bootstrap

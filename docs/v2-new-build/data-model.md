@@ -42,9 +42,11 @@ erDiagram
   users ||--o{ live_rooms : hosts
   live_rooms ||--o{ live_sessions : has
   live_rooms ||--o{ live_passes : sells
-  users ||--o{ age_verifications : has
+  users ||--o{ verification_records : has
   users ||--o{ audit_events : actor
 ```
+
+`verification_records` is the only application authority for age access, adult-content publishing assurance, creator KYC, and organization KYB. The historical `age_verifications` table is a migration archive and is not readable or writable by application roles.
 
 ## Core State Machines
 

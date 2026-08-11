@@ -1,0 +1,1 @@
+drop policy if exists age_verifications_legacy_archive_deny_all on age_verifications;

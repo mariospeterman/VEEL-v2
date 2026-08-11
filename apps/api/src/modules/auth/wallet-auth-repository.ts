@@ -51,6 +51,7 @@ export interface WalletAuthRepository {
   findChallenge(input: FindWalletAuthChallengeInput): Promise<WalletAuthChallenge | null>;
   createSessionFromChallenge(input: CreateWalletAuthSessionInput): Promise<WalletAuthSession>;
   linkSupabaseRecovery(input: LinkSupabaseRecoveryInput): Promise<void>;
+  revokeSessionToken(token: string): Promise<void>;
   verifySessionToken(token: string): Promise<VerifiedWalletAuthSession | null>;
   close?(): Promise<void>;
 }
@@ -304,6 +305,13 @@ export function createPostgresWalletAuthRepository(
         `;
       });
     },
+    async revokeSessionToken(token) {
+      await sql`
+        update wallet_auth_sessions
+        set revoked_at = coalesce(revoked_at, now())
+        where token_hash = ${hashToken(token)}
+      `;
+    },
     async close() {
       if (ownsClient) {
         await sql.end({ timeout: 5 });
@@ -382,6 +390,9 @@ function createUnavailableWalletAuthRepository(): WalletAuthRepository {
       throw new WalletAuthRepositoryConfigurationError();
     },
     async linkSupabaseRecovery() {
+      throw new WalletAuthRepositoryConfigurationError();
+    },
+    async revokeSessionToken() {
       throw new WalletAuthRepositoryConfigurationError();
     },
     async verifySessionToken() {

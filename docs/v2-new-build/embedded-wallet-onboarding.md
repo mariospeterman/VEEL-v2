@@ -170,7 +170,7 @@ sequenceDiagram
 Implementation contract:
 
 - `POST /v1/auth/wallet/challenges` creates a short-lived server-owned challenge for a wallet-first login attempt. It does not require Supabase email auth.
-- `POST /v1/auth/wallet/sessions` verifies the Solana message signature, creates or reuses the user/wallet row, stores only a hashed session token, and returns a bearer token for normal authenticated API calls.
+- `POST /v1/auth/wallet/sessions` verifies the Solana message signature, creates or reuses the user/wallet row, stores only a hashed session token, and sets the raw token only in an HttpOnly, SameSite cookie. Browser JavaScript receives wallet display metadata but never the bearer token.
 - Wallet auth session tokens authenticate the account session only. They are not payment proof, allowance proof, or entitlement proof.
 - `POST /v1/wallets/link-challenges` creates a short-lived server-owned challenge for one authenticated user, wallet address, provider, and chain.
 - The challenge message must be signed exactly as returned by the API.

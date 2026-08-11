@@ -26,6 +26,7 @@ export type CapabilityKey =
   | "canCreateDraft"
   | "canUploadMedia"
   | "canPublishMedia"
+  | "canPublishAdultMedia"
   | "canMonetize"
   | "canReceivePayouts"
   | "canAccessCreatorDashboard"
@@ -61,8 +62,18 @@ export interface VerificationSessionResource {
 
 export interface CreateVerificationSessionInput {
   supabaseUserId: string;
-  purpose: Extract<VerificationPurpose, "creator_kyc" | "org_kyb">;
-  providerPreference: "provider_first" | "sumsub" | "didit" | "persona" | "veriff";
+  purpose: Extract<
+    VerificationPurpose,
+    "age_access" | "adult_content_access" | "creator_kyc" | "org_kyb"
+  >;
+  providerPreference:
+    | "provider_first"
+    | "reusable_first"
+    | "sumsub"
+    | "didit"
+    | "yoti"
+    | "persona"
+    | "veriff";
   idempotencyKey: string;
   organizationId?: string | null;
   callbackUrl: string;
@@ -104,6 +115,7 @@ export interface CapabilityResolution {
   nextBestAction: string;
   verificationSummary: {
     ageAccess: VerificationRecordResource | null;
+    adultContentAccess: VerificationRecordResource | null;
     creatorKyc: VerificationRecordResource | null;
     orgKyb: VerificationRecordResource | null;
   };
@@ -117,16 +129,16 @@ export interface ResolveCapabilitiesInput {
 export interface VerificationRepository {
   createPendingSession(input: {
     supabaseUserId: string;
-    purpose: Extract<VerificationPurpose, "creator_kyc" | "org_kyb">;
+    purpose: Extract<
+      VerificationPurpose,
+      "age_access" | "adult_content_access" | "creator_kyc" | "org_kyb"
+    >;
     organizationId?: string | null;
     providerSession: VerificationProviderSession;
   }): Promise<string>;
-  recordProviderWebhook(input: {
-    provider: VerificationProvider;
-    providerEventId: string;
-    eventType: string;
+  applyProviderWebhook(input: NormalizedVerificationWebhook & {
     payloadHash: string;
-  }): Promise<boolean>;
+  }): Promise<"applied" | "duplicate" | "unmatched">;
   updateVerificationFromWebhook(input: NormalizedVerificationWebhook): Promise<boolean>;
   findLatestUserVerification(input: {
     supabaseUserId: string;

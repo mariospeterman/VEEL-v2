@@ -111,10 +111,16 @@ export function createAccessRepository(
         from users u
         join profiles p on p.user_id = u.id
         left join lateral (
-          select state
-          from age_verifications av
-          where av.user_id = u.id
-          order by av.created_at desc
+          select case
+            when status = 'valid' and (expires_at is null or expires_at > now()) then 'verified'
+            when status = 'pending' then 'pending'
+            else 'failed'
+          end as state
+          from verification_records
+          where subject_type = 'user'
+            and subject_id = u.id
+            and purpose = 'age_access'
+          order by created_at desc, id desc
           limit 1
         ) latest_age on true
         left join lateral (
@@ -150,10 +156,16 @@ export function createAccessRepository(
         from users u
         join profiles p on p.user_id = u.id
         left join lateral (
-          select state
-          from age_verifications av
-          where av.user_id = u.id
-          order by av.created_at desc
+          select case
+            when status = 'valid' and (expires_at is null or expires_at > now()) then 'verified'
+            when status = 'pending' then 'pending'
+            else 'failed'
+          end as state
+          from verification_records
+          where subject_type = 'user'
+            and subject_id = u.id
+            and purpose = 'age_access'
+          order by created_at desc, id desc
           limit 1
         ) latest_age on true
         left join lateral (

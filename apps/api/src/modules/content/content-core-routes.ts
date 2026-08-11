@@ -312,9 +312,21 @@ export async function registerContentCoreRoutes(
     }
 
     try {
+      const ownedContent = await options.contentRepository.findOwnedContentForUpload({
+        supabaseUserId: access.supabaseUserId,
+        contentId: params.contentId
+      });
+
+      if (!ownedContent) {
+        return reply.code(404).send({
+          code: "not_found",
+          message: "Content draft was not found"
+        });
+      }
+
       const creatorAccess = await verifyCreatorCapability(
         access.supabaseUserId,
-        "canPublishMedia",
+        ownedContent.nsfwLabel === "none" ? "canPublishMedia" : "canPublishAdultMedia",
         options
       );
 

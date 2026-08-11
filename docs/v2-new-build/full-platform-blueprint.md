@@ -314,7 +314,7 @@ Database:
 users
   ├─ profiles
   ├─ wallets
-  ├─ age_verifications
+  ├─ verification_records
   ├─ creator_accounts
   ├─ content_items
   ├─ live_rooms

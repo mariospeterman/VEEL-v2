@@ -41,7 +41,6 @@ export async function createBackendWalletSession({
   });
 
   saveWalletSession({
-    accessToken: session.accessToken,
     expiresAt: session.expiresAt,
     address: session.wallet.address,
     provider: session.wallet.provider

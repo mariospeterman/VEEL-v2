@@ -434,8 +434,8 @@ const fakeAgeRepository = {
     return { state: "verified" };
   },
   async createPendingAgeVerification() {},
-  async recordProviderWebhook() {
-    return true;
+  async applyProviderWebhook() {
+    return "applied";
   },
   async updateVerificationFromWebhook() {
     return true;

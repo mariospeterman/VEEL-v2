@@ -1,4 +1,9 @@
-import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
+import { randomUUID } from "node:crypto";
+import {
+  resolvePostgresClient,
+  type PostgresSql,
+  type PostgresTransaction
+} from "../../shared/postgres.js";
 import type {
   CapabilityKey,
   CapabilityResolution,
@@ -34,7 +39,7 @@ export function createPostgresVerificationRepository(database?: string | Postgre
       async createPendingSession() {
         throw new VerificationRepositoryConfigurationError();
       },
-      async recordProviderWebhook() {
+      async applyProviderWebhook() {
         throw new VerificationRepositoryConfigurationError();
       },
       async updateVerificationFromWebhook() {
@@ -123,112 +128,34 @@ export function createPostgresVerificationRepository(database?: string | Postgre
 
       return rows[0]?.id ?? "";
     },
-    async recordProviderWebhook(input) {
-      const rows = await sql<Array<{ id: string }>>`
-        insert into verification_events (
-          provider,
-          event_type,
-          idempotency_key,
-          payload_hash,
-          processed_at,
-          processing_status
-        )
-        values (
-          ${input.provider},
-          ${input.eventType},
-          ${input.providerEventId},
-          ${input.payloadHash},
-          now(),
-          'processed'
-        )
-        on conflict do nothing
-        returning id
-      `;
+    async applyProviderWebhook(input) {
+      return sql.begin(async (tx) => {
+        const rows = await tx<Array<{ id: string }>>`
+          insert into verification_events (
+            provider,
+            event_type,
+            idempotency_key,
+            payload_hash,
+            processing_status
+          )
+          values (
+            ${input.provider},
+            ${input.eventType},
+            ${input.providerEventId},
+            ${input.payloadHash},
+            'received'
+          )
+          on conflict do nothing
+          returning id
+        `;
 
-      return rows.length > 0;
+        if (rows.length === 0) return "duplicate" as const;
+        const applied = await applyVerificationWebhookDecision(tx, input, true);
+        return applied ? "applied" as const : "unmatched" as const;
+      });
     },
     async updateVerificationFromWebhook(input) {
-      const sessionRows = await sql<Array<{
-        id: string;
-        subject_type: VerificationRecordResource["subjectType"];
-        subject_id: string;
-        purpose: VerificationPurpose;
-        requested_method: VerificationRecordResource["method"];
-        assurance_level: VerificationRecordResource["assuranceLevel"];
-        reusable: boolean;
-        expires_at: Date | null;
-      }>>`
-        select
-          id,
-          subject_type,
-          subject_id,
-          purpose,
-          requested_method,
-          assurance_level,
-          reusable,
-          expires_at
-        from verification_sessions
-        where provider = ${input.provider}
-          and (
-            provider_session_id = ${input.providerReference}
-            or provider_applicant_id = ${input.providerReference}
-            or provider_inquiry_id = ${input.providerReference}
-            or provider_transaction_id = ${input.providerReference}
-          )
-        order by created_at desc
-        limit 1
-      `;
-      const session = sessionRows[0];
-
-      if (!session) {
-        return false;
-      }
-
-      await sql`
-        update verification_sessions
-        set
-          status = ${sessionStatus(input.status)},
-          updated_at = now(),
-          completed_at = case when ${input.status} in ('valid', 'invalid', 'blocked') then coalesce(${input.occurredAt ?? null}, now()) else completed_at end
-        where id = ${session.id}
-      `;
-
-      await sql`
-        insert into verification_records (
-          subject_type,
-          subject_id,
-          purpose,
-          status,
-          provider,
-          provider_reference,
-          method,
-          assurance_level,
-          verified_at,
-          expires_at,
-          reusable,
-          raw_payload_hash,
-          failure_reason_code,
-          metadata
-        )
-        values (
-          ${session.subject_type},
-          ${session.subject_id},
-          ${session.purpose},
-          ${input.status},
-          ${input.provider},
-          ${input.providerReference},
-          ${session.requested_method},
-          ${session.assurance_level},
-          case when ${input.status} = 'valid' then coalesce(${input.occurredAt ?? null}, now()) else null end,
-          ${session.expires_at},
-          ${session.reusable},
-          ${input.signatureHash},
-          ${input.failureReasonCode ?? null},
-          ${JSON.stringify({ source: "provider_webhook", eventType: input.eventType })}::jsonb
-        )
-      `;
-
-      return true;
+      return sql.begin((tx) => applyVerificationWebhookDecision(tx, input, false));
     },
     async findLatestUserVerification(input) {
       const rows = await sql<VerificationRecordRow[]>`
@@ -251,10 +178,7 @@ export function createPostgresVerificationRepository(database?: string | Postgre
         where vr.subject_type = 'user'
           and u.supabase_user_id = ${input.supabaseUserId}
           and vr.purpose = ${input.purpose}
-        order by
-          case when vr.status = 'valid' and (vr.expires_at is null or vr.expires_at > now()) then 0 else 1 end,
-          vr.verified_at desc nulls last,
-          vr.created_at desc
+        order by vr.created_at desc, vr.id desc
         limit 1
       `;
 
@@ -280,20 +204,21 @@ export function createPostgresVerificationRepository(database?: string | Postgre
         where subject_type = 'organization'
           and subject_id = ${input.organizationId}
           and purpose = ${input.purpose}
-        order by
-          case when status = 'valid' and (expires_at is null or expires_at > now()) then 0 else 1 end,
-          verified_at desc nulls last,
-          created_at desc
+        order by created_at desc, id desc
         limit 1
       `;
 
       return rows[0] ? toRecord(rows[0]) : null;
     },
     async resolveCapabilities(input) {
-      const [ageAccess, creatorKyc, orgKyb] = await Promise.all([
+      const [ageAccess, adultContentAccess, creatorKyc, orgKyb] = await Promise.all([
         this.findLatestUserVerification({
           supabaseUserId: input.supabaseUserId,
           purpose: "age_access"
+        }),
+        this.findLatestUserVerification({
+          supabaseUserId: input.supabaseUserId,
+          purpose: "adult_content_access"
         }),
         this.findLatestUserVerification({
           supabaseUserId: input.supabaseUserId,
@@ -307,7 +232,12 @@ export function createPostgresVerificationRepository(database?: string | Postgre
           : Promise.resolve(null)
       ]);
 
-      return resolveCapabilitiesFromRecords({ ageAccess, creatorKyc, orgKyb });
+      return resolveCapabilitiesFromRecords({
+        ageAccess,
+        adultContentAccess,
+        creatorKyc,
+        orgKyb
+      });
     },
     async close() {
       if (ownsClient) {
@@ -317,11 +247,111 @@ export function createPostgresVerificationRepository(database?: string | Postgre
   };
 }
 
+async function applyVerificationWebhookDecision(
+  tx: PostgresTransaction,
+  input: NormalizedVerificationWebhook,
+  trackEvent: boolean
+): Promise<boolean> {
+  const sessionRows = await tx<Array<{
+    id: string;
+    subject_type: VerificationRecordResource["subjectType"];
+    subject_id: string;
+    purpose: VerificationPurpose;
+    requested_method: VerificationRecordResource["method"];
+    assurance_level: VerificationRecordResource["assuranceLevel"];
+    reusable: boolean;
+    expires_at: Date | null;
+  }>>`
+    select
+      id, subject_type, subject_id, purpose, requested_method,
+      assurance_level, reusable, expires_at
+    from verification_sessions
+    where provider = ${input.provider}
+      and (
+        provider_session_id = ${input.providerReference}
+        or provider_applicant_id = ${input.providerReference}
+        or provider_inquiry_id = ${input.providerReference}
+        or provider_transaction_id = ${input.providerReference}
+      )
+    order by created_at desc
+    limit 1
+    for update
+  `;
+  const session = sessionRows[0];
+
+  if (!session) {
+    if (trackEvent) {
+      await tx`
+        update verification_events
+        set processing_status = 'ignored', processed_at = now()
+        where provider = ${input.provider}
+          and idempotency_key = ${input.providerEventId}
+      `;
+    }
+    return false;
+  }
+
+  await tx`
+    update verification_sessions
+    set
+      status = ${sessionStatus(input.status)},
+      updated_at = now(),
+      completed_at = case when ${input.status} in ('valid', 'invalid', 'blocked') then coalesce(${input.occurredAt ?? null}, now()) else completed_at end
+    where id = ${session.id}
+  `;
+
+  const records = await tx<Array<{ id: string }>>`
+    insert into verification_records (
+      subject_type, subject_id, purpose, status, provider, provider_reference,
+      method, assurance_level, verified_at, expires_at, reusable,
+      raw_payload_hash, failure_reason_code, metadata
+    )
+    values (
+      ${session.subject_type}, ${session.subject_id}, ${session.purpose}, ${input.status},
+      ${input.provider}, ${input.providerReference}, ${session.requested_method},
+      ${session.assurance_level},
+      case when ${input.status} = 'valid' then coalesce(${input.occurredAt ?? null}, now()) else null end,
+      ${session.expires_at}, ${session.reusable}, ${input.signatureHash},
+      ${input.failureReasonCode ?? null},
+      ${tx.json({ source: "provider_webhook", eventType: input.eventType })}
+    )
+    returning id
+  `;
+
+  if (trackEvent) {
+    await tx`
+      update verification_events
+      set session_id = ${session.id}, processing_status = 'processed', processed_at = now()
+      where provider = ${input.provider}
+        and idempotency_key = ${input.providerEventId}
+    `;
+  }
+
+  await tx`
+    insert into audit_events (id, actor_user_id, subject_type, subject_id, action, metadata)
+    values (
+      ${randomUUID()}, null, 'verification_record', ${records[0]?.id ?? session.id},
+      'verification.webhook_applied',
+      ${tx.json({
+        provider: input.provider,
+        providerEventId: input.providerEventId,
+        purpose: session.purpose,
+        status: input.status
+      })}
+    )
+  `;
+
+  return true;
+}
+
 async function resolveSessionSubject(
   sql: PostgresSql,
   input: {
     supabaseUserId: string;
-    purpose: Extract<VerificationPurpose, "creator_kyc" | "org_kyb">;
+    purpose: Extract<
+      VerificationPurpose,
+      "age_access" | "adult_content_access" | "creator_kyc" | "org_kyb"
+    >;
     organizationId?: string | null;
   }
 ): Promise<{ subjectType: VerificationRecordResource["subjectType"]; subjectId: string }> {
@@ -369,39 +399,42 @@ function sessionStatus(status: NormalizedVerificationWebhook["status"]) {
 
 export function resolveCapabilitiesFromRecords(input: {
   ageAccess: VerificationRecordResource | null;
+  adultContentAccess?: VerificationRecordResource | null;
   creatorKyc: VerificationRecordResource | null;
   orgKyb: VerificationRecordResource | null;
 }): CapabilityResolution {
   const hasAge = isValid(input.ageAccess);
+  const hasAdultContentAccess = hasAge && isValid(input.adultContentAccess ?? null);
   const hasCreatorKyc = isValid(input.creatorKyc);
-  const hasOrgKyb = isValid(input.orgKyb);
   const capabilities: Record<CapabilityKey, boolean> = {
     canAccessApp: hasAge,
     canCreateProfile: hasAge,
     canViewAgeRestrictedContent: hasAge,
     canStartCreatorOnboarding: hasAge,
     canCreateDraft: hasAge,
-    canUploadMedia: hasAge && hasCreatorKyc,
-    canPublishMedia: hasAge && hasCreatorKyc,
+    canUploadMedia: hasAge,
+    canPublishMedia: hasAge,
+    canPublishAdultMedia: hasAdultContentAccess,
     canMonetize: hasAge && hasCreatorKyc,
     canReceivePayouts: hasAge && hasCreatorKyc,
     canAccessCreatorDashboard: hasAge,
     canCreateOrganization: hasAge,
-    canAccessStudio: hasAge,
-    canInviteTeam: hasAge && hasOrgKyb,
-    canUseTeamPublishing: hasAge && hasOrgKyb && hasCreatorKyc,
-    canUseAllocationWallets: hasAge && hasOrgKyb,
-    canUseComplianceExports: hasAge && hasOrgKyb,
-    canAccessEnterprise: hasAge && hasOrgKyb
+    canAccessStudio: false,
+    canInviteTeam: false,
+    canUseTeamPublishing: false,
+    canUseAllocationWallets: false,
+    canUseComplianceExports: false,
+    canAccessEnterprise: false
   };
   const missingRequirements = missingFromCapabilities(capabilities);
 
   return {
     capabilities,
     missingRequirements,
-    nextBestAction: nextBestAction(capabilities, missingRequirements),
+    nextBestAction: nextBestAction(capabilities),
     verificationSummary: {
       ageAccess: input.ageAccess,
+      adultContentAccess: input.adultContentAccess ?? null,
       creatorKyc: input.creatorKyc,
       orgKyb: input.orgKyb
     }
@@ -426,30 +459,19 @@ function missingFromCapabilities(capabilities: Record<CapabilityKey, boolean>): 
   if (!capabilities.canAccessApp) {
     missing.add("age_access_required");
   }
-  if (!capabilities.canUploadMedia || !capabilities.canPublishMedia || !capabilities.canMonetize) {
-    missing.add("creator_kyc_required");
+  if (!capabilities.canPublishAdultMedia) {
+    missing.add("adult_verification_required_for_nsfw");
   }
-  if (!capabilities.canAccessEnterprise || !capabilities.canUseComplianceExports) {
-    missing.add("org_kyb_required");
+  if (!capabilities.canMonetize) {
+    missing.add("creator_kyc_required_for_earning");
   }
-  if (!capabilities.canUseTeamPublishing) {
-    missing.add("creator_kyc_required_for_team_publishing");
-  }
-
   return [...missing];
 }
 
-function nextBestAction(capabilities: Record<CapabilityKey, boolean>, missing: string[]): string {
+function nextBestAction(capabilities: Record<CapabilityKey, boolean>): string {
   if (!capabilities.canAccessApp) {
     return "verify_age";
   }
-  if (missing.includes("creator_kyc_required")) {
-    return "verify_creator_identity";
-  }
-  if (missing.includes("org_kyb_required")) {
-    return "verify_business";
-  }
-
   return "continue";
 }
 

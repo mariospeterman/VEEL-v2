@@ -90,6 +90,16 @@ paths:
         "201": { $ref: "#/components/responses/WalletAuthSession" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/auth/wallet/logout:
+    post:
+      operationId: revokeWalletAuthSession
+      tags: [Auth]
+      summary: Revoke the current HttpOnly wallet session
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "204": { description: Wallet session revoked }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/auth/recovery-link:
     post:
       operationId: linkSupabaseRecovery
@@ -2303,7 +2313,7 @@ components:
       type: object
       required: [purpose]
       properties:
-        purpose: { type: string, enum: [creator_kyc, org_kyb] }
+        purpose: { type: string, enum: [adult_content_access, creator_kyc, org_kyb] }
         providerPreference: { type: string, enum: [provider_first, sumsub, didit, persona, veriff], default: provider_first }
         organizationId: { type: string, format: uuid, nullable: true }
     VerificationSession:
@@ -2350,9 +2360,10 @@ components:
         nextBestAction: { type: string }
         verificationSummary:
           type: object
-          required: [ageAccess, creatorKyc, orgKyb]
+          required: [ageAccess, adultContentAccess, creatorKyc, orgKyb]
           properties:
             ageAccess: { oneOf: [{ $ref: "#/components/schemas/VerificationRecordSummary" }, { type: "null" }] }
+            adultContentAccess: { oneOf: [{ $ref: "#/components/schemas/VerificationRecordSummary" }, { type: "null" }] }
             creatorKyc: { oneOf: [{ $ref: "#/components/schemas/VerificationRecordSummary" }, { type: "null" }] }
             orgKyb: { oneOf: [{ $ref: "#/components/schemas/VerificationRecordSummary" }, { type: "null" }] }
     Wallet:
@@ -2405,19 +2416,13 @@ components:
         proof: { $ref: "#/components/schemas/WalletAuthProof" }
     WalletAuthSession:
       type: object
-      required: [accessToken, tokenType, expiresAt, wallet]
+      required: [expiresAt, wallet]
       properties:
-        accessToken: { type: string }
-        tokenType: { type: string, enum: [Bearer] }
         expiresAt: { type: string, format: date-time }
         wallet: { $ref: "#/components/schemas/Wallet" }
     LinkSupabaseRecoveryRequest:
       type: object
-      properties:
-        walletSessionToken:
-          type: string
-          minLength: 16
-          description: Backward-compatible wallet session proof. Prefer the HttpOnly wallet session cookie.
+      additionalProperties: false
     AuthRecoveryLink:
       type: object
       required: [state, provider]
@@ -2627,7 +2632,7 @@ components:
       required: [defaultMode, nsfwPreference]
       properties:
         defaultMode: { type: string, enum: [recommended, following, nsfw, sfw] }
-        nsfwPreference: { type: string, enum: [recommended, nsfw, sfw] }
+        nsfwPreference: { type: string, enum: [both, nsfw, sfw] }
         hiddenCreatorIds:
           type: array
           items: { type: string, format: uuid }
@@ -2638,7 +2643,7 @@ components:
       type: object
       properties:
         defaultMode: { type: string, enum: [recommended, following, nsfw, sfw] }
-        nsfwPreference: { type: string, enum: [recommended, nsfw, sfw] }
+        nsfwPreference: { type: string, enum: [both, nsfw, sfw] }
     HideFeedCreatorRequest:
       type: object
       required: [creatorUserId]

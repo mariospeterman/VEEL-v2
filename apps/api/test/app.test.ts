@@ -337,45 +337,6 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("links Supabase recovery to a wallet-created account when both sessions are proven", async () => {
-    const links: unknown[] = [];
-    const app = await buildApi({
-      authVerifier: fakeAuthVerifier,
-      walletAuthRepository: fakeWalletAuthRepository({
-        async linkSupabaseRecovery(input) {
-          links.push(input);
-        }
-      })
-    });
-    await app.ready();
-
-    const response = await app.inject({
-      method: "POST",
-      url: "/v1/auth/recovery-link",
-      headers: {
-        authorization: "Bearer valid-token",
-        "idempotency-key": "recovery-link-1"
-      },
-      payload: {
-        walletSessionToken: "veel_wallet_test_session"
-      }
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({
-      state: "linked",
-      provider: "supabase"
-    });
-    expect(links).toEqual([
-      {
-        walletSessionToken: "veel_wallet_test_session",
-        supabaseUserId: "00000000-0000-4000-8000-000000000001"
-      }
-    ]);
-
-    await app.close();
-  });
-
   it("links Supabase recovery with wallet session cookie proof", async () => {
     const links: unknown[] = [];
     const app = await buildApi({
@@ -451,17 +412,45 @@ describe("buildApi", () => {
       url: "/v1/auth/recovery-link",
       headers: {
         authorization: "Bearer valid-token",
+        cookie: "veel_wallet_session_token=veel_wallet_test_session",
         "idempotency-key": "recovery-link-conflict"
       },
-      payload: {
-        walletSessionToken: "veel_wallet_test_session"
-      }
+      payload: {}
     });
 
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({
       code: "conflict"
     });
+
+    await app.close();
+  });
+
+  it("revokes the HttpOnly wallet session and expires its cookie", async () => {
+    const revoked: string[] = [];
+    const app = await buildApi({
+      walletAuthRepository: fakeWalletAuthRepository({
+        async revokeSessionToken(token) {
+          revoked.push(token);
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/wallet/logout",
+      headers: {
+        cookie: "veel_wallet_session_token=veel_wallet_test_session",
+        "idempotency-key": "wallet-logout-1"
+      }
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(revoked).toEqual(["veel_wallet_test_session"]);
+    expect(response.headers["set-cookie"]).toContain("veel_wallet_session_token=");
+    expect(response.headers["set-cookie"]).toContain("HttpOnly");
+    expect(response.headers["set-cookie"]).toContain("Max-Age=0");
 
     await app.close();
   });
@@ -542,7 +531,7 @@ describe("buildApi", () => {
         async createPendingAgeVerification(input) {
           createdPendingVerifications.push(input);
         },
-        async recordProviderWebhook() {
+        async applyProviderWebhook() {
           throw new Error("not implemented");
         },
         async updateVerificationFromWebhook() {
@@ -624,7 +613,7 @@ describe("buildApi", () => {
         async createPendingAgeVerification(input) {
           createdPendingVerifications.push(input);
         },
-        async recordProviderWebhook() {
+        async applyProviderWebhook() {
           throw new Error("not implemented");
         },
         async updateVerificationFromWebhook() {
@@ -715,7 +704,7 @@ describe("buildApi", () => {
         async createPendingAgeVerification(input) {
           createdPendingVerifications.push(input);
         },
-        async recordProviderWebhook() {
+        async applyProviderWebhook() {
           throw new Error("not implemented");
         },
         async updateVerificationFromWebhook() {
@@ -886,13 +875,10 @@ describe("buildApi", () => {
     const appliedEvents: unknown[] = [];
     const ageRepository: AgeRepository = {
       ...requiredAgeRepository,
-      async recordProviderWebhook(input) {
+      async applyProviderWebhook(input) {
         recordedEvents.push(input);
-        return true;
-      },
-      async updateVerificationFromWebhook(input) {
         appliedEvents.push(input);
-        return true;
+        return "applied";
       }
     };
     const app = await buildApi({
@@ -933,7 +919,7 @@ describe("buildApi", () => {
         provider: "sumsub",
         providerEventId: "sumsub-event",
         eventType: "applicantReviewed",
-        normalizedState: "verified"
+        state: "verified"
       }
     ]);
     expect(appliedEvents).toMatchObject([
@@ -955,13 +941,10 @@ describe("buildApi", () => {
     const appliedEvents: unknown[] = [];
     const ageRepository: AgeRepository = {
       ...requiredAgeRepository,
-      async recordProviderWebhook(input) {
+      async applyProviderWebhook(input) {
         recordedEvents.push(input);
-        return true;
-      },
-      async updateVerificationFromWebhook(input) {
         appliedEvents.push(input);
-        return true;
+        return "applied";
       }
     };
     const app = await buildApi({
@@ -993,7 +976,7 @@ describe("buildApi", () => {
         provider: "didit",
         providerEventId: "didit-age-session-1",
         eventType: "verification.completed",
-        normalizedState: "verified"
+        state: "verified"
       }
     ]);
     expect(appliedEvents).toMatchObject([
@@ -1014,8 +997,8 @@ describe("buildApi", () => {
     const appliedEvents: unknown[] = [];
     const ageRepository: AgeRepository = {
       ...requiredAgeRepository,
-      async recordProviderWebhook() {
-        return false;
+      async applyProviderWebhook() {
+        return "duplicate";
       },
       async updateVerificationFromWebhook(input) {
         appliedEvents.push(input);
@@ -1142,7 +1125,7 @@ describe("buildApi", () => {
         async createPendingAgeVerification(input) {
           createdPendingVerifications.push(input);
         },
-        async recordProviderWebhook() {
+        async applyProviderWebhook() {
           throw new Error("not implemented");
         },
         async updateVerificationFromWebhook(input) {
@@ -1170,18 +1153,18 @@ describe("buildApi", () => {
       provider: "didit",
       expiresAt: "2026-06-03T22:15:00.000Z"
     });
-    expect(response.json().id).toContain("mock-age:");
+    expect(response.json().id).toContain("mock-verification:age_access:");
     expect(createdPendingVerifications).toMatchObject([
       {
         provider: "didit",
-        providerReference: expect.stringContaining("mock-age:"),
+        providerReference: expect.stringContaining("mock-verification:age_access:"),
         rule: "over_18"
       }
     ]);
     expect(appliedEvents).toMatchObject([
       {
         provider: "didit",
-        providerReference: expect.stringContaining("mock-age:"),
+        providerReference: expect.stringContaining("mock-verification:age_access:"),
         state: "verified"
       }
     ]);
@@ -1573,13 +1556,10 @@ describe("buildApi", () => {
     const appliedEvents: unknown[] = [];
     const verificationRepository: VerificationRepository = {
       ...verificationRepositoryStub(),
-      async recordProviderWebhook(input) {
+      async applyProviderWebhook(input) {
         recordedEvents.push(input);
-        return true;
-      },
-      async updateVerificationFromWebhook(input) {
         appliedEvents.push(input);
-        return true;
+        return "applied";
       }
     };
     const app = await buildApi({
@@ -1642,9 +1622,9 @@ describe("buildApi", () => {
       authVerifier: fakeAuthVerifier,
       verificationRepository: {
         ...verificationRepositoryStub(),
-        async updateVerificationFromWebhook(input) {
+        async applyProviderWebhook(input) {
           appliedEvents.push(input);
-          return true;
+          return "applied";
         }
       }
     });
@@ -1688,9 +1668,9 @@ describe("buildApi", () => {
       authVerifier: fakeAuthVerifier,
       verificationRepository: {
         ...verificationRepositoryStub(),
-        async updateVerificationFromWebhook(input) {
+        async applyProviderWebhook(input) {
           appliedEvents.push(input);
-          return true;
+          return "applied";
         }
       }
     });
@@ -2337,7 +2317,12 @@ describe("buildApi", () => {
         throw new Error("not implemented");
       },
       async findOwnedContentForUpload() {
-        throw new Error("not implemented");
+        return {
+          id: "00000000-0000-4000-8000-000000000040",
+          mediaType: "vod",
+          caption: "studio cut",
+          nsfwLabel: "none"
+        };
       },
       async listHomeFeed(input) {
         expect(input).toEqual({
@@ -2418,7 +2403,12 @@ describe("buildApi", () => {
         throw new Error("not implemented");
       },
       async findOwnedContentForUpload() {
-        throw new Error("not implemented");
+        return {
+          id: "00000000-0000-4000-8000-000000000040",
+          mediaType: "vod",
+          caption: "studio cut",
+          nsfwLabel: "none"
+        };
       },
       async listHomeFeed() {
         throw new Error("not implemented");
@@ -3370,7 +3360,12 @@ describe("buildApi", () => {
         throw new Error("not implemented");
       },
       async findOwnedContentForUpload() {
-        throw new Error("not implemented");
+        return {
+          id: "00000000-0000-4000-8000-000000000040",
+          mediaType: "vod",
+          caption: "studio cut",
+          nsfwLabel: "none"
+        };
       },
       async listHomeFeed() {
         throw new Error("not implemented");
@@ -3438,7 +3433,12 @@ describe("buildApi", () => {
         throw new Error("not implemented");
       },
       async findOwnedContentForUpload() {
-        throw new Error("not implemented");
+        return {
+          id: "00000000-0000-4000-8000-000000000040",
+          mediaType: "vod",
+          caption: "studio cut",
+          nsfwLabel: "none"
+        };
       },
       async listHomeFeed() {
         throw new Error("not implemented");
@@ -3514,7 +3514,8 @@ describe("buildApi", () => {
         return {
           id: "00000000-0000-4000-8000-000000000040",
           mediaType: "vod",
-          caption: "studio cut"
+          caption: "studio cut",
+          nsfwLabel: "none"
         };
       },
       async listHomeFeed() {
@@ -3631,7 +3632,8 @@ describe("buildApi", () => {
         return {
           id: "00000000-0000-4000-8000-000000000040",
           mediaType: "vod",
-          caption: "studio cut"
+          caption: "studio cut",
+          nsfwLabel: "none"
         };
       },
       async listHomeFeed() {
@@ -3725,7 +3727,8 @@ describe("buildApi", () => {
         return {
           id: "00000000-0000-4000-8000-000000000040",
           mediaType: "vod",
-          caption: "studio cut"
+          caption: "studio cut",
+          nsfwLabel: "none"
         };
       },
       async listHomeFeed() {
@@ -3806,7 +3809,8 @@ describe("buildApi", () => {
         return {
           id: "00000000-0000-4000-8000-000000000040",
           mediaType: "vod",
-          caption: "studio cut"
+          caption: "studio cut",
+          nsfwLabel: "none"
         };
       },
       async listHomeFeed() {
@@ -8587,7 +8591,7 @@ describe("buildApi", () => {
     expect(readResponse.statusCode).toBe(200);
     expect(readResponse.json()).toMatchObject({
       defaultMode: "recommended",
-      nsfwPreference: "recommended"
+      nsfwPreference: "both"
     });
     expect(preferencesResponse.statusCode).toBe(200);
     expect(hideCreatorResponse.statusCode).toBe(200);
@@ -9025,6 +9029,9 @@ function fakeWalletAuthRepository(
     async linkSupabaseRecovery() {
       throw new Error("not implemented");
     },
+    async revokeSessionToken() {
+      throw new Error("not implemented");
+    },
     async verifySessionToken() {
       throw new Error("not implemented");
     },
@@ -9042,7 +9049,7 @@ const verifiedAgeRepository: AgeRepository = {
   async createPendingAgeVerification() {
     throw new Error("not implemented");
   },
-  async recordProviderWebhook() {
+  async applyProviderWebhook() {
     throw new Error("not implemented");
   },
   async updateVerificationFromWebhook() {
@@ -9060,7 +9067,7 @@ const requiredAgeRepository: AgeRepository = {
   async createPendingAgeVerification() {
     throw new Error("not implemented");
   },
-  async recordProviderWebhook() {
+  async applyProviderWebhook() {
     throw new Error("not implemented");
   },
   async updateVerificationFromWebhook() {
@@ -9078,7 +9085,7 @@ const pendingAgeSessionRepository: AgeRepository = {
   async createPendingAgeVerification() {
     return undefined;
   },
-  async recordProviderWebhook() {
+  async applyProviderWebhook() {
     throw new Error("not implemented");
   },
   async updateVerificationFromWebhook() {
@@ -9641,7 +9648,7 @@ function fakeEngagementRepository(
       await overrides.onGetFeedPreferences?.(input);
       return {
         defaultMode: "recommended",
-        nsfwPreference: "recommended",
+        nsfwPreference: "both",
         hiddenCreatorIds: [],
         hiddenTopics: []
       };
@@ -9650,7 +9657,7 @@ function fakeEngagementRepository(
       await overrides.onUpdateFeedPreferences?.(input);
       return {
         defaultMode: input.body.defaultMode ?? "recommended",
-        nsfwPreference: input.body.nsfwPreference ?? "recommended",
+        nsfwPreference: input.body.nsfwPreference ?? "both",
         hiddenCreatorIds: [],
         hiddenTopics: []
       };
@@ -9662,7 +9669,7 @@ function fakeEngagementRepository(
       await overrides.onHideCreator?.(input);
       return {
         defaultMode: "recommended",
-        nsfwPreference: "recommended",
+        nsfwPreference: "both",
         hiddenCreatorIds: [input.creatorUserId],
         hiddenTopics: []
       };
@@ -9671,7 +9678,7 @@ function fakeEngagementRepository(
       await overrides.onHideTopic?.(input);
       return {
         defaultMode: "recommended",
-        nsfwPreference: "recommended",
+        nsfwPreference: "both",
         hiddenCreatorIds: [],
         hiddenTopics: [input.topic]
       };
@@ -11021,6 +11028,7 @@ function verificationRepositoryStub(
       canCreateDraft: true,
       canUploadMedia: false,
       canPublishMedia: false,
+      canPublishAdultMedia: false,
       canMonetize: false,
       canReceivePayouts: false,
       canAccessCreatorDashboard: true,
@@ -11036,6 +11044,7 @@ function verificationRepositoryStub(
     nextBestAction: "verify_creator_identity",
     verificationSummary: {
       ageAccess: null,
+      adultContentAccess: null,
       creatorKyc: null,
       orgKyb: null
     }
@@ -11045,8 +11054,8 @@ function verificationRepositoryStub(
     async createPendingSession() {
       return "11111111-1111-4111-8111-111111111111";
     },
-    async recordProviderWebhook() {
-      return true;
+    async applyProviderWebhook() {
+      return "applied";
     },
     async updateVerificationFromWebhook() {
       return true;

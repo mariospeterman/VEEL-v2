@@ -6,6 +6,10 @@ const emptyToUndefined = (value: unknown) => (value === "" ? undefined : value);
 const optionalStringSchema = z.preprocess(emptyToUndefined, z.string().optional());
 const optionalUrlSchema = z.preprocess(emptyToUndefined, z.string().url().optional());
 const optionalEmailSchema = z.preprocess(emptyToUndefined, z.string().email().optional());
+const optionalCookieDomainSchema = z.preprocess(
+  emptyToUndefined,
+  z.string().regex(/^(?:\.)?[A-Za-z0-9.-]+$/).optional()
+);
 const optionalBooleanSchema = (defaultValue: boolean) =>
   z.preprocess(emptyToUndefined, z.coerce.boolean().default(defaultValue));
 
@@ -61,6 +65,7 @@ export const serverEnvSchema = z.object({
   ONRAMP_PROVIDER: z.enum(["disabled", "coinbase"]).default("disabled"),
   ONRAMP_PURCHASE_CURRENCY: z.enum(["SOL", "USDC"]).default("SOL"),
   WALLET_AUTH_SESSION_TTL_SECONDS: z.coerce.number().int().min(300).max(2_592_000).default(604_800),
+  WALLET_AUTH_COOKIE_DOMAIN: optionalCookieDomainSchema,
   COINBASE_CDP_API_KEY_ID: optionalStringSchema,
   COINBASE_CDP_API_KEY_SECRET: optionalStringSchema,
   COINBASE_CDP_API_BASE_URL: z.string().url().default("https://api.cdp.coinbase.com"),

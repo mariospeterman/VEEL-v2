@@ -123,6 +123,7 @@ export interface OwnedContentForUpload {
   id: string;
   mediaType: ContentItem["mediaType"];
   caption?: string | null;
+  nsfwLabel: NonNullable<ContentItem["nsfwLabel"]>;
 }
 
 export interface CreateMediaAssetInput {

@@ -22,7 +22,7 @@ export interface RegisterEngagementRoutesOptions {
 }
 
 const feedModes = new Set(["recommended", "following", "nsfw", "sfw"]);
-const nsfwPreferences = new Set(["recommended", "nsfw", "sfw"]);
+const nsfwPreferences = new Set(["both", "nsfw", "sfw"]);
 const shareModes = new Set(["internal_message", "external_referral_link", "copy_link"]);
 const shareTargetTypes = new Set(["content", "profile", "event"]);
 const reportSubjectTypes = new Set(["content", "user", "message", "live_room", "event"]);

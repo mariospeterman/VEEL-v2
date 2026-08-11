@@ -13,7 +13,7 @@ import {
   AgeProviderIntegrationPendingError,
   AgeProviderUnavailableError
 } from "./age-provider-waterfall.js";
-import { isMockAgeProviderReference } from "./age-provider-adapters.js";
+import { isMockVerificationProviderReference } from "../verification/verification-provider-adapters.js";
 import type {
   AgeProviderWaterfall,
   AgeRepository,
@@ -60,35 +60,21 @@ export async function registerAgeRoutes(
           headers: request.headers,
           env: app.config
         });
-        const isNewEvent = await options.ageRepository.recordProviderWebhook({
+        const result = await options.ageRepository.applyProviderWebhook({
           provider: normalized.provider,
           providerEventId: normalized.providerEventId,
           eventType: normalized.eventType,
-          normalizedState: normalized.state,
-          signatureHash: normalized.signatureHash
-        });
-
-        if (!isNewEvent) {
-          return reply.code(202).send({
-            provider: normalized.provider,
-            received: 1,
-            processed: 0
-          });
-        }
-
-        const applied = await options.ageRepository.updateVerificationFromWebhook({
-          provider: normalized.provider,
-          providerEventId: normalized.providerEventId,
           providerReference: normalized.providerReference,
           state: normalized.state,
           verifiedAt: normalized.occurredAt ?? null,
-          failureCode: normalized.failureCode ?? null
+          failureCode: normalized.failureCode ?? null,
+          signatureHash: normalized.signatureHash
         });
 
         return reply.code(202).send({
           provider: normalized.provider,
           received: 1,
-          processed: applied ? 1 : 0
+          processed: result === "applied" ? 1 : 0
         });
       } catch (error) {
         if (error instanceof AgeWebhookSignatureError) {
@@ -174,7 +160,7 @@ export async function registerAgeRoutes(
         expiresAt: providerSession.expiresAt
       });
 
-      if (isMockAgeProviderReference(app.config, providerSession.providerReference)) {
+      if (isMockVerificationProviderReference(app.config, providerSession.providerReference)) {
         await options.ageRepository.updateVerificationFromWebhook({
           provider: providerSession.provider,
           providerEventId: `${providerSession.providerReference}:auto-approved`,

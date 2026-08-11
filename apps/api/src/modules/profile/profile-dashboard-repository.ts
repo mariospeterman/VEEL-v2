@@ -172,10 +172,16 @@ export function createProfileDashboardRepositoryMethods(
         join users u on u.id = es.user_id
         left join profiles p on p.user_id = u.id
         left join lateral (
-          select av.state
-          from age_verifications av
-          where av.user_id = u.id
-          order by av.created_at desc
+          select case
+            when vr.status = 'valid' and (vr.expires_at is null or vr.expires_at > now()) then 'verified'
+            when vr.status = 'pending' then 'pending'
+            else 'failed'
+          end as state
+          from verification_records vr
+          where vr.subject_type = 'user'
+            and vr.subject_id = u.id
+            and vr.purpose = 'age_access'
+          order by vr.created_at desc, vr.id desc
           limit 1
         ) latest_age on true
         left join lateral (

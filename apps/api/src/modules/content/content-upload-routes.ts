@@ -51,16 +51,6 @@ export async function registerContentUploadRoutes(
     }
 
     try {
-      const creatorAccess = await verifyCreatorCapability(
-        access.supabaseUserId,
-        "canUploadMedia",
-        options
-      );
-
-      if (!creatorAccess.ok) {
-        return reply.code(creatorAccess.statusCode).send(creatorAccess.body);
-      }
-
       const content = await options.contentRepository.findOwnedContentForUpload({
         supabaseUserId: access.supabaseUserId,
         contentId: body.contentId
@@ -71,6 +61,16 @@ export async function registerContentUploadRoutes(
           code: "not_found",
           message: "Content draft was not found"
         });
+      }
+
+      const creatorAccess = await verifyCreatorCapability(
+        access.supabaseUserId,
+        content.nsfwLabel === "none" ? "canUploadMedia" : "canPublishAdultMedia",
+        options
+      );
+
+      if (!creatorAccess.ok) {
+        return reply.code(creatorAccess.statusCode).send(creatorAccess.body);
       }
 
       if (options.contentRepository.countMediaAssetsCreatedSince) {

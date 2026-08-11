@@ -23,7 +23,7 @@ interface RegisterVerificationRoutesOptions {
 }
 
 const verificationProviders = new Set<VerificationProvider>(["sumsub", "didit", "persona", "veriff"]);
-const verificationPurposes = new Set(["creator_kyc", "org_kyb"]);
+const verificationPurposes = new Set(["adult_content_access", "creator_kyc", "org_kyb"]);
 const providerPreferences = new Set(["provider_first", "sumsub", "didit", "persona", "veriff"]);
 
 export async function registerVerificationRoutes(
@@ -56,27 +56,15 @@ export async function registerVerificationRoutes(
           headers: request.headers,
           env: app.config
         });
-        const isNewEvent = await options.verificationRepository.recordProviderWebhook({
-          provider: normalized.provider,
-          providerEventId: normalized.providerEventId,
-          eventType: normalized.eventType,
+        const result = await options.verificationRepository.applyProviderWebhook({
+          ...normalized,
           payloadHash: createHash("sha256").update(rawBody).digest("hex")
         });
-
-        if (!isNewEvent) {
-          return reply.code(202).send({
-            provider: normalized.provider,
-            received: 1,
-            processed: 0
-          });
-        }
-
-        const applied = await options.verificationRepository.updateVerificationFromWebhook(normalized);
 
         return reply.code(202).send({
           provider: normalized.provider,
           received: 1,
-          processed: applied ? 1 : 0
+          processed: result === "applied" ? 1 : 0
         });
       } catch (error) {
         if (error instanceof VerificationWebhookSignatureError) {

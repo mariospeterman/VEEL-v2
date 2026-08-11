@@ -52,11 +52,17 @@ export function createContentMediaRepositoryMethods(
       return rows[0] ? { id: rows[0].id } : undefined;
     },
     async findOwnedContentForUpload(input) {
-      const rows = await sql<{ id: string; media_type: ContentItem["mediaType"]; caption: string | null }[]>`
+      const rows = await sql<{
+        id: string;
+        media_type: ContentItem["mediaType"];
+        caption: string | null;
+        nsfw_label: NonNullable<ContentItem["nsfwLabel"]>;
+      }[]>`
         select
           ci.id,
           ci.media_type,
-          ci.caption
+          ci.caption,
+          ci.nsfw_label
         from content_items ci
         join users u on u.id = ci.creator_user_id
         where ci.id = ${input.contentId}
@@ -71,7 +77,8 @@ export function createContentMediaRepositoryMethods(
         ? {
             id: row.id,
             mediaType: row.media_type,
-            caption: row.caption
+            caption: row.caption,
+            nsfwLabel: row.nsfw_label
           }
         : null;
     },

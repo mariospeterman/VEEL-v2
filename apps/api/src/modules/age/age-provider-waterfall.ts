@@ -1,25 +1,11 @@
 import type { ServerEnv } from "@veel/config";
 import {
-  AgeProviderHttpError,
-  createDiditAgeProviderAdapter,
-  createMockAgeProviderAdapter,
-  createPersonaAgeProviderAdapter,
-  createSumsubAgeProviderAdapter,
-  createVeriffAgeProviderAdapter,
-  createYotiAgeProviderAdapter
-} from "./age-provider-adapters.js";
-import type {
-  AgeProvider,
-  AgeProviderAdapter,
-  AgeProviderPreference,
-  AgeProviderSession,
-  AgeProviderWaterfall
-} from "./types.js";
+  createVerificationProviderWaterfall,
+  VerificationProviderHttpError
+} from "../verification/verification-provider-adapters.js";
+import type { AgeProvider, AgeProviderWaterfall } from "./types.js";
 
-export { AgeProviderHttpError } from "./age-provider-adapters.js";
-
-const reusableFirstOrder: AgeProvider[] = ["didit", "yoti", "persona"];
-const explicitFallbackOrder: AgeProvider[] = ["didit", "yoti", "persona", "sumsub", "veriff"];
+export { VerificationProviderHttpError as AgeProviderHttpError } from "../verification/verification-provider-adapters.js";
 
 export class AgeProviderUnavailableError extends Error {
   constructor() {
@@ -36,62 +22,27 @@ export class AgeProviderIntegrationPendingError extends Error {
 }
 
 export function createAgeProviderWaterfall(env: ServerEnv): AgeProviderWaterfall {
-  return createStaticAgeProviderWaterfall([
-    createMockAgeProviderAdapter(env),
-    createDiditAgeProviderAdapter(env),
-    createYotiAgeProviderAdapter(env),
-    createPersonaAgeProviderAdapter(env),
-    createSumsubAgeProviderAdapter(env),
-    createVeriffAgeProviderAdapter(env)
-  ]);
-}
-
-export function createStaticAgeProviderWaterfall(
-  adapters: AgeProviderAdapter[]
-): AgeProviderWaterfall {
-  const adaptersByProvider = new Map<AgeProvider, AgeProviderAdapter[]>();
-
-  for (const adapter of adapters) {
-    adaptersByProvider.set(adapter.provider, [
-      ...(adaptersByProvider.get(adapter.provider) ?? []),
-      adapter
-    ]);
-  }
+  const verificationProviders = createVerificationProviderWaterfall(env);
 
   return {
-    async createSession(input): Promise<AgeProviderSession> {
-      for (const provider of providerOrder(input.providerPreference)) {
-        const providerAdapters = adaptersByProvider.get(provider) ?? [];
+    async createSession(input) {
+      try {
+        const session = await verificationProviders.createSession({
+          ...input,
+          purpose: "age_access"
+        });
 
-        for (const adapter of providerAdapters) {
-          if (!adapter.isConfigured()) {
-            continue;
-          }
-
-          try {
-            return await adapter.createSession(input);
-          } catch (error) {
-            if (error instanceof AgeProviderHttpError && error.status >= 500) {
-              continue;
-            }
-
-            throw error;
-          }
-        }
+        return {
+          provider: session.provider as "didit" | "yoti" | "sumsub" | "veriff" | "persona",
+          providerReference: session.providerReference,
+          launchUrl: session.launchUrl,
+          expiresAt: session.expiresAt,
+          rule: "over_18"
+        };
+      } catch (error) {
+        if (error instanceof VerificationProviderHttpError) throw error;
+        throw new AgeProviderUnavailableError();
       }
-
-      throw new AgeProviderUnavailableError();
     }
   };
-}
-
-function providerOrder(providerPreference: AgeProviderPreference): AgeProvider[] {
-  if (providerPreference === "reusable_first") {
-    return reusableFirstOrder;
-  }
-
-  return [
-    providerPreference,
-    ...explicitFallbackOrder.filter((provider) => provider !== providerPreference)
-  ];
 }

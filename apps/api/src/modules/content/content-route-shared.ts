@@ -214,7 +214,11 @@ export async function verifyAppReadyAccess(
   };
 }
 
-type CreatorCapability = "canUploadMedia" | "canPublishMedia" | "canMonetize";
+type CreatorCapability =
+  | "canUploadMedia"
+  | "canPublishMedia"
+  | "canPublishAdultMedia"
+  | "canMonetize";
 
 export async function verifyCreatorCapability(
   supabaseUserId: string,
@@ -247,7 +251,12 @@ export async function verifyCreatorCapability(
       statusCode: 403,
       body: {
         code: "verification_required",
-        message: "Creator verification unlocks uploads, publishing, monetization, and payouts.",
+        message:
+          capability === "canPublishAdultMedia"
+            ? "Enhanced adult verification is required for media labeled adult, explicit, or sensitive."
+            : capability === "canMonetize"
+              ? "Identity, tax, and wallet readiness are required before earning."
+              : "Age verification is required before publishing media.",
         missingRequirements: resolution.missingRequirements,
         nextBestAction: resolution.nextBestAction
       }

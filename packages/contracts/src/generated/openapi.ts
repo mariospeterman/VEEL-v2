@@ -89,6 +89,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/wallet/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke the current HttpOnly wallet session */
+        post: operations["revokeWalletAuthSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/recovery-link": {
         parameters: {
             query?: never;
@@ -2673,7 +2690,7 @@ export interface components {
         };
         CreateVerificationSessionRequest: {
             /** @enum {string} */
-            purpose: "creator_kyc" | "org_kyb";
+            purpose: "adult_content_access" | "creator_kyc" | "org_kyb";
             /**
              * @default provider_first
              * @enum {string}
@@ -2726,6 +2743,7 @@ export interface components {
             nextBestAction: string;
             verificationSummary: {
                 ageAccess: components["schemas"]["VerificationRecordSummary"] | null;
+                adultContentAccess: components["schemas"]["VerificationRecordSummary"] | null;
                 creatorKyc: components["schemas"]["VerificationRecordSummary"] | null;
                 orgKyb: components["schemas"]["VerificationRecordSummary"] | null;
             };
@@ -2777,17 +2795,11 @@ export interface components {
             proof: components["schemas"]["WalletAuthProof"];
         };
         WalletAuthSession: {
-            accessToken: string;
-            /** @enum {string} */
-            tokenType: "Bearer";
             /** Format: date-time */
             expiresAt: string;
             wallet: components["schemas"]["Wallet"];
         };
-        LinkSupabaseRecoveryRequest: {
-            /** @description Backward-compatible wallet session proof. Prefer the HttpOnly wallet session cookie. */
-            walletSessionToken?: string;
-        };
+        LinkSupabaseRecoveryRequest: Record<string, never>;
         AuthRecoveryLink: {
             /** @enum {string} */
             state: "linked";
@@ -2978,7 +2990,7 @@ export interface components {
             /** @enum {string} */
             defaultMode: "recommended" | "following" | "nsfw" | "sfw";
             /** @enum {string} */
-            nsfwPreference: "recommended" | "nsfw" | "sfw";
+            nsfwPreference: "both" | "nsfw" | "sfw";
             hiddenCreatorIds?: string[];
             hiddenTopics?: string[];
         };
@@ -2986,7 +2998,7 @@ export interface components {
             /** @enum {string} */
             defaultMode?: "recommended" | "following" | "nsfw" | "sfw";
             /** @enum {string} */
-            nsfwPreference?: "recommended" | "nsfw" | "sfw";
+            nsfwPreference?: "both" | "nsfw" | "sfw";
         };
         HideFeedCreatorRequest: {
             /** Format: uuid */
@@ -6578,6 +6590,28 @@ export interface operations {
         responses: {
             201: components["responses"]["WalletAuthSession"];
             400: components["responses"]["ValidationFailed"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    revokeWalletAuthSession: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Wallet session revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             503: components["responses"]["ServiceUnavailable"];
         };
     };

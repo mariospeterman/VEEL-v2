@@ -3,7 +3,6 @@
 import { readPublicWebEnv } from "@/public-env";
 import { e2eAuthCookieName } from "@/supabase/auth-cookie";
 import { createSupabaseBrowserClient } from "@/supabase/client";
-import { walletSessionCookieName } from "@/wallet/wallet-session";
 import { ApiMutationError } from "./api-mutation-types";
 
 const browserE2eAuthEnabled =
@@ -123,11 +122,6 @@ async function mutationFetch(input: URL, init: RequestInit) {
 }
 
 async function browserSessionToken() {
-  const walletToken = browserCookieToken(walletSessionCookieName);
-  if (walletToken) {
-    return { token: walletToken };
-  }
-
   const e2eToken = browserE2eAccessToken();
   if (e2eToken) {
     return { token: e2eToken };

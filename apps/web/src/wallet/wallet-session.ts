@@ -1,9 +1,6 @@
 "use client";
 
-import { walletSessionCookieName } from "./wallet-session-cookie";
-
 const walletSessionKey = "veel-wallet-session";
-export { walletSessionCookieName };
 
 export interface WalletSessionRecord {
   expiresAt: string;
@@ -11,14 +8,10 @@ export interface WalletSessionRecord {
   provider: string;
 }
 
-export interface SaveWalletSessionInput extends WalletSessionRecord {
-  accessToken: string;
-}
+export type SaveWalletSessionInput = WalletSessionRecord;
 
 export function saveWalletSession(session: SaveWalletSessionInput) {
-  const { accessToken, ...storedSession } = session;
-  window.localStorage.setItem(walletSessionKey, JSON.stringify(storedSession));
-  document.cookie = walletSessionCookie(accessToken, session.expiresAt);
+  window.localStorage.setItem(walletSessionKey, JSON.stringify(session));
 }
 
 export function getWalletSession(): WalletSessionRecord | null {
@@ -32,34 +25,4 @@ export function getWalletSession(): WalletSessionRecord | null {
 
 export function clearWalletSession() {
   window.localStorage.removeItem(walletSessionKey);
-  document.cookie = expiredWalletSessionCookie();
-}
-
-function walletSessionCookie(token: string, expiresAt: string) {
-  const expiresAtMs = Date.parse(expiresAt);
-  const maxAge = Number.isFinite(expiresAtMs)
-    ? Math.max(0, Math.floor((expiresAtMs - Date.now()) / 1000))
-    : 0;
-  const parts = [
-    `${walletSessionCookieName}=${encodeURIComponent(token)}`,
-    "path=/",
-    `max-age=${maxAge}`,
-    "samesite=lax"
-  ];
-
-  if (window.location.protocol === "https:") {
-    parts.push("secure");
-  }
-
-  return parts.join("; ");
-}
-
-function expiredWalletSessionCookie() {
-  const parts = [`${walletSessionCookieName}=`, "path=/", "max-age=0", "samesite=lax"];
-
-  if (window.location.protocol === "https:") {
-    parts.push("secure");
-  }
-
-  return parts.join("; ");
 }

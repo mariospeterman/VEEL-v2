@@ -146,24 +146,32 @@ Creator-facing UI should prefer hashtags first. Categories can be optional metad
 
 ## NSFW/SFW Viewing Controls
 
-Veel is 18+ only, so NSFW/SFW is not an under-18 gate inside the app. It is a viewer preference filter for verified adults.
+Veel is 18+ only, so NSFW/SFW is not an account type or app-access gate. It is a per-media rating and a viewer preference filter for age-verified adults.
 
 Recommended launch behavior:
 
 - before age verification: no protected app access
 - after age verification and wallet setup: viewer can choose feed preference
-- default for new verified users: `Recommended`
+- default feed mode for new verified users: `Recommended`
+- default safety preference: `both`
 - quick Home toggle: `Recommended`, `Following`, `NSFW`, `SFW`
 - saved preference under Settings
 - clear content warnings and report/block controls
 
 Creator Create/Edit:
 
-- required `nsfw_label`
+- required `nsfw_label`; `none` means SFW
 - optional content warning category
 - moderation can correct or override labels
 - repeated mislabeling can restrict monetisation/discovery
 - Mutuals is not a Create/Edit field; creator profile/settings controls Mutuals-active visibility on media
+
+Publishing policy is capability-based on one universal account:
+
+- age assurance permits SFW upload and publishing
+- adult-content assurance is required only for `adult`, `explicit`, or `sensitive` media
+- creator KYC controls earning readiness, not ordinary SFW publishing
+- Studio and Enterprise access comes from backend plan/organization policy, never from KYC alone
 
 NSFW states:
 
@@ -317,7 +325,7 @@ Admin cannot:
 
 - unverified user cannot enter protected app/feed
 - `SFW` mode excludes adult/explicit/sensitive media
-- `NSFW` mode is available only after required 18+ verification and wallet setup
+- `NSFW` mode is available only after the platform's required 18+ access and wallet setup
 - following mode returns followed creators only or primarily, depending fallback policy
 - blocked creators/content do not appear
 - hashtags parse and normalize

@@ -26,7 +26,7 @@ export class VerificationProviderUnavailableError extends Error {
 }
 
 interface VerificationProviderAdapter {
-  provider: Extract<VerificationProvider, "sumsub" | "didit" | "persona" | "veriff">;
+  provider: Extract<VerificationProvider, "sumsub" | "didit" | "yoti" | "persona" | "veriff">;
   isConfigured(input: CreateVerificationSessionInput): boolean;
   createSession(input: CreateVerificationSessionInput): Promise<VerificationProviderSession>;
 }
@@ -35,6 +35,7 @@ export function createVerificationProviderWaterfall(env: ServerEnv): Verificatio
   return createStaticVerificationProviderWaterfall([
     createMockVerificationProviderAdapter(env),
     createDiditVerificationProviderAdapter(env),
+    createYotiVerificationProviderAdapter(env),
     createSumsubVerificationProviderAdapter(env),
     createPersonaVerificationProviderAdapter(env),
     createVeriffVerificationProviderAdapter(env)
@@ -60,15 +61,19 @@ function createMockVerificationProviderAdapter(env: ServerEnv): VerificationProv
     async createSession(input) {
       const providerReference = `${mockVerificationProviderReferencePrefix}${input.purpose}:${input.organizationId ?? input.supabaseUserId}:${input.idempotencyKey}`;
       const isOrganization = input.purpose === "org_kyb";
+      const isAge = input.purpose === "age_access";
 
       return {
         provider: "didit",
         providerReference,
         providerSessionId: providerReference,
-        launchUrl: `${input.callbackUrl}&provider=mock&reference=${encodeURIComponent(providerReference)}`,
+        launchUrl: appendQuery(input.callbackUrl, {
+          provider: "mock",
+          reference: providerReference
+        }),
         expiresAt: expiresInSeconds(15 * 60),
-        method: isOrganization ? "kyb_registry" : "gov_id_selfie",
-        assuranceLevel: isOrganization ? "business_verified" : "documentary",
+        method: isOrganization ? "kyb_registry" : isAge ? "reusable_age" : "gov_id_selfie",
+        assuranceLevel: isOrganization ? "business_verified" : isAge ? "medium" : "documentary",
         reusable: true
       };
     }
@@ -97,7 +102,15 @@ export function createStaticVerificationProviderWaterfall(
             continue;
           }
 
-          return adapter.createSession(input);
+          try {
+            return await adapter.createSession(input);
+          } catch (error) {
+            if (error instanceof VerificationProviderHttpError && error.status >= 500) {
+              continue;
+            }
+
+            throw error;
+          }
         }
       }
 
@@ -154,10 +167,10 @@ function createSumsubVerificationProviderAdapter(env: ServerEnv): VerificationPr
         provider: "sumsub",
         providerReference: userId,
         providerApplicantId: userId,
-        launchUrl: `${input.callbackUrl}?provider=sumsub&token=${encodeURIComponent(token)}`,
+        launchUrl: appendQuery(input.callbackUrl, { provider: "sumsub", token }),
         expiresAt: expiresInSeconds(600),
-        method: input.purpose === "org_kyb" ? "kyb_registry" : "gov_id_selfie",
-        assuranceLevel: input.purpose === "org_kyb" ? "business_verified" : "documentary"
+        method: verificationMethod(input, "sumsub"),
+        assuranceLevel: verificationAssurance(input, "sumsub")
       };
     }
   };
@@ -190,6 +203,7 @@ function createDiditVerificationProviderAdapter(env: ServerEnv): VerificationPro
           metadata: {
             purpose: input.purpose,
             subject: input.purpose === "org_kyb" ? "organization" : "user",
+            ...(input.purpose === "age_access" ? { rule: "over_18" } : {}),
             webhook_url: `${input.webhookBaseUrl}/didit`
           }
         })
@@ -209,8 +223,74 @@ function createDiditVerificationProviderAdapter(env: ServerEnv): VerificationPro
         providerSessionId: id,
         launchUrl: url,
         expiresAt: expiresInSeconds(24 * 60 * 60),
-        method: input.purpose === "org_kyb" ? "kyb_registry" : "gov_id_selfie",
-        assuranceLevel: input.purpose === "org_kyb" ? "business_verified" : "documentary",
+        method: verificationMethod(input, "didit"),
+        assuranceLevel: verificationAssurance(input, "didit"),
+        reusable: true
+      };
+    }
+  };
+}
+
+function createYotiVerificationProviderAdapter(env: ServerEnv): VerificationProviderAdapter {
+  return {
+    provider: "yoti",
+    isConfigured(input) {
+      return input.purpose === "age_access" && Boolean(env.YOTI_SDK_ID && env.YOTI_API_TOKEN);
+    },
+    async createSession(input) {
+      if (!env.YOTI_SDK_ID || !env.YOTI_API_TOKEN) {
+        throw new VerificationProviderHttpError("yoti", 503, "Yoti is not configured");
+      }
+
+      const response = await providerFetch("yoti", `${env.YOTI_API_BASE_URL}/sessions`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${env.YOTI_API_TOKEN}`,
+          "content-type": "application/json",
+          "yoti-sdk-id": env.YOTI_SDK_ID
+        },
+        body: JSON.stringify({
+          type: "OVER",
+          ttl: 900,
+          reference_id: input.idempotencyKey,
+          callback: { url: input.callbackUrl, auto: true },
+          notification_url: `${input.webhookBaseUrl}/yoti`,
+          digital_id: {
+            allowed: true,
+            threshold: 18,
+            age_estimation_allowed: true,
+            age_estimation_threshold: 25,
+            retry_limit: 3
+          },
+          age_estimation: { allowed: true, threshold: 25, level: "PASSIVE", retry_limit: 3 },
+          doc_scan: {
+            allowed: true,
+            threshold: 18,
+            authenticity: "AUTO",
+            level: "PASSIVE",
+            retry_limit: 3
+          },
+          credit_card: { allowed: false }
+        })
+      });
+      const body = objectBody(await response.json());
+      const id = firstString(body.session_id, body.sessionId, body.id);
+
+      if (!id) {
+        throw new VerificationProviderHttpError("yoti", 502, "Yoti response is missing a session id");
+      }
+
+      return {
+        provider: "yoti",
+        providerReference: id,
+        providerSessionId: id,
+        launchUrl: appendQuery(env.YOTI_LAUNCH_BASE_URL, {
+          sessionId: id,
+          sdkId: env.YOTI_SDK_ID
+        }),
+        expiresAt: expiresInSeconds(900),
+        method: "reusable_age",
+        assuranceLevel: "medium",
         reusable: true
       };
     }
@@ -243,7 +323,11 @@ function createPersonaVerificationProviderAdapter(env: ServerEnv): VerificationP
             attributes: {
               "inquiry-template-id": templateId,
               "reference-id": providerSubjectReference(input),
-              note: input.purpose === "org_kyb" ? "WeVid organization KYB" : "WeVid creator KYC"
+              note: input.purpose === "org_kyb"
+                ? "WeVid organization KYB"
+                : input.purpose === "age_access"
+                  ? "WeVid age assurance"
+                  : "WeVid creator KYC"
             }
           },
           meta: {
@@ -268,8 +352,8 @@ function createPersonaVerificationProviderAdapter(env: ServerEnv): VerificationP
         providerInquiryId: id,
         launchUrl: url,
         expiresAt: parseDate(firstString(attributes?.["expires-at"], attributes?.["expires_at"])) ?? expiresInSeconds(86_400),
-        method: input.purpose === "org_kyb" ? "kyb_registry" : "gov_id_selfie",
-        assuranceLevel: input.purpose === "org_kyb" ? "business_verified" : "documentary"
+        method: verificationMethod(input, "persona"),
+        assuranceLevel: verificationAssurance(input, "persona")
       };
     }
   };
@@ -279,7 +363,7 @@ function createVeriffVerificationProviderAdapter(env: ServerEnv): VerificationPr
   return {
     provider: "veriff",
     isConfigured(input) {
-      return input.purpose === "creator_kyc" && Boolean(env.VERIFF_API_KEY);
+      return input.purpose !== "org_kyb" && Boolean(env.VERIFF_API_KEY);
     },
     async createSession(input) {
       if (!env.VERIFF_API_KEY) {
@@ -323,27 +407,34 @@ function createVeriffVerificationProviderAdapter(env: ServerEnv): VerificationPr
 }
 
 function providerOrder(preference: CreateVerificationSessionInput["providerPreference"]) {
+  if (preference === "reusable_first") {
+    return ["didit", "yoti", "persona", "sumsub", "veriff"] as const;
+  }
+
   if (preference === "provider_first") {
-    return ["didit", "sumsub", "persona", "veriff"] as const;
+    return ["didit", "sumsub", "persona", "veriff", "yoti"] as const;
   }
 
   return [
     preference,
-    ...(["didit", "sumsub", "persona", "veriff"] as const).filter((provider) => provider !== preference)
+    ...(["didit", "yoti", "sumsub", "persona", "veriff"] as const).filter((provider) => provider !== preference)
   ];
 }
 
 function sumsubLevelName(env: ServerEnv, input: CreateVerificationSessionInput) {
+  if (input.purpose === "age_access") return env.SUMSUB_LEVEL_NAME;
   return input.purpose === "org_kyb"
     ? env.SUMSUB_ORG_KYB_LEVEL_NAME ?? env.SUMSUB_LEVEL_NAME
     : env.SUMSUB_CREATOR_KYC_LEVEL_NAME ?? env.SUMSUB_LEVEL_NAME;
 }
 
 function diditWorkflowId(env: ServerEnv, input: CreateVerificationSessionInput) {
+  if (input.purpose === "age_access") return env.DIDIT_AGE_WORKFLOW_ID;
   return input.purpose === "org_kyb" ? env.DIDIT_KYB_WORKFLOW_ID : env.DIDIT_KYC_WORKFLOW_ID;
 }
 
 function personaTemplateId(env: ServerEnv, input: CreateVerificationSessionInput) {
+  if (input.purpose === "age_access") return env.PERSONA_TEMPLATE_ID;
   if (input.purpose === "org_kyb") return env.PERSONA_ORG_KYB_TEMPLATE_ID;
   return env.PERSONA_CREATOR_KYC_TEMPLATE_ID ?? env.PERSONA_TEMPLATE_ID;
 }
@@ -352,12 +443,40 @@ function providerSubjectReference(input: CreateVerificationSessionInput) {
   return input.purpose === "org_kyb" ? `org:${input.organizationId ?? input.supabaseUserId}` : `user:${input.supabaseUserId}`;
 }
 
+function verificationMethod(
+  input: CreateVerificationSessionInput,
+  provider: VerificationProvider
+): VerificationProviderSession["method"] {
+  if (input.purpose === "org_kyb") return "kyb_registry";
+  if (input.purpose !== "age_access") return "gov_id_selfie";
+  if (provider === "didit" || provider === "yoti") return "reusable_age";
+  if (provider === "persona") return "doc_scan";
+  return "gov_id_selfie";
+}
+
+function verificationAssurance(
+  input: CreateVerificationSessionInput,
+  provider: VerificationProvider
+): VerificationProviderSession["assuranceLevel"] {
+  if (input.purpose === "org_kyb") return "business_verified";
+  if (input.purpose !== "age_access") return "documentary";
+  return provider === "didit" || provider === "yoti" ? "medium" : "documentary";
+}
+
+function appendQuery(baseUrl: string, params: Record<string, string>) {
+  const search = new URLSearchParams(params);
+  return `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}${search.toString()}`;
+}
+
 function withoutTrailingSlash(value: string) {
   return value.endsWith("/") ? value.slice(0, -1) : value;
 }
 
 async function providerFetch(provider: VerificationProvider, url: string, init: RequestInit): Promise<Response> {
-  const response = await fetch(url, init);
+  const response = await fetch(url, {
+    ...init,
+    signal: init.signal ?? AbortSignal.timeout(10_000)
+  });
 
   if (!response.ok) {
     throw new VerificationProviderHttpError(provider, response.status, await response.text());

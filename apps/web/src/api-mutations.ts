@@ -138,6 +138,10 @@ export async function createWalletAuthSession(
   return publicMutation<WalletAuthSession>("/v1/auth/wallet/sessions", "POST", body);
 }
 
+export async function revokeWalletAuthSession(): Promise<void> {
+  return authenticatedEmptyMutation("/v1/auth/wallet/logout", "POST", {});
+}
+
 export async function linkSupabaseRecovery(
   body: LinkSupabaseRecoveryRequest
 ): Promise<AuthRecoveryLink> {

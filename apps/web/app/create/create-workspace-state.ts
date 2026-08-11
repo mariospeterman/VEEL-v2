@@ -24,7 +24,12 @@ export const visibilityValues: CreateContentRequest["visibility"][] = [
   "subscribers",
   "private"
 ];
-export const nsfwLabels: CreateContentRequest["nsfwLabel"][] = ["adult", "explicit", "sensitive"];
+export const nsfwLabels: CreateContentRequest["nsfwLabel"][] = [
+  "none",
+  "sensitive",
+  "adult",
+  "explicit"
+];
 
 export type PendingState = "draft" | "save" | "publish" | "upload" | "sync" | null;
 export type UploadState = "idle" | "uploading" | "complete" | "failed" | "aborted";
@@ -32,7 +37,7 @@ export type UploadState = "idle" | "uploading" | "complete" | "failed" | "aborte
 export function useCreateWorkspaceState() {
   const [mediaType, setMediaType] = useState<CreateContentRequest["mediaType"]>("clip");
   const [visibility, setVisibility] = useState<CreateContentRequest["visibility"]>("private");
-  const [nsfwLabel, setNsfwLabel] = useState<CreateContentRequest["nsfwLabel"]>("adult");
+  const [nsfwLabel, setNsfwLabel] = useState<CreateContentRequest["nsfwLabel"]>("none");
   const [caption, setCaption] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [draft, setDraft] = useState<ContentItem | null>(null);

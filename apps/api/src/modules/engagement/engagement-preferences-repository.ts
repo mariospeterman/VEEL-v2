@@ -30,7 +30,7 @@ export function createEngagementPreferencesRepositoryMethods(
           select
             actor.user_id,
             coalesce(vfp.default_feed_mode, 'recommended') as default_feed_mode,
-            coalesce(vfp.nsfw_preference, 'recommended') as nsfw_preference
+            coalesce(vfp.nsfw_preference, 'both') as nsfw_preference
           from actor
           left join viewer_feed_preferences vfp on vfp.user_id = actor.user_id
         )
@@ -65,7 +65,7 @@ export function createEngagementPreferencesRepositoryMethods(
           select
             actor.id,
             coalesce(${input.body.defaultMode ?? null}, 'recommended'),
-            coalesce(${input.body.nsfwPreference ?? null}, 'recommended'),
+            coalesce(${input.body.nsfwPreference ?? null}, 'both'),
             now()
           from actor
           on conflict (user_id) do update
@@ -97,7 +97,7 @@ export function createEngagementPreferencesRepositoryMethods(
           insert into viewer_feed_preferences (user_id, default_feed_mode, nsfw_preference, updated_at)
           values (${actor.id}, 'recommended', 'recommended', now())
           on conflict (user_id) do update
-          set default_feed_mode = 'recommended', nsfw_preference = 'recommended', updated_at = now()
+          set default_feed_mode = 'recommended', nsfw_preference = 'both', updated_at = now()
         `;
         await insertAudit(transaction, actor.id, "feed_preferences", actor.id, "feed.reset", {
           idempotencyKey: input.idempotencyKey

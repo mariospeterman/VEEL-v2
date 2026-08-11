@@ -20,7 +20,7 @@ Launch scope:
 Non-goals:
 - historical-context inference, duplicate systems, and unapproved provider/product expansion
 
-This repo now enforces server-owned verification for wallet sign-in and age-gate completion.
+This repo now enforces server-owned verification for wallet sign-in, age-gate completion, adult-content publishing assurance, creator KYC, and organization KYB.
 Local mock flows remain useful for development, but real provider launches and real provider
 webhooks must be configured before production rollout.
 
@@ -30,12 +30,12 @@ Current implementation state:
 - `GET /v1/age/status` is the browser-safe age read projection. `/age` reads it through the typed web API helper and starts `POST /v1/age/sessions` only after explicit authenticated user action.
 - `GET /v1/verification/status` is the backend-owned capability projection for app, creator, Studio, and enterprise access.
 - `POST /v1/verification/sessions` starts creator KYC or organization KYB sessions. The browser receives only a hosted provider launch URL; it cannot mark KYC/KYB complete.
-- `POST /v1/webhooks/verification/{provider}` accepts signed KYC/KYB callbacks and writes normalized `verification_records`.
+- `POST /v1/webhooks/verification/{provider}` accepts signed age, adult-content, KYC, and KYB callbacks and writes normalized `verification_records`.
 - The runtime waterfall has real HTTP session adapters for Yoti, Persona, Veriff, and Sumsub. Each adapter is inert until its exact env/config is present, and all unconfigured or failing providers fail closed with `503`.
 - The creator/business verification waterfall has real HTTP session adapters for Didit, Sumsub, Persona, and Veriff. Didit, Sumsub, and Persona can serve creator KYC and org KYB when their purpose-specific workflows/levels/templates are configured. Veriff is currently a creator KYC documentary fallback only unless a Veriff business/KYB product is separately approved and wired.
 - Local/test environments can enable `AGE_VERIFICATION_ALLOW_MOCK_PROVIDER=true` to use API-owned mock adapters for age, creator KYC, and organization KYB. These adapters create normal pending sessions, immediately apply a normalized valid result through the repository boundary, and are disabled when `NODE_ENV=production`.
 - The landing reusable-first path tries Yoti/Persona-style age assurance first. Sumsub and Veriff remain explicit fallback/provider choices and creator-compliance candidates, not ordinary viewer onboarding defaults.
-- Successful provider session starts are stored as pending `age_verifications` rows with provider reference, state, rule/jurisdiction metadata, and timestamps only.
+- Successful provider session starts are stored in `verification_sessions` with a matching pending `verification_records` entry. `verification_records` is the sole application authority; `age_verifications` is a revoked historical archive after migration `0077`.
 - Raw provider payloads, identity images, document data, and browser-completed age state are not accepted by this route.
 
 ## Official references
@@ -237,7 +237,7 @@ The frontend has neutral monogram fallbacks for local development, but those fal
 - Storage:
   - `provider_webhook_receipts` stores receipt metadata and a hash of the signature only
   - `provider_events` stores normalized provider event state
-  - `age_verifications` stores normalized `pending`, `verified`, or `failed` state
+  - `verification_sessions`, `verification_events`, and `verification_records` store normalized session, receipt, and decision state
   - raw provider payloads, identity images, document data, and private provider comments are not stored
 
 ### Runtime behavior in this repo
@@ -284,7 +284,7 @@ The frontend has neutral monogram fallbacks for local development, but those fal
 - Storage:
   - `provider_webhook_receipts` stores receipt metadata and a hash of the notification signature only
   - `provider_events` stores normalized provider event state
-  - `age_verifications` stores normalized `pending`, `verified`, or `failed` state
+  - `verification_sessions`, `verification_events`, and `verification_records` store normalized session, receipt, and decision state
   - raw provider payloads and identity artifacts are not stored
 
 ### Runtime behavior in this repo
