@@ -971,6 +971,42 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         audit_event_count: "1"
       });
 
+      const normalMessageBody = `Normal integration hello ${shortRunId}`;
+      const normalMessageIdempotencyKey = `normal-message-${runId}`;
+      const normalMessageRequest = {
+        method: "POST" as const,
+        url: `/v1/messages/conversations/${seededConversationId}/messages`,
+        headers: authenticatedHeaders(normalMessageIdempotencyKey),
+        payload: { body: normalMessageBody }
+      };
+      const [normalMessageResponse, concurrentNormalMessageResponse] = await Promise.all([
+        app.inject(normalMessageRequest),
+        app.inject(normalMessageRequest)
+      ]);
+      const replayedNormalMessageResponse = await app.inject(normalMessageRequest);
+
+      expect(normalMessageResponse.statusCode, normalMessageResponse.body).toBe(201);
+      expect(concurrentNormalMessageResponse.statusCode, concurrentNormalMessageResponse.body).toBe(201);
+      expect(replayedNormalMessageResponse.statusCode, replayedNormalMessageResponse.body).toBe(201);
+      expect(concurrentNormalMessageResponse.json()).toEqual(normalMessageResponse.json());
+      expect(replayedNormalMessageResponse.json()).toEqual(normalMessageResponse.json());
+
+      const conflictingNormalMessageResponse = await app.inject({
+        ...normalMessageRequest,
+        payload: { body: `${normalMessageBody} changed` }
+      });
+      expect(conflictingNormalMessageResponse.statusCode, conflictingNormalMessageResponse.body).toBe(409);
+
+      const normalMessageRows = await sql<{ message_count: string }[]>`
+        select count(*) as message_count
+        from messages m
+        join users u on u.id = m.sender_user_id
+        where u.supabase_user_id = ${buyerSupabaseUserId}
+          and m.conversation_id = ${seededConversationId}
+          and m.idempotency_key = ${normalMessageIdempotencyKey}
+      `;
+      expect(normalMessageRows[0]?.message_count).toBe("1");
+
       const paidMessageBody = `Paid integration hello ${shortRunId}`;
       const paidMessageIntentResponse = await app.inject({
         method: "POST",
@@ -1041,6 +1077,12 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(paidMessagesResponse.statusCode, paidMessagesResponse.body).toBe(200);
       expect(paidMessagesResponse.json()).toMatchObject({
         items: [
+          {
+            conversationId: seededConversationId,
+            body: normalMessageBody,
+            deliveryState: "visible",
+            paymentIntentId: null
+          },
           {
             conversationId: seededConversationId,
             body: paidMessageBody,

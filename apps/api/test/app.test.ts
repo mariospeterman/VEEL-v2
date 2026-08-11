@@ -55,6 +55,7 @@ import type {
   StoredLiveRoom
 } from "../src/modules/live/types";
 import { LiveProviderConfigurationError } from "../src/modules/live/livepeer-adapter";
+import { MessageIdempotencyConflictError } from "../src/modules/message/message-repository";
 import type { Message, MessageRepository } from "../src/modules/message/types";
 import type {
   Notification,
@@ -8577,7 +8578,7 @@ describe("buildApi", () => {
   });
 
   it("creates a normal conversation message through the backend", async () => {
-    const createdBodies: string[] = [];
+    const createdInputs: Array<{ body: string; idempotencyKey: string }> = [];
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       sessionRepository: appReadySessionRepository,
@@ -8585,7 +8586,7 @@ describe("buildApi", () => {
       walletRepository: walletRepositoryWithWallet,
       messageRepository: fakeMessageRepository({
         async onCreateMessage(input) {
-          createdBodies.push(input.body);
+          createdInputs.push({ body: input.body, idempotencyKey: input.idempotencyKey });
           return messageFixture({
             conversationId: input.conversationId,
             body: input.body
@@ -8611,7 +8612,39 @@ describe("buildApi", () => {
       body: "Hello from Veel",
       deliveryState: "visible"
     });
-    expect(createdBodies).toEqual(["Hello from Veel"]);
+    expect(createdInputs).toEqual([
+      { body: "Hello from Veel", idempotencyKey: "message-create-1" }
+    ]);
+
+    await app.close();
+  });
+
+  it("rejects normal message idempotency-key reuse with changed input", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      messageRepository: fakeMessageRepository({
+        async onCreateMessage() {
+          throw new MessageIdempotencyConflictError();
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/messages/conversations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab11/messages",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "message-conflict-1"
+      },
+      payload: { body: "Changed message" }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ code: "conflict" });
 
     await app.close();
   });

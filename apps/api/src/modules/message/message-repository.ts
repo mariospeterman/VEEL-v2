@@ -8,7 +8,10 @@ import {
 } from "./message-write-repository.js";
 import type { MessageRepository } from "./types.js";
 
-export { MessageRepositoryConfigurationError } from "./message-errors.js";
+export {
+  MessageIdempotencyConflictError,
+  MessageRepositoryConfigurationError
+} from "./message-errors.js";
 
 export function createPostgresMessageRepository(database?: string | PostgresSql): MessageRepository {
   if (!database) {

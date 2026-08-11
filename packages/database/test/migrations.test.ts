@@ -245,6 +245,16 @@ describe("database migrations", () => {
     expect(sql).not.toMatch(/raw_payload|private_key|service_role|payment_proof/i);
   });
 
+  it("makes normal message delivery idempotent per sender", () => {
+    const sql = readMigration("0084_message_idempotency.sql");
+
+    expect(sql).toContain("add column if not exists idempotency_key text");
+    expect(sql).toContain("messages_sender_idempotency_uidx");
+    expect(sql).toContain("on messages (sender_user_id, idempotency_key)");
+    expect(sql).toContain("where idempotency_key is not null");
+    expect(sql).not.toMatch(/raw_payload|private_key|service_role|message_body/i);
+  });
+
   it("adds AI/MCP scoped sessions and tool-call audit rows with RLS and redaction", () => {
     const sql = readMigration("0025_ai_mcp_scoped_assistant.sql");
 

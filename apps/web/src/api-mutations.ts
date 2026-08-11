@@ -232,23 +232,27 @@ export async function createEventAccessPassIntent(
 
 export async function createMessage(
   conversationId: string,
-  body: CreateMessageRequest
+  body: CreateMessageRequest,
+  idempotencyKey?: string
 ): Promise<Message> {
   return authenticatedMutation<Message>(
     `/v1/messages/conversations/${encodeURIComponent(conversationId)}/messages`,
     "POST",
-    body
+    body,
+    idempotencyKey
   );
 }
 
 export async function createPaidMessageIntent(
   conversationId: string,
-  body: CreatePaidMessageIntentRequest
+  body: CreatePaidMessageIntentRequest,
+  idempotencyKey?: string
 ): Promise<PaidMessageIntent> {
   return authenticatedMutation<PaidMessageIntent>(
     `/v1/messages/conversations/${encodeURIComponent(conversationId)}/paid-message-intents`,
     "POST",
-    body
+    body,
+    idempotencyKey
   );
 }
 

@@ -4,6 +4,8 @@ import type { BrowserContext } from "@playwright/test";
 
 const rawBackendCopy = /HTTP (401|403|404|429|500|503)|Missing or invalid bearer token|API is unavailable/;
 const e2eToken = "veel-e2e-token";
+const firstConversationId = "00000000-0000-4000-8000-000000000081";
+const secondConversationId = "00000000-0000-4000-8000-000000000082";
 let apiServer: Server;
 
 test.beforeAll(async () => {
@@ -138,6 +140,26 @@ test("separates platform plans from creator memberships responsively", async ({ 
   expect(layout.scrollWidth).toBe(layout.clientWidth);
 });
 
+test("selects a requested conversation and keeps the inbox within the viewport", async ({ context, page }) => {
+  await addE2eCookie(context);
+  await page.goto(`/app/messages?conversation=${secondConversationId}`, {
+    waitUntil: "domcontentloaded",
+    timeout: 45_000
+  });
+
+  await expect(page.getByRole("heading", { name: "Production notes" })).toBeVisible();
+  await expect(page.getByRole("article").getByText("Second thread message", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Production notes/ })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("link", { name: /Studio team/ })).not.toHaveAttribute("aria-current", "page");
+  await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
+
+  const layout = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth
+  }));
+  expect(layout.scrollWidth).toBe(layout.clientWidth);
+});
+
 test("keeps content detail route reachable", async ({ page }) => {
   await page.goto("/content/00000000-0000-4000-8000-000000000040", { waitUntil: "domcontentloaded", timeout: 45_000 });
   await expect(page.getByRole("heading", { name: "Content unavailable" })).toBeVisible();
@@ -206,6 +228,33 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
 
   if (method === "GET" && url.pathname === "/v1/subscriptions") {
     sendJson(response, 200, { items: [] });
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/v1/messages/conversations") {
+    sendJson(response, 200, { items: conversations() });
+    return;
+  }
+
+  const conversationMessagesMatch = url.pathname.match(
+    /^\/v1\/messages\/conversations\/([0-9a-f-]+)\/messages$/
+  );
+  if (method === "GET" && conversationMessagesMatch) {
+    const conversationId = conversationMessagesMatch[1];
+    if (conversationId !== firstConversationId && conversationId !== secondConversationId) {
+      sendJson(response, 404, { message: "Conversation not found" });
+      return;
+    }
+
+    sendJson(response, 200, {
+      items: [
+        message(
+          conversationId,
+          conversationId === secondConversationId ? "Second thread message" : "First thread message"
+        )
+      ],
+      nextCursor: null
+    });
     return;
   }
 
@@ -319,6 +368,41 @@ function subscriptionPlan(id: string, label: string, amountMinor: number) {
     provider: "official_solana_subscription_program",
     tokenMint: null,
     tokenProgram: null
+  };
+}
+
+function conversations() {
+  return [
+    conversation(firstConversationId, "Studio team", "First thread message", 0),
+    conversation(secondConversationId, "Production notes", "Second thread message", 2)
+  ];
+}
+
+function conversation(id: string, title: string, body: string, unreadCount: number) {
+  return {
+    id,
+    type: "direct",
+    title,
+    unreadCount,
+    lastMessage: {
+      body,
+      sender: user(),
+      createdAt: "2026-08-11T10:00:00.000Z"
+    }
+  };
+}
+
+function message(conversationId: string, body: string) {
+  return {
+    id: conversationId === firstConversationId
+      ? "00000000-0000-4000-8000-000000000091"
+      : "00000000-0000-4000-8000-000000000092",
+    conversationId,
+    sender: user(),
+    body,
+    deliveryState: "visible",
+    paymentIntentId: null,
+    createdAt: "2026-08-11T10:00:00.000Z"
   };
 }
 

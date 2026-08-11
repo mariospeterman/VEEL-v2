@@ -5,10 +5,12 @@ import {
   messageSelectSql,
   toMessage
 } from "./message-repository-mappers.js";
+import { MessageIdempotencyConflictError } from "./message-errors.js";
 import type { ConversationInput, CreateMessageInput, CreatePaidMessageDraftInput } from "./types.js";
 
 export async function createMessage(sql: postgres.Sql, input: CreateMessageInput) {
-  const rows = await sql<MessageRow[]>`
+  const messageId = randomUUID();
+  const receiptRows = await sql<{ id: string; request_matches: boolean }[]>`
     with actor as (
       select id
       from users
@@ -21,24 +23,40 @@ export async function createMessage(sql: postgres.Sql, input: CreateMessageInput
       join actor on actor.id = cm.user_id
       where cm.conversation_id = ${input.conversationId}
       limit 1
-    ),
-    inserted_message as (
-      insert into messages (
-        id,
-        conversation_id,
-        sender_user_id,
-        body
-      )
-      select
-        ${randomUUID()},
-        conversation_id,
-        actor_user_id,
-        ${input.body}
-      from participant
-      returning *
     )
+    insert into messages (
+      id,
+      conversation_id,
+      sender_user_id,
+      body,
+      idempotency_key
+    )
+    select
+      ${messageId},
+      conversation_id,
+      actor_user_id,
+      ${input.body},
+      ${input.idempotencyKey}
+    from participant
+    on conflict (sender_user_id, idempotency_key) where idempotency_key is not null
+    do update set idempotency_key = messages.idempotency_key
+    returning
+      id,
+      conversation_id = ${input.conversationId} and body = ${input.body} as request_matches
+  `;
+  const receipt = receiptRows[0];
+
+  if (!receipt) {
+    return null;
+  }
+
+  if (!receipt.request_matches) {
+    throw new MessageIdempotencyConflictError();
+  }
+
+  const rows = await sql<MessageRow[]>`
     ${messageSelectSql(sql)}
-    join inserted_message im on im.id = m.id
+    where m.id = ${receipt.id}
   `;
 
   return rows[0] ? toMessage(rows[0]) : null;

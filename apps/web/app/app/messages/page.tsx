@@ -11,11 +11,21 @@ import { Card, EmptyState, ErrorState, PageHeader, StatusPill } from "../../ui";
 
 export const dynamic = "force-dynamic";
 
-export default async function MessagesPage() {
+export default async function MessagesPage({
+  searchParams
+}: {
+  searchParams?: Promise<{ conversation?: string }>;
+}) {
   await requireAppAccess("/app/messages");
 
+  const params = await searchParams;
   const conversations = await getConversations();
-  const selectedConversation = conversations.ok ? (conversations.data.items[0] ?? null) : null;
+  const requestedConversationId = params?.conversation;
+  const selectedConversation = conversations.ok
+    ? (conversations.data.items.find((item) => item.id === requestedConversationId) ??
+      conversations.data.items[0] ??
+      null)
+    : null;
   const messages = selectedConversation
     ? await getConversationMessages(selectedConversation.id)
     : null;
@@ -104,10 +114,12 @@ function ConversationRow({
   isSelected: boolean;
 }) {
   return (
-    <article
+    <a
+      aria-current={isSelected ? "page" : undefined}
       className={`grid gap-1 border-b border-(--line) p-4 ${
         isSelected ? "bg-(--accent-soft)" : ""
       }`}
+      href={`/app/messages?conversation=${encodeURIComponent(conversation.id)}`}
     >
       <div className="flex items-center justify-between gap-3">
         <p className="font-medium">{conversation.title}</p>
@@ -118,7 +130,7 @@ function ConversationRow({
       ) : (
         <p className="text-sm text-(--muted)">No messages yet</p>
       )}
-    </article>
+    </a>
   );
 }
 

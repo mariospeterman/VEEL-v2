@@ -119,6 +119,7 @@ The controlling branch evidence is recorded in `production-branch-inventory.md`.
 - [ ] Complete real following, like, save, comment, share, report, hide, and block persistence with authz, rate limits, reconciliation, audit, and end-to-end tests.
 - [ ] Implement a canonical mixed Home feed and immersive Bits feed with cursor stability, creator diversity, freshness, engagement quality, safety, and follow signals; paid ranking remains forbidden.
 - [ ] Remove every inert production affordance or wire it to the canonical API owner.
+- [x] Persist normal-message idempotency keys, replay the original message for unchanged retries, reject key reuse with changed input, and make inbox rows select canonical conversation URLs.
 - [x] Replace legacy timed live-pass product behavior with three clear access modes: public, profile members, and paid event.
 - [ ] Support one primary live access call to action, optional members-only chat on public live, inherited replay access, and safe public Bit/highlight generation.
 - [ ] Integrate live moderation signals, temporary pause/end controls, human review, evidence, reasons, and appeal paths.

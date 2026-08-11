@@ -21,7 +21,10 @@ import {
   validateMessageBody,
   verifyMessageReadyAccess
 } from "./message-route-utils.js";
-import { MessageRepositoryConfigurationError } from "./message-repository.js";
+import {
+  MessageIdempotencyConflictError,
+  MessageRepositoryConfigurationError
+} from "./message-repository.js";
 import type {
   CreateMessageRequest,
   CreatePaidMessageIntentRequest
@@ -93,7 +96,8 @@ export async function registerMessageRoutes(
       return reply.code(access.statusCode).send(access.body);
     }
 
-    if (!requiredIdempotencyKey(request)) {
+    const idempotencyKey = requiredIdempotencyKey(request);
+    if (!idempotencyKey) {
       return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
     }
 
@@ -116,7 +120,8 @@ export async function registerMessageRoutes(
       const message = await options.messageRepository.createMessage({
         supabaseUserId: access.supabaseUserId,
         conversationId,
-        body: body?.body?.trim() ?? ""
+        body: body?.body?.trim() ?? "",
+        idempotencyKey
       });
 
       if (!message) {
@@ -125,6 +130,10 @@ export async function registerMessageRoutes(
 
       return reply.code(201).send(message);
     } catch (error) {
+      if (error instanceof MessageIdempotencyConflictError) {
+        return reply.code(409).send(conflictResponse("Idempotency key was already used"));
+      }
+
       if (error instanceof MessageRepositoryConfigurationError) {
         request.log.warn({ error }, "Message create failed");
         return reply.code(503).send(serviceUnavailableResponse("Messages are not configured"));

@@ -771,8 +771,13 @@ create table messages (
   sender_user_id uuid not null references users(id),
   body text not null,
   paid_access_state text,
+  idempotency_key text,
   created_at timestamptz not null default now()
 );
+
+create unique index messages_sender_idempotency_uidx
+  on messages (sender_user_id, idempotency_key)
+  where idempotency_key is not null;
 
 create table payment_intents (
   id uuid primary key,
