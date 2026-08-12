@@ -22,6 +22,8 @@ import { createLivepeerProviderAdapter } from "./modules/live/livepeer-adapter.j
 import type { LiveProviderAdapter, LiveRepository } from "./modules/live/types.js";
 import { createPostgresMessageRepository } from "./modules/message/message-repository.js";
 import type { MessageRepository } from "./modules/message/types.js";
+import { createPostgresManagedCreatorRepository } from "./modules/managed-creator/managed-creator-repository.js";
+import type { ManagedCreatorRepository } from "./modules/managed-creator/types.js";
 import { createPostgresMcpRepository } from "./modules/mcp/mcp-repository.js";
 import type { McpRepository } from "./modules/mcp/types.js";
 import { createPostgresMutualsRepository } from "./modules/mutuals/mutuals-repository.js";
@@ -40,6 +42,8 @@ import type {
   PaymentRepository,
   PaymentSettlementVerifier
 } from "./modules/payment/types.js";
+import { createPostgresPerformerRepository } from "./modules/performer/performer-repository.js";
+import type { PerformerRepository } from "./modules/performer/types.js";
 import { createPostgresProfileRepository } from "./modules/profile/profile-repository.js";
 import type { ProfileRepository } from "./modules/profile/types.js";
 import { createPostgresReferralRepository } from "./modules/referral/referral-repository.js";
@@ -81,8 +85,10 @@ export interface BuildApiOptions {
   liveRepository?: LiveRepository;
   liveProvider?: LiveProviderAdapter;
   messageRepository?: MessageRepository;
+  managedCreatorRepository?: ManagedCreatorRepository;
   paymentRepository?: PaymentRepository;
   paymentEvidenceRepository?: PaymentEvidenceRepository;
+  performerRepository?: PerformerRepository;
   activityRepository?: ActivityRepository;
   settlementVerifier?: PaymentSettlementVerifier;
   profileRepository?: ProfileRepository;
@@ -119,8 +125,10 @@ export interface ApiDependencies {
   liveRepository: LiveRepository;
   liveProvider: LiveProviderAdapter;
   messageRepository: MessageRepository;
+  managedCreatorRepository: ManagedCreatorRepository;
   paymentRepository: PaymentRepository;
   paymentEvidenceRepository: PaymentEvidenceRepository;
+  performerRepository: PerformerRepository;
   activityRepository: ActivityRepository;
   settlementVerifier: PaymentSettlementVerifier;
   referralRepository: ReferralRepository;
@@ -175,11 +183,15 @@ export function createApiDependencies(
     liveProvider: options.liveProvider ?? createLivepeerProviderAdapter(app.config),
     messageRepository:
       options.messageRepository ?? createPostgresMessageRepository(postgresClient),
+    managedCreatorRepository:
+      options.managedCreatorRepository ?? createPostgresManagedCreatorRepository(postgresClient),
     paymentRepository:
       options.paymentRepository ?? createPostgresPaymentRepository(postgresClient),
     paymentEvidenceRepository:
       options.paymentEvidenceRepository ??
       createPostgresPaymentEvidenceRepository(postgresClient),
+    performerRepository:
+      options.performerRepository ?? createPostgresPerformerRepository(postgresClient),
     activityRepository:
       options.activityRepository ?? createPostgresActivityRepository(postgresClient),
     settlementVerifier:

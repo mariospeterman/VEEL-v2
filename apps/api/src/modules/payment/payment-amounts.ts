@@ -4,13 +4,17 @@ export interface PaymentSplitInput {
   totalAmountAtomic: number;
   platformFeeBps: number;
   referralShareOfPlatformFeeBps?: number | null;
+  enterpriseShareOfCreatorProceedsBps?: number | null;
 }
 
 export interface PaymentSplit {
   totalAmountAtomic: number;
+  creatorSideProceedsAtomic: number;
   creatorAmountAtomic: number;
+  enterpriseManagementAmountAtomic: number;
+  platformFeeGrossAtomic: number;
   platformFeeAmountAtomic: number;
-  allocationAmountAtomic: number;
+  referralAmountAtomic: number;
 }
 
 export class PaymentAmountError extends Error {
@@ -20,23 +24,28 @@ export class PaymentAmountError extends Error {
   }
 }
 
-export function calculateCreatorSplit(input: PaymentSplitInput): PaymentSplit {
+export function calculateSettlementSplit(input: PaymentSplitInput): PaymentSplit {
   assertSafeAtomicAmount(input.totalAmountAtomic, "invalid_total");
   assertSafeBasisPoints(input.platformFeeBps);
   const referralShareOfPlatformFeeBps = input.referralShareOfPlatformFeeBps ?? 0;
+  const enterpriseShareOfCreatorProceedsBps = input.enterpriseShareOfCreatorProceedsBps ?? 0;
   assertSafeBasisPoints(referralShareOfPlatformFeeBps);
+  assertSafeBasisPoints(enterpriseShareOfCreatorProceedsBps);
 
   const total = BigInt(input.totalAmountAtomic);
   const platformFeeGross = (total * BigInt(input.platformFeeBps)) / 10_000n;
-  const allocation =
+  const referral =
     (platformFeeGross * BigInt(referralShareOfPlatformFeeBps)) / 10_000n;
-  const platformFeeNet = platformFeeGross - allocation;
+  const platformFeeNet = platformFeeGross - referral;
 
   if (platformFeeGross > total) {
     throw new PaymentAmountError("fee_greater_than_total");
   }
 
-  const creator = total - platformFeeGross;
+  const creatorSideProceeds = total - platformFeeGross;
+  const enterpriseManagement =
+    (creatorSideProceeds * BigInt(enterpriseShareOfCreatorProceedsBps)) / 10_000n;
+  const creator = creatorSideProceeds - enterpriseManagement;
 
   if (creator <= 0n) {
     throw new PaymentAmountError("creator_amount_not_positive");
@@ -44,9 +53,12 @@ export function calculateCreatorSplit(input: PaymentSplitInput): PaymentSplit {
 
   return {
     totalAmountAtomic: Number(total),
+    creatorSideProceedsAtomic: Number(creatorSideProceeds),
     creatorAmountAtomic: Number(creator),
+    enterpriseManagementAmountAtomic: Number(enterpriseManagement),
+    platformFeeGrossAtomic: Number(platformFeeGross),
     platformFeeAmountAtomic: Number(platformFeeNet),
-    allocationAmountAtomic: Number(allocation)
+    referralAmountAtomic: Number(referral)
   };
 }
 

@@ -197,6 +197,9 @@ export async function verifySolanaTransfer(
       amountMinor: input.creatorAmountMinor
     })
   );
+  const hasEnterpriseTransfer =
+    input.enterpriseManagementAmountMinor === 0 ||
+    hasExpectedEnterpriseTransfer(instructions, input);
   const hasPlatformFeeTransfer =
     input.platformFeeAmountMinor === 0 ||
     instructions.some((instruction) =>
@@ -206,11 +209,11 @@ export async function verifySolanaTransfer(
         amountMinor: input.platformFeeAmountMinor
       })
     );
-  const hasAllocationTransfer =
-    input.allocationAmountMinor === 0 ||
-    hasExpectedAllocationTransfer(instructions, input);
+  const hasReferralTransfer =
+    input.referralAmountMinor === 0 ||
+    hasExpectedReferralTransfer(instructions, input);
 
-  return hasCreatorTransfer && hasPlatformFeeTransfer && hasAllocationTransfer
+  return hasCreatorTransfer && hasEnterpriseTransfer && hasPlatformFeeTransfer && hasReferralTransfer
     ? {
         confirmed: true,
         blockTime
@@ -221,20 +224,37 @@ export async function verifySolanaTransfer(
       };
 }
 
-function hasExpectedAllocationTransfer(
+function hasExpectedEnterpriseTransfer(
   instructions: Array<ParsedInstruction | PartiallyDecodedInstruction>,
   input: PaymentSettlementInput
 ): boolean {
-  if (!input.allocationWallet) {
+  if (!input.enterpriseWallet) {
     return false;
   }
 
-  const allocationWallet = input.allocationWallet;
   return instructions.some((instruction) =>
     isMatchingTransfer(instruction, input, {
       sourceWallet: input.buyerWallet ?? null,
-      destinationWallet: allocationWallet,
-      amountMinor: input.allocationAmountMinor
+      destinationWallet: input.enterpriseWallet as string,
+      amountMinor: input.enterpriseManagementAmountMinor
+    })
+  );
+}
+
+function hasExpectedReferralTransfer(
+  instructions: Array<ParsedInstruction | PartiallyDecodedInstruction>,
+  input: PaymentSettlementInput
+): boolean {
+  if (!input.referralWallet) {
+    return false;
+  }
+
+  const referralWallet = input.referralWallet;
+  return instructions.some((instruction) =>
+    isMatchingTransfer(instruction, input, {
+      sourceWallet: input.buyerWallet ?? null,
+      destinationWallet: referralWallet,
+      amountMinor: input.referralAmountMinor
     })
   );
 }
@@ -422,12 +442,19 @@ function addSplTokenSplitInstructions(
 function splitTransfers(intent: StoredPaymentIntent): Array<{ wallet: string; amountMinor: number }> {
   const transfers = [{ wallet: intent.creatorWallet, amountMinor: intent.creatorAmountMinor }];
 
+  if (intent.enterpriseWallet && intent.enterpriseManagementAmountMinor > 0) {
+    transfers.push({
+      wallet: intent.enterpriseWallet,
+      amountMinor: intent.enterpriseManagementAmountMinor
+    });
+  }
+
   if (intent.platformFeeAmountMinor > 0) {
     transfers.push({ wallet: intent.platformFeeWallet, amountMinor: intent.platformFeeAmountMinor });
   }
 
-  if (intent.allocationWallet && intent.allocationAmountMinor > 0) {
-    transfers.push({ wallet: intent.allocationWallet, amountMinor: intent.allocationAmountMinor });
+  if (intent.referralWallet && intent.referralAmountMinor > 0) {
+    transfers.push({ wallet: intent.referralWallet, amountMinor: intent.referralAmountMinor });
   }
 
   return transfers;

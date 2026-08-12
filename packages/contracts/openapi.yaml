@@ -19,6 +19,8 @@ tags:
   - name: Wallets
   - name: Profiles
   - name: Content
+  - name: Performers
+  - name: Managed Creators
   - name: Discover
   - name: Feed
   - name: Media
@@ -581,6 +583,277 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/content/{contentId}/performers:
+    get:
+      operationId: listContentPerformers
+      tags: [Performers]
+      summary: List revision-bound performer consent requests for owned content
+      parameters:
+        - $ref: "#/components/parameters/ContentId"
+      responses:
+        "200":
+          description: Performer consent requests
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/PerformerConsentRequest" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    post:
+      operationId: createContentPerformerRequest
+      tags: [Performers]
+      summary: Request performer verification and content-specific consent
+      parameters:
+        - $ref: "#/components/parameters/ContentId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreatePerformerConsentRequest" }
+      responses:
+        "201":
+          description: Performer request and one-time external invitation URL when applicable
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [request, invitationUrl]
+                properties:
+                  request: { $ref: "#/components/schemas/PerformerConsentRequest" }
+                  invitationUrl: { type: string, format: uri, nullable: true }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/performer-consents/{requestId}/responses:
+    post:
+      operationId: respondToLinkedPerformerConsent
+      tags: [Performers]
+      summary: Accept or reject a linked-user performer consent request
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PerformerConsentDecision" }
+      responses:
+        "200":
+          description: Updated performer request
+          content: { application/json: { schema: { $ref: "#/components/schemas/PerformerConsentRequest" } } }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/performer-invitations/{token}:
+    get:
+      operationId: getPerformerInvitation
+      tags: [Performers]
+      security: []
+      summary: Read the exact content revision and allowed uses for an external invitation
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string, minLength: 43, maxLength: 43 }
+      responses:
+        "200":
+          description: Performer invitation
+          content: { application/json: { schema: { $ref: "#/components/schemas/PerformerConsentRequest" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/performer-invitations/{token}/verification-sessions:
+    post:
+      operationId: createPerformerVerificationSession
+      tags: [Performers]
+      security: []
+      summary: Start provider verification for an external performer invitation
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string, minLength: 43, maxLength: 43 }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "201":
+          description: Provider verification launch
+          content: { application/json: { schema: { $ref: "#/components/schemas/VerificationSession" } } }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/performer-invitations/{token}/responses:
+    post:
+      operationId: respondToExternalPerformerConsent
+      tags: [Performers]
+      security: []
+      summary: Accept or reject an external performer consent request after verification
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string, minLength: 43, maxLength: 43 }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PerformerConsentDecision" }
+      responses:
+        "200":
+          description: Updated performer request
+          content: { application/json: { schema: { $ref: "#/components/schemas/PerformerConsentRequest" } } }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/managed-creator-relationships:
+    get:
+      operationId: listManagedCreatorRelationships
+      tags: [Managed Creators]
+      summary: List normalized Enterprise relationship readiness for the current user
+      responses:
+        "200":
+          description: Managed creator relationships
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/ManagedCreatorRelationship" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/organizations/{organizationId}/managed-creators:
+    post:
+      operationId: inviteManagedCreator
+      tags: [Managed Creators]
+      summary: Invite a universal user with versioned Enterprise management terms
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/InviteManagedCreatorRequest" } } }
+      responses:
+        "201":
+          description: Managed creator invitation
+          content: { application/json: { schema: { $ref: "#/components/schemas/ManagedCreatorRelationship" } } }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/managed-creator-relationships/{relationshipId}/responses:
+    post:
+      operationId: respondToManagedCreatorRelationship
+      tags: [Managed Creators]
+      summary: Accept or decline a versioned Enterprise relationship and allocation
+      parameters:
+        - name: relationshipId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [accept, decline] }
+      responses:
+        "200":
+          description: Updated Enterprise relationship
+          content: { application/json: { schema: { $ref: "#/components/schemas/ManagedCreatorRelationship" } } }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/managed-creator-relationships/{relationshipId}/agreements:
+    post:
+      operationId: proposeManagedCreatorAgreement
+      tags: [Managed Creators]
+      summary: Propose versioned Enterprise terms without changing the accepted agreement
+      parameters:
+        - name: relationshipId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ManagedCreatorAgreementTerms" } } }
+      responses:
+        "201":
+          description: Proposed agreement awaiting creator acceptance
+          content: { application/json: { schema: { $ref: "#/components/schemas/ManagedCreatorRelationship" } } }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/managed-creator-relationships/{relationshipId}/agreements/{agreementId}/responses:
+    post:
+      operationId: respondToManagedCreatorAgreement
+      tags: [Managed Creators]
+      summary: Accept or reject changed Enterprise terms as the creator
+      parameters:
+        - name: relationshipId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: agreementId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ManagedCreatorAgreementDecision" } } }
+      responses:
+        "200":
+          description: Updated agreement projection
+          content: { application/json: { schema: { $ref: "#/components/schemas/ManagedCreatorRelationship" } } }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/managed-creator-relationships/{relationshipId}/termination:
+    post:
+      operationId: terminateManagedCreatorRelationship
+      tags: [Managed Creators]
+      summary: End an Enterprise management relationship without changing historical allocations
+      parameters:
+        - name: relationshipId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ManagedCreatorTerminationRequest" } } }
+      responses:
+        "200":
+          description: Terminated relationship
+          content: { application/json: { schema: { $ref: "#/components/schemas/ManagedCreatorRelationship" } } }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "409": { $ref: "#/components/responses/Conflict" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/media/uploads:
@@ -2132,7 +2405,7 @@ components:
     CreateReport: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateReportRequest" } } } }
     CreateMessage: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateMessageRequest" } } } }
     CreatePaidMessageIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreatePaidMessageIntentRequest" } } } }
-    CreatePaymentIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreatePaymentIntentRequest" }, examples: { support: { value: { productType: support, targetId: "00000000-0000-4000-8000-000000000001", amountMinor: 50000000 } }, tip: { value: { productType: tip, targetId: "00000000-0000-4000-8000-000000000001", amountMinor: 50000000 } } } } } }
+    CreatePaymentIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreatePaymentIntentRequest" }, examples: { support: { value: { productType: support, targetId: "00000000-0000-4000-8000-000000000001", amountMinor: 500000 } } } } } }
     SubmitPaymentSignature: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SubmitPaymentSignatureRequest" } } } }
     CreateTransactionRequest: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/TransactionRequestPostRequest" } } } }
     SolanaIndexerWebhook: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SolanaIndexerWebhookPayload" } } } }
@@ -2404,7 +2677,7 @@ components:
         providerReference: { type: string }
         launchUrl: { type: string, format: uri }
         expiresAt: { type: string, format: date-time }
-        purpose: { type: string, enum: [adult_publisher_eligibility, creator_kyc, org_kyb] }
+        purpose: { type: string, enum: [adult_publisher_eligibility, performer_eligibility, creator_kyc, org_kyb] }
     ProviderWebhookReceipt:
       type: object
       required: [provider, received, processed]
@@ -2416,9 +2689,9 @@ components:
       type: object
       required: [subjectType, subjectId, purpose, status, provider, method, assuranceLevel, verifiedAt, expiresAt, reusable]
       properties:
-        subjectType: { type: string, enum: [user, organization, organization_person] }
+        subjectType: { type: string, enum: [user, organization, organization_person, performer] }
         subjectId: { type: string, format: uuid }
-        purpose: { type: string, enum: [age_access, adult_publisher_eligibility, creator_kyc, payout_kyc, org_kyb, ubo_kyc, enterprise_review] }
+        purpose: { type: string, enum: [age_access, adult_publisher_eligibility, performer_eligibility, creator_kyc, payout_kyc, org_kyb, ubo_kyc, enterprise_review] }
         status: { type: string, enum: [valid, invalid, pending, expired, revoked, blocked] }
         provider: { type: string }
         method: { type: string }
@@ -2878,6 +3151,102 @@ components:
         accessState: { type: string, enum: [free, teaser, locked, unlocked, subscribed, pass_required] }
         nsfwLabel: { type: string, enum: [none, adult, explicit] }
         engagement: { $ref: "#/components/schemas/EngagementState" }
+    PerformerAllowedUse:
+      type: string
+      enum: [capture, upload, distribution, monetisation, live, replay, promotion]
+    PerformerConsentRequest:
+      type: object
+      required: [id, contentId, contentRevision, mediaType, rating, performerLabel, linkedUser, state, verificationState, allowedUses, expiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        contentId: { type: string, format: uuid }
+        contentRevision: { type: integer, minimum: 1 }
+        contentCaption: { type: string, nullable: true }
+        mediaType: { type: string }
+        rating: { type: string, enum: [adult, explicit] }
+        performerLabel: { type: string }
+        linkedUser: { type: boolean }
+        state: { type: string, enum: [pending, verification_required, accepted, rejected, expired, revoked, superseded] }
+        verificationState: { type: string, enum: [pending, valid, expired, revoked, blocked] }
+        allowedUses:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/PerformerAllowedUse" }
+        expiresAt: { type: string, format: date-time, nullable: true }
+    CreatePerformerConsentRequest:
+      type: object
+      required: [allowedUses]
+      properties:
+        performerHandle: { type: string, minLength: 1, maxLength: 64 }
+        externalLabel: { type: string, minLength: 1, maxLength: 120 }
+        allowedUses:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/PerformerAllowedUse" }
+      oneOf:
+        - required: [performerHandle]
+        - required: [externalLabel]
+    PerformerConsentDecision:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [accept, reject] }
+    ManagedCreatorPermission:
+      type: string
+      enum: [profile_readiness_view, monetisation_settings_manage, content_manage, analytics_view, revenue_allocation]
+    ManagedCreatorRelationship:
+      type: object
+      required: [id, organizationId, organizationName, creatorUserId, creatorHandle, state, agreementId, agreementVersion, agreementState, permissions, creatorShareBps, enterpriseManagementShareBps, organizationKybReady, enterpriseEntitlementReady, settlementWalletReady]
+      properties:
+        id: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        organizationName: { type: string }
+        creatorUserId: { type: string, format: uuid }
+        creatorHandle: { type: string }
+        state: { type: string, enum: [invited, active, declined, suspended, terminated, expired] }
+        agreementId: { type: string, format: uuid }
+        agreementVersion: { type: integer, minimum: 1 }
+        agreementState: { type: string, enum: [proposed, accepted, rejected, superseded, terminated] }
+        permissions: { type: array, items: { $ref: "#/components/schemas/ManagedCreatorPermission" } }
+        creatorShareBps: { type: integer, minimum: 1, maximum: 10000 }
+        enterpriseManagementShareBps: { type: integer, minimum: 0, maximum: 9999 }
+        organizationKybReady: { type: boolean }
+        enterpriseEntitlementReady: { type: boolean }
+        settlementWalletReady: { type: boolean }
+    InviteManagedCreatorRequest:
+      type: object
+      required: [creatorHandle, permissions, enterpriseManagementShareBps]
+      properties:
+        creatorHandle: { type: string, minLength: 1, maxLength: 64 }
+        permissions:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/ManagedCreatorPermission" }
+        enterpriseManagementShareBps: { type: integer, minimum: 0, maximum: 9999 }
+        settlementWalletId: { type: string, format: uuid, nullable: true }
+    ManagedCreatorAgreementTerms:
+      type: object
+      required: [permissions, enterpriseManagementShareBps]
+      properties:
+        permissions:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/ManagedCreatorPermission" }
+        enterpriseManagementShareBps: { type: integer, minimum: 0, maximum: 9999 }
+    ManagedCreatorAgreementDecision:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [accept, reject] }
+    ManagedCreatorTerminationRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 240 }
     PlaybackResource:
       type: object
       required: [state, url, provider]
@@ -3209,7 +3578,7 @@ components:
         refundValueBasis: { type: string, enum: [original_crypto_amount, fiat_value_at_purchase, manual_resolution] }
     PaymentIntent:
       type: object
-      required: [id, productType, amountMinor, currency, state, settlementKind, creatorAmountMinor, platformFeeAmountMinor, allocationAmountMinor, refundPolicy]
+      required: [id, productType, amountMinor, currency, state, settlementKind, creatorSideProceedsMinor, creatorAmountMinor, enterpriseManagementAmountMinor, platformFeeGrossMinor, platformFeeAmountMinor, referralAmountMinor, refundPolicy]
       properties:
         id: { type: string, format: uuid }
         productType: { $ref: "#/components/schemas/ProductType" }
@@ -3217,9 +3586,12 @@ components:
         currency: { $ref: "#/components/schemas/Currency" }
         state: { type: string, enum: [pending, transaction_requested, submitted, confirming, confirmed, settled, failed, expired, cancelled] }
         settlementKind: { type: string, enum: [creator_split, platform_owned, dev_test] }
+        creatorSideProceedsMinor: { type: integer, minimum: 1, maximum: 9007199254740991 }
         creatorAmountMinor: { type: integer, minimum: 1, maximum: 9007199254740991 }
+        enterpriseManagementAmountMinor: { type: integer, minimum: 0, maximum: 9007199254740991 }
+        platformFeeGrossMinor: { type: integer, minimum: 0, maximum: 9007199254740991 }
         platformFeeAmountMinor: { type: integer, minimum: 0, maximum: 9007199254740991 }
-        allocationAmountMinor: { type: integer, minimum: 0, maximum: 9007199254740991 }
+        referralAmountMinor: { type: integer, minimum: 0, maximum: 9007199254740991 }
         refundPolicy: { $ref: "#/components/schemas/PaymentIntentRefundPolicy" }
     SubmitPaymentSignatureRequest:
       type: object

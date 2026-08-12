@@ -164,7 +164,7 @@ export async function registerVerificationRoutes(
       });
       const sessionId = await options.verificationRepository.createPendingSession({
         supabaseUserId: verifiedSession.supabaseUserId,
-        purpose,
+        purpose: purpose as "adult_publisher_eligibility" | "creator_kyc" | "org_kyb",
         organizationId: typeof body?.organizationId === "string" ? body.organizationId : null,
         providerSession,
         policyVersion,

@@ -1,11 +1,19 @@
 "use client";
 
 import { Expand, ExternalLink, KeyRound, Languages, LogIn, MoreVertical, X } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { WebAuthState } from "@/supabase/auth-state";
-import { LandingAuthSurface } from "./landing-auth-surface";
 import { landingFrames, storyNavFrames } from "./landing-content";
 import { legalDocLabels, legalDocSlugs, legalDocs, type LegalDocSlug } from "./legal-docs";
+
+const LandingAuthSurface = dynamic(
+  () => import("./landing-auth-surface").then((module) => module.LandingAuthSurface),
+  {
+    loading: () => <div aria-busy="true" aria-label="Loading access setup" className="landing-auth-inline" />,
+    ssr: false
+  }
+);
 
 export function LandingExperience() {
   const shellRef = useRef<HTMLElement | null>(null);
@@ -155,7 +163,7 @@ export function LandingExperience() {
     let animation: { kill(): void } | undefined;
 
     async function animateCopy() {
-      if (activeAuth || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      if (activeAuth || activeIndex === 0 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         return;
       }
 

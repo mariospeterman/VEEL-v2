@@ -22,7 +22,7 @@ export async function recordPaymentSubmission(
       amount_minor: number;
       creator_amount_minor: number;
       platform_fee_amount_minor: number;
-      allocation_amount_minor: number;
+      referral_amount_minor: number;
       currency: StoredPaymentIntent["currency"];
     }[]>`
             update payment_intents pi
@@ -61,7 +61,7 @@ export async function recordPaymentSubmission(
               pi.amount_minor,
               pi.creator_amount_minor,
               pi.platform_fee_amount_minor,
-              pi.allocation_amount_minor,
+              pi.referral_amount_minor,
               pi.currency
           `;
 
@@ -86,10 +86,7 @@ export async function recordPaymentSubmission(
       });
     }
 
-    if (
-      input.settlement.confirmed &&
-      (updatedIntent?.product_type === "tip" || updatedIntent?.product_type === "support")
-    ) {
+    if (input.settlement.confirmed && updatedIntent?.product_type === "support") {
       await recordSupportSettlementLedger(transaction, {
         paymentIntentId: updatedIntent.payment_intent_id,
         actorUserId: updatedIntent.user_id,
@@ -99,12 +96,22 @@ export async function recordPaymentSubmission(
         currency: updatedIntent.currency,
         productType: updatedIntent.product_type
       });
+    }
+
+    if (input.settlement.confirmed && updatedIntent) {
       await recordReferralCommission(transaction, {
         paymentIntentId: updatedIntent.payment_intent_id,
         actorUserId: updatedIntent.user_id,
         currency: updatedIntent.currency,
-        allocationAmountMinor: Number(updatedIntent.allocation_amount_minor)
+        referralAmountMinor: Number(updatedIntent.referral_amount_minor)
       });
+
+      await transaction`
+        update managed_creator_allocation_records
+        set state = 'confirmed', confirmed_at = now()
+        where payment_intent_id = ${updatedIntent.payment_intent_id}
+          and state = 'pending'
+      `;
     }
 
     if (input.settlement.confirmed && updatedIntent?.product_type === "live_pass") {

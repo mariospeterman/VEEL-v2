@@ -10,7 +10,7 @@ interface CreatorSupportPanelProps {
   profile: CreatorProfile;
 }
 
-const supportPresets = [10_000_000, 50_000_000, 100_000_000] as const;
+const supportPresets = [500_000, 1_000_000, 2_000_000, 5_000_000] as const;
 
 export function CreatorSupportPanel({ profile }: CreatorSupportPanelProps) {
   const [amountMinor, setAmountMinor] = useState<number>(supportPresets[1]);
@@ -29,7 +29,7 @@ export function CreatorSupportPanel({ profile }: CreatorSupportPanelProps) {
       </div>
 
       <div className="mt-4 grid gap-3 border-t border-(--line) pt-4">
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-4 gap-2">
           {supportPresets.map((preset) => (
             <button
               className={`rounded border px-2 py-2 text-sm ${
@@ -42,7 +42,7 @@ export function CreatorSupportPanel({ profile }: CreatorSupportPanelProps) {
               onClick={() => setAmountMinor(preset)}
               type="button"
             >
-              {formatAssetAmount(preset, "SOL")}
+              {formatAssetAmount(preset, "USDC")}
             </button>
           ))}
         </div>
@@ -51,6 +51,7 @@ export function CreatorSupportPanel({ profile }: CreatorSupportPanelProps) {
           createIntent={() =>
             createPaymentIntent({
               amountMinor,
+              currency: "USDC",
               productType: "support",
               targetId: profile.user.id
             })

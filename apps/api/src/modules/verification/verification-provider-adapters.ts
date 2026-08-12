@@ -202,7 +202,11 @@ function createDiditVerificationProviderAdapter(env: ServerEnv): VerificationPro
           vendor_data: providerSubjectReference(input),
           metadata: {
             purpose: input.purpose,
-            subject: input.purpose === "org_kyb" ? "organization" : "user",
+            subject: input.purpose === "org_kyb"
+              ? "organization"
+              : input.purpose === "performer_eligibility"
+                ? "performer"
+                : "user",
             ...(input.purpose === "age_access" ? { rule: "over_18" } : {}),
             ...(input.policyVersion ? { policy_version: input.policyVersion } : {})
           }
@@ -430,7 +434,9 @@ function sumsubLevelName(env: ServerEnv, input: CreateVerificationSessionInput) 
 
 function diditWorkflowId(env: ServerEnv, input: CreateVerificationSessionInput) {
   if (input.purpose === "age_access") return env.DIDIT_AGE_WORKFLOW_ID;
-  if (input.purpose === "adult_publisher_eligibility") return env.DIDIT_ADULT_PUBLISHER_WORKFLOW_ID;
+  if (input.purpose === "adult_publisher_eligibility" || input.purpose === "performer_eligibility") {
+    return env.DIDIT_ADULT_PUBLISHER_WORKFLOW_ID;
+  }
   return input.purpose === "org_kyb" ? env.DIDIT_KYB_WORKFLOW_ID : env.DIDIT_KYC_WORKFLOW_ID;
 }
 
@@ -441,6 +447,7 @@ function personaTemplateId(env: ServerEnv, input: CreateVerificationSessionInput
 }
 
 function providerSubjectReference(input: CreateVerificationSessionInput) {
+  if (input.subjectReference) return input.subjectReference;
   return input.purpose === "org_kyb" ? `org:${input.organizationId ?? input.supabaseUserId}` : `user:${input.supabaseUserId}`;
 }
 

@@ -738,6 +738,194 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/content/{contentId}/performers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List revision-bound performer consent requests for owned content */
+        get: operations["listContentPerformers"];
+        put?: never;
+        /** Request performer verification and content-specific consent */
+        post: operations["createContentPerformerRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/performer-consents/{requestId}/responses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept or reject a linked-user performer consent request */
+        post: operations["respondToLinkedPerformerConsent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/performer-invitations/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the exact content revision and allowed uses for an external invitation */
+        get: operations["getPerformerInvitation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/performer-invitations/{token}/verification-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start provider verification for an external performer invitation */
+        post: operations["createPerformerVerificationSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/performer-invitations/{token}/responses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept or reject an external performer consent request after verification */
+        post: operations["respondToExternalPerformerConsent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/managed-creator-relationships": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List normalized Enterprise relationship readiness for the current user */
+        get: operations["listManagedCreatorRelationships"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/organizations/{organizationId}/managed-creators": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Invite a universal user with versioned Enterprise management terms */
+        post: operations["inviteManagedCreator"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/managed-creator-relationships/{relationshipId}/responses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept or decline a versioned Enterprise relationship and allocation */
+        post: operations["respondToManagedCreatorRelationship"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/managed-creator-relationships/{relationshipId}/agreements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Propose versioned Enterprise terms without changing the accepted agreement */
+        post: operations["proposeManagedCreatorAgreement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/managed-creator-relationships/{relationshipId}/agreements/{agreementId}/responses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept or reject changed Enterprise terms as the creator */
+        post: operations["respondToManagedCreatorAgreement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/managed-creator-relationships/{relationshipId}/termination": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End an Enterprise management relationship without changing historical allocations */
+        post: operations["terminateManagedCreatorRelationship"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/media/uploads": {
         parameters: {
             query?: never;
@@ -2787,7 +2975,7 @@ export interface components {
             /** Format: date-time */
             expiresAt: string;
             /** @enum {string} */
-            purpose: "adult_publisher_eligibility" | "creator_kyc" | "org_kyb";
+            purpose: "adult_publisher_eligibility" | "performer_eligibility" | "creator_kyc" | "org_kyb";
         };
         ProviderWebhookReceipt: {
             provider: string;
@@ -2796,11 +2984,11 @@ export interface components {
         };
         VerificationRecordSummary: {
             /** @enum {string} */
-            subjectType: "user" | "organization" | "organization_person";
+            subjectType: "user" | "organization" | "organization_person" | "performer";
             /** Format: uuid */
             subjectId: string;
             /** @enum {string} */
-            purpose: "age_access" | "adult_publisher_eligibility" | "creator_kyc" | "payout_kyc" | "org_kyb" | "ubo_kyc" | "enterprise_review";
+            purpose: "age_access" | "adult_publisher_eligibility" | "performer_eligibility" | "creator_kyc" | "payout_kyc" | "org_kyb" | "ubo_kyc" | "enterprise_review";
             /** @enum {string} */
             status: "valid" | "invalid" | "pending" | "expired" | "revoked" | "blocked";
             provider: string;
@@ -3206,6 +3394,80 @@ export interface components {
             nsfwLabel?: "none" | "adult" | "explicit";
             engagement: components["schemas"]["EngagementState"];
         };
+        /** @enum {string} */
+        PerformerAllowedUse: "capture" | "upload" | "distribution" | "monetisation" | "live" | "replay" | "promotion";
+        PerformerConsentRequest: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            contentId: string;
+            contentRevision: number;
+            contentCaption?: string | null;
+            mediaType: string;
+            /** @enum {string} */
+            rating: "adult" | "explicit";
+            performerLabel: string;
+            linkedUser: boolean;
+            /** @enum {string} */
+            state: "pending" | "verification_required" | "accepted" | "rejected" | "expired" | "revoked" | "superseded";
+            /** @enum {string} */
+            verificationState: "pending" | "valid" | "expired" | "revoked" | "blocked";
+            allowedUses: components["schemas"]["PerformerAllowedUse"][];
+            /** Format: date-time */
+            expiresAt: string | null;
+        };
+        CreatePerformerConsentRequest: {
+            performerHandle?: string;
+            externalLabel?: string;
+            allowedUses: components["schemas"]["PerformerAllowedUse"][];
+        } & (unknown | unknown);
+        PerformerConsentDecision: {
+            /** @enum {string} */
+            decision: "accept" | "reject";
+        };
+        /** @enum {string} */
+        ManagedCreatorPermission: "profile_readiness_view" | "monetisation_settings_manage" | "content_manage" | "analytics_view" | "revenue_allocation";
+        ManagedCreatorRelationship: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            organizationName: string;
+            /** Format: uuid */
+            creatorUserId: string;
+            creatorHandle: string;
+            /** @enum {string} */
+            state: "invited" | "active" | "declined" | "suspended" | "terminated" | "expired";
+            /** Format: uuid */
+            agreementId: string;
+            agreementVersion: number;
+            /** @enum {string} */
+            agreementState: "proposed" | "accepted" | "rejected" | "superseded" | "terminated";
+            permissions: components["schemas"]["ManagedCreatorPermission"][];
+            creatorShareBps: number;
+            enterpriseManagementShareBps: number;
+            organizationKybReady: boolean;
+            enterpriseEntitlementReady: boolean;
+            settlementWalletReady: boolean;
+        };
+        InviteManagedCreatorRequest: {
+            creatorHandle: string;
+            permissions: components["schemas"]["ManagedCreatorPermission"][];
+            enterpriseManagementShareBps: number;
+            /** Format: uuid */
+            settlementWalletId?: string | null;
+        };
+        ManagedCreatorAgreementTerms: {
+            permissions: components["schemas"]["ManagedCreatorPermission"][];
+            enterpriseManagementShareBps: number;
+        };
+        ManagedCreatorAgreementDecision: {
+            /** @enum {string} */
+            decision: "accept" | "reject";
+        };
+        ManagedCreatorTerminationRequest: {
+            reason: string;
+        };
         PlaybackResource: {
             /** @enum {string} */
             state: "not_ready" | "teaser" | "full" | "blocked";
@@ -3552,9 +3814,12 @@ export interface components {
             state: "pending" | "transaction_requested" | "submitted" | "confirming" | "confirmed" | "settled" | "failed" | "expired" | "cancelled";
             /** @enum {string} */
             settlementKind: "creator_split" | "platform_owned" | "dev_test";
+            creatorSideProceedsMinor: number;
             creatorAmountMinor: number;
+            enterpriseManagementAmountMinor: number;
+            platformFeeGrossMinor: number;
             platformFeeAmountMinor: number;
-            allocationAmountMinor: number;
+            referralAmountMinor: number;
             refundPolicy: components["schemas"]["PaymentIntentRefundPolicy"];
         };
         SubmitPaymentSignatureRequest: {
@@ -7449,6 +7714,383 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listContentPerformers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                contentId: components["parameters"]["ContentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Performer consent requests */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["PerformerConsentRequest"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createContentPerformerRequest: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                contentId: components["parameters"]["ContentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePerformerConsentRequest"];
+            };
+        };
+        responses: {
+            /** @description Performer request and one-time external invitation URL when applicable */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        request: components["schemas"]["PerformerConsentRequest"];
+                        /** Format: uri */
+                        invitationUrl: string | null;
+                    };
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    respondToLinkedPerformerConsent: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                requestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PerformerConsentDecision"];
+            };
+        };
+        responses: {
+            /** @description Updated performer request */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PerformerConsentRequest"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getPerformerInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Performer invitation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PerformerConsentRequest"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createPerformerVerificationSession: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Provider verification launch */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationSession"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    respondToExternalPerformerConsent: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PerformerConsentDecision"];
+            };
+        };
+        responses: {
+            /** @description Updated performer request */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PerformerConsentRequest"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listManagedCreatorRelationships: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Managed creator relationships */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ManagedCreatorRelationship"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    inviteManagedCreator: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteManagedCreatorRequest"];
+            };
+        };
+        responses: {
+            /** @description Managed creator invitation */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedCreatorRelationship"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    respondToManagedCreatorRelationship: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                relationshipId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    decision: "accept" | "decline";
+                };
+            };
+        };
+        responses: {
+            /** @description Updated Enterprise relationship */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedCreatorRelationship"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    proposeManagedCreatorAgreement: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                relationshipId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManagedCreatorAgreementTerms"];
+            };
+        };
+        responses: {
+            /** @description Proposed agreement awaiting creator acceptance */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedCreatorRelationship"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    respondToManagedCreatorAgreement: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                relationshipId: string;
+                agreementId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManagedCreatorAgreementDecision"];
+            };
+        };
+        responses: {
+            /** @description Updated agreement projection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedCreatorRelationship"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    terminateManagedCreatorRelationship: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                relationshipId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManagedCreatorTerminationRequest"];
+            };
+        };
+        responses: {
+            /** @description Terminated relationship */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedCreatorRelationship"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
             409: components["responses"]["Conflict"];
             503: components["responses"]["ServiceUnavailable"];
         };

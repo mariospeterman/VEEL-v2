@@ -84,11 +84,11 @@ export async function recordReferralCommission(
   input: {
     paymentIntentId: string;
     actorUserId: string;
-    allocationAmountMinor: number;
+    referralAmountMinor: number;
     currency: StoredPaymentIntent["currency"];
   }
 ): Promise<void> {
-  if (input.allocationAmountMinor <= 0) {
+  if (input.referralAmountMinor <= 0) {
     return;
   }
 
@@ -132,7 +132,7 @@ export async function recordReferralCommission(
       ${input.paymentIntentId},
       ${attribution.referrer_user_id},
       ${attribution.referred_user_id},
-      ${input.allocationAmountMinor},
+      ${input.referralAmountMinor},
       ${input.currency}
     )
     on conflict (payment_intent_id, referral_token_id) do nothing
@@ -155,7 +155,7 @@ export async function recordReferralCommission(
       'referral_commission',
       ${`referrer:${attribution.referrer_user_id}`},
       ${attribution.referrer_user_id},
-      ${input.allocationAmountMinor},
+      ${input.referralAmountMinor},
       ${input.currency},
       'credit'
     )
@@ -180,7 +180,7 @@ export async function recordReferralCommission(
       ${transaction.json({
         referralTokenId: attribution.referral_token_id,
         referrerUserId: attribution.referrer_user_id,
-        commissionAmountMinor: input.allocationAmountMinor
+        commissionAmountMinor: input.referralAmountMinor
       })}
     )
   `;

@@ -57,6 +57,7 @@ import type {
   NotificationPushConfig,
   OrganizationDashboardPage,
   PlatformAccess,
+  PerformerConsentRequest,
   SessionState,
   SubscriptionPage,
   SubscriptionPlanPage,
@@ -325,4 +326,8 @@ export async function getAdminOrganizationMembers(
 
 export async function getAdminFeatureFlags(): Promise<ApiResult<AdminPage<AdminFeatureFlag>>> {
   return getJson<AdminPage<AdminFeatureFlag>>("/v1/admin/feature-flags");
+}
+
+export async function getPerformerInvitation(token: string): Promise<ApiResult<PerformerConsentRequest>> {
+  return getJson<PerformerConsentRequest>(`/v1/performer-invitations/${encodeURIComponent(token)}`);
 }

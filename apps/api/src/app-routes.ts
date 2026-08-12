@@ -10,11 +10,13 @@ import { registerEngagementRoutes } from "./modules/engagement/engagement-routes
 import { registerEventRoutes } from "./modules/event/event-routes.js";
 import { registerLiveRoutes } from "./modules/live/live-routes.js";
 import { registerMessageRoutes } from "./modules/message/message-routes.js";
+import { registerManagedCreatorRoutes } from "./modules/managed-creator/managed-creator-routes.js";
 import { registerMcpRoutes } from "./modules/mcp/mcp-routes.js";
 import { registerMutualsRoutes } from "./modules/mutuals/mutuals-routes.js";
 import { registerNotificationRoutes } from "./modules/notification/notification-routes.js";
 import { registerOrganizationRoutes } from "./modules/organization/organization-routes.js";
 import { registerPaymentRoutes } from "./modules/payment/payment-routes.js";
+import { registerPerformerRoutes } from "./modules/performer/performer-routes.js";
 import { registerProfileRoutes } from "./modules/profile/profile-routes.js";
 import { registerReferralRoutes } from "./modules/referral/referral-routes.js";
 import { registerRefundRoutes } from "./modules/refund/refund-routes.js";
@@ -44,9 +46,11 @@ export async function registerApiRoutes(
     engagementRepository,
     paymentRepository,
     paymentEvidenceRepository,
+    performerRepository,
     settlementVerifier,
     liveProvider,
     messageRepository,
+    managedCreatorRepository,
     referralRepository,
     refundRepository,
     notificationRepository,
@@ -82,6 +86,11 @@ export async function registerApiRoutes(
   await registerVerificationRoutes(app, {
     authVerifier,
     verificationRepository,
+    verificationProviderWaterfall
+  });
+  await registerPerformerRoutes(app, {
+    authVerifier,
+    performerRepository,
     verificationProviderWaterfall
   });
   await registerProfileRoutes(app, {
@@ -156,6 +165,7 @@ export async function registerApiRoutes(
     paymentRepository,
     messageRepository
   });
+  await registerManagedCreatorRoutes(app, { authVerifier, managedCreatorRepository });
   await registerReferralRoutes(app, {
     authVerifier,
     sessionRepository,

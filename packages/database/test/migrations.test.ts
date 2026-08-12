@@ -929,4 +929,34 @@ describe("database migrations", () => {
     expect(sql).toContain("media_moderation_appeals_appellant_idx");
     expect(downSql).toContain("drop index if exists media_moderation_jobs_case_idx");
   });
+
+  it("keeps earning, performer, and Enterprise management authorities independent", () => {
+    const sql = readMigration("0090_monetisation_performer_enterprise_authorities.sql");
+    const downSql = readMigration("0090_monetisation_performer_enterprise_authorities.down.sql");
+
+    expect(sql).toContain("create table recipient_monetisation_policies");
+    expect(sql).toContain("kyc_mode in ('disabled', 'risk_based', 'required')");
+    expect(sql).toContain("private.assert_recipient_monetisation_ready");
+    expect(sql).toContain("create table performer_consent_requests");
+    expect(sql).toContain("content_revision bigint not null");
+    expect(sql).toContain("create table managed_creator_relationships");
+    expect(sql).toContain("create table managed_creator_agreements");
+    expect(sql).toContain("unique (relationship_id, idempotency_key)");
+    expect(sql).toContain("creator_share_bps + enterprise_management_share_bps = 10000");
+    expect(sql).toContain("managed_creator_relationships_one_active_creator_idx");
+    expect(sql).toContain("create function private.resolve_managed_creator_allocation");
+    expect(sql).toContain("from tier_waivers tw");
+    expect(sql).toContain("purpose = 'adult_publisher_eligibility'");
+    expect(sql).toContain("purpose = 'performer_eligibility'");
+    expect(sql).toContain("purpose = 'creator_kyc'");
+    expect(sql).toContain("v_settings.earning_state <> 'ready'");
+    expect(sql).toContain("content_items_bump_performer_revision");
+    expect(sql).toContain("content_safety_declarations_bump_performer_revision");
+    expect(sql).toContain("o.kyb_state = 'verified'");
+    expect(sql).toContain("alter table managed_creator_allocation_records enable row level security");
+    expect(sql).toContain("grant select on table managed_creator_allocation_records to authenticated");
+    expect(downSql).toContain("returns table (wallet_id uuid, address text)");
+    expect(downSql).toContain("drop table if exists managed_creator_relationships");
+    expect(sql).not.toMatch(/creator_balance|withdrawal_queue|payout_queue|escrow|private_key|seed_phrase|mnemonic/i);
+  });
 });

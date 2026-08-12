@@ -15,7 +15,21 @@ export {
 } from "./payment-repository-errors.js";
 import { PaymentIntentRow, toStoredPaymentIntent } from "./payment-intent-mapper.js";
 import { recordPaymentSubmission } from "./payment-submission.js";
-import { calculateCreatorSplit } from "./payment-amounts.js";
+import { calculateSettlementSplit } from "./payment-amounts.js";
+
+interface SettlementAuthorityRow {
+  buyer_user_id: string;
+  creator_user_id: string;
+  creator_wallet: string;
+  referral_token_id: string | null;
+  referrer_user_id: string | null;
+  referral_wallet: string | null;
+  managed_creator_relationship_id: string | null;
+  managed_creator_agreement_id: string | null;
+  enterprise_organization_id: string | null;
+  enterprise_wallet: string | null;
+  enterprise_management_share_bps: number | null;
+}
 
 export function createPostgresPaymentRepository(database?: string | PostgresSql): PaymentRepository {
   if (!database) {
@@ -45,102 +59,162 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
 
   return {
     async createOrReuseIntent(input) {
-      const splitWithoutReferral = calculateCreatorSplit({
-        totalAmountAtomic: input.amountMinor,
-        platformFeeBps: input.platformFeeBps
-      });
-      const splitWithReferral = calculateCreatorSplit({
-        totalAmountAtomic: input.amountMinor,
-        platformFeeBps: input.platformFeeBps,
-        referralShareOfPlatformFeeBps: input.referralShareOfPlatformFeeBps
-      });
-      const referralAllocationIsPayable = splitWithReferral.allocationAmountAtomic > 0;
       let rows: PaymentIntentRow[];
       try {
-        rows = await sql<PaymentIntentRow[]>`
-        with target_user as (
-          select id
-          from users
-          where supabase_user_id = ${input.supabaseUserId}
-          limit 1
-        ),
-        referral_candidate as (
-          select rt.id, rt.creator_user_id
-          from referral_tokens rt
-          where rt.token = ${input.referralToken ?? null}
-            and rt.state = 'active'
-            and rt.eligibility in ('external_share', 'partner_campaign')
-            and (rt.expires_at is null or rt.expires_at > now())
-          limit 1
-        ),
-        valid_referral as (
-          select rc.id, rc.creator_user_id
-          from referral_candidate rc
-          join target_user tu on true
-          where rc.creator_user_id <> tu.id
-        ),
-        referral_wallet as (
-          select vr.id, vr.creator_user_id, w.address
-          from valid_referral vr
-          join lateral (
-            select address
-            from wallets
-            where user_id = vr.creator_user_id
-              and chain = case
+        rows = await sql.begin(async (transaction) => {
+          const existing = await transaction<PaymentIntentRow[]>`
+            select pi.*
+            from payment_intents pi
+            join users u on u.id = pi.user_id
+            where u.supabase_user_id = ${input.supabaseUserId}
+              and pi.idempotency_key = ${input.idempotencyKey}
+            limit 1
+          `;
+
+          if (existing[0]) {
+            if (existing[0].request_hash !== input.requestHash) {
+              return existing;
+            }
+            const readinessRows = await transaction<{ wallet_id: string }[]>`
+              with creator_candidate as (
+                select ${input.creatorUserId ?? null}::uuid as id
+                where ${input.creatorUserId ?? null}::uuid is not null
+                union all
+                select ${input.targetId}::uuid
+                where ${input.productType} = 'support'
+                union all
+                select ci.creator_user_id
+                from content_items ci
+                where ${input.productType} = 'content_unlock' and ci.id = ${input.targetId}
+                union all
+                select lr.creator_user_id
+                from live_rooms lr
+                where ${input.productType} = 'live_pass' and lr.id = ${input.targetId}
+                union all
+                select e.creator_user_id
+                from events e
+                where ${input.productType} = 'event_access_pass' and e.id = ${input.targetId}
+                limit 1
+              )
+              select readiness.wallet_id
+              from creator_candidate creator
+              cross join lateral private.assert_recipient_monetisation_ready(
+                creator.id,
+                ${input.productType},
+                case
+                  when ${input.solanaCluster} = 'mainnet-beta' then 'solana_mainnet'::wallet_chain
+                  else 'solana_devnet'::wallet_chain
+                end,
+                null
+              ) readiness
+              limit 1
+            `;
+            if (!readinessRows[0]) return [];
+            return existing;
+          }
+
+          const authorityRows = await transaction<SettlementAuthorityRow[]>`
+            with target_user as (
+              select id
+              from users
+              where supabase_user_id = ${input.supabaseUserId}
+              limit 1
+            ),
+            creator_candidate as (
+              select ${input.creatorUserId ?? null}::uuid as id
+              where ${input.creatorUserId ?? null}::uuid is not null
+              union all
+              select ${input.targetId}::uuid
+              where ${input.productType} = 'support'
+              union all
+              select ci.creator_user_id
+              from content_items ci
+              where ${input.productType} = 'content_unlock' and ci.id = ${input.targetId}
+              union all
+              select lr.creator_user_id
+              from live_rooms lr
+              where ${input.productType} = 'live_pass' and lr.id = ${input.targetId}
+              union all
+              select e.creator_user_id
+              from events e
+              where ${input.productType} = 'event_access_pass' and e.id = ${input.targetId}
+              limit 1
+            ),
+            referral_candidate as (
+              select rt.id, rt.creator_user_id
+              from referral_tokens rt
+              join target_user tu on rt.creator_user_id <> tu.id
+              where rt.token = ${input.referralToken ?? null}
+                and rt.state = 'active'
+                and rt.eligibility in ('external_share', 'partner_campaign')
+                and (rt.expires_at is null or rt.expires_at > now())
+              limit 1
+            ),
+            referral_recipient as (
+              select rc.id, rc.creator_user_id, w.address
+              from referral_candidate rc
+              join lateral (
+                select address from wallets
+                where user_id = rc.creator_user_id
+                  and chain = case
+                    when ${input.solanaCluster} = 'mainnet-beta' then 'solana_mainnet'::wallet_chain
+                    else 'solana_devnet'::wallet_chain
+                  end
+                order by is_primary desc, created_at asc
+                limit 1
+              ) w on true
+            )
+            select
+              tu.id as buyer_user_id,
+              cc.id as creator_user_id,
+              readiness.address as creator_wallet,
+              rr.id as referral_token_id,
+              rr.creator_user_id as referrer_user_id,
+              rr.address as referral_wallet,
+              managed.relationship_id as managed_creator_relationship_id,
+              managed.agreement_id as managed_creator_agreement_id,
+              managed.organization_id as enterprise_organization_id,
+              managed.enterprise_wallet,
+              managed.enterprise_management_share_bps
+            from target_user tu
+            cross join creator_candidate cc
+            cross join lateral private.assert_recipient_monetisation_ready(
+              cc.id,
+              ${input.productType},
+              case
+                when ${input.solanaCluster} = 'mainnet-beta' then 'solana_mainnet'::wallet_chain
+                else 'solana_devnet'::wallet_chain
+              end,
+              null
+            ) readiness
+            left join referral_recipient rr on true
+            left join lateral private.resolve_managed_creator_allocation(
+              cc.id,
+              case
                 when ${input.solanaCluster} = 'mainnet-beta' then 'solana_mainnet'::wallet_chain
                 else 'solana_devnet'::wallet_chain
               end
-            order by is_primary desc, created_at asc
+            ) managed on true
             limit 1
-          ) w on true
-          where ${referralAllocationIsPayable}
-          limit 1
-        ),
-        creator_candidate as (
-          select ${input.creatorUserId ?? null}::uuid as id
-          where ${input.creatorUserId ?? null}::uuid is not null
-          union all
-          select ${input.targetId}::uuid
-          where ${input.productType} in ('tip', 'support')
-          union all
-          select ci.creator_user_id
-          from content_items ci
-          where ${input.productType} = 'content_unlock'
-            and ci.id = ${input.targetId}
-          union all
-          select lr.creator_user_id
-          from live_rooms lr
-          where ${input.productType} = 'live_pass'
-            and lr.id = ${input.targetId}
-          union all
-          select e.creator_user_id
-          from events e
-          where ${input.productType} = 'event_access_pass'
-            and e.id = ${input.targetId}
-          limit 1
-        ),
-        creator_wallet as (
-          select readiness.address
-          from creator_candidate cc
-          cross join lateral private.assert_recipient_monetisation_ready(
-            cc.id,
-            ${input.productType},
-            case
-              when ${input.solanaCluster} = 'mainnet-beta' then 'solana_mainnet'::wallet_chain
-              else 'solana_devnet'::wallet_chain
-            end,
-            null
-          ) readiness
-          limit 1
-        ),
-        existing_intent as (
-          select pi.*
-          from payment_intents pi
-          join target_user tu on tu.id = pi.user_id
-          where pi.idempotency_key = ${input.idempotencyKey}
-          limit 1
-        ),
-        inserted_intent as (
+          `;
+          const authority = authorityRows[0];
+
+          if (!authority) {
+            return [];
+          }
+
+          const split = calculateSettlementSplit({
+            totalAmountAtomic: input.amountMinor,
+            platformFeeBps: input.platformFeeBps,
+            referralShareOfPlatformFeeBps: authority.referral_wallet
+              ? input.referralShareOfPlatformFeeBps
+              : 0,
+            enterpriseShareOfCreatorProceedsBps:
+              authority.enterprise_management_share_bps ?? 0
+          });
+          const enterpriseAllocationIsPayable = split.enterpriseManagementAmountAtomic > 0;
+          const paymentIntentId = randomUUID();
+          const inserted = await transaction<PaymentIntentRow[]>`
           insert into payment_intents (
             id,
             user_id,
@@ -156,19 +230,26 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
             treasury_wallet,
             settlement_kind,
             creator_wallet,
+            enterprise_wallet,
             platform_fee_wallet,
-            allocation_wallet,
+            referral_wallet,
             total_amount_minor,
+            creator_side_proceeds_minor,
             creator_amount_minor,
+            enterprise_management_amount_minor,
+            platform_fee_gross_minor,
             platform_fee_amount_minor,
-            allocation_amount_minor,
+            referral_amount_minor,
+            managed_creator_relationship_id,
+            managed_creator_agreement_id,
+            enterprise_organization_id,
             reference_address,
             referral_token_id,
             expires_at
           )
-          select
-            ${randomUUID()},
-            id,
+          values (
+            ${paymentIntentId},
+            ${authority.buyer_user_id},
             ${input.productType},
             ${input.targetId},
             ${input.amountMinor},
@@ -180,111 +261,71 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
             ${input.solanaCluster},
             ${input.treasuryWallet},
             ${input.settlementKind},
-            (select address from creator_wallet),
+            ${authority.creator_wallet},
+            ${enterpriseAllocationIsPayable ? authority.enterprise_wallet : null},
             ${input.platformFeeWallet},
-            (select address from referral_wallet),
-            ${splitWithoutReferral.totalAmountAtomic},
-            ${splitWithoutReferral.creatorAmountAtomic},
-            case
-              when exists (select 1 from referral_wallet) then ${splitWithReferral.platformFeeAmountAtomic}::bigint
-              else ${splitWithoutReferral.platformFeeAmountAtomic}::bigint
-            end::bigint,
-            case
-              when exists (select 1 from referral_wallet) then ${splitWithReferral.allocationAmountAtomic}::bigint
-              else 0::bigint
-            end::bigint,
+            ${authority.referral_wallet},
+            ${split.totalAmountAtomic},
+            ${split.creatorSideProceedsAtomic},
+            ${split.creatorAmountAtomic},
+            ${split.enterpriseManagementAmountAtomic},
+            ${split.platformFeeGrossAtomic},
+            ${split.platformFeeAmountAtomic},
+            ${split.referralAmountAtomic},
+            ${enterpriseAllocationIsPayable ? authority.managed_creator_relationship_id : null},
+            ${enterpriseAllocationIsPayable ? authority.managed_creator_agreement_id : null},
+            ${enterpriseAllocationIsPayable ? authority.enterprise_organization_id : null},
             ${input.referenceAddress},
-            (select id from referral_wallet),
+            ${authority.referral_token_id},
             ${input.expiresAt}
-          from target_user
-          join creator_wallet on true
-          where not exists (select 1 from existing_intent)
-          returning *
-        ),
-        inserted_attribution as (
-          insert into referral_attributions (
-            id,
-            referral_token_id,
-            referrer_user_id,
-            referred_user_id,
-            payment_intent_id
           )
-          select
-            ${randomUUID()},
-            vr.id,
-            vr.creator_user_id,
-            tu.id,
-            ii.id
-          from inserted_intent ii
-          join referral_wallet vr on true
-          join target_user tu on true
-          on conflict (payment_intent_id) do nothing
-          returning id
-        )
-        select
-          id,
-          product_type,
-          target_id,
-          amount_minor,
-          currency,
-          token_mint,
-          token_decimals,
-          state,
-          reference_address,
-          treasury_wallet,
-          settlement_kind,
-          buyer_wallet,
-          creator_wallet,
-          platform_fee_wallet,
-          allocation_wallet,
-          total_amount_minor,
-          creator_amount_minor,
-          platform_fee_amount_minor,
-          allocation_amount_minor,
-          solana_cluster,
-          expires_at,
-          request_hash,
-          withdrawal_waiver_required,
-          withdrawal_waiver_accepted_at,
-          withdrawal_waiver_version,
-          terms_version,
-          durable_confirmation_required,
-          refund_value_basis
-        from inserted_intent
-        union all
-        select
-          id,
-          product_type,
-          target_id,
-          amount_minor,
-          currency,
-          token_mint,
-          token_decimals,
-          state,
-          reference_address,
-          treasury_wallet,
-          settlement_kind,
-          buyer_wallet,
-          creator_wallet,
-          platform_fee_wallet,
-          allocation_wallet,
-          total_amount_minor,
-          creator_amount_minor,
-          platform_fee_amount_minor,
-          allocation_amount_minor,
-          solana_cluster,
-          expires_at,
-          request_hash,
-          withdrawal_waiver_required,
-          withdrawal_waiver_accepted_at,
-          withdrawal_waiver_version,
-          terms_version,
-          durable_confirmation_required,
-          refund_value_basis
-        from existing_intent
-        cross join creator_wallet
-        limit 1
-        `;
+          on conflict (user_id, idempotency_key) do nothing
+          returning *
+          `;
+
+          if (!inserted[0]) {
+            return transaction<PaymentIntentRow[]>`
+              select pi.* from payment_intents pi
+              where pi.user_id = ${authority.buyer_user_id}
+                and pi.idempotency_key = ${input.idempotencyKey}
+              limit 1
+            `;
+          }
+
+          if (authority.referral_token_id && authority.referrer_user_id && split.referralAmountAtomic > 0) {
+            await transaction`
+              insert into referral_attributions (
+                id, referral_token_id, referrer_user_id, referred_user_id, payment_intent_id
+              ) values (
+                ${randomUUID()}, ${authority.referral_token_id}, ${authority.referrer_user_id},
+                ${authority.buyer_user_id}, ${paymentIntentId}
+              )
+              on conflict (payment_intent_id) do nothing
+            `;
+          }
+
+          if (
+            authority.managed_creator_relationship_id &&
+            authority.managed_creator_agreement_id &&
+            authority.enterprise_organization_id &&
+            split.enterpriseManagementAmountAtomic > 0
+          ) {
+            await transaction`
+              insert into managed_creator_allocation_records (
+                payment_intent_id, relationship_id, agreement_id, organization_id,
+                creator_user_id, creator_side_proceeds_minor, creator_net_minor,
+                enterprise_management_minor, currency
+              ) values (
+                ${paymentIntentId}, ${authority.managed_creator_relationship_id},
+                ${authority.managed_creator_agreement_id}, ${authority.enterprise_organization_id},
+                ${authority.creator_user_id}, ${split.creatorSideProceedsAtomic},
+                ${split.creatorAmountAtomic}, ${split.enterpriseManagementAmountAtomic}, ${input.currency}
+              )
+            `;
+          }
+
+          return inserted;
+        }) as PaymentIntentRow[];
       } catch (error) {
         if (isRecipientMonetisationPolicyError(error)) {
           throw new PaymentRecipientNotReadyError(error.message);
@@ -320,12 +361,16 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
           pi.settlement_kind,
           pi.buyer_wallet,
           pi.creator_wallet,
+          pi.enterprise_wallet,
           pi.platform_fee_wallet,
-          pi.allocation_wallet,
+          pi.referral_wallet,
           pi.total_amount_minor,
+          pi.creator_side_proceeds_minor,
           pi.creator_amount_minor,
+          pi.enterprise_management_amount_minor,
+          pi.platform_fee_gross_minor,
           pi.platform_fee_amount_minor,
-          pi.allocation_amount_minor,
+          pi.referral_amount_minor,
           pi.solana_cluster,
           pi.expires_at,
           pi.request_hash,

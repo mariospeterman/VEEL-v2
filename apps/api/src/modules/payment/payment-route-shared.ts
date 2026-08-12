@@ -153,9 +153,12 @@ export function toPaymentIntentResponse(intent: {
   durableConfirmationRequired?: boolean;
   refundValueBasis?: PaymentIntent["refundPolicy"]["refundValueBasis"];
   settlementKind?: SettlementKind;
+  creatorSideProceedsMinor?: number;
   creatorAmountMinor?: number;
+  enterpriseManagementAmountMinor?: number;
+  platformFeeGrossMinor?: number;
   platformFeeAmountMinor?: number;
-  allocationAmountMinor?: number;
+  referralAmountMinor?: number;
 }): PaymentIntent {
   return {
     id: intent.id,
@@ -164,9 +167,12 @@ export function toPaymentIntentResponse(intent: {
     currency: intent.currency,
     state: intent.state,
     settlementKind: intent.settlementKind ?? "creator_split",
+    creatorSideProceedsMinor: intent.creatorSideProceedsMinor ?? intent.amountMinor,
     creatorAmountMinor: intent.creatorAmountMinor ?? intent.amountMinor,
+    enterpriseManagementAmountMinor: intent.enterpriseManagementAmountMinor ?? 0,
+    platformFeeGrossMinor: intent.platformFeeGrossMinor ?? intent.platformFeeAmountMinor ?? 0,
     platformFeeAmountMinor: intent.platformFeeAmountMinor ?? 0,
-    allocationAmountMinor: intent.allocationAmountMinor ?? 0,
+    referralAmountMinor: intent.referralAmountMinor ?? 0,
     refundPolicy: {
       withdrawalWaiverRequired: intent.withdrawalWaiverRequired ?? true,
       withdrawalWaiverAcceptedAt: intent.withdrawalWaiverAcceptedAt?.toISOString() ?? null,

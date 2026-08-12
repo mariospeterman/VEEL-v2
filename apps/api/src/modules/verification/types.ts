@@ -1,7 +1,8 @@
-export type VerificationSubjectType = "user" | "organization" | "organization_person";
+export type VerificationSubjectType = "user" | "organization" | "organization_person" | "performer";
 export type VerificationPurpose =
   | "age_access"
   | "adult_publisher_eligibility"
+  | "performer_eligibility"
   | "creator_kyc"
   | "payout_kyc"
   | "org_kyb"
@@ -65,6 +66,7 @@ export interface CreateVerificationSessionInput {
   purpose: Extract<
     VerificationPurpose,
     "age_access" | "adult_publisher_eligibility" | "creator_kyc" | "org_kyb"
+    | "performer_eligibility"
   >;
   providerPreference:
     | "provider_first"
@@ -76,6 +78,7 @@ export interface CreateVerificationSessionInput {
     | "veriff";
   idempotencyKey: string;
   organizationId?: string | null;
+  subjectReference?: string | null;
   callbackUrl: string;
   webhookBaseUrl: string;
   policyVersion?: string | null;

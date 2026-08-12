@@ -96,6 +96,7 @@ export type AdminFeatureFlag = components["schemas"]["AdminFeatureFlag"];
 export type AdminOrganizationKybActionRequest = components["schemas"]["AdminOrganizationKybActionRequest"];
 export type AdminOrganizationMemberActionRequest = components["schemas"]["AdminOrganizationMemberActionRequest"];
 export type AdminSupportPolicyActionRequest = components["schemas"]["AdminSupportPolicyActionRequest"];
+export type PerformerConsentRequest = components["schemas"]["PerformerConsentRequest"];
 export type AdminFeatureFlagPatchRequest = components["schemas"]["AdminFeatureFlagPatchRequest"];
 export type AdminSupportCaseActionRequest = components["schemas"]["AdminSupportCaseActionRequest"];
 export type AdminRefundDisputeActionRequest = components["schemas"]["AdminRefundDisputeActionRequest"];

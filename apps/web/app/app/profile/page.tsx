@@ -213,13 +213,20 @@ function CreatorSetup({ onboarding }: { onboarding: CreatorOnboarding }) {
     <Card className="p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium">Become Creator</p>
+          <p className="text-sm font-medium">Enable earnings</p>
           <p className="mt-1 text-xs text-(--muted)">
             State: {onboarding.state} / {onboarding.readinessScore}%
           </p>
         </div>
         <StatusPill tone={onboarding.canStartEarning ? "good" : "warn"}>{onboarding.canStartEarning ? "ready" : "setup"}</StatusPill>
       </div>
+
+      <a
+        className="mt-4 flex min-h-11 items-center justify-center rounded bg-(--foreground) px-3 py-2 text-sm font-semibold text-(--background)"
+        href="/app/profile/earnings"
+      >
+        {onboarding.canStartEarning ? "Review earnings" : "Continue setup"}
+      </a>
 
       <div className="mt-4 grid gap-2">
         {onboarding.steps.map((step) => (

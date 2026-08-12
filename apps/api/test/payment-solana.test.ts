@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import bs58 from "bs58";
 import { Keypair, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { calculateCreatorSplit, PaymentAmountError } from "../src/modules/payment/payment-amounts";
+import { calculateSettlementSplit, PaymentAmountError } from "../src/modules/payment/payment-amounts";
 import {
   buildCreatorSplitTransaction,
   verifySolanaTransfer
@@ -13,50 +13,93 @@ const signature =
   "5Pj5fCupXLUePYn18JkY8SrRaWFiUctuDTRwvUy2MLgVFG1FsCeezrWwZsmxkL5YJQFmQpAcY7rc5pN6vrXJt7Qp";
 const buyerWallet = Keypair.generate().publicKey.toBase58();
 const creatorWallet = Keypair.generate().publicKey.toBase58();
+const enterpriseWallet = Keypair.generate().publicKey.toBase58();
 const platformFeeWallet = Keypair.generate().publicKey.toBase58();
 const treasuryWallet = Keypair.generate().publicKey.toBase58();
-const allocationWallet = Keypair.generate().publicKey.toBase58();
+const referralWallet = Keypair.generate().publicKey.toBase58();
 const referenceAddress = Keypair.generate().publicKey.toBase58();
 const usdcMint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const blockTime = new Date("2026-01-01T00:00:00.000Z");
 
 describe("payment amount calculation", () => {
   it("calculates an exact creator/platform split in atomic units", () => {
-    expect(calculateCreatorSplit({ totalAmountAtomic: 10_000_000, platformFeeBps: 1_000 })).toEqual({
+    expect(calculateSettlementSplit({ totalAmountAtomic: 10_000_000, platformFeeBps: 1_000 })).toEqual({
       totalAmountAtomic: 10_000_000,
+      creatorSideProceedsAtomic: 9_000_000,
       creatorAmountAtomic: 9_000_000,
+      enterpriseManagementAmountAtomic: 0,
+      platformFeeGrossAtomic: 1_000_000,
       platformFeeAmountAtomic: 1_000_000,
-      allocationAmountAtomic: 0
+      referralAmountAtomic: 0
     });
   });
 
   it("rounds platform fees deterministically down to atomic units", () => {
-    expect(calculateCreatorSplit({ totalAmountAtomic: 101, platformFeeBps: 333 })).toEqual({
+    expect(calculateSettlementSplit({ totalAmountAtomic: 101, platformFeeBps: 333 })).toEqual({
       totalAmountAtomic: 101,
+      creatorSideProceedsAtomic: 98,
       creatorAmountAtomic: 98,
+      enterpriseManagementAmountAtomic: 0,
+      platformFeeGrossAtomic: 3,
       platformFeeAmountAtomic: 3,
-      allocationAmountAtomic: 0
+      referralAmountAtomic: 0
     });
   });
 
   it("pays referral allocation from the platform fee without reducing creator share", () => {
-    expect(calculateCreatorSplit({
+    expect(calculateSettlementSplit({
       totalAmountAtomic: 10_000_000,
       platformFeeBps: 1_000,
       referralShareOfPlatformFeeBps: 2_000
     })).toEqual({
       totalAmountAtomic: 10_000_000,
+      creatorSideProceedsAtomic: 9_000_000,
       creatorAmountAtomic: 9_000_000,
+      enterpriseManagementAmountAtomic: 0,
+      platformFeeGrossAtomic: 1_000_000,
       platformFeeAmountAtomic: 800_000,
-      allocationAmountAtomic: 200_000
+      referralAmountAtomic: 200_000
+    });
+  });
+
+  it("takes Enterprise management share from creator-side proceeds, independently of referral", () => {
+    expect(calculateSettlementSplit({
+      totalAmountAtomic: 10_000_000,
+      platformFeeBps: 1_000,
+      referralShareOfPlatformFeeBps: 2_000,
+      enterpriseShareOfCreatorProceedsBps: 1_500
+    })).toEqual({
+      totalAmountAtomic: 10_000_000,
+      creatorSideProceedsAtomic: 9_000_000,
+      creatorAmountAtomic: 7_650_000,
+      enterpriseManagementAmountAtomic: 1_350_000,
+      platformFeeGrossAtomic: 1_000_000,
+      platformFeeAmountAtomic: 800_000,
+      referralAmountAtomic: 200_000
+    });
+  });
+
+  it("rounds a sub-atomic Enterprise management share to zero without reducing creator proceeds", () => {
+    expect(calculateSettlementSplit({
+      totalAmountAtomic: 101,
+      platformFeeBps: 333,
+      enterpriseShareOfCreatorProceedsBps: 1
+    })).toEqual({
+      totalAmountAtomic: 101,
+      creatorSideProceedsAtomic: 98,
+      creatorAmountAtomic: 98,
+      enterpriseManagementAmountAtomic: 0,
+      platformFeeGrossAtomic: 3,
+      platformFeeAmountAtomic: 3,
+      referralAmountAtomic: 0
     });
   });
 
   it("rejects invalid totals, fees, and referral shares", () => {
-    expect(() => calculateCreatorSplit({ totalAmountAtomic: 0, platformFeeBps: 1_000 })).toThrow(PaymentAmountError);
-    expect(() => calculateCreatorSplit({ totalAmountAtomic: 100, platformFeeBps: 10_001 })).toThrow(PaymentAmountError);
+    expect(() => calculateSettlementSplit({ totalAmountAtomic: 0, platformFeeBps: 1_000 })).toThrow(PaymentAmountError);
+    expect(() => calculateSettlementSplit({ totalAmountAtomic: 100, platformFeeBps: 10_001 })).toThrow(PaymentAmountError);
     expect(() =>
-      calculateCreatorSplit({ totalAmountAtomic: 100, platformFeeBps: 1_000, referralShareOfPlatformFeeBps: 10_001 })
+      calculateSettlementSplit({ totalAmountAtomic: 100, platformFeeBps: 1_000, referralShareOfPlatformFeeBps: 10_001 })
     ).toThrow(PaymentAmountError);
   });
 });
@@ -112,8 +155,8 @@ describe("Solana creator split settlement verification", () => {
 
   it("requires exact optional allocation transfer when present", async () => {
     const input = settlementInput({
-      allocationWallet,
-      allocationAmountMinor: 500_000,
+      referralWallet,
+      referralAmountMinor: 500_000,
       creatorAmountMinor: 9_000_000,
       platformFeeAmountMinor: 500_000
     });
@@ -121,13 +164,34 @@ describe("Solana creator split settlement verification", () => {
     await expect(expectSettlement([
       transfer(creatorWallet, 9_000_000),
       transfer(platformFeeWallet, 500_000),
-      transfer(allocationWallet, 500_000),
+      transfer(referralWallet, 500_000),
       memo("veel:intent-1")
     ], { input })).resolves.toEqual({ confirmed: true, blockTime });
 
     await expect(expectSettlement([
       transfer(creatorWallet, 9_000_000),
       transfer(platformFeeWallet, 500_000),
+      memo("veel:intent-1")
+    ], { input })).resolves.toEqual({ confirmed: false, failureCode: "transfer_mismatch" });
+  });
+
+  it("requires the exact Enterprise transfer as a separate creator-proceeds allocation", async () => {
+    const input = settlementInput({
+      enterpriseWallet,
+      creatorAmountMinor: 7_650_000,
+      enterpriseManagementAmountMinor: 1_350_000
+    });
+
+    await expect(expectSettlement([
+      transfer(creatorWallet, 7_650_000),
+      transfer(enterpriseWallet, 1_350_000),
+      transfer(platformFeeWallet, 1_000_000),
+      memo("veel:intent-1")
+    ], { input })).resolves.toEqual({ confirmed: true, blockTime });
+
+    await expect(expectSettlement([
+      transfer(creatorWallet, 7_650_000),
+      transfer(platformFeeWallet, 1_000_000),
       memo("veel:intent-1")
     ], { input })).resolves.toEqual({ confirmed: false, failureCode: "transfer_mismatch" });
   });
@@ -239,13 +303,15 @@ function settlementInput(overrides: Partial<PaymentSettlementInput> = {}): Payme
     settlementKind: "creator_split",
     buyerWallet,
     creatorWallet,
+    enterpriseWallet: null,
     platformFeeWallet,
-    allocationWallet: null,
+    referralWallet: null,
     treasuryWallet,
     totalAmountMinor: 10_000_000,
     creatorAmountMinor: 9_000_000,
+    enterpriseManagementAmountMinor: 0,
     platformFeeAmountMinor: 1_000_000,
-    allocationAmountMinor: 0,
+    referralAmountMinor: 0,
     currency: "SOL",
     tokenMint: null,
     tokenDecimals: null,
@@ -265,13 +331,17 @@ function storedUsdcIntent(): StoredPaymentIntent {
     settlementKind: "creator_split",
     buyerWallet: null,
     creatorWallet,
+    enterpriseWallet: null,
     platformFeeWallet,
-    allocationWallet: null,
+    referralWallet: null,
     treasuryWallet,
     totalAmountMinor: 1_000_000,
+    creatorSideProceedsMinor: 900_000,
     creatorAmountMinor: 900_000,
+    enterpriseManagementAmountMinor: 0,
+    platformFeeGrossMinor: 100_000,
     platformFeeAmountMinor: 100_000,
-    allocationAmountMinor: 0,
+    referralAmountMinor: 0,
     tokenMint: usdcMint,
     tokenDecimals: 6,
     referenceAddress,

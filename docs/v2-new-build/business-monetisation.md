@@ -368,7 +368,8 @@ Earning-record rules:
 - age gate is separate from creator earning KYC/KYB
 - creator earnings visible in dashboard must be based on confirmed settlement
 - `creator_monetisation_settings` stores readiness/product configuration only; it does not create balances, custody, payout queues, escrow, or receivables
-- Creator-recipient readiness and wallet selection are enforced atomically by `private.assert_recipient_monetisation_ready(...)`; product routes must not duplicate this policy or accept a browser-owned recipient.
+- Creator-recipient readiness and wallet selection are enforced atomically by `private.assert_recipient_monetisation_ready(...)`; product routes must not duplicate this policy or accept a browser-owned recipient. Creator KYC is required only when the effective earning policy requires it.
+- Enterprise management allocation is a versioned, creator-accepted relationship. It is calculated from creator-side proceeds after the gross platform fee. Referral commission remains a separate allocation from the platform fee.
 - Launch creator settlement is individual-only. Organization recipients fail closed until a separate KYB, beneficial-owner, tax, signing-authority, and organization-wallet policy ships; KYB or Enterprise entitlement alone never authorizes settlement.
 - creator earnings are records and tax/compliance inputs, not a withdrawable Veel balance
 - no pending payout or creator withdrawal queue exists in the launch model
