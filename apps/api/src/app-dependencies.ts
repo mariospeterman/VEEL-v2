@@ -22,6 +22,10 @@ import { createLivepeerProviderAdapter } from "./modules/live/livepeer-adapter.j
 import type { LiveProviderAdapter, LiveRepository } from "./modules/live/types.js";
 import { createPostgresMessageRepository } from "./modules/message/message-repository.js";
 import type { MessageRepository } from "./modules/message/types.js";
+import { createPostgresManagedCreatorRepository } from "./modules/managed-creator/managed-creator-repository.js";
+import type { ManagedCreatorRepository } from "./modules/managed-creator/types.js";
+import { createPostgresMcpRepository } from "./modules/mcp/mcp-repository.js";
+import type { McpRepository } from "./modules/mcp/types.js";
 import { createPostgresMutualsRepository } from "./modules/mutuals/mutuals-repository.js";
 import type { MutualsRepository } from "./modules/mutuals/types.js";
 import { createPostgresNotificationRepository } from "./modules/notification/notification-repository.js";
@@ -38,6 +42,8 @@ import type {
   PaymentRepository,
   PaymentSettlementVerifier
 } from "./modules/payment/types.js";
+import { createPostgresPerformerRepository } from "./modules/performer/performer-repository.js";
+import type { PerformerRepository } from "./modules/performer/types.js";
 import { createPostgresProfileRepository } from "./modules/profile/profile-repository.js";
 import type { ProfileRepository } from "./modules/profile/types.js";
 import { createPostgresReferralRepository } from "./modules/referral/referral-repository.js";
@@ -47,6 +53,10 @@ import type { RefundRepository } from "./modules/refund/types.js";
 import { createPostgresSessionRepository } from "./modules/session/session-repository.js";
 import { createSupabaseAuthVerifier } from "./modules/session/supabase-auth.js";
 import type { SessionRepository, SupabaseAuthVerifier } from "./modules/session/types.js";
+import {
+  createPostgresWalletAuthRepository,
+  type WalletAuthRepository
+} from "./modules/auth/wallet-auth-repository.js";
 import { createPostgresSubscriptionRepository } from "./modules/subscription/subscription-repository.js";
 import { createSolanaSubscriptionAuthorizationVerifier } from "./modules/subscription/subscription-verifier.js";
 import type {
@@ -56,6 +66,9 @@ import type {
 import { createWalletOnrampProvider } from "./modules/wallet/wallet-onramp-adapter.js";
 import { createPostgresWalletRepository } from "./modules/wallet/wallet-repository.js";
 import type { WalletOnrampProviderAdapter, WalletRepository } from "./modules/wallet/types.js";
+import { createPostgresVerificationRepository } from "./modules/verification/verification-repository.js";
+import { createVerificationProviderWaterfall } from "./modules/verification/verification-provider-adapters.js";
+import type { VerificationProviderWaterfall, VerificationRepository } from "./modules/verification/types.js";
 import { createPostgresClient, type PostgresSql } from "./shared/postgres.js";
 
 export interface BuildApiOptions {
@@ -72,8 +85,10 @@ export interface BuildApiOptions {
   liveRepository?: LiveRepository;
   liveProvider?: LiveProviderAdapter;
   messageRepository?: MessageRepository;
+  managedCreatorRepository?: ManagedCreatorRepository;
   paymentRepository?: PaymentRepository;
   paymentEvidenceRepository?: PaymentEvidenceRepository;
+  performerRepository?: PerformerRepository;
   activityRepository?: ActivityRepository;
   settlementVerifier?: PaymentSettlementVerifier;
   profileRepository?: ProfileRepository;
@@ -84,9 +99,13 @@ export interface BuildApiOptions {
   subscriptionRepository?: SubscriptionRepository;
   subscriptionAuthorizationVerifier?: SubscriptionAuthorizationVerifier;
   walletRepository?: WalletRepository;
+  walletAuthRepository?: WalletAuthRepository;
   onrampProvider?: WalletOnrampProviderAdapter;
   adminRepository?: AdminRepository;
   aiRepository?: AiRepository;
+  mcpRepository?: McpRepository;
+  verificationRepository?: VerificationRepository;
+  verificationProviderWaterfall?: VerificationProviderWaterfall;
   postgresClient?: PostgresSql;
 }
 
@@ -106,8 +125,10 @@ export interface ApiDependencies {
   liveRepository: LiveRepository;
   liveProvider: LiveProviderAdapter;
   messageRepository: MessageRepository;
+  managedCreatorRepository: ManagedCreatorRepository;
   paymentRepository: PaymentRepository;
   paymentEvidenceRepository: PaymentEvidenceRepository;
+  performerRepository: PerformerRepository;
   activityRepository: ActivityRepository;
   settlementVerifier: PaymentSettlementVerifier;
   referralRepository: ReferralRepository;
@@ -117,9 +138,13 @@ export interface ApiDependencies {
   subscriptionRepository: SubscriptionRepository;
   subscriptionAuthorizationVerifier: SubscriptionAuthorizationVerifier;
   walletRepository: WalletRepository;
+  walletAuthRepository: WalletAuthRepository;
   onrampProvider: WalletOnrampProviderAdapter;
   adminRepository: AdminRepository;
   aiRepository: AiRepository;
+  mcpRepository: McpRepository;
+  verificationRepository: VerificationRepository;
+  verificationProviderWaterfall: VerificationProviderWaterfall;
 }
 
 export function createApiDependencies(
@@ -129,10 +154,15 @@ export function createApiDependencies(
   const postgresClient =
     options.postgresClient ??
     (app.config.DATABASE_URL ? createPostgresClient(app.config.DATABASE_URL) : undefined);
+  const walletAuthRepository =
+    options.walletAuthRepository ?? createPostgresWalletAuthRepository(postgresClient);
 
   return {
     postgresClient,
-    authVerifier: options.authVerifier ?? createSupabaseAuthVerifier(app.config),
+    walletAuthRepository,
+    authVerifier:
+      options.authVerifier ??
+      createSupabaseAuthVerifier(app.config, walletAuthRepository),
     sessionRepository:
       options.sessionRepository ?? createPostgresSessionRepository(postgresClient),
     ageRepository: options.ageRepository ?? createPostgresAgeRepository(postgresClient),
@@ -153,15 +183,23 @@ export function createApiDependencies(
     liveProvider: options.liveProvider ?? createLivepeerProviderAdapter(app.config),
     messageRepository:
       options.messageRepository ?? createPostgresMessageRepository(postgresClient),
+    managedCreatorRepository:
+      options.managedCreatorRepository ?? createPostgresManagedCreatorRepository(postgresClient),
     paymentRepository:
       options.paymentRepository ?? createPostgresPaymentRepository(postgresClient),
     paymentEvidenceRepository:
       options.paymentEvidenceRepository ??
       createPostgresPaymentEvidenceRepository(postgresClient),
+    performerRepository:
+      options.performerRepository ?? createPostgresPerformerRepository(postgresClient),
     activityRepository:
       options.activityRepository ?? createPostgresActivityRepository(postgresClient),
     settlementVerifier:
-      options.settlementVerifier ?? createSolanaRpcSettlementVerifier(app.config.SOLANA_RPC_URL),
+      options.settlementVerifier ??
+        createSolanaRpcSettlementVerifier(
+          app.config.SOLANA_RPC_URL,
+          app.config.PAYMENT_SOLANA_FINALITY
+        ),
     referralRepository:
       options.referralRepository ?? createPostgresReferralRepository(postgresClient),
     refundRepository: options.refundRepository ?? createPostgresRefundRepository(postgresClient),
@@ -175,11 +213,16 @@ export function createApiDependencies(
     subscriptionRepository:
       options.subscriptionRepository ?? createPostgresSubscriptionRepository(postgresClient),
     subscriptionAuthorizationVerifier:
-      options.subscriptionAuthorizationVerifier ?? createSolanaSubscriptionAuthorizationVerifier(),
+      options.subscriptionAuthorizationVerifier ?? createSolanaSubscriptionAuthorizationVerifier(app.config),
     walletRepository:
       options.walletRepository ?? createPostgresWalletRepository(postgresClient),
     onrampProvider: options.onrampProvider ?? createWalletOnrampProvider(app.config),
     adminRepository: options.adminRepository ?? createPostgresAdminRepository(postgresClient),
-    aiRepository: options.aiRepository ?? createPostgresAiRepository(postgresClient)
+    aiRepository: options.aiRepository ?? createPostgresAiRepository(postgresClient),
+    mcpRepository: options.mcpRepository ?? createPostgresMcpRepository(postgresClient),
+    verificationRepository:
+      options.verificationRepository ?? createPostgresVerificationRepository(postgresClient),
+    verificationProviderWaterfall:
+      options.verificationProviderWaterfall ?? createVerificationProviderWaterfall(app.config)
   };
 }

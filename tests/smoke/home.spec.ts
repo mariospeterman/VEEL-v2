@@ -1,159 +1,223 @@
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { expect, test } from "@playwright/test";
+import type { BrowserContext } from "@playwright/test";
 
-const unavailableStatus = /HTTP (401|429|503)/;
-const unavailableReason = /API is unavailable|Missing or invalid bearer token|Rate limit exceeded/;
-const profileFallbackStatus = /HTTP (401|404|429|503)/;
-const profileFallbackReason =
-  /API is unavailable|Missing or invalid bearer token|Profile was not found|Rate limit exceeded/;
+const rawBackendCopy = /HTTP (401|403|404|429|500|503)|Missing or invalid bearer token|API is unavailable/;
+const e2eToken = "veel-e2e-token";
+const firstConversationId = "00000000-0000-4000-8000-000000000081";
+const secondConversationId = "00000000-0000-4000-8000-000000000082";
+let apiServer: Server;
 
-test("renders the app shell and Home media card", async ({ page }) => {
+test.beforeAll(async () => {
+  apiServer = createServer(async (request, response) => {
+    try {
+      await handleApiRequest(request, response);
+    } catch (error) {
+      sendJson(response, 500, { message: error instanceof Error ? error.message : "Mock API error" });
+    }
+  });
+
+  await new Promise<void>((resolve) => {
+    apiServer.listen(4000, "127.0.0.1", resolve);
+  });
+});
+
+test.afterAll(async () => {
+  await new Promise<void>((resolve, reject) => {
+    apiServer.close((error) => (error ? reject(error) : resolve()));
+  });
+});
+
+async function addE2eCookie(context: BrowserContext) {
+  await context.addCookies([
+    {
+      name: "veel_e2e_access_token",
+      value: e2eToken,
+      url: "http://127.0.0.1:3000",
+      httpOnly: false,
+      sameSite: "Lax"
+    }
+  ]);
+}
+
+test("renders the public landing with the current WeVid visual contract", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Recommended" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Home feed unavailable" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Live rail unavailable" })).toBeVisible();
-  await expect(page.getByText(unavailableStatus).first()).toBeVisible();
-  await expect(page.getByText(unavailableReason).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "WeVid home" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Create without asking the algorithm for permission." })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Start onboarding/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Log in" }).first()).toBeVisible();
+  await expect(page.getByText("Public legal copy here is a product placeholder")).toHaveCount(0);
 });
 
-test("renders the enter onboarding projection", async ({ page }) => {
-  await page.goto("/enter");
+test("renders inline login and onboarding entry surfaces", async ({ page }) => {
+  await page.goto("/?mode=login", { waitUntil: "domcontentloaded", timeout: 20_000 });
 
-  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Identity, wallet, then age gate." })).toBeVisible();
-  await expect(page.getByText("Email or passkey")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Complete identity" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Link Solana wallet" })).toBeVisible();
-  await expect(page.getByText("External Solana wallet")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Continue" })).toHaveAttribute("href", "/age");
+  await expect(page.getByRole("heading", { name: "Login to WeVid" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Connect wallet" })).toBeVisible();
+  await expect(page.getByText("Privy", { exact: true })).toBeVisible();
+
+  await page.goto("/?mode=onboarding", { waitUntil: "domcontentloaded", timeout: 20_000 });
+
+  await expect(page.getByRole("heading", { name: "Set up access." })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Connect wallet" })).toBeVisible();
+  await expect(page.getByText("Required. Load wallet providers only when you are ready to connect and sign.")).toBeVisible();
+
+  await page.getByRole("button", { name: /Connect wallet Solana ownership signature only/ }).click();
+  await expect(page.getByText("Required. Connect a Solana wallet and sign the backend ownership challenge.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Set up access." })).toBeVisible();
+  await expect(page.locator(".landing-progress-topic")).toHaveText("Onboarding");
 });
 
-test("renders the age assurance projection", async ({ page }) => {
+test("renders a deep-linked onboarding step without an entrance-animation delay", async ({ page }) => {
+  await page.goto("/?mode=onboarding&step=profile&next=%2Fapp%2Fhome", {
+    waitUntil: "domcontentloaded",
+    timeout: 20_000
+  });
+
+  await expect(page.getByRole("heading", { name: "Set up access." })).toBeVisible();
+  await expect(page.getByLabel("Handle")).toBeVisible();
+  await expect(page.locator(".landing-auth-inline")).toHaveCSS("opacity", "1");
+  await expect(page.locator(".landing-auth-inline")).toHaveCSS("visibility", "visible");
+});
+
+test("renders the standalone age handoff without raw API/provider errors", async ({ page }) => {
   await page.goto("/age");
 
-  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Provider-backed 18+ gate" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Age status unavailable" })).toBeVisible();
-  await expect(page.getByText(unavailableStatus).first()).toBeVisible();
-  await expect(page.getByText(unavailableReason).first()).toBeVisible();
-  await expect(page.getByText("signature verified")).toBeVisible();
-  await expect(page.getByText("normalized result only")).toBeVisible();
-  await expect(page.getByText("Session launch URLs are created by the backend")).toBeVisible();
+  await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Start age verification" })).toBeDisabled();
 });
 
-test("renders the content media viewer projection", async ({ page }) => {
-  await page.goto("/content/00000000-0000-4000-8000-000000000040");
+test("enforces canonical app route ownership redirects", async ({ request }) => {
+  const redirects: Array<[string, RegExp]> = [
+    ["/activity", /\/app\/activity$/],
+    ["/assistant", /\/app\/assistant$/],
+    ["/create", /\/app\/create$/],
+    ["/discover", /\/app\/bits$/],
+    ["/messages", /\/app\/messages$/],
+    ["/profile", /\/app\/profile$/],
+    ["/settings", /\/app\/settings$/],
+    ["/studio", /\/app\/studio$/],
+    ["/subscriptions", /\/app\/subscriptions$/],
+    ["/wallet", /\/app\/wallet$/]
+  ];
 
-  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
+  for (const [source, expected] of redirects) {
+    const response = await request.get(source, { maxRedirects: 0 });
+    expect(response.status()).toBeGreaterThanOrEqual(300);
+    expect(response.status()).toBeLessThan(400);
+    expect(response.headers().location ?? "").toMatch(expected);
+  }
+});
+
+test("renders the canonical protected app home shell through /app", async ({ context, page }) => {
+  await addE2eCookie(context);
+  await page.goto("/app/home", { waitUntil: "domcontentloaded", timeout: 45_000 });
+
+  await expect(page.getByRole("link", { name: "WeVid app home" }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Mixed media feed|Enter WeVid/ }).first()).toBeVisible();
+  await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
+});
+
+test("separates platform plans from creator memberships responsively", async ({ context, page }) => {
+  await addE2eCookie(context);
+  await page.goto("/app/subscriptions", { waitUntil: "domcontentloaded", timeout: 45_000 });
+
+  await expect(page.getByRole("heading", { name: "Your WeVid access" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Platform plans" })).toBeVisible();
+  await expect(page.getByRole("heading", { exact: true, name: "Creator memberships" })).toBeVisible();
+  await expect(page.getByText("Free Verified", { exact: true })).toHaveCount(2);
+  await expect(page.getByText("Veel Studio", { exact: true })).toBeVisible();
+  await expect(page.getByText("No joined memberships", { exact: true })).toBeVisible();
+
+  const layout = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth
+  }));
+  expect(layout.scrollWidth).toBe(layout.clientWidth);
+});
+
+test("selects a requested conversation and keeps the inbox within the viewport", async ({ context, page }) => {
+  await addE2eCookie(context);
+  await page.goto(`/app/messages?conversation=${secondConversationId}`, {
+    waitUntil: "domcontentloaded",
+    timeout: 45_000
+  });
+
+  await expect(page.getByRole("heading", { name: "Production notes" })).toBeVisible();
+  await expect(page.getByRole("article").getByText("Second thread message", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Production notes/ })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("link", { name: /Studio team/ })).not.toHaveAttribute("aria-current", "page");
+  await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
+
+  const layout = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth
+  }));
+  expect(layout.scrollWidth).toBe(layout.clientWidth);
+});
+
+test("keeps content detail route reachable", async ({ page }) => {
+  await page.goto("/content/00000000-0000-4000-8000-000000000040", { waitUntil: "domcontentloaded", timeout: 45_000 });
   await expect(page.getByRole("heading", { name: "Content unavailable" })).toBeVisible();
-  await expect(page.getByText(unavailableStatus)).toBeVisible();
-  await expect(page.getByText(unavailableReason)).toBeVisible();
+  await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
 });
 
-test("renders the create upload workspace projection", async ({ page }) => {
-  await page.goto("/create");
+test("runs content engagement actions responsively through canonical API routes", async ({ context, page }) => {
+  await addE2eCookie(context);
+  await page.goto("/content/00000000-0000-4000-8000-000000000040", {
+    waitUntil: "domcontentloaded",
+    timeout: 45_000
+  });
 
-  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Upload workspace" })).toBeVisible();
-  await expect(page.getByText("POST /v1/content")).toBeVisible();
-  await expect(page.getByText("Bunny TUS session")).toBeVisible();
-  await expect(page.getByText("POST /v1/media/assets/:id/sync")).toBeVisible();
-  await expect(page.getByText("safe session headers only")).toBeVisible();
-  await expect(page.locator("span").getByText("explicit", { exact: true })).toBeVisible();
+  await expect(page.getByText("Studio sunrise session")).toBeVisible();
+  await page.getByRole("button", { name: "Like" }).click();
+  await expect(page.getByRole("button", { name: "Liked" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText("129", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("button", { name: "Saved" })).toHaveAttribute("aria-pressed", "true");
+
+  await page.getByRole("button", { name: "Comment" }).click();
+  await page.getByRole("textbox", { name: "Comment", exact: true }).fill("Browser-backed comment");
+  await page.getByRole("button", { name: "Post comment" }).click();
+  await expect(page.getByRole("article").getByText("Browser-backed comment")).toBeVisible();
+  await expect(page.getByText("Comment posted.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Share" }).click();
+  await expect(page.getByText(/Link copied\.|Share link ready\./)).toBeVisible();
+
+  await page.getByRole("button", { name: "Report", exact: true }).click();
+  await page.getByLabel("Report reason").fill("Misleading content metadata");
+  await page.getByRole("button", { name: "Submit report" }).click();
+  await expect(page.getByText("Report submitted for review.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Creator controls" }).click();
+  await page.getByRole("button", { name: "Hide from feed" }).click();
+  await expect(page.getByText("Creator hidden from your feed.")).toBeVisible();
+
+  const layout = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth
+  }));
+  expect(layout.scrollWidth).toBe(layout.clientWidth);
+  await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
 });
 
-test("renders the discover projection", async ({ page }) => {
-  await page.goto("/discover");
+test("keeps compatibility aliases intentional", async ({ request }) => {
+  const mediaResponse = await request.get("/app/media/00000000-0000-4000-8000-000000000040", { maxRedirects: 0 });
+  expect(mediaResponse.headers().location ?? "").toMatch(/\/content\/00000000-0000-4000-8000-000000000040$/);
 
-  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Search and explore" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Discover unavailable" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Discover sidebars unavailable" })).toBeVisible();
-  await expect(page.getByText(unavailableStatus).first()).toBeVisible();
-  await expect(page.getByText(unavailableReason).first()).toBeVisible();
-});
+  const streamResponse = await request.get("/app/stream/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10", { maxRedirects: 0 });
+  expect(streamResponse.headers().location ?? "").toMatch(/\/live\/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10$/);
 
-test("renders the messages and paid-message projection", async ({ page }) => {
-  await page.goto("/messages");
+  const eventResponse = await request.get("/events/00000000-0000-4000-8000-0000000000e1", { maxRedirects: 0 });
+  expect(eventResponse.headers().location ?? "").toMatch(/\/event-access\/00000000-0000-4000-8000-0000000000e1$/);
 
-  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Inbox" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Messages unavailable" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Conversation unavailable" })).toBeVisible();
-  await expect(page.getByText(unavailableStatus).first()).toBeVisible();
-  await expect(page.getByText(unavailableReason).first()).toBeVisible();
-});
-
-test("renders the activity and wallet transaction projection", async ({ page }) => {
-  await page.goto("/activity");
-
-  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Payments" })).toBeVisible();
-  await expect(page.getByText("Wallet transactions", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Payment activity unavailable" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Wallet transactions unavailable" })).toBeVisible();
-  await expect(page.getByText(unavailableStatus).first()).toBeVisible();
-  await expect(page.getByText(unavailableReason).first()).toBeVisible();
-});
-
-test("renders the wallet funding and primary-wallet projection", async ({ page }) => {
-  await page.goto("/wallet");
-
-  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Funding and receipts" })).toBeVisible();
-  await expect(page.getByText("User-owned wallet funding")).toBeVisible();
-  await expect(page.getByText("Funding sessions do not unlock")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Wallets unavailable" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Wallet transactions unavailable" })).toBeVisible();
-  await expect(page.getByText(unavailableStatus).first()).toBeVisible();
-  await expect(page.getByText(unavailableReason).first()).toBeVisible();
-});
-
-test("renders the creator dashboard projection", async ({ page }) => {
-  await page.goto("/profile");
-
-  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Creator dashboard unavailable" })).toBeVisible();
-  await expect(page.getByText(unavailableStatus)).toBeVisible();
-  await expect(page.getByText(unavailableReason)).toBeVisible();
-});
-
-test("renders the delegated subscription projection", async ({ page }) => {
-  await page.goto("/subscriptions");
-
-  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Auto-renewing access" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Subscription plans unavailable" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Subscriptions unavailable" })).toBeVisible();
-  await expect(page.getByText(unavailableStatus).first()).toBeVisible();
-  await expect(page.getByText(unavailableReason).first()).toBeVisible();
-  await expect(page.getByText("Manual Solana Pay renewal is reserved")).toBeVisible();
-});
-
-test("renders the Studio organization dashboard projection", async ({ page }) => {
-  await page.goto("/studio");
-
-  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Organization dashboards" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Studio API unavailable" })).toBeVisible();
-  await expect(page.getByText(unavailableStatus)).toBeVisible();
-  await expect(page.getByText(unavailableReason)).toBeVisible();
-  await expect(page.getByText("payout queues")).toBeVisible();
-});
-
-test("renders the settings projection", async ({ page }) => {
-  await page.goto("/settings");
-
-  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Account controls" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Security" })).toBeVisible();
-  await expect(page.getByText("Settings API unavailable").first()).toBeVisible();
-  await expect(page.getByText(unavailableStatus).first()).toBeVisible();
-  await expect(page.getByText("privacy-safe only")).toBeVisible();
-  await expect(page.getByText("Browser push", { exact: true })).toBeVisible();
-  await expect(page.getByText("server-owned").first()).toBeVisible();
+  const mutualsResponse = await request.get("/mutuals/mutuals", { maxRedirects: 0 });
+  expect(mutualsResponse.headers().location ?? "").toMatch(/\/mutuals$/);
 });
 
 test("serves the browser push service worker with internal click handling", async ({ page }) => {
@@ -164,135 +228,376 @@ test("serves the browser push service worker with internal click handling", asyn
   expect(source).toContain('self.addEventListener("push"');
   expect(source).toContain('self.addEventListener("notificationclick"');
   expect(source).toContain("safeInternalPath");
-  expect(source).toContain('return "/notifications"');
 });
 
-test("redirects documented app route aliases", async ({ page }) => {
-  test.setTimeout(45_000);
+async function handleApiRequest(request: IncomingMessage, response: ServerResponse) {
+  const method = request.method ?? "GET";
+  const url = new URL(request.url ?? "/", "http://127.0.0.1:4000");
+  setCorsHeaders(response);
 
-  await page.goto("/app/settings");
-  await expect(page).toHaveURL(/\/settings$/);
-  await expect(page.getByRole("heading", { name: "Account controls" })).toBeVisible();
+  if (method === "OPTIONS") {
+    response.writeHead(204);
+    response.end();
+    return;
+  }
 
-  await page.goto("/app/studio");
-  await expect(page).toHaveURL(/\/studio$/);
-  await expect(page.getByRole("heading", { name: "Organization dashboards" })).toBeVisible();
+  if (request.headers.authorization !== `Bearer ${e2eToken}`) {
+    sendJson(response, 401, { message: "Missing or invalid bearer token" });
+    return;
+  }
 
-  await page.goto("/app/stream/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10");
-  await expect(page).toHaveURL(/\/live\/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10$/);
-  await expect(page.getByRole("heading", { name: "Live room" })).toBeVisible();
+  if (method === "GET" && url.pathname === "/v1/session") {
+    sendJson(response, 200, sessionState());
+    return;
+  }
 
-  await page.goto("/event-access/00000000-0000-4000-8000-0000000000e1");
-  await expect(page).toHaveURL(/\/event-access\/00000000-0000-4000-8000-0000000000e1$/);
-  await expect(page.getByRole("heading", { name: "Event unavailable" })).toBeVisible();
+  if (method === "GET" && url.pathname === "/v1/content/feed") {
+    sendJson(response, 200, { items: [contentItem()], nextCursor: null });
+    return;
+  }
 
-  await page.goto("/events/00000000-0000-4000-8000-0000000000e1");
-  await expect(page).toHaveURL(/\/event-access\/00000000-0000-4000-8000-0000000000e1$/);
-  await expect(page.getByRole("heading", { name: "Event unavailable" })).toBeVisible();
+  if (method === "GET" && url.pathname === "/v1/content/00000000-0000-4000-8000-000000000040") {
+    sendJson(response, 200, contentItem());
+    return;
+  }
 
-  await page.goto("/mutuals/mutuals");
-  await expect(page).toHaveURL(/\/mutuals$/);
-  await expect(page.getByRole("heading", { name: "Mutuals", exact: true })).toBeVisible();
+  const engagementMatch = url.pathname.match(
+    /^\/v1\/engagement\/(00000000-0000-4000-8000-000000000040)\/(like|save|comments)$/
+  );
+  if (engagementMatch) {
+    if (method === "GET" && engagementMatch[2] === "comments") {
+      sendJson(response, 200, { items: [], nextCursor: null });
+      return;
+    }
 
-});
+    if (method === "POST" && !hasIdempotencyKey(request)) {
+      sendJson(response, 400, { message: "Idempotency-Key header is required" });
+      return;
+    }
 
-test("renders the public creator profile projection", async ({ page }) => {
-  await page.goto("/profile/maki");
+    if (method === "POST" && engagementMatch[2] === "like") {
+      sendJson(response, 200, engagementState({ liked: true, likeCount: 129 }));
+      return;
+    }
 
-  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: /Creator profile (not found|unavailable)/ })).toBeVisible();
-  await expect(page.getByText(profileFallbackStatus)).toBeVisible();
-  await expect(page.getByText(profileFallbackReason)).toBeVisible();
-});
+    if (method === "POST" && engagementMatch[2] === "save") {
+      sendJson(response, 200, engagementState({ saved: true }));
+      return;
+    }
 
-test("renders the admin payment unlock and provider ops projection", async ({ page }) => {
-  await page.goto("/admin");
+    if (method === "POST" && engagementMatch[2] === "comments") {
+      const body = await readJsonBody<{ body?: string }>(request);
+      sendJson(response, 201, comment(body.body ?? ""));
+      return;
+    }
+  }
 
-  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Payments and unlocks" })).toBeVisible();
-  await expect(page.getByText("Admin ops")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Payments", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Unlocks", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Users content and reports", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Notification health", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Provider events", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Live and media providers", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Age and KYC providers", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "AI operations", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Compliance ledger", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "DAC7 and CARF reports", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Referral governance", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Organizations and KYB", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Support policy", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Refunds and disputes", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Event Access ops", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Mutuals safety", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Data requests", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Audit log", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Feature flags", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "VAT receipts and invoices", exact: true })).toBeVisible();
-  await expect(page.getByText("Admin API unavailable").first()).toBeVisible();
-  await expect(page.getByText(unavailableStatus).first()).toBeVisible();
-  await expect(page.getByText(unavailableReason).first()).toBeVisible();
-});
+  if (method === "POST" && url.pathname === "/v1/shares") {
+    if (!hasIdempotencyKey(request)) {
+      sendJson(response, 400, { message: "Idempotency-Key header is required" });
+      return;
+    }
+    sendJson(response, 201, {
+      id: "00000000-0000-4000-8000-0000000000c2",
+      mode: "copy_link",
+      url: "http://127.0.0.1:3000/share/content/00000000-0000-4000-8000-000000000040"
+    });
+    return;
+  }
 
-test("renders the Livepeer live room projection", async ({ page }) => {
-  await page.goto("/live/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10");
+  if (method === "POST" && url.pathname === "/v1/reports") {
+    if (!hasIdempotencyKey(request)) {
+      sendJson(response, 400, { message: "Idempotency-Key header is required" });
+      return;
+    }
+    sendJson(response, 201, {
+      id: "00000000-0000-4000-8000-0000000000c3",
+      state: "queued",
+      queue: "content"
+    });
+    return;
+  }
 
-  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Live room unavailable" })).toBeVisible();
-  await expect(page.getByText(unavailableStatus)).toBeVisible();
-  await expect(page.getByText(unavailableReason)).toBeVisible();
-});
+  if (method === "POST" && url.pathname === "/v1/feed/hide-creator") {
+    if (!hasIdempotencyKey(request)) {
+      sendJson(response, 400, { message: "Idempotency-Key header is required" });
+      return;
+    }
+    sendJson(response, 200, {
+      defaultMode: "recommended",
+      nsfwPreference: "both",
+      hiddenCreatorIds: [user().id],
+      hiddenTopics: []
+    });
+    return;
+  }
 
-test("renders the Event Access sheet projection", async ({ page }) => {
-  await page.goto("/event-access/00000000-0000-4000-8000-0000000000e1");
+  if (method === "POST" && url.pathname === `/v1/blocks/${user().id}`) {
+    if (!hasIdempotencyKey(request)) {
+      sendJson(response, 400, { message: "Idempotency-Key header is required" });
+      return;
+    }
+    sendJson(response, 200, { blocked: true, blockedUserId: user().id });
+    return;
+  }
 
-  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Event unavailable" })).toBeVisible();
-  await expect(page.getByText(unavailableStatus)).toBeVisible();
-  await expect(page.getByText(unavailableReason)).toBeVisible();
-});
+  if (method === "GET" && url.pathname === "/v1/platform-access") {
+    sendJson(response, 200, platformAccess());
+    return;
+  }
 
-test("renders the user Event Access pass projection", async ({ page }) => {
-  await page.goto("/passes");
+  if (method === "GET" && url.pathname === "/v1/subscriptions/plans") {
+    sendJson(response, 200, { items: subscriptionPlans() });
+    return;
+  }
 
-  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "My passes" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Passes unavailable" })).toBeVisible();
-  await expect(page.getByText(unavailableStatus)).toBeVisible();
-  await expect(page.getByText(unavailableReason)).toBeVisible();
-});
+  if (method === "GET" && url.pathname === "/v1/subscriptions") {
+    sendJson(response, 200, { items: [] });
+    return;
+  }
 
-test("renders the Mutuals feed projection", async ({ page }) => {
-  await page.goto("/mutuals/feed");
+  if (method === "GET" && url.pathname === "/v1/messages/conversations") {
+    sendJson(response, 200, { items: conversations() });
+    return;
+  }
 
-  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Explicit Mutuals feed" })).toBeVisible();
-  await expect(page.getByText("Mutuals safety")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Mutuals feed unavailable" })).toBeVisible();
-  await expect(page.getByText(unavailableStatus)).toBeVisible();
-  await expect(page.getByText(unavailableReason)).toBeVisible();
-  await expect(page.getByText("explicit opt-in required")).toBeVisible();
-});
+  const conversationMessagesMatch = url.pathname.match(
+    /^\/v1\/messages\/conversations\/([0-9a-f-]+)\/messages$/
+  );
+  if (method === "GET" && conversationMessagesMatch) {
+    const conversationId = conversationMessagesMatch[1];
+    if (conversationId !== firstConversationId && conversationId !== secondConversationId) {
+      sendJson(response, 404, { message: "Conversation not found" });
+      return;
+    }
 
-test("renders the Mutuals list projection", async ({ page }) => {
-  await page.goto("/mutuals");
+    sendJson(response, 200, {
+      items: [
+        message(
+          conversationId,
+          conversationId === secondConversationId ? "Second thread message" : "First thread message"
+        )
+      ],
+      nextCursor: null
+    });
+    return;
+  }
 
-  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Mutuals", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Mutuals unavailable" })).toBeVisible();
-  await expect(page.getByText(unavailableStatus)).toBeVisible();
-  await expect(page.getByText(unavailableReason)).toBeVisible();
-});
+  if (method === "GET" && url.pathname === "/v1/discover/search") {
+    sendJson(response, 200, {
+      content: [contentItem()],
+      creators: [user()],
+      hashtags: [{ slug: "studio", displayName: "Studio", state: "active" }],
+      events: [],
+      liveRooms: [liveRoom()],
+      nextCursor: null
+    });
+    return;
+  }
 
-test("renders the scoped assistant projection", async ({ page }) => {
-  await page.goto("/assistant");
+  sendJson(response, 503, { message: "Route unavailable in smoke API" });
+}
 
-  await expect(page.getByRole("link", { name: "VEEL" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Scoped assistant" })).toBeVisible();
-  await expect(page.getByText("Assistant API unavailable")).toBeVisible();
-  await expect(page.getByText(unavailableStatus).first()).toBeVisible();
-  await expect(page.getByText("explicit start only").first()).toBeVisible();
-  await expect(page.getByText("required for admin actions")).toBeVisible();
-});
+function setCorsHeaders(response: ServerResponse) {
+  response.setHeader("Access-Control-Allow-Origin", "http://127.0.0.1:3000");
+  response.setHeader("Access-Control-Allow-Credentials", "true");
+  response.setHeader("Access-Control-Allow-Headers", "authorization,content-type,idempotency-key,accept");
+  response.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,OPTIONS");
+}
+
+function sendJson(response: ServerResponse, status: number, body: unknown) {
+  response.writeHead(status, { "content-type": "application/json" });
+  response.end(JSON.stringify(body));
+}
+
+function hasIdempotencyKey(request: IncomingMessage) {
+  return typeof request.headers["idempotency-key"] === "string";
+}
+
+async function readJsonBody<T>(request: IncomingMessage): Promise<T> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of request) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  return JSON.parse(Buffer.concat(chunks).toString("utf8")) as T;
+}
+
+function user() {
+  return {
+    id: "00000000-0000-4000-8000-000000000010",
+    handle: "ariamoon",
+    displayName: "Aria Moon",
+    avatarUrl: null,
+    badges: [{ key: "age_verified", label: "Age verified", group: "trust" }]
+  };
+}
+
+function sessionState() {
+  return {
+    authenticated: true,
+    appAccessState: { allowed: true, reason: "ready" },
+    user: user()
+  };
+}
+
+function platformAccess() {
+  const tiers = [
+    platformTier("free_verified", "Free Verified", 0, 0, "included", null),
+    platformTier("veel_plus", "Veel Plus", 1, 500, "available", "platform-plus"),
+    platformTier("veel_ultra", "Veel Ultra", 2, 1_500, "available", "platform-ultra"),
+    platformTier("veel_studio", "Veel Studio", 3, 3_000, "available", "platform-studio"),
+    platformTier("enterprise", "Enterprise", 4, null, "contact_sales", null)
+  ];
+
+  return {
+    currentTier: tiers[0],
+    usage: {
+      windowStartsAt: "2026-08-01T00:00:00.000Z",
+      windowEndsAt: "2026-09-01T00:00:00.000Z",
+      publicMediaSeconds: 7_200,
+      remainingPublicMediaSeconds: 28_800,
+      limitReached: false
+    },
+    tiers,
+    policyBoundary: "platform_tiers_buy_software_and_public_media_allowance_never_social_priority"
+  };
+}
+
+function platformTier(
+  key: string,
+  label: string,
+  rank: number,
+  monthlyPriceMinor: number | null,
+  purchaseState: string,
+  subscriptionPlanId: string | null
+) {
+  return {
+    key,
+    label,
+    rank,
+    monthlyPriceMinor,
+    currency: monthlyPriceMinor === null ? null : "USDC",
+    publicMediaAllowanceSeconds: key === "enterprise" ? null : 36_000 * (rank + 1),
+    capabilities: [],
+    purchaseState,
+    subscriptionPlanId
+  };
+}
+
+function subscriptionPlans() {
+  return [
+    subscriptionPlan("platform-plus", "Veel Plus", 500),
+    subscriptionPlan("platform-ultra", "Veel Ultra", 1_500),
+    subscriptionPlan("platform-studio", "Veel Studio", 3_000)
+  ];
+}
+
+function subscriptionPlan(id: string, label: string, amountMinor: number) {
+  return {
+    id,
+    scope: "platform",
+    label,
+    amountMinor,
+    currency: "USDC",
+    periodDays: 30,
+    billingMode: "delegated_solana_subscription",
+    providerState: "staging_required",
+    provider: "official_solana_subscription_program",
+    tokenMint: null,
+    tokenProgram: null
+  };
+}
+
+function conversations() {
+  return [
+    conversation(firstConversationId, "Studio team", "First thread message", 0),
+    conversation(secondConversationId, "Production notes", "Second thread message", 2)
+  ];
+}
+
+function conversation(id: string, title: string, body: string, unreadCount: number) {
+  return {
+    id,
+    type: "direct",
+    title,
+    unreadCount,
+    lastMessage: {
+      body,
+      sender: user(),
+      createdAt: "2026-08-11T10:00:00.000Z"
+    }
+  };
+}
+
+function message(conversationId: string, body: string) {
+  return {
+    id: conversationId === firstConversationId
+      ? "00000000-0000-4000-8000-000000000091"
+      : "00000000-0000-4000-8000-000000000092",
+    conversationId,
+    sender: user(),
+    body,
+    deliveryState: "visible",
+    paymentIntentId: null,
+    createdAt: "2026-08-11T10:00:00.000Z"
+  };
+}
+
+function liveRoom() {
+  return {
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10",
+    title: "Live now with access-gated chat",
+    creator: user(),
+    state: "live",
+    accessState: "pass_required",
+    playback: {
+      state: "teaser",
+      url: null,
+      provider: "livepeer",
+      resourceType: null,
+      expiresAt: null
+    },
+    teaserSecondsRemaining: 45,
+    passOptions: [{ durationMinutes: 30, amountMinor: 10, currency: "SOL" }],
+    chat: { enabled: true, accessState: "pass_required" },
+    replayContentId: null
+  };
+}
+
+function contentItem() {
+  return {
+    id: "00000000-0000-4000-8000-000000000040",
+    creator: user(),
+    mediaType: "clip",
+    caption: "Studio sunrise session",
+    posterUrl: null,
+    playback: {
+      state: "full",
+      url: "https://media.example.test/studio.mp4",
+      provider: "bunny",
+      resourceType: "direct",
+      expiresAt: null
+    },
+    accessState: "free",
+    nsfwLabel: "adult",
+    engagement: {
+      liked: false,
+      saved: false,
+      likeCount: 128,
+      commentCount: 24,
+      shareCount: 8
+    }
+  };
+}
+
+function engagementState(overrides: Partial<ReturnType<typeof contentItem>["engagement"]> = {}) {
+  return { ...contentItem().engagement, ...overrides };
+}
+
+function comment(body: string) {
+  return {
+    id: "00000000-0000-4000-8000-0000000000c1",
+    author: user(),
+    body,
+    moderationState: "visible",
+    createdAt: "2026-08-11T12:00:00.000Z"
+  };
+}

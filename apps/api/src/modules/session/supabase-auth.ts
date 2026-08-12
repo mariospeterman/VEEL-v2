@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import type { ServerEnv } from "@veel/config";
+import type { WalletAuthRepository } from "../auth/wallet-auth-repository.js";
 import type { SupabaseAuthVerifier, VerifiedSupabaseSession } from "./types.js";
 
 const missingSupabaseConfig = "SUPABASE_AUTH_NOT_CONFIGURED";
@@ -11,13 +12,20 @@ export class SupabaseAuthConfigurationError extends Error {
   }
 }
 
-export function createSupabaseAuthVerifier(config: ServerEnv): SupabaseAuthVerifier {
+export function createSupabaseAuthVerifier(
+  config: ServerEnv,
+  walletAuthRepository?: WalletAuthRepository
+): SupabaseAuthVerifier {
   const supabaseKey =
     config.SUPABASE_PUBLISHABLE_KEY ?? config.SUPABASE_SECRET_KEY ?? config.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!config.SUPABASE_URL || !supabaseKey) {
     return {
-      async verifyBearerToken() {
+      async verifyBearerToken(token: string) {
+        if (token.startsWith("veel_wallet_")) {
+          return (await walletAuthRepository?.verifySessionToken(token)) ?? null;
+        }
+
         throw new SupabaseAuthConfigurationError();
       }
     };
@@ -33,6 +41,10 @@ export function createSupabaseAuthVerifier(config: ServerEnv): SupabaseAuthVerif
 
   return {
     async verifyBearerToken(token: string): Promise<VerifiedSupabaseSession | null> {
+      if (token.startsWith("veel_wallet_")) {
+        return (await walletAuthRepository?.verifySessionToken(token)) ?? null;
+      }
+
       const { data, error } = await supabase.auth.getClaims(token);
 
       if (error || !data?.claims?.sub) {

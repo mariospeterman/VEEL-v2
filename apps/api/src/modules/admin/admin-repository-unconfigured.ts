@@ -10,6 +10,7 @@ export function createUnconfiguredAdminRepository(): AdminRepository {
     hasAdminAccess: fail,
     getOpsSummary: fail,
     getNotificationHealth: fail,
+    retryDeadLetterJob: fail,
     listUsers: fail,
     getUser: fail,
     listContent: fail,

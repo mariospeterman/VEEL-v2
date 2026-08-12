@@ -1,11 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildWorkerRuntime,
+  runMediaModerationTick,
+  runScheduledWorkerTick,
   runNotificationDeliveryTick,
   runPaymentConfirmationEmailTick,
   runProviderEventReplayTick,
   runSubscriptionCollectionTick
 } from "../src/index";
+import type {
+  MediaModerationOutcome,
+  MediaModerationRepository,
+  QueuedMediaModerationJob
+} from "../src/media-moderation";
 import type {
   DueNotificationDelivery,
   NotificationDeliveryOutcome,
@@ -56,11 +63,11 @@ describe("buildWorkerRuntime", () => {
     expect(runtime).toMatchObject({
       name: "veel-worker",
       queues: [
-        "subscription-authorizations",
         "subscription-collections",
         "notification-deliveries",
         "payment-confirmation-emails",
-        "provider-event-replays"
+        "provider-event-replays",
+        "media-moderation"
       ],
       schedules: [
         {
@@ -82,9 +89,97 @@ describe("buildWorkerRuntime", () => {
           name: "provider-event-replays",
           cadence: "operator_requested",
           sourceIndex: "provider_event_replay_requests_state_created_idx"
+        },
+        {
+          name: "media-moderation",
+          cadence: "every_minute",
+          sourceIndex: "media_moderation_jobs_lease_idx"
         }
       ]
     });
+  });
+});
+
+describe("runScheduledWorkerTick", () => {
+  it("runs every scheduled queue and isolates task failures", async () => {
+    const calls: string[] = [];
+    const errors: Array<Record<string, unknown>> = [];
+
+    const result = await runScheduledWorkerTick({
+      runners: {
+        async mediaModeration() {
+          calls.push("moderation");
+        },
+        async notificationDeliveries() {
+          calls.push("notifications");
+        },
+        async paymentConfirmationEmails() {
+          calls.push("email");
+          throw new Error("provider unavailable");
+        },
+        async subscriptionCollections() {
+          calls.push("subscriptions");
+        }
+      },
+      logger: {
+        info() {},
+        error(fields) {
+          errors.push(fields);
+        }
+      }
+    });
+
+    expect(calls.sort()).toEqual(["email", "moderation", "notifications", "subscriptions"]);
+    expect(result).toEqual({
+      mediaModeration: "completed",
+      notificationDeliveries: "completed",
+      paymentConfirmationEmails: "failed",
+      subscriptionCollections: "completed"
+    });
+    expect(errors).toEqual([
+      {
+        task: "paymentConfirmationEmails",
+        errorName: "Error"
+      }
+    ]);
+  });
+});
+
+describe("runMediaModerationTick", () => {
+  it("routes queued media to review when automated moderation is not launch-approved", async () => {
+    const job: QueuedMediaModerationJob = {
+      jobId: "moderation-job-1",
+      caseId: "safety-case-1",
+      mediaAssetId: "media-asset-1",
+      provider: "bunny",
+      providerAssetId: "bunny-video-1",
+      stage: "provider_scan_reconciliation",
+      attemptCount: 1,
+      maxAttempts: 5,
+      leaseToken: "00000000-0000-4000-8000-000000000099"
+    };
+    const outcomes: MediaModerationOutcome[] = [];
+    const repository: MediaModerationRepository = {
+      async leaseJobs() {
+        return [job];
+      },
+      async recordOutcome(input) {
+        outcomes.push(input.outcome);
+      }
+    };
+
+    await expect(runMediaModerationTick({ repository })).resolves.toEqual({
+      leased: 1,
+      completed: 0,
+      reviewRequired: 1,
+      failed: 0
+    });
+    expect(outcomes).toEqual([
+      {
+        state: "review_required",
+        reasonCode: "automated_media_moderation_not_launch_approved"
+      }
+    ]);
   });
 });
 
@@ -377,6 +472,8 @@ describe("runSubscriptionCollectionTick", () => {
       {
         collectionId: "collection-1",
         subscriptionId: "subscription-1",
+        leaseToken: "lease-1",
+        maxAttempts: 8,
         outcome: {
           state: "confirmed",
           collectionSignature: "renewal-signature"
@@ -449,6 +546,29 @@ describe("runSubscriptionCollectionTick", () => {
         state: "revoked",
         failureCode: "delegation_revoked"
       }
+    });
+  });
+
+  it("reconciles a stale lease before considering another provider collection", async () => {
+    const repository = fakeSubscriptionCollectionRepository({
+      dueCollections: [dueCollectionFixture({ attemptCount: 2 })]
+    });
+    const collect = vi.fn();
+    const provider: SubscriptionCollectionProvider = {
+      async reconcile(input) {
+        expect(input.providerIdempotencyKey).toBe("subscription-1:2026-06-06T00:00:00.000Z");
+        return { state: "confirmed", collectionSignature: "reconciled-signature" };
+      },
+      collect
+    };
+
+    const result = await runSubscriptionCollectionTick({ repository, provider });
+
+    expect(result.confirmed).toBe(1);
+    expect(collect).not.toHaveBeenCalled();
+    expect(repository.outcomes[0]?.outcome).toEqual({
+      state: "confirmed",
+      collectionSignature: "reconciled-signature"
     });
   });
 });
@@ -602,10 +722,15 @@ function dueCollectionFixture(
 ): DueSubscriptionCollection {
   return {
     collectionId: overrides.collectionId ?? "collection-1",
+    leaseToken: overrides.leaseToken ?? "lease-1",
+    attemptCount: overrides.attemptCount ?? 1,
+    providerIdempotencyKey:
+      overrides.providerIdempotencyKey ?? "subscription-1:2026-06-06T00:00:00.000Z",
     subscriptionId: overrides.subscriptionId ?? "subscription-1",
     subscriberUserId: overrides.subscriberUserId ?? "subscriber-1",
     planId: overrides.planId ?? "platform_plus_monthly",
-    amountMinor: overrides.amountMinor ?? 15000000,
+    amountMinor: overrides.amountMinor ?? 15000000n,
+    amountAtomic: overrides.amountAtomic ?? 15000000n,
     currency: overrides.currency ?? "USDC",
     periodStartsAt: overrides.periodStartsAt ?? new Date("2026-06-06T00:00:00.000Z"),
     periodEndsAt: overrides.periodEndsAt ?? new Date("2026-07-06T00:00:00.000Z"),
@@ -614,7 +739,10 @@ function dueCollectionFixture(
     subscriberTokenAccount: overrides.subscriberTokenAccount ?? "subscriber-token-account",
     collectorAddress: overrides.collectorAddress ?? "collector-address",
     tokenMint: overrides.tokenMint ?? "usdc-mint",
-    tokenProgram: overrides.tokenProgram ?? "spl_token"
+    tokenProgram: overrides.tokenProgram ?? "spl_token",
+    provider: overrides.provider ?? "official_solana_subscription_program",
+    programId: overrides.programId ?? "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
+    periodSeconds: overrides.periodSeconds ?? 30 * 86_400
   };
 }
 
@@ -625,6 +753,9 @@ function fakeSubscriptionCollectionProvider(
 
   return {
     inputs,
+    async reconcile() {
+      return { state: "not_found" };
+    },
     async collect(input) {
       inputs.push(input);
 
@@ -668,6 +799,8 @@ function paymentConfirmationEmailFixture(
 ): QueuedPaymentConfirmationEmail {
   return {
     deliveryId: overrides.deliveryId ?? "confirmation-delivery-1",
+    leaseToken: overrides.leaseToken ?? "email-lease-1",
+    attemptCount: overrides.attemptCount ?? 1,
     paymentIntentId: overrides.paymentIntentId ?? "00000000-0000-4000-8000-000000000050",
     receiptId: overrides.receiptId ?? "00000000-0000-4000-8000-000000000051",
     userId: overrides.userId ?? "buyer-1",
@@ -733,6 +866,8 @@ function notificationDeliveryFixture(
 ): DueNotificationDelivery {
   return {
     attemptId: overrides.attemptId ?? "attempt-1",
+    leaseToken: overrides.leaseToken ?? "notification-lease-1",
+    attemptCount: overrides.attemptCount ?? 1,
     notificationId: overrides.notificationId ?? "notification-1",
     deviceId: overrides.deviceId ?? "device-1",
     userId: overrides.userId ?? "user-1",
@@ -796,6 +931,8 @@ function providerEventReplayFixture(
 ): QueuedProviderEventReplay {
   return {
     replayRequestId: overrides.replayRequestId ?? "replay-request-1",
+    leaseToken: overrides.leaseToken ?? "replay-lease-1",
+    attemptCount: overrides.attemptCount ?? 1,
     providerEventId: overrides.providerEventId ?? "00000000-0000-4000-8000-000000000050",
     provider: overrides.provider ?? "helius",
     eventType: overrides.eventType ?? "payment.confirmed",

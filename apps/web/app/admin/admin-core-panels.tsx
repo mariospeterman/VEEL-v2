@@ -8,6 +8,7 @@ import type {
   Event,
   EventAccessPass
 } from "@/api-client";
+import { mapApiFailure } from "@/api-errors";
 import {
   EmptyState,
   Metric,
@@ -94,11 +95,12 @@ export function EventAccessPanel({
 
 export function SummaryMetrics({ summary }: { summary: ApiResult<AdminOpsSummary> }) {
   if (!summary.ok) {
+    const mapped = mapApiFailure(summary, "Ops summary");
     return (
       <div className="rounded border border-(--line) bg-(--panel) px-3 py-2 text-sm">
         <p className="text-xs uppercase text-(--muted)">Ops summary</p>
-        <p className="mt-1 font-semibold tracking-normal">HTTP {summary.status}</p>
-        <p className="mt-1 text-xs text-(--muted)">{summary.message}</p>
+        <p className="mt-1 font-semibold tracking-normal">{mapped.title}</p>
+        <p className="mt-1 text-xs text-(--muted)">{mapped.message}</p>
       </div>
     );
   }

@@ -1,0 +1,1 @@
+-- Session revocation is intentionally irreversible. Users must authenticate again.

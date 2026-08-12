@@ -85,8 +85,7 @@ export function productSummaries(
   products: ProductRow[]
 ): CreatorMonetisationDashboardResource["products"] {
   const enabledByProduct: Partial<Record<components["schemas"]["ProductType"], boolean>> = {
-    tip: row.tips_enabled,
-    support: row.tips_enabled,
+    support: row.support_enabled,
     content_unlock: row.content_unlocks_enabled,
     live_pass: row.live_passes_enabled,
     paid_message: row.paid_messages_enabled,

@@ -30,7 +30,7 @@ Current implementation state:
 - Captions are parsed server-side for normalized hashtags. Frontend does not submit trusted hashtag state.
 - The first read query returns approved public `content_items` joined to creator profiles and the first media poster only.
 - Playback URLs, paid entitlement state, provider media tokens, personalized ranking, and hidden/blocked creator filters are deferred to their owning slices.
-- The web Home surface reads `GET /v1/content/feed` for recommended media and the protected discovery projection for the live rail through the typed web API helper. `/discover` reads protected backend discovery projections through the same helper. Neither surface renders local media/discovery business-data fixtures or raw provider payloads.
+- The web Home surface reads `GET /v1/content/feed` for recommended media and the protected discovery projection for the live rail through the typed web API helper. `/app/bits` reads protected backend discovery projections through the same helper. Neither surface renders local media/discovery business-data fixtures or raw provider payloads.
 
 ## Feed Surfaces
 
@@ -61,7 +61,7 @@ Home should expose simple controls, not too many categories:
 - `Recommended`: recommended mixed media, default.
 - `Following`: creators the viewer follows.
 - `NSFW`: adult/protected media preference.
-- `SFW`: hides adult/explicit/sensitive media.
+- `SFW`: hides adult and explicit media.
 
 Do not make dozens of top-level categories at launch. Use hashtags, search, and Discover for finer navigation.
 
@@ -146,24 +146,32 @@ Creator-facing UI should prefer hashtags first. Categories can be optional metad
 
 ## NSFW/SFW Viewing Controls
 
-Veel is 18+ only, so NSFW/SFW is not an under-18 gate inside the app. It is a viewer preference filter for verified adults.
+Veel is 18+ only, so NSFW/SFW is not an account type or app-access gate. It is a per-media rating and a viewer preference filter for age-verified adults.
 
 Recommended launch behavior:
 
 - before age verification: no protected app access
 - after age verification and wallet setup: viewer can choose feed preference
-- default for new verified users: `Recommended`
+- default feed mode for new verified users: `Recommended`
+- default safety preference: `both`
 - quick Home toggle: `Recommended`, `Following`, `NSFW`, `SFW`
 - saved preference under Settings
 - clear content warnings and report/block controls
 
 Creator Create/Edit:
 
-- required `nsfw_label`
+- required `nsfw_label`; `none` means SFW
 - optional content warning category
 - moderation can correct or override labels
 - repeated mislabeling can restrict monetisation/discovery
 - Mutuals is not a Create/Edit field; creator profile/settings controls Mutuals-active visibility on media
+
+Publishing policy is capability-based on one universal account:
+
+- age assurance permits SFW upload and publishing
+- adult-publisher eligibility is required only for `adult` or `explicit` media
+- creator KYC controls earning readiness, not ordinary SFW publishing
+- Studio and Enterprise access comes from backend plan/organization policy, never from KYC alone
 
 NSFW states:
 
@@ -171,7 +179,6 @@ NSFW states:
 none
 adult
 explicit
-sensitive
 restricted
 blocked
 ```
@@ -316,8 +323,8 @@ Admin cannot:
 ## Tests
 
 - unverified user cannot enter protected app/feed
-- `SFW` mode excludes adult/explicit/sensitive media
-- `NSFW` mode is available only after required 18+ verification and wallet setup
+- `SFW` mode excludes adult and explicit media
+- `NSFW` mode is available only after the platform's required 18+ access and wallet setup
 - following mode returns followed creators only or primarily, depending fallback policy
 - blocked creators/content do not appear
 - hashtags parse and normalize

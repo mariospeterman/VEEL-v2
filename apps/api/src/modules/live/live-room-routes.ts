@@ -3,7 +3,7 @@ import {
   LiveRepositoryConfigurationError,
   LiveRoomIdempotencyConflictError
 } from "./live-repository.js";
-import { LiveProviderConfigurationError } from "./livepeer-adapter.js";
+import { LiveProviderError } from "./livepeer-adapter.js";
 import type { CreateLiveRoomRequest } from "./types.js";
 import {
   conflictResponse,
@@ -51,8 +51,13 @@ export async function registerLiveRoomRoutes(
 
     const normalizedBody = {
       title: body?.title?.trim() ?? "",
-      teaserSeconds: body?.teaserSeconds ?? 60,
-      passPriceMinor: body?.passPriceMinor ?? 50_000_000
+      accessMode: body?.accessMode ?? "public",
+      previewSeconds: body?.previewSeconds ?? 60,
+      eventPriceMinor: body?.accessMode === "paid_event" ? (body.eventPriceMinor ?? null) : null,
+      membersOnlyChat: body?.membersOnlyChat ?? false,
+      membersIncludedInPaidEvent:
+        body?.accessMode === "paid_event" ? (body.membersIncludedInPaidEvent ?? false) : false,
+      replayWindowHours: body?.replayWindowHours ?? 48
     };
     const requestHash = hashLiveRequest(normalizedBody);
 
@@ -98,7 +103,7 @@ export async function registerLiveRoomRoutes(
     } catch (error) {
       if (
         error instanceof LiveRepositoryConfigurationError ||
-        error instanceof LiveProviderConfigurationError
+        error instanceof LiveProviderError
       ) {
         request.log.warn({ error }, "Live room creation failed");
         return reply.code(503).send(serviceUnavailableResponse("Live rooms are not configured"));
@@ -134,14 +139,16 @@ export async function registerLiveRoomRoutes(
       const response = await withSignedLivePlayback({
         room,
         supabaseUserId: access.supabaseUserId,
-        liveProvider: options.liveProvider
+        appUserId: access.appUserId,
+        liveProvider: options.liveProvider,
+        subscriptionRepository: options.subscriptionRepository
       });
 
       return reply.code(200).send(response);
     } catch (error) {
       if (
         error instanceof LiveRepositoryConfigurationError ||
-        error instanceof LiveProviderConfigurationError
+        error instanceof LiveProviderError
       ) {
         request.log.warn({ error }, "Live room lookup failed");
         return reply.code(503).send(serviceUnavailableResponse("Live rooms are not configured"));
@@ -223,7 +230,7 @@ export async function registerLiveRoomRoutes(
     } catch (error) {
       if (
         error instanceof LiveRepositoryConfigurationError ||
-        error instanceof LiveProviderConfigurationError
+        error instanceof LiveProviderError
       ) {
         request.log.warn({ error }, "Live room sync failed");
         return reply.code(503).send(serviceUnavailableResponse("Live rooms are not configured"));

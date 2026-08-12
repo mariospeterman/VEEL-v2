@@ -1,7 +1,6 @@
 import type { components } from "@veel/contracts";
 
 export type CreateLiveRoomRequest = components["schemas"]["CreateLiveRoomRequest"];
-export type CreateLivePassIntentRequest = components["schemas"]["CreateLivePassIntentRequest"];
 export type CreateLiveChatMessageRequest = components["schemas"]["CreateLiveChatMessageRequest"];
 export type HostConnection = components["schemas"]["HostConnection"];
 export type LiveChatMessage = components["schemas"]["LiveChatMessage"];
@@ -51,8 +50,12 @@ export interface CreateLiveRoomInput {
   idempotencyKey: string;
   requestHash: string;
   title: string;
-  teaserSeconds: number;
-  passPriceMinor: number;
+  accessMode: NonNullable<CreateLiveRoomRequest["accessMode"]>;
+  previewSeconds: number;
+  eventPriceMinor: number | null;
+  membersOnlyChat: boolean;
+  membersIncludedInPaidEvent: boolean;
+  replayWindowHours: number;
   providerRoom: CreatedLiveProviderRoom;
 }
 
@@ -61,8 +64,12 @@ export interface ReserveLiveRoomInput {
   idempotencyKey: string;
   requestHash: string;
   title: string;
-  teaserSeconds: number;
-  passPriceMinor: number;
+  accessMode: NonNullable<CreateLiveRoomRequest["accessMode"]>;
+  previewSeconds: number;
+  eventPriceMinor: number | null;
+  membersOnlyChat: boolean;
+  membersIncludedInPaidEvent: boolean;
+  replayWindowHours: number;
 }
 
 export interface AttachLiveProviderRoomInput {
@@ -90,7 +97,6 @@ export interface CreateLivePassPurchaseRequestInput {
   supabaseUserId: string;
   roomId: string;
   paymentIntentId: string;
-  durationMinutes: 30 | 60 | 180;
   amountMinor: number;
   currency: "SOL";
 }

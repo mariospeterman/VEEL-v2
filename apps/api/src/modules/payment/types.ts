@@ -1,10 +1,13 @@
 import type { components } from "@veel/contracts";
+import type { SettlementKind } from "./payment-amounts.js";
 
 export type CreatePaymentIntentRequest = components["schemas"]["CreatePaymentIntentRequest"];
 export type PaymentIntent = components["schemas"]["PaymentIntent"];
 export type ProductType = components["schemas"]["ProductType"];
 export type SubmitPaymentSignatureRequest = components["schemas"]["SubmitPaymentSignatureRequest"];
 export type TransactionRequest = components["schemas"]["TransactionRequest"];
+export type TransactionRequestPostRequest = components["schemas"]["TransactionRequestPostRequest"];
+export type TransactionRequestPostResponse = components["schemas"]["TransactionRequestPostResponse"];
 export type WebhookReceipt = components["schemas"]["WebhookReceipt"];
 
 export interface CreatePaymentIntentInput {
@@ -14,9 +17,17 @@ export interface CreatePaymentIntentInput {
   productType: ProductType;
   targetId: string;
   amountMinor: number;
-  currency: "SOL";
+  currency: "SOL" | "USDC";
+  tokenMint?: string | null;
+  tokenDecimals?: number | null;
   solanaCluster: "devnet" | "mainnet-beta";
   treasuryWallet: string;
+  platformFeeWallet: string;
+  platformFeeBps: number;
+  referralShareOfPlatformFeeBps: number;
+  settlementKind: SettlementKind;
+  creatorUserId?: string | null;
+  creatorWallet?: string | null;
   referenceAddress: string;
   expiresAt: Date;
   referralToken?: string | null;
@@ -34,7 +45,17 @@ export interface FindPaymentIntentInput {
 export interface RecordTransactionRequestInput {
   supabaseUserId: string;
   paymentIntentId: string;
-  transactionRequestUrl: string;
+  publicTransactionRequestUrl: string;
+  storedTransactionRequestUrl: string;
+  checkoutTokenHash: string;
+}
+
+export interface FindCheckoutPaymentIntentInput {
+  checkoutTokenHash: string;
+}
+
+export interface RecordCheckoutPayerInput extends FindCheckoutPaymentIntentInput {
+  buyerWallet: string;
 }
 
 export interface RecordPaymentSubmissionInput {
@@ -48,6 +69,21 @@ export interface StoredPaymentIntent extends PaymentIntent {
   targetId: string;
   referenceAddress: string;
   treasuryWallet: string;
+  settlementKind: SettlementKind;
+  buyerWallet: string | null;
+  creatorWallet: string;
+  enterpriseWallet: string | null;
+  platformFeeWallet: string;
+  referralWallet: string | null;
+  totalAmountMinor: number;
+  creatorSideProceedsMinor: number;
+  creatorAmountMinor: number;
+  enterpriseManagementAmountMinor: number;
+  platformFeeGrossMinor: number;
+  platformFeeAmountMinor: number;
+  referralAmountMinor: number;
+  tokenMint?: string | null;
+  tokenDecimals?: number | null;
   solanaCluster: "devnet" | "mainnet-beta";
   expiresAt: Date;
   requestHash: string;
@@ -62,7 +98,9 @@ export interface StoredPaymentIntent extends PaymentIntent {
 export interface PaymentRepository {
   createOrReuseIntent(input: CreatePaymentIntentInput): Promise<StoredPaymentIntent>;
   findIntent(input: FindPaymentIntentInput): Promise<StoredPaymentIntent | null>;
+  findCheckoutIntent(input: FindCheckoutPaymentIntentInput): Promise<StoredPaymentIntent | null>;
   recordTransactionRequest(input: RecordTransactionRequestInput): Promise<TransactionRequest | null>;
+  recordCheckoutPayer(input: RecordCheckoutPayerInput): Promise<StoredPaymentIntent | null>;
   recordSubmission(input: RecordPaymentSubmissionInput): Promise<void>;
   close?(): Promise<void>;
 }
@@ -95,15 +133,31 @@ export interface PaymentEvidenceRepository {
 export interface PaymentSettlementInput {
   signature: string;
   referenceAddress: string;
-  treasuryWallet: string;
-  amountMinor: number;
+  memo: string;
+  settlementKind: SettlementKind;
+  buyerWallet?: string | null;
+  creatorWallet: string;
+  enterpriseWallet?: string | null;
+  platformFeeWallet: string;
+  referralWallet?: string | null;
+  treasuryWallet?: string | null;
+  totalAmountMinor: number;
+  creatorAmountMinor: number;
+  enterpriseManagementAmountMinor: number;
+  platformFeeAmountMinor: number;
+  referralAmountMinor: number;
+  currency: "SOL" | "USDC";
+  tokenMint?: string | null;
+  tokenDecimals?: number | null;
+  expiresAt: Date;
 }
 
 export interface PaymentSettlementResult {
   confirmed: boolean;
   failureCode?: string;
+  blockTime?: Date;
 }
 
 export interface PaymentSettlementVerifier {
-  verifyNativeSolTransfer(input: PaymentSettlementInput): Promise<PaymentSettlementResult>;
+  verifyTransfer(input: PaymentSettlementInput): Promise<PaymentSettlementResult>;
 }

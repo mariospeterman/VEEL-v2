@@ -1,0 +1,92 @@
+export const landingFrames = [
+  {
+    id: "welcome",
+    label: "Welcome",
+    kicker: "WeVid - Frame Your Way",
+    title: "Create without asking the algorithm for permission.",
+    copy:
+      "A creator network for adults tired of censorship, ad dependency, privacy leaks, buried discovery, and payment systems that make direct support feel complicated.",
+    primary: "Start onboarding",
+    secondary: "Log in",
+    visual: "intro"
+  },
+  {
+    id: "watch-create",
+    label: "Watch / Create",
+    kicker: "Watch freely. Create verified.",
+    title: "Watch freely. Create verified.",
+    copy:
+      "Viewers can discover and support. Verified creators can publish, unlock, go live, and build paid access.",
+    primary: "Start onboarding",
+    secondary: "Log in",
+    visual: "access"
+  },
+  {
+    id: "why-wevid",
+    label: "Why WeVid",
+    kicker: "Audience ownership",
+    title: "Your audience should not belong to an ad network.",
+    copy:
+      "WeVid gives creators a verified, privacy-first space where access, payments, and community are not controlled by opaque ranking games.",
+    primary: "Enter WeVid",
+    secondary: "Log in",
+    visual: "trust"
+  },
+  {
+    id: "earn",
+    label: "Earn",
+    kicker: "Direct support",
+    title: "Get paid without giving up control.",
+    copy:
+      "Tips, unlocks, memberships, and event access are tied to user-owned wallets and backend-verified access states. Fast, low-fee Solana settlement.",
+    primary: "Start earning",
+    secondary: "Log in",
+    visual: "earn"
+  },
+  {
+    id: "partners",
+    label: "Partners",
+    kicker: "Provider-ready",
+    title: "Provider-ready. Not provider-owned.",
+    copy:
+      "Wallet, age, media, live, safety, and auth providers plug into a WeVid trust layer without becoming the product.",
+    primary: "Start onboarding",
+    secondary: "Log in",
+    visual: "partner"
+  },
+  {
+    id: "trust",
+    label: "Trust",
+    kicker: "18+ by design",
+    title: "18+ by design. Private by default.",
+    copy:
+      "Wallet readiness, profile state, and age verification unlock the app. Raw provider documents never become UI data.",
+    primary: "Start onboarding",
+    secondary: "Log in",
+    visual: "trust"
+  },
+  {
+    id: "onboarding",
+    label: "Onboarding",
+    kicker: "Enter WeVid",
+    title: "Set up access.",
+    copy: "Connect a wallet, add a profile or use a starter one, then complete 18+ verification.",
+    primary: "Continue setup",
+    secondary: "Wallet login",
+    visual: "start",
+    auth: "onboard"
+  },
+  {
+    id: "login",
+    label: "Login",
+    kicker: "Return",
+    title: "Login to WeVid",
+    copy: "Use wallet, embedded wallet, or optional Supabase recovery auth.",
+    primary: "Wallet login",
+    secondary: "Supabase auth",
+    visual: "login",
+    auth: "login"
+  }
+] as const;
+
+export const storyNavFrames = landingFrames.filter((frame) => !("auth" in frame));

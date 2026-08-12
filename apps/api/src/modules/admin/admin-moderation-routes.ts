@@ -4,6 +4,7 @@ import { mutationRateLimit } from "../../shared/rate-limits.js";
 import { adminListInput, requireAdminAccess, requireAdminMutation } from "./admin-route-auth.js";
 import { validateModerationAction, validateReportAction } from "./admin-route-validators.js";
 import type { AdminModerationActionRequest, AdminReportActionRequest } from "./types.js";
+import { AdminRepositoryStateConflictError } from "./admin-repository.js";
 
 export function registerAdminModerationRoutes(
   app: FastifyInstance,
@@ -66,12 +67,20 @@ export function registerAdminModerationRoutes(
     );
     if (!mutation) return reply;
 
-    const content = await options.adminRepository.updateContentModeration({
-      supabaseUserId: mutation.supabaseUserId,
-      contentId,
-      body: mutation.body,
-      idempotencyKey: mutation.idempotencyKey
-    });
+    let content;
+    try {
+      content = await options.adminRepository.updateContentModeration({
+        supabaseUserId: mutation.supabaseUserId,
+        contentId,
+        body: mutation.body,
+        idempotencyKey: mutation.idempotencyKey
+      });
+    } catch (error) {
+      if (error instanceof AdminRepositoryStateConflictError) {
+        return reply.code(409).send({ code: "conflict", message: error.message });
+      }
+      throw error;
+    }
 
     if (!content) {
       return reply.code(404).send({

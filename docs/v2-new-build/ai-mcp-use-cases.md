@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: AI assistant, MCP tools, admin ops, creator/user utility
-Last updated: 2026-06-12
+Last updated: 2026-06-13
 Source of truth: yes for v2 AI/MCP scope
 
 Owns:
@@ -36,16 +36,19 @@ The launch jobs are:
 
 Do not let AI spend money, unlock content, issue Event Access Passes, publish content, message users, change safety/admin decisions, access private content/messages, or call provider APIs unless the user/admin explicitly confirms and backend policy allows the tool call.
 
-The first production slice is a secure remote MCP foundation:
+The current external MCP slice is production-auth-capable but still requires operational staging proof before external connector compatibility is claimed:
 
-- Veel MCP server with OAuth 2.1 authorization, resource/audience-bound tokens,
-  least-privilege scopes, and no token passthrough
-- connection records, scoped tokens, tool allowlists, rate limits, and audit
-- small safe tool set that reads backend projections or creates drafts/review
-  requests only
+- protected-resource and authorization-server metadata for remote MCP clients
+- OAuth authorization-code plus PKCE for production remote connectors
+- connection records, hash-only scoped tokens for dev/staging, hash-only OAuth access tokens, tool allowlists, rate limits, revocation, and audit
+- small safe tool set that reads backend projections or creates creator drafts only
 - AI-generated/AI-edited content label fields where content policy requires it
+- staging proof helpers documented in `mcp-staging-proof.md`: `pnpm mcp:seed`, `pnpm mcp:oauth:pkce`, and `pnpm mcp:smoke`
 - optional BYO in-app assistant later, after provider ADR, prompt/eval fixtures,
   budget controls, and UX evidence are approved
+
+Production private-data connectors for Claude, Cowork-style clients, OpenAI, or similar MCP clients use pre-registered OAuth clients, authorization-code plus PKCE, resource-bound bearer access tokens, scope grants, and revocation. Scoped tokens are explicitly limited to local development and staging environments.
+MCP Inspector, Claude Code, Claude custom connectors, and OpenAI-compatible clients must be proven against a public HTTPS staging URL before Veel claims compatibility with those external clients.
 
 Do not build a broad AI platform, custom model layer, casino-like assistant
 dashboard, or provider-calling autonomous agent for MVP.
@@ -56,7 +59,7 @@ dashboard, or provider-calling autonomous agent for MVP.
 
 Useful because creators need lower-friction publishing, better captions, and faster content organization.
 
-Allowed MCP tools:
+Desired MCP tools:
 
 - `get_my_profile`
 - `get_my_creator_settings`
@@ -106,7 +109,7 @@ Not allowed:
 
 This is the highest ROI use case. Alibaba-style agentic commerce patterns point toward controlled operational agents, not open-ended chat. For Veel, admin AI should triage and explain operational state, then prepare actions for human confirmation.
 
-Allowed MCP tools:
+Desired MCP tools:
 
 - `get_platform_health_summary`
 - `list_open_support_cases`
@@ -170,6 +173,10 @@ Launch implementation rules:
 - `GET /v1/ai/capabilities` exposes backend-derived scopes and tool allowlists without creating a session or executing a tool.
 - `POST /v1/ai/sessions` creates an expiring scoped session with backend-derived allowed tools.
 - `POST /v1/ai/sessions/:id/tool-calls` accepts only enumed tool names from OpenAPI.
+- `GET /v1/mcp/tools`, `GET /v1/mcp/connections`, `POST /v1/mcp/connections`, `GET /v1/mcp/connections/:id`, and `POST /v1/mcp/connections/:id/revoke` manage external MCP client connections without exposing stored tokens.
+- `POST /mcp` supports the current foundation methods `initialize`, `tools/list`, and `tools/call`.
+- `GET /.well-known/oauth-protected-resource`, `GET /.well-known/oauth-authorization-server`, `GET /oauth/authorize`, `POST /oauth/token`, `POST /oauth/revoke`, and the authenticated `/oauth/consent/:requestId` approval routes implement production MCP OAuth for private-data connectors.
+- OAuth client registration is pre-provisioned in `oauth_clients`; dynamic client registration and refresh tokens are not advertised.
 - Remote MCP tools must expose typed input and output schemas; clients may use
   tool filtering and approval requests where supported.
 - Admin tools require an active staff membership check before execution.
@@ -183,37 +190,16 @@ Launch implementation rules:
   providers, change admin state, or mutate user data without explicit
   confirmation.
 
-## Tool Scope Matrix
+## Current External MCP Tool Scope Matrix
 
 | Tool | User | Creator | Admin | Confirmation |
 | --- | --- | --- | --- | --- |
-| `get_my_profile` | own only | own only | no | no |
-| `get_my_creator_settings` | no | own only | no | no |
-| `list_my_media` | no | own only | no | no |
-| `get_my_media_detail` | no | own only | no | no |
-| `get_my_metrics_summary` | no | own only | no | no |
-| `list_my_drafts` | no | own only | no | no |
-| `list_my_events` | no | own only | no | no |
-| `create_profile_update_draft` | no | own only | no | review before apply |
-| `create_post_draft` | no | own only | no | review before publish |
-| `create_event_draft` | no | own only | no | review before publish |
-| `create_message_reply_draft` | no | own only | no | review before send |
-| `create_media_metadata_draft` | no | own only | no | review before apply |
-| `request_publish_review` | no | own only | no | human review |
-| `request_profile_update_review` | no | own only | no | human review |
-| `mark_media_as_ai_generated` | no | own only | no | no |
-| `get_platform_health_summary` | no | no | yes | no |
-| `list_open_support_cases` | no | no | yes | no |
-| `get_support_case_summary` | no | no | yes | no |
-| `list_moderation_queue` | no | no | yes | no |
-| `get_moderation_case_summary` | no | no | yes | no |
-| `list_payment_issues` | no | no | yes | no |
-| `get_creator_account_summary` | no | no | yes | no |
-| `draft_support_reply` | no | no | yes | review before send |
-| `draft_moderation_decision_note` | no | no | yes | review before apply |
-| `draft_creator_warning` | no | no | yes | review before send |
-| `draft_refund_recommendation` | no | no | yes | review before refund |
-| `create_internal_task` | no | no | yes | no |
+| `creator_get_profile` | no | own only | no | no |
+| `creator_get_metrics_summary` | no | own only | no | no |
+| `creator_create_content_draft` | no | own only | no | review before publish |
+| `admin_get_platform_health_summary` | no | no | yes | no |
+| `admin_list_support_cases` | no | no | yes | no |
+| `admin_list_payment_intents` | no | no | yes | no |
 
 No `admin.full_access` scope is allowed. Scopes must be human-readable and
 specific, for example `creator.profile.read`, `creator.drafts.write`,

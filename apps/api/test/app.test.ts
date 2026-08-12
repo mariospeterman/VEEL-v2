@@ -7,6 +7,7 @@ import { AdminRepositoryStateConflictError } from "../src/modules/admin/admin-re
 import type { AdminRepository } from "../src/modules/admin/types";
 import type { ActivityRepository } from "../src/modules/activity/types";
 import { createBunnyStreamUploadAdapter } from "../src/modules/content/media-upload-adapter";
+import { ContentDraftQuotaExceededError } from "../src/modules/content/content-repository";
 import type {
   ContentItem,
   ContentRepository,
@@ -19,6 +20,10 @@ import type {
   CreatePendingAgeVerificationInput
 } from "../src/modules/age/types";
 import type { AiRepository, AiSession, AiToolCall } from "../src/modules/ai/types";
+import {
+  WalletRecoveryLinkConflictError,
+  type WalletAuthRepository
+} from "../src/modules/auth/wallet-auth-repository";
 import type { ProfileRepository } from "../src/modules/profile/types";
 import type { ReferralRepository } from "../src/modules/referral/types";
 import type { RefundRepository } from "../src/modules/refund/types";
@@ -50,6 +55,7 @@ import type {
   StoredLiveRoom
 } from "../src/modules/live/types";
 import { LiveProviderConfigurationError } from "../src/modules/live/livepeer-adapter";
+import { MessageIdempotencyConflictError } from "../src/modules/message/message-repository";
 import type { Message, MessageRepository } from "../src/modules/message/types";
 import type {
   Notification,
@@ -67,6 +73,8 @@ import type { MutualsRepository } from "../src/modules/mutuals/types";
 import type { DiscoverRepository } from "../src/modules/discover/types";
 import type { EngagementRepository } from "../src/modules/engagement/types";
 import type {
+  PlatformAccess,
+  PlatformPlaybackSession,
   Subscription,
   SubscriptionAuthorizationIntent,
   SubscriptionAuthorizationVerifier,
@@ -74,6 +82,21 @@ import type {
   SubscriptionPlan,
   SubscriptionRepository
 } from "../src/modules/subscription/types";
+import type {
+  CapabilityResolution,
+  VerificationProviderSession,
+  VerificationProviderWaterfall,
+  VerificationRepository
+} from "../src/modules/verification/types";
+
+const checkoutPaymentRepositoryMethods = {
+  async findCheckoutIntent() {
+    return null;
+  },
+  async recordCheckoutPayer() {
+    return null;
+  }
+} satisfies Pick<PaymentRepository, "findCheckoutIntent" | "recordCheckoutPayer">;
 
 describe("buildApi", () => {
   it("boots the Fastify skeleton and loads the OpenAPI document", async () => {
@@ -106,6 +129,48 @@ describe("buildApi", () => {
     });
 
     await app.close();
+  });
+
+  it("allows browser profile mutations through CORS preflight", async () => {
+    const app = await buildApi();
+    await app.ready();
+
+    const response = await app.inject({
+      method: "OPTIONS",
+      url: "/v1/profiles/me",
+      headers: {
+        origin: "http://localhost:3000",
+        "access-control-request-method": "PATCH"
+      }
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(response.headers["access-control-allow-methods"]).toContain("PATCH");
+
+    await app.close();
+  });
+
+  it("allows local browser profile mutations when WEB_URL points at a tunnel", async () => {
+    vi.stubEnv("WEB_URL", "https://web-tunnel.example.test");
+    const app = await buildApi();
+    await app.ready();
+
+    const response = await app.inject({
+      method: "OPTIONS",
+      url: "/v1/profiles/me/starter",
+      headers: {
+        origin: "http://127.0.0.1:3008",
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "authorization,content-type,idempotency-key,accept"
+      }
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(response.headers["access-control-allow-origin"]).toBe("http://127.0.0.1:3008");
+    expect(response.headers["access-control-allow-methods"]).toContain("POST");
+
+    await app.close();
+    vi.unstubAllEnvs();
   });
 
   it("returns a contract-safe session for a verified Supabase user with a Veel profile", async () => {
@@ -150,6 +215,55 @@ describe("buildApi", () => {
         displayName: "Maki",
         avatarUrl: null,
         badges: []
+      }
+    });
+
+    await app.close();
+  });
+
+  it("accepts HttpOnly wallet session cookies for protected API access", async () => {
+    const app = await buildApi({
+      authVerifier: {
+        async verifyBearerToken(token) {
+          return token === "veel_wallet_cookie_session"
+            ? {
+                supabaseUserId: "00000000-0000-4000-8000-000000000001",
+                email: null,
+                role: "authenticated"
+              }
+            : null;
+        }
+      },
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/session",
+      headers: {
+        cookie: "veel_wallet_session_token=veel_wallet_cookie_session"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      authenticated: true,
+      appAccessState: {
+        allowed: true,
+        reason: "ready"
       }
     });
 
@@ -234,6 +348,124 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("links Supabase recovery with wallet session cookie proof", async () => {
+    const links: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      walletAuthRepository: fakeWalletAuthRepository({
+        async linkSupabaseRecovery(input) {
+          links.push(input);
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/recovery-link",
+      headers: {
+        authorization: "Bearer valid-token",
+        cookie: "veel_wallet_session_token=veel_wallet_cookie_session",
+        "idempotency-key": "recovery-link-cookie-1"
+      },
+      payload: {}
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(links).toEqual([
+      {
+        walletSessionToken: "veel_wallet_cookie_session",
+        supabaseUserId: "00000000-0000-4000-8000-000000000001"
+      }
+    ]);
+
+    await app.close();
+  });
+
+  it("rejects recovery linking without a wallet session proof", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      walletAuthRepository: fakeWalletAuthRepository()
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/recovery-link",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "recovery-link-missing-wallet"
+      },
+      payload: {}
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toMatchObject({
+      code: "unauthorized"
+    });
+
+    await app.close();
+  });
+
+  it("rejects recovery linking when the Supabase identity belongs to another account", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      walletAuthRepository: fakeWalletAuthRepository({
+        async linkSupabaseRecovery() {
+          throw new WalletRecoveryLinkConflictError();
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/recovery-link",
+      headers: {
+        authorization: "Bearer valid-token",
+        cookie: "veel_wallet_session_token=veel_wallet_test_session",
+        "idempotency-key": "recovery-link-conflict"
+      },
+      payload: {}
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: "conflict"
+    });
+
+    await app.close();
+  });
+
+  it("revokes the HttpOnly wallet session and expires its cookie", async () => {
+    const revoked: string[] = [];
+    const app = await buildApi({
+      walletAuthRepository: fakeWalletAuthRepository({
+        async revokeSessionToken(token) {
+          revoked.push(token);
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/wallet/logout",
+      headers: {
+        cookie: "veel_wallet_session_token=veel_wallet_test_session",
+        "idempotency-key": "wallet-logout-1"
+      }
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(revoked).toEqual(["veel_wallet_test_session"]);
+    expect(response.headers["set-cookie"]).toContain("veel_wallet_session_token=");
+    expect(response.headers["set-cookie"]).toContain("HttpOnly");
+    expect(response.headers["set-cookie"]).toContain("Max-Age=0");
+
+    await app.close();
+  });
+
   it("keeps authenticated users gated until the Veel profile exists", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -310,7 +542,7 @@ describe("buildApi", () => {
         async createPendingAgeVerification(input) {
           createdPendingVerifications.push(input);
         },
-        async recordProviderWebhook() {
+        async applyProviderWebhook() {
           throw new Error("not implemented");
         },
         async updateVerificationFromWebhook() {
@@ -354,19 +586,309 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("starts a configured Yoti age session through the real provider adapter", async () => {
+    vi.stubEnv("AGE_VERIFICATION_DRIVER", "yoti_digital_id");
+    vi.stubEnv("YOTI_SDK_ID", "yoti-sdk-id");
+    vi.stubEnv("YOTI_API_TOKEN", "yoti-api-token");
+    vi.stubEnv("YOTI_API_BASE_URL", "https://age.yoti.example/api/v1");
+    vi.stubEnv("YOTI_LAUNCH_BASE_URL", "https://age.yoti.example");
+    vi.setSystemTime(new Date("2026-06-03T22:00:00.000Z"));
+    const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        fetchCalls.push(init ? { url, init } : { url });
+        return new Response(JSON.stringify({ session_id: "yoti-session-1" }), {
+          status: 200,
+          headers: {
+            "content-type": "application/json"
+          }
+        });
+      })
+    );
+    const createdPendingVerifications: CreatePendingAgeVerificationInput[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return null;
+        }
+      }),
+      ageRepository: {
+        async findLatestAgeStatusBySupabaseUserId() {
+          return {
+            state: "required",
+            provider: null
+          };
+        },
+        async createPendingAgeVerification(input) {
+          createdPendingVerifications.push(input);
+        },
+        async applyProviderWebhook() {
+          throw new Error("not implemented");
+        },
+        async updateVerificationFromWebhook() {
+          throw new Error("not implemented");
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/age/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "age-yoti-1"
+      },
+      payload: {
+        providerPreference: "reusable_first"
+      }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(201);
+    expect(response.json()).toEqual({
+      id: "yoti-session-1",
+      provider: "yoti",
+      launchUrl: "https://age.yoti.example?sessionId=yoti-session-1&sdkId=yoti-sdk-id",
+      expiresAt: "2026-06-03T22:15:00.000Z"
+    });
+    expect(fetchCalls[0]?.url).toBe("https://age.yoti.example/api/v1/sessions");
+    expect(fetchCalls[0]?.init?.method).toBe("POST");
+    expect(JSON.parse(String(fetchCalls[0]?.init?.body))).toMatchObject({
+      reference_id: "age-yoti-1",
+      notification_url: "http://localhost:4000/v1/webhooks/age/yoti"
+    });
+    expect(createdPendingVerifications).toMatchObject([
+      {
+        provider: "yoti",
+        providerReference: "yoti-session-1",
+        rule: "over_18"
+      }
+    ]);
+
+    await app.close();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("starts a configured Didit age session through the real provider adapter", async () => {
+    vi.stubEnv("DIDIT_API_KEY", "didit-api-key");
+    vi.stubEnv("DIDIT_AGE_WORKFLOW_ID", "didit-age-workflow");
+    vi.stubEnv("DIDIT_API_BASE_URL", "https://verification.didit.example");
+    vi.setSystemTime(new Date("2026-06-03T22:00:00.000Z"));
+    const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        fetchCalls.push(init ? { url, init } : { url });
+        return new Response(
+          JSON.stringify({
+            session_id: "didit-age-session-1",
+            url: "https://verification.didit.example/session/didit-age-session-1"
+          }),
+          {
+            status: 200,
+            headers: {
+              "content-type": "application/json"
+            }
+          }
+        );
+      })
+    );
+    const createdPendingVerifications: CreatePendingAgeVerificationInput[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return null;
+        }
+      }),
+      ageRepository: {
+        async findLatestAgeStatusBySupabaseUserId() {
+          return {
+            state: "required",
+            provider: null
+          };
+        },
+        async createPendingAgeVerification(input) {
+          createdPendingVerifications.push(input);
+        },
+        async applyProviderWebhook() {
+          throw new Error("not implemented");
+        },
+        async updateVerificationFromWebhook() {
+          throw new Error("not implemented");
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/age/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "age-didit-1"
+      },
+      payload: {
+        providerPreference: "didit"
+      }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(201);
+    expect(response.json()).toEqual({
+      id: "didit-age-session-1",
+      provider: "didit",
+      launchUrl: "https://verification.didit.example/session/didit-age-session-1",
+      expiresAt: "2026-06-04T22:00:00.000Z"
+    });
+    expect(fetchCalls[0]?.url).toBe("https://verification.didit.example/v3/session/");
+    expect(fetchCalls[0]?.init?.method).toBe("POST");
+    expect(fetchCalls[0]?.init?.headers).toMatchObject({
+      "x-api-key": "didit-api-key"
+    });
+    expect(JSON.parse(String(fetchCalls[0]?.init?.body))).toMatchObject({
+      workflow_id: "didit-age-workflow",
+      callback: "http://localhost:3000/age/callback",
+      callback_method: "completer",
+      vendor_data: "user:00000000-0000-4000-8000-000000000001",
+      metadata: {
+        purpose: "age_access",
+        rule: "over_18"
+      }
+    });
+    expect(createdPendingVerifications).toMatchObject([
+      {
+        provider: "didit",
+        providerReference: "didit-age-session-1",
+        rule: "over_18"
+      }
+    ]);
+
+    await app.close();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("creates Persona and Veriff sessions through the real provider waterfall when explicitly selected", async () => {
+    vi.setSystemTime(new Date("2026-06-03T22:00:00.000Z"));
+    const personaFetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          data: {
+            id: "persona-inquiry-1",
+            attributes: {
+              "expires-at": "2026-06-04T22:00:00.000Z"
+            }
+          },
+          meta: {
+            "one-time-link": "https://withpersona.example/i/persona-inquiry-1"
+          }
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", personaFetch);
+    vi.stubEnv("AGE_VERIFICATION_DRIVER", "persona");
+    vi.stubEnv("PERSONA_API_KEY", "persona-api-key");
+    vi.stubEnv("PERSONA_TEMPLATE_ID", "persona-template-id");
+    vi.stubEnv("PERSONA_API_BASE_URL", "https://withpersona.example");
+
+    const personaApp = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return null;
+        }
+      }),
+      ageRepository: pendingAgeSessionRepository
+    });
+    await personaApp.ready();
+    const personaResponse = await personaApp.inject({
+      method: "POST",
+      url: "/v1/age/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "age-persona-1"
+      },
+      payload: {
+        providerPreference: "persona"
+      }
+    });
+
+    expect(personaResponse.statusCode, JSON.stringify(personaResponse.json())).toBe(201);
+    expect(personaResponse.json()).toMatchObject({
+      id: "persona-inquiry-1",
+      provider: "persona",
+      launchUrl: "https://withpersona.example/i/persona-inquiry-1"
+    });
+    await personaApp.close();
+    vi.unstubAllEnvs();
+
+    const veriffFetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          verification: {
+            id: "veriff-session-1",
+            url: "https://station.veriff.example/v/veriff-session-1"
+          }
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", veriffFetch);
+    vi.stubEnv("AGE_VERIFICATION_DRIVER", "veriff");
+    vi.stubEnv("VERIFF_API_KEY", "veriff-api-key");
+    vi.stubEnv("VERIFF_API_BASE_URL", "https://stationapi.veriff.example");
+
+    const veriffApp = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return null;
+        }
+      }),
+      ageRepository: pendingAgeSessionRepository
+    });
+    await veriffApp.ready();
+    const veriffResponse = await veriffApp.inject({
+      method: "POST",
+      url: "/v1/age/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "age-veriff-1"
+      },
+      payload: {
+        providerPreference: "veriff"
+      }
+    });
+
+    expect(veriffResponse.statusCode, JSON.stringify(veriffResponse.json())).toBe(201);
+    expect(veriffResponse.json()).toMatchObject({
+      id: "veriff-session-1",
+      provider: "veriff",
+      launchUrl: "https://station.veriff.example/v/veriff-session-1"
+    });
+
+    await veriffApp.close();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
   it("accepts a signed Sumsub age webhook and applies normalized verification state", async () => {
     vi.stubEnv("SUMSUB_WEBHOOK_SECRET", "sumsub-test-secret");
     const recordedEvents: unknown[] = [];
     const appliedEvents: unknown[] = [];
     const ageRepository: AgeRepository = {
       ...requiredAgeRepository,
-      async recordProviderWebhook(input) {
+      async applyProviderWebhook(input) {
         recordedEvents.push(input);
-        return true;
-      },
-      async updateVerificationFromWebhook(input) {
         appliedEvents.push(input);
-        return true;
+        return "applied";
       }
     };
     const app = await buildApi({
@@ -407,7 +929,7 @@ describe("buildApi", () => {
         provider: "sumsub",
         providerEventId: "sumsub-event",
         eventType: "applicantReviewed",
-        normalizedState: "verified"
+        state: "verified"
       }
     ]);
     expect(appliedEvents).toMatchObject([
@@ -423,13 +945,62 @@ describe("buildApi", () => {
     vi.unstubAllEnvs();
   });
 
+  it("routes a signed Didit age workflow event through the shared verification webhook", async () => {
+    vi.stubEnv("DIDIT_WEBHOOK_SECRET", "didit-webhook-secret");
+    const appliedEvents: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      verificationRepository: {
+        ...verificationRepositoryStub(),
+        async applyProviderWebhook(input) {
+          appliedEvents.push(input);
+          return "applied";
+        }
+      }
+    });
+    await app.ready();
+    const payload = {
+      event_id: "didit-age-event-1",
+      webhook_type: "status.updated",
+      session_id: "didit-age-session-1",
+      status: "Approved",
+      timestamp: Math.floor(Date.now() / 1000)
+    };
+    const rawPayload = JSON.stringify(payload);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/webhooks/verification/didit",
+      headers: {
+        "content-type": "application/json",
+        "x-signature-v2": diditV2Signature(payload),
+        "x-timestamp": String(payload.timestamp)
+      },
+      payload: rawPayload
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(202);
+    expect(appliedEvents).toMatchObject([
+      {
+        provider: "didit",
+        providerEventId: "didit-age-event-1",
+        providerReference: "didit-age-session-1",
+        eventType: "status.updated",
+        status: "valid"
+      }
+    ]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
   it("deduplicates repeated signed Sumsub age webhooks", async () => {
     vi.stubEnv("SUMSUB_WEBHOOK_SECRET", "sumsub-test-secret");
     const appliedEvents: unknown[] = [];
     const ageRepository: AgeRepository = {
       ...requiredAgeRepository,
-      async recordProviderWebhook() {
-        return false;
+      async applyProviderWebhook() {
+        return "duplicate";
       },
       async updateVerificationFromWebhook(input) {
         appliedEvents.push(input);
@@ -534,6 +1105,724 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("starts and completes a local mock age session only when mock providers are enabled", async () => {
+    vi.stubEnv("AGE_VERIFICATION_ALLOW_MOCK_PROVIDER", "true");
+    vi.setSystemTime(new Date("2026-06-03T22:00:00.000Z"));
+    const createdPendingVerifications: CreatePendingAgeVerificationInput[] = [];
+    const appliedEvents: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return null;
+        }
+      }),
+      ageRepository: {
+        async findLatestAgeStatusBySupabaseUserId() {
+          return {
+            state: "required",
+            provider: null
+          };
+        },
+        async createPendingAgeVerification(input) {
+          createdPendingVerifications.push(input);
+        },
+        async applyProviderWebhook() {
+          throw new Error("not implemented");
+        },
+        async updateVerificationFromWebhook(input) {
+          appliedEvents.push(input);
+          return true;
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/age/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "mock-age-1"
+      },
+      payload: {
+        providerPreference: "reusable_first"
+      }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(201);
+    expect(response.json()).toMatchObject({
+      provider: "didit",
+      expiresAt: "2026-06-03T22:15:00.000Z"
+    });
+    expect(response.json().id).toContain("mock-verification:age_access:");
+    expect(createdPendingVerifications).toMatchObject([
+      {
+        provider: "didit",
+        providerReference: expect.stringContaining("mock-verification:age_access:"),
+        rule: "over_18"
+      }
+    ]);
+    expect(appliedEvents).toMatchObject([
+      {
+        provider: "didit",
+        providerReference: expect.stringContaining("mock-verification:age_access:"),
+        state: "verified"
+      }
+    ]);
+
+    await app.close();
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+  });
+
+  it("does not enable mock age providers in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("AGE_VERIFICATION_ALLOW_MOCK_PROVIDER", "true");
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return null;
+        }
+      }),
+      ageRepository: requiredAgeRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/age/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "mock-age-prod"
+      },
+      payload: {
+        providerPreference: "reusable_first"
+      }
+    });
+
+    expect(response.statusCode).toBe(503);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("starts a creator KYC verification session through the provider waterfall", async () => {
+    vi.setSystemTime(new Date("2026-06-03T22:00:00.000Z"));
+    const createdSessions: unknown[] = [];
+    const providerSession: VerificationProviderSession = {
+      provider: "sumsub",
+      providerReference: "user:00000000-0000-4000-8000-000000000001",
+      providerApplicantId: "sumsub-applicant-1",
+      launchUrl: "https://sumsub.example/sdk?token=token-1",
+      expiresAt: new Date("2026-06-03T22:10:00.000Z"),
+      method: "gov_id_selfie",
+      assuranceLevel: "documentary"
+    };
+    const verificationProviderWaterfall: VerificationProviderWaterfall = {
+      async createSession(input) {
+        expect(input).toMatchObject({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          purpose: "creator_kyc",
+          providerPreference: "provider_first",
+          idempotencyKey: "creator-kyc-1"
+        });
+        return providerSession;
+      }
+    };
+    const verificationRepository: VerificationRepository = {
+      ...verificationRepositoryStub(),
+      async createPendingSession(input) {
+        createdSessions.push(input);
+        return "11111111-1111-4111-8111-111111111111";
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      verificationProviderWaterfall,
+      verificationRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/verification/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "creator-kyc-1"
+      },
+      payload: {
+        purpose: "creator_kyc"
+      }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(201);
+    expect(response.json()).toEqual({
+      id: "11111111-1111-4111-8111-111111111111",
+      provider: "sumsub",
+      providerReference: "user:00000000-0000-4000-8000-000000000001",
+      launchUrl: "https://sumsub.example/sdk?token=token-1",
+      expiresAt: "2026-06-03T22:10:00.000Z",
+      purpose: "creator_kyc"
+    });
+    expect(createdSessions).toMatchObject([
+      {
+        supabaseUserId: "00000000-0000-4000-8000-000000000001",
+        purpose: "creator_kyc",
+        providerSession
+      }
+    ]);
+
+    await app.close();
+    vi.useRealTimers();
+  });
+
+  it("starts and completes local mock creator KYC when mock providers are enabled", async () => {
+    vi.stubEnv("AGE_VERIFICATION_ALLOW_MOCK_PROVIDER", "true");
+    vi.setSystemTime(new Date("2026-06-03T22:00:00.000Z"));
+    const createdSessions: unknown[] = [];
+    const appliedEvents: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      verificationRepository: {
+        ...verificationRepositoryStub(),
+        async createPendingSession(input) {
+          createdSessions.push(input);
+          return "11111111-1111-4111-8111-111111111113";
+        },
+        async updateVerificationFromWebhook(input) {
+          appliedEvents.push(input);
+          return true;
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/verification/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "mock-creator-kyc-1"
+      },
+      payload: {
+        purpose: "creator_kyc"
+      }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(201);
+    expect(response.json()).toMatchObject({
+      id: "11111111-1111-4111-8111-111111111113",
+      provider: "didit",
+      expiresAt: "2026-06-03T22:15:00.000Z",
+      purpose: "creator_kyc"
+    });
+    expect(response.json().providerReference).toContain("mock-verification:creator_kyc");
+    expect(createdSessions).toMatchObject([
+      {
+        purpose: "creator_kyc",
+        providerSession: {
+          provider: "didit",
+          providerReference: expect.stringContaining("mock-verification:creator_kyc"),
+          method: "gov_id_selfie",
+          assuranceLevel: "documentary",
+          reusable: true
+        }
+      }
+    ]);
+    expect(appliedEvents).toMatchObject([
+      {
+        provider: "didit",
+        providerReference: expect.stringContaining("mock-verification:creator_kyc"),
+        eventType: "mock.auto_approved",
+        status: "valid"
+      }
+    ]);
+
+    await app.close();
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+  });
+
+  it("requires explicit adult publisher terms before starting identity verification", async () => {
+    vi.stubEnv("AGE_VERIFICATION_ALLOW_MOCK_PROVIDER", "true");
+    const app = await buildApi({ authVerifier: fakeAuthVerifier });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/verification/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "adult-without-terms"
+      },
+      payload: {
+        purpose: "adult_publisher_eligibility",
+        source: "onboarding"
+      }
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toMatchObject({ code: "validation_failed" });
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("starts one adult publisher identity and age flow from onboarding", async () => {
+    vi.stubEnv("AGE_VERIFICATION_ALLOW_MOCK_PROVIDER", "true");
+    const createdSessions: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      verificationRepository: {
+        ...verificationRepositoryStub(),
+        async createPendingSession(input) {
+          createdSessions.push(input);
+          return "11111111-1111-4111-8111-111111111115";
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/verification/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "adult-onboarding-1"
+      },
+      payload: {
+        purpose: "adult_publisher_eligibility",
+        source: "onboarding",
+        adultPublisherTermsAccepted: true
+      }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(201);
+    expect(response.json()).toMatchObject({
+      purpose: "adult_publisher_eligibility",
+      provider: "didit"
+    });
+    expect(response.json().launchUrl).toContain("/age/callback?intent=adult");
+    expect(createdSessions).toMatchObject([
+      {
+        purpose: "adult_publisher_eligibility",
+        policyVersion: "adult-publisher-2026-08-v1",
+        termsAcceptedAt: expect.any(Date)
+      }
+    ]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("starts and completes local mock organization KYB when mock providers are enabled", async () => {
+    vi.stubEnv("AGE_VERIFICATION_ALLOW_MOCK_PROVIDER", "true");
+    vi.setSystemTime(new Date("2026-06-03T22:00:00.000Z"));
+    const createdSessions: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      verificationRepository: {
+        ...verificationRepositoryStub(),
+        async createPendingSession(input) {
+          createdSessions.push(input);
+          return "11111111-1111-4111-8111-111111111114";
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/verification/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "mock-org-kyb-1"
+      },
+      payload: {
+        purpose: "org_kyb",
+        organizationId: "22222222-2222-4222-8222-222222222222"
+      }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(201);
+    expect(response.json()).toMatchObject({
+      id: "11111111-1111-4111-8111-111111111114",
+      provider: "didit",
+      expiresAt: "2026-06-03T22:15:00.000Z",
+      purpose: "org_kyb"
+    });
+    expect(response.json().providerReference).toContain("mock-verification:org_kyb");
+    expect(createdSessions).toMatchObject([
+      {
+        purpose: "org_kyb",
+        organizationId: "22222222-2222-4222-8222-222222222222",
+        providerSession: {
+          method: "kyb_registry",
+          assuranceLevel: "business_verified"
+        }
+      }
+    ]);
+
+    await app.close();
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+  });
+
+  it("starts Didit creator KYC with the current provider session API shape", async () => {
+    vi.stubEnv("DIDIT_API_KEY", "didit-api-key");
+    vi.stubEnv("DIDIT_KYC_WORKFLOW_ID", "didit-creator-workflow");
+    vi.stubEnv("DIDIT_API_BASE_URL", "https://verification.didit.example");
+    const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) =>
+      new Response(
+        JSON.stringify({
+          session_id: "didit-session-1",
+          url: "https://verification.didit.example/session/didit-session-1"
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const createdSessions: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      verificationRepository: {
+        ...verificationRepositoryStub(),
+        async createPendingSession(input) {
+          createdSessions.push(input);
+          return "11111111-1111-4111-8111-111111111112";
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/verification/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "didit-creator-1"
+      },
+      payload: {
+        purpose: "creator_kyc",
+        providerPreference: "didit"
+      }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(201);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://verification.didit.example/v3/session/",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "x-api-key": "didit-api-key"
+        })
+      })
+    );
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+      workflow_id: "didit-creator-workflow",
+      callback: "http://localhost:3000/app/profile?verification=earnings",
+      callback_method: "completer",
+      vendor_data: "user:00000000-0000-4000-8000-000000000001",
+      metadata: { purpose: "creator_kyc" }
+    });
+    expect(createdSessions).toMatchObject([
+      {
+        purpose: "creator_kyc",
+        providerSession: {
+          provider: "didit",
+          providerReference: "didit-session-1",
+          reusable: false
+        }
+      }
+    ]);
+
+    await app.close();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("starts Persona organization KYB with the organization template", async () => {
+    vi.stubEnv("PERSONA_API_KEY", "persona-api-key");
+    vi.stubEnv("PERSONA_ORG_KYB_TEMPLATE_ID", "persona-org-kyb-template");
+    vi.stubEnv("PERSONA_API_BASE_URL", "https://withpersona.example");
+    const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) =>
+      new Response(
+        JSON.stringify({
+          data: {
+            id: "persona-org-inquiry-1",
+            attributes: {
+              "expires-at": "2026-06-04T22:00:00.000Z"
+            }
+          },
+          meta: {
+            "one-time-link": "https://withpersona.example/i/persona-org-inquiry-1"
+          }
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const createdSessions: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      verificationRepository: {
+        ...verificationRepositoryStub(),
+        async createPendingSession(input) {
+          createdSessions.push(input);
+          return "11111111-1111-4111-8111-111111111113";
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/verification/sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "persona-org-kyb-1"
+      },
+      payload: {
+        purpose: "org_kyb",
+        providerPreference: "persona",
+        organizationId: "00000000-0000-4000-8000-000000000090"
+      }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(201);
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+      data: {
+        attributes: {
+          "inquiry-template-id": "persona-org-kyb-template",
+          "reference-id": "org:00000000-0000-4000-8000-000000000090",
+          note: "WeVid organization KYB"
+        }
+      },
+      meta: {
+        "redirect-uri": "http://localhost:3000/app/profile?verification=organization"
+      }
+    });
+    expect(createdSessions).toMatchObject([
+      {
+        purpose: "org_kyb",
+        organizationId: "00000000-0000-4000-8000-000000000090",
+        providerSession: {
+          provider: "persona",
+          method: "kyb_registry",
+          assuranceLevel: "business_verified"
+        }
+      }
+    ]);
+
+    await app.close();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("accepts a signed Sumsub creator verification webhook and applies normalized state", async () => {
+    vi.stubEnv("SUMSUB_WEBHOOK_SECRET", "sumsub-test-secret");
+    const recordedEvents: unknown[] = [];
+    const appliedEvents: unknown[] = [];
+    const verificationRepository: VerificationRepository = {
+      ...verificationRepositoryStub(),
+      async applyProviderWebhook(input) {
+        recordedEvents.push(input);
+        appliedEvents.push(input);
+        return "applied";
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      verificationRepository
+    });
+    await app.ready();
+    const payload = {
+      type: "applicantReviewed",
+      applicantId: "sumsub-applicant",
+      correlationId: "sumsub-event",
+      reviewResult: {
+        reviewAnswer: "GREEN"
+      },
+      createdAt: "2026-06-06 01:00:00+0000"
+    };
+    const rawPayload = JSON.stringify(payload);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/webhooks/verification/sumsub",
+      headers: {
+        "content-type": "application/json",
+        "x-payload-digest": sumsubDigest(rawPayload),
+        "x-payload-digest-alg": "HMAC_SHA256_HEX"
+      },
+      payload: rawPayload
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(202);
+    expect(response.json()).toEqual({
+      provider: "sumsub",
+      received: 1,
+      processed: 1
+    });
+    expect(recordedEvents).toMatchObject([
+      {
+        provider: "sumsub",
+        providerEventId: "sumsub-event",
+        eventType: "applicantReviewed"
+      }
+    ]);
+    expect(appliedEvents).toMatchObject([
+      {
+        provider: "sumsub",
+        providerEventId: "sumsub-event",
+        providerReference: "sumsub-applicant",
+        status: "valid"
+      }
+    ]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("accepts a Didit verification webhook signed with X-Signature-V2", async () => {
+    vi.stubEnv("DIDIT_WEBHOOK_SECRET", "didit-webhook-secret");
+    const appliedEvents: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      verificationRepository: {
+        ...verificationRepositoryStub(),
+        async applyProviderWebhook(input) {
+          appliedEvents.push(input);
+          return "applied";
+        }
+      }
+    });
+    await app.ready();
+    const payload = {
+      event_id: "didit-event-1",
+      webhook_type: "status.updated",
+      session_id: "didit-session-1",
+      status: "Approved",
+      timestamp: Math.floor(Date.now() / 1000)
+    };
+    const rawPayload = JSON.stringify(payload);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/webhooks/verification/didit",
+      headers: {
+        "content-type": "application/json",
+        "x-signature-v2": diditV2Signature(payload),
+        "x-timestamp": String(payload.timestamp)
+      },
+      payload: rawPayload
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(202);
+    expect(appliedEvents).toMatchObject([
+      {
+        provider: "didit",
+        providerReference: "didit-session-1",
+        eventType: "status.updated",
+        status: "valid"
+      }
+    ]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("rejects a correctly signed but stale Didit webhook", async () => {
+    vi.stubEnv("DIDIT_WEBHOOK_SECRET", "didit-webhook-secret");
+    const app = await buildApi({ authVerifier: fakeAuthVerifier });
+    await app.ready();
+    const staleTimestamp = Math.floor(Date.now() / 1000) - 301;
+    const payload = {
+      event_id: "didit-stale-event",
+      webhook_type: "status.updated",
+      session_id: "didit-session-1",
+      status: "Approved",
+      timestamp: staleTimestamp
+    };
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/webhooks/verification/didit",
+      headers: {
+        "content-type": "application/json",
+        "x-signature-v2": diditV2Signature(payload),
+        "x-timestamp": String(staleTimestamp)
+      },
+      payload: JSON.stringify(payload)
+    });
+
+    expect(response.statusCode).toBe(401);
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("accepts a Persona webhook signed with Persona-Signature", async () => {
+    vi.stubEnv("PERSONA_WEBHOOK_SECRET", "persona-webhook-secret");
+    const appliedEvents: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      verificationRepository: {
+        ...verificationRepositoryStub(),
+        async applyProviderWebhook(input) {
+          appliedEvents.push(input);
+          return "applied";
+        }
+      }
+    });
+    await app.ready();
+    const payload = {
+      data: {
+        id: "evt-persona-1",
+        type: "event",
+        attributes: {
+          name: "inquiry.approved",
+          payload: {
+            data: {
+              id: "inq-persona-1",
+              type: "inquiry",
+              attributes: {
+                status: "approved",
+                "completed-at": "2026-06-06T01:00:00Z"
+              }
+            }
+          }
+        }
+      }
+    };
+    const rawPayload = JSON.stringify(payload);
+    const timestamp = "1780707600";
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/webhooks/verification/persona",
+      headers: {
+        "content-type": "application/json",
+        "persona-signature": personaSignature(timestamp, rawPayload)
+      },
+      payload: rawPayload
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(202);
+    expect(appliedEvents).toMatchObject([
+      {
+        provider: "persona",
+        providerEventId: "evt-persona-1",
+        providerReference: "inq-persona-1",
+        eventType: "inquiry.approved",
+        status: "valid"
+      }
+    ]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
   it("updates the current profile after bootstrapping the Veel user row", async () => {
     const ensuredSupabaseUserIds: string[] = [];
     const app = await buildApi({
@@ -560,6 +1849,8 @@ describe("buildApi", () => {
       payload: {
         handle: "maki",
         displayName: "Maki",
+        avatarUrl: "https://media.example.test/avatar.jpg",
+        links: [{ label: "Website", url: "https://veel.example.test/maki" }],
         bio: "Building Veel v2"
       }
     });
@@ -570,8 +1861,92 @@ describe("buildApi", () => {
       id: "00000000-0000-4000-8000-000000000010",
       handle: "maki",
       displayName: "Maki",
-      avatarUrl: null,
+      avatarUrl: "https://media.example.test/avatar.jpg",
       badges: []
+    });
+
+    await app.close();
+  });
+
+  it("creates a backend-owned starter profile for onboarding", async () => {
+    const upserts: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return null;
+        }
+      }),
+      profileRepository: {
+        ...fakeProfileRepository,
+        async upsertMyProfile(supabaseUserId, input) {
+          upserts.push({ supabaseUserId, input });
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            handle: input.handle,
+            displayName: input.displayName,
+            avatarUrl: null,
+            badges: []
+          };
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/profiles/me/starter",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "profile-starter-1"
+      },
+      payload: {}
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      handle: expect.stringMatching(/^wevid_[a-f0-9]{12}$/),
+      displayName: "WeVid user"
+    });
+    expect(upserts).toMatchObject([
+      {
+        supabaseUserId: "00000000-0000-4000-8000-000000000001",
+        input: {
+          displayName: "WeVid user",
+          handle: expect.stringMatching(/^wevid_[a-f0-9]{12}$/),
+          links: []
+        }
+      }
+    ]);
+
+    await app.close();
+  });
+
+  it("rejects profile avatar uploads above 5 MB", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier
+    });
+    await app.ready();
+
+    const overLimitBase64 = "A".repeat(Math.ceil(((5_000_000 + 10) * 4) / 3));
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/profiles/me/avatar",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "profile-avatar-limit-1"
+      },
+      payload: {
+        contentType: "image/png",
+        dataBase64: overLimitBase64,
+        fileName: "avatar.png"
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: "validation_failed",
+      message: "Profile picture must be 5MB or smaller"
     });
 
     await app.close();
@@ -634,7 +2009,7 @@ describe("buildApi", () => {
         followerCount: 0
       },
       monetisation: {
-        tipsEnabled: true,
+        supportEnabled: true,
         subscriptionsEnabled: false
       }
     });
@@ -1043,7 +2418,12 @@ describe("buildApi", () => {
         throw new Error("not implemented");
       },
       async findOwnedContentForUpload() {
-        throw new Error("not implemented");
+        return {
+          id: "00000000-0000-4000-8000-000000000040",
+          mediaType: "vod",
+          caption: "studio cut",
+          nsfwLabel: "none"
+        };
       },
       async listHomeFeed(input) {
         expect(input).toEqual({
@@ -1072,6 +2452,7 @@ describe("buildApi", () => {
         }
       }),
       ageRepository: verifiedAgeRepository,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       walletRepository: walletRepositoryWithWallet,
       contentRepository
     });
@@ -1123,7 +2504,12 @@ describe("buildApi", () => {
         throw new Error("not implemented");
       },
       async findOwnedContentForUpload() {
-        throw new Error("not implemented");
+        return {
+          id: "00000000-0000-4000-8000-000000000040",
+          mediaType: "vod",
+          caption: "studio cut",
+          nsfwLabel: "none"
+        };
       },
       async listHomeFeed() {
         throw new Error("not implemented");
@@ -1143,6 +2529,7 @@ describe("buildApi", () => {
         }
       }),
       ageRepository: verifiedAgeRepository,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       walletRepository: walletRepositoryWithWallet,
       contentRepository
     });
@@ -1227,6 +2614,7 @@ describe("buildApi", () => {
         }
       }),
       ageRepository: verifiedAgeRepository,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       walletRepository: walletRepositoryWithWallet,
       contentRepository,
       mediaUploadProvider
@@ -1251,6 +2639,94 @@ describe("buildApi", () => {
     });
 
     await app.close();
+  });
+
+  it("attaches public-media accounting and blocks signed playback when allowance is exhausted", async () => {
+    const publicVod: ContentItem = {
+      ...homeFeedItem,
+      creator: {
+        ...homeFeedItem.creator,
+        id: "00000000-0000-4000-8000-000000000011"
+      },
+      mediaType: "vod",
+      accessState: "free",
+      playback: {
+        state: "full",
+        url: "https://vz-example.b-cdn.net/11111111-1111-4111-8111-111111111111/playlist.m3u8",
+        provider: "bunny"
+      }
+    };
+    const contentRepository = contentRepositoryWithDetail(publicVod);
+    const mediaUploadProvider: MediaUploadProviderAdapter = {
+      provider: "bunny",
+      isConfigured: () => true,
+      async createUploadSession() {
+        throw new Error("not implemented");
+      },
+      createPlaybackResource() {
+        return {
+          state: "full",
+          url: "https://iframe.mediadelivery.net/embed/123/11111111-1111-4111-8111-111111111111?token=signed&expires=1770000900",
+          provider: "bunny",
+          resourceType: "embed"
+        };
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository,
+      mediaUploadProvider,
+      subscriptionRepository: fakeSubscriptionRepository({
+        async onGetPlatformPlaybackDecision() {
+          return { countsTowardAllowance: true, limitReached: false };
+        }
+      })
+    });
+    await app.ready();
+
+    const accounted = await app.inject({
+      method: "GET",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040",
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(accounted.statusCode).toBe(200);
+    expect(accounted.json().playback.usage).toEqual({
+      policy: "public_media_allowance",
+      targetType: "content",
+      targetId: publicVod.id,
+      heartbeatIntervalSeconds: 15
+    });
+
+    await app.close();
+
+    const exhaustedApp = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository,
+      mediaUploadProvider,
+      subscriptionRepository: fakeSubscriptionRepository({
+        async onGetPlatformPlaybackDecision() {
+          return { countsTowardAllowance: true, limitReached: true };
+        }
+      })
+    });
+    await exhaustedApp.ready();
+    const exhausted = await exhaustedApp.inject({
+      method: "GET",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040",
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(exhausted.json().playback).toMatchObject({
+      state: "blocked",
+      url: null,
+      blockReason: "allowance_exhausted"
+    });
+    await exhaustedApp.close();
   });
 
   it("fails Bunny playback closed when the signer is unavailable", async () => {
@@ -1309,6 +2785,7 @@ describe("buildApi", () => {
         }
       }),
       ageRepository: verifiedAgeRepository,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       walletRepository: walletRepositoryWithWallet,
       contentRepository,
       mediaUploadProvider
@@ -1379,6 +2856,7 @@ describe("buildApi", () => {
       }),
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       contentRepository
     });
     await app.ready();
@@ -1437,6 +2915,7 @@ describe("buildApi", () => {
       }),
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       contentRepository
     });
     await app.ready();
@@ -1557,7 +3036,7 @@ describe("buildApi", () => {
       creators: [homeFeedItem.creator],
       hashtags: [{ slug: "studio", displayName: "#studio", state: "active" }],
       events: [eventFixture()],
-      liveRooms: [{ title: "Live room", accessState: "pass_required" }],
+      liveRooms: [{ title: "Live room", accessState: "event_access_required" }],
       nextCursor: null
     });
 
@@ -1602,13 +3081,19 @@ describe("buildApi", () => {
   it("creates a content draft for an app-ready user", async () => {
     const contentRepository: ContentRepository = {
       async createDraft(input) {
-        expect(input).toEqual({
+        expect(input).toMatchObject({
           supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          idempotencyKey: "content-draft-1",
           mediaType: "vod",
           caption: "studio cut",
           visibility: "private",
-          nsfwLabel: "none"
+          nsfwLabel: "none",
+          representationMode: "not_declared",
+          contentSafetyPolicyAccepted: false,
+          dailyDraftQuota: 20
         });
+        expect(input.requestHash).toMatch(/^[a-f0-9]{64}$/);
+        expect(input.quotaWindowStart).toBeInstanceOf(Date);
 
         return homeFeedItem;
       },
@@ -1643,6 +3128,7 @@ describe("buildApi", () => {
       }),
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       contentRepository
     });
     await app.ready();
@@ -1670,16 +3156,16 @@ describe("buildApi", () => {
 
   it("blocks content draft creation when the daily server quota is reached", async () => {
     const contentRepository: ContentRepository = {
-      async createDraft() {
-        throw new Error("quota should be checked before draft creation");
+      async createDraft(input) {
+        expect(input).toMatchObject({
+          idempotencyKey: "content-draft-quota-1",
+          dailyDraftQuota: 20
+        });
+        expect(input.quotaWindowStart).toBeInstanceOf(Date);
+        throw new ContentDraftQuotaExceededError();
       },
       async createMediaAsset() {
         throw new Error("not implemented");
-      },
-      async countContentDraftsCreatedSince(input) {
-        expect(input.supabaseUserId).toBe("00000000-0000-4000-8000-000000000001");
-        expect(input.since).toBeInstanceOf(Date);
-        return 20;
       },
       async findContentDetail() {
         throw new Error("not implemented");
@@ -1709,6 +3195,7 @@ describe("buildApi", () => {
       }),
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       contentRepository
     });
     await app.ready();
@@ -1739,16 +3226,16 @@ describe("buildApi", () => {
 
   it("uses the active admin content abuse policy for draft quota enforcement", async () => {
     const contentRepository: ContentRepository = {
-      async createDraft() {
-        throw new Error("admin safety policy should be checked before draft creation");
+      async createDraft(input) {
+        expect(input).toMatchObject({
+          idempotencyKey: "content-draft-policy-1",
+          dailyDraftQuota: 2
+        });
+        expect(input.quotaWindowStart).toBeInstanceOf(Date);
+        throw new ContentDraftQuotaExceededError();
       },
       async createMediaAsset() {
         throw new Error("not implemented");
-      },
-      async countContentDraftsCreatedSince(input) {
-        expect(input.supabaseUserId).toBe("00000000-0000-4000-8000-000000000001");
-        expect(input.since).toBeInstanceOf(Date);
-        return 2;
       },
       async getContentCreationAbusePolicy() {
         return {
@@ -1785,6 +3272,7 @@ describe("buildApi", () => {
       }),
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       contentRepository
     });
     await app.ready();
@@ -1842,6 +3330,8 @@ describe("buildApi", () => {
           captionProvided: true,
           visibility: "followers",
           nsfwLabel: "adult",
+          representationMode: "self_only",
+          contentSafetyPolicyAccepted: true,
           teaserStartMs: 1000,
           teaserStartMsProvided: true,
           teaserEndMs: 5000,
@@ -1874,6 +3364,7 @@ describe("buildApi", () => {
       }),
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       contentRepository
     });
     await app.ready();
@@ -1889,6 +3380,8 @@ describe("buildApi", () => {
         caption: "updated #studio",
         visibility: "followers",
         nsfwLabel: "adult",
+        representationMode: "self_only",
+        contentSafetyPolicyAccepted: true,
         teaserStartMs: 1000,
         teaserEndMs: 5000,
         thumbnailFrameMs: 1200
@@ -1995,6 +3488,8 @@ describe("buildApi", () => {
           captionProvided: false,
           visibility: undefined,
           nsfwLabel: undefined,
+          representationMode: undefined,
+          contentSafetyPolicyAccepted: false,
           teaserStartMs: undefined,
           teaserStartMsProvided: false,
           teaserEndMs: undefined,
@@ -2062,7 +3557,12 @@ describe("buildApi", () => {
         throw new Error("not implemented");
       },
       async findOwnedContentForUpload() {
-        throw new Error("not implemented");
+        return {
+          id: "00000000-0000-4000-8000-000000000040",
+          mediaType: "vod",
+          caption: "studio cut",
+          nsfwLabel: "none"
+        };
       },
       async listHomeFeed() {
         throw new Error("not implemented");
@@ -2092,6 +3592,7 @@ describe("buildApi", () => {
       }),
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       contentRepository
     });
     await app.ready();
@@ -2129,7 +3630,12 @@ describe("buildApi", () => {
         throw new Error("not implemented");
       },
       async findOwnedContentForUpload() {
-        throw new Error("not implemented");
+        return {
+          id: "00000000-0000-4000-8000-000000000040",
+          mediaType: "vod",
+          caption: "studio cut",
+          nsfwLabel: "none"
+        };
       },
       async listHomeFeed() {
         throw new Error("not implemented");
@@ -2154,6 +3660,7 @@ describe("buildApi", () => {
       }),
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       contentRepository
     });
     await app.ready();
@@ -2204,7 +3711,8 @@ describe("buildApi", () => {
         return {
           id: "00000000-0000-4000-8000-000000000040",
           mediaType: "vod",
-          caption: "studio cut"
+          caption: "studio cut",
+          nsfwLabel: "none"
         };
       },
       async listHomeFeed() {
@@ -2251,6 +3759,7 @@ describe("buildApi", () => {
         }
       }),
       ageRepository: verifiedAgeRepository,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       walletRepository: walletRepositoryWithWallet,
       contentRepository,
       mediaUploadProvider
@@ -2320,7 +3829,8 @@ describe("buildApi", () => {
         return {
           id: "00000000-0000-4000-8000-000000000040",
           mediaType: "vod",
-          caption: "studio cut"
+          caption: "studio cut",
+          nsfwLabel: "none"
         };
       },
       async listHomeFeed() {
@@ -2353,6 +3863,7 @@ describe("buildApi", () => {
       }),
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       contentRepository,
       mediaUploadProvider
     });
@@ -2413,7 +3924,8 @@ describe("buildApi", () => {
         return {
           id: "00000000-0000-4000-8000-000000000040",
           mediaType: "vod",
-          caption: "studio cut"
+          caption: "studio cut",
+          nsfwLabel: "none"
         };
       },
       async listHomeFeed() {
@@ -2446,6 +3958,7 @@ describe("buildApi", () => {
       }),
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
+      verificationRepository: creatorVerifiedVerificationRepository(),
       contentRepository,
       mediaUploadProvider
     });
@@ -2493,7 +4006,8 @@ describe("buildApi", () => {
         return {
           id: "00000000-0000-4000-8000-000000000040",
           mediaType: "vod",
-          caption: "studio cut"
+          caption: "studio cut",
+          nsfwLabel: "none"
         };
       },
       async listHomeFeed() {
@@ -2988,26 +4502,65 @@ describe("buildApi", () => {
         NODE_ENV: "test",
         API_URL: "http://localhost:4000",
         WEB_URL: "http://localhost:3000",
+        PROFILE_AVATAR_BUCKET: "profile-avatars",
         SOLANA_CLUSTER: "devnet",
         SOLANA_NETWORK: "solana:devnet",
         SOLANA_RPC_URL: "https://api.devnet.solana.com",
         PAYMENT_DEFAULT_ASSET: "SOL",
+        PAYMENT_USDC_DECIMALS: 6,
+        PAYMENT_SOLANA_FINALITY: "finalized",
+        PAYMENT_MIN_SUPPORT_SOL_LAMPORTS: 1_000_000,
+        PAYMENT_MIN_SUPPORT_USDC_ATOMIC: 500_000,
+        PAYMENT_PLATFORM_FEE_BPS: 1000,
+        PAYMENT_REFERRAL_SHARE_OF_PLATFORM_FEE_BPS: 2000,
         SOLANA_SUBSCRIPTION_DELEGATION_PROGRAM_ID: "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
+        SUBSCRIPTIONS_ENABLED: false,
+        SUBSCRIPTIONS_PROVIDER: "disabled",
+        SUBSCRIPTIONS_SOLANA_PROGRAM_ID: "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
+        SUBSCRIPTIONS_SOLANA_NETWORK: "devnet",
+        SUBSCRIPTIONS_REQUIRE_ONCHAIN_VERIFICATION: true,
         HELIUS_CLUSTER: "devnet",
         ONRAMP_PROVIDER: "disabled",
         ONRAMP_PURCHASE_CURRENCY: "SOL",
+        WALLET_AUTH_SESSION_TTL_SECONDS: 604800,
         COINBASE_CDP_API_BASE_URL: "https://api.cdp.coinbase.com",
         COINBASE_ONRAMP_DESTINATION_NETWORK: "solana",
         AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: false,
+        AGE_VERIFICATION_PROVIDER_SELECTION_ENABLED: true,
+        AGE_VERIFICATION_PREFER_REUSABLE_CREDENTIALS: true,
+        AGE_VERIFICATION_REUSABLE_PROVIDERS: "didit_reusable,yoti_digital_id,eudi_wallet,scytales",
+        AGE_VERIFICATION_FALLBACK_PROVIDERS: "didit_age_estimation,persona_document",
+        AGE_VERIFICATION_FALLBACK_ORDER: "reusable_credential,age_estimation,free_document,portable_credential,database_non_doc,document",
+        AGE_VERIFICATION_REVERIFY_MODE: "risk_or_expiry",
+        AGE_VERIFICATION_REVERIFY_DAYS: 365,
         SUMSUB_API_BASE_URL: "https://api.sumsub.com",
+        DIDIT_API_BASE_URL: "https://verification.didit.me",
         YOTI_API_BASE_URL: "https://age.yoti.com/api/v1",
         YOTI_LAUNCH_BASE_URL: "https://age.yoti.com",
         VERIFF_API_BASE_URL: "https://stationapi.veriff.com",
         PERSONA_API_BASE_URL: "https://api.withpersona.com",
         TRANSACTIONAL_EMAIL_PROVIDER: "disabled",
+        WORKER_TICK_INTERVAL_MS: 60_000,
+        WORKER_BATCH_LIMIT: 25,
+        MCP_ENABLED: false,
+        MCP_AUTH_MODE: "oauth",
+        MCP_ALLOWED_CLIENTS: "",
+        MCP_REQUIRE_OAUTH: true,
+        MCP_ALLOW_STATIC_TOKENS_DEV: false,
+        MCP_TOOL_CALL_RATE_LIMIT_PER_MINUTE: 30,
+        MCP_CONNECTION_TOKEN_TTL_SECONDS: 86400,
+        MCP_OAUTH_AUTH_CODE_TTL_SECONDS: 600,
+        MCP_OAUTH_ACCESS_TOKEN_TTL_SECONDS: 3600,
+        MCP_AUDIT_RETENTION_DAYS: 365,
+        MCP_OAUTH_PUBLIC_CLIENT: true,
         BUNNY_STREAM_API_KEY: "bunny-secret",
         BUNNY_STREAM_LIBRARY_ID: "library-id",
-        BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS: 900
+        BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS: 900,
+        BUNNY_SHIELD_UPLOAD_COVERAGE: "not_configured",
+        LIVEPEER_API_BASE_URL: "https://livepeer.studio/api",
+        LIVEPEER_HTTP_TIMEOUT_MS: 10_000,
+        LIVEPEER_ADULT_LIVE_ENABLED: false,
+        MEDIA_MODERATION_MODE: "disabled_fail_closed"
       },
       fetchMock
     );
@@ -3052,27 +4605,66 @@ describe("buildApi", () => {
       NODE_ENV: "test",
       API_URL: "http://localhost:4000",
       WEB_URL: "http://localhost:3000",
+      PROFILE_AVATAR_BUCKET: "profile-avatars",
       SOLANA_CLUSTER: "devnet",
       SOLANA_NETWORK: "solana:devnet",
       SOLANA_RPC_URL: "https://api.devnet.solana.com",
       PAYMENT_DEFAULT_ASSET: "SOL",
+      PAYMENT_USDC_DECIMALS: 6,
+      PAYMENT_SOLANA_FINALITY: "finalized",
+      PAYMENT_MIN_SUPPORT_SOL_LAMPORTS: 1_000_000,
+      PAYMENT_MIN_SUPPORT_USDC_ATOMIC: 500_000,
+      PAYMENT_PLATFORM_FEE_BPS: 1000,
+      PAYMENT_REFERRAL_SHARE_OF_PLATFORM_FEE_BPS: 2000,
       SOLANA_SUBSCRIPTION_DELEGATION_PROGRAM_ID: "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
+      SUBSCRIPTIONS_ENABLED: false,
+      SUBSCRIPTIONS_PROVIDER: "disabled",
+      SUBSCRIPTIONS_SOLANA_PROGRAM_ID: "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
+      SUBSCRIPTIONS_SOLANA_NETWORK: "devnet",
+      SUBSCRIPTIONS_REQUIRE_ONCHAIN_VERIFICATION: true,
       HELIUS_CLUSTER: "devnet",
       ONRAMP_PROVIDER: "disabled",
       ONRAMP_PURCHASE_CURRENCY: "SOL",
+      WALLET_AUTH_SESSION_TTL_SECONDS: 604800,
       COINBASE_CDP_API_BASE_URL: "https://api.cdp.coinbase.com",
       COINBASE_ONRAMP_DESTINATION_NETWORK: "solana",
       AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: false,
+      AGE_VERIFICATION_PROVIDER_SELECTION_ENABLED: true,
+      AGE_VERIFICATION_PREFER_REUSABLE_CREDENTIALS: true,
+      AGE_VERIFICATION_REUSABLE_PROVIDERS: "didit_reusable,yoti_digital_id,eudi_wallet,scytales",
+      AGE_VERIFICATION_FALLBACK_PROVIDERS: "didit_age_estimation,persona_document",
+      AGE_VERIFICATION_FALLBACK_ORDER: "reusable_credential,age_estimation,free_document,portable_credential,database_non_doc,document",
+      AGE_VERIFICATION_REVERIFY_MODE: "risk_or_expiry",
+      AGE_VERIFICATION_REVERIFY_DAYS: 365,
       SUMSUB_API_BASE_URL: "https://api.sumsub.com",
+      DIDIT_API_BASE_URL: "https://verification.didit.me",
       YOTI_API_BASE_URL: "https://age.yoti.com/api/v1",
       YOTI_LAUNCH_BASE_URL: "https://age.yoti.com",
       VERIFF_API_BASE_URL: "https://stationapi.veriff.com",
       PERSONA_API_BASE_URL: "https://api.withpersona.com",
       TRANSACTIONAL_EMAIL_PROVIDER: "disabled",
+      WORKER_TICK_INTERVAL_MS: 60_000,
+      WORKER_BATCH_LIMIT: 25,
+      MCP_ENABLED: false,
+      MCP_AUTH_MODE: "oauth",
+      MCP_ALLOWED_CLIENTS: "",
+      MCP_REQUIRE_OAUTH: true,
+      MCP_ALLOW_STATIC_TOKENS_DEV: false,
+      MCP_TOOL_CALL_RATE_LIMIT_PER_MINUTE: 30,
+      MCP_CONNECTION_TOKEN_TTL_SECONDS: 86400,
+      MCP_OAUTH_AUTH_CODE_TTL_SECONDS: 600,
+      MCP_OAUTH_ACCESS_TOKEN_TTL_SECONDS: 3600,
+      MCP_AUDIT_RETENTION_DAYS: 365,
+      MCP_OAUTH_PUBLIC_CLIENT: true,
       BUNNY_STREAM_API_KEY: "bunny-secret",
       BUNNY_STREAM_LIBRARY_ID: "759",
       BUNNY_STREAM_EMBED_TOKEN_KEY: "embed-token-secret",
-      BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS: 900
+      BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS: 900,
+      BUNNY_SHIELD_UPLOAD_COVERAGE: "not_configured",
+      LIVEPEER_API_BASE_URL: "https://livepeer.studio/api",
+      LIVEPEER_HTTP_TIMEOUT_MS: 10_000,
+      LIVEPEER_ADULT_LIVE_ENABLED: false,
+      MEDIA_MODERATION_MODE: "disabled_fail_closed"
     });
     const providerAssetId = "eb1c4f77-0cda-46be-b47d-1118ad7c2ffe";
     const expires = 1_780_531_200 + 900;
@@ -3099,11 +4691,12 @@ describe("buildApi", () => {
   it("creates a native SOL payment intent for an app-ready user", async () => {
     vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
     const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
       async createOrReuseIntent(input) {
         expect(input).toMatchObject({
           supabaseUserId: "00000000-0000-4000-8000-000000000001",
           idempotencyKey: "payment-intent-1",
-          productType: "tip",
+          productType: "support",
           targetId: "00000000-0000-4000-8000-000000000010",
           amountMinor: 10000000,
           currency: "SOL",
@@ -3113,6 +4706,7 @@ describe("buildApi", () => {
 
         return {
           ...storedPaymentIntent,
+          productType: input.productType,
           referenceAddress: input.referenceAddress,
           requestHash: input.requestHash,
           expiresAt: input.expiresAt
@@ -3147,7 +4741,7 @@ describe("buildApi", () => {
         "idempotency-key": "payment-intent-1"
       },
       payload: {
-        productType: "tip",
+        productType: "support",
         targetId: "00000000-0000-4000-8000-000000000010",
         amountMinor: 10000000
       }
@@ -3156,10 +4750,17 @@ describe("buildApi", () => {
     expect(response.statusCode).toBe(201);
     expect(response.json()).toEqual({
       id: storedPaymentIntent.id,
-      productType: "tip",
+      productType: "support",
       amountMinor: 10000000,
       currency: "SOL",
       state: "pending",
+      settlementKind: "creator_split",
+      creatorSideProceedsMinor: storedPaymentIntent.creatorSideProceedsMinor,
+      creatorAmountMinor: storedPaymentIntent.creatorAmountMinor,
+      enterpriseManagementAmountMinor: storedPaymentIntent.enterpriseManagementAmountMinor,
+      platformFeeGrossMinor: storedPaymentIntent.platformFeeGrossMinor,
+      platformFeeAmountMinor: storedPaymentIntent.platformFeeAmountMinor,
+      referralAmountMinor: storedPaymentIntent.referralAmountMinor,
       refundPolicy: storedPaymentIntent.refundPolicy
     });
 
@@ -3367,9 +4968,9 @@ describe("buildApi", () => {
       items: [
         {
           kind: "payment_intent",
-          title: "Tip",
+          title: "Support",
           state: "confirmed",
-          productType: "tip",
+          productType: "support",
           amountMinor: 10000000,
           currency: "SOL",
           receiptNumber: "VEEL-0000000000004000",
@@ -3856,6 +5457,7 @@ describe("buildApi", () => {
       }
     };
     const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
       async createOrReuseIntent(input) {
         expect(input).toMatchObject({
           productType: "event_access_pass",
@@ -4420,6 +6022,9 @@ describe("buildApi", () => {
         async getNotificationHealth() {
           throw new Error("not implemented");
         },
+        async retryDeadLetterJob() {
+          throw new Error("not implemented");
+        },
         async listUsers() {
           throw new Error("not implemented");
         },
@@ -4557,6 +6162,9 @@ describe("buildApi", () => {
         async getNotificationHealth() {
           throw new Error("not implemented");
         },
+        async retryDeadLetterJob() {
+          throw new Error("not implemented");
+        },
         async listUsers() {
           throw new Error("not implemented");
         },
@@ -4690,6 +6298,9 @@ describe("buildApi", () => {
           throw new Error("not implemented");
         },
         async getNotificationHealth() {
+          throw new Error("not implemented");
+        },
+        async retryDeadLetterJob() {
           throw new Error("not implemented");
         },
         async listUsers() {
@@ -5964,15 +7575,28 @@ describe("buildApi", () => {
 
     expect(replayResponse.statusCode).toBe(202);
 
+    const deadLetterRetryResponse = await app.inject({
+      method: "POST",
+      url: "/v1/admin/worker-queues/media_moderation/jobs/00000000-0000-4000-8000-0000000000b0/retry",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "media-moderation-dead-letter-retry-key"
+      },
+      payload: { reason: "retry after correcting the moderation provider configuration" }
+    });
+
+    expect(deadLetterRetryResponse.statusCode).toBe(202);
+
     await app.close();
   });
 
   it("passes referral tokens to backend-owned payment intent creation", async () => {
     vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
     const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
       async createOrReuseIntent(input) {
         expect(input).toMatchObject({
-          productType: "tip",
+          productType: "support",
           targetId: "00000000-0000-4000-8000-000000000010",
           amountMinor: 10000000,
           referralToken: "veel_referral_token"
@@ -5980,6 +7604,7 @@ describe("buildApi", () => {
 
         return {
           ...storedPaymentIntent,
+          productType: input.productType,
           referenceAddress: input.referenceAddress,
           requestHash: input.requestHash,
           expiresAt: input.expiresAt
@@ -6013,7 +7638,7 @@ describe("buildApi", () => {
         "idempotency-key": "payment-intent-referral-1"
       },
       payload: {
-        productType: "tip",
+        productType: "support",
         targetId: "00000000-0000-4000-8000-000000000010",
         amountMinor: 10000000,
         referralToken: "veel_referral_token"
@@ -6059,6 +7684,7 @@ describe("buildApi", () => {
       }
     };
     const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
       async createOrReuseIntent(input) {
         expect(input).toMatchObject({
           supabaseUserId: "00000000-0000-4000-8000-000000000001",
@@ -6121,6 +7747,13 @@ describe("buildApi", () => {
         amountMinor: 25000000,
         currency: "SOL",
         state: "pending",
+        settlementKind: "creator_split",
+        creatorSideProceedsMinor: storedPaymentIntent.creatorSideProceedsMinor,
+        creatorAmountMinor: storedPaymentIntent.creatorAmountMinor,
+        enterpriseManagementAmountMinor: storedPaymentIntent.enterpriseManagementAmountMinor,
+        platformFeeGrossMinor: storedPaymentIntent.platformFeeGrossMinor,
+        platformFeeAmountMinor: storedPaymentIntent.platformFeeAmountMinor,
+        referralAmountMinor: storedPaymentIntent.referralAmountMinor,
         refundPolicy: storedPaymentIntent.refundPolicy
       }
     });
@@ -6162,21 +7795,25 @@ describe("buildApi", () => {
     vi.unstubAllEnvs();
   });
 
-  it("returns a Solana Pay transfer request without treating it as settlement", async () => {
+  it("mints a scoped Solana Pay checkout that exposes wallet metadata without Veel auth", async () => {
     vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
     const recordedRequests: RecordTransactionRequestInput[] = [];
     const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
       async createOrReuseIntent() {
         throw new Error("not implemented");
       },
       async findIntent() {
         return storedPaymentIntent;
       },
+      async findCheckoutIntent() {
+        return storedPaymentIntent;
+      },
       async recordTransactionRequest(input) {
         recordedRequests.push(input);
 
         return {
-          transactionRequestUrl: input.transactionRequestUrl,
+          transactionRequestUrl: input.publicTransactionRequestUrl,
           expiresAt: storedPaymentIntent.expiresAt.toISOString()
         };
       },
@@ -6204,12 +7841,22 @@ describe("buildApi", () => {
 
     expect(response.statusCode).toBe(200);
     const body = response.json() as { transactionRequestUrl: string; expiresAt: string };
-    expect(body.transactionRequestUrl).toContain(`solana:${treasuryWallet}?`);
-    expect(body.transactionRequestUrl).toContain("amount=0.01");
-    expect(body.transactionRequestUrl).toContain(
-      `reference=${storedPaymentIntent.referenceAddress}`
+    expect(body.transactionRequestUrl).toMatch(
+      /^solana:http:\/\/localhost:4000\/v1\/payments\/checkout\/[A-Za-z0-9_-]{43}$/
     );
-    expect(recordedRequests[0]?.transactionRequestUrl).toBe(body.transactionRequestUrl);
+    expect(recordedRequests[0]?.publicTransactionRequestUrl).toBe(body.transactionRequestUrl);
+    expect(recordedRequests[0]?.storedTransactionRequestUrl).toContain("[redacted]");
+    expect(recordedRequests[0]?.checkoutTokenHash).toMatch(/^[a-f0-9]{64}$/);
+
+    const walletMetadata = await app.inject({
+      method: "GET",
+      url: new URL(body.transactionRequestUrl.slice("solana:".length)).pathname
+    });
+    expect(walletMetadata.statusCode).toBe(200);
+    expect(walletMetadata.json()).toEqual({
+      label: "Veel",
+      icon: "http://localhost:3000/favicon.ico"
+    });
 
     await app.close();
     vi.unstubAllEnvs();
@@ -6220,6 +7867,7 @@ describe("buildApi", () => {
     const submissions: RecordPaymentSubmissionInput[] = [];
     const settlementInputs: PaymentSettlementInput[] = [];
     const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
       async createOrReuseIntent() {
         throw new Error("not implemented");
       },
@@ -6234,7 +7882,7 @@ describe("buildApi", () => {
       }
     };
     const settlementVerifier: PaymentSettlementVerifier = {
-      async verifyNativeSolTransfer(input) {
+      async verifyTransfer(input) {
         settlementInputs.push(input);
 
         return {
@@ -6269,8 +7917,23 @@ describe("buildApi", () => {
       {
         signature: validSolanaSignature,
         referenceAddress: storedPaymentIntent.referenceAddress,
+        memo: `veel:${storedPaymentIntent.id}`,
+        settlementKind: "creator_split",
+        buyerWallet: null,
+        creatorWallet,
+        enterpriseWallet: null,
+        platformFeeWallet,
+        referralWallet: null,
         treasuryWallet,
-        amountMinor: storedPaymentIntent.amountMinor
+        totalAmountMinor: storedPaymentIntent.totalAmountMinor,
+        creatorAmountMinor: storedPaymentIntent.creatorAmountMinor,
+        enterpriseManagementAmountMinor: storedPaymentIntent.enterpriseManagementAmountMinor,
+        platformFeeAmountMinor: storedPaymentIntent.platformFeeAmountMinor,
+        referralAmountMinor: storedPaymentIntent.referralAmountMinor,
+        currency: "SOL",
+        tokenMint: null,
+        tokenDecimals: null,
+        expiresAt: storedPaymentIntent.expiresAt
       }
     ]);
     expect(submissions).toEqual([
@@ -6313,6 +7976,7 @@ describe("buildApi", () => {
       }
     };
     const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
       async createOrReuseIntent() {
         throw new Error("not implemented");
       },
@@ -6327,7 +7991,7 @@ describe("buildApi", () => {
       }
     };
     const settlementVerifier: PaymentSettlementVerifier = {
-      async verifyNativeSolTransfer(input) {
+      async verifyTransfer(input) {
         settlementInputs.push(input);
 
         return {
@@ -6381,8 +8045,23 @@ describe("buildApi", () => {
       {
         signature: validSolanaSignature,
         referenceAddress: storedPaymentIntent.referenceAddress,
+        memo: `veel:${storedPaymentIntent.id}`,
+        settlementKind: "creator_split",
+        buyerWallet: null,
+        creatorWallet,
+        enterpriseWallet: null,
+        platformFeeWallet,
+        referralWallet: null,
         treasuryWallet,
-        amountMinor: storedPaymentIntent.amountMinor
+        totalAmountMinor: storedPaymentIntent.totalAmountMinor,
+        creatorAmountMinor: storedPaymentIntent.creatorAmountMinor,
+        enterpriseManagementAmountMinor: storedPaymentIntent.enterpriseManagementAmountMinor,
+        platformFeeAmountMinor: storedPaymentIntent.platformFeeAmountMinor,
+        referralAmountMinor: storedPaymentIntent.referralAmountMinor,
+        currency: "SOL",
+        tokenMint: null,
+        tokenDecimals: null,
+        expiresAt: storedPaymentIntent.expiresAt
       }
     ]);
     expect(submissions).toMatchObject([
@@ -6439,6 +8118,7 @@ describe("buildApi", () => {
       }
     };
     const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
       async createOrReuseIntent() {
         throw new Error("not implemented");
       },
@@ -6548,8 +8228,10 @@ describe("buildApi", () => {
       },
       payload: {
         title: "Friday live room",
-        teaserSeconds: 45,
-        passPriceMinor: 75000000
+        accessMode: "paid_event",
+        previewSeconds: 45,
+        eventPriceMinor: 75000000,
+        replayWindowHours: 72
       }
     });
 
@@ -6628,8 +8310,9 @@ describe("buildApi", () => {
       },
       payload: {
         title: "Provider fail room",
-        teaserSeconds: 45,
-        passPriceMinor: 75000000
+        accessMode: "paid_event",
+        previewSeconds: 45,
+        eventPriceMinor: 75000000
       }
     });
 
@@ -6678,7 +8361,7 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("returns signed Livepeer playback only for an active pass", async () => {
+  it("returns signed Livepeer playback only when backend access is allowed", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       sessionRepository: appReadySessionRepository,
@@ -6779,10 +8462,10 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("creates a server-priced live pass payment intent and records the pass purchase request", async () => {
+  it("creates one server-priced live event access intent and records the purchase request", async () => {
     vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
     const paymentCreates: StoredPaymentIntent[] = [];
-    const passRequests: Array<{ paymentIntentId: string; durationMinutes: number }> = [];
+    const passRequests: Array<{ paymentIntentId: string; amountMinor: number }> = [];
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       sessionRepository: appReadySessionRepository,
@@ -6794,17 +8477,20 @@ describe("buildApi", () => {
             id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa12",
             state: "live",
             hasPass: false,
+            accessMode: "paid_event",
+            accessState: "event_access_required",
             playbackUrl: "https://livepeercdn.studio/hls/playback-12/index.m3u8"
           });
         },
         async onRecordLivePassPurchaseRequest(input) {
           passRequests.push({
             paymentIntentId: input.paymentIntentId,
-            durationMinutes: input.durationMinutes
+            amountMinor: input.amountMinor
           });
         }
       }),
       paymentRepository: {
+        ...checkoutPaymentRepositoryMethods,
         async createOrReuseIntent(input) {
           const intent: StoredPaymentIntent = {
             ...storedPaymentIntent,
@@ -6834,12 +8520,11 @@ describe("buildApi", () => {
 
     const response = await app.inject({
       method: "POST",
-      url: "/v1/live/rooms/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa12/pass-intents",
+      url: "/v1/live/rooms/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa12/event-access-intents",
       headers: {
         authorization: "Bearer valid-token",
-        "idempotency-key": "live-pass-intent-1"
-      },
-      payload: { durationMinutes: 60 }
+        "idempotency-key": "live-event-access-intent-1"
+      }
     });
 
     expect(response.statusCode).toBe(201);
@@ -6851,7 +8536,7 @@ describe("buildApi", () => {
     });
     expect(paymentCreates[0]?.productType).toBe("live_pass");
     expect(passRequests).toEqual([
-      { paymentIntentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa50", durationMinutes: 60 }
+      { paymentIntentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa50", amountMinor: 50000000 }
     ]);
 
     await app.close();
@@ -7007,7 +8692,7 @@ describe("buildApi", () => {
   });
 
   it("creates a normal conversation message through the backend", async () => {
-    const createdBodies: string[] = [];
+    const createdInputs: Array<{ body: string; idempotencyKey: string }> = [];
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       sessionRepository: appReadySessionRepository,
@@ -7015,7 +8700,7 @@ describe("buildApi", () => {
       walletRepository: walletRepositoryWithWallet,
       messageRepository: fakeMessageRepository({
         async onCreateMessage(input) {
-          createdBodies.push(input.body);
+          createdInputs.push({ body: input.body, idempotencyKey: input.idempotencyKey });
           return messageFixture({
             conversationId: input.conversationId,
             body: input.body
@@ -7041,7 +8726,39 @@ describe("buildApi", () => {
       body: "Hello from Veel",
       deliveryState: "visible"
     });
-    expect(createdBodies).toEqual(["Hello from Veel"]);
+    expect(createdInputs).toEqual([
+      { body: "Hello from Veel", idempotencyKey: "message-create-1" }
+    ]);
+
+    await app.close();
+  });
+
+  it("rejects normal message idempotency-key reuse with changed input", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      messageRepository: fakeMessageRepository({
+        async onCreateMessage() {
+          throw new MessageIdempotencyConflictError();
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/messages/conversations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab11/messages",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "message-conflict-1"
+      },
+      payload: { body: "Changed message" }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ code: "conflict" });
 
     await app.close();
   });
@@ -7063,6 +8780,7 @@ describe("buildApi", () => {
         }
       }),
       paymentRepository: {
+        ...checkoutPaymentRepositoryMethods,
         async createOrReuseIntent(input) {
           return {
             ...storedPaymentIntent,
@@ -7186,7 +8904,7 @@ describe("buildApi", () => {
     expect(readResponse.statusCode).toBe(200);
     expect(readResponse.json()).toMatchObject({
       defaultMode: "recommended",
-      nsfwPreference: "recommended"
+      nsfwPreference: "both"
     });
     expect(preferencesResponse.statusCode).toBe(200);
     expect(hideCreatorResponse.statusCode).toBe(200);
@@ -7264,6 +8982,11 @@ describe("buildApi", () => {
       headers: { authorization: "Bearer valid-token", "idempotency-key": "comment-1" },
       payload: { body: "Server-owned comment" }
     });
+    const malformedCommentCursorResponse = await app.inject({
+      method: "GET",
+      url: "/v1/engagement/00000000-0000-4000-8000-000000000040/comments?cursor=not-a-date",
+      headers: { authorization: "Bearer valid-token" }
+    });
     const shareResponse = await app.inject({
       method: "POST",
       url: "/v1/shares",
@@ -7292,6 +9015,11 @@ describe("buildApi", () => {
 
     expect(likeResponse.statusCode).toBe(200);
     expect(commentResponse.statusCode).toBe(201);
+    expect(malformedCommentCursorResponse.statusCode).toBe(400);
+    expect(malformedCommentCursorResponse.json()).toEqual({
+      code: "validation_failed",
+      message: "cursor must be an ISO timestamp"
+    });
     expect(shareResponse.statusCode).toBe(201);
     expect(reportResponse.statusCode).toBe(201);
     expect(blockResponse.statusCode).toBe(200);
@@ -7359,7 +9087,109 @@ describe("buildApi", () => {
     vi.unstubAllEnvs();
   });
 
+  it("returns backend-owned platform tier capabilities and allowance state", async () => {
+    const calls: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      subscriptionRepository: fakeSubscriptionRepository({
+        async onGetPlatformAccess(input) {
+          calls.push(input);
+          return platformAccessFixture();
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/platform-access",
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      currentTier: {
+        key: "free_verified",
+        publicMediaAllowanceSeconds: 72000,
+        purchaseState: "included"
+      },
+      usage: {
+        publicMediaSeconds: 0,
+        remainingPublicMediaSeconds: 72000,
+        limitReached: false
+      },
+      policyBoundary: "platform_tiers_buy_software_and_public_media_allowance_never_social_priority"
+    });
+    expect(calls).toEqual([
+      { supabaseUserId: "00000000-0000-4000-8000-000000000001" }
+    ]);
+
+    await app.close();
+  });
+
+  it("creates and advances idempotent public-media playback accounting sessions", async () => {
+    const calls: Array<{ kind: string; input: unknown }> = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      subscriptionRepository: fakeSubscriptionRepository({
+        async onCreatePlatformPlaybackSession(input) {
+          calls.push({ kind: "start", input });
+          return platformPlaybackSessionFixture();
+        },
+        async onRecordPlatformPlaybackHeartbeat(input) {
+          calls.push({ kind: "heartbeat", input });
+          return platformPlaybackSessionFixture({ consumedSeconds: 15 });
+        }
+      })
+    });
+    await app.ready();
+
+    const start = await app.inject({
+      method: "POST",
+      url: "/v1/platform-usage/playback-sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "playback-start-1"
+      },
+      payload: {
+        targetType: "content",
+        targetId: "00000000-0000-4000-8000-000000000040"
+      }
+    });
+    expect(start.statusCode).toBe(201);
+
+    const heartbeat = await app.inject({
+      method: "POST",
+      url: "/v1/platform-usage/playback-sessions/00000000-0000-4000-8000-000000000085/heartbeats",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "playback-heartbeat-1"
+      },
+      payload: { sequence: 1, playedSeconds: 15 }
+    });
+    expect(heartbeat.statusCode).toBe(200);
+    expect(heartbeat.json()).toMatchObject({ consumedSeconds: 15, state: "active" });
+    expect(calls.map((call) => call.kind)).toEqual(["start", "heartbeat"]);
+
+    await app.close();
+  });
+
   it("creates delegated subscription intents and keeps activation behind backend verification", async () => {
+    vi.stubEnv("SUBSCRIPTIONS_ENABLED", "true");
+    vi.stubEnv("SUBSCRIPTIONS_PROVIDER", "official_solana_subscription_program");
+    vi.stubEnv("SUBSCRIPTIONS_SOLANA_PROGRAM_ID", "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44");
+    vi.stubEnv("SUBSCRIPTIONS_SOLANA_RPC_URL", "https://api.devnet.solana.com");
+    vi.stubEnv("SUBSCRIPTIONS_SUPPORTED_MINTS", "USDC_MINT_CONFIG_REQUIRED");
+    vi.stubEnv("SUBSCRIPTIONS_DEFAULT_MINT", "USDC_MINT_CONFIG_REQUIRED");
+    vi.stubEnv("SUBSCRIPTIONS_COLLECTOR_WALLET", "11111111111111111111111111111111");
+    vi.stubEnv("SUBSCRIPTIONS_MERCHANT_WALLET", "11111111111111111111111111111111");
+    vi.stubEnv("SUBSCRIPTIONS_REQUIRE_ONCHAIN_VERIFICATION", "true");
     const calls: Array<{ kind: string; input: unknown }> = [];
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -7487,12 +9317,13 @@ describe("buildApi", () => {
         input: {
           authorizationIntentId: "00000000-0000-4000-8000-000000000071",
           idempotencyKey: "sub-submit-1",
-          verification: { verified: false, failureCode: "delegation_verifier_not_configured" }
+          verification: { verified: false, failureCode: "provider_not_configured" }
         }
       }
     ]);
 
     await app.close();
+    vi.unstubAllEnvs();
   });
 
   it("cancels subscriptions server-side without frontend state truth", async () => {
@@ -7555,6 +9386,32 @@ const fakeAuthVerifier: SupabaseAuthVerifier = {
   }
 };
 
+function fakeWalletAuthRepository(
+  overrides: Partial<WalletAuthRepository> = {}
+): WalletAuthRepository {
+  return {
+    async createChallenge() {
+      throw new Error("not implemented");
+    },
+    async findChallenge() {
+      throw new Error("not implemented");
+    },
+    async createSessionFromChallenge() {
+      throw new Error("not implemented");
+    },
+    async linkSupabaseRecovery() {
+      throw new Error("not implemented");
+    },
+    async revokeSessionToken() {
+      throw new Error("not implemented");
+    },
+    async verifySessionToken() {
+      throw new Error("not implemented");
+    },
+    ...overrides
+  };
+}
+
 const verifiedAgeRepository: AgeRepository = {
   async findLatestAgeStatusBySupabaseUserId() {
     return {
@@ -7565,7 +9422,7 @@ const verifiedAgeRepository: AgeRepository = {
   async createPendingAgeVerification() {
     throw new Error("not implemented");
   },
-  async recordProviderWebhook() {
+  async applyProviderWebhook() {
     throw new Error("not implemented");
   },
   async updateVerificationFromWebhook() {
@@ -7583,7 +9440,25 @@ const requiredAgeRepository: AgeRepository = {
   async createPendingAgeVerification() {
     throw new Error("not implemented");
   },
-  async recordProviderWebhook() {
+  async applyProviderWebhook() {
+    throw new Error("not implemented");
+  },
+  async updateVerificationFromWebhook() {
+    throw new Error("not implemented");
+  }
+};
+
+const pendingAgeSessionRepository: AgeRepository = {
+  async findLatestAgeStatusBySupabaseUserId() {
+    return {
+      state: "required",
+      provider: null
+    };
+  },
+  async createPendingAgeVerification() {
+    return undefined;
+  },
+  async applyProviderWebhook() {
     throw new Error("not implemented");
   },
   async updateVerificationFromWebhook() {
@@ -7611,6 +9486,28 @@ const fakeAgeProviderWaterfall: AgeProviderWaterfall = {
 
 function sumsubDigest(payload: string): string {
   return createHmac("sha256", "sumsub-test-secret").update(payload).digest("hex");
+}
+
+function diditV2Signature(payload: unknown): string {
+  return createHmac("sha256", "didit-webhook-secret").update(testCanonicalJson(payload)).digest("hex");
+}
+
+function personaSignature(timestamp: string, payload: string): string {
+  const signature = createHmac("sha256", "persona-webhook-secret").update(`${timestamp}.${payload}`).digest("hex");
+  return `t=${timestamp},v1=${signature}`;
+}
+
+function testCanonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map((item) => testCanonicalJson(item)).join(",")}]`;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${testCanonicalJson(record[key])}`)
+      .join(",")}}`;
+  }
+
+  return JSON.stringify(value);
 }
 
 function bunnySignature(payload: string): string {
@@ -7650,21 +9547,59 @@ const homeFeedItem: ContentItem = {
   }
 };
 
+function contentRepositoryWithDetail(item: ContentItem): ContentRepository {
+  return {
+    async createDraft() {
+      throw new Error("not implemented");
+    },
+    async createMediaAsset() {
+      throw new Error("not implemented");
+    },
+    async findContentDetail() {
+      return item;
+    },
+    async findContentUnlockOffer() {
+      throw new Error("not implemented");
+    },
+    async findOwnedContentForUpload() {
+      throw new Error("not implemented");
+    },
+    async listHomeFeed() {
+      throw new Error("not implemented");
+    }
+  };
+}
+
 const treasuryWallet = "1".repeat(32);
+const creatorWallet = "2".repeat(32);
+const platformFeeWallet = "3".repeat(32);
 const validSolanaSignature =
   "5Pj5fCupXLUePYn18JkY8SrRaWFiUctuDTRwvUy2MLgVFG1FsCeezrWwZsmxkL5YJQFmQpAcY7rc5pN6vrXJt7Qp";
 
 const storedPaymentIntent: StoredPaymentIntent = {
   id: "00000000-0000-4000-8000-000000000050",
-  productType: "tip",
+  productType: "support",
   targetId: "00000000-0000-4000-8000-000000000010",
   amountMinor: 10000000,
   currency: "SOL",
   state: "pending",
   referenceAddress: `${"1".repeat(31)}2`,
   treasuryWallet,
+  settlementKind: "creator_split",
+  buyerWallet: null,
+  creatorWallet,
+  enterpriseWallet: null,
+  platformFeeWallet,
+  referralWallet: null,
+  totalAmountMinor: 10000000,
+  creatorSideProceedsMinor: 9000000,
+  creatorAmountMinor: 9000000,
+  enterpriseManagementAmountMinor: 0,
+  platformFeeGrossMinor: 1000000,
+  platformFeeAmountMinor: 1000000,
+  referralAmountMinor: 0,
   solanaCluster: "devnet",
-  expiresAt: new Date("2026-06-04T23:15:00.000Z"),
+  expiresAt: new Date("2099-07-04T23:15:00.000Z"),
   requestHash: "request-hash",
   refundPolicy: {
     withdrawalWaiverRequired: true,
@@ -7699,7 +9634,8 @@ function liveRoomFixture(
     title: overrides.title ?? "Live room",
     creator: overrides.creator ?? homeFeedItem.creator,
     state,
-    accessState: hasPass ? "pass_active" : "pass_required",
+    accessMode: overrides.accessMode ?? "paid_event",
+    accessState: overrides.accessState ?? (hasPass ? "allowed" : "event_access_required"),
     playback:
       state === "live" && hasPass && playbackUrl
         ? {
@@ -7712,17 +9648,17 @@ function liveRoomFixture(
             url: null,
             provider: "livepeer"
           },
-    teaserSecondsRemaining: hasPass ? null : 60,
-    passOptions:
-      overrides.passOptions ??
-      [30, 60, 180].map((durationMinutes) => ({
-        durationMinutes: durationMinutes as 30 | 60 | 180,
+    previewSecondsRemaining: hasPass ? null : 60,
+    eventAccess:
+      overrides.eventAccess ?? {
         amountMinor: 50000000,
-        currency: "SOL" as const
-      })),
+        currency: "SOL",
+        replayWindowHours: 48,
+        membersIncluded: false
+      },
     chat: {
       enabled: state === "live",
-      accessState: state === "live" ? (hasPass ? "allowed" : "pass_required") : "closed"
+      accessState: state === "live" ? (hasPass ? "allowed" : "members_only") : "closed"
     },
     replayContentId: overrides.replayContentId ?? null,
     providerStreamId: overrides.providerStreamId ?? "livepeer-stream",
@@ -7823,8 +9759,14 @@ function subscriptionPlanFixture(overrides: Partial<SubscriptionPlan> = {}): Sub
     periodDays: overrides.periodDays ?? 30,
     billingMode: overrides.billingMode ?? "delegated_solana_subscription",
     providerState: overrides.providerState ?? "staging_required",
+    provider: overrides.provider ?? "official_solana_subscription_program",
     tokenMint: overrides.tokenMint ?? "USDC_MINT_CONFIG_REQUIRED",
-    tokenProgram: overrides.tokenProgram ?? "spl_token"
+    tokenProgram: overrides.tokenProgram ?? "spl_token",
+    programId: overrides.programId ?? "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
+    planPda: overrides.planPda ?? null,
+    merchantWallet: overrides.merchantWallet ?? null,
+    amountAtomic: overrides.amountAtomic ?? overrides.amountMinor ?? 15000000,
+    periodSeconds: overrides.periodSeconds ?? 30 * 86_400
   };
 }
 
@@ -7840,7 +9782,15 @@ function subscriptionFixture(overrides: Partial<Subscription> = {}): Subscriptio
     cancelledAt: overrides.cancelledAt ?? null,
     revokedAt: overrides.revokedAt ?? null,
     authorityAddress: overrides.authorityAddress ?? null,
-    delegationAddress: overrides.delegationAddress ?? null
+    delegationAddress: overrides.delegationAddress ?? null,
+    subscriberWallet: overrides.subscriberWallet ?? null,
+    subscriberTokenAccount: overrides.subscriberTokenAccount ?? null,
+    tokenMint: overrides.tokenMint ?? null,
+    provider: overrides.provider ?? null,
+    programId: overrides.programId ?? null,
+    planPda: overrides.planPda ?? null,
+    subscriptionPda: overrides.subscriptionPda ?? null,
+    failureReason: overrides.failureReason ?? null
   };
 }
 
@@ -7863,6 +9813,10 @@ function subscriptionAuthorizationIntentFixture(
 
 function fakeSubscriptionRepository(
   overrides: Partial<{
+    onGetPlatformAccess: NonNullable<SubscriptionRepository["getPlatformAccess"]>;
+    onGetPlatformPlaybackDecision: NonNullable<SubscriptionRepository["getPlatformPlaybackDecision"]>;
+    onCreatePlatformPlaybackSession: NonNullable<SubscriptionRepository["createPlatformPlaybackSession"]>;
+    onRecordPlatformPlaybackHeartbeat: NonNullable<SubscriptionRepository["recordPlatformPlaybackHeartbeat"]>;
     onListPlans: SubscriptionRepository["listPlans"];
     onListSubscriptions: SubscriptionRepository["listSubscriptions"];
     onCreateAuthorizationIntent: SubscriptionRepository["createAuthorizationIntent"];
@@ -7871,6 +9825,21 @@ function fakeSubscriptionRepository(
   }> = {}
 ): SubscriptionRepository {
   return {
+    async getPlatformAccess(input) {
+      return overrides.onGetPlatformAccess?.(input) ?? platformAccessFixture();
+    },
+    async getPlatformPlaybackDecision(input) {
+      return overrides.onGetPlatformPlaybackDecision?.(input) ?? {
+        countsTowardAllowance: false,
+        limitReached: false
+      };
+    },
+    async createPlatformPlaybackSession(input) {
+      return overrides.onCreatePlatformPlaybackSession?.(input) ?? platformPlaybackSessionFixture();
+    },
+    async recordPlatformPlaybackHeartbeat(input) {
+      return overrides.onRecordPlatformPlaybackHeartbeat?.(input) ?? platformPlaybackSessionFixture();
+    },
     async listPlans(input) {
       return overrides.onListPlans?.(input) ?? { items: [subscriptionPlanFixture()] };
     },
@@ -7886,10 +9855,17 @@ function fakeSubscriptionRepository(
         setupReference: "00000000-0000-4000-8000-000000000072",
         delegationProgramId: input.delegationProgramId,
         collectorAddress: null,
+        subscriberWallet: "11111111111111111111111111111111",
         tokenMint: "USDC_MINT_CONFIG_REQUIRED",
         tokenProgram: "spl_token",
         amountMinor: 15000000,
-        periodDays: 30
+        periodDays: 30,
+        provider: "official_solana_subscription_program",
+        planId: "platform_plus_monthly",
+        planPda: null,
+        subscriptionPda: null,
+        merchantWallet: null,
+        expiresAt: new Date("2026-07-05T00:15:00.000Z")
       };
     },
     async submitAuthorization(input) {
@@ -7901,12 +9877,51 @@ function fakeSubscriptionRepository(
   };
 }
 
+function platformAccessFixture(): PlatformAccess {
+  const currentTier: PlatformAccess["currentTier"] = {
+    key: "free_verified",
+    label: "Free Verified",
+    rank: 0,
+    monthlyPriceMinor: 0,
+    currency: "USDC",
+    publicMediaAllowanceSeconds: 72000,
+    capabilities: ["social", "bits", "publish_sfw", "public_live", "buy", "support"],
+    purchaseState: "included",
+    subscriptionPlanId: null
+  };
+
+  return {
+    currentTier,
+    usage: {
+      windowStartsAt: "2026-08-01T00:00:00.000Z",
+      windowEndsAt: "2026-09-01T00:00:00.000Z",
+      publicMediaSeconds: 0,
+      remainingPublicMediaSeconds: 72000,
+      limitReached: false
+    },
+    tiers: [currentTier],
+    policyBoundary: "platform_tiers_buy_software_and_public_media_allowance_never_social_priority"
+  };
+}
+
+function platformPlaybackSessionFixture(
+  overrides: Partial<PlatformPlaybackSession> = {}
+): PlatformPlaybackSession {
+  return {
+    id: overrides.id ?? "00000000-0000-4000-8000-000000000085",
+    state: overrides.state ?? "active",
+    heartbeatIntervalSeconds: overrides.heartbeatIntervalSeconds ?? 15,
+    consumedSeconds: overrides.consumedSeconds ?? 0,
+    usage: overrides.usage ?? platformAccessFixture().usage
+  };
+}
+
 function fakeSubscriptionAuthorizationVerifier(verified: boolean): SubscriptionAuthorizationVerifier {
   return {
     async verifyAuthorization() {
       return verified
         ? { verified: true }
-        : { verified: false, failureCode: "delegation_verifier_not_configured" };
+        : { verified: false, failureCode: "provider_not_configured" };
     }
   };
 }
@@ -8031,7 +10046,7 @@ function fakeMessageRepository(
 }
 
 const fakeUnconfirmedSettlementVerifier: PaymentSettlementVerifier = {
-  async verifyNativeSolTransfer() {
+  async verifyTransfer() {
     return {
       confirmed: false,
       failureCode: "not_found"
@@ -8060,7 +10075,7 @@ function fakeEngagementRepository(
       await overrides.onGetFeedPreferences?.(input);
       return {
         defaultMode: "recommended",
-        nsfwPreference: "recommended",
+        nsfwPreference: "both",
         hiddenCreatorIds: [],
         hiddenTopics: []
       };
@@ -8069,7 +10084,7 @@ function fakeEngagementRepository(
       await overrides.onUpdateFeedPreferences?.(input);
       return {
         defaultMode: input.body.defaultMode ?? "recommended",
-        nsfwPreference: input.body.nsfwPreference ?? "recommended",
+        nsfwPreference: input.body.nsfwPreference ?? "both",
         hiddenCreatorIds: [],
         hiddenTopics: []
       };
@@ -8081,7 +10096,7 @@ function fakeEngagementRepository(
       await overrides.onHideCreator?.(input);
       return {
         defaultMode: "recommended",
-        nsfwPreference: "recommended",
+        nsfwPreference: "both",
         hiddenCreatorIds: [input.creatorUserId],
         hiddenTopics: []
       };
@@ -8090,7 +10105,7 @@ function fakeEngagementRepository(
       await overrides.onHideTopic?.(input);
       return {
         defaultMode: "recommended",
-        nsfwPreference: "recommended",
+        nsfwPreference: "both",
         hiddenCreatorIds: [],
         hiddenTopics: [input.topic]
       };
@@ -8354,6 +10369,7 @@ const fakeAdminRepository: AdminRepository = {
     return {
       providerHealth: "ok",
       queueHealth: "ok",
+      workerQueues: [],
       openReports: 0,
       paymentCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 },
       unlockCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 },
@@ -8372,12 +10388,16 @@ const fakeAdminRepository: AdminRepository = {
       leasedDeliveryCount: 0,
       deliveredDeliveryCount: 7,
       failedDeliveryCount: 1,
+      deadLetterDeliveryCount: 0,
       skippedDeliveryCount: 0,
       revokedDeliveryCount: 0,
       latestNotificationAt: "2026-06-06T10:00:00.000Z",
       latestDeviceSeenAt: "2026-06-06T10:01:00.000Z",
       latestDeliveryAt: "2026-06-06T10:02:00.000Z"
     };
+  },
+  async retryDeadLetterJob() {
+    return true;
   },
   async listUsers() {
     return {
@@ -8750,9 +10770,12 @@ const fakeAdminRepository: AdminRepository = {
           providerPlaybackId: "livepeer-playback-1",
           providerState: "active",
           state: "live",
-          accessRule: "pass_required",
-          passPriceMinor: 50000000,
+          accessMode: "paid_event",
+          eventPriceMinor: 50000000,
           currency: "SOL",
+          membersOnlyChat: false,
+          membersIncludedInPaidEvent: false,
+          replayWindowHours: 48,
           hasPlaybackUrl: true,
           hasHostStreamKey: true,
           startsAt: "2026-06-06T15:00:00.000Z",
@@ -9425,12 +11448,111 @@ function sessionRepositoryWithProfile(options: {
   };
 }
 
+function verificationRepositoryStub(
+  resolution: Partial<CapabilityResolution> = {}
+): VerificationRepository {
+  const defaultResolution: CapabilityResolution = {
+    capabilities: {
+      canAccessApp: true,
+      canCreateProfile: true,
+      canViewAgeRestrictedContent: true,
+      canStartCreatorOnboarding: true,
+      canCreateDraft: true,
+      canUploadMedia: false,
+      canPublishMedia: false,
+      canPublishAdultMedia: false,
+      canMonetize: false,
+      canReceiveCreatorProceeds: false,
+      canAccessCreatorDashboard: true,
+      canCreateOrganization: true,
+      canAccessStudio: true,
+      canInviteTeam: false,
+      canUseTeamPublishing: false,
+      canUseAllocationWallets: false,
+      canUseComplianceExports: false,
+      canAccessEnterprise: false
+    },
+    missingRequirements: ["creator_kyc_required"],
+    nextBestAction: "verify_creator_identity",
+    verificationSummary: {
+      ageAccess: null,
+      adultPublisherEligibility: null,
+      creatorKyc: null,
+      orgKyb: null
+    }
+  };
+
+  return {
+    async createPendingSession() {
+      return "11111111-1111-4111-8111-111111111111";
+    },
+    async applyProviderWebhook() {
+      return "applied";
+    },
+    async updateVerificationFromWebhook() {
+      return true;
+    },
+    async findLatestUserVerification() {
+      return null;
+    },
+    async findLatestOrganizationVerification() {
+      return null;
+    },
+    async resolveCapabilities() {
+      return { ...defaultResolution, ...resolution };
+    }
+  };
+}
+
+function creatorVerifiedVerificationRepository(): VerificationRepository {
+  const repository = verificationRepositoryStub();
+
+  return {
+    ...repository,
+    async resolveCapabilities(input) {
+      const resolution = await repository.resolveCapabilities(input);
+
+      return {
+        ...resolution,
+        capabilities: {
+          ...resolution.capabilities,
+          canUploadMedia: true,
+          canPublishMedia: true,
+          canPublishAdultMedia: true,
+          canMonetize: true,
+          canReceiveCreatorProceeds: true,
+          canAccessCreatorDashboard: true
+        },
+        missingRequirements: [],
+        nextBestAction: "creator_ready",
+        verificationSummary: {
+          ...resolution.verificationSummary,
+          creatorKyc: {
+            subjectType: "user",
+            subjectId: input.supabaseUserId,
+            purpose: "creator_kyc",
+            status: "valid",
+            provider: "sumsub",
+            method: "gov_id_selfie",
+            assuranceLevel: "documentary",
+            verifiedAt: "2026-06-03T22:00:00.000Z",
+            expiresAt: null,
+            reusable: true
+          }
+        }
+      };
+    }
+  };
+}
+
 const fakeProfileRepository: ProfileRepository = {
   async upsertMyProfile(supabaseUserId, input) {
     expect(supabaseUserId).toBe("00000000-0000-4000-8000-000000000001");
     expect(input).toMatchObject({
       handle: "maki",
       displayName: "Maki",
+      avatarUrl: "https://media.example.test/avatar.jpg",
+      links: [{ label: "Website", url: "https://veel.example.test/maki" }],
       bio: "Building Veel v2"
     });
 
@@ -9438,7 +11560,7 @@ const fakeProfileRepository: ProfileRepository = {
       id: "00000000-0000-4000-8000-000000000010",
       handle: input.handle,
       displayName: input.displayName,
-      avatarUrl: null,
+      avatarUrl: input.avatarUrl ?? null,
       badges: []
     };
   },
@@ -9455,6 +11577,7 @@ const fakeProfileRepository: ProfileRepository = {
       },
       bio: "Building Veel v2",
       locationLabel: "Belgrade",
+      links: [{ label: "Website", url: "https://veel.example.test/maki" }],
       stats: {
         contentCount: 2,
         liveRoomCount: 1,
@@ -9462,7 +11585,7 @@ const fakeProfileRepository: ProfileRepository = {
         followerCount: 0
       },
       monetisation: {
-        tipsEnabled: true,
+        supportEnabled: true,
         contentUnlocksEnabled: true,
         livePassesEnabled: true,
         paidMessagesEnabled: true,

@@ -18,6 +18,7 @@ export interface ConversationInput {
 
 export interface CreateMessageInput extends ConversationInput {
   body: string;
+  idempotencyKey: string;
 }
 
 export interface CreatePaidMessageDraftInput extends ConversationInput {

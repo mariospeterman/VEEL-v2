@@ -7,6 +7,7 @@ import type { ContentRepository } from "../content/types.js";
 import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
 import type { WalletRepository } from "../wallet/types.js";
 import type { CreatePaymentIntentRequest, PaymentIntent, PaymentEvidenceRepository, PaymentRepository, PaymentSettlementVerifier, ProductType } from "./types.js";
+import type { SettlementKind } from "./payment-amounts.js";
 
 export interface RegisterPaymentRoutesOptions {
   authVerifier: SupabaseAuthVerifier;
@@ -19,10 +20,7 @@ export interface RegisterPaymentRoutesOptions {
   settlementVerifier: PaymentSettlementVerifier;
 }
 
-const productTypes = new Set([
-  "tip",
-  "support"
-]);
+const productTypes = new Set(["support"]);
 export const paymentIntentTtlMs = 15 * 60 * 1000;
 
 type PaymentReadyAccessResult =
@@ -79,7 +77,8 @@ export async function verifyPaymentReadyAccess(
 }
 
 export function validateCreatePaymentIntentRequest(
-  body: Partial<CreatePaymentIntentRequest> | undefined
+  body: Partial<CreatePaymentIntentRequest> | undefined,
+  options?: { minimumAmountMinor?: number }
 ): string | null {
   if (!body || typeof body !== "object") {
     return "Request body is required";
@@ -94,7 +93,14 @@ export function validateCreatePaymentIntentRequest(
   }
 
   if (!Number.isSafeInteger(body.amountMinor) || Number(body.amountMinor) <= 0) {
-    return "amountMinor is required for native SOL payment intents";
+    return "amountMinor is required for payment intents";
+  }
+
+  if (
+    options?.minimumAmountMinor !== undefined &&
+    Number(body.amountMinor) < options.minimumAmountMinor
+  ) {
+    return `Support amount must be at least ${options.minimumAmountMinor} atomic units`;
   }
 
   if (
@@ -116,6 +122,7 @@ export function hashPaymentIntentRequest(body: {
   productType: ProductType;
   targetId: string;
   amountMinor?: number | null;
+  currency?: "SOL" | "USDC" | null;
   livePassDurationMinutes?: 30 | 60 | 180 | null;
   referralToken?: string | null;
 }): string {
@@ -125,6 +132,7 @@ export function hashPaymentIntentRequest(body: {
         productType: body.productType,
         targetId: body.targetId,
         amountMinor: body.amountMinor ?? null,
+        currency: body.currency ?? null,
         livePassDurationMinutes: body.livePassDurationMinutes ?? null,
         referralToken: body.referralToken ?? null
       })
@@ -144,6 +152,13 @@ export function toPaymentIntentResponse(intent: {
   termsVersion?: string | null;
   durableConfirmationRequired?: boolean;
   refundValueBasis?: PaymentIntent["refundPolicy"]["refundValueBasis"];
+  settlementKind?: SettlementKind;
+  creatorSideProceedsMinor?: number;
+  creatorAmountMinor?: number;
+  enterpriseManagementAmountMinor?: number;
+  platformFeeGrossMinor?: number;
+  platformFeeAmountMinor?: number;
+  referralAmountMinor?: number;
 }): PaymentIntent {
   return {
     id: intent.id,
@@ -151,6 +166,13 @@ export function toPaymentIntentResponse(intent: {
     amountMinor: intent.amountMinor,
     currency: intent.currency,
     state: intent.state,
+    settlementKind: intent.settlementKind ?? "creator_split",
+    creatorSideProceedsMinor: intent.creatorSideProceedsMinor ?? intent.amountMinor,
+    creatorAmountMinor: intent.creatorAmountMinor ?? intent.amountMinor,
+    enterpriseManagementAmountMinor: intent.enterpriseManagementAmountMinor ?? 0,
+    platformFeeGrossMinor: intent.platformFeeGrossMinor ?? intent.platformFeeAmountMinor ?? 0,
+    platformFeeAmountMinor: intent.platformFeeAmountMinor ?? 0,
+    referralAmountMinor: intent.referralAmountMinor ?? 0,
     refundPolicy: {
       withdrawalWaiverRequired: intent.withdrawalWaiverRequired ?? true,
       withdrawalWaiverAcceptedAt: intent.withdrawalWaiverAcceptedAt?.toISOString() ?? null,

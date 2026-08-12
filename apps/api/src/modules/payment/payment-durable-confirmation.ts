@@ -2,7 +2,6 @@ import { createHash, randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import type { StoredPaymentIntent } from "./types.js";
 
-const platformFeeBps = 1000;
 const confirmationVersion = "payment-confirmation-v1";
 
 export async function recordPaymentDurableConfirmation(
@@ -31,6 +30,9 @@ export async function recordPaymentDurableConfirmation(
         pi.product_type,
         pi.target_id,
         pi.amount_minor,
+        pi.creator_amount_minor,
+        pi.platform_fee_amount_minor,
+        pi.referral_amount_minor,
         pi.currency,
         pi.reference_address,
         pi.confirmed_signature,
@@ -150,13 +152,10 @@ export async function recordPaymentDurableConfirmation(
         payment.id,
         receipt.id,
         payment.amount_minor,
-        case
-          when payment.seller_user_id is null then payment.amount_minor
-          else floor((payment.amount_minor::numeric * ${platformFeeBps}) / 10000)::bigint
-        end,
+        case when payment.seller_user_id is null then payment.amount_minor else payment.platform_fee_amount_minor end,
         case
           when payment.seller_user_id is null then null
-          else payment.amount_minor - floor((payment.amount_minor::numeric * ${platformFeeBps}) / 10000)::bigint
+          else payment.creator_amount_minor
         end,
         null,
         payment.currency,
@@ -170,6 +169,8 @@ export async function recordPaymentDurableConfirmation(
           jsonb_build_object(
             'referenceAddress', payment.reference_address,
             'confirmedAt', payment.confirmed_at,
+            'platformFeeNetMinor', payment.platform_fee_amount_minor,
+            'referralAllocationMinor', payment.referral_amount_minor,
             'termsVersion', payment.terms_version,
             'withdrawalWaiverVersion', payment.withdrawal_waiver_version,
             'withdrawalWaiverAcceptedAt', payment.withdrawal_waiver_accepted_at,
@@ -379,6 +380,6 @@ function descriptionForProduct(productType: StoredPaymentIntent["productType"]):
       return "Creator support";
     case "tip":
     default:
-      return "Creator tip";
+      return "Creator support";
   }
 }

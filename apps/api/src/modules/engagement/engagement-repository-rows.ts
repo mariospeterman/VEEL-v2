@@ -31,14 +31,35 @@ export interface CommentRow {
   avatar_url: string | null;
 }
 
+export interface CommentReplayRow extends CommentRow {
+  content_item_id: string;
+}
+
 export interface ShareRow {
   id: string;
   mode: ShareResult["mode"];
   url: string | null;
 }
 
+export interface ShareReplayRow extends ShareRow {
+  target_type: string;
+  target_id: string;
+}
+
 export interface ReportRow {
   id: string;
   state: ModerationIntake["state"];
   queue: ModerationIntake["queue"];
+}
+
+export interface ReportReplayRow extends ReportRow {
+  subject_type: string;
+  subject_id: string;
+  reason: string;
+}
+
+export interface BlockReplayRow {
+  blocker_user_id: string;
+  blocked_user_id: string;
+  idempotency_key: string;
 }

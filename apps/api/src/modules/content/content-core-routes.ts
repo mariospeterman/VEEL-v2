@@ -1,9 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import {
+  ContentDraftIdempotencyConflictError,
+  ContentDraftQuotaExceededError,
   ContentEventDraftConflictError,
   ContentPublishConflictError,
   ContentRepositoryConfigurationError
 } from "./content-repository.js";
+import { hashIdempotencyPayload, readIdempotencyKey } from "../../shared/idempotency.js";
 import { validateEventDraft } from "../event/event-route-shared.js";
 import type {
   CreateContentRequest,
@@ -17,7 +20,9 @@ import {
   feedModeFromQuery,
   nsfwLabels,
   quotaExceededResponse,
+  representationModes,
   resolveContentCreationAbusePolicy,
+  verifyCreatorCapability,
   verifyAppReadyAccess,
   withSignedPlayback,
   type RegisterContentRoutesOptions
@@ -34,9 +39,9 @@ export async function registerContentCoreRoutes(
       return reply.code(access.statusCode).send(access.body);
     }
 
-    const idempotencyKey = request.headers["idempotency-key"];
+    const idempotencyKey = readIdempotencyKey(request);
 
-    if (typeof idempotencyKey !== "string" || idempotencyKey.length === 0) {
+    if (!idempotencyKey) {
       return reply.code(400).send({
         code: "validation_failed",
         message: "Idempotency-Key header is required"
@@ -61,30 +66,66 @@ export async function registerContentCoreRoutes(
     }
 
     try {
-      if (options.contentRepository.countContentDraftsCreatedSince) {
-        const abusePolicy = await resolveContentCreationAbusePolicy(options.contentRepository);
-        const draftCount = await options.contentRepository.countContentDraftsCreatedSince({
-          supabaseUserId: access.supabaseUserId,
-          since: dailyQuotaWindowStart(new Date(), abusePolicy.rollingWindowHours)
+      const isAdultRated = body.nsfwLabel !== "none";
+      if (
+        isAdultRated &&
+        (typeof body.representationMode !== "string" ||
+          !representationModes.has(body.representationMode) ||
+          body.contentSafetyPolicyAccepted !== true)
+      ) {
+        return reply.code(400).send({
+          code: "validation_failed",
+          message: "Adult or explicit media requires a performer declaration and policy acceptance"
         });
+      }
 
-        if (draftCount >= abusePolicy.dailyContentDraftQuota) {
-          return reply
-            .code(429)
-            .send(quotaExceededResponse("Daily content draft quota has been reached"));
+      if (isAdultRated) {
+        const creatorAccess = await verifyCreatorCapability(
+          access.supabaseUserId,
+          "canPublishAdultMedia",
+          options
+        );
+        if (!creatorAccess.ok) {
+          return reply.code(creatorAccess.statusCode).send(creatorAccess.body);
         }
       }
 
-      const content = await options.contentRepository.createDraft({
-        supabaseUserId: access.supabaseUserId,
+      const abusePolicy = await resolveContentCreationAbusePolicy(options.contentRepository);
+      const draftBody = {
         mediaType: body.mediaType,
         caption: typeof body.caption === "string" ? body.caption : null,
         visibility: body.visibility,
-        nsfwLabel: body.nsfwLabel
+        nsfwLabel: body.nsfwLabel,
+        representationMode: isAdultRated
+          ? (body.representationMode as NonNullable<CreateContentRequest["representationMode"]>)
+          : "not_declared" as const,
+        contentSafetyPolicyAccepted: isAdultRated
+      };
+
+      const content = await options.contentRepository.createDraft({
+        supabaseUserId: access.supabaseUserId,
+        idempotencyKey,
+        requestHash: hashIdempotencyPayload(draftBody),
+        ...draftBody,
+        quotaWindowStart: dailyQuotaWindowStart(new Date(), abusePolicy.rollingWindowHours),
+        dailyDraftQuota: abusePolicy.dailyContentDraftQuota
       });
 
       return reply.code(201).send(content);
     } catch (error) {
+      if (error instanceof ContentDraftIdempotencyConflictError) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: "Idempotency key was already used for a different content draft"
+        });
+      }
+
+      if (error instanceof ContentDraftQuotaExceededError) {
+        return reply
+          .code(429)
+          .send(quotaExceededResponse("Daily content draft quota has been reached"));
+      }
+
       if (error instanceof ContentRepositoryConfigurationError) {
         request.log.warn({ error }, "Content repository is not configured");
         return reply.code(503).send({
@@ -161,7 +202,13 @@ export async function registerContentCoreRoutes(
         });
       }
 
-      return reply.code(200).send(withSignedPlayback(content, options.mediaUploadProvider));
+      return reply.code(200).send(await withSignedPlayback({
+        content,
+        mediaUploadProvider: options.mediaUploadProvider,
+        subscriptionRepository: options.subscriptionRepository,
+        supabaseUserId: access.supabaseUserId,
+        appUserId: access.appUserId
+      }));
     } catch (error) {
       if (error instanceof ContentRepositoryConfigurationError) {
         request.log.warn({ error }, "Content repository is not configured");
@@ -218,6 +265,20 @@ export async function registerContentCoreRoutes(
         });
       }
 
+      if (
+        body?.representationMode ||
+        (body?.nsfwLabel !== undefined && body.nsfwLabel !== "none")
+      ) {
+        const creatorAccess = await verifyCreatorCapability(
+          access.supabaseUserId,
+          "canPublishAdultMedia",
+          options
+        );
+        if (!creatorAccess.ok) {
+          return reply.code(creatorAccess.statusCode).send(creatorAccess.body);
+        }
+      }
+
       const content = await options.contentRepository.updateOwnedContent({
         supabaseUserId: access.supabaseUserId,
         contentId: params.contentId,
@@ -226,6 +287,8 @@ export async function registerContentCoreRoutes(
         captionProvided: Boolean(body && "caption" in body),
         visibility: body?.visibility,
         nsfwLabel: body?.nsfwLabel,
+        representationMode: body?.representationMode,
+        contentSafetyPolicyAccepted: body?.contentSafetyPolicyAccepted === true,
         teaserStartMs: body && "teaserStartMs" in body ? body.teaserStartMs ?? null : undefined,
         teaserStartMsProvided: Boolean(body && "teaserStartMs" in body),
         teaserEndMs: body && "teaserEndMs" in body ? body.teaserEndMs ?? null : undefined,
@@ -300,6 +363,28 @@ export async function registerContentCoreRoutes(
     }
 
     try {
+      const ownedContent = await options.contentRepository.findOwnedContentForUpload({
+        supabaseUserId: access.supabaseUserId,
+        contentId: params.contentId
+      });
+
+      if (!ownedContent) {
+        return reply.code(404).send({
+          code: "not_found",
+          message: "Content draft was not found"
+        });
+      }
+
+      const creatorAccess = await verifyCreatorCapability(
+        access.supabaseUserId,
+        ownedContent.nsfwLabel === "none" ? "canPublishMedia" : "canPublishAdultMedia",
+        options
+      );
+
+      if (!creatorAccess.ok) {
+        return reply.code(creatorAccess.statusCode).send(creatorAccess.body);
+      }
+
       if (!options.contentRepository.publishOwnedContent) {
         return reply.code(503).send({
           code: "service_unavailable",
@@ -354,6 +439,8 @@ function validateUpdateContentBody(body: Partial<UpdateContentRequest> | undefin
     "caption" in body ||
     "visibility" in body ||
     "nsfwLabel" in body ||
+    "representationMode" in body ||
+    "contentSafetyPolicyAccepted" in body ||
     "teaserStartMs" in body ||
     "teaserEndMs" in body ||
     "thumbnailFrameMs" in body ||
@@ -384,6 +471,28 @@ function validateUpdateContentBody(body: Partial<UpdateContentRequest> | undefin
 
   if ("nsfwLabel" in body && !nsfwLabels.has(body.nsfwLabel ?? "")) {
     return "nsfwLabel is invalid";
+  }
+
+  if (
+    "representationMode" in body &&
+    !representationModes.has(body.representationMode ?? "")
+  ) {
+    return "representationMode is invalid";
+  }
+
+  if (
+    "representationMode" in body &&
+    body.contentSafetyPolicyAccepted !== true
+  ) {
+    return "Changing a performer declaration requires policy acceptance";
+  }
+
+  if (
+    body.nsfwLabel &&
+    body.nsfwLabel !== "none" &&
+    (!body.representationMode || body.contentSafetyPolicyAccepted !== true)
+  ) {
+    return "Adult or explicit media requires a performer declaration and policy acceptance";
   }
 
   for (const [field, value] of [

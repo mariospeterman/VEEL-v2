@@ -8,6 +8,8 @@ import {
   type ContentUnlockIntent,
   type TransactionRequest
 } from "@/api-mutations";
+import { safeMutationMessage } from "@/api-errors";
+import { formatAssetAmount } from "@/format-asset-amount";
 
 interface ContentUnlockPanelProps {
   contentId: string;
@@ -83,7 +85,13 @@ export function ContentUnlockPanel({ contentId, accessState }: ContentUnlockPane
 
         {unlock?.paymentIntent ? (
           <div className="grid gap-2 rounded border border-(--line) bg-(--background) p-3 text-sm">
-            <Fact label="Amount" value={`${unlock.paymentIntent.amountMinor.toLocaleString()} ${unlock.paymentIntent.currency}`} />
+            <Fact
+              label="Amount"
+              value={formatAssetAmount(
+                unlock.paymentIntent.amountMinor,
+                unlock.paymentIntent.currency
+              )}
+            />
             <Fact label="Intent" value={unlock.paymentIntent.state} />
           </div>
         ) : null}
@@ -123,13 +131,5 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 function errorMessage(error: unknown) {
-  if (error instanceof ApiMutationError) {
-    return error.message;
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "Unlock could not be started.";
+  return safeMutationMessage(error, "Unlock");
 }

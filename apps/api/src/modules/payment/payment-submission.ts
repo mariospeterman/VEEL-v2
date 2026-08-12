@@ -5,7 +5,7 @@ import { grantContentUnlockEntitlement, grantLivePassEntitlement } from "./payme
 import { grantEventAccessPassEntitlement } from "./payment-event-access-pass-settlement.js";
 import { deliverPaidMessage } from "./payment-paid-message-settlement.js";
 import { recordPaymentDurableConfirmation } from "./payment-durable-confirmation.js";
-import { recordReferralCommission, recordTipSupportSettlementLedger } from "./payment-settlement-ledger.js";
+import { recordReferralCommission, recordSupportSettlementLedger } from "./payment-settlement-ledger.js";
 import { insertSettlementAttempt, recordWalletTransaction } from "./payment-settlement-records.js";
 
 export async function recordPaymentSubmission(
@@ -20,6 +20,9 @@ export async function recordPaymentSubmission(
       product_type: string;
       target_id: string;
       amount_minor: number;
+      creator_amount_minor: number;
+      platform_fee_amount_minor: number;
+      referral_amount_minor: number;
       currency: StoredPaymentIntent["currency"];
     }[]>`
             update payment_intents pi
@@ -35,6 +38,15 @@ export async function recordPaymentSubmission(
                 when ${input.settlement.confirmed} then now()
                 else confirmed_at
               end,
+              failed_at = case
+                when ${input.settlement.confirmed} then failed_at
+                when ${input.settlement.failureCode ?? null}::text is not null then now()
+                else failed_at
+              end,
+              failure_reason = case
+                when ${input.settlement.confirmed} then failure_reason
+                else ${input.settlement.failureCode ?? null}::text
+              end,
               updated_at = now()
             from users u
             where pi.user_id = u.id
@@ -47,6 +59,9 @@ export async function recordPaymentSubmission(
               pi.product_type,
               pi.target_id,
               pi.amount_minor,
+              pi.creator_amount_minor,
+              pi.platform_fee_amount_minor,
+              pi.referral_amount_minor,
               pi.currency
           `;
 
@@ -71,24 +86,32 @@ export async function recordPaymentSubmission(
       });
     }
 
-    if (
-      input.settlement.confirmed &&
-      (updatedIntent?.product_type === "tip" || updatedIntent?.product_type === "support")
-    ) {
-      const ledger = await recordTipSupportSettlementLedger(transaction, {
+    if (input.settlement.confirmed && updatedIntent?.product_type === "support") {
+      await recordSupportSettlementLedger(transaction, {
         paymentIntentId: updatedIntent.payment_intent_id,
         actorUserId: updatedIntent.user_id,
         creatorUserId: updatedIntent.target_id,
-        amountMinor: Number(updatedIntent.amount_minor),
+        creatorAmountMinor: Number(updatedIntent.creator_amount_minor),
+        platformFeeMinor: Number(updatedIntent.platform_fee_amount_minor),
         currency: updatedIntent.currency,
         productType: updatedIntent.product_type
       });
+    }
+
+    if (input.settlement.confirmed && updatedIntent) {
       await recordReferralCommission(transaction, {
         paymentIntentId: updatedIntent.payment_intent_id,
         actorUserId: updatedIntent.user_id,
         currency: updatedIntent.currency,
-        platformFeeMinor: ledger.platformFeeMinor
+        referralAmountMinor: Number(updatedIntent.referral_amount_minor)
       });
+
+      await transaction`
+        update managed_creator_allocation_records
+        set state = 'confirmed', confirmed_at = now()
+        where payment_intent_id = ${updatedIntent.payment_intent_id}
+          and state = 'pending'
+      `;
     }
 
     if (input.settlement.confirmed && updatedIntent?.product_type === "live_pass") {

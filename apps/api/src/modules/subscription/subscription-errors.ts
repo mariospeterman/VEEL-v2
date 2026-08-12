@@ -5,6 +5,27 @@ export class SubscriptionRepositoryConfigurationError extends Error {
   }
 }
 
+export class PlatformPlaybackNotQualifyingError extends Error {
+  constructor() {
+    super("platform_playback_not_qualifying");
+    this.name = "PlatformPlaybackNotQualifyingError";
+  }
+}
+
+export class PlatformUsageLimitReachedError extends Error {
+  constructor() {
+    super("platform_usage_limit_reached");
+    this.name = "PlatformUsageLimitReachedError";
+  }
+}
+
+export class PlatformUsageSequenceConflictError extends Error {
+  constructor() {
+    super("platform_usage_sequence_conflict");
+    this.name = "PlatformUsageSequenceConflictError";
+  }
+}
+
 export class SubscriptionIdempotencyConflictError extends Error {
   constructor() {
     super("SUBSCRIPTION_IDEMPOTENCY_CONFLICT");

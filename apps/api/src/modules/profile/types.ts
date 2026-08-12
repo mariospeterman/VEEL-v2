@@ -10,8 +10,10 @@ export type CreatorOnboardingResource = components["schemas"]["CreatorOnboarding
 export interface UpsertMyProfileInput {
   handle: string;
   displayName: string;
+  avatarUrl?: string | null | undefined;
   bio?: string | undefined;
   locationLabel?: string | undefined;
+  links?: components["schemas"]["ProfileLink"][] | undefined;
 }
 
 export interface ProfileRepository {

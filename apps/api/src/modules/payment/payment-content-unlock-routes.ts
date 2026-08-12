@@ -1,7 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { ContentRepositoryConfigurationError } from "../content/content-repository.js";
 import type { ContentUnlockIntent } from "../content/types.js";
-import { PaymentIdempotencyConflictError, PaymentRepositoryConfigurationError } from "./payment-repository.js";
+import {
+  PaymentIdempotencyConflictError,
+  PaymentRecipientNotReadyError,
+  PaymentRepositoryConfigurationError
+} from "./payment-repository.js";
 import { assertSolanaAddress, createSolanaReferenceAddress, SolanaPaymentConfigurationError } from "./solana-payment.js";
 import type { RegisterPaymentRoutesOptions } from "./payment-route-shared.js";
 import { hashPaymentIntentRequest, notFoundResponse, paymentIntentTtlMs, toPaymentIntentResponse, validationResponse, verifyPaymentReadyAccess } from "./payment-route-shared.js";
@@ -29,15 +33,17 @@ export async function registerContentUnlockPaymentRoutes(
       return reply.code(400).send(validationResponse("contentId is required"));
     }
 
-    if (!app.config.PAYMENT_PLATFORM_TREASURY_WALLET) {
+    const platformFeeWallet = app.config.PAYMENT_PLATFORM_FEE_WALLET ?? app.config.PAYMENT_PLATFORM_TREASURY_WALLET;
+
+    if (!platformFeeWallet) {
       return reply.code(503).send({
         code: "service_unavailable",
-        message: "Payment treasury wallet is not configured"
+        message: "Payment platform fee wallet is not configured"
       });
     }
 
     try {
-      assertSolanaAddress(app.config.PAYMENT_PLATFORM_TREASURY_WALLET);
+      assertSolanaAddress(platformFeeWallet);
       await options.sessionRepository.ensureUserForSupabaseId(access.supabaseUserId);
 
       const offer = await options.contentRepository.findContentUnlockOffer({
@@ -71,7 +77,11 @@ export async function registerContentUnlockPaymentRoutes(
         amountMinor: intentBody.amountMinor,
         currency: offer.currency,
         solanaCluster: app.config.SOLANA_CLUSTER,
-        treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET,
+        treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET ?? platformFeeWallet,
+        platformFeeWallet,
+        platformFeeBps: app.config.PAYMENT_PLATFORM_FEE_BPS,
+        referralShareOfPlatformFeeBps: app.config.PAYMENT_REFERRAL_SHARE_OF_PLATFORM_FEE_BPS,
+        settlementKind: "creator_split",
         referenceAddress: createSolanaReferenceAddress(),
         expiresAt: new Date(Date.now() + paymentIntentTtlMs),
         referralToken: null
@@ -87,6 +97,13 @@ export async function registerContentUnlockPaymentRoutes(
         return reply.code(409).send({
           code: "conflict",
           message: "Idempotency key was already used for a different content unlock intent"
+        });
+      }
+
+      if (error instanceof PaymentRecipientNotReadyError) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: "This creator cannot receive payments yet"
         });
       }
 

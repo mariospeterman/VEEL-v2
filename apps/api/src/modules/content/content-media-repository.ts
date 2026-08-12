@@ -21,42 +21,86 @@ export function createContentMediaRepositoryMethods(
 ): ContentMediaRepositoryMethods {
   return {
     async createMediaAsset(input) {
-      const rows = await sql<{ id: string }[]>`
-        with inserted as (
-          insert into media_assets (
-            id,
-            content_item_id,
-            provider,
-            provider_asset_id,
-            provider_state
+      const rows = await withPostgresTransaction(sql, async (transaction) => {
+        const mediaRows = await transaction<{ id: string }[]>`
+          with inserted as (
+            insert into media_assets (
+              id,
+              content_item_id,
+              provider,
+              provider_asset_id,
+              provider_state
+            )
+            values (
+              ${randomUUID()},
+              ${input.contentId},
+              ${input.provider},
+              ${input.providerAssetId},
+              ${input.providerState}
+            )
+            on conflict (provider, provider_asset_id) do nothing
+            returning id
           )
-          values (
-            ${randomUUID()},
-            ${input.contentId},
-            ${input.provider},
-            ${input.providerAssetId},
-            ${input.providerState}
-          )
-          on conflict (provider, provider_asset_id) do nothing
-          returning id
-        )
-        select id from inserted
-        union all
-        select id
-        from media_assets
-        where provider = ${input.provider}
-          and provider_asset_id = ${input.providerAssetId}
-        limit 1
-      `;
+          select id from inserted
+          union all
+          select id
+          from media_assets
+          where provider = ${input.provider}
+            and provider_asset_id = ${input.providerAssetId}
+          limit 1
+        `;
+        const mediaAsset = mediaRows[0];
+
+        if (mediaAsset) {
+          await transaction`
+            insert into media_moderation_jobs (
+              media_safety_case_id,
+              media_asset_id,
+              stage,
+              state,
+              idempotency_key
+            )
+            select
+              msc.id,
+              ${mediaAsset.id},
+              'provider_scan_reconciliation',
+              'queued',
+              ${`media-safety:asset:${mediaAsset.id}:provider-scan-v1`}
+            from media_safety_cases msc
+            where msc.content_item_id = ${input.contentId}
+              and msc.state <> 'superseded'
+            on conflict (idempotency_key) do nothing
+          `;
+
+          await transaction`
+            update media_safety_cases
+            set
+              state = 'preprocessing',
+              reason_code = 'awaiting_provider_scan_reconciliation',
+              provider_release_allowed = false,
+              updated_at = now()
+            where content_item_id = ${input.contentId}
+              and state in ('quarantined', 'preprocessing')
+          `;
+        }
+
+        return mediaRows;
+      });
 
       return rows[0] ? { id: rows[0].id } : undefined;
     },
     async findOwnedContentForUpload(input) {
-      const rows = await sql<{ id: string; media_type: ContentItem["mediaType"]; caption: string | null }[]>`
+      const rows = await sql<{
+        id: string;
+        media_type: ContentItem["mediaType"];
+        caption: string | null;
+        nsfw_label: NonNullable<ContentItem["nsfwLabel"]>;
+      }[]>`
         select
           ci.id,
           ci.media_type,
-          ci.caption
+          ci.caption,
+          ci.nsfw_label
         from content_items ci
         join users u on u.id = ci.creator_user_id
         where ci.id = ${input.contentId}
@@ -71,7 +115,8 @@ export function createContentMediaRepositoryMethods(
         ? {
             id: row.id,
             mediaType: row.media_type,
-            caption: row.caption
+            caption: row.caption,
+            nsfwLabel: row.nsfw_label
           }
         : null;
     },

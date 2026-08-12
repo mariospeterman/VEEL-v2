@@ -37,7 +37,7 @@ export function createProfileDashboardRepositoryMethods(
           es.kyc_state,
           es.tax_profile_state,
           case when es.earnings_recipient_wallet_id is null then 'missing' else 'linked' end as recipient_wallet_state,
-          es.tips_enabled,
+          es.support_enabled,
           es.content_unlocks_enabled,
           es.live_passes_enabled,
           es.paid_messages_enabled,
@@ -96,14 +96,14 @@ export function createProfileDashboardRepositoryMethods(
             select ${dashboard.id}::uuid as id
           )
           select
-            pi.product_type,
+            case when pi.product_type = 'tip' then 'support' else pi.product_type end as product_type,
             coalesce(sum(pi.amount_minor), 0) as amount_minor,
             count(*) as confirmed_payment_count
           from payment_intents pi
           join creator_targets ct on ct.id = pi.target_id
           where pi.state = 'confirmed'
-          group by pi.product_type
-          order by pi.product_type
+          group by case when pi.product_type = 'tip' then 'support' else pi.product_type end
+          order by case when pi.product_type = 'tip' then 'support' else pi.product_type end
         `,
         sql<RecentPaymentRow[]>`
           with creator_targets as (
@@ -163,7 +163,7 @@ export function createProfileDashboardRepositoryMethods(
           es.kyc_state,
           es.tax_profile_state,
           es.earnings_recipient_wallet_id,
-          es.tips_enabled,
+          es.support_enabled,
           es.content_unlocks_enabled,
           es.live_passes_enabled,
           es.paid_messages_enabled,
@@ -172,10 +172,16 @@ export function createProfileDashboardRepositoryMethods(
         join users u on u.id = es.user_id
         left join profiles p on p.user_id = u.id
         left join lateral (
-          select av.state
-          from age_verifications av
-          where av.user_id = u.id
-          order by av.created_at desc
+          select case
+            when vr.status = 'valid' and (vr.expires_at is null or vr.expires_at > now()) then 'verified'
+            when vr.status = 'pending' then 'pending'
+            else 'failed'
+          end as state
+          from verification_records vr
+          where vr.subject_type = 'user'
+            and vr.subject_id = u.id
+            and vr.purpose = 'age_access'
+          order by vr.created_at desc, vr.id desc
           limit 1
         ) latest_age on true
         left join lateral (

@@ -98,7 +98,23 @@ const resolveTool = () => {
     return {
       executable: join(repoRoot, "apps/web/node_modules/next/dist/bin/next"),
       cwd: join(repoRoot, "apps/web"),
-      args: ["dev", "--port", "3000", "--hostname", "127.0.0.1", ...args]
+      args: ["dev", "--webpack", "--port", "3000", "--hostname", "127.0.0.1", ...args]
+    };
+  }
+
+  if (command === "web-build") {
+    return {
+      executable: join(repoRoot, "apps/web/node_modules/next/dist/bin/next"),
+      cwd: join(repoRoot, "apps/web"),
+      args: ["build", ...args]
+    };
+  }
+
+  if (command === "web-preview") {
+    return {
+      executable: join(repoRoot, "apps/web/node_modules/next/dist/bin/next"),
+      cwd: join(repoRoot, "apps/web"),
+      args: ["start", "--port", "3000", "--hostname", "127.0.0.1", ...args]
     };
   }
 

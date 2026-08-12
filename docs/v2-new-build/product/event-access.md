@@ -57,8 +57,9 @@ Avoid launch-facing language:
   projections for Event Access sheets and Pass QR display. When the API is
   unavailable, both routes fail closed instead of rendering fixture Event
   Access data.
-- `/events/:id` and app-prefixed historical event paths are compatibility
-  redirects only.
+- Historical `/events/:id` and app-prefixed event paths are removed as route
+  owners. The canonical frontend Event Access detail route is
+  `/event-access/:id`.
 
 ## Product Position
 
@@ -90,7 +91,6 @@ Noncustodial boundary:
 /admin/events                  planned admin ops
 /admin/event-access            planned admin access ops
 
-/events/:id                    compatibility frontend redirect
 /v1/events/{eventId}/access-passes/intents canonical API path
 /v1/access-passes/:id/check-in canonical API path
 ```

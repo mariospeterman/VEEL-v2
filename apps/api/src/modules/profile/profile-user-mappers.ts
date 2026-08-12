@@ -20,6 +20,7 @@ export function toCreatorProfile(
     user: toUserResource(row),
     bio: row.bio,
     locationLabel: row.location_label,
+    links: toProfileLinks(row.profile_links),
     stats: {
       contentCount: Number(row.content_count),
       liveRoomCount: Number(row.live_room_count),
@@ -27,7 +28,7 @@ export function toCreatorProfile(
       followerCount: 0
     },
     monetisation: {
-      tipsEnabled: row.tips_enabled,
+      supportEnabled: row.support_enabled,
       contentUnlocksEnabled: row.content_unlocks_enabled,
       livePassesEnabled: row.live_passes_enabled,
       paidMessagesEnabled: row.paid_messages_enabled,
@@ -35,6 +36,24 @@ export function toCreatorProfile(
     },
     recentContent: recentContent.map(toContentItem)
   };
+}
+
+function toProfileLinks(value: unknown): components["schemas"]["ProfileLink"][] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter(
+      (link): link is components["schemas"]["ProfileLink"] =>
+        typeof link === "object" &&
+        link !== null &&
+        "label" in link &&
+        "url" in link &&
+        typeof link.label === "string" &&
+        typeof link.url === "string"
+    )
+    .slice(0, 5);
 }
 
 export function toContentItem(row: CreatorContentRow): components["schemas"]["ContentItem"] {

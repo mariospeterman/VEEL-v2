@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Conversation } from "@/api-client";
 import {
   ApiMutationError,
@@ -11,6 +11,9 @@ import {
   type PaymentIntent,
   type TransactionRequest
 } from "@/api-mutations";
+import { safeMutationMessage } from "@/api-errors";
+import { createMutationIdempotencyKey } from "@/api-mutation-transport";
+import { formatAssetAmount } from "@/format-asset-amount";
 
 interface MessageComposerProps {
   conversation: Conversation;
@@ -23,6 +26,8 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
   const [sentMessage, setSentMessage] = useState<Message | null>(null);
   const [intent, setIntent] = useState<PaymentIntent | null>(null);
   const [transaction, setTransaction] = useState<TransactionRequest | null>(null);
+  const messageAttempt = useRef<{ body: string; idempotencyKey: string } | null>(null);
+  const paidMessageAttempt = useRef<{ body: string; idempotencyKey: string } | null>(null);
   const trimmedBody = body.trim();
   const isBusy = state === "sending" || state === "payment";
 
@@ -31,7 +36,9 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
     resetResult("sending");
 
     try {
-      const created = await createMessage(conversation.id, { body: trimmedBody });
+      const idempotencyKey = idempotencyKeyForBody(messageAttempt, trimmedBody);
+      const created = await createMessage(conversation.id, { body: trimmedBody }, idempotencyKey);
+      messageAttempt.current = null;
       setSentMessage(created);
       setBody("");
       setState("ready");
@@ -47,9 +54,15 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
     resetResult("payment");
 
     try {
-      const result = await createPaidMessageIntent(conversation.id, { body: trimmedBody });
+      const idempotencyKey = idempotencyKeyForBody(paidMessageAttempt, trimmedBody);
+      const result = await createPaidMessageIntent(
+        conversation.id,
+        { body: trimmedBody },
+        idempotencyKey
+      );
 
       if (result.state === "already_delivered") {
+        paidMessageAttempt.current = null;
         setSentMessage(result.message ?? null);
         setBody("");
         setState("ready");
@@ -62,6 +75,7 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
       }
 
       const transactionRequest = await getPaymentTransactionRequest(result.paymentIntent.id);
+      paidMessageAttempt.current = null;
       setIntent(result.paymentIntent);
       setTransaction(transactionRequest);
       setState("ready");
@@ -113,7 +127,7 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
 
       {intent ? (
         <div className="mt-3 grid gap-2 rounded border border-(--line) bg-(--background) p-3 text-sm">
-          <Fact label="Amount" value={`${intent.amountMinor.toLocaleString()} ${intent.currency}`} />
+          <Fact label="Amount" value={formatAssetAmount(intent.amountMinor, intent.currency)} />
           <Fact label="Intent" value={intent.state} />
         </div>
       ) : null}
@@ -158,13 +172,18 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 function errorMessage(error: unknown) {
-  if (error instanceof ApiMutationError) {
-    return error.message;
+  return safeMutationMessage(error, "Message action");
+}
+
+function idempotencyKeyForBody(
+  attempt: { current: { body: string; idempotencyKey: string } | null },
+  body: string
+) {
+  if (attempt.current?.body === body) {
+    return attempt.current.idempotencyKey;
   }
 
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "Message action could not be completed.";
+  const idempotencyKey = createMutationIdempotencyKey();
+  attempt.current = { body, idempotencyKey };
+  return idempotencyKey;
 }

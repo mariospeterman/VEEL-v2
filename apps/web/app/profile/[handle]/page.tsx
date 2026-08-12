@@ -1,5 +1,6 @@
 import { appShellNavItems } from "@veel/ui";
 import { getCreatorProfile, type CreatorProfile } from "@/api-client";
+import { ErrorState } from "../../ui";
 import { CreatorSupportPanel } from "./creator-support-panel";
 
 export default async function PublicCreatorProfilePage({
@@ -17,11 +18,13 @@ export default async function PublicCreatorProfilePage({
       {profileResult.ok ? (
         <ProfileView profile={profileResult.data} />
       ) : (
-        <UnavailableState
-          message={profileResult.message}
-          status={profileResult.status}
-          title={profileResult.status === 404 ? "Creator profile not found" : "Creator profile unavailable"}
-        />
+        <section className="mx-auto grid w-full max-w-6xl content-center px-5 py-6">
+          <ErrorState
+            context="Creator profile"
+            result={profileResult}
+            title={profileResult.status === 404 ? "Creator profile not found" : "Creator profile unavailable"}
+          />
+        </section>
       )}
     </main>
   );
@@ -31,7 +34,7 @@ function AppNav() {
   return (
     <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-(--line) px-5 py-4">
       <a className="text-lg font-semibold tracking-normal" href="/">
-        VEEL
+        WeVid
       </a>
       <div className="flex gap-1">
         {appShellNavItems.map((item) => (
@@ -71,7 +74,7 @@ function ProfileView({ profile }: { profile: CreatorProfile }) {
         <div className="flex items-center justify-between gap-4 border-b border-(--line) pb-3">
           <h2 className="text-base font-semibold tracking-normal">Media</h2>
           <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs text-(--accent-strong)">
-            tips {profile.monetisation.tipsEnabled ? "enabled" : "disabled"}
+            support {profile.monetisation.supportEnabled ? "enabled" : "disabled"}
           </span>
         </div>
 
@@ -99,25 +102,5 @@ function Stat({ label, value }: { label: string; value: number }) {
       <p className="text-xs uppercase text-(--muted)">{label}</p>
       <p className="mt-1 font-semibold">{value.toLocaleString()}</p>
     </div>
-  );
-}
-
-function UnavailableState({
-  message,
-  status,
-  title
-}: {
-  message: string;
-  status: number;
-  title: string;
-}) {
-  return (
-    <section className="mx-auto grid min-h-[calc(100vh-73px)] w-full max-w-6xl content-center px-5 py-6">
-      <div className="rounded border border-(--line) bg-(--panel) p-6">
-        <p className="text-sm font-medium text-(--accent)">HTTP {status}</p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-normal">{title}</h1>
-        <p className="mt-3 text-sm leading-6 text-(--muted)">{message}</p>
-      </div>
-    </section>
   );
 }

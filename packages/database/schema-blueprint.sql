@@ -46,6 +46,7 @@ create table profiles (
   display_name text not null,
   avatar_url text,
   bio text,
+  profile_links jsonb not null default '[]'::jsonb,
   location_label text,
   visibility text not null default 'public',
   created_at timestamptz not null default now(),
@@ -84,6 +85,7 @@ create table wallets (
   unique (chain, address)
 );
 
+-- Legacy migration archive only. Application roles are revoked and verification_records owns decisions.
 create table age_verifications (
   id uuid primary key,
   user_id uuid not null references users(id),
@@ -123,7 +125,7 @@ create table creator_monetisation_settings (
   kyc_state text not null default 'not_required',
   tax_profile_state text not null default 'not_required',
   earnings_recipient_wallet_id uuid references wallets(id),
-  tips_enabled boolean not null default true,
+  support_enabled boolean not null default true,
   content_unlocks_enabled boolean not null default true,
   live_passes_enabled boolean not null default true,
   paid_messages_enabled boolean not null default true,
@@ -276,6 +278,9 @@ create table receipt_lines (
   description text not null,
   amount_minor bigint not null,
   currency text not null,
+  token_mint text,
+  token_decimals smallint,
+  checkout_token_hash text,
   created_at timestamptz not null default now()
 );
 
@@ -286,7 +291,7 @@ create table payment_confirmation_deliveries (
   user_id uuid not null references users(id),
   channel text not null check (channel in ('in_app', 'email')),
   state text not null default 'queued'
-    check (state in ('queued', 'processing', 'sent', 'provider_not_configured', 'failed')),
+    check (state in ('queued', 'processing', 'sent', 'provider_not_configured', 'failed', 'dead_letter')),
   durable_medium boolean not null default true,
   confirmation_version text not null default 'payment-confirmation-v1',
   terms_version text not null,
@@ -294,6 +299,9 @@ create table payment_confirmation_deliveries (
   payload jsonb not null default '{}'::jsonb,
   attempt_count integer not null default 0 check (attempt_count >= 0),
   leased_at timestamptz,
+  lease_token uuid,
+  leased_until timestamptz,
+  next_attempt_at timestamptz not null default now(),
   failure_code text,
   provider_message_id text,
   delivered_at timestamptz,
@@ -505,7 +513,7 @@ create table ranking_snapshots (
 create table viewer_feed_preferences (
   user_id uuid primary key references users(id),
   default_feed_mode text not null default 'recommended',
-  nsfw_preference text not null default 'recommended',
+  nsfw_preference text not null default 'both',
   updated_at timestamptz not null default now()
 );
 
@@ -595,15 +603,53 @@ create table media_assets (
 create table live_rooms (
   id uuid primary key,
   creator_user_id uuid not null references users(id),
-  content_item_id uuid references content_items(id),
   provider media_provider not null default 'livepeer',
   provider_stream_id text unique,
-  state text not null default 'scheduled',
-  access_rule text not null default 'pass_required',
-  teaser_seconds integer not null default 60,
-  pass_durations_minutes integer[] not null default array[30, 60, 180],
+  provider_playback_id text,
+  provider_state text not null default 'created',
+  state text not null default 'waiting',
+  access_rule text not null default 'public',
+  preview_seconds integer not null default 60,
+  event_price_minor bigint,
+  currency text not null default 'SOL',
+  members_only_chat boolean not null default false,
+  members_included_in_paid_event boolean not null default false,
+  replay_window_hours integer not null default 48,
+  playback_url text,
+  replay_content_item_id uuid references content_items(id),
+  idempotency_key text not null,
+  request_hash text not null,
   starts_at timestamptz,
   ended_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (access_rule in ('public', 'profile_members', 'paid_event')),
+  check (
+    (access_rule = 'paid_event' and event_price_minor is not null and event_price_minor > 0)
+    or (access_rule <> 'paid_event' and event_price_minor is null)
+  ),
+  check (not members_included_in_paid_event or access_rule = 'paid_event'),
+  check (replay_window_hours between 0 and 720),
+  unique (creator_user_id, idempotency_key)
+);
+
+create table live_pass_purchase_requests (
+  payment_intent_id uuid primary key references payment_intents(id),
+  room_id uuid not null references live_rooms(id),
+  buyer_user_id uuid not null references users(id),
+  amount_minor bigint not null,
+  currency text not null,
+  created_at timestamptz not null default now()
+);
+
+create table live_passes (
+  id uuid primary key,
+  room_id uuid not null references live_rooms(id),
+  user_id uuid not null references users(id),
+  payment_intent_id uuid unique not null references payment_intents(id),
+  state text not null default 'active',
+  starts_at timestamptz not null default now(),
+  expires_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -725,8 +771,13 @@ create table messages (
   sender_user_id uuid not null references users(id),
   body text not null,
   paid_access_state text,
+  idempotency_key text,
   created_at timestamptz not null default now()
 );
+
+create unique index messages_sender_idempotency_uidx
+  on messages (sender_user_id, idempotency_key)
+  where idempotency_key is not null;
 
 create table payment_intents (
   id uuid primary key,
@@ -748,6 +799,10 @@ create index payment_intents_created_at_idx
 create index payment_intents_submitted_signature_idx
   on payment_intents (submitted_signature)
   where submitted_signature is not null;
+
+create unique index payment_intents_checkout_token_hash_uidx
+  on payment_intents (checkout_token_hash)
+  where checkout_token_hash is not null;
 
 create table payment_splits (
   id uuid primary key,
@@ -927,6 +982,31 @@ create table subscription_plans (
   token_mint text,
   token_program text,
   provider_plan_reference text,
+  provider text not null default 'official_solana_subscription_program',
+  program_id text,
+  plan_pda text,
+  onchain_plan_id text,
+  merchant_wallet text,
+  amount_atomic bigint not null,
+  period_seconds integer not null,
+  creator_amount_atomic bigint not null default 0,
+  platform_fee_amount_atomic bigint not null default 0,
+  allocation_amount_atomic bigint not null default 0,
+  metadata_uri text,
+  state text not null default 'active',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table platform_tier_policies (
+  tier_key text primary key,
+  label text not null,
+  rank integer not null unique,
+  monthly_price_minor bigint,
+  currency text,
+  public_media_allowance_seconds bigint,
+  subscription_plan_id text references subscription_plans(id),
+  capabilities jsonb not null default '[]'::jsonb,
   state text not null default 'active',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -942,9 +1022,26 @@ create table subscriptions (
   renewal_mode text not null default 'delegated_solana_subscription',
   authority_address text,
   delegation_address text,
+  subscriber_wallet text,
   subscriber_token_account text,
+  user_token_account text,
   collector_address text,
   provider_reference text,
+  provider text not null default 'official_solana_subscription_program',
+  program_id text,
+  token_mint text,
+  subscription_authority_pda text,
+  subscription_pda text,
+  amount_atomic bigint,
+  period_seconds integer,
+  start_at timestamptz,
+  expires_at timestamptz,
+  setup_signature text,
+  verified_signature text,
+  verified_at timestamptz,
+  failure_reason text,
+  plan_pda text,
+  merchant_wallet text,
   current_period_starts_at timestamptz,
   current_period_ends_at timestamptz,
   next_collection_at timestamptz,
@@ -958,6 +1055,48 @@ create table subscriptions (
 create index subscriptions_plan_id_idx
   on subscriptions (plan_id);
 
+create table platform_usage_windows (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id),
+  window_starts_at timestamptz not null,
+  window_ends_at timestamptz not null,
+  public_media_seconds bigint not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, window_starts_at)
+);
+
+create table platform_playback_sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id),
+  target_type text not null,
+  target_id uuid not null,
+  state text not null default 'active',
+  window_starts_at timestamptz not null,
+  window_ends_at timestamptz not null,
+  consumed_seconds bigint not null default 0,
+  last_sequence integer not null default 0,
+  last_heartbeat_at timestamptz not null default now(),
+  idempotency_key text not null,
+  request_hash text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, idempotency_key)
+);
+
+create table platform_playback_heartbeats (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references platform_playback_sessions(id),
+  sequence integer not null,
+  reported_seconds integer not null,
+  credited_seconds integer not null,
+  idempotency_key text not null,
+  request_hash text not null,
+  created_at timestamptz not null default now(),
+  unique (session_id, sequence),
+  unique (session_id, idempotency_key)
+);
+
 create table subscription_authorization_intents (
   id uuid primary key,
   subscription_id uuid not null references subscriptions(id),
@@ -969,6 +1108,14 @@ create table subscription_authorization_intents (
   transaction_request_url text,
   submitted_signature text unique,
   verified_signature text unique,
+  provider text not null default 'official_solana_subscription_program',
+  program_id text,
+  subscriber_wallet text,
+  subscriber_token_account text,
+  token_mint text,
+  subscription_authority_pda text,
+  subscription_pda text,
+  failure_reason text,
   expires_at timestamptz not null,
   submitted_at timestamptz,
   verified_at timestamptz,
@@ -982,11 +1129,24 @@ create table subscription_collections (
   period_starts_at timestamptz not null,
   period_ends_at timestamptz not null,
   amount_minor bigint not null,
+  amount_atomic bigint not null,
+  creator_amount_atomic bigint not null default 0,
+  platform_fee_amount_atomic bigint not null default 0,
+  allocation_amount_atomic bigint not null default 0,
   currency text not null,
   state text not null default 'due',
   collection_signature text unique,
   failure_code text,
+  collector_wallet text,
+  receiver_wallet text,
+  receiver_token_account text,
+  idempotency_key text,
   due_at timestamptz not null,
+  attempted_at timestamptz,
+  attempt_count integer not null default 0 check (attempt_count >= 0),
+  lease_token uuid,
+  leased_until timestamptz,
+  next_attempt_at timestamptz not null default now(),
   submitted_at timestamptz,
   confirmed_at timestamptz,
   created_at timestamptz not null default now(),
@@ -1236,6 +1396,9 @@ create table provider_event_replay_requests (
   state text not null default 'queued',
   attempt_count integer not null default 0,
   leased_at timestamptz,
+  lease_token uuid,
+  leased_until timestamptz,
+  next_attempt_at timestamptz not null default now(),
   processed_at timestamptz,
   failure_code text,
   created_at timestamptz not null default now(),
@@ -1356,11 +1519,38 @@ create table notification_delivery_attempts (
   attempt_count integer not null default 0,
   next_attempt_at timestamptz not null default now(),
   leased_at timestamptz,
+  lease_token uuid,
+  leased_until timestamptz,
   delivered_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (notification_id, device_id)
 );
+
+create table worker_queue_recovery_requests (
+  id uuid primary key,
+  queue_name text not null,
+  job_id uuid not null,
+  requested_by_user_id uuid references users(id),
+  idempotency_key text not null,
+  reason text not null,
+  created_at timestamptz not null default now(),
+  unique (queue_name, job_id, idempotency_key)
+);
+
+alter table worker_queue_recovery_requests enable row level security;
+revoke all on table worker_queue_recovery_requests from anon, authenticated;
+
+create policy worker_queue_recovery_requests_browser_deny
+  on worker_queue_recovery_requests
+  for all
+  to anon, authenticated
+  using (false)
+  with check (false);
+
+create index worker_queue_recovery_requests_requested_by_user_idx
+  on worker_queue_recovery_requests (requested_by_user_id)
+  where requested_by_user_id is not null;
 
 create table moderation_reviews (
   id uuid primary key,
@@ -1518,15 +1708,54 @@ create table ai_tool_calls (
   created_at timestamptz not null default now()
 );
 
+create table mcp_connections (
+  id uuid primary key,
+  actor_user_id uuid not null references users(id),
+  client_name text not null,
+  client_type text not null,
+  role_type text not null,
+  state text not null default 'active',
+  token_hash text not null unique,
+  token_hint text not null,
+  scopes text[] not null,
+  idempotency_key text not null,
+  expires_at timestamptz not null,
+  last_used_at timestamptz,
+  revoked_at timestamptz,
+  revoked_by_user_id uuid references users(id),
+  created_at timestamptz not null default now()
+);
+
+create table mcp_tool_calls (
+  id uuid primary key,
+  connection_id uuid not null references mcp_connections(id),
+  actor_user_id uuid not null references users(id),
+  tool_name text not null,
+  state text not null,
+  risk_level text not null,
+  required_scopes text[] not null,
+  input_summary text not null,
+  output_summary text not null,
+  input_redacted jsonb not null default '{}'::jsonb,
+  output_redacted jsonb not null default '{}'::jsonb,
+  denied_reason text,
+  created_at timestamptz not null default now()
+);
+
 create table audit_events (
   id uuid primary key,
   actor_user_id uuid references users(id),
   subject_type text not null,
   subject_id uuid,
   action text not null,
+  idempotency_key text,
   metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
+
+create unique index audit_events_actor_action_idempotency_uidx
+  on audit_events (actor_user_id, action, idempotency_key)
+  where actor_user_id is not null and idempotency_key is not null;
 
 -- Required migration checklist for each implemented slice:
 -- 1. Enable RLS on user-visible tables before exposing direct Supabase access.

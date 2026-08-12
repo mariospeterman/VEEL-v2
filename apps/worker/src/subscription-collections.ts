@@ -16,12 +16,21 @@ export type SubscriptionCollectionOutcome =
       failureCode: string;
     };
 
+export type SubscriptionCollectionReconciliation =
+  | SubscriptionCollectionOutcome
+  | { state: "not_found" }
+  | { state: "unknown"; failureCode: string; retryAt: Date };
+
 export interface DueSubscriptionCollection {
   collectionId: string;
+  leaseToken: string;
+  attemptCount: number;
+  providerIdempotencyKey: string;
   subscriptionId: string;
   subscriberUserId: string;
   planId: string;
-  amountMinor: number;
+  amountMinor: bigint;
+  amountAtomic: bigint;
   currency: "SOL" | "USDC";
   periodStartsAt: Date;
   periodEndsAt: Date;
@@ -31,20 +40,31 @@ export interface DueSubscriptionCollection {
   collectorAddress: string;
   tokenMint: string;
   tokenProgram: "spl_token" | "token_2022";
+  provider: string;
+  programId: string;
+  periodSeconds: number;
 }
 
 export interface SubscriptionCollectionRepository {
   expireCancelledDueSubscriptions(input: { now: Date; limit: number }): Promise<number>;
-  leaseDueCollections(input: { now: Date; limit: number }): Promise<DueSubscriptionCollection[]>;
+  leaseDueCollections(input: {
+    now: Date;
+    limit: number;
+    leaseDurationMs: number;
+    maxAttempts: number;
+  }): Promise<DueSubscriptionCollection[]>;
   recordCollectionOutcome(input: {
     collectionId: string;
     subscriptionId: string;
+    leaseToken: string;
+    maxAttempts: number;
     outcome: SubscriptionCollectionOutcome;
   }): Promise<void>;
   close?(): Promise<void>;
 }
 
 export interface SubscriptionCollectionProvider {
+  reconcile(input: DueSubscriptionCollection): Promise<SubscriptionCollectionReconciliation>;
   collect(input: DueSubscriptionCollection): Promise<SubscriptionCollectionOutcome>;
 }
 
@@ -61,11 +81,20 @@ export async function processDueSubscriptionCollections(input: {
   provider: SubscriptionCollectionProvider;
   now?: Date;
   limit?: number;
+  leaseDurationMs?: number;
+  maxAttempts?: number;
 }): Promise<ProcessSubscriptionCollectionsResult> {
   const now = input.now ?? new Date();
   const limit = input.limit ?? 25;
+  const leaseDurationMs = input.leaseDurationMs ?? 5 * 60 * 1000;
+  const maxAttempts = input.maxAttempts ?? 8;
   const expired = await input.repository.expireCancelledDueSubscriptions({ now, limit });
-  const dueCollections = await input.repository.leaseDueCollections({ now, limit });
+  const dueCollections = await input.repository.leaseDueCollections({
+    now,
+    limit,
+    leaseDurationMs,
+    maxAttempts
+  });
   const result: ProcessSubscriptionCollectionsResult = {
     expired,
     leased: dueCollections.length,
@@ -75,10 +104,37 @@ export async function processDueSubscriptionCollections(input: {
   };
 
   for (const dueCollection of dueCollections) {
-    const outcome = await input.provider.collect(dueCollection);
+    const reconciliation = dueCollection.attemptCount > 1
+      ? await input.provider.reconcile(dueCollection)
+      : { state: "not_found" as const };
+    const outcome =
+      reconciliation.state === "confirmed" || reconciliation.state === "failed" || reconciliation.state === "revoked"
+        ? reconciliation
+        : reconciliation.state === "unknown"
+          ? {
+              state: "failed" as const,
+              failureCode: reconciliation.failureCode,
+              retryAt: reconciliation.retryAt
+            }
+        :
+      dueCollection.currency === "SOL"
+        ? {
+            state: "failed" as const,
+            failureCode: "unsupported_native_sol_subscription",
+            retryAt: new Date(now.getTime() + 5 * 60 * 1000)
+          }
+        : !dueCollection.collectorAddress
+          ? {
+              state: "failed" as const,
+              failureCode: "collector_wallet_missing",
+              retryAt: new Date(now.getTime() + 5 * 60 * 1000)
+            }
+          : await input.provider.collect(dueCollection);
     await input.repository.recordCollectionOutcome({
       collectionId: dueCollection.collectionId,
       subscriptionId: dueCollection.subscriptionId,
+      leaseToken: dueCollection.leaseToken,
+      maxAttempts,
       outcome
     });
 
@@ -92,6 +148,13 @@ export async function processDueSubscriptionCollections(input: {
 
 export function createUnconfiguredSubscriptionCollectionProvider(): SubscriptionCollectionProvider {
   return {
+    async reconcile() {
+      return {
+        state: "unknown",
+        failureCode: "subscription_collection_provider_not_configured",
+        retryAt: new Date(Date.now() + 5 * 60 * 1000)
+      };
+    },
     async collect() {
       return {
         state: "failed",
@@ -172,6 +235,31 @@ export function createPostgresSubscriptionCollectionRepository(
 
     async leaseDueCollections(input) {
       return sql.begin(async (transaction) => {
+        const exhausted = await transaction<{ subscription_id: string }[]>`
+          update subscription_collections collection
+          set
+            state = 'dead_letter',
+            failure_code = coalesce(failure_code, 'collection_attempt_limit_exceeded'),
+            lease_token = null,
+            leased_until = null
+          where collection.state in ('due', 'failed', 'processing')
+            and collection.attempt_count >= ${input.maxAttempts}
+            and (
+              collection.state <> 'processing'
+              or collection.leased_until is null
+              or collection.leased_until <= ${input.now}
+            )
+          returning collection.subscription_id
+        `;
+
+        if (exhausted.length > 0) {
+          await transaction`
+            update subscriptions
+            set state = 'suspended', next_collection_at = null, updated_at = now()
+            where id in ${transaction(exhausted.map((row) => row.subscription_id))}
+          `;
+        }
+
         const dueRows = await transaction<DueSubscriptionRow[]>`
           select
             s.id as subscription_id,
@@ -180,6 +268,8 @@ export function createPostgresSubscriptionCollectionRepository(
             sp.amount_minor,
             sp.currency,
             sp.period_days,
+            coalesce(s.amount_atomic, sp.amount_atomic, sp.amount_minor) as amount_atomic,
+            coalesce(s.period_seconds, sp.period_seconds, sp.period_days * 86400) as period_seconds,
             coalesce(s.current_period_ends_at, ${input.now}) as period_starts_at,
             coalesce(s.current_period_ends_at, ${input.now}) + (sp.period_days || ' days')::interval as period_ends_at,
             s.authority_address,
@@ -187,12 +277,19 @@ export function createPostgresSubscriptionCollectionRepository(
             s.subscriber_token_account,
             s.collector_address,
             sp.token_mint,
-            sp.token_program
+            sp.token_program,
+            coalesce(s.provider, sp.provider) as provider,
+            coalesce(s.program_id, sp.program_id) as program_id
           from subscriptions s
           join subscription_plans sp on sp.id = s.plan_id
           where s.state in ('active', 'renewal_pending', 'grace_period')
             and s.renewal_mode = 'delegated_solana_subscription'
             and s.cancel_at_period_end = false
+            and (s.expires_at is null or s.expires_at > ${input.now})
+            and sp.state = 'active'
+            and sp.provider_state = 'launch_approved'
+            and sp.provider = 'official_solana_subscription_program'
+            and sp.currency <> 'SOL'
             and s.next_collection_at <= ${input.now}
             and s.authority_address is not null
             and s.delegation_address is not null
@@ -200,6 +297,8 @@ export function createPostgresSubscriptionCollectionRepository(
             and s.collector_address is not null
             and sp.token_mint is not null
             and sp.token_program is not null
+            and coalesce(s.program_id, sp.program_id) is not null
+            and coalesce(s.amount_atomic, sp.amount_atomic, sp.amount_minor) <= sp.amount_atomic
           order by s.next_collection_at asc
           limit ${input.limit}
           for update skip locked
@@ -209,44 +308,68 @@ export function createPostgresSubscriptionCollectionRepository(
 
         for (const row of dueRows) {
           const collectionId = randomUUID();
-          const collectionRows = await transaction<CollectionLeaseRow[]>`
+          const idempotencyKey = `${row.subscription_id}:${row.period_starts_at.toISOString()}`;
+          await transaction`
             insert into subscription_collections (
               id,
               subscription_id,
               period_starts_at,
               period_ends_at,
               amount_minor,
+              amount_atomic,
               currency,
               state,
+              collector_wallet,
+              idempotency_key,
               due_at,
-              submitted_at
+              next_attempt_at
             )
             values (
               ${collectionId},
               ${row.subscription_id},
               ${row.period_starts_at},
               ${row.period_ends_at},
-              ${Number(row.amount_minor)},
+              ${row.amount_minor},
+              ${row.amount_atomic},
               ${row.currency},
-              'submitted',
+              'due',
+              ${row.collector_address},
+              ${idempotencyKey},
               ${input.now},
-              now()
+              ${input.now}
             )
-            on conflict (subscription_id, period_starts_at) do update
+            on conflict (subscription_id, period_starts_at) do nothing
+          `;
+          const leaseToken = randomUUID();
+          const leasedUntil = new Date(input.now.getTime() + input.leaseDurationMs);
+          const collectionRows = await transaction<CollectionLeaseRow[]>`
+            update subscription_collections collection
             set
-              state = case
-                when subscription_collections.state in ('failed', 'due') then 'submitted'
-                else subscription_collections.state
-              end,
-              submitted_at = case
-                when subscription_collections.state in ('failed', 'due') then now()
-                else subscription_collections.submitted_at
-              end
-            returning id, state
+              state = 'processing',
+              lease_token = ${leaseToken},
+              leased_until = ${leasedUntil},
+              attempt_count = collection.attempt_count + 1,
+              attempted_at = ${input.now},
+              submitted_at = coalesce(collection.submitted_at, ${input.now}),
+              failure_code = null
+            where collection.subscription_id = ${row.subscription_id}
+              and collection.period_starts_at = ${row.period_starts_at}
+              and collection.attempt_count < ${input.maxAttempts}
+              and (
+                (
+                  collection.state in ('due', 'failed')
+                  and collection.next_attempt_at <= ${input.now}
+                )
+                or (
+                  collection.state = 'processing'
+                  and (collection.leased_until is null or collection.leased_until <= ${input.now})
+                )
+              )
+            returning collection.id, collection.state, collection.attempt_count, collection.idempotency_key
           `;
           const collection = collectionRows[0];
 
-          if (!collection || collection.state !== "submitted") {
+          if (!collection || collection.state !== "processing") {
             continue;
           }
 
@@ -261,18 +384,26 @@ export function createPostgresSubscriptionCollectionRepository(
           await insertCollectionEvent(transaction, {
             subscriptionId: row.subscription_id,
             collectionId: collection.id,
-            action: "subscription.collection_submitted",
+            action: collection.attempt_count === 1
+              ? "subscription.collection_submitted"
+              : "subscription.collection_released",
             metadata: {
-              planId: row.plan_id
+              planId: row.plan_id,
+              attemptCount: collection.attempt_count,
+              leaseToken
             }
           });
 
           leased.push({
             collectionId: collection.id,
+            leaseToken,
+            attemptCount: collection.attempt_count,
+            providerIdempotencyKey: collection.idempotency_key ?? idempotencyKey,
             subscriptionId: row.subscription_id,
             subscriberUserId: row.subscriber_user_id,
             planId: row.plan_id,
-            amountMinor: Number(row.amount_minor),
+            amountMinor: BigInt(row.amount_minor),
+            amountAtomic: BigInt(row.amount_atomic),
             currency: row.currency,
             periodStartsAt: row.period_starts_at,
             periodEndsAt: row.period_ends_at,
@@ -281,7 +412,10 @@ export function createPostgresSubscriptionCollectionRepository(
             subscriberTokenAccount: row.subscriber_token_account,
             collectorAddress: row.collector_address,
             tokenMint: row.token_mint,
-            tokenProgram: row.token_program
+            tokenProgram: row.token_program,
+            provider: row.provider,
+            programId: row.program_id,
+            periodSeconds: Number(row.period_seconds)
           });
         }
 
@@ -298,9 +432,13 @@ export function createPostgresSubscriptionCollectionRepository(
               state = 'confirmed',
               collection_signature = ${input.outcome.collectionSignature},
               failure_code = null,
-              confirmed_at = now()
+              confirmed_at = now(),
+              lease_token = null,
+              leased_until = null
             where id = ${input.collectionId}
               and subscription_id = ${input.subscriptionId}
+              and state = 'processing'
+              and lease_token = ${input.leaseToken}
             returning period_starts_at, period_ends_at
           `;
           const row = rows[0];
@@ -329,14 +467,20 @@ export function createPostgresSubscriptionCollectionRepository(
         }
 
         if (input.outcome.state === "revoked") {
-          await transaction`
+          const rows = await transaction<{ id: string }[]>`
             update subscription_collections
             set
               state = 'failed',
-              failure_code = ${input.outcome.failureCode}
+              failure_code = ${input.outcome.failureCode},
+              lease_token = null,
+              leased_until = null
             where id = ${input.collectionId}
               and subscription_id = ${input.subscriptionId}
+              and state = 'processing'
+              and lease_token = ${input.leaseToken}
+            returning id
           `;
+          if (rows.length === 0) return;
           await transaction`
             update subscriptions
             set
@@ -357,19 +501,27 @@ export function createPostgresSubscriptionCollectionRepository(
           return;
         }
 
-        await transaction`
+        const rows = await transaction<{ attempt_count: number }[]>`
           update subscription_collections
           set
-            state = 'failed',
-            failure_code = ${input.outcome.failureCode}
+            state = case when attempt_count >= ${input.maxAttempts} then 'dead_letter' else 'failed' end,
+            failure_code = ${input.outcome.failureCode},
+            next_attempt_at = ${input.outcome.retryAt},
+            lease_token = null,
+            leased_until = null
           where id = ${input.collectionId}
             and subscription_id = ${input.subscriptionId}
+            and state = 'processing'
+            and lease_token = ${input.leaseToken}
+          returning attempt_count
         `;
+        const row = rows[0];
+        if (!row) return;
         await transaction`
           update subscriptions
           set
-            state = 'grace_period',
-            next_collection_at = ${input.outcome.retryAt},
+            state = ${row.attempt_count >= input.maxAttempts ? "suspended" : "grace_period"},
+            next_collection_at = ${row.attempt_count >= input.maxAttempts ? null : input.outcome.retryAt},
             updated_at = now()
           where id = ${input.subscriptionId}
         `;
@@ -379,7 +531,9 @@ export function createPostgresSubscriptionCollectionRepository(
           action: "subscription.collection_failed",
           metadata: {
             failureCode: input.outcome.failureCode,
-            retryAt: input.outcome.retryAt.toISOString()
+            retryAt: input.outcome.retryAt.toISOString(),
+            attemptCount: row.attempt_count,
+            deadLettered: row.attempt_count >= input.maxAttempts
           }
         });
       });
@@ -396,8 +550,10 @@ interface DueSubscriptionRow {
   subscriber_user_id: string;
   plan_id: string;
   amount_minor: string | number;
+  amount_atomic: string | number;
   currency: "SOL" | "USDC";
   period_days: number;
+  period_seconds: string | number;
   period_starts_at: Date;
   period_ends_at: Date;
   authority_address: string;
@@ -406,11 +562,15 @@ interface DueSubscriptionRow {
   collector_address: string;
   token_mint: string;
   token_program: "spl_token" | "token_2022";
+  provider: string;
+  program_id: string;
 }
 
 interface CollectionLeaseRow {
   id: string;
   state: string;
+  attempt_count: number;
+  idempotency_key: string | null;
 }
 
 async function insertCollectionEvent(

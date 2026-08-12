@@ -1,5 +1,6 @@
 import { appShellNavItems } from "@veel/ui";
 import { getMutualsFeed, type MutualsFeedPage } from "@/api-client";
+import { ErrorState } from "../../ui";
 import { requireAppAccess } from "@/supabase/route-guard";
 
 export const dynamic = "force-dynamic";
@@ -23,9 +24,9 @@ export default async function MutualsFeedPageRoute() {
           {feedResult.ok ? (
             <MutualsFeed feed={feedResult.data} />
           ) : (
-            <UnavailableState
-              message={feedResult.message}
-              status={feedResult.status}
+            <ErrorState
+              context="Mutuals feed"
+              result={feedResult}
               title={feedResult.status === 403 ? "Mutuals not active" : "Mutuals feed unavailable"}
             />
           )}
@@ -90,7 +91,7 @@ function AppNav() {
   return (
     <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-(--line) px-5 py-4">
       <a className="text-lg font-semibold tracking-normal" href="/">
-        VEEL
+        WeVid
       </a>
       <div className="flex gap-1">
         {appShellNavItems.map((item) => (
@@ -113,23 +114,5 @@ function Fact({ label, value }: { label: string; value: string }) {
       <p className="text-xs uppercase text-(--muted)">{label}</p>
       <p className="mt-1 truncate font-medium">{value}</p>
     </div>
-  );
-}
-
-function UnavailableState({
-  message,
-  status,
-  title
-}: {
-  message: string;
-  status: number;
-  title: string;
-}) {
-  return (
-    <section className="rounded border border-(--line) bg-(--panel) p-5">
-      <p className="text-sm font-medium text-(--accent)">HTTP {status}</p>
-      <h2 className="mt-2 text-base font-semibold tracking-normal">{title}</h2>
-      <p className="mt-2 text-sm leading-6 text-(--muted)">{message}</p>
-    </section>
   );
 }

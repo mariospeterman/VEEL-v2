@@ -1,8 +1,8 @@
 import { createBrowserClient } from "@supabase/ssr";
-import { parsePublicWebEnv } from "@veel/config/public";
+import { readPublicWebEnv } from "@/public-env";
 
 export function createSupabaseBrowserClient() {
-  const env = parsePublicWebEnv(process.env);
+  const env = readPublicWebEnv();
   const supabaseKey =
     env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 

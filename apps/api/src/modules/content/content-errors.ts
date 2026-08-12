@@ -18,3 +18,17 @@ export class ContentEventDraftConflictError extends Error {
     this.name = "ContentEventDraftConflictError";
   }
 }
+
+export class ContentDraftIdempotencyConflictError extends Error {
+  constructor() {
+    super("content_draft_idempotency_conflict");
+    this.name = "ContentDraftIdempotencyConflictError";
+  }
+}
+
+export class ContentDraftQuotaExceededError extends Error {
+  constructor() {
+    super("content_draft_quota_exceeded");
+    this.name = "ContentDraftQuotaExceededError";
+  }
+}

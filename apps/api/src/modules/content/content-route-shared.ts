@@ -4,6 +4,9 @@ import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js
 import type { AgeRepository } from "../age/types.js";
 import type { LiveRepository } from "../live/types.js";
 import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
+import type { SubscriptionRepository } from "../subscription/types.js";
+import { VerificationRepositoryConfigurationError } from "../verification/verification-repository.js";
+import type { VerificationRepository } from "../verification/types.js";
 import type { WalletRepository } from "../wallet/types.js";
 import type {
   ContentRepository,
@@ -19,12 +22,19 @@ export interface RegisterContentRoutesOptions {
   contentRepository: ContentRepository;
   mediaUploadProvider: MediaUploadProviderAdapter;
   liveRepository?: LiveRepository;
+  verificationRepository: VerificationRepository;
+  subscriptionRepository: SubscriptionRepository;
 }
 
 export const feedModes = new Set(["recommended", "following", "nsfw", "sfw", "live", "premium"]);
 export const contentMediaTypes = new Set(["bit", "clip", "image", "vod", "live_replay"]);
 export const contentVisibilityValues = new Set(["public", "followers", "subscribers", "private"]);
-export const nsfwLabels = new Set(["none", "adult", "explicit", "sensitive"]);
+export const nsfwLabels = new Set(["none", "adult", "explicit"]);
+export const representationModes = new Set([
+  "no_real_person",
+  "self_only",
+  "declared_performers"
+]);
 export const videoMimeTypes = new Set(["video/mp4", "video/quicktime", "video/webm"]);
 export const dailyContentDraftQuota = 20;
 export const dailyMediaUploadQuota = 30;
@@ -100,10 +110,14 @@ export async function resolveContentCreationAbusePolicy(
   };
 }
 
-export function withSignedPlayback(
-  content: components["schemas"]["ContentItem"],
-  mediaUploadProvider: MediaUploadProviderAdapter
-): components["schemas"]["ContentItem"] {
+export async function withSignedPlayback(input: {
+  content: components["schemas"]["ContentItem"];
+  mediaUploadProvider: MediaUploadProviderAdapter;
+  subscriptionRepository: SubscriptionRepository;
+  supabaseUserId: string;
+  appUserId: string;
+}): Promise<components["schemas"]["ContentItem"]> {
+  const { content, mediaUploadProvider } = input;
   const playback = content.playback;
 
   if (playback?.state === "full" && playback.provider === "livepeer") {
@@ -127,6 +141,48 @@ export function withSignedPlayback(
     provider: "bunny"
   };
 
+  const potentiallyAccounted =
+    ["vod", "live_replay"].includes(content.mediaType) &&
+    content.accessState === "free" &&
+    content.creator.id !== input.appUserId;
+  let usage: components["schemas"]["PlaybackUsageContext"] | undefined;
+
+  if (potentiallyAccounted) {
+    if (!input.subscriptionRepository.getPlatformPlaybackDecision) {
+      return {
+        ...content,
+        playback: { ...blockedPlayback, blockReason: "provider_unavailable" }
+      };
+    }
+
+    try {
+      const decision = await input.subscriptionRepository.getPlatformPlaybackDecision({
+        supabaseUserId: input.supabaseUserId,
+        targetType: "content",
+        targetId: content.id
+      });
+      if (decision.limitReached) {
+        return {
+          ...content,
+          playback: { ...blockedPlayback, blockReason: "allowance_exhausted" }
+        };
+      }
+      if (decision.countsTowardAllowance) {
+        usage = {
+          policy: "public_media_allowance",
+          targetType: "content",
+          targetId: content.id,
+          heartbeatIntervalSeconds: 15
+        };
+      }
+    } catch {
+      return {
+        ...content,
+        playback: { ...blockedPlayback, blockReason: "provider_unavailable" }
+      };
+    }
+  }
+
   if (!mediaUploadProvider.createPlaybackResource) {
     return {
       ...content,
@@ -146,9 +202,10 @@ export function withSignedPlayback(
   try {
     return {
       ...content,
-      playback: mediaUploadProvider.createPlaybackResource({
-        providerAssetId
-      })
+      playback: {
+        ...mediaUploadProvider.createPlaybackResource({ providerAssetId }),
+        ...(usage ? { usage } : {})
+      }
     };
   } catch {
     return {
@@ -162,6 +219,7 @@ type AppReadyAccessResult =
   | {
       ok: true;
       supabaseUserId: string;
+      appUserId: string;
     }
   | {
       ok: false;
@@ -207,8 +265,72 @@ export async function verifyAppReadyAccess(
 
   return {
     ok: true,
-    supabaseUserId: verifiedSession.supabaseUserId
+    supabaseUserId: verifiedSession.supabaseUserId,
+    appUserId: profile.id
   };
+}
+
+type CreatorCapability =
+  | "canUploadMedia"
+  | "canPublishMedia"
+  | "canPublishAdultMedia"
+  | "canMonetize";
+
+export async function verifyCreatorCapability(
+  supabaseUserId: string,
+  capability: CreatorCapability,
+  options: RegisterContentRoutesOptions
+): Promise<
+  | { ok: true }
+  | {
+      ok: false;
+      statusCode: 403 | 503;
+      body: {
+        code: string;
+        message: string;
+        missingRequirements?: string[];
+        nextBestAction?: string;
+      };
+    }
+> {
+  try {
+    const resolution = await options.verificationRepository.resolveCapabilities({
+      supabaseUserId
+    });
+
+    if (resolution.capabilities[capability]) {
+      return { ok: true };
+    }
+
+    return {
+      ok: false,
+      statusCode: 403,
+      body: {
+        code: "verification_required",
+        message:
+          capability === "canPublishAdultMedia"
+            ? "Adult publisher verification is required for adult or explicit media."
+            : capability === "canMonetize"
+              ? "Identity, tax, and wallet readiness are required before earning."
+              : "Age verification is required before publishing media.",
+        missingRequirements: resolution.missingRequirements,
+        nextBestAction: resolution.nextBestAction
+      }
+    };
+  } catch (error) {
+    if (error instanceof VerificationRepositoryConfigurationError) {
+      return {
+        ok: false,
+        statusCode: 503,
+        body: {
+          code: "service_unavailable",
+          message: "Verification status is not configured"
+        }
+      };
+    }
+
+    throw error;
+  }
 }
 
 function bunnyProviderAssetIdFromPlaybackUrl(url: string): string | null {

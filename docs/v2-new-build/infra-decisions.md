@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: queues, search, analytics, observability, notifications, feature flags, compliance research constraints
-Last updated: 2026-06-07
+Last updated: 2026-06-13
 Source of truth: yes for v2 infrastructure defaults
 
 Owns:
@@ -58,12 +58,16 @@ Launch repository must keep these workflows:
 .github/workflows/db-migrations.yml
 ```
 
-Current scaffold workflows run docs/contract/schema checks and security scaffolding. They become full production gates when the foundation slice creates real app, API, worker, migration, and E2E tooling.
+Current workflows run docs/contract/schema checks, database migration checks, deploy readiness checks, lint, typecheck, tests, smoke coverage, and security scaffolding. Production deployment remains manually gated by environment configuration and provider proof.
 
 Current executable state:
 
+- The canonical CI proof job is `pinned-toolchain-proof`; it reads `.node-version`, installs `pnpm@10.0.0` through `pnpm/action-setup@v4`, prints both tool versions, installs with `pnpm install --frozen-lockfile`, then runs docs, migrations, deploy readiness, lint, typecheck, and tests.
+- Local macOS hosts install optional Darwin `rolldown` native bindings for Vitest/Vite and use `pnpm run doctor` to resolve the pinned Node.js/Corepack toolchain even when the interactive shell points at an older Node. Do not bypass tests; local proof and the pinned Linux CI proof are both required before launch-scope changes are considered validated.
 - `preview` installs dependencies, builds deployable apps, and verifies the deploy skeleton.
 - `deploy-staging` and `deploy-production` install dependencies, build deployable apps, run database migration checks, and run `pnpm deploy:check`.
+- `deploy-production` sets `DEPLOY_ENV=production`, so `pnpm deploy:check` fails fast when required provider, Supabase, Solana, media, notification, and webhook environment values are missing.
+- External MCP is disabled by default. If `MCP_ENABLED=true` in production, deploy readiness requires an HTTPS, non-localhost `MCP_PUBLIC_BASE_URL`, `MCP_AUTH_MODE=oauth`, `MCP_REQUIRE_OAUTH=true`, `MCP_ALLOW_STATIC_TOKENS_DEV=false`, and bounded MCP OAuth authorization-code/access-token TTL values.
 - `DEPLOY_ENABLED=true` must be set only in a GitHub environment after real hosting targets exist.
 - `API_HEALTH_URL` and `API_READY_URL` are required when deploy checks are active and must point at `/healthz` and `/readyz`.
 
@@ -79,6 +83,30 @@ Required branch protection for `main`:
 - OIDC for cloud deploy credentials; no long-lived deploy secrets
 
 No production deploy workflow may become active until it has artifact digest pinning, migration backup/snapshot step, health checks, smoke tests, and rollback instructions.
+
+## External MCP Connector Deployment
+
+The external MCP foundation exposes public metadata at `/.well-known/oauth-protected-resource`, authorization-server metadata at `/.well-known/oauth-authorization-server`, OAuth authorization-code plus PKCE endpoints, and a minimal HTTP MCP endpoint at `/mcp`.
+
+Current deployment topology:
+
+```text
+External MCP client
+  -> public API base URL
+  -> MCP bearer-token guard
+  -> tool registry and scope policy
+  -> existing Fastify domain repositories
+  -> redacted MCP tool-call audit row
+```
+
+Current private-data production status:
+
+- Local and staging may use `MCP_AUTH_MODE=scoped_token` only when `MCP_ALLOW_STATIC_TOKENS_DEV=true` is explicitly set.
+- Production private-data connectors require pre-registered `oauth_clients`, exact redirect URI allowlists, PKCE S256, resource-bound bearer tokens, scope checks, and connection/token revocation.
+- `pnpm mcp:seed`, `pnpm mcp:oauth:pkce`, and `pnpm mcp:smoke` are the local/staging proof helpers for client registration, PKCE authorization, remote MCP smoke, forbidden-tool denial, and optional audit-row confirmation.
+- MCP Inspector, Claude Code, Claude custom connectors, and OpenAI-compatible clients must each be proven against a public HTTPS staging URL before external connector compatibility is claimed.
+- MCP must never expose raw SQL, shell, filesystem, browser, provider callback, payment settlement, refund, publish, send-message, moderation enforcement, age/KYC override, or Solana state mutation tools.
+- Tool calls use existing backend domain repositories and are audited with redacted input and output summaries.
 
 ## Queue Strategy
 

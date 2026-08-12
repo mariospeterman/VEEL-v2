@@ -39,10 +39,16 @@ export interface ContentRepository {
 
 export interface CreateContentDraftInput {
   supabaseUserId: string;
+  idempotencyKey: string;
+  requestHash: string;
   mediaType: ContentItem["mediaType"];
   caption?: string | null | undefined;
   visibility: string;
   nsfwLabel: NonNullable<ContentItem["nsfwLabel"]>;
+  representationMode: "not_declared" | NonNullable<CreateContentRequest["representationMode"]>;
+  contentSafetyPolicyAccepted: boolean;
+  quotaWindowStart: Date;
+  dailyDraftQuota: number;
 }
 
 export interface CountContentQuotaInput {
@@ -64,6 +70,8 @@ export interface UpdateOwnedContentInput {
   captionProvided: boolean;
   visibility?: string | undefined;
   nsfwLabel?: NonNullable<ContentItem["nsfwLabel"]> | undefined;
+  representationMode?: NonNullable<UpdateContentRequest["representationMode"]> | undefined;
+  contentSafetyPolicyAccepted: boolean;
   teaserStartMs?: number | null | undefined;
   teaserStartMsProvided: boolean;
   teaserEndMs?: number | null | undefined;
@@ -119,6 +127,7 @@ export interface OwnedContentForUpload {
   id: string;
   mediaType: ContentItem["mediaType"];
   caption?: string | null;
+  nsfwLabel: NonNullable<ContentItem["nsfwLabel"]>;
 }
 
 export interface CreateMediaAssetInput {

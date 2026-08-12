@@ -183,8 +183,8 @@ Mobile:
 Mobile:
 
 - video/live stage first
-- pass CTA compact
-- pass options in bottom sheet
+- one mode-specific access CTA, compact
+- paid event details or profile-membership conversion in one bottom sheet
 - chat as sheet/panel
 - creator metadata compact
 - no overlapping text
@@ -205,7 +205,7 @@ Mobile:
 - bottom-aligned or sheet-based steps: media, thumbnail/teaser, caption, labels,
   monetise, optional event, preview, publish
 - thumbnail and Bit/teaser selection are simple native controls
-- labels include NSFW/adult/sensitive and optional event attachment only
+- labels include SFW/adult/explicit, independent content warnings, and optional event attachment only
 - event attachment captures date/time, pass capacity, public sale or private request-to-join, digital live stream or physical location, and map-assisted location search
 - Mutuals is not configured in Create; it is enabled from profile/settings and appears as a Mutuals-active affordance on eligible creator media
 - record/publish explicit

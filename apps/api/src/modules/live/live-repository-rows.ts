@@ -14,13 +14,16 @@ export interface LiveRoomRow {
   host_ingest_url: string | null;
   host_stream_key: string | null;
   playback_url: string | null;
-  teaser_seconds: number;
-  pass_price_minor: number;
+  preview_seconds: number;
+  event_price_minor: number | null;
   currency: "SOL";
-  pass_durations_minutes: number[];
+  members_only_chat: boolean;
+  members_included_in_paid_event: boolean;
+  replay_window_hours: number;
   replay_content_item_id: string | null;
   request_hash?: string;
   has_active_pass: boolean;
+  has_active_membership: boolean;
   is_creator: boolean;
 }
 

@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: documentation
-Last updated: 2026-06-03
+Last updated: 2026-08-11
 Source of truth: yes
 
 Owns:
@@ -28,6 +28,9 @@ Non-goals:
 - Paid Livepeer streams and paid replay assets use JWT playback access from day one.
 - Live playback remains server-authorized through Fastify before provider playback starts.
 - Deleted, removed, and cleaned assets have local playback references revoked immediately.
+- `media_safety_cases` is the release authority; provider-ready state and `content_items.moderation_state` cannot bypass it.
+- Adult/explicit release requires an accepted representation declaration, valid adult-publisher identity, and any required performer consent.
+- Provider scan events are normalized/minimized evidence only and never auto-publish content.
 
 ## Required production settings
 
@@ -35,6 +38,7 @@ Non-goals:
 - enable Bunny Stream allowed-domain restrictions for the real web origins
 - enable Bunny CDN token authentication on the Stream pull zone if you use direct CDN paths
 - enable Bunny Shield, Cloudflare API Shield, or an equivalent WAF/rate-limit/bot-control layer for API and webhook edge protection
+- do not claim Bunny Shield covers direct Bunny Stream TUS until provider confirmation and a staging incident fixture prove that exact path
 - enable Livepeer JWT playback policy for paid/pass-gated live streams and paid replay assets
 - keep Bunny and Livepeer secrets server-side only
 - keep provider webhooks signed and verified
@@ -72,3 +76,6 @@ No practical web video stack can guarantee that premium media cannot be copied. 
 - advanced geo/IP token policies where business rules require them
 - dynamic watermark overlays in the player path
 - broader operator tooling around repeated token abuse
+- Bunny Shield event-log reconciliation and exact direct-TUS coverage proof
+- Livepeer moderation multistream and emergency-suspension staging proof
+- adult live activation; it remains disabled until the provider path is launch-approved

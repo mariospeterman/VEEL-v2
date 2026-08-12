@@ -5,10 +5,12 @@ import nacl from "tweetnacl";
 import { describe, expect, it, vi } from "vitest";
 import { buildApi } from "../src/app";
 import type { AgeProviderWaterfall } from "../src/modules/age/types";
+import { createPostgresAdminRepository } from "../src/modules/admin/admin-repository";
 import type {
   PaymentSettlementInput,
   PaymentSettlementVerifier
 } from "../src/modules/payment/types";
+import { createPostgresLiveRepository } from "../src/modules/live/live-repository";
 import type {
   SupabaseAuthVerifier,
   VerifiedSupabaseSession
@@ -31,6 +33,7 @@ const describeIntegration = enableRealApiIntegration ? describe : describe.skip;
 const buyerSupabaseUserId = "10000000-0000-4000-8000-000000000001";
 const creatorSupabaseUserId = "10000000-0000-4000-8000-000000000002";
 const authToken = "integration-buyer-token";
+const creatorAuthToken = "integration-creator-token";
 const sumsubWebhookSecret = "sumsub-integration-webhook-secret";
 const treasuryWallet = "1".repeat(32);
 const subscriptionCollectorWallet = "1".repeat(32);
@@ -38,6 +41,10 @@ const subscriptionTokenMint = "3".repeat(32);
 const subscriptionAuthorityAddress = "4".repeat(32);
 const subscriptionDelegationAddress = "5".repeat(32);
 const subscriptionTokenAccount = "6".repeat(32);
+const subscriptionPlanPda = "7".repeat(32);
+const subscriptionMerchantWallet = "8".repeat(32);
+const subscriptionProgramId = "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44";
+const creatorSettlementWallet = "2".repeat(32);
 const validSolanaSignature =
   "5Pj5fCupXLUePYn18JkY8SrRaWFiUctuDTRwvUy2MLgVFG1FsCeezrWwZsmxkL5YJQFmQpAcY7rc5pN6vrXJt7Qp";
 const validEventAccessSolanaSignature = deterministicBase58Signature(41);
@@ -46,7 +53,7 @@ const validLivePassSolanaSignature = deterministicBase58Signature(127);
 const validSubscriptionAuthorizationSignature = deterministicBase58Signature(149);
 
 describeIntegration("authenticated API happy path against Postgres", () => {
-  it("links wallet, verifies age, creates content, unlocks content, buys Event Access, sends a paid message, buys a live pass, and verifies subscriptions", async () => {
+  it("links wallet, verifies age, creates content, unlocks content, buys Event Access, sends a paid message, buys paid live event access, and verifies subscriptions", async () => {
     const databaseUrl = integrationDatabaseUrl();
     assertIntegrationDatabaseIsAllowed(databaseUrl);
 
@@ -59,6 +66,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     const seededContentId = randomUUID();
     const seededMediaAssetId = randomUUID();
     const seededAccessRuleId = randomUUID();
+    const seededFreeContentId = randomUUID();
+    const seededFreeMediaAssetId = randomUUID();
     const seededEventId = randomUUID();
     const seededAccessPassTypeId = randomUUID();
     const seededConversationId = randomUUID();
@@ -66,11 +75,14 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     const seededSubscriptionPlanId = `integration-platform-${shortRunId}`;
     const seededProviderEventId = randomUUID();
     const seededProviderReplayRequestId = randomUUID();
+    const seededOrganizationId = randomUUID();
+    const seededOrganizationMembershipId = randomUUID();
+    const seededEnterpriseWaiverId = randomUUID();
     const providerReference = `sumsub-${runId}`;
     const ageProviderWaterfall = createIntegrationAgeWaterfall(providerReference);
     const settlementInputs: PaymentSettlementInput[] = [];
     const settlementVerifier: PaymentSettlementVerifier = {
-      async verifyNativeSolTransfer(input) {
+      async verifyTransfer(input) {
         settlementInputs.push(input);
 
         return {
@@ -83,6 +95,13 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     vi.stubEnv("SUMSUB_WEBHOOK_SECRET", sumsubWebhookSecret);
     vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
     vi.stubEnv("SOLANA_SUBSCRIPTION_COLLECTOR_WALLET", subscriptionCollectorWallet);
+    vi.stubEnv("SUBSCRIPTIONS_ENABLED", "true");
+    vi.stubEnv("SUBSCRIPTIONS_PROVIDER", "official_solana_subscription_program");
+    vi.stubEnv("SUBSCRIPTIONS_SOLANA_RPC_URL", "https://api.devnet.solana.com");
+    vi.stubEnv("SUBSCRIPTIONS_SUPPORTED_MINTS", subscriptionTokenMint);
+    vi.stubEnv("SUBSCRIPTIONS_DEFAULT_MINT", subscriptionTokenMint);
+    vi.stubEnv("SUBSCRIPTIONS_COLLECTOR_WALLET", subscriptionCollectorWallet);
+    vi.stubEnv("SUBSCRIPTIONS_MERCHANT_WALLET", subscriptionMerchantWallet);
 
     const subscriptionVerificationInputs: Parameters<
       SubscriptionAuthorizationVerifier["verifyAuthorization"]
@@ -97,11 +116,13 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       }
     };
 
+    const liveRepository = createPostgresLiveRepository(sql);
     const app = await buildApi({
       authVerifier: integrationAuthVerifier,
       ageProviderWaterfall,
       settlementVerifier,
       subscriptionAuthorizationVerifier,
+      liveRepository,
       liveProvider: {
         isConfigured: () => true,
         async createRoom() {
@@ -130,12 +151,14 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         creatorSupabaseUserId,
         providerReference,
         seededContentId,
+        seededFreeContentId,
         seededEventId,
         seededConversationId,
         seededLiveRoomId,
         seededSubscriptionPlanId,
         seededProviderEventId,
-        seededProviderReplayRequestId
+        seededProviderReplayRequestId,
+        seededOrganizationId
       });
       await seedCreatorPaidContent(sql, {
         creatorUserId: seededCreatorUserId,
@@ -144,6 +167,11 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         contentId: seededContentId,
         mediaAssetId: seededMediaAssetId,
         accessRuleId: seededAccessRuleId
+      });
+      await seedCreatorFreeVideo(sql, {
+        creatorUserId: seededCreatorUserId,
+        contentId: seededFreeContentId,
+        mediaAssetId: seededFreeMediaAssetId
       });
       await seedCreatorPaidEvent(sql, {
         creatorUserId: seededCreatorUserId,
@@ -227,7 +255,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         reviewResult: {
           reviewAnswer: "GREEN"
         },
-        createdAt: "2026-06-12 12:00:00+0000"
+        createdAt: new Date().toISOString()
       });
       const ageWebhookResponse = await app.inject({
         method: "POST",
@@ -246,6 +274,15 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         received: 1,
         processed: 1
       });
+
+      const ageStatusResponse = await app.inject({
+        method: "GET",
+        url: "/v1/age/status",
+        headers: authenticatedHeaders(`age-status-${runId}`)
+      });
+
+      expect(ageStatusResponse.statusCode, ageStatusResponse.body).toBe(200);
+      expect(ageStatusResponse.json()).toMatchObject({ state: "verified", provider: "sumsub" });
 
       const profileResponse = await app.inject({
         method: "PATCH",
@@ -270,6 +307,216 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         creatorUserId: seededCreatorUserId
       });
 
+      const likeIdempotencyKey = `engagement-like-${runId}`;
+      const concurrentLikeResponses = await Promise.all([
+        app.inject({
+          method: "POST",
+          url: `/v1/engagement/${seededFreeContentId}/like`,
+          headers: authenticatedHeaders(likeIdempotencyKey)
+        }),
+        app.inject({
+          method: "POST",
+          url: `/v1/engagement/${seededFreeContentId}/like`,
+          headers: authenticatedHeaders(likeIdempotencyKey)
+        })
+      ]);
+      expect(concurrentLikeResponses.map((response) => response.statusCode)).toEqual([200, 200]);
+      expect(concurrentLikeResponses[0]?.json()).toMatchObject({ liked: true, likeCount: 1 });
+      expect(concurrentLikeResponses[1]?.json()).toMatchObject({ liked: true, likeCount: 1 });
+
+      const conflictingLikeResponse = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/${seededContentId}/like`,
+        headers: authenticatedHeaders(likeIdempotencyKey)
+      });
+      expect(conflictingLikeResponse.statusCode, conflictingLikeResponse.body).toBe(409);
+
+      const commentIdempotencyKey = `engagement-comment-${runId}`;
+      const commentPayload = { body: "Real Postgres engagement comment" };
+      const concurrentCommentResponses = await Promise.all([
+        app.inject({
+          method: "POST",
+          url: `/v1/engagement/${seededFreeContentId}/comments`,
+          headers: authenticatedHeaders(commentIdempotencyKey),
+          payload: commentPayload
+        }),
+        app.inject({
+          method: "POST",
+          url: `/v1/engagement/${seededFreeContentId}/comments`,
+          headers: authenticatedHeaders(commentIdempotencyKey),
+          payload: commentPayload
+        })
+      ]);
+      expect(concurrentCommentResponses.map((response) => response.statusCode)).toEqual([201, 201]);
+      expect(concurrentCommentResponses[0]?.json()).toEqual(concurrentCommentResponses[1]?.json());
+
+      const conflictingCommentResponse = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/${seededFreeContentId}/comments`,
+        headers: authenticatedHeaders(commentIdempotencyKey),
+        payload: { body: "Different comment" }
+      });
+      expect(conflictingCommentResponse.statusCode, conflictingCommentResponse.body).toBe(409);
+
+      const shareIdempotencyKey = `engagement-share-${runId}`;
+      const sharePayload = {
+        targetType: "content",
+        targetId: seededFreeContentId,
+        mode: "copy_link"
+      } as const;
+      const firstShareResponse = await app.inject({
+        method: "POST",
+        url: "/v1/shares",
+        headers: authenticatedHeaders(shareIdempotencyKey),
+        payload: sharePayload
+      });
+      const replayedShareResponse = await app.inject({
+        method: "POST",
+        url: "/v1/shares",
+        headers: authenticatedHeaders(shareIdempotencyKey),
+        payload: sharePayload
+      });
+      expect(firstShareResponse.statusCode, firstShareResponse.body).toBe(201);
+      expect(replayedShareResponse.statusCode, replayedShareResponse.body).toBe(201);
+      expect(replayedShareResponse.json()).toEqual(firstShareResponse.json());
+
+      const conflictingShareResponse = await app.inject({
+        method: "POST",
+        url: "/v1/shares",
+        headers: authenticatedHeaders(shareIdempotencyKey),
+        payload: { ...sharePayload, mode: "external_referral_link" }
+      });
+      expect(conflictingShareResponse.statusCode, conflictingShareResponse.body).toBe(409);
+
+      const reportIdempotencyKey = `engagement-report-${runId}`;
+      const reportPayload = {
+        subjectType: "content",
+        subjectId: seededFreeContentId,
+        reason: "Integration safety review"
+      } as const;
+      const firstReportResponse = await app.inject({
+        method: "POST",
+        url: "/v1/reports",
+        headers: authenticatedHeaders(reportIdempotencyKey),
+        payload: reportPayload
+      });
+      const replayedReportResponse = await app.inject({
+        method: "POST",
+        url: "/v1/reports",
+        headers: authenticatedHeaders(reportIdempotencyKey),
+        payload: reportPayload
+      });
+      expect(firstReportResponse.statusCode, firstReportResponse.body).toBe(201);
+      expect(replayedReportResponse.statusCode, replayedReportResponse.body).toBe(201);
+      expect(replayedReportResponse.json()).toEqual(firstReportResponse.json());
+
+      const conflictingReportResponse = await app.inject({
+        method: "POST",
+        url: "/v1/reports",
+        headers: authenticatedHeaders(reportIdempotencyKey),
+        payload: { ...reportPayload, reason: "A different safety reason" }
+      });
+      expect(conflictingReportResponse.statusCode, conflictingReportResponse.body).toBe(409);
+
+      const engagementRows = await sql<{
+        comment_count: string;
+        like_count: string;
+        report_count: string;
+        report_audit_count: string;
+        share_count: string;
+        share_audit_count: string;
+      }[]>`
+        select
+          (select count(*) from comments where content_item_id = ${seededFreeContentId}) as comment_count,
+          (
+            select count(*) from content_reactions
+            where content_item_id = ${seededFreeContentId} and state = 'active'
+          ) as like_count,
+          (select count(*) from reports where subject_id = ${seededFreeContentId}) as report_count,
+          (
+            select count(*)
+            from audit_events audit
+            join users actor on actor.id = audit.actor_user_id
+            where actor.supabase_user_id = ${buyerSupabaseUserId}
+              and audit.action = 'report.created'
+              and audit.idempotency_key = ${reportIdempotencyKey}
+          ) as report_audit_count,
+          (select count(*) from share_records where target_id = ${seededFreeContentId}) as share_count,
+          (
+            select count(*)
+            from audit_events audit
+            join users actor on actor.id = audit.actor_user_id
+            where actor.supabase_user_id = ${buyerSupabaseUserId}
+              and audit.action = 'share.created'
+              and audit.idempotency_key = ${shareIdempotencyKey}
+          ) as share_audit_count
+      `;
+      expect(engagementRows[0]).toEqual({
+        comment_count: "1",
+        like_count: "1",
+        report_count: "1",
+        report_audit_count: "1",
+        share_count: "1",
+        share_audit_count: "1"
+      });
+
+      const adultDraftResponse = await app.inject({
+        method: "POST",
+        url: "/v1/content",
+        headers: creatorAuthenticatedHeaders(`adult-content-create-${runId}`),
+        payload: {
+          mediaType: "image",
+          visibility: "public",
+          nsfwLabel: "adult",
+          representationMode: "self_only",
+          contentSafetyPolicyAccepted: true,
+          caption: `Adult integration draft ${runId}`
+        }
+      });
+
+      expect(adultDraftResponse.statusCode, adultDraftResponse.body).toBe(201);
+      expect(adultDraftResponse.json()).toMatchObject({ nsfwLabel: "adult" });
+      const adultContentId = adultDraftResponse.json().id as string;
+      const adultSafetyRows = await sql<
+        {
+          representation_mode: string;
+          case_state: string;
+          provider_release_allowed: boolean;
+          consent_count: string;
+        }[]
+      >`
+        select
+          csd.representation_mode,
+          msc.state as case_state,
+          msc.provider_release_allowed,
+          (select count(*) from performer_consents pc where pc.content_item_id = ci.id) as consent_count
+        from content_items ci
+        join content_safety_declarations csd on csd.content_item_id = ci.id
+        join media_safety_cases msc on msc.content_item_id = ci.id
+        where ci.id = ${adultContentId}
+      `;
+      expect(adultSafetyRows[0]).toEqual({
+        representation_mode: "self_only",
+        case_state: "quarantined",
+        provider_release_allowed: false,
+        consent_count: "1"
+      });
+
+      const moderationRepository = createPostgresAdminRepository(sql);
+      const moderatedAdultDraft = await moderationRepository.updateContentModeration({
+        supabaseUserId: creatorSupabaseUserId,
+        contentId: adultContentId,
+        body: {
+          action: "restrict",
+          reason: "integration_media_safety_review"
+        },
+        idempotencyKey: `adult-content-restrict-${runId}`
+      });
+      expect(moderatedAdultDraft).toMatchObject({
+        id: adultContentId,
+        moderationState: "review_required"
+      });
+
       const createContentResponse = await app.inject({
         method: "POST",
         url: "/v1/content",
@@ -277,7 +524,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         payload: {
           mediaType: "image",
           visibility: "public",
-          nsfwLabel: "adult",
+          nsfwLabel: "none",
           caption: `Integration draft ${runId}`
         }
       });
@@ -288,6 +535,225 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         accessState: "free",
         caption: `Integration draft ${runId}`
       });
+
+      const playbackSessionResponse = await app.inject({
+        method: "POST",
+        url: "/v1/platform-usage/playback-sessions",
+        headers: authenticatedHeaders(`playback-session-${runId}`),
+        payload: {
+          targetType: "content",
+          targetId: seededFreeContentId
+        }
+      });
+
+      expect(playbackSessionResponse.statusCode, playbackSessionResponse.body).toBe(201);
+      const playbackSession = playbackSessionResponse.json<{ id: string }>();
+      expect(playbackSessionResponse.json()).toMatchObject({
+        state: "active",
+        consumedSeconds: 0,
+        usage: {
+          publicMediaSeconds: 0,
+          limitReached: false
+        }
+      });
+
+      const heartbeatPayload = { sequence: 1, playedSeconds: 1 };
+      const playbackHeartbeatResponse = await app.inject({
+        method: "POST",
+        url: `/v1/platform-usage/playback-sessions/${playbackSession.id}/heartbeats`,
+        headers: authenticatedHeaders(`playback-heartbeat-${runId}`),
+        payload: heartbeatPayload
+      });
+
+      expect(playbackHeartbeatResponse.statusCode, playbackHeartbeatResponse.body).toBe(200);
+      expect(playbackHeartbeatResponse.json()).toMatchObject({
+        id: playbackSession.id,
+        state: "active",
+        consumedSeconds: 1,
+        usage: {
+          publicMediaSeconds: 1
+        }
+      });
+
+      const replayedHeartbeatResponse = await app.inject({
+        method: "POST",
+        url: `/v1/platform-usage/playback-sessions/${playbackSession.id}/heartbeats`,
+        headers: authenticatedHeaders(`playback-heartbeat-${runId}`),
+        payload: heartbeatPayload
+      });
+
+      expect(replayedHeartbeatResponse.statusCode, replayedHeartbeatResponse.body).toBe(200);
+      expect(replayedHeartbeatResponse.json()).toMatchObject({
+        consumedSeconds: 1,
+        usage: { publicMediaSeconds: 1 }
+      });
+
+      const persistedPlaybackRows = await sql<{
+        heartbeat_count: string;
+        session_count: string;
+        usage_seconds: string;
+      }[]>`
+        select
+          (
+            select count(*)
+            from platform_playback_sessions
+            where id = ${playbackSession.id}
+          ) as session_count,
+          (
+            select count(*)
+            from platform_playback_heartbeats
+            where session_id = ${playbackSession.id}
+          ) as heartbeat_count,
+          (
+            select public_media_seconds
+            from platform_usage_windows usage
+            join users actor on actor.id = usage.user_id
+            where actor.supabase_user_id = ${buyerSupabaseUserId}
+            order by usage.window_starts_at desc
+            limit 1
+          ) as usage_seconds
+      `;
+
+      expect(persistedPlaybackRows[0]).toEqual({
+        heartbeat_count: "1",
+        session_count: "1",
+        usage_seconds: "1"
+      });
+
+      const buyerRows = await sql<{ id: string }[]>`
+        select id from users where supabase_user_id = ${buyerSupabaseUserId}
+      `;
+      const buyerUserId = buyerRows[0]?.id;
+      expect(buyerUserId).toBeTruthy();
+      await sql`
+        insert into organizations (id, name, state, kyb_state)
+        values (${seededOrganizationId}, ${`Integration Organization ${runId}`}, 'active', 'verified')
+      `;
+      await sql`
+        insert into organization_memberships (id, organization_id, user_id, role, state, joined_at)
+        values (
+          ${seededOrganizationMembershipId},
+          ${seededOrganizationId},
+          ${buyerUserId!},
+          'owner',
+          'active',
+          now()
+        )
+      `;
+
+      const kybOnlyAccessResponse = await app.inject({
+        method: "GET",
+        url: "/v1/platform-access",
+        headers: authenticatedHeaders(`platform-access-kyb-${runId}`)
+      });
+
+      expect(kybOnlyAccessResponse.statusCode, kybOnlyAccessResponse.body).toBe(200);
+      expect(kybOnlyAccessResponse.json()).toMatchObject({
+        currentTier: { key: "free_verified" }
+      });
+
+      const kybOnlyOrganizationResponse = await app.inject({
+        method: "GET",
+        url: "/v1/organizations",
+        headers: authenticatedHeaders(`organization-kyb-only-${runId}`)
+      });
+      expect(kybOnlyOrganizationResponse.statusCode, kybOnlyOrganizationResponse.body).toBe(200);
+      expect(kybOnlyOrganizationResponse.json()).toMatchObject({
+        items: [
+          {
+            capabilities: {
+              rbacEnabled: false,
+              teamPublishingEnabled: false,
+              consolidatedReportingEnabled: false,
+              complianceExportsEnabled: false
+            },
+            rolePermissions: expect.arrayContaining([
+              expect.objectContaining({
+                key: "publish_team_content",
+                allowed: false,
+                reason: "enterprise_entitlement_required"
+              })
+            ])
+          }
+        ]
+      });
+
+      await sql`
+        insert into tier_waivers (
+          id,
+          subject_type,
+          subject_id,
+          tier_key,
+          state,
+          starts_at
+        )
+        values (
+          ${seededEnterpriseWaiverId},
+          'organization',
+          ${seededOrganizationId},
+          'enterprise',
+          'active',
+          now()
+        )
+      `;
+
+      const contractedEnterpriseAccessResponse = await app.inject({
+        method: "GET",
+        url: "/v1/platform-access",
+        headers: authenticatedHeaders(`platform-access-enterprise-${runId}`)
+      });
+
+      expect(contractedEnterpriseAccessResponse.statusCode, contractedEnterpriseAccessResponse.body).toBe(200);
+      expect(contractedEnterpriseAccessResponse.json()).toMatchObject({
+        currentTier: { key: "enterprise" }
+      });
+
+      const enterpriseOrganizationResponse = await app.inject({
+        method: "GET",
+        url: "/v1/organizations",
+        headers: authenticatedHeaders(`organization-enterprise-${runId}`)
+      });
+      expect(enterpriseOrganizationResponse.statusCode, enterpriseOrganizationResponse.body).toBe(200);
+      expect(enterpriseOrganizationResponse.json()).toMatchObject({
+        items: [
+          {
+            capabilities: {
+              rbacEnabled: true,
+              teamPublishingEnabled: true,
+              consolidatedReportingEnabled: true,
+              complianceExportsEnabled: true
+            },
+            rolePermissions: expect.arrayContaining([
+              expect.objectContaining({
+                key: "publish_team_content",
+                allowed: true,
+                reason: "allowed"
+              })
+            ])
+          }
+        ]
+      });
+
+      await sql`
+        update creator_monetisation_settings
+        set earning_state = 'held', updated_at = now()
+        where user_id = ${seededCreatorUserId}
+      `;
+      const heldCreatorUnlockResponse = await app.inject({
+        method: "POST",
+        url: `/v1/content/${seededContentId}/unlock-intents`,
+        headers: authenticatedHeaders(`content-unlock-held-${runId}`)
+      });
+      expect(heldCreatorUnlockResponse.statusCode, heldCreatorUnlockResponse.body).toBe(409);
+      expect(heldCreatorUnlockResponse.json()).toMatchObject({
+        code: "conflict",
+        message: "This creator cannot receive payments yet"
+      });
+      await sql`
+        update creator_monetisation_settings
+        set earning_state = 'ready', updated_at = now()
+        where user_id = ${seededCreatorUserId}
+      `;
 
       const unlockResponse = await app.inject({
         method: "POST",
@@ -312,6 +778,27 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           amountMinor: number;
         };
       }>();
+
+      await sql`
+        update creator_monetisation_settings
+        set earning_state = 'held', updated_at = now()
+        where user_id = ${seededCreatorUserId}
+      `;
+      const heldCreatorRetryResponse = await app.inject({
+        method: "POST",
+        url: `/v1/content/${seededContentId}/unlock-intents`,
+        headers: authenticatedHeaders(`content-unlock-${runId}`)
+      });
+      expect(heldCreatorRetryResponse.statusCode, heldCreatorRetryResponse.body).toBe(409);
+      expect(heldCreatorRetryResponse.json()).toMatchObject({
+        code: "conflict",
+        message: "This creator cannot receive payments yet"
+      });
+      await sql`
+        update creator_monetisation_settings
+        set earning_state = 'ready', updated_at = now()
+        where user_id = ${seededCreatorUserId}
+      `;
 
       const submissionResponse = await app.inject({
         method: "POST",
@@ -339,7 +826,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         expect.objectContaining({
           signature: validSolanaSignature,
           treasuryWallet,
-          amountMinor: unlock.paymentIntent.amountMinor
+          totalAmountMinor: unlock.paymentIntent.amountMinor
         })
       );
       expect(settlementInputs[0]?.referenceAddress).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
@@ -680,7 +1167,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         expect.objectContaining({
           signature: validEventAccessSolanaSignature,
           treasuryWallet,
-          amountMinor: accessPassIntent.paymentIntent.amountMinor
+          totalAmountMinor: accessPassIntent.paymentIntent.amountMinor
         })
       );
       expect(settlementInputs[1]?.referenceAddress).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
@@ -775,6 +1262,42 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         audit_event_count: "1"
       });
 
+      const normalMessageBody = `Normal integration hello ${shortRunId}`;
+      const normalMessageIdempotencyKey = `normal-message-${runId}`;
+      const normalMessageRequest = {
+        method: "POST" as const,
+        url: `/v1/messages/conversations/${seededConversationId}/messages`,
+        headers: authenticatedHeaders(normalMessageIdempotencyKey),
+        payload: { body: normalMessageBody }
+      };
+      const [normalMessageResponse, concurrentNormalMessageResponse] = await Promise.all([
+        app.inject(normalMessageRequest),
+        app.inject(normalMessageRequest)
+      ]);
+      const replayedNormalMessageResponse = await app.inject(normalMessageRequest);
+
+      expect(normalMessageResponse.statusCode, normalMessageResponse.body).toBe(201);
+      expect(concurrentNormalMessageResponse.statusCode, concurrentNormalMessageResponse.body).toBe(201);
+      expect(replayedNormalMessageResponse.statusCode, replayedNormalMessageResponse.body).toBe(201);
+      expect(concurrentNormalMessageResponse.json()).toEqual(normalMessageResponse.json());
+      expect(replayedNormalMessageResponse.json()).toEqual(normalMessageResponse.json());
+
+      const conflictingNormalMessageResponse = await app.inject({
+        ...normalMessageRequest,
+        payload: { body: `${normalMessageBody} changed` }
+      });
+      expect(conflictingNormalMessageResponse.statusCode, conflictingNormalMessageResponse.body).toBe(409);
+
+      const normalMessageRows = await sql<{ message_count: string }[]>`
+        select count(*) as message_count
+        from messages m
+        join users u on u.id = m.sender_user_id
+        where u.supabase_user_id = ${buyerSupabaseUserId}
+          and m.conversation_id = ${seededConversationId}
+          and m.idempotency_key = ${normalMessageIdempotencyKey}
+      `;
+      expect(normalMessageRows[0]?.message_count).toBe("1");
+
       const paidMessageBody = `Paid integration hello ${shortRunId}`;
       const paidMessageIntentResponse = await app.inject({
         method: "POST",
@@ -831,7 +1354,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         expect.objectContaining({
           signature: validPaidMessageSolanaSignature,
           treasuryWallet,
-          amountMinor: paidMessageIntent.paymentIntent.amountMinor
+          totalAmountMinor: paidMessageIntent.paymentIntent.amountMinor
         })
       );
       expect(settlementInputs[2]?.referenceAddress).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
@@ -845,6 +1368,12 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(paidMessagesResponse.statusCode, paidMessagesResponse.body).toBe(200);
       expect(paidMessagesResponse.json()).toMatchObject({
         items: [
+          {
+            conversationId: seededConversationId,
+            body: normalMessageBody,
+            deliveryState: "visible",
+            paymentIntentId: null
+          },
           {
             conversationId: seededConversationId,
             body: paidMessageBody,
@@ -935,7 +1464,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(lockedLiveRoomResponse.json()).toMatchObject({
         id: seededLiveRoomId,
         state: "live",
-        accessState: "pass_required",
+        accessMode: "paid_event",
+        accessState: "event_access_required",
         playback: {
           state: "blocked",
           url: null,
@@ -943,17 +1473,14 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         },
         chat: {
           enabled: true,
-          accessState: "pass_required"
+          accessState: "members_only"
         }
       });
 
       const livePassIntentResponse = await app.inject({
         method: "POST",
-        url: `/v1/live/rooms/${seededLiveRoomId}/pass-intents`,
-        headers: authenticatedHeaders(`live-pass-${runId}`),
-        payload: {
-          durationMinutes: 60
-        }
+        url: `/v1/live/rooms/${seededLiveRoomId}/event-access-intents`,
+        headers: authenticatedHeaders(`live-event-access-${runId}`)
       });
 
       expect(livePassIntentResponse.statusCode, livePassIntentResponse.body).toBe(201);
@@ -996,7 +1523,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         expect.objectContaining({
           signature: validLivePassSolanaSignature,
           treasuryWallet,
-          amountMinor: livePassIntent.amountMinor
+          totalAmountMinor: livePassIntent.amountMinor
         })
       );
       expect(settlementInputs[3]?.referenceAddress).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
@@ -1011,7 +1538,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(activeLiveRoomResponse.json()).toMatchObject({
         id: seededLiveRoomId,
         state: "live",
-        accessState: "pass_active",
+        accessState: "allowed",
         playback: {
           state: "full",
           provider: "livepeer",
@@ -1103,7 +1630,6 @@ describeIntegration("authenticated API happy path against Postgres", () => {
             where u.supabase_user_id = ${buyerSupabaseUserId}
               and lppr.payment_intent_id = ${livePassIntent.id}
               and lppr.room_id = ${seededLiveRoomId}
-              and lppr.duration_minutes = 60
           ) as purchase_request_count,
           (
             select count(*)
@@ -1112,10 +1638,9 @@ describeIntegration("authenticated API happy path against Postgres", () => {
             where u.supabase_user_id = ${buyerSupabaseUserId}
               and lp.payment_intent_id = ${livePassIntent.id}
               and lp.room_id = ${seededLiveRoomId}
-              and lp.duration_minutes = 60
               and lp.state = 'active'
               and lp.starts_at <= now()
-              and lp.expires_at > now()
+              and lp.expires_at is null
           ) as live_pass_count,
           (
             select count(*)
@@ -1127,7 +1652,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
               and e.target_id = ${seededLiveRoomId}
               and e.product_type = 'live_pass'
               and e.state = 'active'
-              and e.ends_at > now()
+              and e.ends_at is null
           ) as entitlement_count,
           (
             select count(*)
@@ -1135,7 +1660,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
             join users u on u.id = ae.actor_user_id
             where u.supabase_user_id = ${buyerSupabaseUserId}
               and ae.subject_id = ${seededLiveRoomId}
-              and ae.action = 'live_pass_entitlement_granted'
+              and ae.action = 'live_event_access_entitlement_granted'
           ) as audit_event_count,
           (
             select count(*)
@@ -1157,6 +1682,40 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         entitlement_count: "1",
         audit_event_count: "1",
         chat_message_count: "1"
+      });
+
+      await liveRepository.updateRoomStatus({
+        roomId: seededLiveRoomId,
+        status: {
+          providerStreamId: `livepeer-stream-${shortRunId}`,
+          providerPlaybackId: `livepeer-playback-${shortRunId}`,
+          providerState: "idle",
+          state: "ended",
+          playbackUrl: null
+        }
+      });
+
+      const [closedLiveAccess] = await sql<{
+        room_ended: boolean;
+        pass_matches_entitlement: boolean;
+        replay_window_is_48_hours: boolean;
+      }[]>`
+        select
+          lr.state = 'ended' and lr.ended_at is not null as room_ended,
+          lp.expires_at = e.ends_at as pass_matches_entitlement,
+          lp.expires_at = lr.ended_at + interval '48 hours' as replay_window_is_48_hours
+        from live_rooms lr
+        join live_passes lp on lp.room_id = lr.id
+        join entitlements e on e.payment_intent_id = lp.payment_intent_id
+        where lr.id = ${seededLiveRoomId}
+          and lp.payment_intent_id = ${livePassIntent.id}
+          and e.product_type = 'live_pass'
+      `;
+
+      expect(closedLiveAccess).toEqual({
+        room_ended: true,
+        pass_matches_entitlement: true,
+        replay_window_is_48_hours: true
       });
 
       const subscriptionPlansResponse = await app.inject({
@@ -1336,12 +1895,15 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           now: new Date(),
           limit: 5,
           provider: {
+            async reconcile() {
+              return { state: "not_found" };
+            },
             async collect(input) {
               expect(input).toEqual(
                 expect.objectContaining({
                   subscriptionId: subscriptionIntent.subscription.id,
                   planId: seededSubscriptionPlanId,
-                  amountMinor: 19000000,
+                  amountMinor: 19000000n,
                   currency: "USDC",
                   authorityAddress: subscriptionAuthorityAddress,
                   delegationAddress: subscriptionDelegationAddress,
@@ -1430,6 +1992,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
             async replay(input) {
               expect(input).toEqual({
                 replayRequestId: seededProviderReplayRequestId,
+                leaseToken: expect.any(String),
+                attemptCount: 1,
                 providerEventId: seededProviderEventId,
                 provider: "solana_indexer",
                 eventType: "payment.confirmed",
@@ -1479,6 +2043,45 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         replay_request_count: "1",
         provider_event_count: "1"
       });
+
+      const blockIdempotencyKey = `engagement-block-${runId}`;
+      const concurrentBlockResponses = await Promise.all([
+        app.inject({
+          method: "POST",
+          url: `/v1/blocks/${seededCreatorUserId}`,
+          headers: authenticatedHeaders(blockIdempotencyKey)
+        }),
+        app.inject({
+          method: "POST",
+          url: `/v1/blocks/${seededCreatorUserId}`,
+          headers: authenticatedHeaders(blockIdempotencyKey)
+        })
+      ]);
+      expect(concurrentBlockResponses.map((response) => response.statusCode)).toEqual([200, 200]);
+      expect(concurrentBlockResponses[0]?.json()).toEqual(concurrentBlockResponses[1]?.json());
+
+      const conflictingBlockResponse = await app.inject({
+        method: "POST",
+        url: `/v1/blocks/${buyerUserId!}`,
+        headers: authenticatedHeaders(blockIdempotencyKey)
+      });
+      expect(conflictingBlockResponse.statusCode, conflictingBlockResponse.body).toBe(409);
+
+      const [blockRows] = await sql<{
+        audit_count: string;
+        block_count: string;
+      }[]>`
+        select
+          (select count(*) from blocks where blocker_user_id = ${buyerUserId!}) as block_count,
+          (
+            select count(*)
+            from audit_events
+            where actor_user_id = ${buyerUserId!}
+              and action = 'user.blocked'
+              and idempotency_key = ${blockIdempotencyKey}
+          ) as audit_count
+      `;
+      expect(blockRows).toEqual({ audit_count: "1", block_count: "1" });
     } finally {
       await cleanupRun(sql, {
         buyerHandle,
@@ -1487,12 +2090,14 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         creatorSupabaseUserId,
         providerReference,
         seededContentId,
+        seededFreeContentId,
         seededEventId,
         seededConversationId,
         seededLiveRoomId,
         seededSubscriptionPlanId,
         seededProviderEventId,
-        seededProviderReplayRequestId
+        seededProviderReplayRequestId,
+        seededOrganizationId
       });
       await app.close();
       vi.unstubAllEnvs();
@@ -1537,17 +2142,30 @@ function authenticatedHeaders(idempotencyKey: string): Record<string, string> {
   };
 }
 
+function creatorAuthenticatedHeaders(idempotencyKey: string): Record<string, string> {
+  return {
+    authorization: `Bearer ${creatorAuthToken}`,
+    "idempotency-key": idempotencyKey
+  };
+}
+
 const integrationAuthVerifier: SupabaseAuthVerifier = {
   async verifyBearerToken(token: string): Promise<VerifiedSupabaseSession | null> {
-    if (token !== authToken) {
-      return null;
+    if (token === authToken) {
+      return {
+        supabaseUserId: buyerSupabaseUserId,
+        email: "integration-buyer@example.test",
+        role: "authenticated"
+      };
     }
-
-    return {
-      supabaseUserId: buyerSupabaseUserId,
-      email: "integration-buyer@example.test",
-      role: "authenticated"
-    };
+    if (token === creatorAuthToken) {
+      return {
+        supabaseUserId: creatorSupabaseUserId,
+        email: "integration-creator@example.test",
+        role: "authenticated"
+      };
+    }
+    return null;
   }
 };
 
@@ -1558,7 +2176,7 @@ function createIntegrationAgeWaterfall(providerReference: string): AgeProviderWa
         provider: "sumsub",
         providerReference,
         launchUrl: `https://age.example.test/sumsub/${providerReference}`,
-        expiresAt: new Date("2026-06-12T12:15:00.000Z"),
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
         jurisdiction: "US",
         rule: "over_18"
       };
@@ -1585,6 +2203,7 @@ async function seedCreatorPaidContent(
     accessRuleId: string;
   }
 ): Promise<void> {
+  const recipientWalletId = randomUUID();
   await sql`
     insert into users (id, supabase_user_id)
     values (${input.creatorUserId}, ${input.creatorSupabaseUserId})
@@ -1598,6 +2217,81 @@ async function seedCreatorPaidContent(
       display_name = excluded.display_name,
       bio = excluded.bio,
       updated_at = now()
+  `;
+  await sql`
+    insert into wallets (id, user_id, provider, address, chain, is_primary)
+    values (
+      ${recipientWalletId},
+      ${input.creatorUserId},
+      'wallet_adapter',
+      ${creatorSettlementWallet},
+      'solana_devnet',
+      true
+    )
+    on conflict (chain, address) do update set
+      user_id = excluded.user_id,
+      is_primary = true,
+      updated_at = now()
+  `;
+  await sql`
+    insert into verification_records (
+      subject_type,
+      subject_id,
+      purpose,
+      status,
+      provider,
+      provider_reference,
+      method,
+      threshold_age,
+      result_over_threshold,
+      assurance_level,
+      verified_at,
+      reusable,
+      policy_version,
+      terms_accepted_at
+    )
+    values
+      (
+        'user', ${input.creatorUserId}, 'age_access', 'valid', 'didit',
+        ${`creator-age-${input.contentId}`}, 'gov_id_selfie', 18, true, 'high', now(), true,
+        null, null
+      ),
+      (
+        'user', ${input.creatorUserId}, 'creator_kyc', 'valid', 'didit',
+        ${`creator-kyc-${input.contentId}`}, 'gov_id_selfie', 18, true, 'high', now(), true,
+        null, null
+      ),
+      (
+        'user', ${input.creatorUserId}, 'adult_publisher_eligibility', 'valid', 'didit',
+        ${`creator-adult-${input.contentId}`}, 'gov_id_selfie', 18, true, 'high', now(), true,
+        'adult-publisher-v1', now()
+      )
+  `;
+  await sql`
+    insert into creator_monetisation_settings (
+      user_id,
+      state,
+      earning_state,
+      kyc_state,
+      tax_profile_state,
+      earnings_recipient_wallet_id,
+      support_enabled,
+      content_unlocks_enabled,
+      live_passes_enabled,
+      paid_messages_enabled
+    )
+    values (
+      ${input.creatorUserId},
+      'active',
+      'ready',
+      'verified',
+      'not_required',
+      ${recipientWalletId},
+      true,
+      true,
+      true,
+      true
+    )
   `;
   await sql`
     insert into content_items (
@@ -1617,12 +2311,12 @@ async function seedCreatorPaidContent(
       ${input.creatorUserId},
       'image',
       'ready',
-      'published',
-      now(),
+      'submitted_for_review',
+      null,
       'Integration paid content',
       'public',
       'adult',
-      'approved'
+      'pending'
     )
   `;
   await sql`
@@ -1649,6 +2343,12 @@ async function seedCreatorPaidContent(
       now()
     )
   `;
+  await approveSeededContent(sql, {
+    contentId: input.contentId,
+    creatorUserId: input.creatorUserId,
+    rating: "adult",
+    representationMode: "no_real_person"
+  });
   await sql`
     insert into content_access_rules (
       id,
@@ -1668,6 +2368,132 @@ async function seedCreatorPaidContent(
       'SOL',
       'active'
     )
+  `;
+}
+
+async function seedCreatorFreeVideo(
+  sql: PostgresSql,
+  input: {
+    creatorUserId: string;
+    contentId: string;
+    mediaAssetId: string;
+  }
+): Promise<void> {
+  await sql`
+    insert into content_items (
+      id,
+      creator_user_id,
+      media_type,
+      state,
+      publish_state,
+      published_at,
+      caption,
+      visibility,
+      nsfw_label,
+      moderation_state
+    )
+    values (
+      ${input.contentId},
+      ${input.creatorUserId},
+      'vod',
+      'ready',
+      'submitted_for_review',
+      null,
+      'Integration free video',
+      'public',
+      'none',
+      'pending'
+    )
+  `;
+  await sql`
+    insert into media_assets (
+      id,
+      content_item_id,
+      provider,
+      provider_asset_id,
+      provider_state,
+      poster_url,
+      playback_url,
+      provider_playable,
+      ready_at
+    )
+    values (
+      ${input.mediaAssetId},
+      ${input.contentId},
+      'bunny',
+      ${`integration-free-${input.contentId}`},
+      'ready',
+      'https://media.example.test/integration-free-poster.jpg',
+      ${`https://video.example.test/${input.mediaAssetId}/playlist.m3u8`},
+      true,
+      now()
+    )
+  `;
+  await approveSeededContent(sql, {
+    contentId: input.contentId,
+    creatorUserId: input.creatorUserId,
+    rating: "none",
+    representationMode: "not_declared"
+  });
+}
+
+async function approveSeededContent(
+  sql: PostgresSql,
+  input: {
+    contentId: string;
+    creatorUserId: string;
+    rating: "none" | "adult" | "explicit";
+    representationMode: "not_declared" | "no_real_person" | "self_only";
+  }
+): Promise<void> {
+  await sql`
+    insert into content_safety_declarations (
+      content_item_id,
+      uploader_user_id,
+      representation_mode,
+      policy_version,
+      state,
+      accepted_at
+    )
+    values (
+      ${input.contentId},
+      ${input.creatorUserId},
+      ${input.representationMode},
+      'media-safety-v1',
+      'active',
+      ${input.representationMode === "not_declared" ? null : new Date()}
+    )
+  `;
+  await sql`
+    insert into media_safety_cases (
+      content_item_id,
+      declared_rating,
+      state,
+      decision_source,
+      reason_code,
+      policy_version,
+      provider_release_allowed,
+      decided_at
+    )
+    values (
+      ${input.contentId},
+      ${input.rating},
+      'approved',
+      'staff',
+      'integration_fixture_approved',
+      'media-safety-v1',
+      true,
+      now()
+    )
+  `;
+  await sql`
+    update content_items
+    set
+      moderation_state = 'approved',
+      publish_state = 'published',
+      published_at = now(),
+      updated_at = now()
+    where id = ${input.contentId}
   `;
 }
 
@@ -1793,10 +2619,12 @@ async function seedCreatorLiveRoom(
       provider_state,
       state,
       access_rule,
-      teaser_seconds,
-      pass_price_minor,
+      preview_seconds,
+      event_price_minor,
       currency,
-      pass_durations_minutes,
+      members_only_chat,
+      members_included_in_paid_event,
+      replay_window_hours,
       host_ingest_url,
       host_stream_key,
       playback_url,
@@ -1811,11 +2639,13 @@ async function seedCreatorLiveRoom(
       ${`livepeer-playback-${input.shortRunId}`},
       'active',
       'live',
-      'pass_required',
+      'paid_event',
       60,
       50000000,
       'SOL',
-      array[30, 60, 180],
+      false,
+      false,
+      48,
       'rtmp://rtmp.livepeer.com/live/integration',
       'integration-stream-key',
       ${`https://livepeercdn.studio/hls/livepeer-playback-${input.shortRunId}/index.m3u8`},
@@ -1843,6 +2673,14 @@ async function seedPlatformSubscriptionPlan(
       provider_state,
       token_mint,
       token_program,
+      provider,
+      program_id,
+      plan_pda,
+      onchain_plan_id,
+      merchant_wallet,
+      amount_atomic,
+      period_seconds,
+      platform_fee_amount_atomic,
       state
     )
     values (
@@ -1853,9 +2691,17 @@ async function seedPlatformSubscriptionPlan(
       'USDC',
       30,
       'delegated_solana_subscription',
-      'staging_required',
+      'launch_approved',
       ${subscriptionTokenMint},
       'spl_token',
+      'official_solana_subscription_program',
+      ${subscriptionProgramId},
+      ${subscriptionPlanPda},
+      ${input.planId},
+      ${subscriptionMerchantWallet},
+      19000000,
+      2592000,
+      19000000,
       'active'
     )
   `;
@@ -1912,12 +2758,14 @@ async function cleanupRun(
     creatorSupabaseUserId: string;
     providerReference: string;
     seededContentId: string;
+    seededFreeContentId: string;
     seededEventId: string;
     seededConversationId: string;
     seededLiveRoomId: string;
     seededSubscriptionPlanId: string;
     seededProviderEventId: string;
     seededProviderReplayRequestId: string;
+    seededOrganizationId: string;
   }
 ): Promise<void> {
   await sql.begin(async (tx) => {
@@ -1939,6 +2787,18 @@ async function cleanupRun(
           from age_verifications
           where provider_reference = ${input.providerReference}
         `;
+    const verificationSessionRows = await tx<{ id: string }[]>`
+      select id
+      from verification_sessions
+      where provider_session_id = ${input.providerReference}
+        ${userIds.length > 0 ? tx`or subject_id in ${tx(userIds)}` : tx``}
+    `;
+    const verificationRecordRows = await tx<{ id: string }[]>`
+      select id
+      from verification_records
+      where provider_reference = ${input.providerReference}
+        ${userIds.length > 0 ? tx`or subject_id in ${tx(userIds)}` : tx``}
+    `;
     const walletRows = userIds.length
       ? await tx<{ id: string }[]>`
           select id
@@ -1951,12 +2811,12 @@ async function cleanupRun(
           select id
           from content_items
           where creator_user_id in ${tx(userIds)}
-             or id = ${input.seededContentId}
+             or id in (${input.seededContentId}, ${input.seededFreeContentId})
         `
       : await tx<{ id: string }[]>`
           select id
           from content_items
-          where id = ${input.seededContentId}
+          where id in (${input.seededContentId}, ${input.seededFreeContentId})
         `;
     const contentIds = contentRows.map((row) => row.id);
     const eventRows = userIds.length
@@ -2014,6 +2874,8 @@ async function cleanupRun(
         `;
     const subscriptionIds = subscriptionRows.map((row) => row.id);
     const ageIds = ageRows.map((row) => row.id);
+    const verificationSessionIds = verificationSessionRows.map((row) => row.id);
+    const verificationRecordIds = verificationRecordRows.map((row) => row.id);
     const walletIds = walletRows.map((row) => row.id);
     const paymentIntentRows = userIds.length
       ? await tx<{ id: string }[]>`
@@ -2028,6 +2890,40 @@ async function cleanupRun(
           where target_id in (${input.seededContentId}, ${input.seededEventId}, ${input.seededConversationId}, ${input.seededLiveRoomId})
         `;
     const paymentIntentIds = paymentIntentRows.map((row) => row.id);
+
+    await tx`
+      delete from platform_playback_heartbeats
+      where session_id in (
+        select id
+        from platform_playback_sessions
+        where (target_type = 'content' and target_id in (${input.seededContentId}, ${input.seededFreeContentId}))
+          ${userIds.length > 0 ? tx`or user_id in ${tx(userIds)}` : tx``}
+      )
+    `;
+    await tx`
+      delete from platform_playback_sessions
+      where (target_type = 'content' and target_id in (${input.seededContentId}, ${input.seededFreeContentId}))
+        ${userIds.length > 0 ? tx`or user_id in ${tx(userIds)}` : tx``}
+    `;
+    if (userIds.length > 0) {
+      await tx`
+        delete from platform_usage_windows
+        where user_id in ${tx(userIds)}
+      `;
+    }
+    await tx`
+      delete from tier_waivers
+      where subject_type = 'organization'
+        and subject_id = ${input.seededOrganizationId}
+    `;
+    await tx`
+      delete from organization_memberships
+      where organization_id = ${input.seededOrganizationId}
+    `;
+    await tx`
+      delete from organizations
+      where id = ${input.seededOrganizationId}
+    `;
 
     if (userIds.length > 0) {
       if (subscriptionIds.length > 0) {
@@ -2224,8 +3120,17 @@ async function cleanupRun(
         where user_id in ${tx(userIds)}
       `;
       await tx`
+        delete from creator_monetisation_settings
+        where user_id in ${tx(userIds)}
+      `;
+      await tx`
         delete from wallets
         where user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from blocks
+        where blocker_user_id in ${tx(userIds)}
+           or blocked_user_id in ${tx(userIds)}
       `;
       await tx`
         delete from audit_events
@@ -2374,6 +3279,32 @@ async function cleanupRun(
         `;
       }
       await tx`
+        delete from engagement_action_receipts
+        where target_id in ${tx(contentIds)}
+      `;
+      await tx`
+        delete from content_reactions
+        where content_item_id in ${tx(contentIds)}
+      `;
+      await tx`
+        delete from content_saves
+        where content_item_id in ${tx(contentIds)}
+      `;
+      await tx`
+        delete from comments
+        where content_item_id in ${tx(contentIds)}
+      `;
+      await tx`
+        delete from share_records
+        where target_type = 'content'
+          and target_id in ${tx(contentIds)}
+      `;
+      await tx`
+        delete from reports
+        where subject_type = 'content'
+          and subject_id in ${tx(contentIds)}
+      `;
+      await tx`
         delete from content_access_rules
         where content_item_id in ${tx(contentIds)}
       `;
@@ -2406,6 +3337,32 @@ async function cleanupRun(
       `;
     }
 
+    if (verificationSessionIds.length > 0 || verificationRecordIds.length > 0) {
+      const verificationSubjectIds = [...verificationSessionIds, ...verificationRecordIds];
+      await tx`
+        delete from audit_events
+        where subject_type = 'verification_record'
+          and subject_id in ${tx(verificationSubjectIds)}
+      `;
+      await tx`
+        delete from verification_events
+        where idempotency_key = ${`sumsub-event-${input.providerReference.replace("sumsub-", "")}`}
+          ${verificationSessionIds.length > 0 ? tx`or session_id in ${tx(verificationSessionIds)}` : tx``}
+      `;
+      if (verificationRecordIds.length > 0) {
+        await tx`
+          delete from verification_records
+          where id in ${tx(verificationRecordIds)}
+        `;
+      }
+      if (verificationSessionIds.length > 0) {
+        await tx`
+          delete from verification_sessions
+          where id in ${tx(verificationSessionIds)}
+        `;
+      }
+    }
+
     if (walletIds.length > 0) {
       await tx`
         delete from audit_events
@@ -2424,6 +3381,13 @@ async function cleanupRun(
         and webhook_type = 'age-verification'
         and idempotency_key = ${`sumsub-event-${input.providerReference.replace("sumsub-", "")}`}
     `;
+    if (userIds.length > 0) {
+      await tx`
+        delete from performer_subjects
+        where owner_user_id in ${tx(userIds)}
+           or linked_user_id in ${tx(userIds)}
+      `;
+    }
     await tx`
       delete from profiles
       where handle in (${input.buyerHandle}, ${input.creatorHandle})
@@ -2431,6 +3395,10 @@ async function cleanupRun(
     `;
 
     if (userIds.length > 0) {
+      await tx`
+        delete from idempotency_keys
+        where actor_user_id in ${tx(userIds)}
+      `;
       await tx`
         delete from users
         where id in ${tx(userIds)}

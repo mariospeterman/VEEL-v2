@@ -10,16 +10,21 @@ import { registerEngagementRoutes } from "./modules/engagement/engagement-routes
 import { registerEventRoutes } from "./modules/event/event-routes.js";
 import { registerLiveRoutes } from "./modules/live/live-routes.js";
 import { registerMessageRoutes } from "./modules/message/message-routes.js";
+import { registerManagedCreatorRoutes } from "./modules/managed-creator/managed-creator-routes.js";
+import { registerMcpRoutes } from "./modules/mcp/mcp-routes.js";
 import { registerMutualsRoutes } from "./modules/mutuals/mutuals-routes.js";
 import { registerNotificationRoutes } from "./modules/notification/notification-routes.js";
 import { registerOrganizationRoutes } from "./modules/organization/organization-routes.js";
 import { registerPaymentRoutes } from "./modules/payment/payment-routes.js";
+import { registerPerformerRoutes } from "./modules/performer/performer-routes.js";
 import { registerProfileRoutes } from "./modules/profile/profile-routes.js";
 import { registerReferralRoutes } from "./modules/referral/referral-routes.js";
 import { registerRefundRoutes } from "./modules/refund/refund-routes.js";
 import { registerSessionRoutes } from "./modules/session/session-routes.js";
 import { registerSubscriptionRoutes } from "./modules/subscription/subscription-routes.js";
+import { registerVerificationRoutes } from "./modules/verification/verification-routes.js";
 import { registerWalletRoutes } from "./modules/wallet/wallet-routes.js";
+import { registerWalletAuthRoutes } from "./modules/auth/wallet-auth-routes.js";
 
 export async function registerApiRoutes(
   app: FastifyInstance,
@@ -41,9 +46,11 @@ export async function registerApiRoutes(
     engagementRepository,
     paymentRepository,
     paymentEvidenceRepository,
+    performerRepository,
     settlementVerifier,
     liveProvider,
     messageRepository,
+    managedCreatorRepository,
     referralRepository,
     refundRepository,
     notificationRepository,
@@ -53,9 +60,17 @@ export async function registerApiRoutes(
     activityRepository,
     adminRepository,
     aiRepository,
+    mcpRepository,
+    verificationRepository,
+    verificationProviderWaterfall,
+    walletAuthRepository,
     onrampProvider
   } = dependencies;
 
+  await registerWalletAuthRoutes(app, {
+    authVerifier,
+    walletAuthRepository
+  });
   await registerSessionRoutes(app, {
     authVerifier,
     sessionRepository,
@@ -67,6 +82,16 @@ export async function registerApiRoutes(
     sessionRepository,
     ageProviderWaterfall,
     ageRepository
+  });
+  await registerVerificationRoutes(app, {
+    authVerifier,
+    verificationRepository,
+    verificationProviderWaterfall
+  });
+  await registerPerformerRoutes(app, {
+    authVerifier,
+    performerRepository,
+    verificationProviderWaterfall
   });
   await registerProfileRoutes(app, {
     authVerifier,
@@ -81,7 +106,9 @@ export async function registerApiRoutes(
     walletRepository,
     contentRepository,
     mediaUploadProvider,
-    liveRepository
+    liveRepository,
+    verificationRepository,
+    subscriptionRepository
   });
   await registerDiscoverRoutes(app, {
     authVerifier,
@@ -127,7 +154,8 @@ export async function registerApiRoutes(
     walletRepository,
     paymentRepository,
     liveRepository,
-    liveProvider
+    liveProvider,
+    subscriptionRepository
   });
   await registerMessageRoutes(app, {
     authVerifier,
@@ -137,6 +165,7 @@ export async function registerApiRoutes(
     paymentRepository,
     messageRepository
   });
+  await registerManagedCreatorRoutes(app, { authVerifier, managedCreatorRepository });
   await registerReferralRoutes(app, {
     authVerifier,
     sessionRepository,
@@ -185,6 +214,16 @@ export async function registerApiRoutes(
     ageRepository,
     adminRepository,
     aiRepository
+  });
+  await registerMcpRoutes(app, {
+    authVerifier,
+    sessionRepository,
+    ageRepository,
+    walletRepository,
+    profileRepository,
+    contentRepository,
+    adminRepository,
+    mcpRepository
   });
   await registerWalletRoutes(app, {
     authVerifier,

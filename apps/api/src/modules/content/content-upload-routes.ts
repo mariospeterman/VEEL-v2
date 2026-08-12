@@ -9,6 +9,7 @@ import {
   dailyQuotaWindowStart,
   quotaExceededResponse,
   resolveContentCreationAbusePolicy,
+  verifyCreatorCapability,
   verifyAppReadyAccess,
   videoMimeTypes,
   type RegisterContentRoutesOptions
@@ -60,6 +61,16 @@ export async function registerContentUploadRoutes(
           code: "not_found",
           message: "Content draft was not found"
         });
+      }
+
+      const creatorAccess = await verifyCreatorCapability(
+        access.supabaseUserId,
+        content.nsfwLabel === "none" ? "canUploadMedia" : "canPublishAdultMedia",
+        options
+      );
+
+      if (!creatorAccess.ok) {
+        return reply.code(creatorAccess.statusCode).send(creatorAccess.body);
       }
 
       if (options.contentRepository.countMediaAssetsCreatedSince) {

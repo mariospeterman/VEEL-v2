@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import {
   PaymentIdempotencyConflictError,
+  PaymentRecipientNotReadyError,
   PaymentRepositoryConfigurationError
 } from "../payment/payment-repository.js";
 import {
@@ -21,7 +22,10 @@ import {
   validateMessageBody,
   verifyMessageReadyAccess
 } from "./message-route-utils.js";
-import { MessageRepositoryConfigurationError } from "./message-repository.js";
+import {
+  MessageIdempotencyConflictError,
+  MessageRepositoryConfigurationError
+} from "./message-repository.js";
 import type {
   CreateMessageRequest,
   CreatePaidMessageIntentRequest
@@ -93,7 +97,8 @@ export async function registerMessageRoutes(
       return reply.code(access.statusCode).send(access.body);
     }
 
-    if (!requiredIdempotencyKey(request)) {
+    const idempotencyKey = requiredIdempotencyKey(request);
+    if (!idempotencyKey) {
       return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
     }
 
@@ -116,7 +121,8 @@ export async function registerMessageRoutes(
       const message = await options.messageRepository.createMessage({
         supabaseUserId: access.supabaseUserId,
         conversationId,
-        body: body?.body?.trim() ?? ""
+        body: body?.body?.trim() ?? "",
+        idempotencyKey
       });
 
       if (!message) {
@@ -125,6 +131,10 @@ export async function registerMessageRoutes(
 
       return reply.code(201).send(message);
     } catch (error) {
+      if (error instanceof MessageIdempotencyConflictError) {
+        return reply.code(409).send(conflictResponse("Idempotency key was already used"));
+      }
+
       if (error instanceof MessageRepositoryConfigurationError) {
         request.log.warn({ error }, "Message create failed");
         return reply.code(503).send(serviceUnavailableResponse("Messages are not configured"));
@@ -154,14 +164,16 @@ export async function registerMessageRoutes(
       return reply.code(400).send(validationResponse(validationError));
     }
 
-    if (!app.config.PAYMENT_PLATFORM_TREASURY_WALLET) {
-      return reply.code(503).send(serviceUnavailableResponse("Payment treasury wallet is not configured"));
+    const platformFeeWallet = app.config.PAYMENT_PLATFORM_FEE_WALLET ?? app.config.PAYMENT_PLATFORM_TREASURY_WALLET;
+
+    if (!platformFeeWallet) {
+      return reply.code(503).send(serviceUnavailableResponse("Payment platform fee wallet is not configured"));
     }
 
     const conversationId = (request.params as { conversationId?: string }).conversationId ?? "";
 
     try {
-      assertSolanaAddress(app.config.PAYMENT_PLATFORM_TREASURY_WALLET);
+      assertSolanaAddress(platformFeeWallet);
       await options.sessionRepository.ensureUserForSupabaseId(access.supabaseUserId);
       const price = await options.messageRepository.findConversationPrice({
         supabaseUserId: access.supabaseUserId,
@@ -187,7 +199,12 @@ export async function registerMessageRoutes(
         amountMinor: price.amountMinor,
         currency: price.currency,
         solanaCluster: app.config.SOLANA_CLUSTER,
-        treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET,
+        treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET ?? platformFeeWallet,
+        platformFeeWallet,
+        platformFeeBps: app.config.PAYMENT_PLATFORM_FEE_BPS,
+        referralShareOfPlatformFeeBps: app.config.PAYMENT_REFERRAL_SHARE_OF_PLATFORM_FEE_BPS,
+        settlementKind: "creator_split",
+        creatorUserId: price.recipientUserId,
         referenceAddress: createSolanaReferenceAddress(),
         expiresAt: new Date(Date.now() + paymentIntentTtlMs),
         referralToken: null
@@ -215,6 +232,10 @@ export async function registerMessageRoutes(
     } catch (error) {
       if (error instanceof PaymentIdempotencyConflictError) {
         return reply.code(409).send(conflictResponse("Idempotency key was already used"));
+      }
+
+      if (error instanceof PaymentRecipientNotReadyError) {
+        return reply.code(409).send(conflictResponse("This creator cannot receive payments yet"));
       }
 
       if (

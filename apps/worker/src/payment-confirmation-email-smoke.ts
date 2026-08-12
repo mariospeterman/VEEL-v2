@@ -24,6 +24,8 @@ const provider = createResendPaymentConfirmationEmailProvider({
 
 const outcome = await provider.send({
   deliveryId: `smoke-${Date.now()}`,
+  leaseToken: "smoke",
+  attemptCount: 1,
   paymentIntentId: "00000000-0000-4000-8000-000000000000",
   receiptId: null,
   userId: "smoke",

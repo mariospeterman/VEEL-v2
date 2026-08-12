@@ -9,9 +9,11 @@ import {
   normalizeAgeWebhook
 } from "./age-webhook-adapter.js";
 import {
+  AgeProviderHttpError,
   AgeProviderIntegrationPendingError,
   AgeProviderUnavailableError
 } from "./age-provider-waterfall.js";
+import { isMockVerificationProviderReference } from "../verification/verification-provider-adapters.js";
 import type {
   AgeProviderWaterfall,
   AgeRepository,
@@ -26,7 +28,10 @@ interface RegisterAgeRoutesOptions {
   ageProviderWaterfall: AgeProviderWaterfall;
 }
 
-const ageProviderPreferences = new Set(["reusable_first", "yoti", "sumsub", "veriff", "persona"]);
+const ageProviderPreferences = new Set(["reusable_first", "didit", "yoti", "sumsub", "veriff", "persona"]);
+// Didit V3 uses one application-level webhook destination across workflows.
+// Route every Didit event through the normalized verification webhook so age,
+// adult eligibility, KYC, and KYB sessions share one idempotency boundary.
 const ageProviders = new Set<AgeProvider>(["yoti", "sumsub", "veriff", "persona"]);
 
 export async function registerAgeRoutes(
@@ -58,35 +63,21 @@ export async function registerAgeRoutes(
           headers: request.headers,
           env: app.config
         });
-        const isNewEvent = await options.ageRepository.recordProviderWebhook({
+        const result = await options.ageRepository.applyProviderWebhook({
           provider: normalized.provider,
           providerEventId: normalized.providerEventId,
           eventType: normalized.eventType,
-          normalizedState: normalized.state,
-          signatureHash: normalized.signatureHash
-        });
-
-        if (!isNewEvent) {
-          return reply.code(202).send({
-            provider: normalized.provider,
-            received: 1,
-            processed: 0
-          });
-        }
-
-        const applied = await options.ageRepository.updateVerificationFromWebhook({
-          provider: normalized.provider,
-          providerEventId: normalized.providerEventId,
           providerReference: normalized.providerReference,
           state: normalized.state,
           verifiedAt: normalized.occurredAt ?? null,
-          failureCode: normalized.failureCode ?? null
+          failureCode: normalized.failureCode ?? null,
+          signatureHash: normalized.signatureHash
         });
 
         return reply.code(202).send({
           provider: normalized.provider,
           received: 1,
-          processed: applied ? 1 : 0
+          processed: result === "applied" ? 1 : 0
         });
       } catch (error) {
         if (error instanceof AgeWebhookSignatureError) {
@@ -148,10 +139,10 @@ export async function registerAgeRoutes(
         verifiedSession.supabaseUserId
       );
 
-      if (latestAgeStatus.state === "verified" || latestAgeStatus.state === "pending") {
+      if (latestAgeStatus.state === "verified") {
         return reply.code(409).send({
           code: "conflict",
-          message: `Age verification is already ${latestAgeStatus.state}`
+          message: "Age verification is already verified"
         });
       }
 
@@ -172,6 +163,17 @@ export async function registerAgeRoutes(
         expiresAt: providerSession.expiresAt
       });
 
+      if (isMockVerificationProviderReference(app.config, providerSession.providerReference)) {
+        await options.ageRepository.updateVerificationFromWebhook({
+          provider: providerSession.provider,
+          providerEventId: `${providerSession.providerReference}:auto-approved`,
+          providerReference: providerSession.providerReference,
+          state: "verified",
+          verifiedAt: new Date(),
+          failureCode: null
+        });
+      }
+
       return reply.code(201).send({
         id: providerSession.providerReference,
         provider: providerSession.provider,
@@ -181,8 +183,10 @@ export async function registerAgeRoutes(
     } catch (error) {
       if (
         error instanceof AgeProviderUnavailableError ||
-        error instanceof AgeProviderIntegrationPendingError
+        error instanceof AgeProviderIntegrationPendingError ||
+        error instanceof AgeProviderHttpError
       ) {
+        request.log.warn({ error }, "Age verification provider is unavailable");
         return reply.code(503).send({
           code: "service_unavailable",
           message: "Age verification provider is not configured"

@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   PaymentIdempotencyConflictError,
+  PaymentRecipientNotReadyError,
   PaymentRepositoryConfigurationError
 } from "../payment/payment-repository.js";
 import {
@@ -98,11 +99,13 @@ export async function registerEventAccessPassRoutes(
         return reply.code(201).send(accessPassIntentResponse("free_granted", accessPass));
       }
 
-      if (!app.config.PAYMENT_PLATFORM_TREASURY_WALLET) {
-        return reply.code(503).send(serviceUnavailableResponse("Payment treasury wallet is not configured"));
+      const platformFeeWallet = app.config.PAYMENT_PLATFORM_FEE_WALLET ?? app.config.PAYMENT_PLATFORM_TREASURY_WALLET;
+
+      if (!platformFeeWallet) {
+        return reply.code(503).send(serviceUnavailableResponse("Payment platform fee wallet is not configured"));
       }
 
-      assertSolanaAddress(app.config.PAYMENT_PLATFORM_TREASURY_WALLET);
+      assertSolanaAddress(platformFeeWallet);
 
       const hasWallet = await options.walletRepository.hasWalletBySupabaseUserId(access.supabaseUserId);
 
@@ -128,7 +131,11 @@ export async function registerEventAccessPassRoutes(
         amountMinor: offer.accessPassType.priceMinor,
         currency: "SOL",
         solanaCluster: app.config.SOLANA_CLUSTER,
-        treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET,
+        treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET ?? platformFeeWallet,
+        platformFeeWallet,
+        platformFeeBps: app.config.PAYMENT_PLATFORM_FEE_BPS,
+        referralShareOfPlatformFeeBps: app.config.PAYMENT_REFERRAL_SHARE_OF_PLATFORM_FEE_BPS,
+        settlementKind: "creator_split",
         referenceAddress: createSolanaReferenceAddress(),
         expiresAt: new Date(Date.now() + paymentIntentTtlMs),
         referralToken: null
@@ -150,6 +157,10 @@ export async function registerEventAccessPassRoutes(
     } catch (error) {
       if (error instanceof PaymentIdempotencyConflictError) {
         return reply.code(409).send(conflictResponse("Idempotency key was already used"));
+      }
+
+      if (error instanceof PaymentRecipientNotReadyError) {
+        return reply.code(409).send(conflictResponse("This creator cannot receive payments yet"));
       }
 
       if (

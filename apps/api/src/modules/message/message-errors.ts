@@ -4,3 +4,10 @@ export class MessageRepositoryConfigurationError extends Error {
     this.name = "MessageRepositoryConfigurationError";
   }
 }
+
+export class MessageIdempotencyConflictError extends Error {
+  constructor() {
+    super("MESSAGE_IDEMPOTENCY_CONFLICT");
+    this.name = "MessageIdempotencyConflictError";
+  }
+}

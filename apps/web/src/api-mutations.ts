@@ -1,64 +1,173 @@
 "use client";
 
-import { parsePublicWebEnv } from "@veel/config/public";
-import type { components } from "@veel/contracts";
-import { createSupabaseBrowserClient } from "@/supabase/client";
-import { e2eAuthCookieName } from "@/supabase/auth-cookie";
-
-export type User = components["schemas"]["User"];
-export type CreateAgeSessionRequest = components["schemas"]["CreateAgeSessionRequest"];
-export type AgeSession = components["schemas"]["AgeSession"];
-export type UpdateProfileRequest = components["schemas"]["UpdateProfileRequest"];
-export type CreateWalletLinkChallengeRequest =
-  components["schemas"]["CreateWalletLinkChallengeRequest"];
-export type WalletLinkChallenge = components["schemas"]["WalletLinkChallenge"];
-export type LinkWalletRequest = components["schemas"]["LinkWalletRequest"];
-export type Wallet = components["schemas"]["Wallet"];
-export type CreateContentRequest = components["schemas"]["CreateContentRequest"];
-export type UpdateContentRequest = components["schemas"]["UpdateContentRequest"];
-export type PublishContentRequest = components["schemas"]["PublishContentRequest"];
-export type ContentItem = components["schemas"]["ContentItem"];
-export type CreateUploadRequest = components["schemas"]["CreateUploadRequest"];
-export type UploadSession = components["schemas"]["UploadSession"];
-export type ContentUnlockIntent = components["schemas"]["ContentUnlockIntent"];
-export type CreateLivePassIntentRequest = components["schemas"]["CreateLivePassIntentRequest"];
-export type CreateAccessPassIntentRequest = components["schemas"]["CreateAccessPassIntentRequest"];
-export type AccessPassIntent = components["schemas"]["AccessPassIntent"];
-export type CreateMessageRequest = components["schemas"]["CreateMessageRequest"];
-export type CreatePaidMessageIntentRequest = components["schemas"]["CreatePaidMessageIntentRequest"];
-export type Message = components["schemas"]["Message"];
-export type PaidMessageIntent = components["schemas"]["PaidMessageIntent"];
-export type CreatePaymentIntentRequest = components["schemas"]["CreatePaymentIntentRequest"];
-export type PaymentIntent = components["schemas"]["PaymentIntent"];
-export type TransactionRequest = components["schemas"]["TransactionRequest"];
-export type CreateSubscriptionIntentRequest = components["schemas"]["CreateSubscriptionIntentRequest"];
-export type SubscriptionAuthorizationIntent =
-  components["schemas"]["SubscriptionAuthorizationIntent"];
-export type SubmitSubscriptionAuthorizationRequest =
-  components["schemas"]["SubmitSubscriptionAuthorizationRequest"];
-export type Subscription = components["schemas"]["Subscription"];
-export type CreateRefundDisputeRequest = components["schemas"]["CreateRefundDisputeRequest"];
-export type RefundDisputeRequest = components["schemas"]["RefundDisputeRequest"];
-
-const browserE2eAuthEnabled =
-  process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_ENABLE_E2E_AUTH === "true";
-
-export class ApiMutationError extends Error {
-  constructor(
-    message: string,
-    readonly status?: number
-  ) {
-    super(message);
-    this.name = "ApiMutationError";
-  }
-}
+import {
+  authenticatedEmptyMutation,
+  authenticatedGet,
+  authenticatedMutation,
+  publicMutation
+} from "./api-mutation-transport";
+export { ApiMutationError } from "./api-mutation-types";
+export type {
+  AccessPassIntent,
+  AgeSession,
+  ContentItem,
+  ContentUnlockIntent,
+  BlockState,
+  Comment,
+  CommentPage,
+  CreateCommentRequest,
+  CreateReportRequest,
+  CreateShareRequest,
+  EngagementState,
+  FeedPreferences,
+  HideFeedCreatorRequest,
+  ModerationIntake,
+  ShareResult,
+  CreateAccessPassIntentRequest,
+  CreateAgeSessionRequest,
+  CreateVerificationSessionRequest,
+  CreateContentRequest,
+  CreateMessageRequest,
+  CreatePaidMessageIntentRequest,
+  CreatePaymentIntentRequest,
+  CreateRefundDisputeRequest,
+  CreateSubscriptionIntentRequest,
+  CreateUploadRequest,
+  CreateWalletLinkChallengeRequest,
+  CreateWalletAuthChallengeRequest,
+  CreateWalletAuthSessionRequest,
+  LinkSupabaseRecoveryRequest,
+  LinkWalletRequest,
+  McpConnection,
+  McpOAuthRedirect,
+  Message,
+  PaidMessageIntent,
+  PaymentIntent,
+  PublishContentRequest,
+  ProfileAvatarUpload,
+  RefundDisputeRequest,
+  SessionState,
+  SubmitSubscriptionAuthorizationRequest,
+  Subscription,
+  SubscriptionAuthorizationIntent,
+  TransactionRequest,
+  UpdateContentRequest,
+  UpdateProfileRequest,
+  UploadProfileAvatarRequest,
+  UploadSession,
+  VerificationSession,
+  User,
+  Wallet,
+  WalletAuthChallenge,
+  WalletAuthSession,
+  AuthRecoveryLink,
+  WalletLinkChallenge
+} from "./api-mutation-types";
+import type {
+  AccessPassIntent,
+  AgeSession,
+  ContentItem,
+  ContentUnlockIntent,
+  BlockState,
+  Comment,
+  CommentPage,
+  CreateCommentRequest,
+  CreateReportRequest,
+  CreateShareRequest,
+  EngagementState,
+  FeedPreferences,
+  HideFeedCreatorRequest,
+  ModerationIntake,
+  ShareResult,
+  CreateAccessPassIntentRequest,
+  CreateAgeSessionRequest,
+  CreateVerificationSessionRequest,
+  CreateContentRequest,
+  CreateMessageRequest,
+  CreatePaidMessageIntentRequest,
+  CreatePaymentIntentRequest,
+  CreateRefundDisputeRequest,
+  CreateSubscriptionIntentRequest,
+  CreateUploadRequest,
+  CreateWalletLinkChallengeRequest,
+  CreateWalletAuthChallengeRequest,
+  CreateWalletAuthSessionRequest,
+  LinkSupabaseRecoveryRequest,
+  LinkWalletRequest,
+  McpConnection,
+  McpOAuthRedirect,
+  Message,
+  PaidMessageIntent,
+  PaymentIntent,
+  PublishContentRequest,
+  ProfileAvatarUpload,
+  RefundDisputeRequest,
+  SessionState,
+  SubmitSubscriptionAuthorizationRequest,
+  Subscription,
+  SubscriptionAuthorizationIntent,
+  TransactionRequest,
+  UpdateContentRequest,
+  UpdateProfileRequest,
+  UploadProfileAvatarRequest,
+  UploadSession,
+  VerificationSession,
+  User,
+  Wallet,
+  WalletAuthChallenge,
+  WalletAuthSession,
+  AuthRecoveryLink,
+  WalletLinkChallenge
+} from "./api-mutation-types";
 
 export async function createAgeSession(body: CreateAgeSessionRequest): Promise<AgeSession> {
   return authenticatedMutation<AgeSession>("/v1/age/sessions", "POST", body);
 }
 
+export async function getCurrentSession(): Promise<SessionState> {
+  return authenticatedGet<SessionState>("/v1/session");
+}
+
+export async function createVerificationSession(
+  body: CreateVerificationSessionRequest
+): Promise<VerificationSession> {
+  return authenticatedMutation<VerificationSession>("/v1/verification/sessions", "POST", body);
+}
+
 export async function updateMyProfile(body: UpdateProfileRequest): Promise<User> {
   return authenticatedMutation<User>("/v1/profiles/me", "PATCH", body);
+}
+
+export async function createStarterProfile(): Promise<User> {
+  return authenticatedMutation<User>("/v1/profiles/me/starter", "POST", {});
+}
+
+export async function uploadMyProfileAvatar(
+  body: UploadProfileAvatarRequest
+): Promise<ProfileAvatarUpload> {
+  return authenticatedMutation<ProfileAvatarUpload>("/v1/profiles/me/avatar", "POST", body);
+}
+
+export async function createWalletAuthChallenge(
+  body: CreateWalletAuthChallengeRequest
+): Promise<WalletAuthChallenge> {
+  return publicMutation<WalletAuthChallenge>("/v1/auth/wallet/challenges", "POST", body);
+}
+
+export async function createWalletAuthSession(
+  body: CreateWalletAuthSessionRequest
+): Promise<WalletAuthSession> {
+  return publicMutation<WalletAuthSession>("/v1/auth/wallet/sessions", "POST", body);
+}
+
+export async function revokeWalletAuthSession(): Promise<void> {
+  return authenticatedEmptyMutation("/v1/auth/wallet/logout", "POST", {});
+}
+
+export async function linkSupabaseRecovery(
+  body: LinkSupabaseRecoveryRequest
+): Promise<AuthRecoveryLink> {
+  return authenticatedMutation<AuthRecoveryLink>("/v1/auth/recovery-link", "POST", body);
 }
 
 export async function createWalletLinkChallenge(
@@ -71,8 +180,11 @@ export async function linkWallet(body: LinkWalletRequest): Promise<Wallet> {
   return authenticatedMutation<Wallet>("/v1/wallets/link", "POST", body);
 }
 
-export async function createContentDraft(body: CreateContentRequest): Promise<ContentItem> {
-  return authenticatedMutation<ContentItem>("/v1/content", "POST", body);
+export async function createContentDraft(
+  body: CreateContentRequest,
+  idempotencyKey?: string
+): Promise<ContentItem> {
+  return authenticatedMutation<ContentItem>("/v1/content", "POST", body, idempotencyKey);
 }
 
 export async function updateContent(
@@ -121,14 +233,89 @@ export async function createContentUnlockIntent(contentId: string): Promise<Cont
   );
 }
 
-export async function createLivePassIntent(
-  liveRoomId: string,
-  body: CreateLivePassIntentRequest
-): Promise<PaymentIntent> {
-  return authenticatedMutation<PaymentIntent>(
-    `/v1/live/rooms/${encodeURIComponent(liveRoomId)}/pass-intents`,
+export async function toggleContentLike(
+  contentId: string,
+  idempotencyKey: string
+): Promise<EngagementState> {
+  return authenticatedMutation<EngagementState>(
+    `/v1/engagement/${encodeURIComponent(contentId)}/like`,
     "POST",
-    body
+    {},
+    idempotencyKey
+  );
+}
+
+export async function toggleContentSave(
+  contentId: string,
+  idempotencyKey: string
+): Promise<EngagementState> {
+  return authenticatedMutation<EngagementState>(
+    `/v1/engagement/${encodeURIComponent(contentId)}/save`,
+    "POST",
+    {},
+    idempotencyKey
+  );
+}
+
+export async function getContentComments(contentId: string): Promise<CommentPage> {
+  return authenticatedGet<CommentPage>(
+    `/v1/engagement/${encodeURIComponent(contentId)}/comments`
+  );
+}
+
+export async function createContentComment(
+  contentId: string,
+  body: CreateCommentRequest,
+  idempotencyKey: string
+): Promise<Comment> {
+  return authenticatedMutation<Comment>(
+    `/v1/engagement/${encodeURIComponent(contentId)}/comments`,
+    "POST",
+    body,
+    idempotencyKey
+  );
+}
+
+export async function createContentShare(
+  body: CreateShareRequest,
+  idempotencyKey: string
+): Promise<ShareResult> {
+  return authenticatedMutation<ShareResult>("/v1/shares", "POST", body, idempotencyKey);
+}
+
+export async function createSafetyReport(
+  body: CreateReportRequest,
+  idempotencyKey: string
+): Promise<ModerationIntake> {
+  return authenticatedMutation<ModerationIntake>("/v1/reports", "POST", body, idempotencyKey);
+}
+
+export async function hideFeedCreator(
+  body: HideFeedCreatorRequest,
+  idempotencyKey: string
+): Promise<FeedPreferences> {
+  return authenticatedMutation<FeedPreferences>(
+    "/v1/feed/hide-creator",
+    "POST",
+    body,
+    idempotencyKey
+  );
+}
+
+export async function blockUser(userId: string, idempotencyKey: string): Promise<BlockState> {
+  return authenticatedMutation<BlockState>(
+    `/v1/blocks/${encodeURIComponent(userId)}`,
+    "POST",
+    {},
+    idempotencyKey
+  );
+}
+
+export async function createLiveEventAccessIntent(liveRoomId: string): Promise<PaymentIntent> {
+  return authenticatedMutation<PaymentIntent>(
+    `/v1/live/rooms/${encodeURIComponent(liveRoomId)}/event-access-intents`,
+    "POST",
+    {}
   );
 }
 
@@ -145,23 +332,27 @@ export async function createEventAccessPassIntent(
 
 export async function createMessage(
   conversationId: string,
-  body: CreateMessageRequest
+  body: CreateMessageRequest,
+  idempotencyKey?: string
 ): Promise<Message> {
   return authenticatedMutation<Message>(
     `/v1/messages/conversations/${encodeURIComponent(conversationId)}/messages`,
     "POST",
-    body
+    body,
+    idempotencyKey
   );
 }
 
 export async function createPaidMessageIntent(
   conversationId: string,
-  body: CreatePaidMessageIntentRequest
+  body: CreatePaidMessageIntentRequest,
+  idempotencyKey?: string
 ): Promise<PaidMessageIntent> {
   return authenticatedMutation<PaidMessageIntent>(
     `/v1/messages/conversations/${encodeURIComponent(conversationId)}/paid-message-intents`,
     "POST",
-    body
+    body,
+    idempotencyKey
   );
 }
 
@@ -206,120 +397,26 @@ export async function createRefundDisputeRequest(
   return authenticatedMutation<RefundDisputeRequest>("/v1/refunds/requests", "POST", body);
 }
 
-async function authenticatedGet<T>(path: string): Promise<T> {
-  const { token } = await browserSessionToken();
-  const env = parsePublicWebEnv(process.env);
-  const response = await fetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
-    cache: "no-store",
-    headers: {
-      accept: "application/json",
-      authorization: `Bearer ${token}`
-    }
-  });
-
-  if (!response.ok) {
-    throw new ApiMutationError(await errorMessage(response), response.status);
-  }
-
-  return (await response.json()) as T;
+export async function approveMcpConsentRequest(requestId: string): Promise<McpOAuthRedirect> {
+  return authenticatedMutation<McpOAuthRedirect>(
+    `/oauth/consent/${encodeURIComponent(requestId)}/approve`,
+    "POST",
+    {}
+  );
 }
 
-async function authenticatedMutation<T>(
-  path: string,
-  method: "PATCH" | "POST",
-  body: unknown
-): Promise<T> {
-  const { token } = await browserSessionToken();
-  const env = parsePublicWebEnv(process.env);
-  const response = await fetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
-    body: JSON.stringify(body),
-    cache: "no-store",
-    headers: {
-      accept: "application/json",
-      authorization: `Bearer ${token}`,
-      "content-type": "application/json",
-      "idempotency-key": mutationIdempotencyKey()
-    },
-    method
-  });
-
-  if (!response.ok) {
-    throw new ApiMutationError(await errorMessage(response), response.status);
-  }
-
-  return (await response.json()) as T;
+export async function denyMcpConsentRequest(requestId: string): Promise<McpOAuthRedirect> {
+  return authenticatedMutation<McpOAuthRedirect>(
+    `/oauth/consent/${encodeURIComponent(requestId)}/deny`,
+    "POST",
+    {}
+  );
 }
 
-async function authenticatedEmptyMutation(
-  path: string,
-  method: "PATCH" | "POST",
-  body: unknown
-): Promise<void> {
-  const { token } = await browserSessionToken();
-  const env = parsePublicWebEnv(process.env);
-  const response = await fetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
-    body: JSON.stringify(body),
-    cache: "no-store",
-    headers: {
-      accept: "application/json",
-      authorization: `Bearer ${token}`,
-      "content-type": "application/json",
-      "idempotency-key": mutationIdempotencyKey()
-    },
-    method
-  });
-
-  if (!response.ok) {
-    throw new ApiMutationError(await errorMessage(response), response.status);
-  }
-}
-
-async function browserSessionToken() {
-  const e2eToken = browserE2eAccessToken();
-  if (e2eToken) {
-    return { token: e2eToken };
-  }
-
-  const supabase = createSupabaseBrowserClient();
-  const {
-    data: { session }
-  } = await supabase.auth.getSession();
-
-  if (!session?.access_token) {
-    throw new ApiMutationError("Create or restore a session before continuing.", 401);
-  }
-
-  return { token: session.access_token };
-}
-
-function browserE2eAccessToken() {
-  if (!browserE2eAuthEnabled) {
-    return null;
-  }
-
-  const token = document.cookie
-    .split(";")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(`${e2eAuthCookieName}=`))
-    ?.slice(e2eAuthCookieName.length + 1);
-
-  return token ? decodeURIComponent(token) : null;
-}
-
-function mutationIdempotencyKey() {
-  return typeof crypto.randomUUID === "function"
-    ? crypto.randomUUID()
-    : `web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-}
-
-async function errorMessage(response: Response) {
-  try {
-    const body = (await response.json()) as { message?: unknown; code?: unknown };
-    if (typeof body.message === "string" && body.message) return body.message;
-    if (typeof body.code === "string" && body.code) return body.code;
-  } catch {
-    return response.statusText || "Request failed";
-  }
-
-  return response.statusText || "Request failed";
+export async function revokeMcpConnection(connectionId: string): Promise<McpConnection> {
+  return authenticatedMutation<McpConnection>(
+    `/v1/mcp/connections/${encodeURIComponent(connectionId)}/revoke`,
+    "POST",
+    {}
+  );
 }

@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Bunny, Livepeer, media, live
-Last updated: 2026-06-06
+Last updated: 2026-08-11
 Source of truth: yes
 
 Owns:
@@ -23,12 +23,15 @@ Non-goals:
 Current implementation state:
 
 - `POST /v1/content` creates a server-owned content draft for app-ready users.
+- Adult/explicit draft creation requires a first-party representation declaration and explicit policy acceptance. `self_only` reuses the creator's valid Didit-backed adult-publisher identity and records one scoped consent; MCP cannot accept this declaration for the creator.
 - `POST /v1/content` enforces a backend-owned draft quota before inserting content. The default policy is 20 drafts per rolling 24 hours, and an active `safety.content_creation_abuse_policy` admin software-policy flag can tighten or relax the draft count/window without giving the browser, money, tiers, Mutuals, recommendations, messages, or moderation priority any control.
 - `POST /v1/media/uploads` creates a Bunny Stream upload session for an owned content draft, persists the corresponding backend `media_assets` record, returns its frontend-safe `mediaAssetId`, and enforces a backend-owned upload-session quota before touching Bunny. The default policy is 30 upload sessions per rolling 24 hours, with the same active admin safety policy controlling launch operations.
 - `/create` now uses those backend endpoints for explicit draft creation, metadata/preview updates, upload-session creation, provider-status sync, and content projection refresh, then uploads bytes through `tus-js-client` using the server-issued Bunny TUS endpoint and headers. The browser displays progress, pause/resume state, safe upload headers, expiry, persisted media asset id, and frontend-safe content access/playback projection; it does not receive the Bunny API key, mutate moderation state, or publish content locally.
 - `PATCH /v1/content/{contentId}` is creator-owned and idempotency-header gated. It updates caption, visibility, NSFW label, teaser start/end, thumbnail frame controls, and draft Event Access metadata/pass types for the same owned content item. It does not publish content, publish the event, approve moderation, grant access, or update provider playback truth.
 - `POST /v1/content/{contentId}/publish` is creator-owned and idempotency-header gated. It requires explicit `submit_for_review` confirmation and provider-ready media before moving `publish_state` to `submitted_for_review` or `published` if moderation was already approved. It does not approve moderation, grant access, or create paid visibility.
 - Browser upload completion is still provider-transfer completion only. Provider-ready playback, moderation approval, publish state, and public/discovery access remain backend-owned follow-up states.
+- Upload persistence creates a durable `media_moderation_jobs` record. Jobs lease only after the provider asset is playable. The default adapter routes to review because automated provider coverage is not launch-approved.
+- Migration `0088` makes `media_safety_cases` canonical, guards approved content at the database boundary, stores minimized provider scan evidence, and adds performer consent, appeal, and reporting workflow records with RLS.
 - The Bunny adapter follows the current Bunny Stream TUS flow: create video object, generate server-side SHA256 upload signature, return `https://video.bunnycdn.com/tusupload` plus safe upload headers.
 - `BUNNY_STREAM_API_KEY` and `BUNNY_STREAM_LIBRARY_ID` are server-only config values; the Stream API key is never returned to the browser.
 - Upload state is stored in `media_assets` as normalized provider/provider asset/provider state only.
@@ -123,47 +126,41 @@ Rules:
 - Use Livepeer React/player primitives where they fit the UX, especially for live/replay playback.
 - Use provider-supported JWT access for paid/pass-gated streams and paid replay assets.
 - Livepeer JWT signing keys stay backend-only.
+- Livepeer access JWTs are signed with the pinned official `@livepeer/core/crypto` `signAccessJwt` helper using P-256 keys. The API does not maintain a parallel JWT implementation.
+- Livepeer API calls honor `LIVEPEER_API_BASE_URL` and the bounded `LIVEPEER_HTTP_TIMEOUT_MS`. Configuration, authentication, not-found, rate-limit, timeout, and provider failures are typed; only provider 404 permits playback lookup fallback, while all other failures remain visible and fail closed.
 - Livepeer stream webhooks require `Livepeer-Signature` with `t=` and `v1=` values; the backend verifies the exact raw request body with `LIVEPEER_WEBHOOK_SECRET` and a five-minute replay window.
 - Livepeer `stream.started`, `stream.idle`, `recording.waiting`, and `recording.ready` events are normalized into live room provider state by provider stream id. Provider payloads and host credentials are not exposed to viewer resources.
 - `recording.ready` handoff links a private, moderation-pending `live_replay` content item and Livepeer media asset to the room. Generic content playback for Livepeer replay rows fails closed until the dedicated signed replay playback slice is implemented.
 
 ## Live Monetisation Model
 
-Live streams are paid products by default.
+Every verified account can create a public live. The host selects exactly one primary mode:
 
-Viewer experience:
-
-1. User opens live room.
-2. First minute is a free teaser preview where the creator/product policy allows it.
-3. After the teaser, playback and chat require a creator live pass.
-4. Pass duration templates default to:
-   - 30 minutes
-   - 1 hour
-   - 3 hours
-5. Creator chooses which allowed durations to offer and sets pass prices above admin/env minimums.
-6. Pass duration templates, minimum prices, teaser seconds, and chat access policy are configurable by environment and admin settings.
-7. Admin policy can override environment defaults; environment remains the fallback.
+1. `public`: everyone can watch; chat may optionally require an active profile membership.
+2. `profile_members`: active members of the host profile can watch and chat.
+3. `paid_event`: one event price includes the live and a disclosed replay window; active profile members may optionally be included.
 
 Rules:
 
-- Backend validates creator-selected pass price/duration against policy and owns entitlement, expiry, and chat access.
-- Wallet approval is not access proof; pass entitlement begins only after backend-confirmed payment.
-- Livepeer JWT is issued only for the active entitlement window.
-- Chat access follows live pass state unless a product-specific override is configured.
+- Backend validates the selected mode and paid-event price, then owns membership, event entitlement, replay expiry, and chat access.
+- Timed 30/60/180-minute live passes are removed from contracts and user interfaces.
+- Wallet approval is not access proof; paid-event access begins only after backend-confirmed payment.
+- Livepeer JWT is issued only when the backend access projection is `allowed`.
+- Public/member/event countdown, metadata, thumbnail, and policy-safe preview remain discoverable without exposing protected playback.
 - Viewer never receives stream key or ingest URL.
 - Live replays are content items: they can have a free Bit/teaser segment and then follow normal replay/VOD monetisation chosen by the creator.
 
 Current implementation slice:
 
 - `POST /v1/live/rooms` creates a Livepeer stream with JWT playback policy through the backend provider adapter.
-- `GET /v1/live/rooms/:id` returns viewer-safe room, playback, pass, chat, and replay projection.
+- `GET /v1/live/rooms/:id` returns viewer-safe mode, playback, membership/event access, chat, and replay projection.
 - `/live/[liveRoomId]` consumes that live-room projection through the web API helper and renders fail-closed unavailable state when the API or authorization path cannot return a viewer-safe resource.
-- Active-pass Livepeer playback is signed server-side and returned as a short-lived HLS resource with a JWT query parameter. If JWT signing keys are unavailable, full playback fails closed as `blocked` even when the database pass projection is active.
+- Allowed Livepeer playback is signed server-side and returned as a short-lived HLS resource with a JWT query parameter. If JWT signing keys are unavailable, full playback fails closed as `blocked` even when backend access is active.
 - `GET /v1/live/rooms/:id/host-connection` returns masked host connection details only.
 - `POST /v1/live/rooms/:id/sync` refreshes provider state and replay projection.
-- `POST /v1/live/rooms/:id/pass-intents` creates a server-priced `live_pass` payment intent.
-- Confirmed payment settlement creates active live pass access server-side.
-- `GET/POST /v1/live/rooms/:id/messages` gates chat on backend pass state.
+- `POST /v1/live/rooms/:id/event-access-intents` creates the room's one server-priced paid-event intent.
+- Confirmed payment settlement creates active event access server-side and closes its replay window from the backend room end time.
+- `GET/POST /v1/live/rooms/:id/messages` gates chat on backend access and optional members-only-chat policy.
 - Livepeer remains launch-gated until staging keys, JWT policy, and real provider smoke are validated.
 
 ## Media Access Resource
@@ -208,8 +205,10 @@ Token policy:
 ## Moderation Pipeline
 
 ```text
-upload ready -> creator submit_for_review -> automated scan -> policy review if needed -> publish allowed
+private upload -> provider playable -> durable scan reconciliation -> staff review -> canonical approval -> publish allowed
 ```
+
+Direct Bunny Stream TUS coverage by Bunny Shield is unproven and must not be inferred from Shield's generic upload-scanning documentation. Livepeer multistream moderation and server-side suspension are supported provider primitives but remain candidate until real staging evidence is recorded in ADR 0003. Adult live remains disabled by default.
 
 Moderation can block:
 
@@ -231,5 +230,5 @@ Moderation can block:
 - Livepeer creator host connection authorized
 - Livepeer JWT/protected playback path works for paid streams
 - replay resource safe
-- live pass access controls playback/chat
-- first-minute live teaser expires into pass-required state
+- public, profile-member, and paid-event access controls playback/chat
+- protected live preview expires into membership-required or event-access-required state

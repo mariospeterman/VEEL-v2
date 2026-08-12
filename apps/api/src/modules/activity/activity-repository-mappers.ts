@@ -1,4 +1,4 @@
-import type { AccessPassPage, ActivityItem, WalletTransaction } from "./types.js";
+import type { AccessPassPage, ActivityItem, ActivityPage, WalletTransaction } from "./types.js";
 
 export interface ActivityRow {
   id: string;
@@ -60,6 +60,15 @@ export function toActivityPage(rows: ActivityRow[], limit: number) {
   return {
     items: pageRows.map(toActivityItem),
     nextCursor: extraRow ? extraRow.created_at.toISOString() : null
+  };
+}
+
+export function normalizeActivityPage(page: ActivityPage): ActivityPage {
+  return {
+    ...page,
+    items: page.items.map((item) => item.productType === "tip"
+      ? { ...item, productType: "support", title: item.title === "Tip" ? "Support" : item.title }
+      : item)
   };
 }
 

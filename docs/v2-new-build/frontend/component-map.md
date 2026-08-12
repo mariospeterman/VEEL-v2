@@ -26,17 +26,17 @@ This document describes current v2 route and component ownership.
 
 ### `app/page.tsx`
 
-- authenticated mixed feed
-- backend feed/search projections through the typed web API helper
-- fail-closed API-unavailable state when local/staging API is absent
+- public landing experience
+- teaser-safe product positioning and public entry points
+- no backend/provider secrets, raw trust state, or app-shell business truth
 
-### `app/enter/page.tsx`
+### `app/landing-experience.tsx`
 
-- onboarding entry
-- Supabase magic-link UI
-- profile-completion mutation UI
+- landing-owned login and onboarding story frames
+- Supabase magic-link/recovery UI
+- optional profile setup UI
 - external wallet challenge handoff UI
-- backend session/readiness projection
+- dark-only public brand surface
 
 ### `app/layout.tsx`
 
@@ -47,7 +47,7 @@ This document describes current v2 route and component ownership.
 - provider-backed age status
 - provider session start panel
 
-### `app/create/page.tsx`
+### `app/app/create/page.tsx`
 
 - creator draft workspace
 - backend content draft and metadata mutation handoff
@@ -64,14 +64,14 @@ This document describes current v2 route and component ownership.
 
 - live room projection
 - Livepeer playback resource rendering
-- live pass payment handoff panel
+- public, profile-member, or single paid-event access panel
 
-### `app/messages/page.tsx`
+### `app/app/messages/page.tsx`
 
 - conversation, inbox, and activity shell
 - paid-message handoff where backend projects it
 
-### `app/profile/page.tsx`
+### `app/app/profile/page.tsx`
 
 - managed profile
 - own badges, verification status, activity, wallet/payment stats
@@ -81,25 +81,25 @@ This document describes current v2 route and component ownership.
 - contextual creator route
 - public creator badges, creator media, follow/support/subscribe actions
 
-### `app/discover/page.tsx`
+### `app/app/bits/page.tsx`
 
-- search and discovery surface
+- Bits/search and discovery surface
 - creator, hashtag, event, live, and safe category discovery
-- never a redirect alias to Bits
+- no `/discover` route owner; canonical app discovery lives here
 
 ### Protected operations routes
 
-- `app/wallet/page.tsx`: wallet projections, funding receipts, transaction state
-- `app/activity/page.tsx` and `app/activity/refund-request-panel.tsx`: payment activity, receipt/confirmation state, withdrawal-review status, and real refund/access-issue review request mutation
-- `app/activity/page.tsx`: activity projection
-- `app/subscriptions/page.tsx`: backend-owned subscription authorization and cancellation controls
+- `app/app/wallet/page.tsx`: wallet projections, funding receipts, transaction state
+- `app/app/activity/page.tsx` and `app/activity/refund-request-panel.tsx`: payment activity, receipt/confirmation state, withdrawal-review status, and real refund/access-issue review request mutation
+- `app/app/activity/page.tsx`: activity projection
+- `app/app/subscriptions/page.tsx`: backend-owned subscription authorization and cancellation controls
 - `app/event-access/[eventId]/page.tsx`: Event Access pass projection and purchase handoff
 - `app/passes/page.tsx`: pass inventory projection
 - `app/mutuals/page.tsx` and `app/mutuals/feed/page.tsx`: backend-owned Mutuals mode/projection
-- `app/studio/page.tsx`: Studio/org workspace projection
+- `app/app/studio/page.tsx`: Studio/org workspace projection
 - `app/admin/page.tsx`: admin/ops projections and safe mutation panels
-- `app/settings/page.tsx`: preference projections and explicit mutations
-- `app/assistant/page.tsx`: capability-gated AI/MCP surface only; not primary mobile navigation
+- `app/app/settings/page.tsx`: preference projections and explicit mutations
+- `app/app/assistant/page.tsx`: capability-gated AI/MCP surface only; not primary mobile navigation
 
 ## Feature slices
 
@@ -124,7 +124,7 @@ This document describes current v2 route and component ownership.
 
 ### UI primitives
 
-- Shared controls live under `components/ui`.
+- Shared controls live under `packages/ui`.
 - Use project primitives for buttons, sheets, inputs, textareas, selects,
   checkboxes, and segmented controls.
 - Native file/range inputs remain only where required by browser upload/media
@@ -132,9 +132,9 @@ This document describes current v2 route and component ownership.
 
 ### Smoke and E2E harness
 
-- `tests/smoke` owns browser coverage for shell/projection behavior.
+- `tests/smoke` owns browser coverage for landing, canonical route ownership, shell/projection behavior, and raw-error redaction.
 - `tests/smoke/auth-happy-path.spec.ts` owns the local authenticated happy path:
-  enter -> profile -> wallet -> age -> home -> create -> unlock.
+  landing onboarding -> app/profile -> app/wallet -> age -> app/home -> app/create -> unlock.
 - The auth smoke harness uses a local mock API on `127.0.0.1:4000`, a guarded
   non-production `veel_e2e_access_token` cookie, and serialized Playwright
   workers so other smoke specs do not observe the mock backend by accident.

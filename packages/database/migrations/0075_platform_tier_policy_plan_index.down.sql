@@ -1,0 +1,1 @@
+drop index if exists platform_tier_policies_subscription_plan_idx;

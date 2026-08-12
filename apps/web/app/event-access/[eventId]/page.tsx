@@ -1,5 +1,6 @@
 import { appShellNavItems } from "@veel/ui";
 import { getEvent, type Event } from "@/api-client";
+import { ErrorState } from "../../ui";
 import { EventAccessPassPanel } from "./event-access-pass-panel";
 
 export default async function EventPage({
@@ -21,11 +22,13 @@ export default async function EventPage({
             <EventState event={eventResult.data} />
           </>
         ) : (
-          <UnavailableState
-            message={eventResult.message}
-            status={eventResult.status}
-            title={eventResult.status === 404 ? "Event not found" : "Event unavailable"}
-          />
+          <section className="lg:col-span-2">
+            <ErrorState
+              context="Event Access"
+              result={eventResult}
+              title={eventResult.status === 404 ? "Event not found" : "Event unavailable"}
+            />
+          </section>
         )}
       </section>
     </main>
@@ -75,7 +78,7 @@ function AppNav() {
   return (
     <nav className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-(--line) px-5 py-4">
       <a className="text-lg font-semibold tracking-normal" href="/">
-        VEEL
+        WeVid
       </a>
       <div className="flex gap-1">
         {appShellNavItems.map((item) => (
@@ -98,25 +101,5 @@ function Fact({ label, value }: { label: string; value: string }) {
       <p className="text-xs uppercase text-(--muted)">{label}</p>
       <p className="mt-1 truncate font-medium">{value}</p>
     </div>
-  );
-}
-
-function UnavailableState({
-  message,
-  status,
-  title
-}: {
-  message: string;
-  status: number;
-  title: string;
-}) {
-  return (
-    <section className="grid min-h-[68vh] content-center rounded border border-(--line) bg-(--panel) p-6 lg:col-span-2">
-      <div className="max-w-xl">
-        <p className="text-sm font-medium text-(--accent)">HTTP {status}</p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-normal">{title}</h1>
-        <p className="mt-3 text-sm leading-6 text-(--muted)">{message}</p>
-      </div>
-    </section>
   );
 }

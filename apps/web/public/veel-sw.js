@@ -1,6 +1,6 @@
 self.addEventListener("push", (event) => {
   const payload = safeJson(event.data);
-  const title = typeof payload.title === "string" ? payload.title : "VEEL";
+  const title = typeof payload.title === "string" ? payload.title : "WeVid";
   const body = typeof payload.body === "string" ? payload.body : "New account notification";
   const actionUrl = safeInternalPath(payload.actionUrl);
 

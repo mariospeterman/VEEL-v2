@@ -14,6 +14,7 @@ import { resolve } from "node:path";
 
 const supabaseBin = resolve("node_modules/.bin/supabase");
 const supabaseConfig = resolve("supabase/config.toml");
+const supabaseTempDir = resolve("supabase/.temp");
 const canonicalMigrationsDir = resolve("packages/database/migrations");
 
 if (!existsSync(supabaseBin)) {
@@ -77,8 +78,16 @@ const workdir = needsMigrationWorkdir ? mkdtempSync(resolve(tmpdir(), "veel-supa
 if (needsMigrationWorkdir) {
   const generatedSupabaseDir = resolve(workdir, "supabase");
   const generatedMigrationsDir = resolve(generatedSupabaseDir, "migrations");
+  const generatedTempDir = resolve(generatedSupabaseDir, ".temp");
   mkdirSync(generatedMigrationsDir, { recursive: true });
   copyFileSync(supabaseConfig, resolve(generatedSupabaseDir, "config.toml"));
+
+  if (existsSync(supabaseTempDir)) {
+    mkdirSync(generatedTempDir, { recursive: true });
+    for (const fileName of readdirSync(supabaseTempDir)) {
+      copyFileSync(resolve(supabaseTempDir, fileName), resolve(generatedTempDir, fileName));
+    }
+  }
 
   for (const fileName of readdirSync(canonicalMigrationsDir).sort()) {
     if (!/^\d+_.+\.sql$/.test(fileName) || fileName.endsWith(".down.sql")) {

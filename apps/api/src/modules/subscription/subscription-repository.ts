@@ -2,6 +2,7 @@ import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.j
 import type { SubscriptionRepository } from "./types.js";
 import { createSubscriptionAuthorizationRepositoryMethods } from "./subscription-authorization-repository.js";
 import { createSubscriptionCancellationRepositoryMethods } from "./subscription-cancellation-repository.js";
+import { createPlatformAccessRepositoryMethods } from "./platform-access-repository.js";
 import { SubscriptionRepositoryConfigurationError } from "./subscription-errors.js";
 import {
   toSubscription,
@@ -10,6 +11,9 @@ import {
 import type { PlanRow, SubscriptionRow } from "./subscription-repository-rows.js";
 
 export {
+  PlatformPlaybackNotQualifyingError,
+  PlatformUsageLimitReachedError,
+  PlatformUsageSequenceConflictError,
   SubscriptionIdempotencyConflictError,
   SubscriptionPolicyError,
   SubscriptionRepositoryConfigurationError
@@ -22,6 +26,18 @@ export function createPostgresSubscriptionRepository(database?: string | Postgre
         throw new SubscriptionRepositoryConfigurationError();
       },
       async listSubscriptions() {
+        throw new SubscriptionRepositoryConfigurationError();
+      },
+      async getPlatformAccess() {
+        throw new SubscriptionRepositoryConfigurationError();
+      },
+      async getPlatformPlaybackDecision() {
+        throw new SubscriptionRepositoryConfigurationError();
+      },
+      async createPlatformPlaybackSession() {
+        throw new SubscriptionRepositoryConfigurationError();
+      },
+      async recordPlatformPlaybackHeartbeat() {
         throw new SubscriptionRepositoryConfigurationError();
       },
       async createAuthorizationIntent() {
@@ -42,6 +58,7 @@ export function createPostgresSubscriptionRepository(database?: string | Postgre
   const { sql, ownsClient } = resolvePostgresClient(database);
 
   return {
+    ...createPlatformAccessRepositoryMethods(sql),
     async listPlans() {
       const rows = await sql<PlanRow[]>`
         select
@@ -49,12 +66,18 @@ export function createPostgresSubscriptionRepository(database?: string | Postgre
           sp.scope,
           sp.label,
           sp.amount_minor,
+          sp.amount_atomic,
           sp.currency,
           sp.period_days,
+          sp.period_seconds,
           sp.billing_mode,
           sp.provider_state,
           sp.token_mint,
           sp.token_program,
+          sp.provider,
+          sp.program_id,
+          sp.plan_pda,
+          sp.merchant_wallet,
           sp.creator_user_id,
           p.handle as creator_handle,
           p.display_name as creator_display_name,
@@ -85,6 +108,15 @@ export function createPostgresSubscriptionRepository(database?: string | Postgre
           s.revoked_at,
           s.authority_address,
           s.delegation_address,
+          s.subscriber_wallet,
+          s.provider,
+          s.program_id,
+          s.token_mint,
+          s.amount_atomic,
+          s.period_seconds,
+          s.plan_pda,
+          s.subscription_pda,
+          s.merchant_wallet,
           s.creator_user_id,
           p.handle as creator_handle,
           p.display_name as creator_display_name,

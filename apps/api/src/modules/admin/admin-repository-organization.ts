@@ -88,10 +88,49 @@ export function createOrganizationRepository(
             from updated_org
             cross join actor
             returning id
+          ),
+          verification_insert as (
+            insert into verification_records (
+              subject_type,
+              subject_id,
+              purpose,
+              status,
+              provider,
+              method,
+              assurance_level,
+              verified_at,
+              reusable,
+              manual_review_reason,
+              metadata
+            )
+            select
+              'organization',
+              updated_org.id,
+              'org_kyb',
+              case
+                when updated_org.kyb_state = 'verified' then 'valid'
+                when updated_org.kyb_state = 'pending' then 'pending'
+                when updated_org.kyb_state = 'rejected' then 'blocked'
+                else 'invalid'
+              end,
+              'manual',
+              'manual_review',
+              case when updated_org.kyb_state = 'verified' then 'business_verified' else 'low' end,
+              case when updated_org.kyb_state = 'verified' then now() else null end,
+              false,
+              ${input.body.reason},
+              jsonb_build_object(
+                'source', 'admin_kyb_override',
+                'idempotencyKey', ${input.idempotencyKey},
+                'auditEventId', audit_insert.id
+              )
+            from updated_org
+            cross join audit_insert
+            returning id
           )
           select id, name, state, plan, kyb_state, created_at
           from updated_org
-          where exists (select 1 from audit_insert)
+          where exists (select 1 from verification_insert)
         `;
 
         return updatedRows;

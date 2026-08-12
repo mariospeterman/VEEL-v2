@@ -28,6 +28,7 @@ const required = [
   "docs/v2-new-build/providers/content-protection.md",
   "docs/v2-new-build/providers/provider-map.md",
   "docs/v2-new-build/ai-mcp-use-cases.md",
+  "docs/v2-new-build/mcp-staging-proof.md",
   "AGENTS.md",
   "CLAUDE.md",
   ".cursor/rules/veel-v2.mdc",
@@ -82,9 +83,54 @@ if (missingFromRouteMap.length > 0 || missingFromOpenapi.length > 0) {
   process.exit(1);
 }
 
+const apiRouteFiles = [];
+const walkApiRoutes = (dir) => {
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    const stat = statSync(full);
+    if (stat.isDirectory()) walkApiRoutes(full);
+    else if (full.endsWith(".ts")) apiRouteFiles.push(full);
+  }
+};
+walkApiRoutes("apps/api/src");
+
+const openapiOperations = new Set();
+let operationPath = null;
+for (const match of openapi.matchAll(/^  (\/[^\n:]+):|^    (get|post|patch|put|delete):/gm)) {
+  if (match[1]) {
+    operationPath = match[1].startsWith("/v1/") ? normalizePath(match[1]) : null;
+  } else if (operationPath && match[2]) {
+    openapiOperations.add(`${match[2].toUpperCase()} ${operationPath}`);
+  }
+}
+
+const fastifyOperations = new Set();
+for (const file of apiRouteFiles) {
+  const text = readFileSync(file, "utf8");
+  for (const match of text.matchAll(/app\.(get|post|patch|put|delete)\(\s*["'`](\/v1\/[A-Za-z0-9{}:_/-]+)["'`]/g)) {
+    fastifyOperations.add(`${match[1].toUpperCase()} ${normalizePath(match[2])}`);
+  }
+}
+
+const missingFromFastify = [...openapiOperations].filter((route) => !fastifyOperations.has(route));
+const missingFromContract = [...fastifyOperations].filter((route) => !openapiOperations.has(route));
+
+if (missingFromFastify.length > 0 || missingFromContract.length > 0) {
+  console.error("OpenAPI and Fastify route registrations differ after dynamic-segment normalization.");
+  if (missingFromFastify.length > 0) {
+    console.error("In OpenAPI but not registered in Fastify:");
+    for (const route of missingFromFastify) console.error(`- ${route}`);
+  }
+  if (missingFromContract.length > 0) {
+    console.error("Registered in Fastify but missing from OpenAPI:");
+    for (const route of missingFromContract) console.error(`- ${route}`);
+  }
+  process.exit(1);
+}
+
 const missingOperationIds = [];
 const operationIds = [];
-const operationRegex = /^  (\/v1\/[^\n:]+):|^    (get|post|patch|put|delete):|^      operationId:/gm;
+const operationRegex = /^  (\/[^\n:]+):|^    (get|post|patch|put|delete):|^      operationId:/gm;
 let currentPath = null;
 let currentMethod = null;
 let currentHasOperationId = false;
@@ -93,7 +139,7 @@ for (const match of openapi.matchAll(operationRegex)) {
     if (currentPath && currentMethod && !currentHasOperationId) {
       missingOperationIds.push(`${currentMethod.toUpperCase()} ${currentPath}`);
     }
-    currentPath = match[1];
+    currentPath = match[1].startsWith("/v1/") ? match[1] : null;
     currentMethod = null;
     currentHasOperationId = false;
   } else if (match[2]) {
@@ -225,11 +271,17 @@ if (paymentStateMatch) {
 }
 
 const criticalMethodsMissingRequiredIdempotency = [];
-const pathBlocks = [...openapi.matchAll(/^  (\/v1\/[^\n:]+):\n([\s\S]*?)(?=^  \/v1\/|\ncomponents:)/gm)];
+const pathBlocks = [...openapi.matchAll(/^  (\/v1\/[^\n:]+):\n([\s\S]*?)(?=^  \/|\ncomponents:)/gm)];
 for (const [, path, block] of pathBlocks) {
   for (const methodMatch of block.matchAll(/^    (post|patch|put|delete):\n([\s\S]*?)(?=^    (?:get|post|patch|put|delete):|(?![\s\S]))/gm)) {
     const methodBlock = methodMatch[2];
-    if (!methodBlock.includes("#/components/parameters/RequiredIdempotencyKey") && !path.includes("/webhooks/")) {
+    const hasRequiredIdempotencyKey = methodBlock.includes(
+      "#/components/parameters/RequiredIdempotencyKey"
+    );
+    const hasCheckoutCapabilityPolicy = methodBlock.includes(
+      "x-idempotency-policy: checkout-capability"
+    );
+    if (!hasRequiredIdempotencyKey && !hasCheckoutCapabilityPolicy && !path.includes("/webhooks/")) {
       criticalMethodsMissingRequiredIdempotency.push(`${methodMatch[1].toUpperCase()} ${path}`);
     }
   }

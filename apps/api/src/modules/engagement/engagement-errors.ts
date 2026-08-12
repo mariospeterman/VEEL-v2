@@ -11,3 +11,10 @@ export class EngagementPolicyError extends Error {
     this.name = "EngagementPolicyError";
   }
 }
+
+export class EngagementIdempotencyConflictError extends Error {
+  constructor() {
+    super("ENGAGEMENT_IDEMPOTENCY_CONFLICT");
+    this.name = "EngagementIdempotencyConflictError";
+  }
+}

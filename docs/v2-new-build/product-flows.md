@@ -144,7 +144,8 @@ Create MVP is intentionally raw and simple:
    - mentions `@`
    - optional location
 4. Label and attach:
-   - required NSFW/adult/sensitive label
+   - required SFW/adult/explicit rating
+   - independent content warnings where applicable
    - optional event toggle
    - no per-post Mutuals toggle; Mutuals mode is enabled from profile/settings and appears on eligible creator media automatically
 5. Monetisation:

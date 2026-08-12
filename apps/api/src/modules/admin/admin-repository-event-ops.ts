@@ -116,8 +116,11 @@ export function createEventOpsRepository(
           provider_state,
           state,
           access_rule,
-          pass_price_minor,
+          event_price_minor,
           currency,
+          members_only_chat,
+          members_included_in_paid_event,
+          replay_window_hours,
           (playback_url is not null) as has_playback_url,
           (host_stream_key is not null) as has_host_stream_key,
           starts_at,
@@ -157,18 +160,24 @@ export function createEventOpsRepository(
       const rows = await sql<AgeCheckRow[]>`
         select
           id,
-          user_id,
+          subject_id as user_id,
           provider,
           provider_reference,
-          state,
+          case
+            when status = 'valid' and (expires_at is null or expires_at > now()) then 'verified'
+            when status = 'pending' then 'pending'
+            else 'failed'
+          end as state,
           jurisdiction,
-          rule,
+          metadata ->> 'rule' as rule,
           (provider_reference is not null and provider_reference <> '') as has_provider_reference,
           verified_at,
           expires_at,
           created_at
-        from age_verifications
-        where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
+        from verification_records
+        where subject_type = 'user'
+          and purpose = 'age_access'
+          and (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
         order by created_at desc
         limit ${pageSize + 1}
       `;

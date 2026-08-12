@@ -3,8 +3,8 @@ import { getSession, type SessionState } from "../api-client";
 import { getWebAuthState } from "./auth-state";
 
 export function signInRedirectForPath(path: string): string {
-  const params = new URLSearchParams({ next: path });
-  return `/enter?${params.toString()}`;
+  const params = new URLSearchParams({ mode: "login", next: path });
+  return `/?${params.toString()}`;
 }
 
 export async function requireConfiguredSession(path: string) {
@@ -23,15 +23,19 @@ export function appAccessRedirectForPath(
 ): string {
   const next = safeNext(path);
 
+  if (reason === "identity_required") {
+    return withNext("/", next, { mode: "onboarding", step: "profile" });
+  }
+
   if (reason === "wallet_required") {
-    return withNext("/wallet", next);
+    return withNext("/", next, { mode: "onboarding", step: "wallet" });
   }
 
   if (reason === "age_required" || reason === "age_pending") {
-    return withNext("/age", next);
+    return withNext("/", next, { mode: "onboarding", step: "age" });
   }
 
-  return withNext("/enter", next);
+  return withNext("/", next, { mode: "login" });
 }
 
 export async function requireAppAccess(path: string) {
@@ -66,7 +70,7 @@ function safeNext(path: string) {
   return path.startsWith("/") && !path.startsWith("//") ? path : "/";
 }
 
-function withNext(path: string, next: string) {
-  const params = new URLSearchParams({ next });
+function withNext(path: string, next: string, initial?: Record<string, string>) {
+  const params = new URLSearchParams({ ...initial, next });
   return `${path}?${params.toString()}`;
 }

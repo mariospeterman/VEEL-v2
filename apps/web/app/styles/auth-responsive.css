@@ -1,0 +1,194 @@
+@layer components {
+  @media (max-width: 980px) {
+    .auth-onboarding-layout,
+    .auth-login-provider-section {
+      grid-template-columns: 1fr;
+    }
+
+    .auth-stepper-v2,
+    .auth-flow-actions {
+      justify-content: start;
+    }
+  }
+
+  @media (max-width: 720px) {
+    .auth-shell {
+      overflow: hidden;
+      grid-template-rows: 64px minmax(0, 1fr);
+    }
+
+    .auth-header {
+      min-height: 64px;
+      padding: 8px 14px;
+    }
+
+    .auth-header > a:first-child {
+      width: 34px;
+      overflow: hidden;
+      white-space: nowrap;
+      color: transparent;
+    }
+
+    .auth-header > a:first-child::before {
+      content: "←";
+      color: var(--muted);
+    }
+
+    .auth-header-actions > .auth-help {
+      display: none;
+    }
+
+    .auth-brand {
+      gap: 8px;
+    }
+
+    .auth-logo-text {
+      font-size: 20px;
+      letter-spacing: 0.12em;
+    }
+
+    .auth-header-actions .auth-mobile-menu-button {
+      display: grid;
+    }
+
+    .auth-login-stage,
+    .auth-flow-stage {
+      padding: 12px 18px 14px;
+    }
+
+    .auth-login-card {
+      gap: 8px;
+      text-align: center;
+    }
+
+    .auth-login-card > h1,
+    .auth-flow-copy h1 {
+      font-size: clamp(30px, 9.6vw, 40px);
+      text-wrap: balance;
+    }
+
+    .auth-login-card > p:not(.auth-switch),
+    .auth-flow-copy > p {
+      max-width: 330px;
+      font-size: 14px;
+      line-height: 1.34;
+    }
+
+    .auth-login-panel {
+      gap: 0;
+    }
+
+    .auth-login-provider-section {
+      gap: 8px;
+      padding: 8px 0;
+      text-align: left;
+    }
+
+    .auth-login-section-copy {
+      gap: 0;
+    }
+
+    .auth-login-section-copy h2 {
+      font-size: 18px;
+    }
+
+    .auth-login-section-copy p {
+      display: none;
+    }
+
+    .auth-provider-button-grid-wallets,
+    .auth-provider-button-grid-embedded,
+    .auth-provider-button-grid-recovery,
+    .auth-profile-links,
+    .auth-oauth-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .auth-provider-button-grid-recovery .auth-provider-button:last-child {
+      grid-column: 1 / -1;
+    }
+
+    .auth-provider-button {
+      min-height: 44px;
+      gap: 10px;
+      padding: 7px 9px;
+    }
+
+    .auth-provider-button strong {
+      font-size: 13px;
+      white-space: normal;
+    }
+
+    .auth-provider-button small {
+      display: none;
+    }
+
+    .auth-switch {
+      margin: 2px 0 0;
+      font-size: 14px;
+    }
+
+    .auth-login-security-strip {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      border-radius: 10px;
+    }
+
+    .auth-login-security-strip span {
+      min-height: 52px;
+      grid-template-columns: 1fr;
+      justify-items: center;
+      gap: 3px;
+      padding: 8px 6px;
+      text-align: center;
+    }
+
+    .auth-login-security-strip svg {
+      grid-row: auto;
+      width: 15px;
+      height: 15px;
+    }
+
+    .auth-login-security-strip strong {
+      font-size: 10px;
+    }
+
+    .auth-login-security-strip small {
+      display: none;
+    }
+
+    .auth-focused-card,
+    .auth-helper-card {
+      padding: 16px;
+    }
+
+    .auth-footer {
+      display: none;
+    }
+  }
+
+  @media (max-width: 430px) {
+    .auth-login-stage,
+    .auth-flow-stage {
+      padding-inline: 16px;
+    }
+
+    .auth-profile-links,
+    .auth-oauth-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .auth-login-stage {
+      padding-inline: 16px;
+    }
+
+    .auth-provider-button-grid {
+      gap: 8px;
+    }
+
+    .auth-provider-icon,
+    .provider-logo {
+      width: 26px;
+      height: 26px;
+    }
+  }
+}

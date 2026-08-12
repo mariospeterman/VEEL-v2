@@ -44,7 +44,7 @@ This folder is the canonical new-build pack. It is intentionally self-contained 
 | --- | --- | --- |
 | Product/platform behavior | `full-platform-blueprint.md`, `product-flows.md`, product docs | Tests and route screens must match these docs. |
 | API shape | `packages/contracts/openapi.yaml` | Generated client and Fastify schemas must match exactly. |
-| Frontend routes/screens/gestures | `route-map.md`, `native-ui-ux-screens.md`, frontend docs | Next routes encode route state only. |
+| Frontend routes/screens/gestures | `route-map.md`, `native-ui-ux-screens.md`, frontend docs, `apps/web/public/mockup/design.md`, `apps/web/public/mockup/*.png` | Next routes encode route state only. Mockups define visual direction; contracts and backend state still own behavior. |
 | Database shape | `packages/database/schema-blueprint.sql` until migrations exist | Migrations must be derived slice-by-slice from the blueprint. |
 | Money/access/referral/tax truth | `liability-compliance-audit.md`, `payments-and-monetisation.md`, `business-monetisation.md`, `noncustodial-money-compliance.md`, `compliance/dac7-dac8-vat-system.md`, OpenAPI | Backend owns final state; frontend is UX/cache only. |
 | Payment/access/reporting/bookkeeping truth | `business-monetisation.md`, `liability-compliance-audit.md`, `compliance/dac7-dac8-vat-system.md`, OpenAPI, schema | Blockchain = payment truth; entitlements = access truth; compliance ledger = reporting truth; accounting integration = bookkeeping truth. No duplicate authority. |
@@ -64,6 +64,8 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 5. [Stack decision](stack-decision.md)
 6. [ADR: Fastify and Supabase decision](adr/0001-fastify-supabase-decision.md)
 7. [ADR: 2026 provider decisions](adr/0002-provider-decisions-2026.md)
+8. [ADR: provider-native media safety and consent](adr/0003-provider-native-media-safety.md)
+9. [ADR: independent eligibility authorities](adr/0004-independent-eligibility-authorities.md)
 8. [Route map](route-map.md)
 9. [Initial contracts and schema](contracts-and-schema.md)
 10. [Infrastructure and research decisions](infra-decisions.md)
@@ -76,14 +78,15 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 14. [Event Access architecture](product/event-access.md)
 15. [Frontend architecture](frontend-architecture.md)
 16. [Native UI, screens, gestures, and motion](native-ui-ux-screens.md)
-17. [Landing page and GSAP blueprint](landing-page-gsap.md)
+17. [Landing page GSAP scope](landing-page-gsap.md)
 18. [Recommendation and discovery](recommendation-discovery.md)
 19. [Profile, activity, badges, and ranking](profile-activity-ranking.md)
 20. [Engagement strategy](engagement-strategy.md)
 21. [Design system](frontend/design-system.md)
 22. [Component map](frontend/component-map.md)
-23. [Copy system](frontend/copy-system.md)
-24. [Motion system](frontend/motion-system.md)
+23. [UI kit lock](frontend/ui-kit-lock.md)
+24. [Copy system](frontend/copy-system.md)
+25. [Motion system](frontend/motion-system.md)
 
 ## Backend, Data, Auth, And Realtime
 
@@ -105,16 +108,18 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 37. [Content protection](providers/content-protection.md)
 38. [Safety, admin, and AI/MCP](safety-admin-ai.md)
 39. [AI/MCP practical use cases](ai-mcp-use-cases.md)
-40. [Admin and operations dashboard](admin-operations-dashboard.md)
-41. [Adult content compliance](compliance/adult-content-compliance.md)
-42. [Age/KYC jurisdictions and provider waterfall](compliance/age-kyc-jurisdictions.md)
-43. [DAC7, DAC8/CARF, VAT/MWST system](compliance/dac7-dac8-vat-system.md)
+40. [MCP staging proof](mcp-staging-proof.md)
+41. [Admin and operations dashboard](admin-operations-dashboard.md)
+42. [Adult content compliance](compliance/adult-content-compliance.md)
+43. [Age/KYC jurisdictions and provider waterfall](compliance/age-kyc-jurisdictions.md)
+44. [DAC7, DAC8/CARF, VAT/MWST system](compliance/dac7-dac8-vat-system.md)
 
 ## Infrastructure And Execution
 
-44. [Infrastructure and research decisions](infra-decisions.md)
-45. [Deployment topology](deployment-topology.md)
-46. [Slice workflow](slice-workflow.md)
+45. [Infrastructure and research decisions](infra-decisions.md)
+46. [Deployment topology](deployment-topology.md)
+47. [Slice workflow](slice-workflow.md)
+48. [Production branch inventory](production-branch-inventory.md)
 
 ## How To Use In A New Repo
 

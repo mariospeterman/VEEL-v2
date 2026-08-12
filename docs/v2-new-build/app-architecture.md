@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: full product architecture
-Last updated: 2026-06-03
+Last updated: 2026-06-14
 Source of truth: yes
 
 Owns:
@@ -28,9 +28,9 @@ Recommended v2 direction:
 
 - Keep a Next.js PWA, but build the app shell and product surfaces around a smaller design/component system.
 - Use a TypeScript backend built on Fastify.
-- Use Supabase Postgres as the primary database, Supabase Auth as identity/session issuer, and Supabase Realtime selectively for messages, notifications, live room state, and activity events.
+- Use Supabase Postgres as the primary database, VEEL wallet sessions plus optional Supabase Auth for identity/session recovery, and Supabase Realtime selectively for messages, notifications, live room state, and activity events.
 - Keep all money/access/media/provider truth behind the backend. Supabase RLS protects direct realtime reads, but Fastify remains the business policy layer.
-- Add a mainstream onboarding path with email/social/passkey signup and a noncustodial embedded Solana wallet, while keeping Phantom/Solflare/external wallet connect first-class for web3-native users.
+- Add a wallet-first onboarding path with embedded noncustodial Solana wallets or Phantom/Solflare/external wallet connect, then optional email recovery/profile management.
 - Use Hono only for small edge/public endpoints if a real edge deployment need appears. Do not mix Hono into the core API.
 - Keep pnpm as the monorepo package manager and Node.js LTS as the production runtime for v2 launch. Bun can be evaluated later for isolated tooling/services, but should not be added as another moving part during the backend/auth/realtime build.
 - Use official provider SDKs/APIs where they reduce custom code: Solana JS/Pay, Bunny Stream TUS/API, Livepeer APIs, age/KYC provider APIs.
@@ -142,7 +142,7 @@ flowchart TB
 | Web | Next.js App Router, TypeScript, Tailwind v4, TanStack Query, Zustand | Current frontend stack is viable; clean up architecture instead of switching frameworks. |
 | API | Fastify TypeScript | Lower overhead, schema-first validation/serialization, direct provider SDK use, less boilerplate than Nest. |
 | Edge | Hono only for tiny public/edge endpoints | Hono is excellent at edge, but mixing it into core business API adds unnecessary architecture surface. |
-| Auth | Supabase Auth with backend-verified JWTs | Gives browser/mobile sessions, JWTs, identity providers, and RLS integration while Fastify remains the business policy layer. |
+| Auth | Backend-verified VEEL wallet sessions plus optional Supabase Auth | Wallet-first onboarding avoids mandatory email while Supabase can still provide recovery/profile-management sessions and RLS integration where used. |
 | Wallet onboarding | Embedded wallet provider + external wallet adapter | Reduces conversion friction while preserving noncustodial user approval and backend settlement verification. |
 | DB | Supabase Postgres | Relational money/access/media truth needs Postgres, transactions, constraints, and auditability. |
 | Realtime | Supabase Realtime Broadcast/Presence + selective Postgres Changes | Avoids custom websocket infrastructure for messages/live/activity while keeping backend policy. |
@@ -280,7 +280,7 @@ Read these in order:
 4. `frontend-architecture.md`
 5. `engagement-strategy.md`
 6. `native-ui-ux-screens.md`
-7. `landing-page-gsap.md`
+7. `landing-page-gsap.md` (landing-only GSAP scope for first-viewport scroll choreography)
 8. `backend-fastify-architecture.md`
 9. `auth-supabase-realtime.md`
 10. `embedded-wallet-onboarding.md`

@@ -1,0 +1,88 @@
+# ADR 0003: Provider-Native Media Safety And Consent
+
+Status: accepted
+Scope: Bunny Stream, Bunny Shield, Livepeer, moderation, performer consent, reporting
+Last updated: 2026-08-11
+Source of truth: yes
+
+Owns:
+- media safety cases, provider scan evidence, performer declarations/consent, and release gating
+
+Defers to:
+- OpenAPI, migration `0088`, provider contracts, counsel, and official provider documentation where narrower
+
+Does not own:
+- age-access policy, creator earning KYC, payment settlement, raw identity evidence, or provider account approval
+
+## Decision
+
+`media_safety_cases` is the canonical release decision. `content_items.moderation_state` is a read projection. Provider readiness, provider scan signals, creator labels, and staff actions are inputs; none is independently sufficient to publish media.
+
+The release predicate requires:
+
+1. a provider-playable media asset;
+2. an active safety case in `approved` state with `provider_release_allowed=true`;
+3. an active creator declaration;
+4. valid adult-publisher identity plus scoped performer consent for adult/explicit media.
+
+Provider “clear” signals are normalized into `provider_media_scan_events` and still route to a staff release decision. Suspected or matched signals remain held. Automated systems do not issue irreversible user sanctions.
+
+## Upload Decision
+
+Bunny Stream TUS remains the VOD upload provider. The video object is private/quarantined until the release predicate passes. Bunny Stream provider readiness only sets media processing state.
+
+Bunny Shield upload scanning is not assumed to cover direct `video.bunnycdn.com/tusupload` traffic. Official Shield documentation confirms upload scanning for request bodies routed through Shield, including malware and PDQ-based known-hash checks, but it does not establish direct Stream TUS coverage. Therefore:
+
+- `BUNNY_SHIELD_UPLOAD_COVERAGE=not_configured` is the default;
+- direct Stream TUS cannot be marked covered without written provider confirmation and a staging incident fixture;
+- `MEDIA_MODERATION_MODE=disabled_fail_closed` routes ready assets to review;
+- a dedicated Shield-covered upload gateway is an allowed future option only if it preserves resumable uploads and does not duplicate Stream storage/transcoding.
+
+Disable Bunny Stream Early Play for quarantined uploads. Enabling Keep Original requires a retention/deletion review because the source file becomes a distinct provider-held copy.
+
+## Live Decision
+
+Livepeer remains the live/replay provider. Official APIs support multistream targets and the stream `suspended` property. The preferred safety path is a provider-supported moderation rendition/target plus server-side suspension, but it remains candidate until staging proves:
+
+- target creation before the broadcast session;
+- rendition selection and reconnect behavior;
+- webhook delivery and replay protection;
+- suspension blocks ingest and playback within the accepted response window;
+- restart/recovery and replay handoff remain fail closed.
+
+`LIVEPEER_ADULT_LIVE_ENABLED=false` remains the default. A thumbnail is only a fallback signal, not continuous moderation.
+
+## Data Minimization
+
+Veel stores normalized decisions, payload hashes, opaque provider references, confidence/ruleset metadata, consent scope/version, and reporting state. Veel does not store raw provider payloads, illegal-media copies, identity documents, selfies, biometric templates, or browser-visible provider secrets in this domain.
+
+## Provider State Matrix
+
+| Path | State | Launch evidence still required |
+| --- | --- | --- |
+| Canonical DB release guard and manual review fallback | staging-approved | Admin browser QA and CI |
+| Bunny Stream TUS/private playback | candidate | Real account, private quarantine, Early Play disabled, token/domain smoke |
+| Bunny Shield direct Stream TUS coverage | candidate/unproven | Written provider confirmation plus positive/negative staging fixtures |
+| Bunny Shield event-log reconciliation | candidate | Auth, pagination, incident semantics, reporting reconciliation fixture |
+| Livepeer moderation multistream | candidate | Real target/session/webhook smoke |
+| Livepeer emergency suspension | candidate | Measured ingest/playback block and recovery test |
+| Adult live | disabled | Counsel/policy approval and launch-approved monitoring/suspension |
+
+No candidate row can be treated as production protection.
+
+## Official Documentation Checked
+
+- Bunny Shield upload scanning: https://docs.bunny.net/shield/upload-scanning
+- Bunny Shield upload-scanning configuration API: https://docs.bunny.net/reference/get_shield-shield-zone-shieldzoneid-upload-scanning
+- Bunny Shield event logs: https://docs.bunny.net/api-reference/shield/eventlogs/get-shieldevent-logs-
+- Bunny Stream TUS uploads: https://docs.bunny.net/stream/tus-resumable-uploads
+- Bunny Stream dashboard and Early Play/Keep Original: https://docs.bunny.net/stream/dashboard
+- Bunny Stream encoding/content tagging: https://docs.bunny.net/stream/encoding
+- Livepeer multistream: https://docs.livepeer.org/developers/guides/multistream
+- Livepeer add multistream target: https://docs.livepeer.org/api-reference/stream/add-multistream-target
+- Livepeer update stream/suspension: https://docs.livepeer.org/api-reference/stream/update
+- Livepeer live thumbnails: https://docs.livepeer.org/developers/guides/thumbnails-live
+
+## Rollback
+
+Migration `0088_media_safety_and_consent.down.sql` removes the new domain. It does not fabricate prior approvals. Production rollback must keep affected content unpublished until a replacement safety authority is explicitly approved.

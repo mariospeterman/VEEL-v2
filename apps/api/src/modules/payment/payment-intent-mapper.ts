@@ -9,6 +9,21 @@ export interface PaymentIntentRow {
   state: StoredPaymentIntent["state"];
   reference_address: string;
   treasury_wallet: string;
+  settlement_kind: StoredPaymentIntent["settlementKind"];
+  buyer_wallet: string | null;
+  creator_wallet: string | null;
+  enterprise_wallet: string | null;
+  platform_fee_wallet: string | null;
+  referral_wallet: string | null;
+  total_amount_minor: number | null;
+  creator_side_proceeds_minor: number | null;
+  creator_amount_minor: number | null;
+  enterprise_management_amount_minor: number | null;
+  platform_fee_gross_minor: number | null;
+  platform_fee_amount_minor: number | null;
+  referral_amount_minor: number | null;
+  token_mint: string | null;
+  token_decimals: number | null;
   solana_cluster: StoredPaymentIntent["solanaCluster"];
   expires_at: Date;
   request_hash: string;
@@ -40,6 +55,21 @@ export function toStoredPaymentIntent(row: PaymentIntentRow): StoredPaymentInten
     refundPolicy,
     referenceAddress: row.reference_address,
     treasuryWallet: row.treasury_wallet,
+    settlementKind: row.settlement_kind ?? "creator_split",
+    buyerWallet: row.buyer_wallet,
+    creatorWallet: row.creator_wallet ?? row.treasury_wallet,
+    enterpriseWallet: row.enterprise_wallet,
+    platformFeeWallet: row.platform_fee_wallet ?? row.treasury_wallet,
+    referralWallet: row.referral_wallet,
+    totalAmountMinor: Number(row.total_amount_minor ?? row.amount_minor),
+    creatorSideProceedsMinor: Number(row.creator_side_proceeds_minor ?? row.creator_amount_minor ?? row.amount_minor),
+    creatorAmountMinor: Number(row.creator_amount_minor ?? row.amount_minor),
+    enterpriseManagementAmountMinor: Number(row.enterprise_management_amount_minor ?? 0),
+    platformFeeGrossMinor: Number(row.platform_fee_gross_minor ?? row.platform_fee_amount_minor ?? 0),
+    platformFeeAmountMinor: Number(row.platform_fee_amount_minor ?? 0),
+    referralAmountMinor: Number(row.referral_amount_minor ?? 0),
+    tokenMint: row.token_mint,
+    tokenDecimals: row.token_decimals,
     solanaCluster: row.solana_cluster,
     expiresAt: row.expires_at,
     requestHash: row.request_hash,

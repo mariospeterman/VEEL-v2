@@ -1,6 +1,8 @@
 import { appShellNavItems } from "@veel/ui";
 import { getLiveRoom, type LiveRoom } from "@/api-client";
-import { LivePassPanel } from "./live-pass-panel";
+import { ProviderPlayback } from "../../provider-playback";
+import { ErrorState } from "../../ui";
+import { LiveAccessPanel as LiveAccessOfferPanel } from "./live-access-panel";
 
 export default async function LiveRoomPage({
   params
@@ -11,10 +13,10 @@ export default async function LiveRoomPage({
   const roomResult = await getLiveRoom(liveRoomId);
 
   return (
-    <main className="min-h-screen bg-(--background) text-(--foreground)">
-      <nav className="mx-auto flex w-full max-w-7xl items-center justify-between border-b border-(--line) px-5 py-4">
-        <a className="text-lg font-semibold tracking-normal" href="/">
-          VEEL
+    <main className="media-shell">
+      <nav className="media-nav">
+        <a className="text-lg font-semibold tracking-normal" href="/app/home">
+          WeVid
         </a>
         <div className="flex gap-1">
           {appShellNavItems.map((item) => (
@@ -29,18 +31,20 @@ export default async function LiveRoomPage({
         </div>
       </nav>
 
-      <section className="mx-auto grid min-h-[calc(100vh-73px)] w-full max-w-7xl gap-5 px-5 py-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <section className="media-layout">
         {roomResult.ok ? (
           <>
             <LiveStage room={roomResult.data} />
             <LiveAccessPanel room={roomResult.data} />
           </>
         ) : (
-          <UnavailableState
-            message={roomResult.message}
-            status={roomResult.status}
-            title={roomResult.status === 404 ? "Live room not found" : "Live room unavailable"}
-          />
+          <section className="lg:col-span-2">
+            <ErrorState
+              context="Live room"
+              result={roomResult}
+              title={roomResult.status === 404 ? "Live room not found" : "Live room unavailable"}
+            />
+          </section>
         )}
       </section>
     </main>
@@ -49,8 +53,8 @@ export default async function LiveRoomPage({
 
 function LiveStage({ room }: { room: LiveRoom }) {
   return (
-    <section className="relative min-h-[68vh] overflow-hidden rounded border border-(--line) bg-[#0f1217]">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(20,184,166,0.25),transparent_32%),linear-gradient(135deg,#101827,#09090b_55%,#172554)]" />
+    <section className="media-pane relative overflow-hidden rounded border border-(--line) bg-[#0f1217]">
+      <ProviderPlayback playback={room.playback} title="WeVid Livepeer room playback" />
       <div className="absolute left-4 top-4 flex items-center gap-2">
         <span className="rounded bg-[#fee2e2] px-2 py-1 text-xs font-semibold uppercase text-[#991b1b]">
           {room.state}
@@ -73,7 +77,7 @@ function LiveStage({ room }: { room: LiveRoom }) {
 
 function LiveAccessPanel({ room }: { room: LiveRoom }) {
   return (
-    <aside className="grid content-start gap-4">
+    <aside className="side-pane grid content-start gap-4">
       <section className="rounded border border-(--line) bg-(--panel) p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -88,17 +92,20 @@ function LiveAccessPanel({ room }: { room: LiveRoom }) {
         <div className="mt-5 grid gap-3 border-t border-(--line) pt-4">
           <Fact label="Playback" value={room.playback?.state ?? "not_ready"} />
           <Fact label="Provider" value={room.playback?.provider ?? "none"} />
-          <Fact label="Teaser" value={`${room.teaserSecondsRemaining ?? 0}s remaining`} />
+          <Fact label="Access" value={room.accessMode} />
+          <Fact label="Preview" value={`${room.previewSecondsRemaining ?? 0}s remaining`} />
           <Fact label="Chat" value={room.chat.accessState} />
         </div>
       </section>
 
-      <LivePassPanel room={room} />
+      <LiveAccessOfferPanel room={room} />
 
       <section className="rounded border border-(--line) bg-(--panel) p-4">
         <h2 className="text-sm font-semibold">Live chat</h2>
         <div className="mt-4 rounded border border-(--line) bg-(--background) p-3 text-sm text-(--muted)">
-          Chat unlocks only after backend-confirmed live pass settlement.
+          {room.chat.accessState === "members_only"
+            ? "Chat is reserved for active profile members."
+            : "Chat access follows the host's live policy and backend access state."}
         </div>
       </section>
     </aside>
@@ -111,25 +118,5 @@ function Fact({ label, value }: { label: string; value: string }) {
       <span className="text-(--muted)">{label}</span>
       <span className="text-right font-medium">{value}</span>
     </div>
-  );
-}
-
-function UnavailableState({
-  message,
-  status,
-  title
-}: {
-  message: string;
-  status: number;
-  title: string;
-}) {
-  return (
-    <section className="grid min-h-[68vh] content-center rounded border border-(--line) bg-(--panel) p-6 lg:col-span-2">
-      <div className="max-w-xl">
-        <p className="text-sm font-medium text-(--accent)">HTTP {status}</p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-normal">{title}</h1>
-        <p className="mt-3 text-sm leading-6 text-(--muted)">{message}</p>
-      </div>
-    </section>
   );
 }

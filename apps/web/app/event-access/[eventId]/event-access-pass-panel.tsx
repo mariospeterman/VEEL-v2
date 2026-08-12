@@ -9,6 +9,8 @@ import {
   type PaymentIntent,
   type TransactionRequest
 } from "@/api-mutations";
+import { safeMutationMessage } from "@/api-errors";
+import { formatAssetAmount } from "@/format-asset-amount";
 
 interface EventAccessPassPanelProps {
   event: Event;
@@ -94,7 +96,14 @@ function EventAccessPassOption({
         </span>
       </div>
       <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
-        <Fact label="Price" value={`${accessPassType.priceMinor?.toLocaleString() ?? "free"} ${accessPassType.currency}`} />
+        <Fact
+          label="Price"
+          value={
+            accessPassType.priceMinor === null
+              ? "Free"
+              : formatAssetAmount(accessPassType.priceMinor, accessPassType.currency)
+          }
+        />
         <Fact label="Capacity" value={accessPassType.capacity.toString()} />
         <Fact label="Access" value={event.accessRule} />
       </div>
@@ -110,7 +119,7 @@ function EventAccessPassOption({
 
         {intent ? (
           <div className="grid gap-2 rounded border border-(--line) bg-(--panel) p-3 text-sm">
-            <Fact label="Amount" value={`${intent.amountMinor.toLocaleString()} ${intent.currency}`} />
+            <Fact label="Amount" value={formatAssetAmount(intent.amountMinor, intent.currency)} />
             <Fact label="Intent" value={intent.state} />
           </div>
         ) : null}
@@ -150,13 +159,5 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 function errorMessage(error: unknown) {
-  if (error instanceof ApiMutationError) {
-    return error.message;
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "Access Pass could not be started.";
+  return safeMutationMessage(error, "Access Pass");
 }

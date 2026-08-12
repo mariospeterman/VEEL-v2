@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import {
-  ApiMutationError,
   getPaymentTransactionRequest,
   type PaymentIntent,
   type TransactionRequest
 } from "@/api-mutations";
+import { safeMutationMessage } from "@/api-errors";
+import { formatAssetAmount } from "@/format-asset-amount";
 
 interface PaymentHandoffPanelProps {
   createIntent: () => Promise<PaymentIntent | null>;
@@ -70,7 +71,7 @@ export function PaymentHandoffPanel({
 
       {intent ? (
         <div className="grid gap-2 rounded border border-(--line) bg-(--background) p-3 text-sm">
-          <Fact label="Amount" value={`${intent.amountMinor.toLocaleString()} ${intent.currency}`} />
+          <Fact label="Amount" value={formatAssetAmount(intent.amountMinor, intent.currency)} />
           <Fact label="Intent" value={intent.state} />
         </div>
       ) : null}
@@ -103,13 +104,5 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 function errorMessage(error: unknown) {
-  if (error instanceof ApiMutationError) {
-    return error.message;
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "Payment could not be started.";
+  return safeMutationMessage(error, "Payment");
 }

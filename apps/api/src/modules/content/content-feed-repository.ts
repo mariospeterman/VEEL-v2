@@ -69,6 +69,7 @@ export function createContentFeedRepositoryMethods(
         join users u on u.id = ci.creator_user_id
         join profiles p on p.user_id = u.id
         join users viewer on viewer.supabase_user_id = ${input.supabaseUserId}
+        left join viewer_feed_preferences vfp on vfp.user_id = viewer.id
         left join lateral (
           select poster_url, playback_url, provider, provider_state, provider_playable
           from media_assets
@@ -103,8 +104,18 @@ export function createContentFeedRepositoryMethods(
           and ci.publish_state = 'published'
           and ci.visibility = 'public'
           and ci.moderation_state = 'approved'
-          and (${input.mode} != 'sfw' or ci.nsfw_label = 'none')
-          and (${input.mode} != 'nsfw' or ci.nsfw_label in ('adult', 'explicit'))
+          and (
+            (${input.mode} = 'sfw' and ci.nsfw_label = 'none')
+            or (${input.mode} = 'nsfw' and ci.nsfw_label <> 'none')
+            or (
+              ${input.mode} not in ('sfw', 'nsfw')
+              and (
+                coalesce(vfp.nsfw_preference, 'both') = 'both'
+                or (vfp.nsfw_preference = 'sfw' and ci.nsfw_label = 'none')
+                or (vfp.nsfw_preference = 'nsfw' and ci.nsfw_label <> 'none')
+              )
+            )
+          )
           and (${input.cursor ?? null}::timestamptz is null or ci.created_at < ${input.cursor ?? null}::timestamptz)
           and not exists (
             select 1

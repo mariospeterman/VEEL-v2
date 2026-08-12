@@ -62,9 +62,9 @@ Recommended provider waterfall:
 
 Launch provider strategy:
 
-- primary commercial provider: Yoti, pending legal/vendor review
-- fallback providers: Sumsub, Veriff, and Persona, pending legal/vendor review
-- optional future lanes: EUDI wallet, Scytales, Didit, region-specific trusted ID
+- reusable-first viewer age assurance: Didit, Yoti Digital ID, EUDI Wallet, Scytales, pending legal/vendor review
+- light/free viewer fallback: Didit age estimation and Persona/Didit document proof, pending legal/vendor review
+- creator/compliance escalation only: Sumsub and Veriff for Studio/enterprise, creator publishing, tax, fraud, merchant, or regulated partner workflows
 - do not force KYC/KYB for ordinary viewers unless product/legal policy requires it
 
 Do not store raw identity images/docs unless provider/legal workflow explicitly requires it. Store:

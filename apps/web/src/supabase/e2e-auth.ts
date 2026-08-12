@@ -4,7 +4,10 @@ import type { WebAuthState } from "./auth-state";
 import { e2eAuthCookieName } from "./auth-cookie";
 
 export function isE2eAuthEnabled(env = process.env) {
-  return env.NODE_ENV !== "production" && parsePublicWebEnv(env).NEXT_PUBLIC_ENABLE_E2E_AUTH;
+  return (
+    env.DEPLOY_ENV !== "production" &&
+    (env.ENABLE_E2E_AUTH === "true" || parsePublicWebEnv(env).NEXT_PUBLIC_ENABLE_E2E_AUTH)
+  );
 }
 
 export async function getE2eAccessToken() {

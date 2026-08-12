@@ -6,7 +6,11 @@ import {
 import type { AgeRepository } from "../age/types.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
-import { EngagementPolicyError, EngagementRepositoryConfigurationError } from "./engagement-repository.js";
+import {
+  EngagementIdempotencyConflictError,
+  EngagementPolicyError,
+  EngagementRepositoryConfigurationError
+} from "./engagement-errors.js";
 import type {
   CreateReportRequest,
   CreateShareRequest,
@@ -22,7 +26,7 @@ export interface RegisterEngagementRoutesOptions {
 }
 
 const feedModes = new Set(["recommended", "following", "nsfw", "sfw"]);
-const nsfwPreferences = new Set(["recommended", "nsfw", "sfw"]);
+const nsfwPreferences = new Set(["both", "nsfw", "sfw"]);
 const shareModes = new Set(["internal_message", "external_referral_link", "copy_link"]);
 const shareTargetTypes = new Set(["content", "profile", "event"]);
 const reportSubjectTypes = new Set(["content", "user", "message", "live_room", "event"]);
@@ -41,7 +45,7 @@ export async function toggleContentAction(
   }
   const params = request.params as { contentId?: string };
   const contentId = params.contentId;
-  if (!contentId) return reply.code(400).send(validationResponse("contentId is required"));
+  if (!isUuid(contentId)) return reply.code(400).send(validationResponse("contentId must be a UUID"));
 
   return repositoryReply(request, reply, async () =>
     action === "like"
@@ -118,6 +122,13 @@ export async function repositoryReply<T>(
       });
     }
 
+    if (error instanceof EngagementIdempotencyConflictError) {
+      return reply.code(409).send({
+        code: "conflict",
+        message: "Idempotency key was already used for a different engagement action"
+      });
+    }
+
     throw error;
   }
 }
@@ -161,4 +172,15 @@ export function isShareMode(value: unknown): value is CreateShareRequest["mode"]
 
 export function isReportSubjectType(value: unknown): value is CreateReportRequest["subjectType"] {
   return typeof value === "string" && reportSubjectTypes.has(value);
+}
+
+export function isUuid(value: unknown): value is string {
+  return typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+export function isIsoTimestamp(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const parsed = new Date(value);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString() === value;
 }

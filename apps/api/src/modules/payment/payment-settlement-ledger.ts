@@ -2,22 +2,18 @@ import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import type { StoredPaymentIntent } from "./types.js";
 
-const defaultPlatformFeeBps = 1000;
-
-export async function recordTipSupportSettlementLedger(
+export async function recordSupportSettlementLedger(
   transaction: postgres.TransactionSql,
   input: {
     paymentIntentId: string;
     actorUserId: string;
     creatorUserId: string;
-    amountMinor: number;
+    creatorAmountMinor: number;
+    platformFeeMinor: number;
     currency: StoredPaymentIntent["currency"];
     productType: "tip" | "support";
   }
 ): Promise<{ creatorAmountMinor: number; platformFeeMinor: number }> {
-  const platformFeeMinor = Math.floor((input.amountMinor * defaultPlatformFeeBps) / 10_000);
-  const creatorAmountMinor = input.amountMinor - platformFeeMinor;
-
   await transaction`
     insert into payment_ledger_entries (
       id,
@@ -36,7 +32,7 @@ export async function recordTipSupportSettlementLedger(
         'creator_earning',
         ${`creator:${input.creatorUserId}`},
         ${input.creatorUserId},
-        ${creatorAmountMinor},
+        ${input.creatorAmountMinor},
         ${input.currency},
         'credit'
       ),
@@ -46,7 +42,7 @@ export async function recordTipSupportSettlementLedger(
         'platform_fee',
         'platform',
         null,
-        ${platformFeeMinor},
+        ${input.platformFeeMinor},
         ${input.currency},
         'credit'
       )
@@ -67,34 +63,32 @@ export async function recordTipSupportSettlementLedger(
       ${input.actorUserId},
       'payment_intent',
       ${input.paymentIntentId},
-      'tip_support_settlement_posted',
+      'support_settlement_posted',
       ${transaction.json({
         productType: input.productType,
         creatorUserId: input.creatorUserId,
-        creatorAmountMinor,
-        platformFeeMinor
+        creatorAmountMinor: input.creatorAmountMinor,
+        platformFeeMinor: input.platformFeeMinor
       })}
     )
   `;
 
   return {
-    creatorAmountMinor,
-    platformFeeMinor
+    creatorAmountMinor: input.creatorAmountMinor,
+    platformFeeMinor: input.platformFeeMinor
   };
 }
-
-const defaultReferralShareOfPlatformFeeBps = 2000;
 
 export async function recordReferralCommission(
   transaction: postgres.TransactionSql,
   input: {
     paymentIntentId: string;
     actorUserId: string;
-    platformFeeMinor: number;
+    referralAmountMinor: number;
     currency: StoredPaymentIntent["currency"];
   }
 ): Promise<void> {
-  if (input.platformFeeMinor <= 0) {
+  if (input.referralAmountMinor <= 0) {
     return;
   }
 
@@ -120,14 +114,6 @@ export async function recordReferralCommission(
     return;
   }
 
-  const commissionAmountMinor = Math.floor(
-    (input.platformFeeMinor * defaultReferralShareOfPlatformFeeBps) / 10_000
-  );
-
-  if (commissionAmountMinor <= 0) {
-    return;
-  }
-
   await transaction`
     insert into referral_commissions (
       id,
@@ -146,7 +132,7 @@ export async function recordReferralCommission(
       ${input.paymentIntentId},
       ${attribution.referrer_user_id},
       ${attribution.referred_user_id},
-      ${commissionAmountMinor},
+      ${input.referralAmountMinor},
       ${input.currency}
     )
     on conflict (payment_intent_id, referral_token_id) do nothing
@@ -169,7 +155,7 @@ export async function recordReferralCommission(
       'referral_commission',
       ${`referrer:${attribution.referrer_user_id}`},
       ${attribution.referrer_user_id},
-      ${commissionAmountMinor},
+      ${input.referralAmountMinor},
       ${input.currency},
       'credit'
     )
@@ -194,10 +180,8 @@ export async function recordReferralCommission(
       ${transaction.json({
         referralTokenId: attribution.referral_token_id,
         referrerUserId: attribution.referrer_user_id,
-        commissionAmountMinor
+        commissionAmountMinor: input.referralAmountMinor
       })}
     )
   `;
 }
-
-

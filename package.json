@@ -4,10 +4,14 @@
   "version": "0.0.0",
   "packageManager": "pnpm@10.0.0",
   "scripts": {
+    "bootstrap": "corepack enable && corepack prepare pnpm@10.0.0 --activate && pnpm install --frozen-lockfile",
+    "check": "pnpm docs:check && pnpm db:migrations:check && pnpm deploy:check && pnpm lint && pnpm typecheck && pnpm test",
+    "doctor": "bash scripts/toolchain-doctor.sh",
     "docs:check": "node scripts/check-docs.mjs",
     "scaffold:check": "pnpm docs:check",
     "build": "pnpm -r --if-present build",
     "deploy:check": "node scripts/check-deploy-readiness.mjs",
+    "db:migrations:check": "node packages/database/scripts/check-migrations.mjs",
     "contracts:generate": "pnpm --filter @veel/contracts generate",
     "database:check": "pnpm --filter @veel/database check",
     "supabase:version": "supabase --version",
@@ -17,6 +21,9 @@
     "supabase:advisors": "node --env-file=.env scripts/run-supabase-cli.mjs db advisors --db-url-env --type all --level warn --fail-on none",
     "supabase:push:dry": "node --env-file=.env scripts/run-supabase-cli.mjs db push --db-url-env --dry-run",
     "supabase:push": "node --env-file=.env scripts/run-supabase-cli.mjs db push --db-url-env",
+    "mcp:seed": "node --env-file=.env scripts/seed-mcp-oauth-client.mjs",
+    "mcp:oauth:pkce": "node --env-file=.env scripts/smoke-mcp-oauth-pkce.mjs",
+    "mcp:smoke": "node --env-file=.env scripts/smoke-mcp-remote.mjs",
     "lint": "eslint .",
     "smoke": "node scripts/run-local-tool.mjs playwright test",
     "typecheck": "pnpm -r typecheck",
@@ -24,23 +31,32 @@
     "test:integration:api": "VEEL_ENABLE_REAL_API_INTEGRATION_TESTS=1 node --env-file=.env scripts/run-local-tool.mjs vitest run apps/api/test/authenticated-happy-path.integration.test.ts"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.16.0 <23"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild",
       "sharp"
-    ]
+    ],
+    "overrides": {
+      "axios@>=1.15.2 <1.18.0": "1.18.0",
+      "ws@>=8.0.0 <8.21.0": "8.21.3"
+    }
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
-    "@playwright/test": "^1.51.1",
+    "@playwright/test": "1.60.0",
     "@types/node": "^25.9.3",
     "eslint": "^9.39.1",
     "globals": "^16.5.0",
     "supabase": "^2.106.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.61.0",
+    "postgres": "^3.4.9",
     "vitest": "^4.0.8"
+  },
+  "optionalDependencies": {
+    "@rolldown/binding-darwin-arm64": "1.0.3",
+    "@rolldown/binding-darwin-x64": "1.0.3"
   }
 }

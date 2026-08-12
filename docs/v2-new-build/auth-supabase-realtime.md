@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: auth, DB, realtime
-Last updated: 2026-06-04
+Last updated: 2026-06-29
 Source of truth: yes
 
 Owns:
@@ -22,9 +22,9 @@ Non-goals:
 
 ## Decision
 
-Use Supabase Auth for identity/session and Supabase Postgres for data. Use Supabase Realtime selectively. The Fastify backend remains the business policy layer.
+Use Supabase Auth for optional recovery/account-management sessions and Supabase Postgres for data. Use Supabase Realtime selectively. The Fastify backend remains the business policy layer.
 
-V2 should not require an external wallet before signup. Use Supabase Auth for mainstream email/social/passkey entry, create or link a user-controlled wallet through the wallet architecture in `embedded-wallet-onboarding.md`, then complete the single age-verification gate before protected app access.
+V2 onboarding is wallet-first. A user connects an external noncustodial Solana wallet or unlocks a configured noncustodial embedded wallet, sets up the public profile, optionally signs into Supabase email/social recovery for profile management, then completes the single age-verification gate before protected app access.
 
 ## Identity Model
 
@@ -33,7 +33,7 @@ erDiagram
   auth_users ||--|| users : maps_to
   users ||--|| profiles : has
   users ||--o{ wallets : owns
-  users ||--o{ age_verifications : has
+  users ||--o{ verification_records : has
   users ||--o{ staff_memberships : may_have
   users ||--o{ sessions_audit : creates
 
@@ -67,28 +67,46 @@ erDiagram
     string address
     boolean primary
   }
+  verification_records {
+    uuid id
+    uuid subject_id
+    string purpose
+    string status
+    string provider
+  }
 ```
 
 ## Auth Flow
 
-1. User signs in through Supabase Auth.
-2. Frontend receives session/JWT.
-3. Frontend calls Fastify `/v1/session`.
-4. Fastify verifies JWT and loads Veel profile, wallet, age, restrictions, monetisation, and app permissions.
-5. Fastify returns frontend-safe session payload.
+1. User signs a backend-issued wallet challenge through an external Solana wallet or configured embedded wallet provider.
+2. Fastify verifies the wallet signature and creates or restores the Veel wallet session.
+3. User sets the Veel profile handle/display name through `PATCH /v1/profiles/me`.
+4. User may sign into Supabase email/social recovery for profile management.
+5. User completes third-party age verification before protected app access.
+6. Fastify loads Veel profile, wallet, age, restrictions, monetisation, and app permissions and returns frontend-safe session payloads.
 
 Signup paths and onboarding order:
 
-- Step 1: user chooses email/social/passkey with embedded wallet, or external/native wallet sign-in.
-- Step 2: Fastify bootstraps the Veel `users` row for the verified Supabase identity.
+- Step 1: user connects an external/native wallet or unlocks a configured embedded wallet.
+- Step 2: Fastify verifies the wallet challenge, bootstraps the Veel `users` row, and audits the wallet session/link.
 - Step 3: user sets the Veel profile handle/display name through `PATCH /v1/profiles/me`.
-- Step 4: backend links/creates the mandatory wallet path and audits it.
+- Step 4: user may sign into Supabase email/social recovery for profile management.
 - Step 5: third-party age verification completes the app age gate.
-- Email/social/passkey: creates a Veel profile and creates or loads a noncustodial embedded wallet by default.
-- External wallet: uses signed wallet challenge and can attach to an existing Supabase-authenticated user or become the primary wallet path.
+- Supabase email/social/passkey: optional recovery/account-management access. It is not the primary app-access proof; it can be linked to a wallet-created account only after both wallet-session proof and Supabase-session proof are present.
+- External wallet: uses signed wallet challenge and can attach to an existing Supabase-authenticated recovery session or become the primary wallet path.
 - Returning user: Fastify resolves profile, primary wallet, linked wallets, age/access, restrictions, and monetisation state.
 
 Protected app access requires both age verification and a wallet path. Supabase Auth alone is not enough to enter the app shell.
+
+Current implementation boundary:
+
+- Supabase Auth login and magic-link recovery are wired through the official SSR callback pattern: OAuth/PKCE callbacks exchange the returned `code` with `exchangeCodeForSession`, and email magic links verify `token_hash` plus `type` with `verifyOtp`.
+- Wallet-first login creates or restores an app-owned wallet session whose bearer token maps to the internal `users.supabase_user_id` compatibility identifier.
+- Supabase Auth remains recovery/account-management only. The browser renders email/social recovery providers only when Supabase browser config exists and the matching `NEXT_PUBLIC_SUPABASE_AUTH_*_ENABLED` flag is set for a provider that is also enabled in the Supabase Auth dashboard.
+- Supabase recovery callbacks resolve `/v1/session` before entering `/app/*`. If the Supabase identity has no linked wallet/profile state, the user is routed back to wallet onboarding instead of being treated as wallet-authenticated.
+- `POST /v1/auth/recovery-link` links Supabase recovery to a wallet-created account after the server proves both sessions: a valid Supabase bearer token in `Authorization` and the active wallet session in its HttpOnly cookie. The wallet token is never accepted in the JSON body. The API updates the existing wallet-owned `users` row to the verified Supabase subject, so future wallet login and future Supabase login resolve to the same profile, wallet, age, creator KYC, and organization KYB state.
+- `POST /v1/auth/wallet/logout` revokes the hashed wallet session server-side and expires the HttpOnly cookie. Provider SDK logout and Supabase local sign-out remain frontend orchestration steps around this backend authority.
+- Recovery linking fails with `409` if that Supabase identity already belongs to a different WeVid account. The API never silently merges two users, profiles, wallets, age records, verification records, payments, or organization memberships.
 
 ## Profile Bootstrap
 
@@ -107,9 +125,11 @@ Wallet linking is not Supabase Auth by itself.
 - Backend verifies signature.
 - Backend links wallet to the authenticated Supabase user profile.
 - Wallet link events are audited.
-- `/enter` and `/wallet` can coordinate injected Phantom/Solflare/wallet-adapter signing for the existing `POST /v1/wallets/link-challenges` and `POST /v1/wallets/link` flow. The browser signs exactly the returned challenge text with `signMessage`; it never stores wallet truth, never treats wallet approval as payment proof, and never opens protected access without the backend session/access state.
+- Landing onboarding and `/app/wallet` coordinate Solana Wallet Adapter signing for the existing `POST /v1/wallets/link-challenges` and `POST /v1/wallets/link` flow. Phantom and Solflare are sent to the backend as their explicit provider enum values; Backpack and other wallet-standard/browser wallets are sent as `wallet_adapter` unless the OpenAPI contract is intentionally expanded. The browser signs exactly the returned challenge text with `signMessage`; it never stores wallet truth, never treats wallet approval as payment proof, and never opens protected access without the backend session/access state.
 
 Embedded wallets are also linked to the Veel profile, but they are not a backend custody account. The selected wallet provider must support a noncustodial/user-controlled model where Veel cannot move funds without user approval.
+
+The web app mounts the Privy embedded-wallet SDK only when its browser-safe app id is configured and `NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED=true`. Privy uses `NEXT_PUBLIC_PRIVY_APP_ID` and Solana RPC settings, creates or unlocks a Solana embedded wallet through the official Privy React/Solana SDK, selects the Privy wallet explicitly from the connected Solana wallet list, then signs the backend wallet-auth challenge as `embedded_privy`. Turnkey remains an ADR fallback, not a bundled browser runtime or launch path.
 
 Wallet path is mandatory before protected app access because Veel is wallet-native and every user must be able to receive or approve noncustodial Solana actions.
 
@@ -187,16 +207,20 @@ Avoid:
 
 - Frontend uses Supabase URL plus publishable key and user JWT. Legacy anon keys may be used for compatibility only.
 - Web SSR uses `@supabase/ssr` cookie clients, `apps/web/proxy.ts` refreshes Supabase auth cookies with `auth.getClaims()`, and `/auth/confirm` exchanges email `token_hash` links for sessions before redirecting back to the app.
-- `/enter` starts the real browser-side Supabase magic-link flow and can sign out a browser session. It does not grant protected app access by itself; backend `/v1/session`, wallet readiness, and age verification remain the access truth.
-- `/enter` also exposes the profile completion form after session creation. It sends `PATCH /v1/profiles/me` with a browser Supabase bearer token and an idempotency key; backend validation, handle uniqueness, and app-access state remain authoritative.
-- `/enter` and `/wallet` expose external Solana wallet handoff for injected wallets using the backend wallet challenge/proof endpoints. Official Phantom Solana signing docs checked on 2026-06-07 confirm `signMessage` receives UTF-8 bytes and returns an Ed25519 signature that the backend verifies with tweetnacl.
-- `/age` exposes an authenticated start button for `POST /v1/age/sessions` with `providerPreference=reusable_first`. It redirects only to the backend-returned provider launch URL and still waits for signed provider webhook evidence before access changes.
-- Protected app pages use a shared server-side route guard before backend reads. When Supabase SSR env is configured and `getClaims()` does not validate a browser session, the guard redirects to `/enter?next=<protected-path>`.
-- Protected app-shell pages additionally call backend `GET /v1/session` and redirect incomplete access states to `/enter`, `/wallet`, or `/age` based on `appAccessState.reason`. `/wallet`, `/settings`, `/enter`, and `/age` remain reachable as remediation/onboarding surfaces.
+- Landing login starts the real browser-side Supabase magic-link flow. It does not grant protected app access by itself; backend `/v1/session`, wallet readiness, and age verification remain the access truth.
+- Landing onboarding exposes optional profile completion after wallet setup. Profile submission must send `PATCH /v1/profiles/me` with a browser Supabase bearer token or wallet session and an idempotency key; backend validation, handle uniqueness, and app-access state remain authoritative.
+- Landing onboarding and `/app/wallet` expose external Solana wallet handoff through Solana Wallet Adapter using the backend wallet challenge/proof endpoints. Wallet Adapter must provide `signMessage`; backend verification remains the auth truth.
+- Landing onboarding keeps age assurance on the story surface: wallet connection is mandatory, profile and Supabase recovery auth are optional, and age assurance is mandatory before protected app access.
+- `/age` / landing age assurance starts `POST /v1/age/sessions` with `providerPreference=reusable_first`. The preferred waterfall is reusable age ID first (`Didit`, `Yoti Digital ID`, `EUDI Wallet`, `Scytales`), then free/light age estimation or document proof (`Didit`, `Persona`) when reusable proof is unavailable. The UI may link users to create a reusable ID and return to the age check.
+- Sumsub and Veriff are not shown as ordinary viewer onboarding providers. Keep them for Studio/enterprise or creator-compliance escalation before creator publishing, monetized creator workflows, tax, merchant, fraud, or regulated partner handoff.
+- Age reverification is not recurring onboarding. Recheck only on provider credential expiry, jurisdiction/rule change, suspicious activity, admin/risk reason, or transition into creator/Studio/enterprise features.
+- Provider launch redirects must use only backend-returned provider launch URLs and still wait for signed provider webhook evidence before access changes.
+- Protected app pages use a shared server-side route guard before backend reads. When Supabase SSR env is configured and `getClaims()` does not validate a browser session, the guard redirects to `/?mode=login&next=<protected-path>`.
+- Protected app-shell pages additionally call backend `GET /v1/session` and redirect incomplete access states to `/?mode=onboarding`, `/app/wallet`, or `/age` based on `appAccessState.reason`. `/app/wallet`, `/app/settings`, `/`, and `/age` remain reachable as remediation/onboarding surfaces.
 - Every guarded page must export `dynamic = "force-dynamic"` so auth cookies and refreshed claims are evaluated per request instead of during static prerendering.
 - When Supabase SSR env is not configured, local development and smoke projections stay visible; backend API calls still fail closed and remain the access authority.
-- Public Home/Discover, public creator profiles, content/live/event previews, `/enter`, and `/age` stay reachable without a browser session.
-- Configure Supabase Auth email templates for server-side flow: set magic-link and confirm-signup links to `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/enter`.
+- Public landing, public creator profiles, content/live/event previews, and `/age` stay reachable without a browser session.
+- Configure Supabase Auth email templates for server-side flow: set magic-link and confirm-signup links to `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/`.
 - Backend never exposes secret or service-role keys to browser bundles.
 - Backend verifies Supabase-issued access tokens with Supabase Auth `getClaims()` where possible, falling back to Auth-server verification behavior for shared-secret signing projects.
 - JWT verification keys/config must be cached and rotated safely.
@@ -208,12 +232,16 @@ Avoid:
 
 The root `.env.example` is the full monorepo checklist. Local API scripts load the root `.env` with Node's built-in env-file support. `apps/web/.env.example` contains only browser-safe values for the Next app's `.env.local`. `apps/api/.env.example` contains server-only runtime and local tooling values.
 
+In this monorepo, the Next app is built from `apps/web`. Local browser auth therefore needs the public Supabase values in `apps/web/.env.local` or exported into the shell before `next build`. Having `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` only in the root `.env` is enough for shared local scripts, but it is not a reliable source for the browser bundle. After changing any `NEXT_PUBLIC_*` value, run the web build again because Next inlines public environment values into the client build.
+
 Use these key classes:
 
 - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in the web app.
+- `NEXT_PUBLIC_SUPABASE_AUTH_EMAIL_ENABLED`, `NEXT_PUBLIC_SUPABASE_AUTH_GOOGLE_ENABLED`, `NEXT_PUBLIC_SUPABASE_AUTH_GITHUB_ENABLED`, `NEXT_PUBLIC_SUPABASE_AUTH_DISCORD_ENABLED`, and `NEXT_PUBLIC_SUPABASE_AUTH_TWITTER_ENABLED` only for providers enabled in Supabase Auth.
 - `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and `DATABASE_URL` in the API.
 - `SUPABASE_SECRET_KEY` only for backend-only provider/admin work that explicitly needs it.
 - `SUPABASE_SERVICE_ROLE_KEY` only for legacy compatibility or narrowly reviewed backend work.
+- `PROFILE_AVATAR_BUCKET=profile-avatars` for server-owned profile avatar uploads. Migrations `0070_profile_avatar_storage_bucket.sql` and `0071_profile_avatar_storage_limit.sql` create or update this public Supabase Storage bucket with a 5 MB limit and JPEG/PNG/WebP MIME allowlist. The browser never receives storage write credentials.
 - `SUPABASE_ACCESS_TOKEN` and `SUPABASE_PROJECT_REF` only for local Supabase CLI/MCP tooling.
 - `ONRAMP_PROVIDER`, `ONRAMP_PURCHASE_CURRENCY`, `COINBASE_CDP_API_KEY_ID`, `COINBASE_CDP_API_KEY_SECRET`, `COINBASE_CDP_API_BASE_URL`, and `COINBASE_ONRAMP_DESTINATION_NETWORK` only in the API/worker environment for user-wallet funding sessions.
 
@@ -228,8 +256,10 @@ Do not connect AI tooling directly to production data. Use a development project
 ## Age/KYC Separation
 
 - Age gate: required for protected viewing/app access.
-- KYC/KYB: required for earning, tax, and compliance flows.
-- Normal viewer access should not require KYC unless product/legal policy says so.
+- Creator KYC: required only when a user attempts creator capabilities such as uploading media, publishing, monetization, payouts, or creator/studio management actions.
+- Organization KYB: required only for Studio, Enterprise, team publishing, allocation wallets, reporting, compliance exports, or business controls.
+- Normal viewer access must not require KYC/KYB unless product/legal policy says so.
+- Valid checks are reused when provider policy, legal basis, expiry, jurisdiction, and consent allow it. A valid creator KYC that proves over-threshold age can derive/refresh age access; age estimation alone cannot satisfy creator KYC.
 - Frontend receives only state/action, never raw provider payload.
 
 ## Locked Onboarding Decision
@@ -246,8 +276,9 @@ Rules:
 
 - No protected app entry without age verification.
 - No protected app entry without a wallet path.
+- No hard viewer/creator/studio fork during default onboarding. Creator and Studio/Enterprise shortcut intent is contextual and optional.
 - No double age verification per media item after the app-level age gate, unless a future jurisdiction/product rule explicitly requires it.
-- KYC/KYB remains separate from age verification and is only required for creator earning, tax/compliance, and risk workflows by default.
+- KYC/KYB remains separate from age verification and is only required for creator, earning, business, tax/compliance, and risk workflows by default.
 
 ## Implementation Decisions Required Before Coding
 
