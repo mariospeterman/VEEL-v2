@@ -206,7 +206,7 @@ function safeResultForTool(
     default:
       return {
         summary: "App state explanation prepared",
-        explanation: "Veel gates premium actions through profile, age, wallet, backend settlement, and server-side access checks.",
+        explanation: "WeVid gates premium actions through profile, age, wallet, backend settlement, and server-side access checks.",
         safetyNote: "No privileged state changed."
       };
   }

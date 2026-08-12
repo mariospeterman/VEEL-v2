@@ -15,6 +15,7 @@ import {
   VerificationWebhookValidationError
 } from "./verification-webhook-adapter.js";
 import type { CreateVerificationSessionInput, VerificationProvider, VerificationProviderWaterfall, VerificationRepository } from "./types.js";
+import { mutationRateLimit } from "../../shared/rate-limits.js";
 
 interface RegisterVerificationRoutesOptions {
   authVerifier: SupabaseAuthVerifier;
@@ -96,7 +97,7 @@ export async function registerVerificationRoutes(
     }
   );
 
-  app.post("/v1/verification/sessions", async (request, reply) => {
+  app.post("/v1/verification/sessions", mutationRateLimit("ageMutation"), async (request, reply) => {
     const verifiedSession = await verifyRequestSession(request, options.authVerifier);
 
     if (!verifiedSession) {

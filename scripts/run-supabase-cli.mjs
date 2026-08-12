@@ -25,11 +25,10 @@ if (!existsSync(supabaseBin)) {
 const resolveDatabaseUrl = () => {
   const databaseUrl =
     process.env.SUPABASE_MIGRATIONS_DB_URL ??
-    process.env.SUPABASE_DIRECT_DB_URL ??
-    process.env.DATABASE_URL;
+    process.env.SUPABASE_DIRECT_DB_URL;
 
   if (!databaseUrl) {
-    console.error("SUPABASE_MIGRATIONS_DB_URL, SUPABASE_DIRECT_DB_URL, or DATABASE_URL is required.");
+    console.error("SUPABASE_MIGRATIONS_DB_URL or SUPABASE_DIRECT_DB_URL is required. Generic application DATABASE_URL is never used for remote migration commands.");
     process.exit(1);
   }
 
@@ -116,7 +115,7 @@ if (needsMigrationWorkdir) {
 }
 
 if (result.error?.name === "TimeoutError" || result.signal === "SIGTERM") {
-  console.error("Supabase CLI command timed out. Check DATABASE_URL, network access, or use Supabase MCP for remote operations.");
+  console.error("Supabase CLI command timed out. Check the explicit Supabase migration URL, network access, or use Supabase MCP for remote inspection.");
   process.exit(124);
 }
 

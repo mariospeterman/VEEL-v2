@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { mutationRateLimit } from "../../shared/rate-limits.js";
 import {
   LiveRepositoryConfigurationError,
   LiveRoomIdempotencyConflictError
@@ -25,7 +26,7 @@ export async function registerLiveRoomRoutes(
   app: FastifyInstance,
   options: RegisterLiveRoutesOptions
 ): Promise<void> {
-  app.post("/v1/live/rooms", async (request, reply) => {
+  app.post("/v1/live/rooms", mutationRateLimit("accessMutation"), async (request, reply) => {
     const access = await verifyLiveReadyAccess(request, options);
 
     if (!access.ok) {
@@ -192,7 +193,7 @@ export async function registerLiveRoomRoutes(
     }
   });
 
-  app.post("/v1/live/rooms/:roomId/sync", async (request, reply) => {
+  app.post("/v1/live/rooms/:roomId/sync", mutationRateLimit("accessMutation"), async (request, reply) => {
     const access = await verifyLiveReadyAccess(request, options);
 
     if (!access.ok) {

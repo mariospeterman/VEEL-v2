@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { mutationRateLimit } from "../../shared/rate-limits.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { SupabaseAuthVerifier } from "../session/types.js";
 import { VerificationProviderUnavailableError } from "../verification/verification-provider-adapters.js";
@@ -31,7 +32,7 @@ export async function registerPerformerRoutes(app: FastifyInstance, options: Per
     }
   });
 
-  app.post("/v1/content/:contentId/performers", async (request, reply) => {
+  app.post("/v1/content/:contentId/performers", mutationRateLimit("ageMutation"), async (request, reply) => {
     const access = await verifyRequestSession(request, options.authVerifier);
     if (!access) return reply.code(401).send(unauthorizedResponse("Authentication is required"));
     const body = request.body as {
@@ -78,7 +79,7 @@ export async function registerPerformerRoutes(app: FastifyInstance, options: Per
     }
   });
 
-  app.post("/v1/performer-consents/:requestId/responses", async (request, reply) => {
+  app.post("/v1/performer-consents/:requestId/responses", mutationRateLimit("ageMutation"), async (request, reply) => {
     const access = await verifyRequestSession(request, options.authVerifier);
     if (!access) return reply.code(401).send(unauthorizedResponse("Authentication is required"));
     const decision = readDecision(request.body);

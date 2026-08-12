@@ -9,11 +9,10 @@ const migrationsDir = resolve("packages/database/migrations");
 const resolveDatabaseUrl = () => {
   const databaseUrl =
     process.env.SUPABASE_MIGRATIONS_DB_URL ??
-    process.env.SUPABASE_DIRECT_DB_URL ??
-    process.env.DATABASE_URL;
+    process.env.SUPABASE_DIRECT_DB_URL;
 
   if (!databaseUrl) {
-    console.error("SUPABASE_MIGRATIONS_DB_URL, SUPABASE_DIRECT_DB_URL, or DATABASE_URL is required.");
+    console.error("SUPABASE_MIGRATIONS_DB_URL or SUPABASE_DIRECT_DB_URL is required. Generic application DATABASE_URL is never used for remote migration inspection.");
     process.exit(1);
   }
 

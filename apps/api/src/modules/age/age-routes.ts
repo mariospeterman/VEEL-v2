@@ -20,6 +20,7 @@ import type {
   AgeProvider,
   CreateAgeSessionRequest
 } from "./types.js";
+import { mutationRateLimit } from "../../shared/rate-limits.js";
 
 interface RegisterAgeRoutesOptions {
   authVerifier: SupabaseAuthVerifier;
@@ -107,7 +108,7 @@ export async function registerAgeRoutes(
     }
   );
 
-  app.post("/v1/age/sessions", async (request, reply) => {
+  app.post("/v1/age/sessions", mutationRateLimit("ageMutation"), async (request, reply) => {
     const verifiedSession = await verifyRequestSession(request, options.authVerifier);
 
     if (!verifiedSession) {

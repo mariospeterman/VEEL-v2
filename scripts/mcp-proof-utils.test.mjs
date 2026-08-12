@@ -104,6 +104,33 @@ describe("MCP proof helpers", () => {
     expect(http.status).not.toBe(0);
     expect(http.stderr).toContain("must use https");
   });
+
+  it("accepts configured one-time USDC while preserving production safety gates", () => {
+    const result = runDeployCheck({
+      MCP_ENABLED: "false",
+      PAYMENT_DEFAULT_ASSET: "USDC",
+      PAYMENT_USDC_MINT: "usdc-mint"
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("no deployment");
+  });
+
+  it("blocks process-local rate limiting and adult live in production", () => {
+    const localLimiter = runDeployCheck({
+      MCP_ENABLED: "false",
+      API_RATE_LIMIT_STORE_DRIVER: "process_memory"
+    });
+    expect(localLimiter.status).not.toBe(0);
+    expect(localLimiter.stderr).toContain("distributed adapter");
+
+    const adultLive = runDeployCheck({
+      MCP_ENABLED: "false",
+      LIVEPEER_ADULT_LIVE_ENABLED: "true"
+    });
+    expect(adultLive.status).not.toBe(0);
+    expect(adultLive.stderr).toContain("adult live is not launch-approved");
+  });
 });
 
 function runDeployCheck(overrides) {
@@ -141,6 +168,9 @@ function productionDeployEnv() {
     AGE_VERIFICATION_DRIVER: "sumsub",
     TRANSACTIONAL_EMAIL_PROVIDER: "disabled",
     PAYMENT_DEFAULT_ASSET: "SOL",
+    API_RATE_LIMIT_STORE_DRIVER: "external",
+    LIVEPEER_ADULT_LIVE_ENABLED: "false",
+    MEDIA_MODERATION_MODE: "launch_approved",
     MCP_ENABLED: "true",
     MCP_AUTH_MODE: "oauth",
     MCP_REQUIRE_OAUTH: "true",

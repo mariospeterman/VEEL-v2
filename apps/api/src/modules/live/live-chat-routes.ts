@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { mutationRateLimit } from "../../shared/rate-limits.js";
 import { LiveRepositoryConfigurationError } from "./live-repository.js";
 import type { CreateLiveChatMessageRequest } from "./types.js";
 import {
@@ -44,7 +45,7 @@ export async function registerLiveChatRoutes(
     }
   });
 
-  app.post("/v1/live/rooms/:roomId/messages", async (request, reply) => {
+  app.post("/v1/live/rooms/:roomId/messages", mutationRateLimit("messageMutation"), async (request, reply) => {
     const access = await verifyLiveReadyAccess(request, options);
 
     if (!access.ok) {

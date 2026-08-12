@@ -1,19 +1,19 @@
-name: deploy-production
+name: production-preflight
 
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
-  production-gate:
+  production-preflight:
+    name: production-preflight
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
       - uses: pnpm/action-setup@v4
@@ -26,11 +26,11 @@ jobs:
           pnpm --version
       - name: Install
         run: pnpm install --frozen-lockfile
-      - name: Build deployable apps
+      - name: Build application artifact
         run: pnpm build
       - name: Check database migrations
         run: pnpm database:check
-      - name: Verify production deploy readiness
+      - name: Verify production release preflight
         env:
           DEPLOY_ENV: production
           DEPLOY_ENABLED: ${{ vars.DEPLOY_ENABLED }}
@@ -43,6 +43,9 @@ jobs:
           SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           SOLANA_RPC_URL: ${{ vars.SOLANA_RPC_URL }}
+          PAYMENT_DEFAULT_ASSET: ${{ vars.PAYMENT_DEFAULT_ASSET }}
+          PAYMENT_USDC_MINT: ${{ vars.PAYMENT_USDC_MINT }}
+          PAYMENT_PLATFORM_FEE_WALLET: ${{ vars.PAYMENT_PLATFORM_FEE_WALLET }}
           PAYMENT_PLATFORM_TREASURY_WALLET: ${{ vars.PAYMENT_PLATFORM_TREASURY_WALLET }}
           HELIUS_WEBHOOK_SECRET: ${{ secrets.HELIUS_WEBHOOK_SECRET }}
           BUNNY_STREAM_API_KEY: ${{ secrets.BUNNY_STREAM_API_KEY }}
@@ -54,6 +57,19 @@ jobs:
           NOTIFICATION_DEVICE_ENCRYPTION_KEY: ${{ secrets.NOTIFICATION_DEVICE_ENCRYPTION_KEY }}
           AGE_VERIFICATION_DRIVER: ${{ vars.AGE_VERIFICATION_DRIVER }}
           AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: "false"
+          API_RATE_LIMIT_STORE_DRIVER: ${{ vars.API_RATE_LIMIT_STORE_DRIVER }}
+          API_TRUST_PROXY: ${{ vars.API_TRUST_PROXY }}
+          LIVEPEER_ADULT_LIVE_ENABLED: "false"
+          MEDIA_MODERATION_MODE: ${{ vars.MEDIA_MODERATION_MODE }}
+          SUBSCRIPTIONS_ENABLED: ${{ vars.SUBSCRIPTIONS_ENABLED }}
+          SUBSCRIPTIONS_PROVIDER: ${{ vars.SUBSCRIPTIONS_PROVIDER }}
+          SUBSCRIPTIONS_REQUIRE_ONCHAIN_VERIFICATION: ${{ vars.SUBSCRIPTIONS_REQUIRE_ONCHAIN_VERIFICATION }}
+          SUBSCRIPTIONS_SOLANA_PROGRAM_ID: ${{ vars.SUBSCRIPTIONS_SOLANA_PROGRAM_ID }}
+          SUBSCRIPTIONS_SOLANA_RPC_URL: ${{ vars.SUBSCRIPTIONS_SOLANA_RPC_URL }}
+          SUBSCRIPTIONS_SUPPORTED_MINTS: ${{ vars.SUBSCRIPTIONS_SUPPORTED_MINTS }}
+          SUBSCRIPTIONS_DEFAULT_MINT: ${{ vars.SUBSCRIPTIONS_DEFAULT_MINT }}
+          SUBSCRIPTIONS_COLLECTOR_WALLET: ${{ vars.SUBSCRIPTIONS_COLLECTOR_WALLET }}
+          SUBSCRIPTIONS_MERCHANT_WALLET: ${{ vars.SUBSCRIPTIONS_MERCHANT_WALLET }}
           TRANSACTIONAL_EMAIL_PROVIDER: ${{ vars.TRANSACTIONAL_EMAIL_PROVIDER }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           ONRAMP_PROVIDER: ${{ vars.ONRAMP_PROVIDER }}

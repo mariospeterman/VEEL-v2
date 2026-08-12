@@ -1,9 +1,9 @@
 openapi: 3.1.0
 info:
-  title: Veel V2 API
+  title: WeVid API
   version: 0.1.0
   description: >
-    Contract-first API source of truth for the Veel v2 standalone build. Fastify routes,
+    Contract-first API source of truth for the WeVid platform. Fastify routes,
     generated clients, tests, and docs must stay aligned with this file.
 servers:
   - url: https://api.veel.example
@@ -83,7 +83,7 @@ paths:
       operationId: createWalletAuthSession
       tags: [Auth]
       security: []
-      summary: Verify a wallet challenge and create a Veel session
+      summary: Verify a wallet challenge and create a WeVid session
       parameters:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       requestBody:

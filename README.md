@@ -1,9 +1,9 @@
-# VEEL v2
+# WeVid
 
 Status: accepted
-Scope: standalone Veel v2 build scaffold
+Scope: provider-first 18+ creator PWA/dApp platform
 
-This repo is the clean starting point for the Veel v2 standalone build. The historical context is context only for validated lessons and tests. Do not bulk-copy historical context app code into this repo.
+This repository contains the active WeVid platform implementation. It is substantial but not production-launched: provider staging evidence, recurring collection, moderation approval, deployment, observability, and final product QA remain gated by the canonical build plan.
 
 ## Start Here
 
@@ -102,15 +102,15 @@ pnpm run doctor
 
 ## Product And Compliance Language
 
-Veel v2 is an 18+ creator media, access, noncustodial settlement, and admin/compliance platform. Product docs use `Mutuals` instead of dating, `Event Access` / `Passes` instead of ticketing, and `Creator Memberships` instead of creator subscriptions.
+WeVid is an 18+ creator media, access, noncustodial settlement, and admin/compliance platform. Product docs use `Mutuals` instead of dating, `Event Access` / `Passes` instead of ticketing, and `Creator Memberships` instead of creator subscriptions.
 
-The legal/financial boundary is explicit: no custody, no Veel-held creator balances, no internal credits, no withdrawals, no escrow, and no payment-based ranking boosts. DAC7/DAC8/VAT readiness is tracked in [dac7-dac8-vat-system.md](docs/v2-new-build/compliance/dac7-dac8-vat-system.md).
+The legal/financial boundary is explicit: no custody, no WeVid-held creator balances, no internal credits, no withdrawals, no escrow, and no payment-based ranking boosts. DAC7/DAC8/VAT readiness is tracked in [dac7-dac8-vat-system.md](docs/v2-new-build/compliance/dac7-dac8-vat-system.md).
 
 Do not start by coding random screens. Start with repo foundation, contracts, database, Fastify API skeleton, and app shell.
 
 ## Current Validation
 
-This scaffold now contains the first foundation slice: workspace packages, contract generation, a Next.js PWA shell, a Fastify API skeleton, a worker entrypoint, and real lint/type/test checks.
+The implementation includes the Next.js PWA, Fastify API, worker, migrations through `0090`, shared contracts/config/UI, broad domain routes, and real unit/browser/Postgres integration coverage. See the current implementation status for verified boundaries and launch blockers.
 
 Run the local web and API processes from separate terminals:
 
@@ -124,7 +124,7 @@ The web app serves the PWA shell. The API serves Fastify routes, `/healthz`, `/r
 Wallet-first onboarding uses backend-verified Solana signatures:
 
 - `POST /v1/auth/wallet/challenges` creates the signed login challenge.
-- `POST /v1/auth/wallet/sessions` verifies the signature and returns a VEEL bearer session.
+- `POST /v1/auth/wallet/sessions` verifies the signature and returns a WeVid bearer session.
 - Supabase email auth remains optional for recovery/profile management and is not required before wallet onboarding.
 - Embedded provider UI is gated by `NEXT_PUBLIC_PRIVY_APP_ID`; keep provider secrets server-only and do not enable the Privy production path before staging/launch approval.
 - `NEXT_PUBLIC_SOLANA_CHAIN` controls the web chain label: `solana:devnet` locally, `solana:mainnet` only when production provider and payment checks are approved.

@@ -152,7 +152,7 @@ export function createResendPaymentConfirmationEmailProvider(
           from: options.from,
           to: [input.to],
           ...(options.replyTo ? { reply_to: options.replyTo } : {}),
-          subject: `Veel receipt ${input.receiptNumber}`,
+          subject: `WeVid receipt ${input.receiptNumber}`,
           text: plainTextConfirmation(input, options.webUrl),
           html: htmlConfirmation(input, options.webUrl)
         })

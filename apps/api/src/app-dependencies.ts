@@ -1,3 +1,4 @@
+import type { FastifyRateLimitStoreCtor } from "@fastify/rate-limit";
 import type { FastifyInstance } from "fastify";
 import { createPostgresAdminRepository } from "./modules/admin/admin-repository.js";
 import type { AdminRepository } from "./modules/admin/types.js";
@@ -72,6 +73,7 @@ import type { VerificationProviderWaterfall, VerificationRepository } from "./mo
 import { createPostgresClient, type PostgresSql } from "./shared/postgres.js";
 
 export interface BuildApiOptions {
+  rateLimitStore?: FastifyRateLimitStoreCtor;
   authVerifier?: SupabaseAuthVerifier;
   sessionRepository?: SessionRepository;
   ageRepository?: AgeRepository;

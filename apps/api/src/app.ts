@@ -1,4 +1,5 @@
 import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import sensible from "@fastify/sensible";
 import Fastify, { type FastifyInstance } from "fastify";
@@ -15,10 +16,13 @@ export type { BuildApiOptions } from "./app-dependencies.js";
 
 export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({
+    trustProxy: trustedProxySetting(process.env.API_TRUST_PROXY),
     logger: {
       level: process.env.LOG_LEVEL ?? "info",
       redact: [
         "req.headers.authorization",
+        "req.headers.cookie",
+        "res.headers.set-cookie",
         "SUPABASE_SECRET_KEY",
         "SUPABASE_SERVICE_ROLE_KEY",
         "DATABASE_URL",
@@ -31,22 +35,52 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   });
 
   await app.register(sensible);
+  await app.register(envPlugin);
+  await app.register(helmet, {
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'none'"],
+        baseUri: ["'none'"],
+        formAction: ["'none'"],
+        frameAncestors: ["'none'"]
+      }
+    },
+    crossOriginResourcePolicy: false,
+    hsts:
+      app.config.NODE_ENV === "production"
+        ? { maxAge: 31_536_000, includeSubDomains: true, preload: true }
+        : false,
+    referrerPolicy: { policy: "no-referrer" }
+  });
   await app.register(cors, {
-    origin: localWebOrigins(process.env.WEB_URL ?? "http://localhost:3000"),
+    origin: allowedWebOrigins(app.config.WEB_URL, app.config.NODE_ENV),
     credentials: true,
     methods: ["GET", "HEAD", "POST", "PATCH", "OPTIONS"]
   });
+
+  if (app.config.API_RATE_LIMIT_STORE_DRIVER === "external" && !options.rateLimitStore) {
+    throw new Error(
+      "API_RATE_LIMIT_STORE_DRIVER=external requires a configured Fastify rate-limit store adapter"
+    );
+  }
+
   await app.register(rateLimit, {
     max: 100,
-    timeWindow: "1 minute"
+    timeWindow: "1 minute",
+    ...(options.rateLimitStore ? { store: options.rateLimitStore } : {})
   });
+
+  if (app.config.NODE_ENV === "production" && !options.rateLimitStore) {
+    app.log.warn(
+      "API rate limiting is process-local; horizontally scaled production readiness is blocked"
+    );
+  }
   await app.register(rawBody, {
     field: "rawBody",
     global: false,
     encoding: false,
     runFirst: true
   });
-  await app.register(envPlugin);
   await app.register(supabaseBoundaryPlugin);
 
   const dependencies = createApiDependencies(app, options);
@@ -58,23 +92,18 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   return app;
 }
 
-function localWebOrigins(webUrl: string) {
+function allowedWebOrigins(webUrl: string, nodeEnv: "development" | "test" | "production") {
   const origins = new Set([webUrl]);
-
-  try {
-    const url = new URL(webUrl);
-    if (url.hostname === "localhost") {
-      url.hostname = "127.0.0.1";
-      origins.add(url.toString().replace(/\/$/, ""));
-    } else if (url.hostname === "127.0.0.1") {
-      url.hostname = "localhost";
-      origins.add(url.toString().replace(/\/$/, ""));
-    }
-  } catch {
-    return webUrl;
+  const url = new URL(webUrl);
+  if (url.hostname === "localhost") {
+    url.hostname = "127.0.0.1";
+    origins.add(url.toString().replace(/\/$/, ""));
+  } else if (url.hostname === "127.0.0.1") {
+    url.hostname = "localhost";
+    origins.add(url.toString().replace(/\/$/, ""));
   }
 
-  if (process.env.NODE_ENV !== "production") {
+  if (nodeEnv !== "production") {
     origins.add("http://localhost:3000");
     origins.add("http://127.0.0.1:3000");
     origins.add("http://localhost:3008");
@@ -82,4 +111,21 @@ function localWebOrigins(webUrl: string) {
   }
 
   return [...origins];
+}
+
+function trustedProxySetting(value: string | undefined): false | string[] {
+  if (!value) {
+    return false;
+  }
+
+  const proxies = value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  if (proxies.length === 0 || proxies.some((entry) => entry === "*" || entry === "true")) {
+    throw new Error("API_TRUST_PROXY must contain explicit proxy IP addresses or CIDR ranges");
+  }
+
+  return proxies;
 }

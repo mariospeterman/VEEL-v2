@@ -2,23 +2,19 @@ name: db-migrations
 
 on:
   pull_request:
-    paths:
-      - "packages/database/**"
-      - "supabase/**"
-      - "scripts/run-supabase-cli.mjs"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - ".github/workflows/db-migrations.yml"
+  push:
+    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
   migration-plan:
+    name: migration-plan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
       - uses: pnpm/action-setup@v4

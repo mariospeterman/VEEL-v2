@@ -1,8 +1,8 @@
-# Veel V2 New-Build Documentation Pack
+# WeVid Production Documentation
 
 Status: accepted
-Scope: complete standalone Veel v2 build instructions
-Last updated: 2026-06-05
+Scope: canonical architecture, current implementation truth, and production completion plan
+Last updated: 2026-08-12
 Source of truth: yes
 
 Owns:
@@ -20,7 +20,7 @@ Launch scope:
 Non-goals:
 - parallel doc families or historical lessons
 
-This folder is the canonical new-build pack. It is intentionally self-contained so a developer can build Veel v2 from these docs without reading any older repository.
+This folder is the canonical WeVid engineering pack. Technical `veel` identifiers remain where compatibility requires them; public product language is WeVid.
 
 ## What This Pack Is
 
@@ -57,8 +57,8 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 
 ## Start Here
 
-1. [Build plan](build-plan.md)
-2. [Current implementation status](current-implementation-status.md)
+1. [Current implementation status](current-implementation-status.md)
+2. [Build plan](build-plan.md)
 3. [Full platform blueprint](full-platform-blueprint.md)
 4. [App architecture](app-architecture.md)
 5. [Stack decision](stack-decision.md)
@@ -120,6 +120,7 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 46. [Deployment topology](deployment-topology.md)
 47. [Slice workflow](slice-workflow.md)
 48. [Production branch inventory](production-branch-inventory.md)
+49. `staging-evidence/` for redacted provider proof tied to a commit and environment
 
 ## How To Use In A New Repo
 

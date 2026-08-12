@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: implementation status, known gaps, and next hardening priorities
-Last updated: 2026-08-10
+Last updated: 2026-08-12
 Source of truth: yes
 
 Owns:
@@ -28,17 +28,50 @@ Non-goals:
 - Money can buy content, Event Access, memberships, live access, subscriptions, and platform software features.
 - Money must never buy people, visibility, matches, recommendations, ranking, moderation priority, message priority, or preferential social treatment.
 - Blockchain is payment truth. Entitlements are access truth. Compliance ledger is reporting truth. Accounting export/integration is bookkeeping truth.
-- Veel remains noncustodial: no internal credits, balances, escrow, withdrawals, payout queues, or server-held user private keys.
+- WeVid remains noncustodial: no internal credits, balances, escrow, withdrawals, payout queues, or server-held user private keys.
+
+## Launch 00 Baseline And Architecture Lock
+
+- Audited base: `origin/main` at `9ef4a0dca3b61dfa811c928223d4f3497f11fe8e` after squash-merged PR #34.
+- Planning baseline: architecture 88%, database/security 93%, backend 82%, frontend about 50%, feature completeness about 65%, and public production readiness about 58%. These are planning estimates, not launch claims.
+- Canonical owners remain `apps/web`, `apps/api`, `apps/worker`, `packages/database`, `packages/contracts`, `packages/config`, and `packages/ui`. No second backend, database, auth authority, payment authority, moderation system, contract system, or design system may be introduced.
+- The universal-account model remains locked. Age access, adult-publisher eligibility, performer eligibility, creator earnings eligibility, KYC, KYB, Enterprise management, and admin authority are independent backend-owned capabilities.
+- Git uses protected `main` plus short-lived slice branches. Pull requests produce preview preflight; merged `main` is the staging source; an approved immutable release artifact is promoted to production. Staging and production credentials, databases, providers, wallets, and observability remain isolated.
+
+## Readiness Truth
+
+| Area | Verified state | Launch blocker |
+| --- | --- | --- |
+| Architecture and data authority | Substantial and implemented through migration `0090`; server authority, RLS, idempotency, and provider adapters are present. | Remaining domain integration must be proven slice by slice against real infrastructure. |
+| Auth, wallet, age, and profile | Implemented with fail-closed provider boundaries and browser smoke coverage. | Real provider staging evidence, embedded-wallet launch selection, and recovery matrix proof remain required. |
+| One-time payments and access | Backend-owned SOL and supported one-time USDC intent, settlement, receipt, and entitlement paths exist. | Mainnet/provider evidence, operational reconciliation, and full consumer journey proof remain required. |
+| Media and live | Bunny/Livepeer boundaries and quarantine/release authorities exist. | Automated moderation is not launch-approved; adult live is disabled; provider staging evidence is absent. |
+| Recurring subscriptions | Domain, worker, and fail-closed adapter boundaries exist. | Sales remain disabled until an official on-chain provider/program is configured and proven. |
+| Frontend | Broad app-shell, onboarding, creation, access, admin, and smoke surfaces exist. | Core social/feed depth, realtime completion, accessibility, cross-browser QA, and final visual system remain unfinished. |
+| Delivery and operations | Build, migration, security, preview, staging, and production preflight workflows exist. | No workflow deploys an artifact. Hosting, immutable promotion, telemetry, alerts, backup/restore, and rollback evidence belong to Slice 11. |
+
+## Unsafe Capability Flags
+
+- `AGE_VERIFICATION_ALLOW_MOCK_PROVIDER=false` outside local/test.
+- `MEDIA_MODERATION_MODE=disabled_fail_closed` until real adapter and review evidence justify `launch_approved`.
+- `LIVEPEER_ADULT_LIVE_ENABLED=false` until Slice 12 is independently approved.
+- `SUBSCRIPTIONS_ENABLED=false` until recurring collection and verification pass Slice 08.
+- `NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED=false` until the selected noncustodial provider passes target-domain/device staging proof.
+- `API_RATE_LIMIT_STORE_DRIVER=process_memory` is local-only; production preflight requires an injected distributed store adapter.
+
+## Brand Compatibility Boundary
+
+Public product copy and API metadata use WeVid and Support. Technical package scopes, `VEEL_*` test-tool env names, `VEEL-` historical receipt identifiers, the legacy `X-Veel-Webhook-Signature` compatibility header, migration history, and the existing `/video/Veel.mp4` asset path remain unchanged to avoid a destructive rename. Historical `tip` records are normalized to Support on active reads; deeper compatibility cleanup belongs to the monetisation slice.
 
 ## Implemented And Real
 
 - Monorepo, pnpm workspace, CI/security workflow, docs checks, lint/typecheck/test/smoke scripts, GStack gates, and gitleaks local gate.
 - Toolchain versioning is explicit through `.node-version`, `.nvmrc`, `packageManager`, and `engines`: Node.js `22.16.0`, pnpm `10.0.0`, Corepack activation, `pnpm bootstrap`, `pnpm run doctor`, and `pnpm check`. The canonical CI proof job is `pinned-toolchain-proof`.
-- The production dependency graph no longer includes the unused `@solana/wallet-adapter-wallets` umbrella package, which removed unrelated hardware-wallet and WalletConnect adapters. Next.js is pinned to `16.3.0`, Playwright is pinned to the latest macOS 12-compatible release (`1.60.0`), and patched same-major `axios`/`ws` resolutions are enforced. `pnpm audit --prod` reports zero critical advisories; the remaining `image-size` and legacy `uuid` findings are transitive provider/mobile-tooling dependencies and do not occur in the built `.next` artifact. Provider selection must still remove the unselected embedded-wallet SDK and re-audit before launch.
+- The production dependency graph no longer includes the unused `@solana/wallet-adapter-wallets` umbrella package, which removed unrelated hardware-wallet and WalletConnect adapters. Next.js is pinned to `16.3.0`, Playwright is pinned to the latest macOS 12-compatible release (`1.60.0`), and patched same-major `axios`/`ws` resolutions are enforced. Launch 00 `pnpm audit --prod` reports three high and two moderate transitive advisories: unpatched `bigint-buffer` through Solana SPL tooling, unpatched `image-size` through Privy/WalletConnect React Native tooling, and legacy `uuid` through Solana Web3/Jayson. No critical advisory is reported, but provider selection/dependency replacement and a clean production audit remain launch blockers; these findings are not dismissed merely because some paths do not appear in the built `.next` artifact.
 - OpenAPI, route map, and Fastify route registration are checked for route drift. Previous contract-only current-viewer and follow endpoints were removed from the active contract because the session endpoint is the implemented current-viewer boundary and the follow graph does not yet have a real migration/repository/API slice.
 - Fastify API bootstrap with route registration, dependency construction, shared app-level Postgres client construction, close-hook lifecycle, env validation, raw-body support for signed webhooks, global rate limit, OpenAPI plugin, and Supabase boundary plugin.
 - Shared backend helpers now cover the app-level Postgres client, explicit transaction boundary, common Idempotency-Key parsing/validation, stable idempotency request hashing, route-specific mutation rate-limit presets, and the first admin mutation route-policy guard for migrated route utilities.
-- Root Supabase CLI project is initialized with committed `supabase/config.toml`, repo-local Supabase CLI `2.106.0`, and `supabase/migrations` linked to the canonical `packages/database/migrations` SQL files. Local development and the connected Veel v2 Supabase project are synchronized through migration `0089`; the security advisor reports no findings, and media-safety foreign keys have covering indexes. Newly created indexes remain reported as unused while the remote database has no content traffic.
+- Root Supabase CLI project is initialized with committed `supabase/config.toml`, repo-local Supabase CLI `2.106.0`, and `supabase/migrations` linked to the canonical `packages/database/migrations` SQL files. Repository history is defined through migration `0090`. Supabase MCP confirms the connected project has the matching final schema change by name, but it is recorded as timestamp version `20260811233346` rather than sequential `0090`; history normalization is a visible release blocker and must use an approved migration-repair procedure. The remote security advisor has no findings; performance notices are informational unused indexes on the no-traffic project. Generic application `DATABASE_URL` is never used by remote migration commands.
 - Supabase/Auth session verification boundary, web SSR cookie refresh/confirmation route, landing-owned magic-link/OAuth session UX, profile-completion mutation UI, external wallet challenge handoff UI, configured-session redirects, backend app-access redirects for protected app-shell pages, and backend session/profile readiness projections. Browser Supabase auth uses the public Supabase URL plus publishable or anon key only; service-role and secret keys stay server-side.
 - Age provider waterfall boundary, `/age` provider-session start UI, and normalized webhook/test paths, with unavailable providers failing closed when not configured. Local/test-only mock age and creator verification adapters exist behind explicit mock guards for end-to-end development; production provider paths still require real provider credentials, webhook secrets, callback allowlists, and provider dashboard configuration.
 - External wallet challenge/link/revoke/status flow with backend signature verification and replay/expiry checks; landing onboarding and `/app/wallet` can now coordinate Solana wallet-adapter challenge signing while keeping wallet truth server-side. The landing wallet chooser filters to intentionally supported Solana wallet surfaces and the Privy embedded-wallet button remains disabled unless its runtime env is configured; onramp provider boundary fails closed unless configured.
@@ -66,14 +99,14 @@ Non-goals:
 - Landing login and onboarding stay locked to their GSAP story frame while provider runtimes initialize or wallet UI takes focus, with desktop and mobile smoke coverage preventing outer-story scroll drift.
 - Age session creation now has real backend HTTP adapters for Yoti, Persona, Veriff, and Sumsub behind the provider waterfall, with unconfigured providers failing closed. Didit V3 owns the separate creator identity boundary, including signed and replay-safe webhook ingestion, documentary/liveness/face-match evidence, an adult-publisher workflow, and the optional onboarding shortcut for users who declare adult publishing intent. Launch readiness still requires configured Didit sandbox credentials and workflow IDs, public callback/webhook proof, provider-contract and retention approval, and admin evidence review.
 - Embedded wallet provider remains a boundary until a launch-approved noncustodial provider is configured and tested.
-- Payment settlement is native SOL devnet first with server-composed creator split transactions for one-time creator monetization. Recurring subscriptions are token-based only and fail closed without official Solana subscription/delegation verification; native SOL recurring subscriptions, SPL/USDC one-time split settlement, real transactional email domain/API-key configuration and staging deliverability smoke for withdrawal-waiver confirmations, and provider replay side-effect handlers still need launch-scope completion.
+- Payment settlement is native SOL devnet first with server-composed creator split transactions for one-time creator monetization and a supported one-time USDC path. Recurring subscriptions are token-based only and fail closed without official Solana subscription/delegation verification; native SOL recurring subscriptions, real transactional email domain/API-key configuration and staging deliverability smoke for withdrawal-waiver confirmations, and provider replay side-effect handlers still need launch-scope completion.
 - Follow/unfollow is planned but intentionally absent from the active contract until the follow graph migration, repository, idempotent route, feed impact, abuse controls, and tests ship together. Current feed controls cover preferences, hides, reports, blocks, comments, likes, saves, and shares.
 - Subscription renewals are architected as auto-renewing backend/worker collections, but production collection requires official provider/program configuration, authority/subscription/delegation verification, launch-approved token plans, collector signing support, and staging evidence.
 - Remote MCP production connector compatibility still requires public HTTPS staging deployment, exact redirect URI allowlists for each real client, MCP Inspector proof, Claude Code proof, Claude custom connector proof, OpenAI-compatible proof, revocation proof, and audit-row confirmation against the deployed database.
 - Media creation has backend draft, admin-tunable draft/upload abuse policy enforcement with safe defaults, metadata/preview update, Event Access draft linking, persisted upload-session handoff, TUS browser upload/resume wiring, provider-status sync UI, entitlement-aware content playback rendering, explicit publish submission, and a separate `publish_state`.
 - Frontend visual polish remains iterative: main app-shell routes now follow the mockup-derived shell and safe state model, but contextual detail/admin routes still need a final responsive visual QA pass against the mockup screenshots before the frontend should be called design-complete.
 - Admin dashboard is substantial; organization KYB/member, support policy/case, moderation/report, refund/dispute, data-request, and feature-flag mutations now share the admin mutation route-policy/idempotency/rate-limit guard, but final role matrix coverage and removal of any remaining compatibility aliases after migrations and clients are updated still remain.
-- Deployment has an executable skeleton with health/readiness probes, build/migration workflow gates, rollback runbook, deploy preflight, and observability runbook. It remains not production-ready until real hosting targets, artifact digest pinning, database backup confirmation, provider staging smoke, alert routing, environment-scoped deploy variables, and the final Supabase remote migration-history linking strategy are configured.
+- Delivery has executable build/migration gates, health/readiness probes, rollback documentation, and release preflight workflows. These workflows do not deploy. Production remains blocked until Slice 11 adds a real hosting target, immutable artifact promotion, database backup/restore proof, provider staging smoke, alert routing, environment-scoped credentials, and rollback evidence.
 - Local macOS Vitest/Vite execution is covered by optional `rolldown` Darwin native bindings and `pnpm run doctor`, which resolves the pinned Node.js/Corepack toolchain even when the interactive shell points at an older Node. Tests must still run locally and in the pinned Linux CI proof before provider or frontend slices are considered validated.
 
 ## P0 Before Broad Expansion
@@ -155,4 +188,4 @@ The controlling branch evidence is recorded in `production-branch-inventory.md`.
 - Every slice summary must state controlling docs, provider docs checked, gaps closed, tests run, and security/compliance boundaries.
 - Docs must say what is implemented, what remains fail-closed, required env vars, migrations/contracts/routes changed, admin visibility, tests, and production gates.
 - Production UI buttons must perform a real action, navigate to a real route, or be hidden/disabled behind a documented feature flag.
-- Do not mark Veel production-ready until code, migrations, tests, provider staging, deployment, observability, and security/compliance gates support that claim.
+- Do not mark WeVid production-ready until code, migrations, tests, provider staging, deployment, observability, and security/compliance gates support that claim.
