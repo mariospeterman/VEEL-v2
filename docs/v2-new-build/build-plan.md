@@ -46,7 +46,7 @@ The historical milestones below remain useful implementation context. New produc
 
 | Slice | Goal | State at Launch 00 |
 | --- | --- | --- |
-| 00 | Baseline, governance, and truth lock | In progress on `codex/launch-00-baseline-governance` |
+| 00 | Baseline, governance, and truth lock | Implemented on `codex/launch-00-baseline-governance`; merge gated by required checks |
 | 01 | Executable contracts and platform security boundary | Not started |
 | 02 | Canonical verification and earnings-readiness authority | Not started |
 | 03 | VOD creation, multi-performer enrollment, and moderation operations | Not started |
