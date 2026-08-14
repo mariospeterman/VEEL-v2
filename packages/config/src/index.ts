@@ -19,6 +19,8 @@ export const serverEnvSchema = z.object({
   NODE_ENV: nodeEnvSchema,
   API_URL: z.string().url().default("http://localhost:4000"),
   WEB_URL: z.string().url().default("http://localhost:3000"),
+  API_TRUST_PROXY: optionalStringSchema,
+  API_RATE_LIMIT_STORE_DRIVER: z.enum(["process_memory", "external"]).default("process_memory"),
   SUPABASE_URL: optionalUrlSchema,
   SUPABASE_PROJECT_REF: optionalStringSchema,
   SUPABASE_PUBLISHABLE_KEY: optionalStringSchema,

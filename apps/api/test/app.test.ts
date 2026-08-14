@@ -107,9 +107,39 @@ describe("buildApi", () => {
     expect(app.swagger()).toMatchObject({
       openapi: "3.1.0",
       info: {
-        title: "Veel V2 API"
+        title: "WeVid API"
       }
     });
+
+    await app.close();
+  });
+
+  it("sets API security headers without enabling development HSTS", async () => {
+    const app = await buildApi();
+    await app.ready();
+
+    const response = await app.inject({ method: "GET", url: "/healthz" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-security-policy"]).toContain("default-src 'none'");
+    expect(response.headers["x-content-type-options"]).toBe("nosniff");
+    expect(response.headers["x-frame-options"]).toBe("SAMEORIGIN");
+    expect(response.headers["strict-transport-security"]).toBeUndefined();
+
+    await app.close();
+  });
+
+  it("rate limits repeated age-session mutations", async () => {
+    const app = await buildApi();
+    await app.ready();
+
+    for (let requestNumber = 0; requestNumber < 8; requestNumber += 1) {
+      const response = await app.inject({ method: "POST", url: "/v1/age/sessions" });
+      expect(response.statusCode).toBe(401);
+    }
+
+    const limited = await app.inject({ method: "POST", url: "/v1/age/sessions" });
+    expect(limited.statusCode).toBe(429);
 
     await app.close();
   });
@@ -4502,6 +4532,7 @@ describe("buildApi", () => {
         NODE_ENV: "test",
         API_URL: "http://localhost:4000",
         WEB_URL: "http://localhost:3000",
+        API_RATE_LIMIT_STORE_DRIVER: "process_memory",
         PROFILE_AVATAR_BUCKET: "profile-avatars",
         SOLANA_CLUSTER: "devnet",
         SOLANA_NETWORK: "solana:devnet",
@@ -4605,6 +4636,7 @@ describe("buildApi", () => {
       NODE_ENV: "test",
       API_URL: "http://localhost:4000",
       WEB_URL: "http://localhost:3000",
+      API_RATE_LIMIT_STORE_DRIVER: "process_memory",
       PROFILE_AVATAR_BUCKET: "profile-avatars",
       SOLANA_CLUSTER: "devnet",
       SOLANA_NETWORK: "solana:devnet",
@@ -7854,7 +7886,7 @@ describe("buildApi", () => {
     });
     expect(walletMetadata.statusCode).toBe(200);
     expect(walletMetadata.json()).toEqual({
-      label: "Veel",
+      label: "WeVid",
       icon: "http://localhost:3000/favicon.ico"
     });
 

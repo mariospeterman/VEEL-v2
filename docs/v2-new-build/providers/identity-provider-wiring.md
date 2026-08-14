@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: documentation
-Last updated: 2026-08-11
+Last updated: 2026-08-14
 Source of truth: yes
 
 Owns:
@@ -35,7 +35,7 @@ Current implementation state:
 - The creator/business verification waterfall has real HTTP session adapters for Didit, Sumsub, Persona, and Veriff. Didit, Sumsub, and Persona can serve creator KYC and org KYB when their purpose-specific workflows/levels/templates are configured. Veriff is currently a creator KYC documentary fallback only unless a Veriff business/KYB product is separately approved and wired.
 - Local/test environments can enable `AGE_VERIFICATION_ALLOW_MOCK_PROVIDER=true` to use API-owned mock adapters for age, creator KYC, and organization KYB. These adapters create normal pending sessions, immediately apply a normalized valid result through the repository boundary, and are disabled when `NODE_ENV=production`.
 - The landing path exposes one recommended age action and lets the server choose the lowest-friction configured method. Didit Adaptive Age Verification is the preferred low-friction path; Yoti Digital ID is the reusable credential candidate. The UI does not hardcode provider availability.
-- A user may optionally declare adult-publishing intent during onboarding. That starts one stronger documentary identity/liveness flow whose approved over-18 result can derive ordinary age access. Ordinary users see only the lightweight age path, and adult eligibility can always be completed later in Create.
+- Adult-publishing intent is not part of the locked three-step onboarding. Adult eligibility begins later from Create when explicit publication is selected; a valid higher-assurance result may satisfy ordinary age access only under explicit reuse policy.
 - Successful provider session starts are stored in `verification_sessions` with a matching pending `verification_records` entry. `verification_records` is the sole application authority; `age_verifications` is a revoked historical archive after migration `0077`.
 - Raw provider payloads, identity images, document data, and browser-completed age state are not accepted by this route.
 
@@ -90,6 +90,7 @@ Current implementation state:
 - Email magic links use `verifyOtp({ token_hash, type })`.
 - Social/OAuth providers use PKCE and must exchange the returned `code` with `exchangeCodeForSession(code)` in `/auth/confirm`.
 - Supabase recovery auth is not a second account path. It links to an existing wallet-created account only after the browser proves both sessions: active wallet session token and Supabase bearer token. If the Supabase identity already belongs to another user row, the API returns conflict instead of merging profiles, wallets, age state, payments, creator KYC, or organization KYB.
+- Locked target: recovery is optional and primarily benefits external-wallet-only users. Privy users are not asked to repeat equivalent recovery setup. A short-lived backend linking intent and audited subject mapping must precede production enablement; matching email never authorizes a merge.
 - Local preview on port `3008` requires the local web env and Supabase dashboard redirect allowlist to include `http://localhost:3008/auth/confirm` and, when testing through Playwright or `127.0.0.1`, `http://127.0.0.1:3008/auth/confirm`.
 
 ### Production rollout notes
@@ -110,7 +111,7 @@ Users may leave the landing surface to create a reusable ID and then return to c
 Current API behavior:
 
 - `providerPreference=reusable_first` uses the configured light/reusable adapter order: Didit Adaptive Age Verification, then Yoti, then Persona. It does not silently treat ordinary onboarding as creator KYC.
-- `providerPreference=yoti|persona|sumsub|veriff` lets the user or policy select a specific configured provider and then falls back only if that provider is temporarily unavailable.
+- `providerPreference=yoti|persona|sumsub|veriff` remains an API compatibility/operator-test override for a specifically configured provider. Ordinary onboarding does not expose it as a provider chooser; production policy selects one primary and at most one documented fallback.
 - Webhooks normalize signed provider events into app-owned states only: `pending`, `verified`, or `failed`.
 - Launch approval still requires live sandbox evidence for the selected provider, webhook signing proof, retention/legal review, and provider-contract approval.
 

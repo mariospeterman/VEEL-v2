@@ -1,9 +1,9 @@
-# VEEL v2
+# WeVid
 
 Status: accepted
-Scope: standalone Veel v2 build scaffold
+Scope: provider-first 18+ creator PWA/dApp platform
 
-This repo is the clean starting point for the Veel v2 standalone build. The historical context is context only for validated lessons and tests. Do not bulk-copy historical context app code into this repo.
+This repository contains the active WeVid platform implementation. It is substantial but not production-launched: provider staging evidence, recurring collection, moderation approval, deployment, observability, and final product QA remain gated by the canonical build plan.
 
 ## Start Here
 
@@ -22,9 +22,9 @@ Read these first:
 - Web: Next.js PWA, TypeScript, Tailwind v4, TanStack Query, Zustand
 - API: Fastify TypeScript
 - Worker: TypeScript worker runtime
-- DB/Auth/Realtime: Supabase Postgres/Auth/Realtime
+- DB/Auth/Realtime: Supabase Postgres/RLS/Realtime; Supabase Auth is optional recovery/linking
 - Payments: Solana Pay, native SOL devnet first, SPL/USDC capable
-- Wallets: embedded noncustodial wallet provider plus external Solana wallets
+- Wallets: Privy noncustodial Solana embedded wallets plus intentional external Solana wallets
 - Media: Bunny Stream for VOD, Livepeer for live/replay
 - Safety: third-party age assurance, KYC/KYB only where needed
 - Package manager: pnpm 10.0.0 through Corepack
@@ -102,15 +102,15 @@ pnpm run doctor
 
 ## Product And Compliance Language
 
-Veel v2 is an 18+ creator media, access, noncustodial settlement, and admin/compliance platform. Product docs use `Mutuals` instead of dating, `Event Access` / `Passes` instead of ticketing, and `Creator Memberships` instead of creator subscriptions.
+WeVid is an 18+ creator media, access, noncustodial settlement, and admin/compliance platform. Product docs use `Mutuals` instead of dating, `Event Access` / `Passes` instead of ticketing, and `Profile Membership` / `Join @handle` instead of creator subscriptions.
 
-The legal/financial boundary is explicit: no custody, no Veel-held creator balances, no internal credits, no withdrawals, no escrow, and no payment-based ranking boosts. DAC7/DAC8/VAT readiness is tracked in [dac7-dac8-vat-system.md](docs/v2-new-build/compliance/dac7-dac8-vat-system.md).
+The legal/financial boundary is explicit: no custody, no WeVid-held creator balances, no internal credits, no withdrawals, no escrow, and no payment-based ranking boosts. DAC7/DAC8/VAT readiness is tracked in [dac7-dac8-vat-system.md](docs/v2-new-build/compliance/dac7-dac8-vat-system.md).
 
 Do not start by coding random screens. Start with repo foundation, contracts, database, Fastify API skeleton, and app shell.
 
 ## Current Validation
 
-This scaffold now contains the first foundation slice: workspace packages, contract generation, a Next.js PWA shell, a Fastify API skeleton, a worker entrypoint, and real lint/type/test checks.
+The implementation includes the Next.js PWA, Fastify API, worker, migrations through `0090`, shared contracts/config/UI, broad domain routes, and real unit/browser/Postgres integration coverage. See the current implementation status for verified boundaries and launch blockers.
 
 Run the local web and API processes from separate terminals:
 
@@ -121,12 +121,15 @@ pnpm --filter @veel/web dev
 
 The web app serves the PWA shell. The API serves Fastify routes, `/healthz`, `/readyz`, OpenAPI, OAuth metadata, and the remote MCP endpoint when its env gates are enabled.
 
-Wallet-first onboarding uses backend-verified Solana signatures:
+The locked target is one universal WeVid account/profile and three visible onboarding steps: Account + Wallet, Minimal Profile, and Age Verification. Every user leaves Step 1 with either an external Solana wallet or a Privy embedded Solana wallet. Supabase signup is never a fourth mandatory step.
+
+Current runtime uses backend-verified Solana signatures:
 
 - `POST /v1/auth/wallet/challenges` creates the signed login challenge.
-- `POST /v1/auth/wallet/sessions` verifies the signature and returns a VEEL bearer session.
-- Supabase email auth remains optional for recovery/profile management and is not required before wallet onboarding.
-- Embedded provider UI is gated by `NEXT_PUBLIC_PRIVY_APP_ID`; keep provider secrets server-only and do not enable the Privy production path before staging/launch approval.
+- `POST /v1/auth/wallet/sessions` verifies the signature and returns a WeVid bearer session.
+- Supabase email/social auth remains optional recovery linking, primarily for external-wallet-only users. It must resolve to the existing WeVid user and must not create a second profile or wallet.
+- Privy is the sole embedded-wallet launch runtime. The target Privy path authenticates, creates or retrieves the Solana wallet, signs the normal WeVid challenge, and creates the canonical backend session as one continuous Step 1 flow. The current UI still needs that orchestration in Slice 02.
+- Embedded provider UI is gated by `NEXT_PUBLIC_PRIVY_APP_ID` and `NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED`; keep provider secrets server-only and fail closed until Privy staging/launch approval.
 - `NEXT_PUBLIC_SOLANA_CHAIN` controls the web chain label: `solana:devnet` locally, `solana:mainnet` only when production provider and payment checks are approved.
 
 Current executable validation:

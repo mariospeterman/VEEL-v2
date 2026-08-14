@@ -1,8 +1,8 @@
-# Veel V2 Embedded Wallet Onboarding
+# WeVid V2 Embedded Wallet Onboarding
 
 Status: accepted
 Scope: auth, wallets, onboarding, onramp, conversion
-Last updated: 2026-06-14
+Last updated: 2026-08-14
 Source of truth: yes
 
 Owns:
@@ -20,11 +20,11 @@ Launch scope:
 Non-goals:
 - historical-context inference, duplicate systems, and unapproved provider/product expansion
 
-This document defines the recommended v2 wallet onboarding model. The goal is to reduce signup and payment churn without making Veel custodial or moving payment truth to the frontend.
+This document defines the locked three-step wallet-native onboarding target. The goal is to reduce signup and payment churn without making WeVid custodial or moving payment truth to the frontend.
 
 ## Decision
 
-V2 supports wallet-first onboarding with two wallet paths:
+V2 supports one Account + Wallet step with two entry paths:
 
 1. External wallet connect for web3-native users.
 2. Social/email/passkey signup with a noncustodial embedded Solana wallet for mainstream users.
@@ -38,10 +38,10 @@ Protected app access rule:
   1. wallet session from embedded or external noncustodial wallet
   2. profile setup
   3. age verification
-- The recommended launch default is wallet-first: create/connect a noncustodial wallet, then optionally add email recovery in profile/settings.
+- Primary mainstream choices are Privy-backed email, Google, passkey, or another explicitly approved Privy method. “Continue with wallet” is the secondary web3-native choice. Consumer copy does not ask users to choose an auth provider.
 - External/native wallet connect remains first-class for web3-native users.
 - One wallet path is mandatory; the other path can be added, changed, or selected as primary later in profile/settings.
-- Wallet path must be ready before age verification starts.
+- Wallet capability must be ready before age verification starts, but provider authentication, wallet provisioning, challenge signing, and session creation remain one continuous Step 1 flow.
 - No user enters the protected app shell until age verification is complete.
 - Wallet existence is required for wallet-native identity/payment readiness, but it is not payment proof.
 
@@ -84,9 +84,9 @@ Runtime/session behavior:
 
 Provider decision:
 
-- Privy is the recommended launch provider for Veel if staging confirms Solana wallet creation, funding, export/recovery, external-wallet linking, and noncustodial user approval. It is the fastest default for mainstream email/social/passkey conversion.
-- Turnkey is the advanced policy fallback if Privy cannot satisfy required Solana, audit, key-recovery/export, cost, or policy-control needs. It remains the preferred option for deeper sub-organization controls or future admin/AI guarded-wallet policies.
-- Dynamic remains an alternative to evaluate if Turnkey/Privy do not meet regional, cost, or UX needs.
+- Privy is the sole embedded-wallet launch runtime, still fail-closed until staging confirms Solana creation/retrieval, challenge signing, recovery/export, mobile PWA behavior, adult-platform account acceptance, and the required noncustodial/user-controlled posture.
+- Turnkey is a documented fallback only: not bundled, initialized, shown, or operated in parallel. Historical enum compatibility remains because persisted migrations cannot be rewritten.
+- Do not introduce Dynamic or another embedded-wallet runtime without a new provider decision that replaces the canonical owner and removes obsolete overlap.
 - Wallet funding should be provided through the selected embedded-wallet or funding path and must fund the user-owned wallet, not a Veel custodial account or product checkout balance.
 
 Selection criteria:
@@ -131,8 +131,8 @@ sequenceDiagram
   participant API as Fastify API
   participant DB as Postgres
 
-  User->>Web: Connect or create wallet
-  Web->>Wallet: Request address
+  User->>Web: Continue with Privy method or wallet
+  Web->>Wallet: Authenticate/create-retrieve or connect
   Wallet-->>Web: User-controlled wallet address
   Web->>API: Create wallet auth challenge
   API-->>Web: Domain-bound nonce message
@@ -140,8 +140,8 @@ sequenceDiagram
   Web->>API: Submit signature
   API->>API: Verify Ed25519 signature
   API->>DB: Create/reuse user, wallet, hashed wallet session
-  API-->>Web: Veel bearer session
-  Web->>API: Save profile
+  API-->>Web: Canonical WeVid session cookie
+  Web->>API: Save minimal profile
   Web->>API: Start age verification
   API-->>Web: Age provider session
   Web->>API: Refresh session after provider result
@@ -171,6 +171,7 @@ Implementation contract:
 
 - `POST /v1/auth/wallet/challenges` creates a short-lived server-owned challenge for a wallet-first login attempt. It does not require Supabase email auth.
 - `POST /v1/auth/wallet/sessions` verifies the Solana message signature, creates or reuses the user/wallet row, stores only a hashed session token, and sets the raw token only in an HttpOnly, SameSite cookie. Browser JavaScript receives wallet display metadata but never the bearer token.
+- Locked Privy orchestration target: one invocation authenticates the Privy identity, creates or retrieves its Solana wallet, requests and signs the normal WeVid challenge, creates/reuses the same universal user/session as external wallets, and advances automatically to Step 2. A signature approval may be explicit, but it is ownership-only and must not become a second “continue” stage.
 - Wallet auth session tokens authenticate the account session only. They are not payment proof, allowance proof, or entitlement proof.
 - `POST /v1/wallets/link-challenges` creates a short-lived server-owned challenge for one authenticated user, wallet address, provider, and chain.
 - The challenge message must be signed exactly as returned by the API.
@@ -182,6 +183,18 @@ Implementation contract:
 - Current supported external provider values are `phantom`, `solflare`, and `wallet_adapter`.
 - The schema retains `embedded_privy` and `embedded_turnkey` as normalized historical/provider values, but the current web runtime implements only `embedded_privy`. It is enabled only when `NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED=true`, the Privy app id is configured, and the provider ADR is staging/launch approved.
 - The current PWA handoff detects injected Solana wallets on landing onboarding and `/app/wallet`, asks the wallet to connect, signs the returned backend challenge using `signMessage`, base64-encodes the signature, and submits it back to the API. The UI must present the signature as ownership-only and must not imply payment, subscription, entitlement, or protected-access completion.
+- Current difference: the embedded flow can stop after Privy wallet creation and require another user action to sign the challenge. That is implemented-but-incomplete behavior, not accepted UX; Slice 02 owns the continuous orchestration after Slice 01 locks the session/security contract.
+
+## Minimal Profile And Age Steps
+
+- Step 2 target requires only a unique `@handle`; display name and avatar are optional or safely prefilled. Bio, interests, categories, creator/viewer choice, gender, exact location, tax, KYC/KYB, earnings, pricing, adult intent, performer, and Enterprise fields stay out of onboarding.
+- Until Step 3 succeeds, the profile is provisional, non-discoverable, excluded from feeds/search, and unable to publish publicly, message others, or receive money. Redirects and recoverable errors preserve safe progress; abandoned/failed profiles follow the approved retention policy.
+- Step 3 says “Confirm you’re 18+ to enter WeVid,” uses the configured provider-neutral waterfall, and stores only normalized threshold/method/provider-reference/jurisdiction/time/expiry/policy evidence. It fails closed and never implies KYC or another capability.
+- Ordinary onboarding asks for wallet ownership once and age once. Higher-assurance evidence appears only for risk/policy, earnings, adult publishing, performer, or legal-entity purposes; purpose records remain separate even where evidence may lawfully be reused.
+
+## Optional Supabase Recovery
+
+Supabase signup is not a fourth step. Privy users already have their provider-supported recovery path and are not prompted to repeat it. Settings may later offer external-wallet-only users “Add account recovery.” The target flow requires an active WeVid session, short-lived backend link intent, Supabase identity proof, collision rejection, audit, and mapping to the existing user. It creates no profile or wallet and does not repeat age. The current recovery-link route proves both sessions and rejects collisions; complete link-intent and recovery-return session proof remains Slice 01/02 work and stays fail-closed until verified.
 
 ## Device Behavior
 
@@ -253,7 +266,7 @@ Wallet-required actions:
 - unlock paid content
 - support
 - paid message
-- Creator Membership
+- Profile Membership
 - live pass
 - Event Access Pass
 - creator earning/tax setup
@@ -270,9 +283,9 @@ Non-wallet actions:
 - Do not show crypto jargon during signup.
 - The flow should feel like one step with progressive checks, not a long form.
 - Viewer flow: teaser, Continue, auth, embedded wallet silently created/loaded, optional native wallet connect, age assurance before adult/protected access, first feed value moment, wallet funding/connect only at payment or allowance need.
-- Explain wallet only when needed: "Your Veel wallet lets you unlock, support creators, and pay from your wallet."
-- Preferred wallet CTAs: `Use Veel wallet`, `Connect my wallet`, `Pay from wallet`.
-- Creator onboarding CTA: `Start Earning` or `Become Creator`.
+- Explain wallet only when needed: "Your WeVid wallet lets you unlock, support creators, and pay from your wallet."
+- Preferred wallet CTAs: `Continue with email`, `Continue with Google`, `Continue with passkey`, and secondary `Continue with wallet`; payment surfaces may say `Pay from wallet`.
+- Monetisation-readiness CTA: `Enable Earnings`.
 - Creator onboarding uses hosted verification for age, identity, liveness, country, wallet ownership, and tax basics.
 - Payment sheets show amount, asset, creator, platform/referral summary where useful, and confirmation.
 - Top-up is an action inside the same payment sheet when balance is insufficient.
@@ -290,9 +303,9 @@ Non-wallet actions:
 - Payment transactions require explicit user approval.
 - Backend settlement remains mandatory for access/commission/creator earning truth.
 
-## Open Provider Decision
+## Provider Launch Gate
 
-Before coding v2, confirm Privy staging UX or explicitly switch the ADR to Turnkey.
+Privy is the sole launch runtime, but remains disabled until staging proves the required UX, security, account acceptance, recovery/export, signing, and device behavior. Replacing it with Turnkey would require a new explicit ADR and removal of the obsolete runtime; it is not an in-slice switch or parallel option.
 
 Current implementation state:
 
@@ -301,7 +314,7 @@ Current implementation state:
 - `PATCH /v1/wallets/{walletId}/primary` safely switches the user's primary wallet and writes an audit event.
 - `POST /v1/wallets/onramp-sessions` creates an idempotent user-wallet funding session when the provider is configured, otherwise returns service unavailable without fabricating a checkout URL.
 - `/wallet` reads linked wallets and backend-observed wallet transactions through the typed web API helper. It does not render fixture wallets or fabricated funding provider URLs.
-- The Privy browser adapter is implemented behind an explicit runtime gate. It is not launch-approved until staging credentials, provider account acceptance, recovery/export behavior, mobile flow, and exact signing behavior are confirmed. Turnkey and Dynamic remain unbundled ADR alternatives.
+- The Privy browser adapter is implemented behind an explicit runtime gate. It is not launch-approved until staging credentials, provider account acceptance, recovery/export behavior, mobile flow, and exact signing behavior are confirmed. Turnkey remains an unbundled fallback only.
 - Coinbase funding is a server-side provider boundary only. It funds user-owned wallets and is not product billing or payment proof.
 
 Recommended decision record:

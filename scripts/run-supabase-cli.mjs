@@ -25,11 +25,10 @@ if (!existsSync(supabaseBin)) {
 const resolveDatabaseUrl = () => {
   const databaseUrl =
     process.env.SUPABASE_MIGRATIONS_DB_URL ??
-    process.env.SUPABASE_DIRECT_DB_URL ??
-    process.env.DATABASE_URL;
+    process.env.SUPABASE_DIRECT_DB_URL;
 
   if (!databaseUrl) {
-    console.error("SUPABASE_MIGRATIONS_DB_URL, SUPABASE_DIRECT_DB_URL, or DATABASE_URL is required.");
+    console.error("SUPABASE_MIGRATIONS_DB_URL or SUPABASE_DIRECT_DB_URL is required. Generic application DATABASE_URL is never used for remote migration commands.");
     process.exit(1);
   }
 
@@ -72,7 +71,8 @@ const args = process.argv.slice(2).flatMap((arg) => {
   return [arg];
 });
 
-const needsMigrationWorkdir = ["db", "migration"].includes(args[0]);
+const isLocalStart = args[0] === "start";
+const needsMigrationWorkdir = ["db", "migration", "start"].includes(args[0]);
 const workdir = needsMigrationWorkdir ? mkdtempSync(resolve(tmpdir(), "veel-supabase-")) : process.cwd();
 
 if (needsMigrationWorkdir) {
@@ -108,7 +108,9 @@ const result = spawnSync(supabaseBin, args, {
     ...process.env,
     PGCONNECT_TIMEOUT: process.env.PGCONNECT_TIMEOUT ?? "10"
   },
-  timeout: Number(process.env.SUPABASE_CLI_TIMEOUT_MS ?? 45_000)
+  timeout: Number(
+    process.env.SUPABASE_CLI_TIMEOUT_MS ?? (isLocalStart ? 300_000 : 45_000)
+  )
 });
 
 if (needsMigrationWorkdir) {
@@ -116,7 +118,7 @@ if (needsMigrationWorkdir) {
 }
 
 if (result.error?.name === "TimeoutError" || result.signal === "SIGTERM") {
-  console.error("Supabase CLI command timed out. Check DATABASE_URL, network access, or use Supabase MCP for remote operations.");
+  console.error("Supabase CLI command timed out. Check the explicit Supabase migration URL, network access, or use Supabase MCP for remote inspection.");
   process.exit(124);
 }
 

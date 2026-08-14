@@ -1,19 +1,19 @@
-name: deploy-staging
+name: staging-preflight
 
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
-  staging-gate:
+  staging-preflight:
+    name: staging-preflight
     runs-on: ubuntu-latest
     environment: staging
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
       - uses: pnpm/action-setup@v4
@@ -26,11 +26,11 @@ jobs:
           pnpm --version
       - name: Install
         run: pnpm install --frozen-lockfile
-      - name: Build deployable apps
+      - name: Build application artifact
         run: pnpm build
       - name: Check database migrations
         run: pnpm database:check
-      - name: Verify staging deploy readiness
+      - name: Verify staging release preflight
         env:
           DEPLOY_ENABLED: ${{ vars.DEPLOY_ENABLED }}
           API_HEALTH_URL: ${{ vars.API_HEALTH_URL }}

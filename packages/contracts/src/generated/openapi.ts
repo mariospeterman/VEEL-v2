@@ -81,7 +81,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Verify a wallet challenge and create a Veel session */
+        /** Verify a wallet challenge and create a WeVid session */
         post: operations["createWalletAuthSession"];
         delete?: never;
         options?: never;

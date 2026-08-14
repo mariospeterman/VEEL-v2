@@ -15,12 +15,13 @@ concurrency:
 
 jobs:
   pinned-toolchain-proof:
+    name: pinned-toolchain-proof
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
 
@@ -61,6 +62,9 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Build
+        run: pnpm build
+
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
@@ -69,3 +73,44 @@ jobs:
 
       - name: Whitespace check
         run: git diff --check
+
+  postgres-integration:
+    name: postgres-integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.0.0
+          run_install: false
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Start isolated Supabase database
+        id: supabase-start
+        run: node scripts/run-supabase-cli.mjs start --exclude studio,imgproxy,mailpit,edge-runtime,logflare,vector,supavisor --yes
+
+      - name: Emit Supabase startup diagnostics
+        if: failure() && steps.supabase-start.outcome == 'failure'
+        shell: bash
+        run: |
+          pnpm exec supabase status || true
+          docker ps --all --filter "label=com.supabase.cli.project=veel-v2"
+          docker logs --tail 200 supabase_db_veel-v2 || true
+
+      - name: Run authenticated API integration suite
+        shell: bash
+        run: |
+          eval "$(pnpm exec supabase status -o env)"
+          VEEL_ENABLE_REAL_API_INTEGRATION_TESTS=1 API_INTEGRATION_DATABASE_URL="$DB_URL" pnpm exec vitest run apps/api/test/authenticated-happy-path.integration.test.ts
+
+      - name: Stop isolated Supabase database
+        if: always()
+        run: pnpm exec supabase stop --no-backup

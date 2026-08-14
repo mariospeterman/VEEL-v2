@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { FastifyInstance } from "fastify";
+import { mutationRateLimit } from "../../shared/rate-limits.js";
 import {
   extractBearerToken,
   extractCookieToken,
@@ -51,7 +52,7 @@ export async function registerWalletAuthRoutes(
   app: FastifyInstance,
   options: RegisterWalletAuthRoutesOptions
 ): Promise<void> {
-  app.post("/v1/auth/wallet/challenges", async (request, reply) => {
+  app.post("/v1/auth/wallet/challenges", mutationRateLimit("walletMutation"), async (request, reply) => {
     if (!request.headers["idempotency-key"]) {
       return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
     }
@@ -105,7 +106,7 @@ export async function registerWalletAuthRoutes(
     }
   });
 
-  app.post("/v1/auth/wallet/sessions", async (request, reply) => {
+  app.post("/v1/auth/wallet/sessions", mutationRateLimit("walletMutation"), async (request, reply) => {
     if (!request.headers["idempotency-key"]) {
       return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
     }
@@ -177,7 +178,7 @@ export async function registerWalletAuthRoutes(
     }
   });
 
-  app.post("/v1/auth/wallet/logout", async (request, reply) => {
+  app.post("/v1/auth/wallet/logout", mutationRateLimit("walletMutation"), async (request, reply) => {
     if (!request.headers["idempotency-key"]) {
       return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
     }
@@ -207,7 +208,7 @@ export async function registerWalletAuthRoutes(
     }
   });
 
-  app.post("/v1/auth/recovery-link", async (request, reply) => {
+  app.post("/v1/auth/recovery-link", mutationRateLimit("walletMutation"), async (request, reply) => {
     if (!request.headers["idempotency-key"]) {
       return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
     }

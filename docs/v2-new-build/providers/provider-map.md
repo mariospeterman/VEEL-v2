@@ -1,8 +1,8 @@
-# Veel V2 Provider Map
+# WeVid V2 Provider Map
 
 Status: accepted
 Scope: provider ownership, boundaries, integrations
-Last updated: 2026-06-02
+Last updated: 2026-08-14
 Source of truth: yes for v2 provider relations
 
 Owns:
@@ -20,16 +20,16 @@ Launch scope:
 Non-goals:
 - historical-context inference, duplicate systems, and unapproved provider/product expansion
 
-This map defines which provider does which job and what Veel owns. It exists to avoid custom infrastructure, duplicate adapters, and frontend-owned business truth.
+This map defines which provider does which job and what WeVid owns. It exists to avoid custom infrastructure, duplicate adapters, and frontend-owned business truth.
 
 ## Provider Boundary Table
 
-| Provider / System | Provider Job | Veel Backend Job | Browser Exposure | Required Proof |
+| Provider / System | Provider Job | WeVid Backend Job | Browser Exposure | Required Proof |
 | --- | --- | --- | --- | --- |
-| Supabase Auth | identity/session/JWT | user policy, roles, account state | public anon key, session | verified JWT |
+| Supabase Auth | optional recovery/link identity | universal-user mapping, link intent, collision rejection, canonical app session | publishable key and optional recovery UI | both sessions + audited link; fail closed until proven |
 | Supabase Postgres | primary data store | schema, RLS, migrations, business transactions | only safe realtime/read channels | DB constraints + API policy |
 | Supabase Realtime | selected realtime events | channel authorization, payload policy | scoped channel payloads | JWT + RLS/policy |
-| Embedded wallet provider | noncustodial wallet UX | wallet link, payment intent, verification | publishable config only | provider proof + wallet address |
+| Privy | mainstream auth state and noncustodial/user-controlled embedded Solana wallet create/retrieve/recovery/export | universal-user mapping, normal wallet challenge, canonical session, linked/primary wallet, payment intent and settlement truth | publishable app id and official UI only | provider auth + backend-verified wallet signature; candidate until staging proof |
 | External wallet adapters | wallet approval | server transaction request and verification | wallet connector UI | signed transaction |
 | Solana RPC | transaction state | finality/amount/reference validation | browser-safe devnet RPC only if needed | confirmed transaction |
 | Helius | payment/access evidence | normalize/verify event, dedupe, audit | none | signed/authorized webhook or API response |
@@ -42,6 +42,11 @@ This map defines which provider does which job and what Veel owns. It exists to 
 | Wallet funding/onramp | user-owned wallet funding only | start session, show funding state | funding widget/session only | provider callback for funding status only |
 | Email/push provider | notifications | notification policy, templates, retries | no secrets | delivery status |
 | OpenTelemetry/logging | observability | traces, logs, redaction | none | trace/log pipeline |
+| Shopify, future only | creator-owned physical catalog, variants, inventory, cart, merchant checkout, shipping, tax, discounts, order/refund workflow | approved catalog display, content attachment, safe attribution, redirect | Storefront-safe catalog/cart handoff only | DEFERRED; no SDK/schema/runtime in core launch |
+
+Turnkey is an unbundled embedded-wallet fallback only. It has no parallel login, wallet UI, or runtime. Indexed PostgreSQL is the initial search authority. Transactional email, web push, and OpenTelemetry remain adapter boundaries; managed providers are selected and proven in their owning deployment slice rather than replaced by custom infrastructure.
+
+Verification remains one provider-neutral domain with one configured primary and at most one documented fallback per purpose. Ordinary users never choose among providers. Age access, adult-publisher eligibility, creator KYC, organization KYB, and performer verification remain separate policy purposes; KYC/KYB are not universal onboarding. Moderation combines proven provider-native upload signals, a trusted illegal-content hash provider, lightweight local routing, a specialist classifier for uncertain/high-risk material, and human review for consequential decisions. A general VLM is not run over every frame, local nudity scores do not prove legality, and AI alone cannot impose permanent sanctions.
 
 ## Payment Provider Relations
 
@@ -102,6 +107,8 @@ KYC/KYB for earning:
 - Provider raw payloads are stored only when needed for reconciliation and are never returned to normal frontend responses.
 - Every provider callback is authenticated, idempotent, replay-safe, and audited.
 - Provider outage behavior must be visible in admin/ops and recoverable in user UI.
+- Prefer one primary provider, one documented fallback, and one canonical adapter. A new provider decision must identify the obsolete path it replaces.
+- WeVid custom code is reserved for product authority: universal capabilities, onboarding orchestration, payment/split/settlement verification, entitlements, social/feed policy, Mutuals consent, performer consent, moderation/HITL policy, Event Access, and product UI/analytics. Providers own commodity identity checks, key storage, encoding/CDN, live ingest/transcoding, merchant commerce, delivery infrastructure, and managed observability storage.
 
 ## Required Provider Decisions Before Coding
 

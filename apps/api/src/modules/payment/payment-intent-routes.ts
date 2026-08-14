@@ -32,6 +32,7 @@ import {
   validationResponse,
   verifyPaymentReadyAccess
 } from "./payment-route-shared.js";
+import { mutationRateLimit } from "../../shared/rate-limits.js";
 
 export async function registerPaymentIntentRoutes(
   app: FastifyInstance,
@@ -39,7 +40,7 @@ export async function registerPaymentIntentRoutes(
 ): Promise<void> {
   const solanaConnection = new Connection(app.config.SOLANA_RPC_URL, "confirmed");
 
-  app.post("/v1/payments/intents", async (request, reply) => {
+  app.post("/v1/payments/intents", mutationRateLimit("paymentMutation"), async (request, reply) => {
     const access = await verifyPaymentReadyAccess(request, options);
 
     if (!access.ok) {
@@ -256,7 +257,7 @@ export async function registerPaymentIntentRoutes(
         }
 
         return reply.code(200).send({
-          label: "Veel",
+          label: "WeVid",
           icon: new URL("/favicon.ico", app.config.WEB_URL).toString()
         });
       } catch (error) {
@@ -274,7 +275,7 @@ export async function registerPaymentIntentRoutes(
 
   app.post(
     "/v1/payments/checkout/:checkoutToken",
-    { logLevel: "silent" },
+    { ...mutationRateLimit("paymentMutation"), logLevel: "silent" },
     async (request, reply) => {
       const checkoutToken = (request.params as { checkoutToken?: string }).checkoutToken ?? "";
       const body = request.body as Partial<TransactionRequestPostRequest> | undefined;
@@ -314,7 +315,7 @@ export async function registerPaymentIntentRoutes(
         });
         return reply.code(200).send({
           transaction,
-          message: `Sign Veel payment ${intent.id}`
+          message: `Sign WeVid payment ${intent.id}`
         });
       } catch (error) {
         if (
@@ -332,80 +333,83 @@ export async function registerPaymentIntentRoutes(
     }
   );
 
-  app.post("/v1/payments/intents/:paymentIntentId/submissions", async (request, reply) => {
-    const access = await verifyPaymentReadyAccess(request, options);
+  app.post(
+    "/v1/payments/intents/:paymentIntentId/submissions",
+    mutationRateLimit("paymentMutation"),
+    async (request, reply) => {
+      const access = await verifyPaymentReadyAccess(request, options);
 
-    if (!access.ok) {
-      return reply.code(access.statusCode).send(access.body);
-    }
-
-    const idempotencyKey = requiredIdempotencyKey(request);
-
-    if (!idempotencyKey) {
-      return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
-    }
-
-    const body = request.body as Partial<SubmitPaymentSignatureRequest> | undefined;
-
-    if (!body || typeof body.signature !== "string" || body.signature.length === 0) {
-      return reply.code(400).send(validationResponse("signature is required"));
-    }
-
-    const params = request.params as { paymentIntentId?: string };
-
-    try {
-      const intent = await options.paymentRepository.findIntent({
-        supabaseUserId: access.supabaseUserId,
-        paymentIntentId: params.paymentIntentId ?? ""
-      });
-
-      if (!intent) {
-        return reply.code(404).send(notFoundResponse("Payment intent was not found"));
+      if (!access.ok) {
+        return reply.code(access.statusCode).send(access.body);
       }
 
-      const settlement = await options.settlementVerifier.verifyTransfer({
-        signature: body.signature,
-        referenceAddress: intent.referenceAddress,
-        memo: paymentMemo(intent.id),
-        settlementKind: intent.settlementKind,
-        buyerWallet: intent.buyerWallet,
-        creatorWallet: intent.creatorWallet,
-        enterpriseWallet: intent.enterpriseWallet,
-        platformFeeWallet: intent.platformFeeWallet,
-        referralWallet: intent.referralWallet,
-        treasuryWallet: intent.treasuryWallet,
-        totalAmountMinor: intent.totalAmountMinor,
-        creatorAmountMinor: intent.creatorAmountMinor,
-        enterpriseManagementAmountMinor: intent.enterpriseManagementAmountMinor,
-        platformFeeAmountMinor: intent.platformFeeAmountMinor,
-        referralAmountMinor: intent.referralAmountMinor,
-        currency: intent.currency,
-        tokenMint: intent.tokenMint ?? null,
-        tokenDecimals: intent.tokenDecimals ?? null,
-        expiresAt: intent.expiresAt
-      });
+      const idempotencyKey = requiredIdempotencyKey(request);
 
-      await options.paymentRepository.recordSubmission({
-        supabaseUserId: access.supabaseUserId,
-        paymentIntentId: intent.id,
-        signature: body.signature,
-        settlement
-      });
+      if (!idempotencyKey) {
+        return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
+      }
 
-      return reply.code(202).send();
-    } catch (error) {
-      if (error instanceof PaymentRepositoryConfigurationError) {
-        request.log.warn({ error }, "Payment submission failed");
-        return reply.code(503).send({
-          code: "service_unavailable",
-          message: "Payments are not configured"
+      const body = request.body as Partial<SubmitPaymentSignatureRequest> | undefined;
+
+      if (!body || typeof body.signature !== "string" || body.signature.length === 0) {
+        return reply.code(400).send(validationResponse("signature is required"));
+      }
+
+      const params = request.params as { paymentIntentId?: string };
+
+      try {
+        const intent = await options.paymentRepository.findIntent({
+          supabaseUserId: access.supabaseUserId,
+          paymentIntentId: params.paymentIntentId ?? ""
         });
+
+        if (!intent) {
+          return reply.code(404).send(notFoundResponse("Payment intent was not found"));
+        }
+
+        const settlement = await options.settlementVerifier.verifyTransfer({
+          signature: body.signature,
+          referenceAddress: intent.referenceAddress,
+          memo: paymentMemo(intent.id),
+          settlementKind: intent.settlementKind,
+          buyerWallet: intent.buyerWallet,
+          creatorWallet: intent.creatorWallet,
+          enterpriseWallet: intent.enterpriseWallet,
+          platformFeeWallet: intent.platformFeeWallet,
+          referralWallet: intent.referralWallet,
+          treasuryWallet: intent.treasuryWallet,
+          totalAmountMinor: intent.totalAmountMinor,
+          creatorAmountMinor: intent.creatorAmountMinor,
+          enterpriseManagementAmountMinor: intent.enterpriseManagementAmountMinor,
+          platformFeeAmountMinor: intent.platformFeeAmountMinor,
+          referralAmountMinor: intent.referralAmountMinor,
+          currency: intent.currency,
+          tokenMint: intent.tokenMint ?? null,
+          tokenDecimals: intent.tokenDecimals ?? null,
+          expiresAt: intent.expiresAt
+        });
+
+        await options.paymentRepository.recordSubmission({
+          supabaseUserId: access.supabaseUserId,
+          paymentIntentId: intent.id,
+          signature: body.signature,
+          settlement
+        });
+
+        return reply.code(202).send();
+      } catch (error) {
+        if (error instanceof PaymentRepositoryConfigurationError) {
+          request.log.warn({ error }, "Payment submission failed");
+          return reply.code(503).send({
+            code: "service_unavailable",
+            message: "Payments are not configured"
+          });
+        }
+
+        throw error;
       }
-
-      throw error;
     }
-  });
-
+  );
 }
 
 function isValidCheckoutToken(token: string): boolean {

@@ -62,8 +62,25 @@ function assertProductionProviderSafety() {
     throw new Error("Production readiness is blocked: creator_split requires PAYMENT_PLATFORM_FEE_WALLET, not a treasury-only wallet.");
   }
 
-  if (process.env.PAYMENT_DEFAULT_ASSET && process.env.PAYMENT_DEFAULT_ASSET !== "SOL") {
-    throw new Error("Production readiness is blocked: only native SOL creator split settlement is implemented.");
+  const paymentAsset = process.env.PAYMENT_DEFAULT_ASSET ?? "SOL";
+  if (!["SOL", "USDC"].includes(paymentAsset)) {
+    throw new Error("Production readiness is blocked: PAYMENT_DEFAULT_ASSET must be SOL or USDC.");
+  }
+
+  if (paymentAsset === "USDC" && !process.env.PAYMENT_USDC_MINT) {
+    throw new Error("Production readiness is blocked: PAYMENT_USDC_MINT is required for USDC settlement.");
+  }
+
+  if (process.env.API_RATE_LIMIT_STORE_DRIVER !== "external") {
+    throw new Error("Production readiness is blocked: API_RATE_LIMIT_STORE_DRIVER must select a configured distributed adapter.");
+  }
+
+  if (process.env.LIVEPEER_ADULT_LIVE_ENABLED === "true") {
+    throw new Error("Production readiness is blocked: adult live is not launch-approved and must remain disabled.");
+  }
+
+  if (process.env.MEDIA_MODERATION_MODE !== "launch_approved") {
+    throw new Error("Production readiness is blocked: MEDIA_MODERATION_MODE must have launch-approved provider evidence.");
   }
 
   assertProductionSubscriptionSafety();
@@ -177,7 +194,9 @@ async function main() {
   }
 
   if (process.env.DEPLOY_ENABLED !== "true") {
-    const readinessLevel = productionMode ? "production blocked: deploy health checks disabled" : "local/dev ready";
+    const readinessLevel = productionMode
+      ? "Production release preflight passed; no deployment or post-deploy health checks were performed"
+      : "Local release preflight passed; no deployment was performed";
     console.log(`${readinessLevel}. Skeleton, rollback, and observability files are present.`);
     return;
   }
@@ -199,7 +218,11 @@ async function main() {
     throw new Error(`${readyUrl} returned readiness status ${readiness.status}`);
   }
 
-  console.log(productionMode ? "Production readiness preflight passed." : "Staging readiness health checks passed.");
+  console.log(
+    productionMode
+      ? "Production release preflight and configured health checks passed; no deployment was performed."
+      : "Staging release preflight and configured health checks passed; no deployment was performed."
+  );
 }
 
 main().catch((error) => {

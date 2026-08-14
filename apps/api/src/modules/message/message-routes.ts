@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { mutationRateLimit } from "../../shared/rate-limits.js";
 import {
   PaymentIdempotencyConflictError,
   PaymentRecipientNotReadyError,
@@ -90,7 +91,7 @@ export async function registerMessageRoutes(
     }
   });
 
-  app.post("/v1/messages/conversations/:conversationId/messages", async (request, reply) => {
+  app.post("/v1/messages/conversations/:conversationId/messages", mutationRateLimit("messageMutation"), async (request, reply) => {
     const access = await verifyMessageReadyAccess(request, options);
 
     if (!access.ok) {
@@ -144,7 +145,7 @@ export async function registerMessageRoutes(
     }
   });
 
-  app.post("/v1/messages/conversations/:conversationId/paid-message-intents", async (request, reply) => {
+  app.post("/v1/messages/conversations/:conversationId/paid-message-intents", mutationRateLimit("paymentMutation"), async (request, reply) => {
     const access = await verifyMessageReadyAccess(request, options);
 
     if (!access.ok) {

@@ -306,4 +306,4 @@ for (const pattern of forbiddenPatterns) {
   }
 }
 
-console.log("Veel v2 scaffold docs, route map, and OpenAPI checks passed.");
+console.log("WeVid docs, route map, and OpenAPI checks passed.");

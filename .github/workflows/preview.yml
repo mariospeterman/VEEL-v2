@@ -1,18 +1,18 @@
-name: preview
+name: preview-preflight
 
 on:
   pull_request:
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
-  preview-gate:
+  preview-preflight:
+    name: preview-preflight
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
       - uses: pnpm/action-setup@v4
@@ -25,7 +25,7 @@ jobs:
           pnpm --version
       - name: Install
         run: pnpm install --frozen-lockfile
-      - name: Build deployable apps
+      - name: Build application artifact
         run: pnpm build
-      - name: Verify deploy skeleton
+      - name: Verify release preflight skeleton
         run: pnpm deploy:check

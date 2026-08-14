@@ -38,7 +38,7 @@ export const landingFrames = [
     kicker: "Direct support",
     title: "Get paid without giving up control.",
     copy:
-      "Tips, unlocks, memberships, and event access are tied to user-owned wallets and backend-verified access states. Fast, low-fee Solana settlement.",
+      "Support, unlocks, memberships, and event access are tied to user-owned wallets and backend-verified access states. Fast, low-fee Solana settlement.",
     primary: "Start earning",
     secondary: "Log in",
     visual: "earn"

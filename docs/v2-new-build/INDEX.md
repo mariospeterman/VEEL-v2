@@ -1,8 +1,8 @@
-# Veel V2 New-Build Documentation Pack
+# WeVid Production Documentation
 
 Status: accepted
-Scope: complete standalone Veel v2 build instructions
-Last updated: 2026-06-05
+Scope: canonical architecture, current implementation truth, and production completion plan
+Last updated: 2026-08-14
 Source of truth: yes
 
 Owns:
@@ -20,7 +20,7 @@ Launch scope:
 Non-goals:
 - parallel doc families or historical lessons
 
-This folder is the canonical new-build pack. It is intentionally self-contained so a developer can build Veel v2 from these docs without reading any older repository.
+This folder is the canonical WeVid engineering pack. Technical `veel` identifiers remain where compatibility requires them; public product language is WeVid.
 
 ## What This Pack Is
 
@@ -49,6 +49,7 @@ This folder is the canonical new-build pack. It is intentionally self-contained 
 | Money/access/referral/tax truth | `liability-compliance-audit.md`, `payments-and-monetisation.md`, `business-monetisation.md`, `noncustodial-money-compliance.md`, `compliance/dac7-dac8-vat-system.md`, OpenAPI | Backend owns final state; frontend is UX/cache only. |
 | Payment/access/reporting/bookkeeping truth | `business-monetisation.md`, `liability-compliance-audit.md`, `compliance/dac7-dac8-vat-system.md`, OpenAPI, schema | Blockchain = payment truth; entitlements = access truth; compliance ledger = reporting truth; accounting integration = bookkeeping truth. No duplicate authority. |
 | Provider boundaries | `providers/provider-map.md`, provider-specific docs, ADRs | Use official provider docs/SDKs first; adapters hide secrets. |
+| Universal identity and onboarding | `embedded-wallet-onboarding.md`, `auth-supabase-realtime.md`, `providers/identity-provider-wiring.md` | One WeVid user/profile; three visible steps; Privy or external wallet converge on one backend session; Supabase recovery is optional. |
 | Security/compliance | compliance docs, `safety-admin-ai.md`, ADRs | Age, moderation, audit, and privacy rules block launch if incomplete. |
 | Admin/ops | `admin-operations-dashboard.md` | Every launch slice needs admin visibility where relevant. |
 | AI/MCP | `ai-mcp-use-cases.md`, `safety-admin-ai.md` | Permissioned tools only; no spending/publishing/messaging without confirmation. |
@@ -57,8 +58,8 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 
 ## Start Here
 
-1. [Build plan](build-plan.md)
-2. [Current implementation status](current-implementation-status.md)
+1. [Current implementation status](current-implementation-status.md)
+2. [Build plan](build-plan.md)
 3. [Full platform blueprint](full-platform-blueprint.md)
 4. [App architecture](app-architecture.md)
 5. [Stack decision](stack-decision.md)
@@ -120,6 +121,7 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 46. [Deployment topology](deployment-topology.md)
 47. [Slice workflow](slice-workflow.md)
 48. [Production branch inventory](production-branch-inventory.md)
+49. `staging-evidence/` for redacted provider proof tied to a commit and environment
 
 ## How To Use In A New Repo
 
@@ -132,7 +134,7 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 
 ## Build From These Docs
 
-The intended build order is:
+The intended core build order is:
 
 ```text
 Docs/ADRs
@@ -141,13 +143,15 @@ Docs/ADRs
   -> Fastify API
   -> worker
   -> Next PWA shell
-  -> auth + embedded/external wallet
+  -> contracts/security boundary
+  -> three-step Privy/external-wallet onboarding + optional recovery
   -> Home/media
   -> payments/access/referrals
   -> providers/media/live
   -> messages/activity
   -> admin/ops
-  -> Event Access/Mutuals/AI
+  -> Event Access
+  -> conditional/post-core Mutuals, physical commerce, adult live, and AI/MCP
 ```
 
 Every production slice must include contracts, migrations, tests, provider boundary checks, frontend smoke coverage, and admin/ops visibility where relevant.

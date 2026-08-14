@@ -1,8 +1,8 @@
-# Veel V2 Business And Monetisation Architecture
+# WeVid V2 Business And Monetisation Architecture
 
 Status: accepted
 Scope: business model, monetisation, noncustodial money movement
-Last updated: 2026-06-05
+Last updated: 2026-08-14
 Source of truth: yes
 
 Owns:
@@ -48,8 +48,8 @@ Operational tables, caches, notifications, admin projections, receipts, exports,
 Veel earns through:
 
 - platform fee on content unlocks, paid messages, paid live events, Event Access Passes, and support
-- Creator Membership platform fee
-- platform plans: Free Verified, Veel Plus, Veel Ultra, Veel Studio, and Enterprise
+- Profile Membership platform fee
+- platform plans: Free, Plus, Ultra, Studio, and Enterprise
 - optional referral commission sourced only from Veel platform commission net of refunds and tax
 - optional wallet-funding referral revenue only if legal/provider review approves it and it is never product checkout revenue
 
@@ -58,7 +58,7 @@ Creators earn through:
 - paid clips, premium posts, VOD, and replay content unlocks
 - support
 - paid messages
-- Creator Memberships
+- Profile Memberships
 - paid live events
 - Event Access Passes
 - referral earnings where product rules allow creator-as-referrer flows
@@ -116,7 +116,7 @@ Creators own monetisation pricing for creator products:
 - support presets where creator offers presets
 - one paid-event price and replay window for a paid live room
 - Event Access Passes
-- Creator Memberships
+- Profile Memberships
 
 Admin/env owns guardrails:
 
@@ -145,7 +145,7 @@ Examples:
 | --- | --- | --- | --- |
 | Native SOL split transfer | Devnet testing, low-friction support/tips, possible SOL products | Optional depending product | Signature, reference, payer, lamports, recipients, finality |
 | SPL/USDC split transfer | Production stablecoin products if selected | Optional depending product | Signature, reference, payer, mint, token program, token amounts, recipients, finality |
-| Solana delegated subscription | Creator Memberships and platform recurring plans | Membership/platform entitlement only after verified authorization and recurring collection | Authority PDA, subscription/delegation PDA, payer token account, mint/program, recipients, amount/period, collection signature, finality |
+| Solana delegated subscription | Profile Memberships and platform recurring plans | Membership/platform entitlement only after verified authorization and recurring collection | Authority PDA, subscription/delegation PDA, payer token account, mint/program, recipients, amount/period, collection signature, finality |
 | Manual Solana Pay recovery | Emergency fallback for failed delegated setup/collection only | Renewal entitlement only after confirmed payment intent | Signature, reference, payer, amount, recipients, finality |
 | Wallet funding/onramp | User adds SOL/USDC to their own wallet | No access effect | Funding status only for UX/support |
 | Free approval | Free Event Access/Passes | Entitlement only | Backend approval/audit, no wallet settlement |
@@ -167,10 +167,10 @@ Native SOL and SPL token modes must share a common intent/split/settlement model
 | Content unlock | One-time price | Creator share | Platform fee | Content access grant |
 | Support | Preset/custom amount or campaign amount | Creator share | Platform fee | No access grant unless explicitly attached |
 | Paid message | Message price | Creator share | Platform fee | Message delivery/open entitlement |
-| Creator Membership | Recurring plan price | Creator share | Platform fee | Creator-specific access plan |
-| Veel Plus | 8.99 USDC/month | No creator share unless bundled | Platform revenue | Regular-user platform entitlement |
-| Veel Ultra | 17.99 USDC/month | No creator share unless bundled | Platform revenue | High-usage viewing entitlement |
-| Veel Studio | 29 USDC/month | No creator share unless bundled | Platform revenue | Creator business/tool entitlement |
+| Profile Membership | Recurring plan price | Creator share | Platform fee | Creator-specific access plan |
+| Plus | 8.99 USDC/month | No creator share unless bundled | Platform revenue | Regular-user platform entitlement |
+| Ultra | 17.99 USDC/month | No creator share unless bundled | Platform revenue | High-usage viewing entitlement |
+| Studio | 29 USDC/month | No creator share unless bundled | Platform revenue | Creator business/tool entitlement |
 | Enterprise | Custom, from 199 USDC/month equivalent | No creator share unless contracted | Platform revenue | Organization/agency/venue entitlement |
 | Live pass | Duration/pass price | Creator share | Platform fee | Live playback/chat access |
 | Event Access Pass | Pass price | Creator/event owner share | Platform fee | Access entitlement/QR |
@@ -233,7 +233,7 @@ Platform net:      0.080 SOL
 
 The backend stores the exact integer unit amounts used in the transaction request. Display decimals are presentation only.
 
-## Platform Plans vs Creator Membership
+## Platform Plans vs Profile Membership
 
 Platform plans:
 
@@ -247,10 +247,10 @@ Recommended platform tiers for first pricing tests are backend policy rows, not 
 
 | Tier | Suggested price | Position |
 | --- | --- | --- |
-| Free Verified | Free | Full social account, Bits, previews, SFW publishing, public live, purchases, support, and about 20 hours/month of free public long-form/live use. |
-| Veel Plus | 8.99 USDC/month | About 100 hours/month, collections, notification/privacy controls, and profile enhancements. No feed/Mutuals boost. |
-| Veel Ultra | 17.99 USDC/month | About 250 hours/month, highest available playback quality, and advanced playback convenience. No feed/Mutuals boost. |
-| Veel Studio | 29 USDC/month | Includes the Ultra allowance plus professional individual analytics, scheduling, pricing, live-conversion, and AI-assistance capabilities where enabled. Creator Membership eligibility is separate. |
+| Free | Free | Full social account, Bits, previews, SFW publishing, public live, purchases, support, and about 20 hours/month of free public long-form/live use. |
+| Plus | 8.99 USDC/month | About 100 hours/month, collections, notification/privacy controls, and profile enhancements. No feed/Mutuals boost. |
+| Ultra | 17.99 USDC/month | About 250 hours/month, highest available playback quality, and advanced playback convenience. No feed/Mutuals boost. |
+| Studio | 29 USDC/month | Includes the Ultra allowance plus professional individual analytics, scheduling, pricing, live-conversion, and AI-assistance capabilities where enabled. Profile Membership eligibility is separate. |
 | Enterprise | Custom, from 199 USDC/month equivalent | Organization, agency, venue, and partner tier with RBAC, consolidated reporting, business support, and contract review. KYB is required for organization use but never grants Enterprise without an active contract, subscription, or waiver. |
 
 Only free public long-form VOD and public live viewing consumes the platform allowance. Bits, previews, individually unlocked content, joined-profile membership media, paid Event Access, the user's own media, and promotional excerpts never consume it. Reaching the allowance must not revoke purchased or membership access.
@@ -270,21 +270,27 @@ Tier rules:
 - platform plans must not hide core safety, basic publishing, Mutuals access, or creator discovery behind a paywall
 - platform plans must not boost paid content ranking, Mutuals ranking, or message priority
 - creator content purchases still happen separately unless a specific bundle is implemented and documented
-- creator-facing productivity value should live in Veel Studio, not in a viewer-only upsell
-- creator membership creation is gated by earning/compliance readiness, not ownership of Veel Studio
+- creator-facing productivity value should live in Studio, not in a viewer-only upsell
+- Profile Membership creation is gated by earning/compliance readiness, not ownership of Studio
 - organization KYB establishes business identity; Enterprise authority additionally requires an active Enterprise subscription, contract waiver, or equivalent backend-owned commercial entitlement
 - Mutuals/Event Access/AI limits can be configured by admin, but the free tier must remain usable enough for real network effects
 
 Pricing, allowance limits, Mutual/Event Access limits, paid-live-event guardrails, and platform feature gates must live in backend/admin configuration. Environment variables provide safe defaults; admin configuration can override them without a deploy.
 
-Creator Membership:
+Profile Membership:
 
 - belongs to a profile and has one active offer per profile at launch
 - grants creator-specific benefits such as subscriber-only media, premium posts, live access tiers, or message privileges
 - has renewal state, grace period, cancellation, and failed-renewal recovery
 - must be auditable per creator, subscriber, plan, billing event, entitlement, and settlement
 
-Platform plans and Creator Memberships use the same recurring authorization/collection state machine but different entitlement scopes.
+Platform plans and Profile Memberships use the same recurring authorization/collection state machine but different entitlement scopes. Recurring sales remain disabled until the official Solana recurring-delegation path proves setup, collection, renewal, cancellation/revocation, failure, reconciliation, idempotency, and entitlement changes in staging; no custom subscription contract is permitted.
+
+Recipient monetisation readiness has one backend authority. “Enable Earnings” is the contextual entry point from any product that needs a recipient; it resolves age, tax acceptance, configured recipient wallet, product enablement, and KYC mode (`disabled`, `risk-based`, or `required`) without creating a second creator account. SFW publishing does not require creator KYC. Adult publishing, performer evidence, KYC, and KYB remain separate purpose capabilities. Support starts at 0.50 USDC by default and may be offered as micro-Support on media, messages, live, or chat only where that product surface is explicitly enabled; it never buys attention or access to a person.
+
+## Deferred Physical Commerce Boundary
+
+Physical goods are post-core and must not use WeVid's digital payment/entitlement system. The preferred future model connects a creator-owned Shopify store: the creator remains merchant of record; Shopify owns catalog, variants, inventory, cart, shipping, tax, discounts, orders, merchant checkout, and merchant refunds. WeVid may display approved Storefront data, attach one product to media, record safe attribution, and redirect to merchant checkout. WeVid holds no product funds, inventory, fulfillment, tax, order, refund, or commerce-split authority. No normal digital-content fee is assumed; possible revenue is limited to Studio/Enterprise, a separately approved affiliate agreement, or another provider-supported commercial agreement.
 
 ## Subscription State Machine
 

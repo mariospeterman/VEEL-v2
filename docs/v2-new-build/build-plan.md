@@ -1,8 +1,8 @@
-# Veel V2 New Repo Build Plan
+# WeVid Production Build Plan
 
 Status: accepted
-Scope: standalone implementation plan
-Last updated: 2026-06-03
+Scope: canonical implementation and production-completion order
+Last updated: 2026-08-14
 Source of truth: yes
 
 Owns:
@@ -39,6 +39,32 @@ Build v2 as a standalone provider-first platform:
 - admin/ops visibility before production cutover
 
 Do not bulk-copy external implementation code. Any outside repository is historical reference only and cannot define v2 behavior.
+
+## Production Completion Program
+
+The historical milestones below remain useful implementation context. New production work follows this ordered slice program and must stop after one reviewed slice.
+
+| Slice | Goal | State at Launch 00 |
+| --- | --- | --- |
+| 00 | Baseline, governance, and truth lock | Implemented on `codex/launch-00-baseline-governance`; merge gated by required checks |
+| 01 | Executable contracts and platform security boundary | Not started |
+| 02 | Three-step onboarding, canonical session, optional recovery, and earnings readiness | Not started |
+| 03 | VOD creation, multi-performer enrollment, and moderation operations | Not started |
+| 04 | Core social graph and real feeds | Not started |
+| 05 | Realtime messages and notifications | Not started |
+| 06 | One-time monetisation and Event Access completion | Not started |
+| 07 | SFW live host, viewer, chat, and operational controls | Not started |
+| 08 | Recurring platform subscriptions and creator memberships | Not started |
+| 09 | Enterprise managed creators | Not started |
+| 10 | Frontend system, accessibility, cross-browser, and PWA completion | Not started |
+| 11 | Actual deployment, observability, recovery, and legal launch | Not started |
+| Post-core | Expanded Mutuals, Shopify-connected physical commerce, adult live, full AI/MCP, NFT/transferable passes, resale, custom contracts, and uncommitted advanced Enterprise work | Separately gated; disabled or absent |
+
+Core SFW launch requires Slices 00–07 and 10–11. Slice 08 is required only before recurring platform plans or Profile Memberships are sold. Slice 09 is required only before Enterprise customers are onboarded. Existing safe foundations for conditional/post-core work may remain, but incomplete capabilities stay hidden, disabled, and fail-closed.
+
+Each completed slice requires the actual UI-to-database/provider path, authorization and runtime validation, focused unit and real-Postgres integration proof, browser proof, operational recovery, canonical docs updates, and redacted provider staging evidence when a provider is involved. Mocks prove application logic only.
+
+The environment model is: pull request to preview preflight, merged `main` to staging, and approved release tag to production. Staging and production use independent Supabase projects, providers, secrets, wallets, storage, domains, and telemetry. The same immutable artifact digest must be promoted; build-only preflight is not deployment.
 
 ## New Repo Bootstrap
 

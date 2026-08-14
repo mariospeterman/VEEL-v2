@@ -197,10 +197,10 @@ Messages:
 - Share inside WeVid and external share are separate flows.
 
 Mutuals:
-- No separate Mutuals discovery screen.
+- Use an explicitly labelled, opt-in Mutuals surface; ordinary Home/Bits media never carries Mutuals gesture semantics.
 - Mutuals is enabled in Profile Settings > Privacy & Safety.
-- If both viewer and creator have Mutuals enabled, media shows Connect.
-- Mobile shortcut: swipe right = Connect, swipe left = Pass.
+- Inside Mutuals only, media shows visible Show Interest and Not interested actions.
+- Mutuals-only mobile shortcuts: swipe right = Show Interest, swipe left = Not interested.
 - Creator gets notified.
 - If both connect, create a Mutual.
 - Mutuals appear inside Messages as Mutual-tagged conversations.
@@ -257,7 +257,7 @@ Studio / Enterprise / Assistant / Admin:
 ## 8. Trust, safety, money, and conversion rules
 
 Always make these actions explicit and visible:
-- Pay / unlock / support / tip.
+- Pay / unlock / Support.
 - Publish.
 - Report / block / hide / not interested.
 - Mutuals connect/pass.

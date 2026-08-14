@@ -26,7 +26,10 @@ pnpm --filter @veel/database test
 
 The root Supabase CLI project lives in `supabase/`. Its `migrations` entry is a symlink to
 `packages/database/migrations` so local and remote Supabase workflows use the same canonical SQL
-files without copying migration history.
+files without copying migration history. Because that canonical directory also contains explicit
+`*.down.sql` rollback files, local stack startup must run through `scripts/run-supabase-cli.mjs`.
+The wrapper builds a temporary migration workdir containing only forward migrations before invoking
+the pinned Supabase CLI, preventing rollback files from being applied as duplicate migration versions.
 
 Run remote migration checks through the repo-local CLI:
 
@@ -38,9 +41,9 @@ pnpm supabase:push:dry
 ```
 
 Use `SUPABASE_MIGRATIONS_DB_URL` or `SUPABASE_DIRECT_DB_URL` for remote CLI checks when available.
-If only `DATABASE_URL` is set and it points at a Supabase transaction pooler, the root wrapper uses
-session-pooler port `5432` for the CLI command because migration commands require prepared-statement
-compatible connections.
+Generic application `DATABASE_URL` is never accepted for migration commands. If an explicit migration
+URL points at a Supabase transaction pooler, the root wrapper uses session-pooler port `5432` because
+migration commands require prepared-statement-compatible connections.
 
 The current shared remote project migration history is normalized to this package's sequence-named SQL
 files. `pnpm supabase:migrations` verifies local/remote version alignment; `pnpm

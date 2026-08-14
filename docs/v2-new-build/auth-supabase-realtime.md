@@ -1,8 +1,8 @@
-# Veel V2 Auth, Supabase, And Realtime Architecture
+# WeVid V2 Auth, Supabase, And Realtime Architecture
 
 Status: accepted
 Scope: auth, DB, realtime
-Last updated: 2026-06-29
+Last updated: 2026-08-14
 Source of truth: yes
 
 Owns:
@@ -24,13 +24,13 @@ Non-goals:
 
 Use Supabase Auth for optional recovery/account-management sessions and Supabase Postgres for data. Use Supabase Realtime selectively. The Fastify backend remains the business policy layer.
 
-V2 onboarding is wallet-first. A user connects an external noncustodial Solana wallet or unlocks a configured noncustodial embedded wallet, sets up the public profile, optionally signs into Supabase email/social recovery for profile management, then completes the single age-verification gate before protected app access.
+The locked onboarding target has three visible steps: Account + Wallet, Minimal Profile, and Age Verification. A user either connects an external noncustodial Solana wallet or authenticates through Privy and creates/retrieves a noncustodial embedded Solana wallet. Both paths sign the same backend challenge and create the same WeVid application session. Supabase email/social signup is optional recovery linking, not an onboarding step.
 
 ## Identity Model
 
 ```mermaid
 erDiagram
-  auth_users ||--|| users : maps_to
+  auth_users o|--|| users : optionally_maps_to
   users ||--|| profiles : has
   users ||--o{ wallets : owns
   users ||--o{ verification_records : has
@@ -78,22 +78,18 @@ erDiagram
 
 ## Auth Flow
 
-1. User signs a backend-issued wallet challenge through an external Solana wallet or configured embedded wallet provider.
-2. Fastify verifies the wallet signature and creates or restores the Veel wallet session.
-3. User sets the Veel profile handle/display name through `PATCH /v1/profiles/me`.
-4. User may sign into Supabase email/social recovery for profile management.
-5. User completes third-party age verification before protected app access.
-6. Fastify loads Veel profile, wallet, age, restrictions, monetisation, and app permissions and returns frontend-safe session payloads.
+1. Account + Wallet: the user chooses a mainstream Privy method or an external wallet, receives/uses a Solana wallet, signs one domain-bound backend challenge, and receives the canonical WeVid session.
+2. Minimal Profile: the user claims a unique handle; display name and avatar are optional or safely prefilled. The profile stays provisional, non-discoverable, unable to publish/message/receive money, and excluded from search/feeds until age succeeds.
+3. Age Verification: a provider returns normalized over-threshold evidence; protected access then opens. Age does not grant KYC, earning, adult-publisher, performer, KYB, Enterprise, or paid-product capability.
+4. Fastify loads the universal profile, primary/linked wallets, age, restrictions, monetisation, and capability state and returns a frontend-safe session projection.
 
 Signup paths and onboarding order:
 
-- Step 1: user connects an external/native wallet or unlocks a configured embedded wallet.
-- Step 2: Fastify verifies the wallet challenge, bootstraps the Veel `users` row, and audits the wallet session/link.
-- Step 3: user sets the Veel profile handle/display name through `PATCH /v1/profiles/me`.
-- Step 4: user may sign into Supabase email/social recovery for profile management.
-- Step 5: third-party age verification completes the app age gate.
+- Step 1 of 3 combines provider entry, wallet create/retrieve/connect, ownership signature, user bootstrap, and session creation into one continuous action. The Privy target must not stop at “wallet created; continue again.”
+- Step 2 of 3 requires only `handle`; `displayName` and avatar are optional target fields. The current contract still requires `displayName`, so that contract/runtime correction belongs to Slice 01/02 and must not be described as implemented.
+- Step 3 of 3 completes third-party age assurance and activates eligible protected access.
 - Supabase email/social/passkey: optional recovery/account-management access. It is not the primary app-access proof; it can be linked to a wallet-created account only after both wallet-session proof and Supabase-session proof are present.
-- External wallet: uses signed wallet challenge and can attach to an existing Supabase-authenticated recovery session or become the primary wallet path.
+- External wallet: uses the signed wallet challenge without mandatory email, Privy, password, Supabase, KYC, or payment.
 - Returning user: Fastify resolves profile, primary wallet, linked wallets, age/access, restrictions, and monetisation state.
 
 Protected app access requires both age verification and a wallet path. Supabase Auth alone is not enough to enter the app shell.
@@ -101,7 +97,7 @@ Protected app access requires both age verification and a wallet path. Supabase 
 Current implementation boundary:
 
 - Supabase Auth login and magic-link recovery are wired through the official SSR callback pattern: OAuth/PKCE callbacks exchange the returned `code` with `exchangeCodeForSession`, and email magic links verify `token_hash` plus `type` with `verifyOtp`.
-- Wallet-first login creates or restores an app-owned wallet session whose bearer token maps to the internal `users.supabase_user_id` compatibility identifier.
+- Wallet login creates or restores an app-owned wallet session whose bearer token maps to the internal `users.supabase_user_id` compatibility identifier. The preferred target stores the raw token only in a secure HttpOnly cookie and only its hash server-side; the existing cookie-backed implementation and any route-specific bearer compatibility must converge under the Slice 01/02 session contract.
 - Supabase Auth remains recovery/account-management only. The browser renders email/social recovery providers only when Supabase browser config exists and the matching `NEXT_PUBLIC_SUPABASE_AUTH_*_ENABLED` flag is set for a provider that is also enabled in the Supabase Auth dashboard.
 - Supabase recovery callbacks resolve `/v1/session` before entering `/app/*`. If the Supabase identity has no linked wallet/profile state, the user is routed back to wallet onboarding instead of being treated as wallet-authenticated.
 - `POST /v1/auth/recovery-link` links Supabase recovery to a wallet-created account after the server proves both sessions: a valid Supabase bearer token in `Authorization` and the active wallet session in its HttpOnly cookie. The wallet token is never accepted in the JSON body. The API updates the existing wallet-owned `users` row to the verified Supabase subject, so future wallet login and future Supabase login resolve to the same profile, wallet, age, creator KYC, and organization KYB state.
@@ -110,9 +106,9 @@ Current implementation boundary:
 
 ## Profile Bootstrap
 
-`GET /v1/session` is allowed to create the backend `users` row for a verified Supabase Auth user. It does not create a public profile without the user's handle/display-name input.
+Current compatibility behavior allows `GET /v1/session` to create the backend `users` row for a verified Supabase Auth user, although it does not create a public profile. This is not the locked launch entry path and must stay out of ordinary onboarding. Slice 01/02 must constrain optional recovery sign-in to a proved existing link (or an explicitly approved safe claim flow) so it cannot silently create a second WeVid user/profile.
 
-`PATCH /v1/profiles/me` creates or updates the public profile row for the authenticated user. The request must include `handle`, `displayName`, and an `Idempotency-Key` header. The backend owns uniqueness, validation, and profile state; frontend code treats the response as cached UX state only.
+Current runtime: `PATCH /v1/profiles/me` creates or updates the profile row and currently requires `handle`, `displayName`, and an `Idempotency-Key`. Locked target: Step 2 requires only a unique `handle`; display name and avatar are optional or safely prefilled. The backend owns uniqueness and provisional visibility/restriction state. The contract and policy transition belongs to Slice 01/02.
 
 Supabase `user_metadata` is not a Veel profile source. Do not use editable metadata for handle, display name, role, age, wallet, admin, or access decisions.
 
@@ -131,7 +127,7 @@ Embedded wallets are also linked to the Veel profile, but they are not a backend
 
 The web app mounts the Privy embedded-wallet SDK only when its browser-safe app id is configured and `NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED=true`. Privy uses `NEXT_PUBLIC_PRIVY_APP_ID` and Solana RPC settings, creates or unlocks a Solana embedded wallet through the official Privy React/Solana SDK, selects the Privy wallet explicitly from the connected Solana wallet list, then signs the backend wallet-auth challenge as `embedded_privy`. Turnkey remains an ADR fallback, not a bundled browser runtime or launch path.
 
-Wallet path is mandatory before protected app access because Veel is wallet-native and every user must be able to receive or approve noncustodial Solana actions.
+Wallet capability is mandatory before protected app access because WeVid is wallet-native and every user must be able to receive or approve noncustodial Solana actions. It is one of three onboarding steps, not an instruction to expose provider mechanics.
 
 Wallet readiness means one of:
 

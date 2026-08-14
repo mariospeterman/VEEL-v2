@@ -109,7 +109,7 @@ export async function registerProfileRoutes(
       if (!onboarding) {
         return reply.code(403).send({
           code: "forbidden",
-          message: "Creator onboarding requires a Veel account"
+          message: "Creator onboarding requires a WeVid account"
         });
       }
 
