@@ -71,7 +71,8 @@ const args = process.argv.slice(2).flatMap((arg) => {
   return [arg];
 });
 
-const needsMigrationWorkdir = ["db", "migration"].includes(args[0]);
+const isLocalStart = args[0] === "start";
+const needsMigrationWorkdir = ["db", "migration", "start"].includes(args[0]);
 const workdir = needsMigrationWorkdir ? mkdtempSync(resolve(tmpdir(), "veel-supabase-")) : process.cwd();
 
 if (needsMigrationWorkdir) {
@@ -107,7 +108,9 @@ const result = spawnSync(supabaseBin, args, {
     ...process.env,
     PGCONNECT_TIMEOUT: process.env.PGCONNECT_TIMEOUT ?? "10"
   },
-  timeout: Number(process.env.SUPABASE_CLI_TIMEOUT_MS ?? 45_000)
+  timeout: Number(
+    process.env.SUPABASE_CLI_TIMEOUT_MS ?? (isLocalStart ? 300_000 : 45_000)
+  )
 });
 
 if (needsMigrationWorkdir) {

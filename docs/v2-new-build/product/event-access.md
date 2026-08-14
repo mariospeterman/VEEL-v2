@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: events, Event Access Passes, Solana payment, QR/check-in, admin ops
-Last updated: 2026-06-05
+Last updated: 2026-08-14
 Source of truth: yes for v2 Event Access
 
 Owns:
@@ -21,6 +21,8 @@ Non-goals:
 - ticket marketplace positioning, resale, escrow, historical-context inference, duplicate systems, and unapproved provider/product expansion
 
 Events are content-attached access flows. They are not a secondary ticket marketplace, not root navigation by default, and paid access always requires explicit confirmation.
+
+Gesture/CTA lock: event media has at most one primary contextual action, `View Event` or `Get Access`. Its detail surface shows date/time, digital or physical format, applicable location, availability, total price, cancellation/refund terms, and access benefits. A final join or purchase requires explicit confirmation. No swipe confirms Event Access, creates an entitlement, or sends funds.
 
 Use legal/backend language:
 

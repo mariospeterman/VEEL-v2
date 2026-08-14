@@ -1,8 +1,8 @@
-# Veel V2 Payments And Monetisation
+# WeVid V2 Payments And Monetisation
 
 Status: accepted
 Scope: Solana Pay, monetisation, referrals
-Last updated: 2026-08-11
+Last updated: 2026-08-14
 Source of truth: yes
 
 Owns:
@@ -51,7 +51,7 @@ Current implementation state:
 - In-app confirmations are useful fallback visibility and support evidence, but launch EU/EEA withdrawal-waiver confirmation should still use a durable outbound medium such as email when available. Staging must run `pnpm --filter @veel/worker email:smoke` only after `TRANSACTIONAL_EMAIL_PROVIDER=resend`, `RESEND_API_KEY`, `TRANSACTIONAL_EMAIL_FROM`, and `TRANSACTIONAL_EMAIL_SMOKE_TO` are configured with a verified sender domain.
 - `GET /v1/activity/payments` includes backend-derived receipt number/state, in-app/email confirmation state, withdrawal-right status, latest refund/dispute review state, and whether a support review can be opened. `/app/activity` renders those facts and can submit the existing refund/access-issue review mutation for legal/policy exceptions; it still never executes refunds, moves funds, revokes access, or creates balances.
 - `GET /v1/profiles/me/creator-dashboard` exposes creator monetisation readiness, backend-derived readiness score, product toggles, confirmed earning records, platform fees, referral commissions, and recent payment activity from backend tables only. Its policy boundary is `creator_records_only_no_balances_payout_queue_or_social_priority`.
-- `GET /v1/profiles/me/creator-onboarding` exposes the backend-owned Become Creator checklist for profile, age, wallet, KYC, tax profile, earnings wallet, and product readiness, plus a backend-derived readiness score. It is an onboarding projection only and does not create balances, custody, payout queues, escrow, or social advantage.
+- `GET /v1/profiles/me/creator-onboarding` is the compatibility route for the backend-owned Enable Earnings checklist covering profile, age, wallet, policy-driven KYC, tax profile, earnings wallet, and product readiness. It does not create another account, balances, custody, payout queues, escrow, or social advantage.
 - Admin reconciliation is available through role-gated read-only projections for payment intents, unlock entitlements, provider events, and operations counts. These projections never expose raw provider payloads, provider secrets, private keys, or frontend-computed payment truth.
 - `GET /v1/subscriptions/plans` and `GET /v1/subscriptions` expose backend-owned plan and current subscription state for app-ready users; `/subscriptions` reads those projections and does not render fixture plans or subscription state.
 - `/subscriptions` can request `POST /v1/subscriptions/intents`, display the backend setup reference/provider readiness, submit signed authorization evidence to `POST /v1/subscriptions/authorizations/{authorizationIntentId}/submissions`, and cancel renewal state through `PATCH /v1/subscriptions/{subscriptionId}/cancel`. The browser never marks a plan active, renews access, or treats wallet setup as payment proof.
@@ -99,21 +99,23 @@ Official references checked:
 - content unlock for paid clip/post/VOD/replay
 - support (`tip` is legacy-read-only compatibility)
 - paid message
-- Creator Membership
-- platform plans: Free Verified, Veel Plus, Veel Ultra, Veel Studio, Enterprise
+- Profile Membership
+- platform plans: Free, Plus, Ultra, Studio, Enterprise
 - paid live event (internal settlement compatibility key: `live_pass`)
 - Event Access Pass
 - external referral commission
 
 ## Solana Pay Architecture
 
-Veel stays noncustodial:
+WeVid stays noncustodial:
 
 - backend configures the transaction request
 - user wallet signs/approves the payment
 - funds move directly to creator/platform/referral recipients where the product supports split transfers
 - backend verifies chain facts before granting access or recording final revenue
 - frontend wallet success is not final payment proof
+
+One-time WeVid digital products remain server-priced SOL/approved USDC intents with backend chain verification and entitlement truth. An onramp only funds the user-owned wallet and never grants access. Future Shopify physical commerce is DEFERRED and merchant-owned; it must not reuse these product intents, splits, entitlements, order/refund authority, or the assumed digital platform fee.
 
 Required settlement ordering:
 

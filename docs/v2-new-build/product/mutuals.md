@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Mutuals, interest signaling, safety, mutual chat
-Last updated: 2026-06-05
+Last updated: 2026-08-14
 Source of truth: yes for v2 Mutuals
 
 Owns:
@@ -142,8 +142,9 @@ Historical migrations and rollback files may still contain `dating`, `swipe`, or
 ```text
 Mutuals feed:
   vertical swipe = next / previous Mutuals media
-  explicit button = Show Interest
-  explicit button = Not interested
+  right = Show Interest shortcut
+  left = Not interested shortcut
+  explicit buttons = Show Interest and Not interested
   Back/Esc = exit mode or close sheet
 
 Normal media:
@@ -151,6 +152,8 @@ Normal media:
 ```
 
 Visible buttons must exist for Show Interest and Not interested, because gestures are shortcuts only.
+
+Undo may reverse only an eligible recent interest action. Reciprocal backend-confirmed interest alone creates a Mutual. Support, paid access, platform plans, and Profile Membership never imply consent, a reply, a match, or priority. Expanded Mutuals is separately gated/post-core; safe existing backend foundations remain but primary launch UI must not imply completion.
 
 ## Safety Rules
 

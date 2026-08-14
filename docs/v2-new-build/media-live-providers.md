@@ -1,8 +1,8 @@
-# Veel V2 Media And Live Provider Architecture
+# WeVid V2 Media And Live Provider Architecture
 
 Status: accepted
 Scope: Bunny, Livepeer, media, live
-Last updated: 2026-08-11
+Last updated: 2026-08-14
 Source of truth: yes
 
 Owns:
@@ -56,10 +56,11 @@ Official references checked:
 
 ## Provider Split
 
-- Bunny Stream: VOD upload, transcoding, thumbnails, CDN playback.
-- Livepeer: live room creation, stream key/ingest, live playback, replay handoff where useful.
-- Veel backend: content state, access, moderation, provider mapping, frontend-safe resources.
-- Frontend: official provider player/component integration wrapped in Veel layout primitives.
+- Bunny Stream owns VOD upload/resumability, storage, encoding, delivery, and provider playback. Bunny Shield is used only on upload paths with staging-proven coverage.
+- Livepeer owns live ingest, transcoding, recording, and provider playback.
+- WeVid backend owns drafts/quarantine, performer and consent requirements, moderation/release, room/access/monetisation policy, entitlement/playback authorization, report and suspend/end orchestration, and replay release.
+- Frontend uses official provider player/component boundaries wrapped in WeVid layout primitives.
+- Custom encoders, CDNs, or live-stream infrastructure are prohibited. Adult live remains disabled until its separate proof gate.
 
 ## Bunny VOD Flow
 

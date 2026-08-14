@@ -94,7 +94,16 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Start isolated Supabase database
-        run: pnpm exec supabase start --exclude studio,imgproxy,mailpit,edge-runtime,logflare,vector,supavisor --yes
+        id: supabase-start
+        run: node scripts/run-supabase-cli.mjs start --exclude studio,imgproxy,mailpit,edge-runtime,logflare,vector,supavisor --yes
+
+      - name: Emit Supabase startup diagnostics
+        if: failure() && steps.supabase-start.outcome == 'failure'
+        shell: bash
+        run: |
+          pnpm exec supabase status || true
+          docker ps --all --filter "label=com.supabase.cli.project=veel-v2"
+          docker logs --tail 200 supabase_db_veel-v2 || true
 
       - name: Run authenticated API integration suite
         shell: bash

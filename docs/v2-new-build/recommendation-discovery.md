@@ -1,8 +1,8 @@
-# Veel V2 Recommendation And Discovery Architecture
+# WeVid V2 Recommendation And Discovery Architecture
 
 Status: accepted
 Scope: Home feed, Bits feed, Discover, hashtags, mentions, NSFW controls, ranking safety
-Last updated: 2026-06-03
+Last updated: 2026-08-14
 Source of truth: yes for v2 content delivery and discovery
 
 Owns:
@@ -42,7 +42,7 @@ Home
 Bits
   immersive short-video feed
   free/discoverable by default
-  vertical swipe
+  vertical swipe/scroll = next or previous media
 
 Discover
   search + hashtags + creators + events + content categories
@@ -53,6 +53,8 @@ Profile
 Mutuals Mode
   explicit opt-in creator media only when both creator and viewer have Mutuals enabled
 ```
+
+Home/Bits gesture lock: the visible action rail owns like, comment, save, share, and Support; Not interested remains a visible action/menu. Horizontal swipes never create Mutuals, buy a product, join an event, grant paid access, or send funds. Event and future product media may expose at most one primary contextual CTA (`View Event`/`Get Access` or `View Product`/`Buy Product`), followed by explicit detail and confirmation. Money never affects ranking, Mutuals priority, or message priority.
 
 ## Feed Modes
 

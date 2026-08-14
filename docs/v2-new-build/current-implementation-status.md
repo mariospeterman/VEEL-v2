@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: implementation status, known gaps, and next hardening priorities
-Last updated: 2026-08-12
+Last updated: 2026-08-14
 Source of truth: yes
 
 Owns:
@@ -36,6 +36,9 @@ Non-goals:
 - Planning baseline: architecture 88%, database/security 93%, backend 82%, frontend about 50%, feature completeness about 65%, and public production readiness about 58%. These are planning estimates, not launch claims.
 - Canonical owners remain `apps/web`, `apps/api`, `apps/worker`, `packages/database`, `packages/contracts`, `packages/config`, and `packages/ui`. No second backend, database, auth authority, payment authority, moderation system, contract system, or design system may be introduced.
 - The universal-account model remains locked. Age access, adult-publisher eligibility, performer eligibility, creator earnings eligibility, KYC, KYB, Enterprise management, and admin authority are independent backend-owned capabilities.
+- Locked target: three visible onboarding steps only: (1) Account + Wallet, (2) Minimal Profile, and (3) Age Verification. Step 1 ends with either an external Solana wallet or a Privy embedded Solana wallet. Both sign the same backend challenge and converge on one canonical application session. Supabase signup is optional recovery/linking and is not a fourth onboarding step.
+- Locked identity relation: one WeVid user has one profile, one or more linked wallets with one primary wallet, and optional Privy identity, Supabase recovery identity, verification records, earning readiness, performer records, and organization memberships. Provider-subject collisions fail closed; matching email alone never authorizes an account merge.
+- Privy is the only embedded-wallet launch runtime. Turnkey remains an unbundled historical/fallback value. Physical-product commerce is deferred; a future creator-owned Shopify store remains merchant-owned and WeVid does not become inventory, fulfillment, tax, order, refund, or checkout authority.
 - Git uses protected `main` plus short-lived slice branches. Pull requests produce preview preflight; merged `main` is the staging source; an approved immutable release artifact is promoted to production. Staging and production credentials, databases, providers, wallets, and observability remain isolated.
 
 ## Readiness Truth
@@ -43,7 +46,7 @@ Non-goals:
 | Area | Verified state | Launch blocker |
 | --- | --- | --- |
 | Architecture and data authority | Substantial and implemented through migration `0090`; server authority, RLS, idempotency, and provider adapters are present. | Remaining domain integration must be proven slice by slice against real infrastructure. |
-| Auth, wallet, age, and profile | Implemented with fail-closed provider boundaries and browser smoke coverage. | Real provider staging evidence, embedded-wallet launch selection, and recovery matrix proof remain required. |
+| Auth, wallet, age, and profile | Wallet challenge/session, profile, age, recovery-link, and fail-closed provider boundaries exist with browser coverage. | The one-action Privy sequence, exact three-step UI, provisional non-discoverable profile policy, canonical cookie-only session convergence, and recovery return-login proof remain locked targets for Slices 01–02; Privy and age-provider staging evidence is absent. |
 | One-time payments and access | Backend-owned SOL and supported one-time USDC intent, settlement, receipt, and entitlement paths exist. | Mainnet/provider evidence, operational reconciliation, and full consumer journey proof remain required. |
 | Media and live | Bunny/Livepeer boundaries and quarantine/release authorities exist. | Automated moderation is not launch-approved; adult live is disabled; provider staging evidence is absent. |
 | Recurring subscriptions | Domain, worker, and fail-closed adapter boundaries exist. | Sales remain disabled until an official on-chain provider/program is configured and proven. |
@@ -63,6 +66,15 @@ Non-goals:
 
 Public product copy and API metadata use WeVid and Support. Technical package scopes, `VEEL_*` test-tool env names, `VEEL-` historical receipt identifiers, the legacy `X-Veel-Webhook-Signature` compatibility header, migration history, and the existing `/video/Veel.mp4` asset path remain unchanged to avoid a destructive rename. Historical `tip` records are normalized to Support on active reads; deeper compatibility cleanup belongs to the monetisation slice.
 
+## Slice Ownership For Remaining Onboarding Work
+
+| Classification | Exact owner | Slice |
+| --- | --- | --- |
+| LOCKED TARGET | OpenAPI/session threat model, collision rules, recent-auth and step-up requirements in `packages/contracts`, `apps/api`, and security docs | 01 |
+| LOCKED TARGET | Continuous Privy authenticate/create-or-retrieve/sign/session orchestration, three-step UI, provisional profile restrictions, and optional Supabase recovery return-login in `apps/web` and `apps/api` | 02 |
+| FAIL-CLOSED | Privy runtime, age providers, and recovery linking without complete provider/domain evidence | Current flags and server checks remain disabled/rejecting |
+| DEFERRED | Recurring memberships/plans, Enterprise, expanded Mutuals, Shopify physical commerce, adult live, full AI/MCP, NFT/transferable passes, resale, and custom contracts | 08+, separately gated, or post-core |
+
 ## Implemented And Real
 
 - Monorepo, pnpm workspace, CI/security workflow, docs checks, lint/typecheck/test/smoke scripts, GStack gates, and gitleaks local gate.
@@ -71,7 +83,7 @@ Public product copy and API metadata use WeVid and Support. Technical package sc
 - OpenAPI, route map, and Fastify route registration are checked for route drift. Previous contract-only current-viewer and follow endpoints were removed from the active contract because the session endpoint is the implemented current-viewer boundary and the follow graph does not yet have a real migration/repository/API slice.
 - Fastify API bootstrap with route registration, dependency construction, shared app-level Postgres client construction, close-hook lifecycle, env validation, raw-body support for signed webhooks, global rate limit, OpenAPI plugin, and Supabase boundary plugin.
 - Shared backend helpers now cover the app-level Postgres client, explicit transaction boundary, common Idempotency-Key parsing/validation, stable idempotency request hashing, route-specific mutation rate-limit presets, and the first admin mutation route-policy guard for migrated route utilities.
-- Root Supabase CLI project is initialized with committed `supabase/config.toml`, repo-local Supabase CLI `2.106.0`, and `supabase/migrations` linked to the canonical `packages/database/migrations` SQL files. Repository history is defined through migration `0090`. Supabase MCP confirms the connected project has the matching final schema change by name, but it is recorded as timestamp version `20260811233346` rather than sequential `0090`; history normalization is a visible release blocker and must use an approved migration-repair procedure. The remote security advisor has no findings; performance notices are informational unused indexes on the no-traffic project. Generic application `DATABASE_URL` is never used by remote migration commands.
+- Root Supabase CLI project is initialized with committed `supabase/config.toml`, repo-local Supabase CLI pinned to `2.113.0`, and `supabase/migrations` linked to the canonical `packages/database/migrations` SQL files. Local/CI startup runs through the repository wrapper, which constructs an ephemeral workdir containing forward migrations only; canonical `*.down.sql` rollback files are never presented to the Supabase migration runner. Repository history is defined through migration `0090`. Supabase MCP confirms the connected project has the matching final schema change by name, but it is recorded as timestamp version `20260811233346` rather than sequential `0090`; history normalization is a visible release blocker and must use an approved migration-repair procedure. The remote security advisor has no findings; performance notices are informational unused indexes on the no-traffic project. Generic application `DATABASE_URL` is never used by remote migration commands.
 - Supabase/Auth session verification boundary, web SSR cookie refresh/confirmation route, landing-owned magic-link/OAuth session UX, profile-completion mutation UI, external wallet challenge handoff UI, configured-session redirects, backend app-access redirects for protected app-shell pages, and backend session/profile readiness projections. Browser Supabase auth uses the public Supabase URL plus publishable or anon key only; service-role and secret keys stay server-side.
 - Age provider waterfall boundary, `/age` provider-session start UI, and normalized webhook/test paths, with unavailable providers failing closed when not configured. Local/test-only mock age and creator verification adapters exist behind explicit mock guards for end-to-end development; production provider paths still require real provider credentials, webhook secrets, callback allowlists, and provider dashboard configuration.
 - External wallet challenge/link/revoke/status flow with backend signature verification and replay/expiry checks; landing onboarding and `/app/wallet` can now coordinate Solana wallet-adapter challenge signing while keeping wallet truth server-side. The landing wallet chooser filters to intentionally supported Solana wallet surfaces and the Privy embedded-wallet button remains disabled unless its runtime env is configured; onramp provider boundary fails closed unless configured.
@@ -141,8 +153,8 @@ The controlling branch evidence is recorded in `production-branch-inventory.md`.
 ### P1 Universal Account, Plans, Memberships, And Usage
 
 - [x] Keep one account and profile; model app access, SFW/adult publishing, earning, and identity readiness as server-owned capabilities. Live, buying, memberships, organization, and paid-plan capability composition still requires completion.
-- [x] Separate VEEL platform plans from `Join @handle` creator membership in schema, contracts, API projections, consumer copy, and tests. Creator Membership readiness is not a Studio capability.
-- [x] Implement backend-configurable Free Verified, Plus, Ultra, Studio, and Enterprise policy projection without browser-owned commercial truth; paid provider plans remain fail-closed until launch-approved configuration.
+- [x] Separate WeVid platform plans from `Join @handle` Profile Membership in schema, contracts, API projections, consumer copy, and tests. Profile Membership readiness is not a Studio capability.
+- [x] Implement backend-configurable Free, Plus, Ultra, Studio, and Enterprise policy projection without browser-owned commercial truth; historical persisted labels remain compatibility data and paid provider plans remain fail-closed until launch-approved configuration.
 - [x] Meter only free public long-form VOD and public live delivery through server-owned idempotent sessions/heartbeats; exclude Bits, previews, paid unlocks, joined-profile media, paid events, own uploads, and promotional excerpts.
 - [x] Preserve purchased, membership, Event Access, preview, Bits, promotional, and owner access when public viewing allowance is exhausted.
 - [x] Enforce at most one active membership offer per profile and resolve live membership access server-side; creator eligibility setup remains a separate incomplete slice.
@@ -180,7 +192,7 @@ The controlling branch evidence is recorded in `production-branch-inventory.md`.
 
 - [ ] Push the production-hardening branch and keep its pull request draft until all required evidence is green.
 - [ ] Merge through reviewed GitHub flow, synchronize local `main` with `origin/main`, and verify a clean worktree.
-- [ ] Close superseded dependency pull requests and remove only merged/superseded remote branches.
+- [ ] Review fresh dependency pull requests independently from current `main`; do not fold unrelated majors or lockfile churn into a product slice.
 - [ ] Declare production readiness only after provider, security, compliance, deployment, observability, backup, and end-to-end evidence gates pass.
 
 ## Required Status Discipline

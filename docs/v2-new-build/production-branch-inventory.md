@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: branch consolidation evidence and cleanup decisions
-Last updated: 2026-08-12
+Last updated: 2026-08-14
 Source of truth: yes
 
 Owns:
@@ -18,6 +18,8 @@ Defers to:
 Launch 00 was based on current `origin/main` at `9ef4a0dca3b61dfa811c928223d4f3497f11fe8e`, the squash merge of PR #34. The implementation branch is `codex/launch-00-baseline-governance`; old feature branches are not valid bases.
 
 Before Launch 00, `main` had no protection or ruleset. Launch 00 enabled strict required checks, pull-request flow, admin enforcement, conversation resolution, linear history, no force push, no deletion, squash-only merge, automatic merged-branch cleanup, secret scanning, push protection, and Dependabot security updates. Open dependency PRs were #26 through #33. All were inspected against current `main`; none may be merged with a stale lockfile.
+
+The prior table is the audited decision record for PRs #26–#33, not a claim that no later bot branches exist. At the 2026-08-14 Slice 00 refresh, the only product branch in scope is `codex/launch-00-baseline-governance`. Fresh Dependabot branches for pnpm/action-setup, eslint, fastify-raw-body, @fastify/rate-limit, globals, and rolldown's Darwin binding are unrelated to Slice 00 and are neither merged nor normalized here. Each must be reviewed independently from current `main`; Slice 00 deletes only its own branch after protected squash merge.
 
 Because `mariospeterman` is the only qualified repository administrator, the required approval count is zero; all automated checks and administrator enforcement still apply. Emergency recovery requires a documented incident, temporary explicit protection change by the owner, an audited pull request or corrective commit, and immediate restoration of these settings. There is no ordinary administrator bypass.
 

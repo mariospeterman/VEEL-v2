@@ -1,8 +1,8 @@
-# Veel V2 Stack Decision
+# WeVid V2 Stack Decision
 
 Status: accepted
 Scope: platform stack
-Last updated: 2026-06-03
+Last updated: 2026-08-14
 Source of truth: yes
 
 Owns:
@@ -25,19 +25,19 @@ Non-goals:
 ```text
 Web:        Next.js PWA, TypeScript, Tailwind v4, TanStack Query, Zustand
 API:        Fastify TypeScript
-DB/Auth:    Supabase Postgres + Supabase Auth
+DB/Auth:    Supabase Postgres/RLS + optional Supabase Auth recovery linking
 Realtime:   Supabase Realtime, selectively
 Workers:    TypeScript worker runtime with pg-boss launch default; BullMQ/Redis only when measured scale requires it
 Contracts:  OpenAPI generated from schemas
 Payments:   Solana JS + Solana Pay; Solana Subscriptions/Allowances after staging approval
-Wallets:    Embedded wallet provider + Solana wallet adapter
+Wallets:    Privy embedded Solana wallet + intentional Solana Wallet Standard adapters
 Media:      Bunny Stream VOD, Livepeer live/replay
 PM:         pnpm workspaces
 Runtime:    Node.js LTS first; Bun evaluated later
 Deploy:     Docker first; serverless/edge only for proven slices
 ```
 
-Wallet onboarding uses a provider-first embedded wallet integration for mainstream email/social/passkey users and the Solana wallet adapter for Phantom/Solflare/external wallets. The embedded wallet provider must be noncustodial/user-controlled; it must not create a Veel-controlled custodial balance.
+Wallet onboarding uses Privy for mainstream email/social/passkey users and the existing Solana Wallet Standard/wallet-adapter boundary for intentional external wallets. Both paths sign the same WeVid backend challenge and converge on one application-session authority. The embedded wallet mode must be noncustodial/user-controlled and must not create a WeVid-controlled balance. Turnkey is an unbundled fallback only.
 
 ## Official Documentation Checked
 
@@ -124,14 +124,13 @@ authenticate -> validate -> authorize -> service/action -> resource/response
 Use Supabase for:
 
 - Postgres
-- Auth
-- JWT/session issuance
+- optional recovery/account-link identity for users who benefit from it, primarily external-wallet-only users
 - RLS enforcement for client-visible realtime rows
 - Realtime Broadcast/Presence/Postgres Changes where safe
 
 Do not use Supabase to bypass backend policy.
 
-Service-role key is backend-only. Frontend only uses anon/public key and user JWT under RLS.
+The backend-issued WeVid application session is canonical after either wallet path. Supabase recovery must link to the existing WeVid user through a short-lived, audited backend intent, reject collisions, and never create a second profile or embedded wallet. Service-role/secret keys are backend-only. Frontend only uses publishable keys and scoped user sessions under RLS.
 
 ## Serverless Decision
 

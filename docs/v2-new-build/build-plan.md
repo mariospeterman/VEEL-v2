@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: canonical implementation and production-completion order
-Last updated: 2026-08-12
+Last updated: 2026-08-14
 Source of truth: yes
 
 Owns:
@@ -48,7 +48,7 @@ The historical milestones below remain useful implementation context. New produc
 | --- | --- | --- |
 | 00 | Baseline, governance, and truth lock | Implemented on `codex/launch-00-baseline-governance`; merge gated by required checks |
 | 01 | Executable contracts and platform security boundary | Not started |
-| 02 | Canonical verification and earnings-readiness authority | Not started |
+| 02 | Three-step onboarding, canonical session, optional recovery, and earnings readiness | Not started |
 | 03 | VOD creation, multi-performer enrollment, and moderation operations | Not started |
 | 04 | Core social graph and real feeds | Not started |
 | 05 | Realtime messages and notifications | Not started |
@@ -58,8 +58,9 @@ The historical milestones below remain useful implementation context. New produc
 | 09 | Enterprise managed creators | Not started |
 | 10 | Frontend system, accessibility, cross-browser, and PWA completion | Not started |
 | 11 | Actual deployment, observability, recovery, and legal launch | Not started |
-| 12 | Adult live launch gate | Not started; explicitly disabled |
-| 13 | Real AI/MCP capability | Not started |
+| Post-core | Expanded Mutuals, Shopify-connected physical commerce, adult live, full AI/MCP, NFT/transferable passes, resale, custom contracts, and uncommitted advanced Enterprise work | Separately gated; disabled or absent |
+
+Core SFW launch requires Slices 00–07 and 10–11. Slice 08 is required only before recurring platform plans or Profile Memberships are sold. Slice 09 is required only before Enterprise customers are onboarded. Existing safe foundations for conditional/post-core work may remain, but incomplete capabilities stay hidden, disabled, and fail-closed.
 
 Each completed slice requires the actual UI-to-database/provider path, authorization and runtime validation, focused unit and real-Postgres integration proof, browser proof, operational recovery, canonical docs updates, and redacted provider staging evidence when a provider is involved. Mocks prove application logic only.
 
