@@ -11,3 +11,24 @@ export class ProfileHandleConflictError extends Error {
     this.name = "ProfileHandleConflictError";
   }
 }
+
+export class CreatorOnboardingIdempotencyConflictError extends Error {
+  constructor() {
+    super("CREATOR_ONBOARDING_IDEMPOTENCY_CONFLICT");
+    this.name = "CreatorOnboardingIdempotencyConflictError";
+  }
+}
+
+export class CreatorOnboardingWalletConflictError extends Error {
+  constructor() {
+    super("CREATOR_ONBOARDING_WALLET_CONFLICT");
+    this.name = "CreatorOnboardingWalletConflictError";
+  }
+}
+
+export class CreatorOnboardingTermsRequiredError extends Error {
+  constructor() {
+    super("CREATOR_ONBOARDING_TERMS_REQUIRED");
+    this.name = "CreatorOnboardingTermsRequiredError";
+  }
+}

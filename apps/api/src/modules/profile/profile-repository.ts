@@ -5,7 +5,13 @@ import { ProfileRepositoryConfigurationError } from "./profile-errors.js";
 import { createProfileMutationRepositoryMethods } from "./profile-mutation-repository.js";
 import type { ProfileRepository } from "./types.js";
 
-export { ProfileHandleConflictError, ProfileRepositoryConfigurationError } from "./profile-errors.js";
+export {
+  CreatorOnboardingIdempotencyConflictError,
+  CreatorOnboardingTermsRequiredError,
+  CreatorOnboardingWalletConflictError,
+  ProfileHandleConflictError,
+  ProfileRepositoryConfigurationError
+} from "./profile-errors.js";
 
 export function createPostgresProfileRepository(database?: string | PostgresSql): ProfileRepository {
   if (!database) {

@@ -141,7 +141,7 @@ export async function registerEventAccessPassRoutes(
         referralToken: null
       });
 
-      await options.eventRepository.recordAccessPassPurchaseRequest({
+      const reserved = await options.eventRepository.recordAccessPassPurchaseRequest({
         supabaseUserId: access.supabaseUserId,
         eventId,
         accessPassTypeId: accessPassTypeId,
@@ -149,6 +149,10 @@ export async function registerEventAccessPassRoutes(
         amountMinor: offer.accessPassType.priceMinor,
         currency: "SOL"
       });
+
+      if (!reserved) {
+        return reply.code(409).send(conflictResponse("Access Pass inventory is no longer available"));
+      }
 
       return reply.code(201).send({
         state: "payment_required",

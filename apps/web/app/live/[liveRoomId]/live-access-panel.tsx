@@ -48,7 +48,7 @@ export function LiveAccessPanel({ room }: { room: LiveRoom }) {
       ) : null}
       <div className="mt-4">
         <PaymentHandoffPanel
-          createIntent={() => createLiveEventAccessIntent(room.id)}
+          createIntent={(idempotencyKey) => createLiveEventAccessIntent(room.id, idempotencyKey)}
           ctaLabel="Get event access"
           disabled={room.accessState === "allowed"}
           idleCopy="The backend creates one server-priced wallet request. Access changes only after settlement verification."

@@ -81,6 +81,32 @@ export async function publicMutation<T>(
   return (await response.json()) as T;
 }
 
+export async function publicCapabilityMutation<T>(url: string, body: unknown): Promise<T> {
+  const capabilityUrl = new URL(url);
+  const safeLocalhost =
+    capabilityUrl.hostname === "localhost" || capabilityUrl.hostname === "127.0.0.1";
+  if (capabilityUrl.protocol !== "https:" && !(safeLocalhost && capabilityUrl.protocol === "http:")) {
+    throw new ApiMutationError("Wallet request is unavailable", 503);
+  }
+
+  const response = await mutationFetch(capabilityUrl, {
+    body: JSON.stringify(body),
+    cache: "no-store",
+    credentials: "omit",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json"
+    },
+    method: "POST"
+  });
+
+  if (!response.ok) {
+    throw new ApiMutationError(await errorMessage(response), response.status);
+  }
+
+  return (await response.json()) as T;
+}
+
 async function sendAuthenticatedMutation(
   path: string,
   method: "DELETE" | "PATCH" | "POST",

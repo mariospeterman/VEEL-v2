@@ -1,16 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import type { Event } from "@/api-client";
 import {
   ApiMutationError,
-  createEventAccessPassIntent,
-  getPaymentTransactionRequest,
-  type PaymentIntent,
-  type TransactionRequest
+  createEventAccessPassIntent
 } from "@/api-mutations";
-import { safeMutationMessage } from "@/api-errors";
 import { formatAssetAmount } from "@/format-asset-amount";
+import { PaymentHandoffPanel } from "@/payment-handoff-panel";
 
 interface EventAccessPassPanelProps {
   event: Event;
@@ -41,47 +37,17 @@ function EventAccessPassOption({
   event: Event;
   accessPassType: Event["accessPassTypes"][number];
 }) {
-  const [state, setState] = useState<"idle" | "creating" | "ready" | "error">("idle");
-  const [message, setMessage] = useState<string | null>(null);
-  const [intent, setIntent] = useState<PaymentIntent | null>(null);
-  const [transaction, setTransaction] = useState<TransactionRequest | null>(null);
-
-  async function startAccessPass() {
-    setState("creating");
-    setMessage(null);
-    setIntent(null);
-    setTransaction(null);
-
-    try {
+  async function createAccessPassPayment(idempotencyKey: string) {
       const result = await createEventAccessPassIntent(event.id, {
         accessPassTypeId: accessPassType.id
-      });
+      }, idempotencyKey);
 
-      if (result.state === "approval_required") {
-        setState("ready");
-        setMessage("This Access Pass requires backend approval before payment or check-in.");
-        return;
-      }
-
-      if (result.state === "free_granted") {
-        setState("ready");
-        setMessage("The backend granted this Access Pass. Refresh activity to see the pass projection.");
-        return;
-      }
+      if (result.state === "approval_required" || result.state === "free_granted") return null;
 
       if (!result.paymentIntent) {
-        throw new ApiMutationError("Access Pass payment was required but no payment intent was returned.");
+        throw new ApiMutationError("Access Pass checkout is unavailable.");
       }
-
-      const transactionRequest = await getPaymentTransactionRequest(result.paymentIntent.id);
-      setIntent(result.paymentIntent);
-      setTransaction(transactionRequest);
-      setState("ready");
-      setMessage("Open the wallet request. Event Access changes only after backend settlement verification.");
-    } catch (error) {
-      setState("error");
-      setMessage(errorMessage(error));
-    }
+      return result.paymentIntent;
   }
 
   return (
@@ -108,42 +74,14 @@ function EventAccessPassOption({
         <Fact label="Access" value={event.accessRule} />
       </div>
       <div className="mt-4 grid gap-3 border-t border-(--line) pt-4">
-        <button
-          className="rounded bg-(--foreground) px-3 py-2 text-center text-sm font-semibold text-(--background) disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={state === "creating" || accessPassType.state !== "active" || accessPassType.remaining <= 0}
-          onClick={startAccessPass}
-          type="button"
-        >
-          {state === "creating" ? "Creating Access Pass intent" : "Get Access Pass"}
-        </button>
-
-        {intent ? (
-          <div className="grid gap-2 rounded border border-(--line) bg-(--panel) p-3 text-sm">
-            <Fact label="Amount" value={formatAssetAmount(intent.amountMinor, intent.currency)} />
-            <Fact label="Intent" value={intent.state} />
-          </div>
-        ) : null}
-
-        {transaction ? (
-          <a
-            className="rounded border border-(--line) px-3 py-2 text-center text-sm font-semibold text-(--foreground)"
-            href={transaction.transactionRequestUrl}
-          >
-            Open wallet request
-          </a>
-        ) : null}
-
-        {message ? (
-          <p
-            className={`rounded border px-3 py-2 text-sm ${
-              state === "error"
-                ? "border-[#7f1d1d] bg-[#450a0a] text-[#fecaca]"
-                : "border-(--line) bg-(--panel) text-(--muted)"
-            }`}
-          >
-            {message}
-          </p>
-        ) : null}
+        <PaymentHandoffPanel
+          createIntent={createAccessPassPayment}
+          ctaLabel="Get Access Pass"
+          disabled={accessPassType.state !== "active" || accessPassType.remaining <= 0}
+          idleCopy="Capacity is reserved briefly when the backend creates a paid pass checkout. Review and approve before it expires."
+          pendingLabel="Reserving Access Pass"
+          readyCopy="The Access Pass request is reflected by the backend. Paid access is issued only after settlement verification."
+        />
       </div>
     </article>
   );
@@ -156,8 +94,4 @@ function Fact({ label, value }: { label: string; value: string }) {
       <p className="mt-1 truncate font-medium">{value}</p>
     </div>
   );
-}
-
-function errorMessage(error: unknown) {
-  return safeMutationMessage(error, "Access Pass");
 }

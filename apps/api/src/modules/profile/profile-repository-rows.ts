@@ -60,6 +60,7 @@ export interface CreatorOnboardingRow {
   kyc_state: "not_required" | "required" | "pending" | "verified" | "failed";
   tax_profile_state: "not_required" | "required" | "pending" | "verified";
   earnings_recipient_wallet_id: string | null;
+  earnings_terms_version: "wevid-creator-earnings-v1" | null;
   support_enabled: boolean;
   content_unlocks_enabled: boolean;
   live_passes_enabled: boolean;

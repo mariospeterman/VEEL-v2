@@ -44,7 +44,6 @@ const nextConfig: NextConfig = {
       { source: "/studio", destination: "/app/studio", permanent: false },
       { source: "/subscriptions", destination: "/app/subscriptions", permanent: false },
       { source: "/wallet", destination: "/app/wallet", permanent: false },
-      { source: "/app/profile/:handle", destination: "/profile/:handle", permanent: false },
       { source: "/app/media/:contentId", destination: "/content/:contentId", permanent: false },
       { source: "/app/stream/:liveRoomId", destination: "/live/:liveRoomId", permanent: false },
       { source: "/events/:eventId", destination: "/event-access/:eventId", permanent: false },

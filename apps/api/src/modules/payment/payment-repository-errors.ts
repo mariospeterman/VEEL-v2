@@ -19,6 +19,13 @@ export class PaymentRecipientNotReadyError extends Error {
   }
 }
 
+export class PaymentConsentConflictError extends Error {
+  constructor() {
+    super("PAYMENT_CONSENT_CONFLICT");
+    this.name = "PaymentConsentConflictError";
+  }
+}
+
 export function isRecipientMonetisationPolicyError(error: unknown): error is { code: "P0001"; message: string } {
   return Boolean(
     error &&

@@ -81,7 +81,7 @@ export interface EventRepository {
   findEvent(input: FindEventInput): Promise<Event | null>;
   updateEvent(input: UpdateEventInput): Promise<Event | null>;
   findAccessPassOffer(input: FindAccessPassOfferInput): Promise<AccessPassOffer | null>;
-  recordAccessPassPurchaseRequest(input: RecordAccessPassPurchaseRequestInput): Promise<void>;
+  recordAccessPassPurchaseRequest(input: RecordAccessPassPurchaseRequestInput): Promise<boolean>;
   grantFreeAccessPass(input: GrantFreeAccessPassInput): Promise<AccessPass | null>;
   createAccessPassRequest(input: CreateAccessPassRequestInput): Promise<AccessPassRequest | null>;
   checkInAccessPass(input: CheckInAccessPassInput): Promise<AccessPass | null>;

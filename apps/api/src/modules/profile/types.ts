@@ -6,6 +6,8 @@ export type CreatorProfileResource = components["schemas"]["CreatorProfile"];
 export type CreatorMonetisationDashboardResource =
   components["schemas"]["CreatorMonetisationDashboard"];
 export type CreatorOnboardingResource = components["schemas"]["CreatorOnboarding"];
+export type UpdateCreatorOnboardingRequest =
+  components["schemas"]["UpdateCreatorOnboardingRequest"];
 
 export interface UpsertMyProfileInput {
   handle: string;
@@ -14,6 +16,14 @@ export interface UpsertMyProfileInput {
   bio?: string | undefined;
   locationLabel?: string | undefined;
   links?: components["schemas"]["ProfileLink"][] | undefined;
+}
+
+export interface UpdateMyCreatorOnboardingInput {
+  supabaseUserId: string;
+  idempotencyKey: string;
+  requestHash: string;
+  expectedWalletChain: "solana_devnet" | "solana_mainnet";
+  request: UpdateCreatorOnboardingRequest;
 }
 
 export interface ProfileRepository {
@@ -27,5 +37,8 @@ export interface ProfileRepository {
     supabaseUserId: string
   ): Promise<CreatorMonetisationDashboardResource | null>;
   getMyCreatorOnboarding(supabaseUserId: string): Promise<CreatorOnboardingResource | null>;
+  updateMyCreatorOnboarding?(
+    input: UpdateMyCreatorOnboardingInput
+  ): Promise<CreatorOnboardingResource | null>;
   close?(): Promise<void>;
 }

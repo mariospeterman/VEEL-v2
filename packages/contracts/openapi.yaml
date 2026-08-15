@@ -345,6 +345,22 @@ paths:
         "200": { $ref: "#/components/responses/CreatorOnboarding" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+    patch:
+      operationId: updateMyCreatorOnboarding
+      tags: [Profiles]
+      summary: Configure the canonical noncustodial Enable Earnings boundary
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/UpdateCreatorOnboarding"
+      responses:
+        "200": { $ref: "#/components/responses/CreatorOnboarding" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/profiles/{handle}:
     get:
       operationId: getProfileByHandle
@@ -1369,9 +1385,30 @@ paths:
         - $ref: "#/components/parameters/PaymentIntentId"
       responses:
         "200": { $ref: "#/components/responses/TransactionRequest" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/payments/intents/{paymentIntentId}/consent:
+    post:
+      operationId: acceptPaymentIntentTerms
+      tags: [Payments]
+      summary: Record explicit checkout terms and immediate-access acknowledgement
+      parameters:
+        - $ref: "#/components/parameters/PaymentIntentId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/AcceptPaymentIntentTerms"
+      responses:
+        "200": { $ref: "#/components/responses/PaymentIntent" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/payments/checkout/{checkoutToken}:
     parameters:
@@ -1417,6 +1454,8 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/webhooks/solana-indexer:
     post:
@@ -2637,7 +2676,9 @@ components:
     CreateDirectConversation: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateDirectConversationRequest" } } } }
     RespondToMessageRequest: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RespondToMessageRequest" } } } }
     CreatePaidMessageIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreatePaidMessageIntentRequest" } } } }
+    UpdateCreatorOnboarding: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateCreatorOnboardingRequest" } } } }
     CreatePaymentIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreatePaymentIntentRequest" }, examples: { support: { value: { productType: support, targetId: "00000000-0000-4000-8000-000000000001", amountMinor: 500000 } } } } } }
+    AcceptPaymentIntentTerms: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AcceptPaymentIntentTermsRequest" } } } }
     SubmitPaymentSignature: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SubmitPaymentSignatureRequest" } } } }
     CreateTransactionRequest: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/TransactionRequestPostRequest" } } } }
     SolanaIndexerWebhook: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SolanaIndexerWebhookPayload" } } } }
@@ -3146,14 +3187,22 @@ components:
         blockedReasons: { type: array, items: { type: string } }
     CreatorOnboarding:
       type: object
-      required: [state, canStartEarning, readinessScore, policyBoundary, steps]
+      required: [state, canStartEarning, readinessScore, policyBoundary, configuration, steps]
       properties:
         state: { type: string, enum: [ready, action_required, review_required, blocked] }
         canStartEarning: { type: boolean }
         readinessScore: { type: integer, minimum: 0, maximum: 100 }
         nextAction: { type: string, nullable: true }
         policyBoundary: { type: string, enum: [creator_records_only_no_balances_payout_queue_or_social_priority] }
+        configuration: { $ref: "#/components/schemas/CreatorOnboardingConfiguration" }
         steps: { type: array, items: { $ref: "#/components/schemas/CreatorOnboardingStep" } }
+    CreatorOnboardingConfiguration:
+      type: object
+      required: [recipientWalletId, earningsTermsVersion, products]
+      properties:
+        recipientWalletId: { type: string, format: uuid, nullable: true }
+        earningsTermsVersion: { type: string, enum: [wevid-creator-earnings-v1], nullable: true }
+        products: { $ref: "#/components/schemas/CreatorProductSelection" }
     CreatorOnboardingStep:
       type: object
       required: [key, label, state, required]
@@ -3165,6 +3214,24 @@ components:
         state: { type: string, enum: [complete, action_required, review_required, blocked, not_required] }
         required: { type: boolean }
         actionHref: { type: string, nullable: true }
+    UpdateCreatorOnboardingRequest:
+      type: object
+      additionalProperties: false
+      required: [recipientWalletId, earningsTermsVersion, earningsTermsAccepted, products]
+      properties:
+        recipientWalletId: { type: string, format: uuid }
+        earningsTermsVersion: { type: string, enum: [wevid-creator-earnings-v1] }
+        earningsTermsAccepted: { type: boolean, enum: [true] }
+        products: { $ref: "#/components/schemas/CreatorProductSelection" }
+    CreatorProductSelection:
+      type: object
+      additionalProperties: false
+      required: [support, contentUnlocks, eventAccessAndLive, paidMessages]
+      properties:
+        support: { type: boolean }
+        contentUnlocks: { type: boolean }
+        eventAccessAndLive: { type: boolean }
+        paidMessages: { type: boolean }
     CreatorEarningsSummary:
       type: object
       required: [currency, creatorEarningsMinor, platformFeesMinor, referralCommissionsMinor, confirmedPaymentCount]
@@ -3932,6 +3999,14 @@ components:
       required: [signature]
       properties:
         signature: { type: string }
+    AcceptPaymentIntentTermsRequest:
+      type: object
+      additionalProperties: false
+      required: [termsVersion, withdrawalWaiverVersion, immediateAccessAcknowledged]
+      properties:
+        termsVersion: { type: string, minLength: 1, maxLength: 80 }
+        withdrawalWaiverVersion: { type: string, minLength: 1, maxLength: 80 }
+        immediateAccessAcknowledged: { type: boolean }
     SolanaIndexerWebhookPayload:
       description: Helius enhanced webhook payload. Raw provider data is accepted server-side only and never exposed in frontend resources.
       oneOf:
@@ -3978,9 +4053,17 @@ components:
         signature: { type: string }
     TransactionRequest:
       type: object
-      required: [transactionRequestUrl, expiresAt]
+      required: [transactionRequestUrl, checkoutUrl, qrDataUrl, expiresAt]
       properties:
         transactionRequestUrl: { type: string, format: uri }
+        checkoutUrl:
+          type: string
+          format: uri
+          description: Short-lived capability URL used only by the selected wallet client.
+        qrDataUrl:
+          type: string
+          pattern: "^data:image/svg\\+xml;base64,"
+          description: Commerce Kit generated QR fallback for the same short-lived transaction request.
         expiresAt: { type: string, format: date-time }
     TransactionRequestPostRequest:
       type: object

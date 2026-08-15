@@ -46,8 +46,8 @@ test.beforeEach(async ({ context }) => {
   ]);
 });
 
-test("covers authenticated app access to profile wallet age home create and unlock", async ({ page }) => {
-  test.setTimeout(70_000);
+test("covers authenticated earnings setup, creation, and one-time checkout", async ({ page }) => {
+  test.setTimeout(100_000);
 
   await gotoUntilVisible(page, "/app/home", () => page.getByRole("link", { name: "WeVid app home" }).first());
   await expect(page.getByRole("heading", { name: "Your feed" })).toBeVisible();
@@ -67,6 +67,15 @@ test("covers authenticated app access to profile wallet age home create and unlo
   await expect(page.getByText("appeal pending")).toBeVisible();
   await expect(page.getByText("Readiness score").locator("..")).toContainText("92%");
   await expect(page.getByText("no balances or social priority")).toBeVisible();
+
+  await page.goto("/app/profile/earnings");
+  await expect(page.getByRole("heading", { name: "Enable earnings" })).toBeVisible();
+  await expect(page.getByLabel("Recipient wallet")).toHaveValue(wallet().id);
+  await expect(page.getByRole("checkbox", { name: /Support/ })).toBeChecked();
+  await expect(page.getByRole("checkbox", { name: /Content unlocks/ })).toBeChecked();
+  await page.getByRole("checkbox", { name: /Creator Earnings Terms/ }).check();
+  await page.getByRole("button", { name: "Update earnings" }).click();
+  await expect(page.getByText("Earnings are enabled.")).toBeVisible();
 
   await page.goto("/app/wallet");
   await expect(page.getByRole("heading", { name: "Funding and receipts" })).toBeVisible();
@@ -152,14 +161,18 @@ test("covers authenticated app access to profile wallet age home create and unlo
   await page.goto(`/content/${contentId}`);
   await expect(page.getByRole("heading", { name: "Media viewer" })).toBeVisible();
   await expect(page.getByText("Access required")).toBeVisible();
-  await page.getByRole("button", { name: "Start unlock" }).evaluate((element) => {
-    (element as HTMLButtonElement).click();
-  });
-  await expect(page.getByText("Open the wallet request. Access changes only after backend settlement verification.")).toBeVisible();
-  await expect(page.getByText("25 SOL")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Open wallet request" })).toHaveAttribute(
+  await page.getByRole("button", { name: "Unlock content" }).click();
+  await expect(page.getByText("The wallet approval is not payment proof.")).toBeVisible();
+  await expect(page.getByText("25 SOL", { exact: true })).toBeVisible();
+  await expect(page.getByText("21.25 SOL", { exact: true })).toBeVisible();
+  await page.getByLabel(/I accept the checkout terms/).check();
+  await page.getByLabel(/I request immediate digital access/).check();
+  await page.getByRole("button", { name: "Continue to wallet" }).click();
+  await expect(page.getByText("Scan the QR code or open the wallet request.")).toBeVisible();
+  await expect(page.getByRole("img", { name: "Wallet checkout QR code" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open wallet" })).toHaveAttribute(
     "href",
-    "https://wallet.example.test/request/content-unlock"
+    "solana:https://wallet.example.test/request/content-unlock"
   );
 
   await page.goto("/app/activity");
@@ -173,6 +186,8 @@ test("covers authenticated app access to profile wallet age home create and unlo
   expect(protectedRequests.every((request) => request.authorization === `Bearer ${e2eToken}`)).toBe(true);
   expect(requests.some((request) => request.method === "POST" && request.path === "/v1/content" && request.idempotencyKey)).toBe(true);
   expect(requests.some((request) => request.method === "POST" && request.path === `/v1/content/${contentId}/unlock-intents` && request.idempotencyKey)).toBe(true);
+  expect(requests.some((request) => request.method === "POST" && request.path === `/v1/payments/intents/${paymentIntentId}/consent` && request.idempotencyKey)).toBe(true);
+  expect(requests.some((request) => request.method === "PATCH" && request.path === "/v1/profiles/me/creator-onboarding" && request.idempotencyKey)).toBe(true);
   expect(requests.some((request) => request.method === "GET" && request.path === "/v1/activity/payments")).toBe(true);
 
   await page.goto("/app/profile");
@@ -242,6 +257,11 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
   }
 
   if (method === "GET" && url.pathname === "/v1/profiles/me/creator-onboarding") {
+    sendJson(response, 200, creatorOnboarding());
+    return;
+  }
+
+  if (method === "PATCH" && url.pathname === "/v1/profiles/me/creator-onboarding") {
     sendJson(response, 200, creatorOnboarding());
     return;
   }
@@ -385,9 +405,16 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
     return;
   }
 
+  if (method === "POST" && url.pathname === `/v1/payments/intents/${paymentIntentId}/consent`) {
+    sendJson(response, 200, paymentIntent());
+    return;
+  }
+
   if (method === "GET" && url.pathname === `/v1/payments/intents/${paymentIntentId}/transaction-request`) {
     sendJson(response, 200, {
-      transactionRequestUrl: "https://wallet.example.test/request/content-unlock",
+      transactionRequestUrl: "solana:https://wallet.example.test/request/content-unlock",
+      checkoutUrl: "https://wallet.example.test/request/content-unlock",
+      qrDataUrl: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiLz48L3N2Zz4=",
       expiresAt: "2026-06-12T10:45:00.000Z"
     });
     return;
@@ -569,6 +596,16 @@ function creatorOnboarding() {
     readinessScore: 92,
     nextAction: null,
     policyBoundary: "creator_records_only_no_balances_payout_queue_or_social_priority",
+    configuration: {
+      recipientWalletId: wallet().id,
+      earningsTermsVersion: "wevid-creator-earnings-v1",
+      products: {
+        support: true,
+        contentUnlocks: true,
+        eventAccessAndLive: false,
+        paidMessages: true
+      }
+    },
     steps: [
       { key: "profile", label: "Profile", state: "complete", required: true, actionHref: "/app/profile" },
       { key: "wallet", label: "Wallet", state: "complete", required: true, actionHref: "/app/wallet" },
@@ -687,8 +724,23 @@ function paymentIntent() {
   return {
     id: paymentIntentId,
     productType: "content_unlock",
-    amountMinor: 25,
+    amountMinor: 25_000_000_000,
     currency: "SOL",
-    state: "transaction_requested"
+    state: "pending",
+    settlementKind: "creator_split",
+    creatorSideProceedsMinor: 21_250_000_000,
+    creatorAmountMinor: 21_250_000_000,
+    enterpriseManagementAmountMinor: 0,
+    platformFeeGrossMinor: 3_750_000_000,
+    platformFeeAmountMinor: 3_750_000_000,
+    referralAmountMinor: 0,
+    refundPolicy: {
+      termsVersion: "veel-terms-v1",
+      withdrawalWaiverVersion: "instant-digital-access-v1",
+      withdrawalWaiverRequired: true,
+      withdrawalWaiverAcceptedAt: null,
+      durableConfirmationRequired: true,
+      refundValueBasis: "original_crypto_amount"
+    }
   };
 }

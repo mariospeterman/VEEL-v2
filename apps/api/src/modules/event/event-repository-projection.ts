@@ -42,7 +42,13 @@ export async function eventFromRows(
       tt.price_minor,
       tt.currency,
       tt.capacity,
-      count(te.id) filter (where te.state in ('active', 'checked_in')) as issued_count,
+      count(te.id) filter (where te.state in ('active', 'checked_in')) + (
+        select count(*)
+        from event_access_purchase_requests eapr
+        where eapr.access_pass_type_id = tt.id
+          and eapr.state = 'pending_payment'
+          and eapr.reserved_until > now()
+      ) as issued_count,
       tt.sale_starts_at,
       tt.sale_ends_at,
       tt.per_user_limit,

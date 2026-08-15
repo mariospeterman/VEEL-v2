@@ -35,21 +35,6 @@ export function createSolanaReferenceAddress(): string {
   return Keypair.generate().publicKey.toBase58();
 }
 
-export function buildSolanaPayTransactionRequestUrl(input: {
-  apiUrl: string;
-  checkoutToken: string;
-}): string {
-  const requestUrl = new URL(
-    `/v1/payments/checkout/${encodeURIComponent(input.checkoutToken)}`,
-    input.apiUrl
-  ).toString();
-  return `solana:${requestUrl}`;
-}
-
-export function buildStoredSolanaPayTransactionRequestUrl(apiUrl: string): string {
-  return `solana:${new URL("/v1/payments/checkout/[redacted]", apiUrl).toString()}`;
-}
-
 export function createPaymentCheckoutToken(): string {
   return randomBytes(32).toString("base64url");
 }

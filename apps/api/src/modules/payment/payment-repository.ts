@@ -5,11 +5,13 @@ export { createPostgresPaymentEvidenceRepository } from "./payment-evidence-repo
 import {
   isRecipientMonetisationPolicyError,
   PaymentIdempotencyConflictError,
+  PaymentConsentConflictError,
   PaymentRecipientNotReadyError,
   PaymentRepositoryConfigurationError
 } from "./payment-repository-errors.js";
 export {
   PaymentIdempotencyConflictError,
+  PaymentConsentConflictError,
   PaymentRecipientNotReadyError,
   PaymentRepositoryConfigurationError
 } from "./payment-repository-errors.js";
@@ -41,6 +43,9 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
         throw new PaymentRepositoryConfigurationError();
       },
       async findCheckoutIntent() {
+        throw new PaymentRepositoryConfigurationError();
+      },
+      async acceptCheckoutTerms() {
         throw new PaymentRepositoryConfigurationError();
       },
       async recordTransactionRequest() {
@@ -402,6 +407,120 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
       `;
 
       return rows[0] ? toStoredPaymentIntent(rows[0]) : null;
+    },
+    async acceptCheckoutTerms(input) {
+      return sql.begin(async (transaction) => {
+        const actorRows = await transaction<{ id: string }[]>`
+          select id
+          from users
+          where supabase_user_id = ${input.supabaseUserId}
+            and state = 'active'
+          limit 1
+        `;
+        const actor = actorRows[0];
+        if (!actor) return null;
+
+        const receiptRows = await transaction<{
+          actor_user_id: string | null;
+          scope: string;
+          request_hash: string;
+          response_body: { paymentIntentId?: string } | null;
+        }[]>`
+          select actor_user_id, scope, request_hash, response_body
+          from idempotency_keys
+          where key = ${input.idempotencyKey}
+          limit 1
+        `;
+        const receipt = receiptRows[0];
+
+        if (receipt) {
+          if (
+            receipt.actor_user_id !== actor.id ||
+            receipt.scope !== 'payment_checkout_consent' ||
+            receipt.request_hash !== input.requestHash ||
+            receipt.response_body?.paymentIntentId !== input.paymentIntentId
+          ) {
+            throw new PaymentIdempotencyConflictError();
+          }
+
+          const replayRows = await transaction<PaymentIntentRow[]>`
+            select *
+            from payment_intents
+            where id = ${input.paymentIntentId}
+              and user_id = ${actor.id}
+            limit 1
+          `;
+          return replayRows[0] ? toStoredPaymentIntent(replayRows[0]) : null;
+        }
+
+        const intentRows = await transaction<PaymentIntentRow[]>`
+          select pi.*
+          from payment_intents pi
+          where pi.id = ${input.paymentIntentId}
+            and pi.user_id = ${actor.id}
+          for update
+        `;
+        const intent = intentRows[0];
+        if (!intent) return null;
+
+        if (
+          intent.terms_version !== input.termsVersion ||
+          intent.withdrawal_waiver_version !== input.withdrawalWaiverVersion ||
+          (intent.withdrawal_waiver_required && !input.immediateAccessAcknowledged)
+        ) {
+          throw new PaymentConsentConflictError();
+        }
+
+        const updatedRows = await transaction<PaymentIntentRow[]>`
+          update payment_intents
+          set
+            withdrawal_waiver_accepted_at = case
+              when withdrawal_waiver_required then coalesce(withdrawal_waiver_accepted_at, now())
+              else withdrawal_waiver_accepted_at
+            end,
+            updated_at = now()
+          where id = ${intent.id}
+            and expires_at > now()
+            and state in ('pending', 'transaction_requested')
+          returning *
+        `;
+        const updated = updatedRows[0];
+        if (!updated) throw new PaymentConsentConflictError();
+
+        await transaction`
+          insert into audit_events (
+            id, actor_user_id, subject_type, subject_id, action, metadata, idempotency_key
+          ) values (
+            ${randomUUID()},
+            ${actor.id},
+            'payment_intent',
+            ${intent.id},
+            'payment_checkout_terms_accepted',
+            ${transaction.json({
+              termsVersion: input.termsVersion,
+              withdrawalWaiverVersion: input.withdrawalWaiverVersion,
+              immediateAccessAcknowledged: input.immediateAccessAcknowledged
+            })},
+            ${input.idempotencyKey}
+          )
+        `;
+
+        await transaction`
+          insert into idempotency_keys (
+            key, actor_user_id, scope, request_hash, response_status, response_body, expires_at
+          ) values (
+            ${input.idempotencyKey},
+            ${actor.id},
+            'payment_checkout_consent',
+            ${input.requestHash},
+            200,
+            ${transaction.json({ paymentIntentId: intent.id })},
+            now() + interval '24 hours'
+          )
+        `;
+
+        return toStoredPaymentIntent(updated);
+      });
     },
     async recordTransactionRequest(input) {
       const rows = await sql<{ expires_at: Date }[]>`

@@ -2,7 +2,7 @@ import type { CreatorOnboardingResource } from "./types.js";
 import type { CreatorOnboardingRow } from "./profile-repository-rows.js";
 
 export function toCreatorOnboarding(row: CreatorOnboardingRow): CreatorOnboardingResource {
-  const hasProfile = Boolean(row.handle && row.display_name);
+  const hasProfile = Boolean(row.handle);
   const hasWallet = Boolean(row.primary_wallet_id) || Number(row.wallet_count) > 0;
   const productsEnabled = [
     row.support_enabled,
@@ -18,49 +18,49 @@ export function toCreatorOnboarding(row: CreatorOnboardingRow): CreatorOnboardin
       label: "Profile",
       state: hasProfile ? "complete" : "action_required",
       required: true,
-      actionHref: hasProfile ? null : "/settings"
+      actionHref: hasProfile ? null : "/app/settings"
     },
     {
       key: "age",
       label: "Age verification",
       state: stateForAge(row.age_state),
       required: true,
-      actionHref: row.age_state === "verified" ? null : "/age"
+      actionHref: row.age_state === "verified" ? null : "/?mode=onboarding&step=age&next=%2Fapp%2Fprofile%2Fearnings"
     },
     {
       key: "wallet",
       label: "Wallet",
       state: hasWallet ? "complete" : "action_required",
       required: true,
-      actionHref: hasWallet ? null : "/wallet"
+      actionHref: hasWallet ? null : "/app/wallet"
     },
     {
       key: "kyc",
       label: "Creator verification",
       state: stateForKyc(row.kyc_state),
       required: row.kyc_state !== "not_required",
-      actionHref: hrefForComplianceState(row.kyc_state, "/settings")
+      actionHref: hrefForComplianceState(row.kyc_state, "/app/profile/earnings#creator-verification")
     },
     {
       key: "tax_profile",
       label: "Tax profile",
       state: stateForTax(row.tax_profile_state),
       required: row.tax_profile_state !== "not_required",
-      actionHref: hrefForComplianceState(row.tax_profile_state, "/settings")
+      actionHref: hrefForComplianceState(row.tax_profile_state, "/app/profile/earnings#tax-profile")
     },
     {
       key: "recipient_wallet",
       label: "Earnings wallet",
       state: row.earnings_recipient_wallet_id ? "complete" : "action_required",
       required: true,
-      actionHref: row.earnings_recipient_wallet_id ? null : "/wallet"
+      actionHref: row.earnings_recipient_wallet_id ? null : "/app/profile/earnings#earnings-wallet"
     },
     {
       key: "products",
       label: "Products",
       state: productsEnabled ? "complete" : "action_required",
       required: true,
-      actionHref: productsEnabled ? null : "/profile"
+      actionHref: productsEnabled ? null : "/app/profile/earnings#products"
     }
   ];
 
@@ -92,6 +92,16 @@ export function toCreatorOnboarding(row: CreatorOnboardingRow): CreatorOnboardin
     readinessScore: readinessScoreForSteps(steps),
     nextAction: nextStep?.actionHref ?? null,
     policyBoundary: "creator_records_only_no_balances_payout_queue_or_social_priority",
+    configuration: {
+      recipientWalletId: row.earnings_recipient_wallet_id,
+      earningsTermsVersion: row.earnings_terms_version,
+      products: {
+        support: row.support_enabled,
+        contentUnlocks: row.content_unlocks_enabled,
+        eventAccessAndLive: row.live_passes_enabled,
+        paidMessages: row.paid_messages_enabled
+      }
+    },
     steps
   };
 }

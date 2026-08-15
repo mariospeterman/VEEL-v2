@@ -51,8 +51,9 @@ Avoid launch-facing language:
 
 - `POST /v1/events`, `GET /v1/events/{eventId}`, and `PATCH /v1/events/{eventId}` provide profile/age-gated event creation and owner updates.
 - `POST /v1/events/{eventId}/access-passes/intents` is the canonical path for Event Access payment or approval intents.
+- Paid intent creation takes a short reservation through the payment-intent expiry. Capacity and per-user limits count both issued passes and unexpired reservations; the inventory key is serialized before the capacity query so concurrent capacity-one requests produce one payable intent and one conflict. If reservation fails, the newly created orphan payment intent is cancelled in the same transaction.
 - Ticket-named API aliases are removed from launch-facing contracts and code.
-- Confirmed `event_access_pass` settlement grants a backend Event Access Pass and QR record in the settlement transaction. Legacy `event_ticket` rows are normalized by migration and still settle through the same backend path during compatibility windows. Wallet approval or frontend redirect never grants access.
+- Confirmed `event_access_pass` settlement serializes the inventory key in a separate statement and grants a backend Event Access Pass and QR record in the settlement transaction. Legacy `event_ticket` rows are normalized by migration and still settle through the same backend path during compatibility windows. Wallet approval or frontend redirect never grants access. A valid paid settlement that cannot be delivered remains confirmed payment truth and creates an audited internal access-support case for noncustodial remediation; it never silently claims that a pass exists.
 - `GET /v1/activity/access-passes` is the canonical activity path for current user Event Access records.
 - `POST /v1/access-passes/{accessPassId}/check-in` validates the backend-issued QR token server-side and idempotently moves an active pass to `checked_in`.
 - `/event-access/:id` and `/passes` are the canonical typed API-backed frontend
@@ -71,7 +72,7 @@ Avoid launch-facing language:
 - Paid Event Access uses noncustodial Solana-compatible payment intents.
 - Backend creates access entitlement, QR, receipt, and compliance ledger entry only after verified payment or approval.
 - Launch does not need a separate Solana ticketing provider. Use backend Event Access Pass entitlements plus Solana settlement.
-- Slice 06 may use the narrow `@solana-commerce/solana-pay` codec and shared WeVid checkout presentation for standards-compliant wallet/QR handoff only. Commerce Kit never owns pass pricing, capacity, settlement confirmation, entitlement, QR/check-in, refund, or access state.
+- Slice 06 uses the exact-pinned narrow `@solana-commerce/solana-pay` codec and shared WeVid checkout presentation for standards-compliant wallet/SVG-QR handoff only. Commerce Kit never owns pass pricing, reservation/capacity, settlement confirmation, entitlement, pass QR/check-in, refund, or access state.
 - Future NFT/token passes, collectible passes, transferable passes, or third-party ticketing providers are separate ADRs, not the launch default.
 
 Noncustodial boundary:
@@ -104,6 +105,7 @@ Fastify owns:
 
 - event creation/update validation
 - inventory and capacity
+- expiry-bound inventory reservations, no extension for invalid/unconfirmed signatures, and orphan-intent cancellation
 - creator-selected pass pricing validated against admin/env guardrails
 - payment intent
 - payment verification

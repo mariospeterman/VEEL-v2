@@ -21,6 +21,7 @@ import {
   WalletAuthChallengeInvalidError,
   WalletRecoveryLinkConflictError
 } from "../src/modules/auth/wallet-auth-repository";
+import { grantAccessPass } from "../src/modules/event/event-access-pass-repository";
 import type { SubscriptionAuthorizationVerifier } from "../src/modules/subscription/types";
 import { createPostgresClient, type PostgresSql } from "../src/shared/postgres";
 import {
@@ -57,6 +58,8 @@ const validEventAccessSolanaSignature = deterministicBase58Signature(41);
 const validPaidMessageSolanaSignature = deterministicBase58Signature(83);
 const validDeclinedPaidMessageSolanaSignature = deterministicBase58Signature(97);
 const validLivePassSolanaSignature = deterministicBase58Signature(127);
+const validRemediationSolanaSignature = deterministicBase58Signature(139);
+const invalidReservationSolanaSignature = deterministicBase58Signature(151);
 const validSubscriptionAuthorizationSignature = deterministicBase58Signature(149);
 
 describeIntegration("authenticated API happy path against Postgres", () => {
@@ -77,6 +80,9 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     const seededFreeMediaAssetId = randomUUID();
     const seededEventId = randomUUID();
     const seededAccessPassTypeId = randomUUID();
+    const seededFreeAccessPassTypeId = randomUUID();
+    const seededRemediationAccessPassTypeId = randomUUID();
+    const seededInvalidAccessPassTypeId = randomUUID();
     const seededConversationId = randomUUID();
     const seededLiveRoomId = randomUUID();
     const seededSubscriptionPlanId = `integration-platform-${shortRunId}`;
@@ -93,6 +99,9 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       async verifyTransfer(input) {
         settlementInputs.push(input);
 
+        if (input.signature === invalidReservationSolanaSignature) {
+          return { confirmed: false, failureCode: "invalid_signature" };
+        }
         return {
           confirmed: true
         };
@@ -158,6 +167,19 @@ describeIntegration("authenticated API happy path against Postgres", () => {
 
     try {
       await app.ready();
+      const acceptImmediateCheckout = async (paymentIntentId: string, suffix: string) => {
+        const response = await app.inject({
+          method: "POST",
+          url: `/v1/payments/intents/${paymentIntentId}/consent`,
+          headers: authenticatedHeaders(`checkout-consent-${suffix}-${runId}`),
+          payload: {
+            termsVersion: "veel-terms-v1",
+            withdrawalWaiverVersion: "instant-digital-access-v1",
+            immediateAccessAcknowledged: true
+          }
+        });
+        expect(response.statusCode, response.body).toBe(200);
+      };
       await cleanupRun(sql, {
         buyerHandle,
         creatorHandle,
@@ -204,6 +226,9 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         creatorUserId: seededCreatorUserId,
         eventId: seededEventId,
         accessPassTypeId: seededAccessPassTypeId,
+        freeAccessPassTypeId: seededFreeAccessPassTypeId,
+        remediationAccessPassTypeId: seededRemediationAccessPassTypeId,
+        invalidAccessPassTypeId: seededInvalidAccessPassTypeId,
         idempotencyKey: `event-${runId}`
       });
       await seedCreatorLiveRoom(sql, {
@@ -259,6 +284,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         address: walletAddress,
         isPrimary: true
       });
+      const linkedWallet = linkResponse.json<{ id: string }>();
 
       const ageSessionResponse = await app.inject({
         method: "POST",
@@ -326,6 +352,118 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(profileResponse.json()).toMatchObject({
         handle: buyerHandle,
         displayName: "Integration Buyer"
+      });
+
+      // Blank legacy display metadata must never override canonical handle readiness.
+      await sql`
+        update profiles
+        set display_name = ''
+        where handle = ${buyerHandle}
+      `;
+
+      await sql`
+        insert into creator_monetisation_settings (user_id)
+        select id from users where supabase_user_id = ${buyerSupabaseUserId}
+        on conflict (user_id) do nothing
+      `;
+      await expect(
+        sql`
+          update creator_monetisation_settings cms
+          set earning_state = 'ready'
+          from users u
+          where cms.user_id = u.id
+            and u.supabase_user_id = ${buyerSupabaseUserId}
+        `
+      ).rejects.toThrow(/creator_monetisation_settings_ready_terms_check/);
+
+      const creatorOnboardingPayload = {
+        recipientWalletId: linkedWallet.id,
+        earningsTermsVersion: "wevid-creator-earnings-v1" as const,
+        earningsTermsAccepted: true as const,
+        products: {
+          support: true,
+          contentUnlocks: true,
+          eventAccessAndLive: true,
+          paidMessages: true
+        }
+      };
+      const creatorOnboardingRequest = {
+        method: "PATCH" as const,
+        url: "/v1/profiles/me/creator-onboarding",
+        headers: authenticatedHeaders(`creator-onboarding-${runId}`),
+        payload: creatorOnboardingPayload
+      };
+      const creatorOnboardingResponse = await app.inject(creatorOnboardingRequest);
+
+      expect(creatorOnboardingResponse.statusCode, creatorOnboardingResponse.body).toBe(200);
+      expect(creatorOnboardingResponse.json()).toMatchObject({
+        state: "ready",
+        canStartEarning: true,
+        configuration: {
+          recipientWalletId: linkedWallet.id,
+          earningsTermsVersion: "wevid-creator-earnings-v1",
+          products: creatorOnboardingPayload.products
+        }
+      });
+      const repeatedCreatorOnboardingResponse = await app.inject(creatorOnboardingRequest);
+      expect(repeatedCreatorOnboardingResponse.statusCode, repeatedCreatorOnboardingResponse.body).toBe(200);
+      expect(repeatedCreatorOnboardingResponse.json()).toEqual(creatorOnboardingResponse.json());
+
+      const conflictingCreatorOnboardingResponse = await app.inject({
+        ...creatorOnboardingRequest,
+        payload: {
+          ...creatorOnboardingPayload,
+          products: { ...creatorOnboardingPayload.products, paidMessages: false }
+        }
+      });
+      expect(conflictingCreatorOnboardingResponse.statusCode, conflictingCreatorOnboardingResponse.body).toBe(409);
+
+      await sql`
+        update profiles
+        set display_name = 'Integration Buyer'
+        where handle = ${buyerHandle}
+      `;
+
+      const creatorOnboardingRows = await sql<{
+        settings_count: string;
+        receipt_count: string;
+        audit_count: string;
+      }[]>`
+        select
+          (
+            select count(*)
+            from creator_monetisation_settings cms
+            join users u on u.id = cms.user_id
+            where u.supabase_user_id = ${buyerSupabaseUserId}
+              and cms.earnings_recipient_wallet_id = ${linkedWallet.id}
+              and cms.earnings_terms_version = 'wevid-creator-earnings-v1'
+              and cms.earnings_terms_accepted_at is not null
+              and cms.earning_state = 'ready'
+              and cms.support_enabled
+              and cms.content_unlocks_enabled
+              and cms.live_passes_enabled
+              and cms.paid_messages_enabled
+          ) as settings_count,
+          (
+            select count(*)
+            from creator_onboarding_action_receipts coar
+            join users u on u.id = coar.actor_user_id
+            where u.supabase_user_id = ${buyerSupabaseUserId}
+              and coar.idempotency_key = ${`creator-onboarding-${runId}`}
+          ) as receipt_count,
+          (
+            select count(*)
+            from audit_events ae
+            join users u on u.id = ae.actor_user_id
+            where u.supabase_user_id = ${buyerSupabaseUserId}
+              and ae.action = 'creator_earnings_configuration_updated'
+              and ae.idempotency_key = ${`creator-onboarding-${runId}`}
+          ) as audit_count
+      `;
+      expect(creatorOnboardingRows[0]).toEqual({
+        settings_count: "1",
+        receipt_count: "1",
+        audit_count: "1"
       });
 
       const preferenceRequest = {
@@ -1342,6 +1480,28 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         where user_id = ${seededCreatorUserId}
       `;
 
+      await expect(
+        sql`
+          update payment_intents
+          set state = 'confirmed', confirmed_at = now(), updated_at = now()
+          where id = ${unlock.paymentIntent.id}
+        `
+      ).rejects.toThrow(/explicit_checkout_consent_required/);
+
+      await acceptImmediateCheckout(unlock.paymentIntent.id, "content-unlock");
+
+      const crossActorConsentReplay = await app.inject({
+        method: "POST",
+        url: `/v1/payments/intents/${unlock.paymentIntent.id}/consent`,
+        headers: creatorAuthenticatedHeaders(`checkout-consent-content-unlock-${runId}`),
+        payload: {
+          termsVersion: "veel-terms-v1",
+          withdrawalWaiverVersion: "instant-digital-access-v1",
+          immediateAccessAcknowledged: true
+        }
+      });
+      expect(crossActorConsentReplay.statusCode, crossActorConsentReplay.body).toBe(409);
+
       const submissionResponse = await app.inject({
         method: "POST",
         url: `/v1/payments/intents/${unlock.paymentIntent.id}/submissions`,
@@ -1656,14 +1816,37 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         `${refundRequestResponse.body}${repeatedRefundRequestResponse.body}${conflictingRefundRequestResponse.body}${paymentActivityResponse.body}`
       ).not.toMatch(/automaticRefund|platformBalance|creatorBalance|withdrawalRequest|payoutQueue|escrow|privateKey|serviceRole/i);
 
-      const accessPassIntentResponse = await app.inject({
-        method: "POST",
-        url: `/v1/events/${seededEventId}/access-passes/intents`,
-        headers: authenticatedHeaders(`event-access-pass-${runId}`),
-        payload: {
-          accessPassTypeId: seededAccessPassTypeId
-        }
+      const accessPassIntentResponses = await Promise.all([
+        app.inject({
+          method: "POST",
+          url: `/v1/events/${seededEventId}/access-passes/intents`,
+          headers: authenticatedHeaders(`event-access-pass-a-${runId}`),
+          payload: {
+            accessPassTypeId: seededAccessPassTypeId
+          }
+        }),
+        app.inject({
+          method: "POST",
+          url: `/v1/events/${seededEventId}/access-passes/intents`,
+          headers: authenticatedHeaders(`event-access-pass-b-${runId}`),
+          payload: {
+            accessPassTypeId: seededAccessPassTypeId
+          }
+        })
+      ]);
+      expect(accessPassIntentResponses.map((response) => response.statusCode).sort()).toEqual([201, 409]);
+      const accessPassIntentResponse = accessPassIntentResponses.find((response) => response.statusCode === 201);
+      const rejectedAccessPassIntentResponse = accessPassIntentResponses.find((response) => response.statusCode === 409);
+
+      expect(accessPassIntentResponse).toBeDefined();
+      expect(rejectedAccessPassIntentResponse?.json()).toMatchObject({
+        code: "conflict",
+        message: "Access Pass inventory is no longer available"
       });
+
+      if (!accessPassIntentResponse) {
+        throw new Error("Concurrent Event Access reservation did not produce a successful checkout");
+      }
 
       expect(accessPassIntentResponse.statusCode, accessPassIntentResponse.body).toBe(201);
       expect(accessPassIntentResponse.json()).toMatchObject({
@@ -1681,6 +1864,37 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           amountMinor: number;
         };
       }>();
+
+      const reservationRows = await sql<{
+        active_reservation_count: string;
+        cancelled_orphan_count: string;
+      }[]>`
+        select
+          (
+            select count(*)
+            from event_access_purchase_requests eapr
+            where eapr.event_id = ${seededEventId}
+              and eapr.access_pass_type_id = ${seededAccessPassTypeId}
+              and eapr.state = 'pending_payment'
+              and eapr.reserved_until > now()
+          ) as active_reservation_count,
+          (
+            select count(*)
+            from payment_intents pi
+            join users u on u.id = pi.user_id
+            where u.supabase_user_id = ${buyerSupabaseUserId}
+              and pi.product_type = 'event_access_pass'
+              and pi.target_id = ${seededEventId}
+              and pi.state = 'cancelled'
+          ) as cancelled_orphan_count
+      `;
+
+      expect(reservationRows[0]).toEqual({
+        active_reservation_count: "1",
+        cancelled_orphan_count: "1"
+      });
+
+      await acceptImmediateCheckout(accessPassIntent.paymentIntent.id, "event-access");
 
       const accessPassSubmissionResponse = await app.inject({
         method: "POST",
@@ -1804,6 +2018,31 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         audit_event_count: "1"
       });
 
+      const concurrentFreeGrants = await Promise.all([
+        grantAccessPass(sql, {
+          supabaseUserId: buyerSupabaseUserId,
+          eventId: seededEventId,
+          accessPassTypeId: seededFreeAccessPassTypeId,
+          paymentIntentId: null
+        }),
+        grantAccessPass(sql, {
+          supabaseUserId: creatorSupabaseUserId,
+          eventId: seededEventId,
+          accessPassTypeId: seededFreeAccessPassTypeId,
+          paymentIntentId: null
+        })
+      ]);
+      expect(concurrentFreeGrants.filter((rows) => rows[0])).toHaveLength(1);
+
+      const freeAccessPassRows = await sql<{ access_pass_count: string }[]>`
+        select count(*) as access_pass_count
+        from event_access_passes
+        where event_id = ${seededEventId}
+          and access_pass_type_id = ${seededFreeAccessPassTypeId}
+          and state in ('active', 'checked_in')
+      `;
+      expect(freeAccessPassRows[0]).toEqual({ access_pass_count: "1" });
+
       const normalMessageBody = `Normal integration hello ${shortRunId}`;
       const normalMessageIdempotencyKey = `normal-message-${runId}`;
       const normalMessageRequest = {
@@ -1868,6 +2107,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           amountMinor: number;
         };
       }>();
+
+      await acceptImmediateCheckout(paidMessageIntent.paymentIntent.id, "paid-message");
 
       const paidMessageSubmissionResponse = await app.inject({
         method: "POST",
@@ -2037,6 +2278,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         payload: { action: "decline" }
       });
       expect(declineBeforeSettlementResponse.statusCode, declineBeforeSettlementResponse.body).toBe(200);
+
+      await acceptImmediateCheckout(declinedPaidIntent.paymentIntent.id, "declined-paid-message");
 
       const declinedPaidSubmissionResponse = await app.inject({
         method: "POST",
@@ -2277,6 +2520,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         amountMinor: number;
       }>();
 
+      await acceptImmediateCheckout(livePassIntent.id, "live-pass");
+
       const livePassSubmissionResponse = await app.inject({
         method: "POST",
         url: `/v1/payments/intents/${livePassIntent.id}/submissions`,
@@ -2464,6 +2709,106 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         audit_event_count: "1",
         chat_message_count: "1"
       });
+
+      const remediationIntentResponse = await app.inject({
+        method: "POST",
+        url: `/v1/events/${seededEventId}/access-passes/intents`,
+        headers: authenticatedHeaders(`event-access-remediation-${runId}`),
+        payload: { accessPassTypeId: seededRemediationAccessPassTypeId }
+      });
+      expect(remediationIntentResponse.statusCode, remediationIntentResponse.body).toBe(201);
+      const remediationIntent = remediationIntentResponse.json<{
+        paymentIntent: { id: string };
+      }>();
+
+      await sql`
+        insert into event_access_passes (
+          id, event_id, access_pass_type_id, holder_user_id,
+          payment_intent_id, qr_token, qr_token_hash
+        ) values (
+          ${randomUUID()}, ${seededEventId}, ${seededRemediationAccessPassTypeId},
+          ${seededCreatorUserId}, null, ${`occupied-${runId}`}, ${`occupied-hash-${runId}`}
+        )
+      `;
+      await acceptImmediateCheckout(remediationIntent.paymentIntent.id, "event-access-remediation");
+      const remediationSubmissionResponse = await app.inject({
+        method: "POST",
+        url: `/v1/payments/intents/${remediationIntent.paymentIntent.id}/submissions`,
+        headers: authenticatedHeaders(`event-access-remediation-submission-${runId}`),
+        payload: { signature: validRemediationSolanaSignature }
+      });
+      expect(remediationSubmissionResponse.statusCode, remediationSubmissionResponse.body).toBe(202);
+
+      const remediationRows = await sql<{
+        payment_state: string;
+        buyer_pass_count: string;
+        support_case_count: string;
+        audit_count: string;
+      }[]>`
+        select
+          (select state from payment_intents where id = ${remediationIntent.paymentIntent.id}) as payment_state,
+          (
+            select count(*) from event_access_passes eap
+            join users u on u.id = eap.holder_user_id
+            where eap.payment_intent_id = ${remediationIntent.paymentIntent.id}
+              and u.supabase_user_id = ${buyerSupabaseUserId}
+          ) as buyer_pass_count,
+          (
+            select count(*) from support_cases
+            where subject_type = 'payment'
+              and subject_id = ${remediationIntent.paymentIntent.id}
+              and state = 'pending_internal'
+          ) as support_case_count,
+          (
+            select count(*) from audit_events
+            where subject_id = ${remediationIntent.paymentIntent.id}
+              and action = 'event_access_delivery_remediation_required'
+          ) as audit_count
+      `;
+      expect(remediationRows[0]).toEqual({
+        payment_state: "confirmed",
+        buyer_pass_count: "0",
+        support_case_count: "1",
+        audit_count: "1"
+      });
+
+      const invalidReservationIntentResponse = await app.inject({
+        method: "POST",
+        url: `/v1/events/${seededEventId}/access-passes/intents`,
+        headers: authenticatedHeaders(`event-access-invalid-reservation-${runId}`),
+        payload: { accessPassTypeId: seededInvalidAccessPassTypeId }
+      });
+      expect(
+        invalidReservationIntentResponse.statusCode,
+        invalidReservationIntentResponse.body
+      ).toBe(201);
+      const invalidReservationIntent = invalidReservationIntentResponse.json<{
+        paymentIntent: { id: string };
+      }>();
+      await acceptImmediateCheckout(
+        invalidReservationIntent.paymentIntent.id,
+        "event-access-invalid-reservation"
+      );
+      const reservationBeforeRows = await sql<{ reserved_until: Date }[]>`
+        select reserved_until
+        from event_access_purchase_requests
+        where payment_intent_id = ${invalidReservationIntent.paymentIntent.id}
+      `;
+      const invalidSubmissionResponse = await app.inject({
+        method: "POST",
+        url: `/v1/payments/intents/${invalidReservationIntent.paymentIntent.id}/submissions`,
+        headers: authenticatedHeaders(`event-access-invalid-submission-${runId}`),
+        payload: { signature: invalidReservationSolanaSignature }
+      });
+      expect(invalidSubmissionResponse.statusCode, invalidSubmissionResponse.body).toBe(202);
+      const reservationAfterRows = await sql<{ reserved_until: Date }[]>`
+        select reserved_until
+        from event_access_purchase_requests
+        where payment_intent_id = ${invalidReservationIntent.paymentIntent.id}
+      `;
+      expect(reservationAfterRows[0]?.reserved_until.toISOString()).toBe(
+        reservationBeforeRows[0]?.reserved_until.toISOString()
+      );
 
       await liveRepository.updateRoomStatus({
         roomId: seededLiveRoomId,
@@ -3368,6 +3713,8 @@ async function seedCreatorPaidContent(
       kyc_state,
       tax_profile_state,
       earnings_recipient_wallet_id,
+      earnings_terms_version,
+      earnings_terms_accepted_at,
       support_enabled,
       content_unlocks_enabled,
       live_passes_enabled,
@@ -3380,6 +3727,8 @@ async function seedCreatorPaidContent(
       'verified',
       'not_required',
       ${recipientWalletId},
+      'wevid-creator-earnings-v1',
+      now(),
       true,
       true,
       true,
@@ -3698,6 +4047,9 @@ async function seedCreatorPaidEvent(
     creatorUserId: string;
     eventId: string;
     accessPassTypeId: string;
+    freeAccessPassTypeId: string;
+    remediationAccessPassTypeId: string;
+    invalidAccessPassTypeId: string;
     idempotencyKey: string;
   }
 ): Promise<void> {
@@ -3750,9 +4102,47 @@ async function seedCreatorPaidEvent(
       'General admission',
       15000000,
       'SOL',
-      10,
+      1,
       1,
       'active'
+    )
+  `;
+  await sql`
+    insert into event_access_pass_types (
+      id,
+      event_id,
+      label,
+      price_minor,
+      currency,
+      capacity,
+      per_user_limit,
+      state
+    )
+    values (
+      ${input.freeAccessPassTypeId},
+      ${input.eventId},
+      'Free admission',
+      0,
+      'SOL',
+      1,
+      1,
+      'active'
+    )
+  `;
+  await sql`
+    insert into event_access_pass_types (
+      id, event_id, label, price_minor, currency, capacity, per_user_limit, state
+    ) values (
+      ${input.remediationAccessPassTypeId}, ${input.eventId}, 'Remediation admission',
+      15000000, 'SOL', 1, 1, 'active'
+    )
+  `;
+  await sql`
+    insert into event_access_pass_types (
+      id, event_id, label, price_minor, currency, capacity, per_user_limit, state
+    ) values (
+      ${input.invalidAccessPassTypeId}, ${input.eventId}, 'Invalid signature admission',
+      15000000, 'SOL', 1, 1, 'active'
     )
   `;
 }
@@ -4341,6 +4731,10 @@ async function cleanupRun(
         where user_id in ${tx(userIds)}
       `;
       await tx`
+        delete from creator_onboarding_action_receipts
+        where actor_user_id in ${tx(userIds)}
+      `;
+      await tx`
         delete from creator_monetisation_settings
         where user_id in ${tx(userIds)}
       `;
@@ -4632,6 +5026,10 @@ async function cleanupRun(
     `;
 
     if (userIds.length > 0) {
+      await tx`
+        delete from support_cases
+        where requester_user_id in ${tx(userIds)}
+      `;
       await tx`
         delete from idempotency_keys
         where actor_user_id in ${tx(userIds)}
