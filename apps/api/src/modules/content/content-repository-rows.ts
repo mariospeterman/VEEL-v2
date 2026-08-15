@@ -6,6 +6,7 @@ export interface FeedRow {
   caption: string | null;
   nsfw_label: NonNullable<ContentItem["nsfwLabel"]>;
   created_at: Date;
+  ranking_score: number;
   creator_id: string;
   handle: string | null;
   display_name: string | null;
@@ -26,6 +27,7 @@ export interface FeedRow {
   like_count: string | number;
   comment_count: string | number;
   share_count: string | number;
+  viewer_following_creator: boolean;
 }
 
 export interface ContentRow {
@@ -42,6 +44,7 @@ export interface ContentRow {
   like_count?: string | number;
   comment_count?: string | number;
   share_count?: string | number;
+  viewer_following_creator?: boolean;
 }
 
 export interface ContentDetailRow extends ContentRow {

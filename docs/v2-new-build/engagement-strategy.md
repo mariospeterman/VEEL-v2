@@ -226,14 +226,21 @@ POST   /v1/shares
 POST   /v1/referrals/tokens
 POST   /v1/reports
 POST   /v1/blocks/:userId
+GET    /v1/follows/:userId
+POST   /v1/follows/:userId
+DELETE /v1/follows/:userId
+POST   /v1/feed/impressions
 GET    /v1/activity
 ```
 
-Follow/unfollow is intentionally not in the active OpenAPI contract until a real follow graph migration, repository, idempotent route, and feed impact test are added together.
+Follow/unfollow is implemented through the canonical `user_follows` graph with projected follower/following counts, viewer-specific feed/profile state, durable command receipts, server-side block/public-profile constraints, social-only audit metadata, and new-follow notifications. It never implies Mutuals, messaging permission, membership, content access, or preferential paid treatment. Feed impressions use separate seven-day receipts so non-adjacent retries and concurrent delivery remain exactly idempotent inside the retry window; each write amortizes bounded expired-receipt cleanup.
 
 ## Tests
 
-- follow graph tests ship with the future follow slice, not as contract-only route promises
+- concurrent follow/unfollow commands reconcile to one canonical edge/count projection
+- block insertion deactivates both-direction follow edges and updates counts
+- changed-input idempotency reuse fails with conflict
+- impression replay remains idempotent even after later impressions
 - like/save/comment persistence
 - comment blocked by block graph
 - share internal creates message/share event

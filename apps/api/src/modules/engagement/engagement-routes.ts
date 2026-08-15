@@ -1,4 +1,6 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { contractRouteSchema } from "../../shared/openapi-route-schema.js";
+import { mutationRateLimit } from "../../shared/rate-limits.js";
 import {
   isFeedMode,
   isIsoTimestamp,
@@ -21,6 +23,7 @@ import type {
   CreateShareRequest,
   HideFeedCreatorRequest,
   HideFeedTopicRequest,
+  RecordFeedImpressionRequest,
   UpdateFeedPreferencesRequest
 } from "./types.js";
 
@@ -28,6 +31,87 @@ export async function registerEngagementRoutes(
   app: FastifyInstance,
   options: RegisterEngagementRoutesOptions
 ): Promise<void> {
+  app.get(
+    "/v1/follows/:userId",
+    { schema: contractRouteSchema("getFollowState") },
+    async (request, reply) => {
+      const access = await verifyEngagementAccess(request, options);
+      if (!access.ok) return reply.code(access.statusCode).send(access.body);
+      const targetUserId = (request.params as { userId?: string }).userId;
+      if (!isUuid(targetUserId)) {
+        return reply.code(400).send(validationResponse("userId must be a UUID"));
+      }
+      return repositoryReply(request, reply, () =>
+        options.engagementRepository.getFollowState({
+          supabaseUserId: access.supabaseUserId,
+          targetUserId
+        })
+      );
+    }
+  );
+
+  const setFollow = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    following: boolean
+  ) => {
+    const access = await verifyEngagementAccess(request, options);
+    if (!access.ok) return reply.code(access.statusCode).send(access.body);
+    const idempotencyKey = requiredIdempotencyKey(request);
+    if (!idempotencyKey) {
+      return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
+    }
+    const targetUserId = (request.params as { userId?: string }).userId;
+    if (!isUuid(targetUserId)) {
+      return reply.code(400).send(validationResponse("userId must be a UUID"));
+    }
+    return repositoryReply(request, reply, () =>
+      options.engagementRepository.setFollowState({
+        supabaseUserId: access.supabaseUserId,
+        targetUserId,
+        following,
+        idempotencyKey
+      })
+    );
+  };
+
+  app.post(
+    "/v1/follows/:userId",
+    mutationRateLimit("socialMutation", "followUser"),
+    async (request, reply) => setFollow(request, reply, true)
+  );
+
+  app.delete(
+    "/v1/follows/:userId",
+    mutationRateLimit("socialMutation", "unfollowUser"),
+    async (request, reply) => setFollow(request, reply, false)
+  );
+
+  app.post(
+    "/v1/feed/impressions",
+    mutationRateLimit("socialMutation", "recordFeedImpression"),
+    async (request, reply) => {
+      const access = await verifyEngagementAccess(request, options);
+      if (!access.ok) return reply.code(access.statusCode).send(access.body);
+      const idempotencyKey = requiredIdempotencyKey(request);
+      if (!idempotencyKey) {
+        return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
+      }
+      const contentId = (request.body as Partial<RecordFeedImpressionRequest>)?.contentId;
+      if (!isUuid(contentId)) {
+        return reply.code(400).send(validationResponse("contentId must be a UUID"));
+      }
+      return repositoryReply(request, reply, async () => {
+        await options.engagementRepository.recordFeedImpression({
+          supabaseUserId: access.supabaseUserId,
+          body: { contentId },
+          idempotencyKey
+        });
+        return { accepted: true };
+      }, 202);
+    }
+  );
+
   app.get("/v1/feed/preferences", async (request, reply) => {
     const access = await verifyEngagementAccess(request, options);
     if (!access.ok) return reply.code(access.statusCode).send(access.body);

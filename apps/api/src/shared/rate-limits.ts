@@ -6,6 +6,7 @@ type MutationRateLimitPreset =
   | "paymentMutation"
   | "accessMutation"
   | "messageMutation"
+  | "socialMutation"
   | "mutualsMutation"
   | "ageMutation"
   | "adminMutation";
@@ -21,6 +22,7 @@ const mutationRateLimitPresets: Record<
   paymentMutation: { max: 12, timeWindow: "1 minute" },
   accessMutation: { max: 20, timeWindow: "1 minute" },
   messageMutation: { max: 30, timeWindow: "1 minute" },
+  socialMutation: { max: 40, timeWindow: "1 minute" },
   mutualsMutation: { max: 30, timeWindow: "1 minute" },
   ageMutation: { max: 8, timeWindow: "1 minute" },
   adminMutation: { max: 30, timeWindow: "1 minute" }

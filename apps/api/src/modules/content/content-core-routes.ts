@@ -7,6 +7,7 @@ import {
   ContentPublishConflictError,
   ContentRepositoryConfigurationError
 } from "./content-repository.js";
+import { InvalidFeedCursorError } from "./content-feed-cursor.js";
 import { hashIdempotencyPayload, readIdempotencyKey } from "../../shared/idempotency.js";
 import { validateEventDraft } from "../event/event-route-shared.js";
 import type {
@@ -20,6 +21,9 @@ import {
   contentVisibilityValues,
   dailyQuotaWindowStart,
   feedModeFromQuery,
+  feedModes,
+  feedSurfaceFromQuery,
+  feedSurfaces,
   nsfwLabels,
   quotaExceededResponse,
   representationModes,
@@ -171,13 +175,21 @@ export async function registerContentCoreRoutes(
       return reply.code(access.statusCode).send(access.body);
     }
 
-    const query = request.query as { mode?: string; cursor?: string };
+    const query = request.query as { mode?: string; surface?: string; cursor?: string };
+    if (query.mode && !feedModes.has(query.mode)) {
+      return reply.code(400).send({ code: "validation_failed", message: "Unsupported feed mode" });
+    }
+    if (query.surface && !feedSurfaces.has(query.surface)) {
+      return reply.code(400).send({ code: "validation_failed", message: "Unsupported feed surface" });
+    }
     const mode = feedModeFromQuery(query.mode);
+    const surface = feedSurfaceFromQuery(query.surface);
 
     try {
       const feedInput = {
         supabaseUserId: access.supabaseUserId,
         mode,
+        surface,
         limit: 20
       };
 
@@ -191,8 +203,16 @@ export async function registerContentCoreRoutes(
         request.log.warn({ error }, "Content repository is not configured");
         return reply.code(200).send({
           items: [],
-          nextCursor: null
+          nextCursor: null,
+          mode,
+          surface,
+          rankingVersion: "deterministic_v1",
+          generatedAt: new Date().toISOString()
         });
+      }
+
+      if (error instanceof InvalidFeedCursorError) {
+        return reply.code(400).send({ code: "validation_failed", message: "Invalid feed cursor" });
       }
 
       throw error;

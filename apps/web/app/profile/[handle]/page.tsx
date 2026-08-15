@@ -1,7 +1,8 @@
 import { appShellNavItems } from "@veel/ui";
-import { getCreatorProfile, type CreatorProfile } from "@/api-client";
+import { getCreatorProfile, getFollowState, type CreatorProfile, type FollowState } from "@/api-client";
 import { ErrorState } from "../../ui";
 import { CreatorSupportPanel } from "./creator-support-panel";
+import { ProfileFollowPanel } from "./profile-follow-panel";
 
 export default async function PublicCreatorProfilePage({
   params
@@ -10,13 +11,17 @@ export default async function PublicCreatorProfilePage({
 }) {
   const { handle } = await params;
   const profileResult = await getCreatorProfile(handle);
+  const followResult = profileResult.ok ? await getFollowState(profileResult.data.user.id) : null;
 
   return (
     <main className="min-h-screen bg-(--background) text-(--foreground)">
       <AppNav />
 
       {profileResult.ok ? (
-        <ProfileView profile={profileResult.data} />
+        <ProfileView
+          followState={followResult?.ok ? followResult.data : null}
+          profile={profileResult.data}
+        />
       ) : (
         <section className="mx-auto grid w-full max-w-6xl content-center px-5 py-6">
           <ErrorState
@@ -51,7 +56,7 @@ function AppNav() {
   );
 }
 
-function ProfileView({ profile }: { profile: CreatorProfile }) {
+function ProfileView({ followState, profile }: { followState: FollowState | null; profile: CreatorProfile }) {
   return (
     <section className="mx-auto grid w-full max-w-6xl gap-6 px-5 py-6 lg:grid-cols-[320px_minmax(0,1fr)]">
       <aside className="grid content-start gap-4">
@@ -65,8 +70,9 @@ function ProfileView({ profile }: { profile: CreatorProfile }) {
           <Stat label="Content" value={profile.stats.contentCount} />
           <Stat label="Live rooms" value={profile.stats.liveRoomCount} />
           <Stat label="Payments" value={profile.stats.confirmedPaymentCount} />
-          <Stat label="Followers" value={profile.stats.followerCount} />
+          {!followState ? <Stat label="Followers" value={profile.stats.followerCount} /> : null}
         </div>
+        {followState ? <ProfileFollowPanel initialState={followState} /> : null}
         <CreatorSupportPanel profile={profile} />
       </aside>
 

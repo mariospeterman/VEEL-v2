@@ -121,8 +121,41 @@ test("renders the canonical protected app home shell through /app", async ({ con
   await page.goto("/app/home", { waitUntil: "domcontentloaded", timeout: 45_000 });
 
   await expect(page.getByRole("link", { name: "WeVid app home" }).first()).toBeVisible();
-  await expect(page.getByRole("heading", { name: /Mixed media feed|Enter WeVid/ }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Your feed|Enter WeVid/ }).first()).toBeVisible();
   await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
+});
+
+test("follows from the real Home feed and renders the immersive Bits surface", async ({ context, page }) => {
+  await addE2eCookie(context);
+  await page.goto("/app/home", { waitUntil: "domcontentloaded", timeout: 45_000 });
+
+  await expect(page.getByRole("article", { name: "Post by Aria Moon" }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Follow", exact: true })).toHaveCount(2);
+  const followResponse = page.waitForResponse((response) =>
+    response.request().method() === "POST" && response.url().endsWith(`/v1/follows/${user().id}`)
+  );
+  await page.getByRole("button", { name: "Follow", exact: true }).first().click();
+  expect((await followResponse).status()).toBe(200);
+  await expect(page.getByRole("button", { name: "Following", exact: true })).toHaveCount(2);
+  await page.getByRole("button", { name: "Following", exact: true }).first().click();
+  await expect(page.getByRole("button", { name: "Follow", exact: true })).toHaveCount(2);
+  await page.getByRole("tab", { name: "For you" }).focus();
+  await page.getByRole("tab", { name: "For you" }).press("ArrowRight");
+  await expect(page.getByRole("tab", { name: "Following" })).toBeFocused();
+  await expect(page.getByRole("tab", { name: "Following" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("article", { name: "Post by Aria Moon" }).first()).toBeVisible();
+
+  await page.goto("/app/bits", { waitUntil: "domcontentloaded", timeout: 45_000 });
+  await expect(page.getByRole("heading", { name: "Swipe. Watch. Keep your place." })).toBeVisible();
+  await expect(page.getByRole("article", { name: "Post by Aria Moon" }).first()).toBeVisible();
+  await page.getByRole("tab", { name: "For you" }).focus();
+  await page.getByRole("tab", { name: "For you" }).press("ArrowDown");
+  await expect(page.getByRole("tab", { name: "Following" })).toBeFocused();
+  const layout = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth
+  }));
+  expect(layout.scrollWidth).toBe(layout.clientWidth);
 });
 
 test("requires confirmation before logging out every device", async ({ context, page }) => {
@@ -276,7 +309,34 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
   }
 
   if (method === "GET" && url.pathname === "/v1/content/feed") {
-    sendJson(response, 200, { items: [contentItem()], nextCursor: null });
+    sendJson(response, 200, {
+      items: [contentItem(), contentItem("00000000-0000-4000-8000-000000000041")],
+      nextCursor: null,
+      mode: url.searchParams.get("mode") ?? "recommended",
+      surface: url.searchParams.get("surface") ?? "home",
+      rankingVersion: "deterministic_v1",
+      generatedAt: "2026-08-15T12:00:00.000Z"
+    });
+    return;
+  }
+
+  if (method === "GET" && url.pathname === `/v1/follows/${user().id}`) {
+    sendJson(response, 200, { userId: user().id, following: false, followerCount: 12, followingCount: 4 });
+    return;
+  }
+
+  if ((method === "POST" || method === "DELETE") && url.pathname === `/v1/follows/${user().id}`) {
+    sendJson(response, 200, {
+      userId: user().id,
+      following: method === "POST",
+      followerCount: method === "POST" ? 13 : 12,
+      followingCount: 4
+    });
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/v1/feed/impressions") {
+    sendJson(response, 202, { accepted: true });
     return;
   }
 
@@ -426,7 +486,7 @@ function setCorsHeaders(response: ServerResponse) {
   response.setHeader("Access-Control-Allow-Origin", "http://127.0.0.1:3000");
   response.setHeader("Access-Control-Allow-Credentials", "true");
   response.setHeader("Access-Control-Allow-Headers", "authorization,content-type,idempotency-key,accept");
-  response.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,OPTIONS");
+  response.setHeader("Access-Control-Allow-Methods", "DELETE,GET,POST,PATCH,OPTIONS");
 }
 
 function sendJson(response: ServerResponse, status: number, body: unknown) {
@@ -458,7 +518,13 @@ function sessionState() {
   return {
     authenticated: true,
     appAccessState: { allowed: true, reason: "ready" },
-    user: user()
+    user: {
+      id: "00000000-0000-4000-8000-000000000009",
+      handle: "viewer",
+      displayName: "Viewer",
+      avatarUrl: null,
+      badges: [{ key: "age_verified", label: "Age verified", group: "trust" }]
+    }
   };
 }
 
@@ -586,9 +652,9 @@ function liveRoom() {
   };
 }
 
-function contentItem() {
+function contentItem(id = "00000000-0000-4000-8000-000000000040") {
   return {
-    id: "00000000-0000-4000-8000-000000000040",
+    id,
     creator: user(),
     mediaType: "clip",
     caption: "Studio sunrise session",
@@ -608,7 +674,8 @@ function contentItem() {
       likeCount: 128,
       commentCount: 24,
       shareCount: 8
-    }
+    },
+    viewerFollowingCreator: false
   };
 }
 

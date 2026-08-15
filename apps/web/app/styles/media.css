@@ -68,4 +68,281 @@
     padding: 18px;
     color: #fff;
   }
+
+  .feed-mode-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 12;
+    display: flex;
+    gap: 4px;
+    margin-bottom: 14px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--background) 88%, transparent);
+    padding: 4px;
+    backdrop-filter: blur(18px);
+  }
+
+  .feed-mode-tab {
+    min-height: 40px;
+    flex: 1;
+    border-radius: 999px;
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .feed-mode-tab.is-active {
+    background: var(--foreground);
+    color: var(--background);
+  }
+
+  .home-feed {
+    display: grid;
+    gap: 18px;
+  }
+
+  .home-feed-card,
+  .bits-card {
+    min-width: 0;
+    overflow: clip;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    background: var(--panel);
+  }
+
+  .feed-card-header {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .feed-creator {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .feed-creator > span:last-child {
+    display: grid;
+    min-width: 0;
+  }
+
+  .feed-creator strong,
+  .feed-creator small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .feed-creator small {
+    color: var(--muted);
+  }
+
+  .feed-avatar {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    place-items: center;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--accent-soft);
+    font-weight: 800;
+  }
+
+  .feed-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .follow-control {
+    position: relative;
+    flex: 0 0 auto;
+  }
+
+  .follow-error {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 20;
+    width: max-content;
+    max-width: min(260px, 70vw);
+    border: 1px solid #7f1d1d;
+    border-radius: 8px;
+    background: #450a0a;
+    padding: 7px 9px;
+    color: #fecaca;
+    font-size: 12px;
+  }
+
+  .feed-media {
+    position: relative;
+    min-height: min(68dvh, 680px);
+    overflow: hidden;
+    background: #05070b;
+  }
+
+  .feed-poster {
+    width: 100%;
+    height: 100%;
+    min-height: inherit;
+    object-fit: contain;
+  }
+
+  .feed-media-placeholder {
+    display: grid;
+    min-height: inherit;
+    place-items: center;
+    padding: 24px;
+    color: #d4d4d8;
+    text-align: center;
+  }
+
+  .feed-access-pill {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 4;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.68);
+    padding: 5px 9px;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .feed-card-copy {
+    display: grid;
+    gap: 10px;
+    padding: 14px 14px 0;
+    overflow-wrap: anywhere;
+  }
+
+  .feed-open-link {
+    width: fit-content;
+    color: var(--accent-strong);
+    font-size: 13px;
+    font-weight: 750;
+  }
+
+  .feed-actions {
+    padding: 14px;
+  }
+
+  .bits-feed {
+    display: grid;
+    max-height: calc(100dvh - 190px);
+    gap: 16px;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scroll-snap-type: y mandatory;
+    scrollbar-width: thin;
+  }
+
+  .bits-card {
+    display: grid;
+    min-height: calc(100dvh - 210px);
+    grid-template-rows: auto minmax(360px, 1fr) auto auto;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
+  .bits-card .feed-media {
+    min-height: 0;
+  }
+
+  .bits-actions {
+    padding: 10px 14px 14px;
+  }
+
+  .feed-skeleton {
+    min-height: 420px;
+    background: linear-gradient(100deg, var(--panel), var(--glass), var(--panel));
+    background-size: 220% 100%;
+    animation: feed-shimmer 1.2s linear infinite;
+  }
+
+  .feed-retry,
+  .feed-empty {
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+    margin: 16px 0;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 28px 18px;
+    text-align: center;
+  }
+
+  .feed-retry p,
+  .feed-empty p,
+  .feed-exhausted {
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .feed-exhausted {
+    padding: 20px;
+    text-align: center;
+  }
+
+  .feed-sentinel {
+    height: 1px;
+  }
+
+  .feed-preload {
+    position: fixed;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  @keyframes feed-shimmer {
+    to { background-position: -220% 0; }
+  }
+
+  @media (max-width: 640px) {
+    .feed-card-header {
+      padding: 10px;
+    }
+
+    .feed-media {
+      min-height: min(62dvh, 580px);
+    }
+
+    .bits-feed {
+      max-height: none;
+      overflow: visible;
+      scroll-snap-type: none;
+    }
+
+    .bits-card {
+      min-height: calc(100svh - 150px);
+    }
+
+    .feed-actions,
+    .bits-actions {
+      padding: 10px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bits-feed {
+      scroll-behavior: auto;
+    }
+
+    .feed-skeleton {
+      animation: none;
+    }
+  }
 }

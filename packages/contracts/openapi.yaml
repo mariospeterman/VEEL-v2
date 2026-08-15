@@ -115,6 +115,7 @@ paths:
         "204": { description: All application sessions revoked }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/auth/recovery/link-intents:
@@ -369,11 +370,66 @@ paths:
       summary: Mixed media Home feed
       parameters:
         - $ref: "#/components/parameters/FeedMode"
+        - $ref: "#/components/parameters/FeedSurface"
         - $ref: "#/components/parameters/Cursor"
       responses:
         "200": { $ref: "#/components/responses/FeedPage" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/follows/{userId}:
+    get:
+      operationId: getFollowState
+      tags: [Engagement]
+      summary: Read the viewer's canonical follow relationship and aggregate counts
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200": { $ref: "#/components/responses/FollowState" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      operationId: followUser
+      tags: [Engagement]
+      summary: Follow a public profile without implying Mutuals, messaging, access, or membership
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "200": { $ref: "#/components/responses/FollowState" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      operationId: unfollowUser
+      tags: [Engagement]
+      summary: Remove a canonical follow relationship
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "200": { $ref: "#/components/responses/FollowState" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /v1/feed/impressions:
+    post:
+      operationId: recordFeedImpression
+      tags: [Engagement]
+      summary: Record a bounded viewer-owned signal for deterministic feed de-prioritisation
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/RecordFeedImpression"
+      responses:
+        "202": { $ref: "#/components/responses/Accepted" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /v1/discover/search:
     get:
       operationId: searchDiscover
@@ -2388,7 +2444,7 @@ components:
       in: header
       required: true
       schema: { type: string, minLength: 12, maxLength: 128 }
-      description: Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations.
+      description: Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations.
     OptionalIdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -2404,7 +2460,7 @@ components:
     Cursor:
       name: cursor
       in: query
-      schema: { type: string }
+      schema: { type: string, maxLength: 512 }
     SearchQuery:
       name: q
       in: query
@@ -2414,7 +2470,13 @@ components:
       in: query
       schema:
         type: string
-        enum: [recommended, following, nsfw, sfw, live, premium]
+        enum: [recommended, following, nsfw, sfw]
+    FeedSurface:
+      name: surface
+      in: query
+      schema:
+        type: string
+        enum: [home, bits]
     ContentId: { name: contentId, in: path, required: true, schema: { type: string, format: uuid } }
     MediaAssetId: { name: mediaAssetId, in: path, required: true, schema: { type: string, format: uuid } }
     RoomId: { name: roomId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -2470,6 +2532,7 @@ components:
     CreatePlatformPlaybackSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreatePlatformPlaybackSessionRequest" } } } }
     RecordPlatformPlaybackHeartbeat: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RecordPlatformPlaybackHeartbeatRequest" } } } }
     UpdateProfile: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateProfileRequest" } } } }
+    RecordFeedImpression: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RecordFeedImpressionRequest" } } } }
     UploadProfileAvatar: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UploadProfileAvatarRequest" } } } }
     CreateContent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateContentRequest" } } } }
     UpdateContent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateContentRequest" } } } }
@@ -2598,6 +2661,7 @@ components:
     ShareResult: { description: Share result, content: { application/json: { schema: { $ref: "#/components/schemas/ShareResult" } } } }
     ModerationIntake: { description: Moderation intake, content: { application/json: { schema: { $ref: "#/components/schemas/ModerationIntake" } } } }
     BlockState: { description: Block state, content: { application/json: { schema: { $ref: "#/components/schemas/BlockState" } } } }
+    FollowState: { description: Canonical follow relationship and aggregate counts, content: { application/json: { schema: { $ref: "#/components/schemas/FollowState" } } } }
     ConversationList: { description: Conversations, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Conversation" } } } } } } }
     MessagePage: { description: Messages, content: { application/json: { schema: { $ref: "#/components/schemas/MessagePage" } } } }
     Message: { description: Message, content: { application/json: { schema: { $ref: "#/components/schemas/Message" } } } }
@@ -2952,12 +3016,13 @@ components:
         recentContent: { type: array, items: { $ref: "#/components/schemas/ContentItem" } }
     CreatorProfileStats:
       type: object
-      required: [contentCount, liveRoomCount, confirmedPaymentCount, followerCount]
+      required: [contentCount, liveRoomCount, confirmedPaymentCount, followerCount, followingCount]
       properties:
         contentCount: { type: integer }
         liveRoomCount: { type: integer }
         confirmedPaymentCount: { type: integer }
         followerCount: { type: integer }
+        followingCount: { type: integer }
     PublicCreatorMonetisation:
       type: object
       required: [supportEnabled, contentUnlocksEnabled, livePassesEnabled, paidMessagesEnabled, subscriptionsEnabled]
@@ -3214,10 +3279,14 @@ components:
         address: { type: string, nullable: true }
     FeedPage:
       type: object
-      required: [items]
+      required: [items, mode, surface, rankingVersion, generatedAt]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/ContentItem" } }
         nextCursor: { type: string, nullable: true }
+        mode: { type: string, enum: [recommended, following, nsfw, sfw] }
+        surface: { type: string, enum: [home, bits] }
+        rankingVersion: { type: string, enum: [deterministic_v1] }
+        generatedAt: { type: string, format: date-time }
     DiscoverPage:
       type: object
       required: [content, creators, hashtags, events, liveRooms]
@@ -3248,6 +3317,22 @@ components:
         accessState: { type: string, enum: [free, teaser, locked, unlocked, subscribed, pass_required] }
         nsfwLabel: { type: string, enum: [none, adult, explicit] }
         engagement: { $ref: "#/components/schemas/EngagementState" }
+        viewerFollowingCreator:
+          type: boolean
+          description: Viewer-relative follow projection; present on authenticated feed items.
+    FollowState:
+      type: object
+      required: [userId, following, followerCount, followingCount]
+      properties:
+        userId: { type: string, format: uuid }
+        following: { type: boolean }
+        followerCount: { type: integer, minimum: 0 }
+        followingCount: { type: integer, minimum: 0 }
+    RecordFeedImpressionRequest:
+      type: object
+      required: [contentId]
+      properties:
+        contentId: { type: string, format: uuid }
     PerformerAllowedUse:
       type: string
       enum: [capture, upload, distribution, monetisation, live, replay, promotion]

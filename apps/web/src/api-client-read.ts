@@ -48,6 +48,7 @@ import type {
   EventAccessPassPage,
   FeedPage,
   FeedPreferences,
+  FollowState,
   LiveRoom,
   McpConnectionPage,
   McpConsentRequest,
@@ -137,8 +138,18 @@ export async function getDiscoverSearch(query = ""): Promise<ApiResult<DiscoverP
   return getJson<DiscoverPage>(`/v1/discover/search${search.size > 0 ? `?${search.toString()}` : ""}`);
 }
 
-export async function getHomeFeed(mode = "recommended"): Promise<ApiResult<FeedPage>> {
-  return getJson<FeedPage>(`/v1/content/feed?mode=${encodeURIComponent(mode)}`);
+export async function getHomeFeed(
+  mode = "recommended",
+  surface: "home" | "bits" = "home",
+  cursor?: string
+): Promise<ApiResult<FeedPage>> {
+  const query = new URLSearchParams({ mode, surface });
+  if (cursor) query.set("cursor", cursor);
+  return getJson<FeedPage>(`/v1/content/feed?${query.toString()}`);
+}
+
+export async function getFollowState(userId: string): Promise<ApiResult<FollowState>> {
+  return getJson<FollowState>(`/v1/follows/${encodeURIComponent(userId)}`);
 }
 
 export async function getFeedPreferences(): Promise<ApiResult<FeedPreferences>> {

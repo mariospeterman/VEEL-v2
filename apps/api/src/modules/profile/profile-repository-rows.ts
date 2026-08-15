@@ -14,6 +14,8 @@ export interface CreatorProfileRow extends ProfileRow {
   content_count: string | number;
   live_room_count: string | number;
   confirmed_payment_count: string | number;
+  follower_count: string | number;
+  following_count: string | number;
   support_enabled: boolean;
   content_unlocks_enabled: boolean;
   live_passes_enabled: boolean;

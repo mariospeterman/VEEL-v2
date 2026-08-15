@@ -57,13 +57,15 @@ const nextConfig: NextConfig = {
 export default nextConfig;
 
 function allowedDevOrigins() {
+  const origins = new Set(["localhost", "127.0.0.1"]);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-  if (!appUrl) return [];
+  if (!appUrl) return [...origins];
 
   try {
     const { hostname } = new URL(appUrl);
-    return hostname.includes("ngrok-free.app") ? [hostname] : [];
+    if (hostname.includes("ngrok-free.app")) origins.add(hostname);
   } catch {
-    return [];
+    // Keep only the explicit loopback development origins.
   }
+  return [...origins];
 }

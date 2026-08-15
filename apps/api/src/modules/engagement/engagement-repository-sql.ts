@@ -18,7 +18,11 @@ export function preferencesSelectSql(sql: postgres.Sql, source: string) {
   `);
 }
 
-export function visibleContentSql(sql: postgres.Sql, contentId: string, supabaseUserId: string) {
+export function visibleContentSql(
+  sql: postgres.Sql | postgres.TransactionSql,
+  contentId: string,
+  supabaseUserId: string
+) {
   return sql`
     select ci.id, ci.creator_user_id
     from content_items ci
@@ -62,9 +66,11 @@ export async function engagementState(
           and cs.user_id = viewer.id
           and cs.state = 'active'
       ) as saved,
-      (select count(*) from content_reactions where content_item_id = ${contentId} and reaction_key = 'like' and state = 'active') as like_count,
-      (select count(*) from comments where content_item_id = ${contentId} and moderation_state = 'visible') as comment_count,
-      (select count(*) from share_records where target_type = 'content' and target_id = ${contentId} and state = 'created') as share_count
+      coalesce(counter.like_count, 0) as like_count,
+      coalesce(counter.comment_count, 0) as comment_count,
+      coalesce(counter.share_count, 0) as share_count
+    from (select 1) anchor
+    left join content_engagement_counters counter on counter.content_item_id = ${contentId}
   `;
 
   const row = rows[0];

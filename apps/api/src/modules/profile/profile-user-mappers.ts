@@ -25,7 +25,8 @@ export function toCreatorProfile(
       contentCount: Number(row.content_count),
       liveRoomCount: Number(row.live_room_count),
       confirmedPaymentCount: Number(row.confirmed_payment_count),
-      followerCount: 0
+      followerCount: Number(row.follower_count),
+      followingCount: Number(row.following_count)
     },
     monetisation: {
       supportEnabled: row.support_enabled,

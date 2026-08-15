@@ -30,7 +30,7 @@ export async function authenticatedGet<T>(path: string): Promise<T> {
 
 export async function authenticatedMutation<T>(
   path: string,
-  method: "PATCH" | "POST",
+  method: "DELETE" | "PATCH" | "POST",
   body: unknown,
   idempotencyKey?: string
 ): Promise<T> {
@@ -45,10 +45,11 @@ export async function authenticatedMutation<T>(
 
 export async function authenticatedEmptyMutation(
   path: string,
-  method: "PATCH" | "POST",
-  body: unknown
+  method: "DELETE" | "PATCH" | "POST",
+  body: unknown,
+  idempotencyKey?: string
 ): Promise<void> {
-  const response = await sendAuthenticatedMutation(path, method, body);
+  const response = await sendAuthenticatedMutation(path, method, body, idempotencyKey);
 
   if (!response.ok) {
     throw new ApiMutationError(await errorMessage(response), response.status);
@@ -82,7 +83,7 @@ export async function publicMutation<T>(
 
 async function sendAuthenticatedMutation(
   path: string,
-  method: "PATCH" | "POST",
+  method: "DELETE" | "PATCH" | "POST",
   body: unknown,
   idempotencyKey?: string
 ): Promise<Response> {

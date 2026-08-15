@@ -22,6 +22,8 @@ export function createProfileCreatorRepositoryMethods(
           coalesce(cms.live_passes_enabled, true) as live_passes_enabled,
           coalesce(cms.paid_messages_enabled, true) as paid_messages_enabled,
           coalesce(cms.subscriptions_enabled, false) as subscriptions_enabled,
+          coalesce(social.follower_count, 0) as follower_count,
+          coalesce(social.following_count, 0) as following_count,
           (
             select count(*)
             from content_items ci
@@ -52,6 +54,7 @@ export function createProfileCreatorRepositoryMethods(
         from profiles p
         join users u on u.id = p.user_id
         left join creator_monetisation_settings cms on cms.user_id = u.id
+        left join user_social_counts social on social.user_id = u.id
         where lower(p.handle) = lower(${handle})
           and p.visibility = 'public'
           and u.state = 'active'

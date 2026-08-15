@@ -50,9 +50,10 @@ test("covers authenticated app access to profile wallet age home create and unlo
   test.setTimeout(70_000);
 
   await gotoUntilVisible(page, "/app/home", () => page.getByRole("link", { name: "WeVid app home" }).first());
-  await expect(page.getByRole("heading", { name: "Mixed media feed" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Aria Moon" })).toBeVisible();
-  await expect(page.getByText("backend entitlement")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your feed" })).toBeVisible();
+  await expect(page.getByRole("article", { name: "Post by Aria Moon" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "For you" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("link", { name: "Open post" })).toBeVisible();
 
   await page.goto("/app/profile");
   await expect(page.getByRole("heading", { name: "Aria Moon" })).toBeVisible();
@@ -80,9 +81,9 @@ test("covers authenticated app access to profile wallet age home create and unlo
   await expect(page.getByRole("button", { name: "Start age verification" })).toBeEnabled();
 
   await page.goto("/app/home");
-  await expect(page.getByRole("heading", { name: "Mixed media feed" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Aria Moon" })).toBeVisible();
-  await expect(page.getByText("Live now with access-gated chat")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your feed" })).toBeVisible();
+  await expect(page.getByRole("article", { name: "Post by Aria Moon" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open post" })).toBeVisible();
 
   await page.goto("/app/create");
   await page.waitForLoadState("networkidle");
@@ -299,7 +300,19 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
   }
 
   if (method === "GET" && url.pathname === "/v1/content/feed") {
-    sendJson(response, 200, { items: [contentItem({ accessState: "free" })], nextCursor: null });
+    sendJson(response, 200, {
+      items: [contentItem({ accessState: "free" })],
+      nextCursor: null,
+      mode: url.searchParams.get("mode") ?? "recommended",
+      surface: url.searchParams.get("surface") ?? "home",
+      rankingVersion: "deterministic_v1",
+      generatedAt: "2026-08-15T12:00:00.000Z"
+    });
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/v1/feed/impressions") {
+    sendJson(response, 202, { accepted: true });
     return;
   }
 
@@ -665,7 +678,8 @@ function contentItem(overrides: {
       likeCount: 128,
       commentCount: 24,
       shareCount: 8
-    }
+    },
+    viewerFollowingCreator: false
   };
 }
 

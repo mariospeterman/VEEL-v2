@@ -8,6 +8,7 @@ import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js
 import type { SessionRepository, ApplicationSessionVerifier } from "../session/types.js";
 import {
   EngagementIdempotencyConflictError,
+  EngagementNotFoundError,
   EngagementPolicyError,
   EngagementRepositoryConfigurationError
 } from "./engagement-errors.js";
@@ -126,6 +127,13 @@ export async function repositoryReply<T>(
       return reply.code(409).send({
         code: "conflict",
         message: "Idempotency key was already used for a different engagement action"
+      });
+    }
+
+    if (error instanceof EngagementNotFoundError) {
+      return reply.code(404).send({
+        code: "not_found",
+        message: "Profile was not found"
       });
     }
 

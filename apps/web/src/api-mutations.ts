@@ -20,7 +20,10 @@ export type {
   CreateShareRequest,
   EngagementState,
   FeedPreferences,
+  FeedPage,
+  FollowState,
   HideFeedCreatorRequest,
+  RecordFeedImpressionRequest,
   ModerationIntake,
   ShareResult,
   CreateAccessPassIntentRequest,
@@ -77,7 +80,10 @@ import type {
   CreateShareRequest,
   EngagementState,
   FeedPreferences,
+  FeedPage,
+  FollowState,
   HideFeedCreatorRequest,
+  RecordFeedImpressionRequest,
   ModerationIntake,
   ShareResult,
   CreateAccessPassIntentRequest,
@@ -330,6 +336,41 @@ export async function blockUser(userId: string, idempotencyKey: string): Promise
     {},
     idempotencyKey
   );
+}
+
+export async function getFeedPage(
+  mode: "recommended" | "following" | "nsfw" | "sfw",
+  surface: "home" | "bits",
+  cursor?: string
+): Promise<FeedPage> {
+  const query = new URLSearchParams({ mode, surface });
+  if (cursor) query.set("cursor", cursor);
+  return authenticatedGet<FeedPage>(`/v1/content/feed?${query.toString()}`);
+}
+
+export async function followUser(userId: string, idempotencyKey: string): Promise<FollowState> {
+  return authenticatedMutation<FollowState>(
+    `/v1/follows/${encodeURIComponent(userId)}`,
+    "POST",
+    {},
+    idempotencyKey
+  );
+}
+
+export async function unfollowUser(userId: string, idempotencyKey: string): Promise<FollowState> {
+  return authenticatedMutation<FollowState>(
+    `/v1/follows/${encodeURIComponent(userId)}`,
+    "DELETE",
+    {},
+    idempotencyKey
+  );
+}
+
+export async function recordFeedImpression(
+  body: RecordFeedImpressionRequest,
+  idempotencyKey: string
+): Promise<void> {
+  await authenticatedEmptyMutation("/v1/feed/impressions", "POST", body, idempotencyKey);
 }
 
 export async function createLiveEventAccessIntent(liveRoomId: string): Promise<PaymentIntent> {
