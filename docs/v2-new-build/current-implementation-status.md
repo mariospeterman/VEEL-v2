@@ -40,7 +40,7 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Merged baseline | `main` at `01b1f83` (Launch 06, PR #47) |
 | Active slice | Launch 07 — SFW live host, viewer, chat, and operational controls |
 | Branch | `codex/launch-07-sfw-live` |
-| Pull request | Pending |
+| Pull request | #48 |
 | State | `ACTIVE` |
 | Slice blockers | Code can complete locally; real Livepeer staging credentials, signed webhook/JWT/ingest evidence, and approved target-domain browser broadcast proof remain pre-production gates |
 | Next unfinished slice | Launch 08 — Recurring platform subscriptions and creator memberships |
