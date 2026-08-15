@@ -41,9 +41,9 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Active slice | Launch 05 — Realtime messages and notifications |
 | Branch | `codex/launch-05-realtime-messages` |
 | Pull request | Pending |
-| State | `IN_PROGRESS` |
+| State | `ACTIVE` |
 | Slice blockers | Code can complete locally; real Supabase Realtime signing-key/channel proof and VAPID browser delivery remain pre-production staging gates |
-| Next unfinished slice | Launch 06 — One-time monetisation and Event Access convergence |
+| Next unfinished slice | Launch 06 — One-time monetisation and Event Access completion, including narrow Commerce Kit Solana Pay convergence and one shared checkout presentation |
 
 Current human/provider gates do not block this process slice: shared staging credentials,
 provider dashboard/webhook/domain configuration, migration `0091` shared-project proof,
