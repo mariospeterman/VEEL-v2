@@ -55,6 +55,7 @@ export function validateModerationAction(
 
   if (
     body.action !== "approve" &&
+    body.action !== "request_changes" &&
     body.action !== "restrict" &&
     body.action !== "block" &&
     body.action !== "delete" &&

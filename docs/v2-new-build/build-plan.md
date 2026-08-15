@@ -49,7 +49,7 @@ The historical milestones below remain useful implementation context. New produc
 | 00 | Baseline, governance, and truth lock | Merged through PR #35 at `b441532`; required main checks passed |
 | 01 | Executable contracts and platform security boundary | Merged through PR #42 at `9081bd0`; local browser/Postgres proof passed, while shared Supabase migration/advisor proof and production-like Redis/provider staging remain release blockers |
 | 02 | Three-step onboarding, canonical session, optional recovery, and earnings readiness | Identity/session/recovery and the three-step onboarding foundation merged with Launch 01; earnings readiness remains incomplete and real provider acceptance evidence remains a launch gate |
-| 03A | SFW media publishing and moderation | Not started; ordinary SFW rights declarations reuse the existing performer relation where consent is required, while adult publishing and documentary performer verification remain separately gated and fail-closed |
+| 03A | SFW media publishing and moderation | `CODE_COMPLETE_PROVIDER_BLOCKED` on PR #44; contracts, reversible migration, owner/admin workflows, real-Postgres proof, and desktop/mobile browser proof are green. Bunny staging credentials and launch-approved classifier/hash evidence remain the fail-closed provider gate |
 | 04 | Core social graph and real feeds | Not started |
 | 05 | Realtime messages and notifications | Not started |
 | 06 | One-time monetisation and Event Access completion, including narrow Commerce Kit Solana Pay convergence and one shared checkout presentation | Not started |

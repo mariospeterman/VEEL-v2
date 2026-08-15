@@ -7,6 +7,7 @@ import { createContentPublishRepositoryMethods } from "./content-publish-reposit
 import { createContentQuotaRepositoryMethods } from "./content-quota-repository.js";
 import { createContentReadRepositoryMethods } from "./content-read-repository.js";
 import { createContentUpdateRepositoryMethods } from "./content-update-repository.js";
+import { createContentWorkflowRepositoryMethods } from "./content-workflow-repository.js";
 import type { ContentRepository } from "./types.js";
 
 export {
@@ -14,6 +15,7 @@ export {
   ContentDraftQuotaExceededError,
   ContentEventDraftConflictError,
   ContentPublishConflictError,
+  ContentModerationAppealConflictError,
   ContentRepositoryConfigurationError
 } from "./content-errors.js";
 
@@ -32,6 +34,7 @@ export function createPostgresContentRepository(database?: string | PostgresSql)
     ...createContentQuotaRepositoryMethods(sql),
     ...createContentReadRepositoryMethods(sql),
     ...createContentUpdateRepositoryMethods(sql),
+    ...createContentWorkflowRepositoryMethods(sql),
     async close() {
       if (ownsClient) {
         await sql.end({ timeout: 5 });
@@ -69,7 +72,16 @@ function createUnavailableContentRepository(): ContentRepository {
     async findOwnedContentForUpload() {
       throw new ContentRepositoryConfigurationError();
     },
+    async findOwnedContentForUpdate() {
+      throw new ContentRepositoryConfigurationError();
+    },
     async listHomeFeed() {
+      throw new ContentRepositoryConfigurationError();
+    },
+    async listOwnedContent() {
+      throw new ContentRepositoryConfigurationError();
+    },
+    async createModerationAppeal() {
       throw new ContentRepositoryConfigurationError();
     },
     async recordMediaProviderWebhook() {

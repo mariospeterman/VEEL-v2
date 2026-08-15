@@ -36,7 +36,7 @@ export function createModerationRepository(
         order by
           case when coalesce(msc.state, ci.moderation_state) in (
             'quarantined', 'preprocessing', 'hash_checking', 'classification',
-            'review_required', 'held_for_reporting', 'appealed', 'pending', 'reported', 'restricted'
+            'review_required', 'changes_requested', 'held_for_reporting', 'appealed', 'pending', 'reported', 'restricted'
           ) then 0 else 1 end,
           ci.created_at desc
         limit ${pageSize + 1}
@@ -78,20 +78,42 @@ export function createModerationRepository(
         if (!safetyCase) {
           throw new AdminRepositoryStateConflictError("Media safety case is missing");
         }
+        assertModerationTransition(
+          input.body.action,
+          safetyCase.state,
+          currentContent.state
+        );
 
         const approving = input.body.action === "approve" || input.body.action === "reinstate";
+        const requestingChanges = input.body.action === "request_changes";
+        const decidingAppeal = safetyCase.state === "appealed";
         await transaction`
           update media_safety_cases
           set
-            state = ${approving ? "approved" : input.body.action === "restrict" ? "review_required" : "rejected"},
+            state = ${approving ? "approved" : requestingChanges ? "changes_requested" : input.body.action === "restrict" ? "review_required" : "rejected"},
             decision_source = 'staff',
-            reason_code = ${input.body.reason},
+            reason_code = ${approving ? "staff_approved" : requestingChanges ? "changes_requested" : input.body.action === "restrict" ? "staff_review_required" : "policy_rejected"},
+            decision_message = ${input.body.reason.trim()},
             provider_release_allowed = ${approving},
             reviewed_by_user_id = ${actor.id},
             decided_at = now(),
             updated_at = now()
           where id = ${safetyCase.id}
         `;
+
+        if (decidingAppeal) {
+          await transaction`
+            update media_moderation_appeals
+            set
+              state = ${approving ? "overturned" : "upheld"},
+              resolution_reason = ${`staff_${input.body.action}`},
+              reviewed_by_user_id = ${actor.id},
+              reviewed_at = now(),
+              updated_at = now()
+            where media_safety_case_id = ${safetyCase.id}
+              and state in ('submitted', 'reviewing')
+          `;
+        }
 
         let updatedRows: AdminContentRow[];
         try {
@@ -105,12 +127,22 @@ export function createModerationRepository(
                   and ci.publish_state = 'submitted_for_review'
                   and ${moderation.state} = 'ready'
                 then 'published'
+                when ${input.body.action} = 'approve'
+                  and ${decidingAppeal}
+                  and ci.publish_state = 'blocked'
+                  and ${moderation.state} = 'ready'
+                then 'published'
                 when ${input.body.action} in ('block', 'delete') then 'blocked'
+                when ${requestingChanges} then 'submitted_for_review'
+                when ${input.body.action} = 'reinstate' and ci.publish_state = 'blocked' then 'unpublished'
                 else ci.publish_state
               end,
               published_at = case
                 when ${approving}
-                  and ci.publish_state = 'submitted_for_review'
+                  and (
+                    ci.publish_state = 'submitted_for_review'
+                    or (${input.body.action} = 'approve' and ${decidingAppeal} and ci.publish_state = 'blocked')
+                  )
                   and ${moderation.state} = 'ready'
                 then coalesce(ci.published_at, now())
                 else ci.published_at
@@ -275,4 +307,26 @@ export function createModerationRepository(
       return rows[0] ? toAdminReport(rows[0]) : null;
     },
   };
+}
+
+function assertModerationTransition(
+  action: string,
+  safetyState: string,
+  contentState: string
+): void {
+  const allowedSafetyStates: Record<string, readonly string[]> = {
+    approve: ["review_required", "appealed", "changes_requested"],
+    request_changes: ["review_required", "appealed"],
+    reinstate: ["rejected"]
+  };
+  const allowed = allowedSafetyStates[action];
+
+  if (action === "reinstate" && contentState === "deleted") {
+    throw new AdminRepositoryStateConflictError("Deleted content cannot be reinstated");
+  }
+  if (allowed && !allowed.includes(safetyState)) {
+    throw new AdminRepositoryStateConflictError(
+      `Moderation action ${action} is invalid while the safety case is ${safetyState}`
+    );
+  }
 }

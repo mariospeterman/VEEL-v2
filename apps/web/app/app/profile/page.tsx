@@ -1,6 +1,7 @@
 import {
   getMyCreatorDashboard,
   getMyCreatorOnboarding,
+  getMyContent,
   type ApiResult,
   type CreatorDashboard,
   type CreatorOnboarding
@@ -10,21 +11,23 @@ import { formatAssetAmount } from "@/format-asset-amount";
 import { AppShell } from "../../app-shell";
 import { Card, ErrorState, Fact, MetricCard, PageHeader, StatusPill } from "../../ui";
 import { ProfileLogoutButton } from "./profile-logout-button";
+import { ProfileMediaWorkspace } from "./profile-media-workspace";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProfilePage() {
   await requireAppAccess("/app/profile");
 
-  const [dashboardResult, onboardingResult] = await Promise.all([
+  const [dashboardResult, onboardingResult, mediaResult] = await Promise.all([
     getMyCreatorDashboard(),
-    getMyCreatorOnboarding()
+    getMyCreatorOnboarding(),
+    getMyContent()
   ]);
 
   return (
     <AppShell>
       {dashboardResult.ok ? (
-        <DashboardView dashboard={dashboardResult.data} onboarding={onboardingResult} />
+        <DashboardView dashboard={dashboardResult.data} media={mediaResult} onboarding={onboardingResult} />
       ) : onboardingResult.ok ? (
         <OnboardingOnlyView onboarding={onboardingResult.data} unavailable={dashboardResult} />
       ) : (
@@ -39,9 +42,11 @@ export default async function ProfilePage() {
 
 function DashboardView({
   dashboard,
+  media,
   onboarding
 }: {
   dashboard: CreatorDashboard;
+  media: Awaited<ReturnType<typeof getMyContent>>;
   onboarding: ApiResult<CreatorOnboarding>;
 }) {
   return (
@@ -54,6 +59,10 @@ function DashboardView({
         >
           @{dashboard.creator.handle}
         </PageHeader>
+
+        {media.ok ? <ProfileMediaWorkspace initialPage={media.data} /> : (
+          <ErrorState result={media} title="Your media is unavailable" context="Profile media" />
+        )}
 
         <div className="grid gap-3 sm:grid-cols-3">
           <MetricCard

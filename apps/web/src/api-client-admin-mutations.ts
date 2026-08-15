@@ -1,5 +1,7 @@
 import { patchJson } from "./api-client-transport";
 import type {
+  AdminContentItem,
+  AdminModerationActionRequest,
   AdminDataRequest,
   AdminDataRequestActionRequest,
   AdminFeatureFlag,
@@ -16,6 +18,18 @@ import type {
   AdminSupportPolicyActionRequest,
   ApiResult
 } from "./api-client-types";
+
+export async function updateAdminContentModeration(
+  contentId: string,
+  body: AdminModerationActionRequest,
+  idempotencyKey: string
+): Promise<ApiResult<AdminContentItem>> {
+  return patchJson<AdminContentItem>(
+    `/v1/admin/content/${encodeURIComponent(contentId)}/moderation`,
+    body,
+    idempotencyKey
+  );
+}
 
 export async function updateAdminOrganizationKyb(
   organizationId: string,

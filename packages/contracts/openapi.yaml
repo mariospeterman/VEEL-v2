@@ -585,6 +585,18 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/content/mine:
+    get:
+      operationId: listMyContent
+      tags: [Content]
+      summary: List the signed-in user's drafts and publication review states
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200": { $ref: "#/components/responses/CreatorMediaPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/content/{contentId}:
     get:
       operationId: getContent
@@ -628,6 +640,24 @@ paths:
         $ref: "#/components/requestBodies/PublishContent"
       responses:
         "200": { $ref: "#/components/responses/ContentItem" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/content/{contentId}/moderation-appeals:
+    post:
+      operationId: createContentModerationAppeal
+      tags: [Content]
+      summary: Appeal a review decision on owned content
+      parameters:
+        - $ref: "#/components/parameters/ContentId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateMediaModerationAppeal"
+      responses:
+        "201": { $ref: "#/components/responses/MediaModerationAppeal" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -2444,6 +2474,7 @@ components:
     CreateContent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateContentRequest" } } } }
     UpdateContent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateContentRequest" } } } }
     PublishContent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PublishContentRequest" } } } }
+    CreateMediaModerationAppeal: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateMediaModerationAppealRequest" } } } }
     UpdateFeedPreferences: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateFeedPreferencesRequest" } } } }
     HideFeedCreator: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/HideFeedCreatorRequest" } } } }
     HideFeedTopic: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/HideFeedTopicRequest" } } } }
@@ -2552,6 +2583,8 @@ components:
     NotificationPushConfig: { description: Browser-safe notification push config, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationPushConfig" } } } }
     NotificationDevice: { description: Notification device, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationDevice" } } } }
     ContentItem: { description: Content item, content: { application/json: { schema: { $ref: "#/components/schemas/ContentItem" } } } }
+    CreatorMediaPage: { description: Owner-visible publication workspace, content: { application/json: { schema: { $ref: "#/components/schemas/CreatorMediaPage" } } } }
+    MediaModerationAppeal: { description: Creator moderation appeal, content: { application/json: { schema: { $ref: "#/components/schemas/MediaModerationAppeal" } } } }
     UploadSession: { description: Safe upload session, content: { application/json: { schema: { $ref: "#/components/schemas/UploadSession" } } } }
     ProfileAvatarUpload: { description: Uploaded profile avatar URL, content: { application/json: { schema: { $ref: "#/components/schemas/ProfileAvatarUpload" } } } }
     LiveRoom: { description: Live room, content: { application/json: { schema: { $ref: "#/components/schemas/LiveRoom" } } } }
@@ -3332,7 +3365,7 @@ components:
         heartbeatIntervalSeconds: { type: integer, minimum: 5, maximum: 30 }
     CreateContentRequest:
       type: object
-      required: [mediaType, visibility, nsfwLabel]
+      required: [mediaType, visibility, nsfwLabel, representationMode, contentSafetyPolicyAccepted]
       properties:
         mediaType: { type: string, enum: [bit, clip, image, vod, live_replay] }
         caption: { type: string }
@@ -3358,6 +3391,42 @@ components:
       required: [confirmation]
       properties:
         confirmation: { type: string, enum: [submit_for_review] }
+    CreatorMediaItem:
+      type: object
+      required: [id, mediaType, visibility, publicationState, reviewState, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        mediaType: { type: string, enum: [bit, clip, image, vod, live_replay] }
+        caption: { type: string, nullable: true }
+        posterUrl: { type: string, format: uri, nullable: true }
+        visibility: { type: string, enum: [public, followers, subscribers, private] }
+        publicationState:
+          type: string
+          enum: [draft, upload_pending, processing, in_review, changes_requested, rejected, appeal_pending, published, blocked]
+        reviewState: { type: string }
+        reviewMessage: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CreatorMediaPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/CreatorMediaItem" } }
+        nextCursor: { type: string, nullable: true }
+    CreateMediaModerationAppealRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 2000 }
+    MediaModerationAppeal:
+      type: object
+      required: [id, contentId, state, reason, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        contentId: { type: string, format: uuid }
+        state: { type: string, enum: [submitted, reviewing, upheld, overturned, withdrawn] }
+        reason: { type: string }
+        createdAt: { type: string, format: date-time }
     EventDraft:
       type: object
       required: [title, startsAt, accessRule, location, accessPassTypes]
@@ -4999,7 +5068,7 @@ components:
       type: object
       required: [action, reason]
       properties:
-        action: { type: string, enum: [approve, restrict, block, delete, reinstate] }
+        action: { type: string, enum: [approve, request_changes, restrict, block, delete, reinstate] }
         reason: { type: string, minLength: 3, maxLength: 500 }
     AdminReportActionRequest:
       type: object

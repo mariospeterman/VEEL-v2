@@ -8,8 +8,33 @@ import { recordContentSafetyDeclaration } from "./content-safety-repository.js";
 
 export function createContentUpdateRepositoryMethods(
   sql: postgres.Sql
-): Pick<ContentRepository, "updateOwnedContent"> {
+): Pick<ContentRepository, "findOwnedContentForUpdate" | "updateOwnedContent"> {
   return {
+    async findOwnedContentForUpdate(input) {
+      const rows = await sql<{
+        id: string;
+        media_type: ContentRow["media_type"];
+        caption: string | null;
+        nsfw_label: NonNullable<ContentRow["nsfw_label"]>;
+      }[]>`
+        select ci.id, ci.media_type, ci.caption, ci.nsfw_label
+        from content_items ci
+        join users u on u.id = ci.creator_user_id
+        where ci.id = ${input.contentId}
+          and u.supabase_user_id = ${input.supabaseUserId}
+          and ci.state <> 'deleted'
+        limit 1
+      `;
+      const row = rows[0];
+      return row
+        ? {
+            id: row.id,
+            mediaType: row.media_type,
+            caption: row.caption,
+            nsfwLabel: row.nsfw_label
+          }
+        : null;
+    },
     async updateOwnedContent(input) {
       const result = await sql.begin(async (transaction) => {
         const rows = await transaction<ContentRow[]>`
@@ -80,9 +105,8 @@ export function createContentUpdateRepositoryMethods(
             contentId: row.id,
             creatorUserId: row.creator_id,
             rating: row.nsfw_label ?? "none",
-            representationMode:
-              row.nsfw_label === "none" ? "not_declared" : input.representationMode ?? "not_declared",
-            policyAccepted: row.nsfw_label === "none" ? false : input.contentSafetyPolicyAccepted
+            representationMode: input.representationMode ?? "not_declared",
+            policyAccepted: input.contentSafetyPolicyAccepted
           });
         }
 

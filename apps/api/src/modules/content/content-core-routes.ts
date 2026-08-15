@@ -3,6 +3,7 @@ import {
   ContentDraftIdempotencyConflictError,
   ContentDraftQuotaExceededError,
   ContentEventDraftConflictError,
+  ContentModerationAppealConflictError,
   ContentPublishConflictError,
   ContentRepositoryConfigurationError
 } from "./content-repository.js";
@@ -10,6 +11,7 @@ import { hashIdempotencyPayload, readIdempotencyKey } from "../../shared/idempot
 import { validateEventDraft } from "../event/event-route-shared.js";
 import type {
   CreateContentRequest,
+  CreateMediaModerationAppealRequest,
   PublishContentRequest,
   UpdateContentRequest
 } from "./types.js";
@@ -68,14 +70,13 @@ export async function registerContentCoreRoutes(
     try {
       const isAdultRated = body.nsfwLabel !== "none";
       if (
-        isAdultRated &&
         (typeof body.representationMode !== "string" ||
           !representationModes.has(body.representationMode) ||
           body.contentSafetyPolicyAccepted !== true)
       ) {
         return reply.code(400).send({
           code: "validation_failed",
-          message: "Adult or explicit media requires a performer declaration and policy acceptance"
+          message: "A people-and-rights declaration and policy acceptance are required"
         });
       }
 
@@ -96,10 +97,8 @@ export async function registerContentCoreRoutes(
         caption: typeof body.caption === "string" ? body.caption : null,
         visibility: body.visibility,
         nsfwLabel: body.nsfwLabel,
-        representationMode: isAdultRated
-          ? (body.representationMode as NonNullable<CreateContentRequest["representationMode"]>)
-          : "not_declared" as const,
-        contentSafetyPolicyAccepted: isAdultRated
+        representationMode: body.representationMode as NonNullable<CreateContentRequest["representationMode"]>,
+        contentSafetyPolicyAccepted: true
       };
 
       const content = await options.contentRepository.createDraft({
@@ -134,6 +133,33 @@ export async function registerContentCoreRoutes(
         });
       }
 
+      throw error;
+    }
+  });
+
+  app.get("/v1/content/mine", async (request, reply) => {
+    const access = await verifyAppReadyAccess(request, options);
+    if (!access.ok) return reply.code(access.statusCode).send(access.body);
+
+    const query = request.query as { cursor?: string };
+    if (query.cursor && Number.isNaN(Date.parse(query.cursor))) {
+      return reply.code(400).send({ code: "validation_failed", message: "cursor must be an ISO date-time" });
+    }
+
+    try {
+      if (!options.contentRepository.listOwnedContent) {
+        return reply.code(503).send({ code: "service_unavailable", message: "Content storage is not configured" });
+      }
+      return reply.code(200).send(await options.contentRepository.listOwnedContent({
+        supabaseUserId: access.supabaseUserId,
+        limit: 24,
+        ...(query.cursor ? { cursor: query.cursor } : {})
+      }));
+    } catch (error) {
+      if (error instanceof ContentRepositoryConfigurationError) {
+        request.log.warn({ error }, "Content repository is not configured");
+        return reply.code(503).send({ code: "service_unavailable", message: "Content storage is not configured" });
+      }
       throw error;
     }
   });
@@ -265,10 +291,29 @@ export async function registerContentCoreRoutes(
         });
       }
 
-      if (
-        body?.representationMode ||
-        (body?.nsfwLabel !== undefined && body.nsfwLabel !== "none")
-      ) {
+      let currentContent = null;
+      if (body?.representationMode && body.nsfwLabel === undefined) {
+        if (!options.contentRepository.findOwnedContentForUpdate) {
+          return reply.code(503).send({
+            code: "service_unavailable",
+            message: "Content storage is not configured"
+          });
+        }
+        currentContent = await options.contentRepository.findOwnedContentForUpdate({
+          supabaseUserId: access.supabaseUserId,
+          contentId: params.contentId
+        });
+        if (!currentContent) {
+          return reply.code(404).send({
+            code: "not_found",
+            message: "Content was not found"
+          });
+        }
+      }
+      const adultDeclaration =
+        (body?.nsfwLabel !== undefined && body.nsfwLabel !== "none") ||
+        (body?.representationMode !== undefined && currentContent?.nsfwLabel !== "none");
+      if (adultDeclaration) {
         const creatorAccess = await verifyCreatorCapability(
           access.supabaseUserId,
           "canPublishAdultMedia",
@@ -425,6 +470,57 @@ export async function registerContentCoreRoutes(
         });
       }
 
+      throw error;
+    }
+  });
+
+  app.post("/v1/content/:contentId/moderation-appeals", async (request, reply) => {
+    const access = await verifyAppReadyAccess(request, options);
+    if (!access.ok) return reply.code(access.statusCode).send(access.body);
+
+    const idempotencyKey = readIdempotencyKey(request);
+    const { contentId } = request.params as { contentId?: string };
+    const body = request.body as Partial<CreateMediaModerationAppealRequest> | undefined;
+
+    if (!idempotencyKey) {
+      return reply.code(400).send({ code: "validation_failed", message: "Idempotency-Key header is required" });
+    }
+    if (!contentId) {
+      return reply.code(400).send({ code: "validation_failed", message: "contentId is required" });
+    }
+    if (!body || typeof body.reason !== "string" || body.reason.trim().length < 3 || body.reason.trim().length > 2000) {
+      return reply.code(400).send({ code: "validation_failed", message: "Appeal reason must be between 3 and 2000 characters" });
+    }
+
+    try {
+      if (!options.contentRepository.createModerationAppeal) {
+        return reply.code(503).send({ code: "service_unavailable", message: "Content storage is not configured" });
+      }
+      const appeal = await options.contentRepository.createModerationAppeal({
+        supabaseUserId: access.supabaseUserId,
+        contentId,
+        idempotencyKey,
+        reason: body.reason.trim()
+      });
+      if (!appeal) {
+        return reply.code(404).send({ code: "not_found", message: "Content was not found" });
+      }
+      return reply.code(201).send(appeal);
+    } catch (error) {
+      if (error instanceof ContentModerationAppealConflictError) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: error.reason === "appeal_already_open"
+            ? "An appeal is already being reviewed"
+            : error.reason === "idempotency_conflict"
+              ? "Idempotency key was already used for a different appeal"
+              : "This review decision cannot be appealed"
+        });
+      }
+      if (error instanceof ContentRepositoryConfigurationError) {
+        request.log.warn({ error }, "Content repository is not configured");
+        return reply.code(503).send({ code: "service_unavailable", message: "Content storage is not configured" });
+      }
       throw error;
     }
   });

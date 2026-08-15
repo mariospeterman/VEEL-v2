@@ -75,6 +75,8 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 
 ## Product And UX
 
+- [SFW publishing and moderation](sfw-publishing-and-moderation.md)
+
 12. [Product flows](product-flows.md)
 13. [Mutuals architecture](product/mutuals.md)
 14. [Event Access architecture](product/event-access.md)

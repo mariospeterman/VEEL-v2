@@ -277,6 +277,8 @@ export function contentModerationForAction(action: string): {
       return { moderationState: "approved", state: "ready" };
     case "restrict":
       return { moderationState: "restricted", state: "ready" };
+    case "request_changes":
+      return { moderationState: "pending", state: "ready" };
     case "block":
       return { moderationState: "blocked", state: "blocked" };
     case "delete":

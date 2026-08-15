@@ -754,6 +754,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/content/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the signed-in user's drafts and publication review states */
+        get: operations["listMyContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/content/{contentId}": {
         parameters: {
             query?: never;
@@ -783,6 +800,23 @@ export interface paths {
         put?: never;
         /** Submit provider-ready content for moderation or publish after approval */
         post: operations["publishContent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/content/{contentId}/moderation-appeals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Appeal a review decision on owned content */
+        post: operations["createContentModerationAppeal"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3553,8 +3587,8 @@ export interface components {
             /** @enum {string} */
             nsfwLabel: "none" | "adult" | "explicit";
             /** @enum {string} */
-            representationMode?: "no_real_person" | "self_only" | "declared_performers";
-            contentSafetyPolicyAccepted?: boolean;
+            representationMode: "no_real_person" | "self_only" | "declared_performers";
+            contentSafetyPolicyAccepted: boolean;
             eventDraft?: components["schemas"]["EventDraft"];
         };
         UpdateContentRequest: {
@@ -3574,6 +3608,43 @@ export interface components {
         PublishContentRequest: {
             /** @enum {string} */
             confirmation: "submit_for_review";
+        };
+        CreatorMediaItem: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            mediaType: "bit" | "clip" | "image" | "vod" | "live_replay";
+            caption?: string | null;
+            /** Format: uri */
+            posterUrl?: string | null;
+            /** @enum {string} */
+            visibility: "public" | "followers" | "subscribers" | "private";
+            /** @enum {string} */
+            publicationState: "draft" | "upload_pending" | "processing" | "in_review" | "changes_requested" | "rejected" | "appeal_pending" | "published" | "blocked";
+            reviewState: string;
+            reviewMessage?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreatorMediaPage: {
+            items: components["schemas"]["CreatorMediaItem"][];
+            nextCursor: string | null;
+        };
+        CreateMediaModerationAppealRequest: {
+            reason: string;
+        };
+        MediaModerationAppeal: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            contentId: string;
+            /** @enum {string} */
+            state: "submitted" | "reviewing" | "upheld" | "overturned" | "withdrawn";
+            reason: string;
+            /** Format: date-time */
+            createdAt: string;
         };
         EventDraft: {
             title: string;
@@ -5231,7 +5302,7 @@ export interface components {
         };
         AdminModerationActionRequest: {
             /** @enum {string} */
-            action: "approve" | "restrict" | "block" | "delete" | "reinstate";
+            action: "approve" | "request_changes" | "restrict" | "block" | "delete" | "reinstate";
             reason: string;
         };
         AdminReportActionRequest: {
@@ -5659,6 +5730,24 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["ContentItem"];
+            };
+        };
+        /** @description Owner-visible publication workspace */
+        CreatorMediaPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["CreatorMediaPage"];
+            };
+        };
+        /** @description Creator moderation appeal */
+        MediaModerationAppeal: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["MediaModerationAppeal"];
             };
         };
         /** @description Safe upload session */
@@ -6760,6 +6849,11 @@ export interface components {
                 "application/json": components["schemas"]["PublishContentRequest"];
             };
         };
+        CreateMediaModerationAppeal: {
+            content: {
+                "application/json": components["schemas"]["CreateMediaModerationAppealRequest"];
+            };
+        };
         UpdateFeedPreferences: {
             content: {
                 "application/json": components["schemas"]["UpdateFeedPreferencesRequest"];
@@ -7760,6 +7854,23 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    listMyContent: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["CreatorMediaPage"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     getContent: {
         parameters: {
             query?: never;
@@ -7817,6 +7928,29 @@ export interface operations {
         requestBody: components["requestBodies"]["PublishContent"];
         responses: {
             200: components["responses"]["ContentItem"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createContentModerationAppeal: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                contentId: components["parameters"]["ContentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["CreateMediaModerationAppeal"];
+        responses: {
+            201: components["responses"]["MediaModerationAppeal"];
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];

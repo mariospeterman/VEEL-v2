@@ -543,6 +543,55 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         moderationState: "review_required"
       });
 
+      const adultChangesRequested = await moderationRepository.updateContentModeration({
+        supabaseUserId: creatorSupabaseUserId,
+        contentId: adultContentId,
+        body: {
+          action: "request_changes",
+          reason: "Please clarify the uploader rights declaration."
+        },
+        idempotencyKey: `adult-content-request-changes-${runId}`
+      });
+      expect(adultChangesRequested).toMatchObject({
+        id: adultContentId,
+        moderationState: "changes_requested"
+      });
+
+      await sql`
+        update verification_records
+        set expires_at = now() - interval '1 minute'
+        where subject_type = 'user'
+          and subject_id = ${seededCreatorUserId}
+          and purpose = 'adult_publisher_eligibility'
+      `;
+      const expiredAdultRepresentationEdit = await app.inject({
+        method: "PATCH",
+        url: `/v1/content/${adultContentId}`,
+        headers: creatorAuthenticatedHeaders(`adult-representation-expired-${runId}`),
+        payload: {
+          representationMode: "self_only",
+          contentSafetyPolicyAccepted: true
+        }
+      });
+      expect(expiredAdultRepresentationEdit.statusCode, expiredAdultRepresentationEdit.body).toBe(403);
+      await sql`
+        update verification_records
+        set expires_at = null
+        where subject_type = 'user'
+          and subject_id = ${seededCreatorUserId}
+          and purpose = 'adult_publisher_eligibility'
+      `;
+
+      await expect(moderationRepository.updateContentModeration({
+        supabaseUserId: creatorSupabaseUserId,
+        contentId: adultContentId,
+        body: {
+          action: "request_changes",
+          reason: "A duplicate transition must fail."
+        },
+        idempotencyKey: `adult-content-request-changes-repeat-${runId}`
+      })).rejects.toThrow("invalid while the safety case is changes_requested");
+
       const createContentResponse = await app.inject({
         method: "POST",
         url: "/v1/content",
@@ -551,6 +600,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           mediaType: "image",
           visibility: "public",
           nsfwLabel: "none",
+          representationMode: "self_only",
+          contentSafetyPolicyAccepted: true,
           caption: `Integration draft ${runId}`
         }
       });
@@ -560,6 +611,137 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         mediaType: "image",
         accessState: "free",
         caption: `Integration draft ${runId}`
+      });
+      const sfwContentId = createContentResponse.json().id as string;
+
+      const ownedMediaResponse = await app.inject({
+        method: "GET",
+        url: "/v1/content/mine",
+        headers: authenticatedHeaders(`owned-media-${runId}`)
+      });
+      expect(ownedMediaResponse.statusCode, ownedMediaResponse.body).toBe(200);
+      expect(ownedMediaResponse.json().items).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: sfwContentId, publicationState: "upload_pending" })
+      ]));
+
+      await sql`
+        update profiles
+        set visibility = 'public'
+        where lower(handle) = lower(${buyerHandle})
+      `;
+
+      const publicProfileBeforeApproval = await app.inject({
+        method: "GET",
+        url: `/v1/profiles/${buyerHandle}`
+      });
+      expect(publicProfileBeforeApproval.statusCode, publicProfileBeforeApproval.body).toBe(200);
+      expect(publicProfileBeforeApproval.json().recentContent).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: sfwContentId })])
+      );
+
+      const sfwMediaAssetId = randomUUID();
+      await sql`
+        insert into media_assets (
+          id, content_item_id, provider, provider_asset_id, provider_state,
+          provider_playable, ready_at, provider_checked_at
+        )
+        values (
+          ${sfwMediaAssetId}, ${sfwContentId}, 'bunny', ${`sfw-review-${runId}`}, 'ready',
+          true, now(), now()
+        )
+      `;
+      await sql`
+        update media_safety_cases
+        set
+          state = 'rejected',
+          decision_source = 'staff',
+          reason_code = 'policy_rejected',
+          decision_message = 'Please clarify the rights declaration.',
+          decided_at = now(),
+          updated_at = now()
+        where content_item_id = ${sfwContentId}
+      `;
+      await sql`
+        update content_items
+        set state = 'blocked', moderation_state = 'blocked', publish_state = 'blocked', updated_at = now()
+        where id = ${sfwContentId}
+      `;
+
+      const rejectedOwnerMediaResponse = await app.inject({
+        method: "GET",
+        url: "/v1/content/mine",
+        headers: authenticatedHeaders(`owned-media-rejected-${runId}`)
+      });
+      expect(rejectedOwnerMediaResponse.statusCode, rejectedOwnerMediaResponse.body).toBe(200);
+      expect(rejectedOwnerMediaResponse.json().items).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: sfwContentId, publicationState: "rejected" })
+      ]));
+
+      const appealResponse = await app.inject({
+        method: "POST",
+        url: `/v1/content/${sfwContentId}/moderation-appeals`,
+        headers: authenticatedHeaders(`sfw-appeal-${runId}`),
+        payload: { reason: "I confirm that I own the recording and appear alone." }
+      });
+      expect(appealResponse.statusCode, appealResponse.body).toBe(201);
+      expect(appealResponse.json()).toMatchObject({ contentId: sfwContentId, state: "submitted" });
+
+      const replayedAppealResponse = await app.inject({
+        method: "POST",
+        url: `/v1/content/${sfwContentId}/moderation-appeals`,
+        headers: authenticatedHeaders(`sfw-appeal-${runId}`),
+        payload: { reason: "I confirm that I own the recording and appear alone." }
+      });
+      expect(replayedAppealResponse.statusCode, replayedAppealResponse.body).toBe(201);
+      expect(replayedAppealResponse.json().id).toBe(appealResponse.json().id);
+
+      const conflictingAppealResponse = await app.inject({
+        method: "POST",
+        url: `/v1/content/${sfwContentId}/moderation-appeals`,
+        headers: authenticatedHeaders(`sfw-appeal-${runId}`),
+        payload: { reason: "This is a different appeal request." }
+      });
+      expect(conflictingAppealResponse.statusCode, conflictingAppealResponse.body).toBe(409);
+
+      const appealedOwnerMediaResponse = await app.inject({
+        method: "GET",
+        url: "/v1/content/mine",
+        headers: authenticatedHeaders(`owned-media-appealed-${runId}`)
+      });
+      expect(appealedOwnerMediaResponse.statusCode, appealedOwnerMediaResponse.body).toBe(200);
+      expect(appealedOwnerMediaResponse.json().items).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: sfwContentId, publicationState: "appeal_pending" })
+      ]));
+
+      const approvedAppeal = await moderationRepository.updateContentModeration({
+        supabaseUserId: creatorSupabaseUserId,
+        contentId: sfwContentId,
+        body: {
+          action: "approve",
+          reason: "Appeal accepted after staff review."
+        },
+        idempotencyKey: `sfw-appeal-approve-${runId}`
+      });
+      expect(approvedAppeal).toMatchObject({
+        id: sfwContentId,
+        state: "ready",
+        moderationState: "approved"
+      });
+      const approvedAppealRows = await sql<{
+        publish_state: string;
+        appeal_state: string;
+        reviewed_at: Date | null;
+      }[]>`
+        select ci.publish_state, mma.state as appeal_state, mma.reviewed_at
+        from content_items ci
+        join media_safety_cases msc on msc.content_item_id = ci.id and msc.state <> 'superseded'
+        join media_moderation_appeals mma on mma.media_safety_case_id = msc.id
+        where ci.id = ${sfwContentId}
+      `;
+      expect(approvedAppealRows[0]).toMatchObject({
+        publish_state: "published",
+        appeal_state: "overturned",
+        reviewed_at: expect.any(Date)
       });
 
       const playbackSessionResponse = await app.inject({

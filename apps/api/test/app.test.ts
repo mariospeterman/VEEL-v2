@@ -3521,8 +3521,8 @@ describe("buildApi", () => {
           caption: "studio cut",
           visibility: "private",
           nsfwLabel: "none",
-          representationMode: "not_declared",
-          contentSafetyPolicyAccepted: false,
+          representationMode: "self_only",
+          contentSafetyPolicyAccepted: true,
           dailyDraftQuota: 20
         });
         expect(input.requestHash).toMatch(/^[a-f0-9]{64}$/);
@@ -3577,7 +3577,9 @@ describe("buildApi", () => {
         mediaType: "vod",
         caption: "studio cut",
         visibility: "private",
-        nsfwLabel: "none"
+        nsfwLabel: "none",
+        representationMode: "self_only",
+        contentSafetyPolicyAccepted: true
       }
     });
 
@@ -3644,7 +3646,9 @@ describe("buildApi", () => {
         mediaType: "vod",
         caption: "studio cut",
         visibility: "private",
-        nsfwLabel: "none"
+        nsfwLabel: "none",
+        representationMode: "self_only",
+        contentSafetyPolicyAccepted: true
       }
     });
 
@@ -3721,7 +3725,9 @@ describe("buildApi", () => {
         mediaType: "vod",
         caption: "studio cut",
         visibility: "private",
-        nsfwLabel: "none"
+        nsfwLabel: "none",
+        representationMode: "self_only",
+        contentSafetyPolicyAccepted: true
       }
     });
 
@@ -3828,6 +3834,173 @@ describe("buildApi", () => {
       nsfwLabel: "adult"
     });
 
+    await app.close();
+  });
+
+  it("rechecks adult-publisher capability before a representation-only edit in any editable state", async () => {
+    const updateOwnedContent = vi.fn();
+    const contentRepository: ContentRepository = {
+      ...contentRepositoryWithDetail(homeFeedItem),
+      async findOwnedContentForUpdate(input) {
+        expect(input).toEqual({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          contentId: "00000000-0000-4000-8000-000000000040"
+        });
+        return {
+          id: input.contentId,
+          mediaType: "vod",
+          caption: "Published adult item",
+          nsfwLabel: "adult"
+        };
+      },
+      updateOwnedContent
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      verificationRepository: verificationRepositoryStub(),
+      contentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "adult-representation-update-1"
+      },
+      payload: {
+        representationMode: "self_only",
+        contentSafetyPolicyAccepted: true
+      }
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(updateOwnedContent).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("lists owner-visible publication states without exposing provider details", async () => {
+    const contentRepository: ContentRepository = {
+      ...contentRepositoryWithDetail(homeFeedItem),
+      async listOwnedContent(input) {
+        expect(input).toEqual({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          limit: 24
+        });
+        return {
+          items: [{
+            id: "00000000-0000-4000-8000-000000000040",
+            mediaType: "vod",
+            caption: "studio cut",
+            posterUrl: null,
+            visibility: "public",
+            publicationState: "in_review",
+            reviewState: "review_required",
+            reviewMessage: null,
+            createdAt: "2026-08-15T12:00:00.000Z",
+            updatedAt: "2026-08-15T12:01:00.000Z"
+          }],
+          nextCursor: null
+        };
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/content/mine",
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json()).toMatchObject({
+      items: [{ publicationState: "in_review", reviewState: "review_required" }]
+    });
+    expect(response.body).not.toContain("provider");
+    await app.close();
+  });
+
+  it("submits an owned moderation appeal with a replay key", async () => {
+    const contentRepository: ContentRepository = {
+      ...contentRepositoryWithDetail(homeFeedItem),
+      async createModerationAppeal(input) {
+        expect(input).toEqual({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          contentId: "00000000-0000-4000-8000-000000000040",
+          idempotencyKey: "content-appeal-1",
+          reason: "The rights declaration is complete."
+        });
+        return {
+          id: "00000000-0000-4000-8000-000000000041",
+          contentId: input.contentId,
+          state: "submitted",
+          reason: input.reason,
+          createdAt: "2026-08-15T12:02:00.000Z"
+        };
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040/moderation-appeals",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "content-appeal-1"
+      },
+      payload: { reason: "The rights declaration is complete." }
+    });
+
+    expect(response.statusCode, response.body).toBe(201);
+    expect(response.json()).toMatchObject({ state: "submitted" });
     await app.close();
   });
 

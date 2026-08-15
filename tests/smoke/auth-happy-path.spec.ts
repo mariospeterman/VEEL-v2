@@ -56,6 +56,14 @@ test("covers authenticated app access to profile wallet age home create and unlo
 
   await page.goto("/app/profile");
   await expect(page.getByRole("heading", { name: "Aria Moon" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your media" })).toBeVisible();
+  await expect(page.getByText("Please confirm the music rights.")).toBeVisible();
+  await page.getByRole("button", { name: "Load more media" }).click();
+  await expect(page.getByText("Older published post")).toBeVisible();
+  await page.getByRole("button", { name: "Appeal decision" }).click();
+  await page.getByLabel("Why should this be reviewed again?").fill("I own the recording and the music license.");
+  await page.getByRole("button", { name: "Send appeal" }).click();
+  await expect(page.getByText("appeal pending")).toBeVisible();
   await expect(page.getByText("Readiness score").locator("..")).toContainText("92%");
   await expect(page.getByText("no balances or social priority")).toBeVisible();
 
@@ -79,25 +87,66 @@ test("covers authenticated app access to profile wallet age home create and unlo
   await page.goto("/app/create");
   await page.waitForLoadState("networkidle");
   await expect(page.getByRole("heading", { name: "New post" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Choose media and audience" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Choose your video" })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.cookie.includes("veel_e2e_access_token="))).toBe(true);
-  await page.getByLabel("Caption").fill("Behind the scenes from today's studio shoot.");
-  await page.getByRole("button", { name: "Continue" }).evaluate((element) => {
-    (element as HTMLButtonElement).click();
-  });
-  await expect(page.getByText("Draft saved")).toBeVisible();
 
-  const fileInput = page.getByLabel("Video");
+  await page.route("https://bunny.example.test/**", async (route) => {
+    const method = route.request().method();
+    if (method === "POST") {
+      await route.fulfill({
+        status: 201,
+        headers: {
+          "Access-Control-Allow-Origin": "http://127.0.0.1:3000",
+          "Access-Control-Expose-Headers": "Location,Upload-Offset,Tus-Resumable",
+          Location: "https://bunny.example.test/tus/studio-session/upload-1",
+          "Tus-Resumable": "1.0.0"
+        }
+      });
+      return;
+    }
+    if (method === "PATCH") {
+      await route.fulfill({
+        status: 204,
+        headers: {
+          "Access-Control-Allow-Origin": "http://127.0.0.1:3000",
+          "Access-Control-Expose-Headers": "Upload-Offset,Tus-Resumable",
+          "Upload-Offset": "10",
+          "Tus-Resumable": "1.0.0"
+        }
+      });
+      return;
+    }
+    await route.fulfill({ status: 200, headers: { "Upload-Offset": "0", "Tus-Resumable": "1.0.0" } });
+  });
+
+  const fileInput = page.locator('input[type="file"]');
   await fileInput.setInputFiles({
     name: "studio-session.mp4",
     mimeType: "video/mp4",
     buffer: Buffer.from("mock-video")
   });
-  await page.getByRole("button", { name: "Prepare upload" }).evaluate((element) => {
-    (element as HTMLButtonElement).click();
+  await expect(page.locator("video")).toBeVisible();
+  await page.getByLabel("Caption").fill("Behind the scenes from today's studio shoot.");
+  await page.getByLabel("I have the right to upload and share this video, and it is safe-for-work.").check();
+  await page.reload();
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "studio-session.mp4",
+    mimeType: "video/mp4",
+    buffer: Buffer.from("mock-video")
   });
-  await expect(page.getByText("Upload media")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Start upload" })).toBeEnabled();
+  await expect(page.getByLabel("Caption")).toHaveValue("Behind the scenes from today's studio shoot.");
+  await expect(page.getByLabel("I have the right to upload and share this video, and it is safe-for-work.")).not.toBeChecked();
+  await page.getByLabel("I have the right to upload and share this video, and it is safe-for-work.").check();
+  await page.getByRole("button", { name: "Upload video" }).click();
+  await expect(page.getByText("Preview ready")).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("button", { name: "Submit for review" }).click();
+  await expect(page.getByText("Submitted. It remains private while review completes.")).toBeVisible();
+  await expect(page.getByText(/Bunny|TUS|provider/i)).toHaveCount(0);
+  const createLayout = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth
+  }));
+  expect(createLayout.scrollWidth).toBe(createLayout.clientWidth);
 
   await page.goto(`/content/${contentId}`);
   await expect(page.getByRole("heading", { name: "Media viewer" })).toBeVisible();
@@ -196,6 +245,24 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
     return;
   }
 
+  if (method === "GET" && url.pathname === "/v1/content/mine") {
+    sendJson(response, 200, url.searchParams.has("cursor")
+      ? { items: [olderCreatorMediaItem()], nextCursor: null }
+      : { items: [creatorMediaItem()], nextCursor: "2026-08-15T12:01:00.000Z" });
+    return;
+  }
+
+  if (method === "POST" && url.pathname === `/v1/content/${draftContentId}/moderation-appeals`) {
+    sendJson(response, 201, {
+      id: "00000000-0000-4000-8000-000000000043",
+      contentId: draftContentId,
+      state: "submitted",
+      reason: stringField(body, "reason"),
+      createdAt: "2026-08-15T12:02:00.000Z"
+    });
+    return;
+  }
+
   if (method === "GET" && url.pathname === "/v1/verification/status") {
     sendJson(response, 200, verificationStatus());
     return;
@@ -278,6 +345,21 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
       },
       expiresAt: "2026-06-12T10:45:00.000Z"
     });
+    return;
+  }
+
+  if (method === "POST" && url.pathname === `/v1/media/assets/${mediaAssetId}/sync`) {
+    sendJson(response, 202, {});
+    return;
+  }
+
+  if (method === "PATCH" && url.pathname === `/v1/content/${draftContentId}`) {
+    sendJson(response, 200, contentItem({ id: draftContentId, accessState: "free", playbackState: "full" }));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === `/v1/content/${draftContentId}/publish`) {
+    sendJson(response, 200, contentItem({ id: draftContentId, accessState: "free", playbackState: "full" }));
     return;
   }
 
@@ -436,6 +518,34 @@ function creatorDashboard() {
       }
     ],
     recentActivity: []
+  };
+}
+
+function creatorMediaItem() {
+  return {
+    id: draftContentId,
+    mediaType: "clip",
+    caption: "Studio draft needing an update",
+    posterUrl: null,
+    visibility: "public",
+    publicationState: "changes_requested",
+    reviewState: "changes_requested",
+    reviewMessage: "Please confirm the music rights.",
+    createdAt: "2026-08-15T12:00:00.000Z",
+    updatedAt: "2026-08-15T12:01:00.000Z"
+  };
+}
+
+function olderCreatorMediaItem() {
+  return {
+    ...creatorMediaItem(),
+    id: "00000000-0000-4000-8000-000000000044",
+    caption: "Older published post",
+    publicationState: "published",
+    reviewState: "approved",
+    reviewMessage: null,
+    createdAt: "2026-08-14T12:00:00.000Z",
+    updatedAt: "2026-08-14T12:01:00.000Z"
   };
 }
 
