@@ -37,13 +37,13 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `890e0ad` (Launch 05, PR #46) |
-| Active slice | Launch 06 — One-time monetisation and Event Access completion |
-| Branch | `codex/launch-06-one-time-monetisation` |
-| Pull request | #47 |
-| State | `CODE_COMPLETE_PROVIDER_BLOCKED` |
-| Slice blockers | Code can complete locally; real staging Solana devnet wallets/RPC settlement proof, policy-approved KYC evidence, and exact provider dashboard configuration remain pre-production gates |
-| Next unfinished slice | Launch 07 — SFW live host, viewer, chat, and operational controls |
+| Merged baseline | `main` at `01b1f83` (Launch 06, PR #47) |
+| Active slice | Launch 07 — SFW live host, viewer, chat, and operational controls |
+| Branch | `codex/launch-07-sfw-live` |
+| Pull request | Pending |
+| State | `ACTIVE` |
+| Slice blockers | Code can complete locally; real Livepeer staging credentials, signed webhook/JWT/ingest evidence, and approved target-domain browser broadcast proof remain pre-production gates |
+| Next unfinished slice | Launch 08 — Recurring platform subscriptions and creator memberships |
 
 Current human/provider gates do not block this process slice: shared staging credentials,
 provider dashboard/webhook/domain configuration, migration `0091` shared-project proof,

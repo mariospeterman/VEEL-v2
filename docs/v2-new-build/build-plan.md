@@ -53,7 +53,7 @@ The historical milestones below remain useful implementation context. New produc
 | 04 | Core social graph and real feeds | Merged through PR #45 at `327b95d`; protected CI, isolated Postgres, review, and desktop/mobile browser proof passed |
 | 05 | Realtime messages and notifications | Merged through PR #46 at `890e0ad`; protected CI, real Postgres, security review, and 36 desktop/mobile browser journeys passed; real Supabase Realtime signing and VAPID delivery remain staging gates |
 | 06 | One-time monetisation and Event Access completion, including narrow Commerce Kit Solana Pay convergence and one shared checkout presentation | `CODE_COMPLETE_PROVIDER_BLOCKED` on PR #47; repository, isolated migration/rollback, repeatable real-Postgres integration, and 36 desktop/mobile browser checks are green. Real Solana devnet wallet/RPC settlement, provider-domain wallet behavior, and approved KYC/tax policy evidence remain pre-production staging gates |
-| 07 | SFW live host, viewer, chat, and operational controls | Not started |
+| 07 | SFW live host, viewer, chat, and operational controls | In progress on `codex/launch-07-sfw-live` |
 | 08 | Recurring platform subscriptions and creator memberships | Not started |
 | 09 | Enterprise managed creators | Not started |
 | 10 | Frontend system, accessibility, cross-browser, and PWA completion | Not started |
