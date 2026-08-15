@@ -39,6 +39,7 @@ import type {
   ContentItem,
   ConversationList,
   CreatorDashboard,
+  CreatorMediaPage,
   CreatorOnboarding,
   CreatorProfile,
   DiscoverPage,
@@ -68,6 +69,10 @@ import type {
 
 export async function getContentItem(contentId: string): Promise<ApiResult<ContentItem>> {
   return getJson<ContentItem>(`/v1/content/${encodeURIComponent(contentId)}`);
+}
+
+export async function getMyContent(): Promise<ApiResult<CreatorMediaPage>> {
+  return getJson<CreatorMediaPage>("/v1/content/mine");
 }
 
 export async function getSession(): Promise<ApiResult<SessionState>> {

@@ -29,6 +29,7 @@ export function createProfileCreatorRepositoryMethods(
               and ci.state = 'ready'
               and ci.visibility = 'public'
               and ci.moderation_state = 'approved'
+              and ci.publish_state = 'published'
           ) as content_count,
           (
             select count(*)
@@ -87,6 +88,7 @@ export function createProfileCreatorRepositoryMethods(
           and ci.state = 'ready'
           and ci.visibility = 'public'
           and ci.moderation_state = 'approved'
+          and ci.publish_state = 'published'
         order by ci.created_at desc
         limit 12
       `;

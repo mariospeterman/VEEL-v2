@@ -26,6 +26,7 @@ export type CreateContentRequest = components["schemas"]["CreateContentRequest"]
 export type UpdateContentRequest = components["schemas"]["UpdateContentRequest"];
 export type PublishContentRequest = components["schemas"]["PublishContentRequest"];
 export type ContentItem = components["schemas"]["ContentItem"];
+export type MediaModerationAppeal = components["schemas"]["MediaModerationAppeal"];
 export type CreateUploadRequest = components["schemas"]["CreateUploadRequest"];
 export type UploadSession = components["schemas"]["UploadSession"];
 export type ContentUnlockIntent = components["schemas"]["ContentUnlockIntent"];

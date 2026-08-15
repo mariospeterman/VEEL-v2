@@ -543,6 +543,30 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         moderationState: "review_required"
       });
 
+      const adultChangesRequested = await moderationRepository.updateContentModeration({
+        supabaseUserId: creatorSupabaseUserId,
+        contentId: adultContentId,
+        body: {
+          action: "request_changes",
+          reason: "Please clarify the uploader rights declaration."
+        },
+        idempotencyKey: `adult-content-request-changes-${runId}`
+      });
+      expect(adultChangesRequested).toMatchObject({
+        id: adultContentId,
+        moderationState: "changes_requested"
+      });
+
+      await expect(moderationRepository.updateContentModeration({
+        supabaseUserId: creatorSupabaseUserId,
+        contentId: adultContentId,
+        body: {
+          action: "request_changes",
+          reason: "A duplicate transition must fail."
+        },
+        idempotencyKey: `adult-content-request-changes-repeat-${runId}`
+      })).rejects.toThrow("invalid while the safety case is changes_requested");
+
       const createContentResponse = await app.inject({
         method: "POST",
         url: "/v1/content",
@@ -551,6 +575,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           mediaType: "image",
           visibility: "public",
           nsfwLabel: "none",
+          representationMode: "self_only",
+          contentSafetyPolicyAccepted: true,
           caption: `Integration draft ${runId}`
         }
       });
@@ -561,6 +587,62 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         accessState: "free",
         caption: `Integration draft ${runId}`
       });
+      const sfwContentId = createContentResponse.json().id as string;
+
+      const ownedMediaResponse = await app.inject({
+        method: "GET",
+        url: "/v1/content/mine",
+        headers: authenticatedHeaders(`owned-media-${runId}`)
+      });
+      expect(ownedMediaResponse.statusCode, ownedMediaResponse.body).toBe(200);
+      expect(ownedMediaResponse.json().items).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: sfwContentId, publicationState: "upload_pending" })
+      ]));
+
+      await sql`
+        update profiles
+        set visibility = 'public'
+        where lower(handle) = lower(${buyerHandle})
+      `;
+
+      const publicProfileBeforeApproval = await app.inject({
+        method: "GET",
+        url: `/v1/profiles/${buyerHandle}`
+      });
+      expect(publicProfileBeforeApproval.statusCode, publicProfileBeforeApproval.body).toBe(200);
+      expect(publicProfileBeforeApproval.json().recentContent).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: sfwContentId })])
+      );
+
+      await sql`
+        update media_safety_cases
+        set
+          state = 'changes_requested',
+          decision_source = 'staff',
+          reason_code = 'changes_requested',
+          decision_message = 'Please clarify the rights declaration.',
+          decided_at = now(),
+          updated_at = now()
+        where content_item_id = ${sfwContentId}
+      `;
+
+      const appealResponse = await app.inject({
+        method: "POST",
+        url: `/v1/content/${sfwContentId}/moderation-appeals`,
+        headers: authenticatedHeaders(`sfw-appeal-${runId}`),
+        payload: { reason: "I confirm that I own the recording and appear alone." }
+      });
+      expect(appealResponse.statusCode, appealResponse.body).toBe(201);
+      expect(appealResponse.json()).toMatchObject({ contentId: sfwContentId, state: "submitted" });
+
+      const replayedAppealResponse = await app.inject({
+        method: "POST",
+        url: `/v1/content/${sfwContentId}/moderation-appeals`,
+        headers: authenticatedHeaders(`sfw-appeal-${runId}`),
+        payload: { reason: "I confirm that I own the recording and appear alone." }
+      });
+      expect(replayedAppealResponse.statusCode, replayedAppealResponse.body).toBe(201);
+      expect(replayedAppealResponse.json().id).toBe(appealResponse.json().id);
 
       const playbackSessionResponse = await app.inject({
         method: "POST",

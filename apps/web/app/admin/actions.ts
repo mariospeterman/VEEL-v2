@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import {
   updateAdminOrganizationKyb,
+  updateAdminContentModeration,
   updateAdminOrganizationMember,
   updateAdminDataRequest,
   updateAdminFeatureFlag,
@@ -11,6 +12,7 @@ import {
   updateAdminSupportCase,
   updateAdminSupportPolicy,
   type AdminDataRequestActionRequest,
+  type AdminModerationActionRequest,
   type AdminFeatureFlagPatchRequest,
   type AdminOrganizationKybActionRequest,
   type AdminOrganizationMemberActionRequest,
@@ -19,6 +21,19 @@ import {
   type AdminSupportPolicyActionRequest,
   type ApiResult
 } from "@/api-client";
+
+export async function updateContentModerationAction(formData: FormData): Promise<void> {
+  const body: AdminModerationActionRequest = {
+    action: enumField(formData, "action", ["approve", "request_changes", "restrict", "block", "delete", "reinstate"]),
+    reason: stringField(formData, "reason")
+  };
+  const result = await updateAdminContentModeration(
+    stringField(formData, "contentId"),
+    body,
+    randomUUID()
+  );
+  actionResult(result);
+}
 
 export async function updateOrganizationKybAction(formData: FormData): Promise<void> {
   const organizationId = stringField(formData, "organizationId");

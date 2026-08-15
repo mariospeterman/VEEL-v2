@@ -40,9 +40,9 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Merged baseline | `main` at `36fc65d004eaa587d1f9987393ad59ec15046c85` (production loop, PR #43) |
 | Active slice | Launch 03A — SFW media publishing and moderation |
 | Branch | `codex/launch-03-sfw-publish-moderation` |
-| Pull request | #44 (draft) |
-| State | `ACTIVE` |
-| Slice blockers | Bunny staging credentials and launch-approved classifier/hash evidence are unavailable; implementation continues with deterministic fixtures and production release remains fail-closed |
+| Pull request | #44 |
+| State | `CODE_COMPLETE_PROVIDER_BLOCKED` |
+| Slice blockers | Bunny staging credentials and launch-approved classifier/hash evidence are unavailable; local implementation and deterministic/real-Postgres/browser proof are complete and production release remains fail-closed |
 | Next unfinished slice | Launch 04 — Core social graph and real feeds |
 
 Current human/provider gates do not block this process slice: shared staging credentials,
@@ -140,6 +140,7 @@ Public product copy and API metadata use WeVid and Support. Technical package sc
 - Subscription renewals are architected as auto-renewing backend/worker collections, but production collection requires official provider/program configuration, authority/subscription/delegation verification, launch-approved token plans, collector signing support, and staging evidence.
 - Remote MCP production connector compatibility still requires public HTTPS staging deployment, exact redirect URI allowlists for each real client, MCP Inspector proof, Claude Code proof, Claude custom connector proof, OpenAI-compatible proof, revocation proof, and audit-row confirmation against the deployed database.
 - Media creation has backend draft, admin-tunable draft/upload abuse policy enforcement with safe defaults, metadata/preview update, Event Access draft linking, persisted upload-session handoff, TUS browser upload/resume wiring, provider-status sync UI, entitlement-aware content playback rendering, explicit publish submission, and a separate `publish_state`.
+- Launch 03A adds a preview-first SFW-only Create journey, required people/rights declaration, one-action draft-and-upload handoff, owner publication/review workspace, uploader-safe request-changes/rejection reasons, replay-safe appeals, and an explicit public-profile `publish_state = 'published'` guard. Code and real local Postgres proof are complete; Bunny staging and launch-approved classifier/hash evidence remain the provider gate.
 - Frontend visual polish remains iterative: main app-shell routes now follow the mockup-derived shell and safe state model, but contextual detail/admin routes still need a final responsive visual QA pass against the mockup screenshots before the frontend should be called design-complete.
 - Admin dashboard is substantial; organization KYB/member, support policy/case, moderation/report, refund/dispute, data-request, and feature-flag mutations now share the admin mutation route-policy/idempotency/rate-limit guard, but final role matrix coverage and removal of any remaining compatibility aliases after migrations and clients are updated still remain.
 - Delivery has executable build/migration gates, health/readiness probes, rollback documentation, and release preflight workflows. These workflows do not deploy. Production remains blocked until Slice 11 adds a real hosting target, immutable artifact promotion, database backup/restore proof, provider staging smoke, alert routing, environment-scoped credentials, and rollback evidence.

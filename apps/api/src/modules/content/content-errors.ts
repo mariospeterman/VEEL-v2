@@ -32,3 +32,10 @@ export class ContentDraftQuotaExceededError extends Error {
     this.name = "ContentDraftQuotaExceededError";
   }
 }
+
+export class ContentModerationAppealConflictError extends Error {
+  constructor(readonly reason: "not_appealable" | "appeal_already_open") {
+    super(reason);
+    this.name = "ContentModerationAppealConflictError";
+  }
+}

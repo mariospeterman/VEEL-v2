@@ -1,6 +1,9 @@
 import type { components } from "@veel/contracts";
 
 export type ContentItem = components["schemas"]["ContentItem"];
+export type CreatorMediaPage = components["schemas"]["CreatorMediaPage"];
+export type CreatorMediaItem = components["schemas"]["CreatorMediaItem"];
+export type MediaModerationAppeal = components["schemas"]["MediaModerationAppeal"];
 export type SessionState = components["schemas"]["SessionState"];
 export type CreatorDashboard = components["schemas"]["CreatorMonetisationDashboard"];
 export type CreatorOnboarding = components["schemas"]["CreatorOnboarding"];
@@ -67,6 +70,7 @@ export type AdminNotificationHealth = components["schemas"]["AdminNotificationHe
 export type AdminMutualsSafety = components["schemas"]["AdminMutualsSafety"];
 export type AuditEvent = components["schemas"]["AuditEvent"];
 export type AdminContentItem = components["schemas"]["AdminContentItem"];
+export type AdminModerationActionRequest = components["schemas"]["AdminModerationActionRequest"];
 export type AdminPaymentIntent = components["schemas"]["AdminPaymentIntent"];
 export type AdminUnlock = components["schemas"]["AdminUnlock"];
 export type AdminProviderEvent = components["schemas"]["AdminProviderEvent"];

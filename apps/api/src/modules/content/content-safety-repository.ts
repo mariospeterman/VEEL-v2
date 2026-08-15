@@ -96,7 +96,7 @@ export async function recordContentSafetyDeclaration(
     `;
   }
 
-  if (input.representationMode !== "self_only") {
+  if (input.representationMode === "no_real_person" || input.representationMode === "not_declared") {
     await transaction`
       update performer_consents
       set state = 'revoked', updated_at = now()
@@ -105,6 +105,10 @@ export async function recordContentSafetyDeclaration(
     `;
     return;
   }
+
+  if (input.representationMode === "declared_performers") return;
+
+  if (input.rating === "none") return;
 
   const performerRows = await transaction<{ id: string }[]>`
     with latest_verification as (

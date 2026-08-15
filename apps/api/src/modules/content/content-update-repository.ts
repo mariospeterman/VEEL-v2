@@ -80,9 +80,8 @@ export function createContentUpdateRepositoryMethods(
             contentId: row.id,
             creatorUserId: row.creator_id,
             rating: row.nsfw_label ?? "none",
-            representationMode:
-              row.nsfw_label === "none" ? "not_declared" : input.representationMode ?? "not_declared",
-            policyAccepted: row.nsfw_label === "none" ? false : input.contentSafetyPolicyAccepted
+            representationMode: input.representationMode ?? "not_declared",
+            policyAccepted: input.contentSafetyPolicyAccepted
           });
         }
 

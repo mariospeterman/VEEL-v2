@@ -13,6 +13,7 @@ import {
   shorten,
   timestampLabel
 } from "./admin-ui";
+import { updateContentModerationAction } from "./actions";
 
 export function PaymentRow({ payment }: { payment: AdminPaymentIntent }) {
   return (
@@ -55,13 +56,32 @@ export function UserQueueRow({ user }: { user: AdminUser }) {
 
 export function ContentQueueRow({ content }: { content: AdminContentItem }) {
   return (
-    <article className="grid gap-3 rounded border border-(--line) bg-(--background) p-3 text-sm md:grid-cols-[1fr_130px_190px]">
+    <article className="grid gap-3 rounded border border-(--line) bg-(--background) p-3 text-sm">
+      <div className="grid gap-3 md:grid-cols-[1fr_130px_190px]">
       <div className="min-w-0">
         <p className="font-medium">@{content.creator.handle}</p>
         <p className="mt-1 truncate text-(--muted)">{content.id}</p>
       </div>
       <Fact label="Moderation" value={content.moderationState} />
       <Fact label="State" value={content.state} />
+      </div>
+      <form action={updateContentModerationAction} className="grid gap-2 border-t border-(--line) pt-3 sm:grid-cols-[180px_minmax(0,1fr)_auto]">
+        <input name="contentId" type="hidden" value={content.id} />
+        <label className="grid gap-1">
+          <span className="text-xs text-(--muted)">Decision</span>
+          <select className="rounded border border-(--line) bg-(--panel) px-3 py-2" defaultValue="approve" name="action">
+            <option value="approve">Approve</option>
+            <option value="request_changes">Request changes</option>
+            <option value="restrict">Keep in review</option>
+            <option value="block">Reject and block</option>
+          </select>
+        </label>
+        <label className="grid gap-1">
+          <span className="text-xs text-(--muted)">Uploader-safe message (no PII or provider evidence)</span>
+          <input className="rounded border border-(--line) bg-(--panel) px-3 py-2" maxLength={500} minLength={3} name="reason" placeholder="Clear reason or requested change" required />
+        </label>
+        <button className="self-end rounded bg-(--foreground) px-3 py-2 font-semibold text-(--background)" type="submit">Save decision</button>
+      </form>
     </article>
   );
 }

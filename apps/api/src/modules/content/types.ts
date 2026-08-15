@@ -10,6 +10,10 @@ export type FeedMode = "recommended" | "following" | "nsfw" | "sfw" | "live" | "
 export type UploadSession = components["schemas"]["UploadSession"];
 export type UpdateContentRequest = components["schemas"]["UpdateContentRequest"];
 export type PublishContentRequest = components["schemas"]["PublishContentRequest"];
+export type CreatorMediaPage = components["schemas"]["CreatorMediaPage"];
+export type MediaModerationAppeal = components["schemas"]["MediaModerationAppeal"];
+export type CreateMediaModerationAppealRequest =
+  components["schemas"]["CreateMediaModerationAppealRequest"];
 
 export interface ListHomeFeedInput {
   supabaseUserId: string;
@@ -29,12 +33,27 @@ export interface ContentRepository {
   findOwnedMediaAssetForSync?(input: FindOwnedMediaAssetForSyncInput): Promise<OwnedMediaAssetForSync | null>;
   findOwnedContentForUpload(input: FindOwnedContentForUploadInput): Promise<OwnedContentForUpload | null>;
   listHomeFeed(input: ListHomeFeedInput): Promise<FeedPage>;
+  listOwnedContent?(input: ListOwnedContentInput): Promise<CreatorMediaPage>;
+  createModerationAppeal?(input: CreateModerationAppealInput): Promise<MediaModerationAppeal | null>;
   recordMediaProviderWebhook?(input: RecordMediaProviderWebhookInput): Promise<boolean>;
   updateMediaAssetFromWebhook?(input: UpdateMediaAssetFromWebhookInput): Promise<boolean>;
   updateMediaAssetPlayback?(input: UpdateMediaAssetPlaybackInput): Promise<void>;
   updateOwnedContent?(input: UpdateOwnedContentInput): Promise<ContentItem | null>;
   publishOwnedContent?(input: PublishOwnedContentInput): Promise<ContentItem | null>;
   close?(): Promise<void>;
+}
+
+export interface ListOwnedContentInput {
+  supabaseUserId: string;
+  cursor?: string;
+  limit: number;
+}
+
+export interface CreateModerationAppealInput {
+  supabaseUserId: string;
+  contentId: string;
+  idempotencyKey: string;
+  reason: string;
 }
 
 export interface CreateContentDraftInput {
