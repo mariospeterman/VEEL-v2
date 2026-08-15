@@ -30,9 +30,31 @@ Non-goals:
 - Blockchain is payment truth. Entitlements are access truth. Compliance ledger is reporting truth. Accounting export/integration is bookkeeping truth.
 - WeVid remains noncustodial: no internal credits, balances, escrow, withdrawals, payout queues, or server-held user private keys.
 
-## Launch 00 Baseline And Architecture Lock
+## Active Production Slice
 
-- Audited base: `origin/main` at `9ef4a0dca3b61dfa811c928223d4f3497f11fe8e` after squash-merged PR #34.
+Exactly one write/integration slice may be active. An open pull request carrying the
+`wevid-active-slice` label is the concurrency mutex.
+
+| Field | Current value |
+| --- | --- |
+| Merged baseline | `main` at `9081bd0f4fb8433e1f63422fd294ba8601c851b2` (Launch 01, PR #42) |
+| Active slice | Production-loop process tooling |
+| Branch | `chore/wevid-production-loop` |
+| Pull request | #43 (ready) |
+| State | `MERGE_READY` |
+| Slice blockers | None; provider proof is not applicable to this process-only slice |
+| Next unfinished slice | Launch 03A — SFW media publishing and moderation |
+
+Current human/provider gates do not block this process slice: shared staging credentials,
+provider dashboard/webhook/domain configuration, migration `0091` shared-project proof,
+production hosting/DNS approval, mainnet wallet approval, and unsettled legal/compliance
+decisions remain release gates. Provider-dependent product work may reach
+`CODE_COMPLETE_PROVIDER_BLOCKED` and merge only while the production path remains explicit
+and fail-closed.
+
+## Launch Baseline And Architecture Lock
+
+- Audited merged base: `origin/main` at `9081bd0f4fb8433e1f63422fd294ba8601c851b2` after squash-merged Launch 01 PR #42.
 - Planning baseline: architecture 88%, database/security 93%, backend 82%, frontend about 50%, feature completeness about 65%, and public production readiness about 58%. These are planning estimates, not launch claims.
 - Canonical owners remain `apps/web`, `apps/api`, `apps/worker`, `packages/database`, `packages/contracts`, `packages/config`, and `packages/ui`. No second backend, database, auth authority, payment authority, moderation system, contract system, or design system may be introduced.
 - The universal-account model remains locked. Age access, adult-publisher eligibility, performer eligibility, creator earnings eligibility, KYC, KYB, Enterprise management, and admin authority are independent backend-owned capabilities.
@@ -46,12 +68,12 @@ Non-goals:
 
 | Area | Verified state | Launch blocker |
 | --- | --- | --- |
-| Architecture and data authority | Substantial and implemented locally through migration `0091`; server authority, RLS, idempotency, and provider adapters are present. | Migration `0091` and the identity/session flow still require isolated Supabase staging proof. |
-| Auth, wallet, age, and profile | Canonical opaque application sessions, explicit recovery exchange, read-only session GET, three-step onboarding, minimal handle profile, provisional privacy, age activation, and fail-closed provider boundaries are implemented. | Privy and age-provider real staging evidence, distributed Redis environment proof, and full browser E2E remain absent. |
+| Architecture and data authority | Substantial and merged through migration `0091`; server authority, RLS, idempotency, and provider adapters are present. | Migration `0091` and the identity/session flow still require isolated Supabase staging proof. |
+| Auth, wallet, age, and profile | Canonical opaque application sessions, explicit recovery exchange, read-only session GET, three-step onboarding, minimal handle profile, provisional privacy, age activation, multi-device session scope, and fail-closed provider boundaries are merged. | Privy and age-provider real staging evidence and distributed Redis environment proof remain absent. |
 | One-time payments and access | Backend-owned SOL and supported one-time USDC intent, settlement, receipt, and entitlement paths exist. | Mainnet/provider evidence, operational reconciliation, and full consumer journey proof remain required. |
 | Media and live | Bunny/Livepeer boundaries and quarantine/release authorities exist. | Automated moderation is not launch-approved; adult live is disabled; provider staging evidence is absent. |
 | Recurring subscriptions | Domain, worker, and fail-closed adapter boundaries exist. | Sales remain disabled until an official on-chain provider/program is configured and proven. |
-| Frontend | Broad app-shell, onboarding, creation, access, admin, and smoke surfaces exist. | Core social/feed depth, realtime completion, accessibility, cross-browser QA, and final visual system remain unfinished. |
+| Frontend | Broad app-shell, direct provider-first entry, onboarding, creation, access, admin, and desktop/mobile browser smoke surfaces exist. | Core social/feed depth, realtime completion, accessibility, cross-browser QA, and final visual system remain unfinished. |
 | Delivery and operations | Build, migration, security, preview, staging, and production preflight workflows exist. | No workflow deploys an artifact. Hosting, immutable promotion, telemetry, alerts, backup/restore, and rollback evidence belong to Slice 11. |
 
 ## Unsafe Capability Flags

@@ -55,6 +55,13 @@ Before implementing or changing provider code, re-check the latest official prov
 
 Follow `docs/v2-new-build/build-plan.md`.
 
+For autonomous production work, use the project-local `$wevid-production-loop` skill in
+`.agents/skills/wevid-production-loop`. Its stable router is:
+
+- current state and blockers: `docs/v2-new-build/current-implementation-status.md`
+- ordered product slices: `docs/v2-new-build/build-plan.md`
+- branch, review, test, and promotion rules: `docs/v2-new-build/slice-workflow.md`
+
 Every production slice must include:
 
 - product behavior doc
