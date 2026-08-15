@@ -42,14 +42,14 @@ Do not bulk-copy external implementation code. Any outside repository is histori
 
 ## Production Completion Program
 
-The historical milestones below remain useful implementation context. New production work follows this ordered slice program and must stop after one reviewed slice.
+The historical milestones below remain useful implementation context. New production work follows this ordered slice program one reviewed slice at a time. Only one write/integration slice may be active; after its protected merge and main-branch verification, continue to the next unblocked slice unless a defined human gate requires owner action.
 
 | Slice | Goal | Current state |
 | --- | --- | --- |
 | 00 | Baseline, governance, and truth lock | Merged through PR #35 at `b441532`; required main checks passed |
 | 01 | Executable contracts and platform security boundary | Merged through PR #42 at `9081bd0`; local browser/Postgres proof passed, while shared Supabase migration/advisor proof and production-like Redis/provider staging remain release blockers |
 | 02 | Three-step onboarding, canonical session, optional recovery, and earnings readiness | Identity/session/recovery and the three-step onboarding foundation merged with Launch 01; earnings readiness remains incomplete and real provider acceptance evidence remains a launch gate |
-| 03 | VOD creation, multi-performer enrollment, and moderation operations | Not started |
+| 03A | SFW media publishing and moderation | Not started; ordinary SFW rights declarations reuse the existing performer relation where consent is required, while adult publishing and documentary performer verification remain separately gated and fail-closed |
 | 04 | Core social graph and real feeds | Not started |
 | 05 | Realtime messages and notifications | Not started |
 | 06 | One-time monetisation and Event Access completion, including narrow Commerce Kit Solana Pay convergence and one shared checkout presentation | Not started |

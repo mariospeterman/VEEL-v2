@@ -55,6 +55,7 @@ if (missing.length > 0) {
 const openapi = readFileSync("packages/contracts/openapi.yaml", "utf8");
 const routeMap = readFileSync("docs/v2-new-build/route-map.md", "utf8");
 const schemaBlueprint = readFileSync("packages/database/schema-blueprint.sql", "utf8");
+const buildPlan = readFileSync("docs/v2-new-build/build-plan.md", "utf8");
 const agentsRouter = readFileSync("AGENTS.md", "utf8");
 const implementationStatus = readFileSync(
   "docs/v2-new-build/current-implementation-status.md",
@@ -104,6 +105,41 @@ const allowedActiveStates = new Set([
 ]);
 if (activeStateMatches.length !== 1 || !allowedActiveStates.has(activeStateMatches[0]?.[1])) {
   console.error("Production walk test failed: expected exactly one valid active-slice state.");
+  process.exit(1);
+}
+
+const activeStateFields = [
+  "Merged baseline",
+  "Active slice",
+  "Branch",
+  "Pull request",
+  "State",
+  "Slice blockers",
+  "Next unfinished slice",
+];
+const activeStateValues = new Map();
+for (const field of activeStateFields) {
+  const escapedField = field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const matches = [
+    ...implementationStatus.matchAll(new RegExp(`^\\| ${escapedField} \\| (.+) \\|$`, "gm")),
+  ];
+  if (matches.length !== 1 || !matches[0]?.[1]?.trim()) {
+    console.error(`Production walk test failed: expected one nonempty ${field} value.`);
+    process.exit(1);
+  }
+  activeStateValues.set(field, matches[0][1].trim());
+}
+
+const canonicalSlices = new Set(
+  [...buildPlan.matchAll(/^\| ([0-9]{2}[A-Z]?) \| ([^|]+) \|/gm)].map(
+    ([, sliceId, goal]) => `Launch ${sliceId} — ${goal.trim()}`,
+  ),
+);
+const nextSlice = activeStateValues.get("Next unfinished slice");
+if (!nextSlice || !canonicalSlices.has(nextSlice)) {
+  console.error(
+    `Production walk test failed: next unfinished slice is not in build-plan.md (${nextSlice ?? "missing"}).`,
+  );
   process.exit(1);
 }
 

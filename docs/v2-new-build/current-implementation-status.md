@@ -41,7 +41,7 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Active slice | Production-loop process tooling |
 | Branch | `chore/wevid-production-loop` |
 | Pull request | #43 (ready) |
-| State | `MERGE_READY` |
+| State | `LOCAL_GREEN` |
 | Slice blockers | None; provider proof is not applicable to this process-only slice |
 | Next unfinished slice | Launch 03A — SFW media publishing and moderation |
 
