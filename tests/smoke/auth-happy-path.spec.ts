@@ -58,6 +58,8 @@ test("covers authenticated app access to profile wallet age home create and unlo
   await expect(page.getByRole("heading", { name: "Aria Moon" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Your media" })).toBeVisible();
   await expect(page.getByText("Please confirm the music rights.")).toBeVisible();
+  await page.getByRole("button", { name: "Load more media" }).click();
+  await expect(page.getByText("Older published post")).toBeVisible();
   await page.getByRole("button", { name: "Appeal decision" }).click();
   await page.getByLabel("Why should this be reviewed again?").fill("I own the recording and the music license.");
   await page.getByRole("button", { name: "Send appeal" }).click();
@@ -244,7 +246,9 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
   }
 
   if (method === "GET" && url.pathname === "/v1/content/mine") {
-    sendJson(response, 200, { items: [creatorMediaItem()], nextCursor: null });
+    sendJson(response, 200, url.searchParams.has("cursor")
+      ? { items: [olderCreatorMediaItem()], nextCursor: null }
+      : { items: [creatorMediaItem()], nextCursor: "2026-08-15T12:01:00.000Z" });
     return;
   }
 
@@ -529,6 +533,19 @@ function creatorMediaItem() {
     reviewMessage: "Please confirm the music rights.",
     createdAt: "2026-08-15T12:00:00.000Z",
     updatedAt: "2026-08-15T12:01:00.000Z"
+  };
+}
+
+function olderCreatorMediaItem() {
+  return {
+    ...creatorMediaItem(),
+    id: "00000000-0000-4000-8000-000000000044",
+    caption: "Older published post",
+    publicationState: "published",
+    reviewState: "approved",
+    reviewMessage: null,
+    createdAt: "2026-08-14T12:00:00.000Z",
+    updatedAt: "2026-08-14T12:01:00.000Z"
   };
 }
 

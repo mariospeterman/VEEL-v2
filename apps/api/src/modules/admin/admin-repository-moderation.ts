@@ -86,6 +86,7 @@ export function createModerationRepository(
 
         const approving = input.body.action === "approve" || input.body.action === "reinstate";
         const requestingChanges = input.body.action === "request_changes";
+        const decidingAppeal = safetyCase.state === "appealed";
         await transaction`
           update media_safety_cases
           set
@@ -100,6 +101,20 @@ export function createModerationRepository(
           where id = ${safetyCase.id}
         `;
 
+        if (decidingAppeal) {
+          await transaction`
+            update media_moderation_appeals
+            set
+              state = ${approving ? "overturned" : "upheld"},
+              resolution_reason = ${`staff_${input.body.action}`},
+              reviewed_by_user_id = ${actor.id},
+              reviewed_at = now(),
+              updated_at = now()
+            where media_safety_case_id = ${safetyCase.id}
+              and state in ('submitted', 'reviewing')
+          `;
+        }
+
         let updatedRows: AdminContentRow[];
         try {
           updatedRows = await transaction<AdminContentRow[]>`
@@ -112,6 +127,11 @@ export function createModerationRepository(
                   and ci.publish_state = 'submitted_for_review'
                   and ${moderation.state} = 'ready'
                 then 'published'
+                when ${input.body.action} = 'approve'
+                  and ${decidingAppeal}
+                  and ci.publish_state = 'blocked'
+                  and ${moderation.state} = 'ready'
+                then 'published'
                 when ${input.body.action} in ('block', 'delete') then 'blocked'
                 when ${requestingChanges} then 'submitted_for_review'
                 when ${input.body.action} = 'reinstate' and ci.publish_state = 'blocked' then 'unpublished'
@@ -119,7 +139,10 @@ export function createModerationRepository(
               end,
               published_at = case
                 when ${approving}
-                  and ci.publish_state = 'submitted_for_review'
+                  and (
+                    ci.publish_state = 'submitted_for_review'
+                    or (${input.body.action} = 'approve' and ${decidingAppeal} and ci.publish_state = 'blocked')
+                  )
                   and ${moderation.state} = 'ready'
                 then coalesce(ci.published_at, now())
                 else ci.published_at

@@ -2,10 +2,35 @@
 
 import { useState, type FormEvent } from "react";
 import type { CreatorMediaItem, CreatorMediaPage } from "@/api-client";
-import { ApiMutationError, createContentModerationAppeal } from "@/api-mutations";
+import {
+  ApiMutationError,
+  createContentModerationAppeal,
+  getMyContentPage
+} from "@/api-mutations";
 
 export function ProfileMediaWorkspace({ initialPage }: { initialPage: CreatorMediaPage }) {
   const [items, setItems] = useState(initialPage.items);
+  const [nextCursor, setNextCursor] = useState(initialPage.nextCursor);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
+
+  async function loadMore() {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    setPageError(null);
+    try {
+      const page = await getMyContentPage(nextCursor);
+      setItems((current) => {
+        const knownIds = new Set(current.map((item) => item.id));
+        return [...current, ...page.items.filter((item) => !knownIds.has(item.id))];
+      });
+      setNextCursor(page.nextCursor);
+    } catch (caught) {
+      setPageError(caught instanceof ApiMutationError ? caught.message : "More media could not be loaded.");
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   if (items.length === 0) {
     return (
@@ -43,6 +68,17 @@ export function ProfileMediaWorkspace({ initialPage }: { initialPage: CreatorMed
           />
         ))}
       </div>
+      {pageError ? <p className="text-sm text-red-400" role="alert">{pageError}</p> : null}
+      {nextCursor ? (
+        <button
+          className="min-h-11 justify-self-center rounded border border-(--line) px-4 py-2 text-sm font-semibold disabled:opacity-50"
+          disabled={loadingMore}
+          onClick={loadMore}
+          type="button"
+        >
+          {loadingMore ? "Loading…" : "Load more media"}
+        </button>
+      ) : null}
     </section>
   );
 }

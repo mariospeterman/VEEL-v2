@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
+import { hashIdempotencyPayload } from "../../shared/idempotency.js";
 import { ContentModerationAppealConflictError } from "./content-errors.js";
 import type { ContentRepository, CreatorMediaPage } from "./types.js";
 
@@ -103,19 +104,30 @@ export function createContentWorkflowRepositoryMethods(
         const current = rows[0];
         if (!current) return null;
         const storedIdempotencyKey = `content-appeal:${current.creator_user_id}:${input.contentId}:${input.idempotencyKey}`;
+        const requestHash = hashIdempotencyPayload({
+          contentId: input.contentId,
+          reason: input.reason.trim()
+        });
 
         const replay = await transaction<{
           id: string;
           state: "submitted" | "reviewing" | "upheld" | "overturned" | "withdrawn";
           reason: string;
+          request_hash: string | null;
           created_at: Date;
         }[]>`
-          select id, state, reason, created_at
+          select id, state, reason, request_hash, created_at
           from media_moderation_appeals
           where idempotency_key = ${storedIdempotencyKey}
           limit 1
         `;
         if (replay[0]) {
+          const sameRequest = replay[0].request_hash
+            ? replay[0].request_hash === requestHash
+            : replay[0].reason.trim() === input.reason.trim();
+          if (!sameRequest) {
+            throw new ContentModerationAppealConflictError("idempotency_conflict");
+          }
           return toAppeal(input.contentId, replay[0]);
         }
 
@@ -147,14 +159,16 @@ export function createContentWorkflowRepositoryMethods(
             media_safety_case_id,
             appellant_user_id,
             reason,
-            idempotency_key
+            idempotency_key,
+            request_hash
           )
           values (
             ${appealId},
             ${current.case_id},
             ${current.creator_user_id},
             ${input.reason},
-            ${storedIdempotencyKey}
+            ${storedIdempotencyKey},
+            ${requestHash}
           )
           returning id, state, reason, created_at
         `;
@@ -193,10 +207,10 @@ function publicationState(
   row: OwnerMediaRow
 ): CreatorMediaPage["items"][number]["publicationState"] {
   if (row.publish_state === "published" && row.review_state === "approved") return "published";
-  if (row.publish_state === "blocked" || row.content_state === "blocked") return "blocked";
   if (row.review_state === "rejected") return "rejected";
   if (row.review_state === "changes_requested") return "changes_requested";
   if (row.review_state === "appealed") return "appeal_pending";
+  if (row.publish_state === "blocked" || row.content_state === "blocked") return "blocked";
   if (row.publish_state === "submitted_for_review" || row.review_state === "review_required") {
     return "in_review";
   }

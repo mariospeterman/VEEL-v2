@@ -42,6 +42,7 @@ export type {
   McpOAuthRedirect,
   Message,
   MediaModerationAppeal,
+  CreatorMediaPage,
   PaidMessageIntent,
   PaymentIntent,
   PublishContentRequest,
@@ -98,6 +99,7 @@ import type {
   McpOAuthRedirect,
   Message,
   MediaModerationAppeal,
+  CreatorMediaPage,
   PaidMessageIntent,
   PaymentIntent,
   PublishContentRequest,
@@ -219,6 +221,12 @@ export async function createContentModerationAppeal(
     `/v1/content/${encodeURIComponent(contentId)}/moderation-appeals`,
     "POST",
     { reason }
+  );
+}
+
+export async function getMyContentPage(cursor: string): Promise<CreatorMediaPage> {
+  return authenticatedGet<CreatorMediaPage>(
+    `/v1/content/mine?cursor=${encodeURIComponent(cursor)}`
   );
 }
 

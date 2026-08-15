@@ -291,12 +291,25 @@ export async function registerContentCoreRoutes(
         });
       }
 
-      const currentContent = body?.representationMode && body.nsfwLabel === undefined
-        ? await options.contentRepository.findOwnedContentForUpload({
-            supabaseUserId: access.supabaseUserId,
-            contentId: params.contentId
-          })
-        : null;
+      let currentContent = null;
+      if (body?.representationMode && body.nsfwLabel === undefined) {
+        if (!options.contentRepository.findOwnedContentForUpdate) {
+          return reply.code(503).send({
+            code: "service_unavailable",
+            message: "Content storage is not configured"
+          });
+        }
+        currentContent = await options.contentRepository.findOwnedContentForUpdate({
+          supabaseUserId: access.supabaseUserId,
+          contentId: params.contentId
+        });
+        if (!currentContent) {
+          return reply.code(404).send({
+            code: "not_found",
+            message: "Content was not found"
+          });
+        }
+      }
       const adultDeclaration =
         (body?.nsfwLabel !== undefined && body.nsfwLabel !== "none") ||
         (body?.representationMode !== undefined && currentContent?.nsfwLabel !== "none");
@@ -499,7 +512,9 @@ export async function registerContentCoreRoutes(
           code: "conflict",
           message: error.reason === "appeal_already_open"
             ? "An appeal is already being reviewed"
-            : "This review decision cannot be appealed"
+            : error.reason === "idempotency_conflict"
+              ? "Idempotency key was already used for a different appeal"
+              : "This review decision cannot be appealed"
         });
       }
       if (error instanceof ContentRepositoryConfigurationError) {

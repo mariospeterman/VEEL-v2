@@ -72,6 +72,9 @@ function createUnavailableContentRepository(): ContentRepository {
     async findOwnedContentForUpload() {
       throw new ContentRepositoryConfigurationError();
     },
+    async findOwnedContentForUpdate() {
+      throw new ContentRepositoryConfigurationError();
+    },
     async listHomeFeed() {
       throw new ContentRepositoryConfigurationError();
     },

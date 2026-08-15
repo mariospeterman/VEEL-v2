@@ -32,6 +32,7 @@ export interface ContentRepository {
   findContentUnlockOffer(input: FindContentUnlockOfferInput): Promise<ContentUnlockOffer | null>;
   findOwnedMediaAssetForSync?(input: FindOwnedMediaAssetForSyncInput): Promise<OwnedMediaAssetForSync | null>;
   findOwnedContentForUpload(input: FindOwnedContentForUploadInput): Promise<OwnedContentForUpload | null>;
+  findOwnedContentForUpdate?(input: FindOwnedContentForUploadInput): Promise<OwnedContentForUpload | null>;
   listHomeFeed(input: ListHomeFeedInput): Promise<FeedPage>;
   listOwnedContent?(input: ListOwnedContentInput): Promise<CreatorMediaPage>;
   createModerationAppeal?(input: CreateModerationAppealInput): Promise<MediaModerationAppeal | null>;

@@ -24,7 +24,9 @@ Review can instead produce `changes_requested`, `rejected`, `appeal_pending`, or
 - `private.content_safety_release_ready` and the database trigger remain the final release guard.
 - Public profile queries require ready, public, approved, and `publish_state = 'published'`.
 - Owner profile media includes private drafts and uploader-safe staff messages.
-- Appeals are owner-authorized, replay-safe, audited, and return the canonical safety case to the staff queue.
+- Appeals are owner-authorized, replay-safe, audited, and return the canonical safety case to the staff queue. A replay key is bound to the content id and normalized reason; changed-input reuse fails with a conflict.
+- Staff decisions close the active appeal in the same transaction. An accepted appeal restores release-eligible blocked content to published, while the database release guard still requires approved safety and provider-ready media.
+- Rejected and appealed owner states take precedence over the generic blocked projection so the creator can see the decision and reach the appeal workflow.
 
 ## Provider Boundary
 
@@ -39,7 +41,7 @@ Staff can approve, request changes, keep in review, or reject/block with an uplo
 ## Verification
 
 - OpenAPI contracts cover owner publication state and appeals.
-- Migration `0092` adds the safe decision projection and scoped appeal replay key.
-- API route tests cover safe projection and appeal handoff.
-- Real local Postgres tests cover SFW creation without KYC, private quarantine, public-profile exclusion, request-changes, idempotent appeal, and existing cross-product journeys.
-- Playwright covers the preview-first responsive Create surface and absence of provider jargon.
+- Migration `0092` adds the safe decision projection and scoped appeal replay key. Migration `0093` binds that key to a validated request hash.
+- API route tests cover safe projection, appeal handoff, and mandatory adult-publisher reauthorization for representation-only edits in every editable content state.
+- Real local Postgres tests cover SFW creation without KYC, private quarantine, rejected/appealed owner projections, changed-input replay rejection, transactional appeal resolution, blocked-content restoration after an accepted appeal, and existing cross-product journeys.
+- Playwright covers the preview-first responsive Create surface, paginated creator media workspace, appeal submission, and absence of provider jargon on desktop and mobile.

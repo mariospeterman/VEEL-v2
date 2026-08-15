@@ -3837,6 +3837,62 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("rechecks adult-publisher capability before a representation-only edit in any editable state", async () => {
+    const updateOwnedContent = vi.fn();
+    const contentRepository: ContentRepository = {
+      ...contentRepositoryWithDetail(homeFeedItem),
+      async findOwnedContentForUpdate(input) {
+        expect(input).toEqual({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          contentId: "00000000-0000-4000-8000-000000000040"
+        });
+        return {
+          id: input.contentId,
+          mediaType: "vod",
+          caption: "Published adult item",
+          nsfwLabel: "adult"
+        };
+      },
+      updateOwnedContent
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      verificationRepository: verificationRepositoryStub(),
+      contentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "adult-representation-update-1"
+      },
+      payload: {
+        representationMode: "self_only",
+        contentSafetyPolicyAccepted: true
+      }
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(updateOwnedContent).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it("lists owner-visible publication states without exposing provider details", async () => {
     const contentRepository: ContentRepository = {
       ...contentRepositoryWithDetail(homeFeedItem),
