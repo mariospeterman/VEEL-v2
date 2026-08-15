@@ -6,6 +6,15 @@ export interface ConversationRow {
   type: Conversation["type"];
   title: string;
   unread_count: number;
+  conversation_state: string;
+  counterpart_id: string;
+  counterpart_handle: string;
+  counterpart_display_name: string;
+  counterpart_avatar_url: string | null;
+  request_state: "pending" | "accepted" | "declined" | null;
+  request_role: "initiator" | "recipient" | null;
+  requester_message_count: number | null;
+  relationship_blocked: boolean;
   last_body: string | null;
   last_created_at: Date | null;
   last_sender_id: string | null;
@@ -27,7 +36,7 @@ export interface MessageRow {
   sender_avatar_url: string | null;
 }
 
-export function messageSelectSql(sql: postgres.Sql) {
+export function messageSelectSql(sql: postgres.ISql) {
   return sql`
     select
       m.id,
@@ -52,6 +61,23 @@ export function toConversation(row: ConversationRow): Conversation {
     type: row.type,
     title: row.title,
     unreadCount: Number(row.unread_count),
+    counterpart: {
+      id: row.counterpart_id,
+      handle: row.counterpart_handle,
+      displayName: row.counterpart_display_name,
+      avatarUrl: row.counterpart_avatar_url,
+      badges: []
+    },
+    requestState: row.request_state ?? "not_required",
+    requestRole: row.request_role ?? "none",
+    canSend:
+      row.conversation_state === "active" &&
+      !row.relationship_blocked &&
+      (row.request_state === null ||
+        row.request_state === "accepted" ||
+        (row.request_state === "pending" &&
+          row.request_role === "initiator" &&
+          Number(row.requester_message_count) < 2)),
     ...(row.last_body && row.last_created_at && row.last_sender_id
       ? {
           lastMessage: {

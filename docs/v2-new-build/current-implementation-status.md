@@ -40,7 +40,7 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Merged baseline | `main` at `327b95d` (Launch 04, PR #45) |
 | Active slice | Launch 05 — Realtime messages and notifications |
 | Branch | `codex/launch-05-realtime-messages` |
-| Pull request | Pending |
+| Pull request | #46 |
 | State | `ACTIVE` |
 | Slice blockers | Code can complete locally; real Supabase Realtime signing-key/channel proof and VAPID browser delivery remain pre-production staging gates |
 | Next unfinished slice | Launch 06 — One-time monetisation and Event Access completion, including narrow Commerce Kit Solana Pay convergence and one shared checkout presentation |
@@ -73,7 +73,7 @@ and fail-closed.
 | One-time payments and access | Backend-owned SOL and supported one-time USDC intent, settlement, receipt, and entitlement paths exist. | Mainnet/provider evidence, operational reconciliation, and full consumer journey proof remain required. |
 | Media and live | Bunny/Livepeer boundaries and quarantine/release authorities exist. | Automated moderation is not launch-approved; adult live is disabled; provider staging evidence is absent. |
 | Recurring subscriptions | Domain, worker, and fail-closed adapter boundaries exist. | Sales remain disabled until an official on-chain provider/program is configured and proven. |
-| Frontend | Broad app-shell, direct provider-first entry, onboarding, creation, access, admin, canonical Home/Bits feeds, and desktop/mobile browser smoke surfaces exist. | Realtime completion, full accessibility/cross-browser QA, and the final visual system remain unfinished. |
+| Frontend | Broad app-shell, direct provider-first entry, onboarding, creation, access, admin, canonical Home/Bits feeds, messages/notifications with reconnecting Realtime invalidation, and desktop/mobile browser smoke surfaces exist. | Real Supabase/VAPID proof, full accessibility/cross-browser QA, and the final visual system remain unfinished. |
 | Delivery and operations | Build, migration, security, preview, staging, and production preflight workflows exist. | No workflow deploys an artifact. Hosting, immutable promotion, telemetry, alerts, backup/restore, and rollback evidence belong to Slice 11. |
 
 ## Unsafe Capability Flags

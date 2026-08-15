@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { mutationRateLimit } from "../../shared/rate-limits.js";
 import {
   PaymentIdempotencyConflictError,
@@ -14,6 +14,7 @@ import { toPaymentIntentResponse } from "../payment/payment-route-shared.js";
 import {
   conflictResponse,
   hashMessageBody,
+  hashMessageActionRequest,
   hashPaymentRequest,
   notFoundResponse,
   requiredIdempotencyKey,
@@ -24,15 +25,21 @@ import {
   verifyMessageReadyAccess
 } from "./message-route-utils.js";
 import {
+  MessageBlockedError,
   MessageIdempotencyConflictError,
+  MessageRequestForbiddenError,
+  MessageRequestLimitError,
   MessageRepositoryConfigurationError
 } from "./message-repository.js";
 import type {
+  CreateDirectConversationRequest,
   CreateMessageRequest,
-  CreatePaidMessageIntentRequest
+  CreatePaidMessageIntentRequest,
+  RespondToMessageRequest
 } from "./types.js";
 
 const paymentIntentTtlMs = 15 * 60 * 1000;
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function registerMessageRoutes(
   app: FastifyInstance,
@@ -57,6 +64,92 @@ export async function registerMessageRoutes(
         return reply.code(503).send(serviceUnavailableResponse("Messages are not configured"));
       }
 
+      throw error;
+    }
+  });
+
+  app.post("/v1/messages/conversations", mutationRateLimit("messageMutation"), async (request, reply) => {
+    const access = await verifyMessageReadyAccess(request, options);
+    if (!access.ok) return reply.code(access.statusCode).send(access.body);
+    const idempotencyKey = requiredIdempotencyKey(request);
+    if (!idempotencyKey) {
+      return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
+    }
+    const body = request.body as Partial<CreateDirectConversationRequest> | undefined;
+    if (!body || typeof body.targetUserId !== "string" || !uuidPattern.test(body.targetUserId)) {
+      return reply.code(400).send(validationResponse("targetUserId must be a valid UUID"));
+    }
+
+    try {
+      const conversation = await options.messageRepository.createDirectConversation({
+        supabaseUserId: access.supabaseUserId,
+        targetUserId: body.targetUserId,
+        idempotencyKey,
+        requestHash: hashMessageActionRequest({ targetUserId: body.targetUserId })
+      });
+      if (!conversation) return reply.code(404).send(notFoundResponse("User was not found"));
+      return reply.code(201).send(conversation);
+    } catch (error) {
+      const handled = messageMutationErrorReply(request, reply, error);
+      if (handled) return handled;
+      throw error;
+    }
+  });
+
+  app.patch("/v1/messages/conversations/:conversationId/request", mutationRateLimit("messageMutation"), async (request, reply) => {
+    const access = await verifyMessageReadyAccess(request, options);
+    if (!access.ok) return reply.code(access.statusCode).send(access.body);
+    const idempotencyKey = requiredIdempotencyKey(request);
+    if (!idempotencyKey) {
+      return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
+    }
+    const conversationId = (request.params as { conversationId?: string }).conversationId ?? "";
+    const body = request.body as Partial<RespondToMessageRequest> | undefined;
+    if (!uuidPattern.test(conversationId) || (body?.action !== "accept" && body?.action !== "decline")) {
+      return reply.code(400).send(validationResponse("A valid conversation and request action are required"));
+    }
+
+    try {
+      const conversation = await options.messageRepository.respondToMessageRequest({
+        supabaseUserId: access.supabaseUserId,
+        conversationId,
+        action: body.action,
+        idempotencyKey,
+        requestHash: hashMessageActionRequest({ conversationId, action: body.action })
+      });
+      if (!conversation) return reply.code(404).send(notFoundResponse("Conversation was not found"));
+      return reply.code(200).send(conversation);
+    } catch (error) {
+      const handled = messageMutationErrorReply(request, reply, error);
+      if (handled) return handled;
+      throw error;
+    }
+  });
+
+  app.patch("/v1/messages/conversations/:conversationId/read", mutationRateLimit("messageMutation"), async (request, reply) => {
+    const access = await verifyMessageReadyAccess(request, options);
+    if (!access.ok) return reply.code(access.statusCode).send(access.body);
+    const idempotencyKey = requiredIdempotencyKey(request);
+    if (!idempotencyKey) {
+      return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
+    }
+    const conversationId = (request.params as { conversationId?: string }).conversationId ?? "";
+    if (!uuidPattern.test(conversationId)) {
+      return reply.code(400).send(validationResponse("conversationId must be a valid UUID"));
+    }
+
+    try {
+      const readState = await options.messageRepository.markConversationRead({
+        supabaseUserId: access.supabaseUserId,
+        conversationId,
+        idempotencyKey,
+        requestHash: hashMessageActionRequest({ conversationId })
+      });
+      if (!readState) return reply.code(404).send(notFoundResponse("Conversation was not found"));
+      return reply.code(200).send(readState);
+    } catch (error) {
+      const handled = messageMutationErrorReply(request, reply, error);
+      if (handled) return handled;
       throw error;
     }
   });
@@ -132,14 +225,8 @@ export async function registerMessageRoutes(
 
       return reply.code(201).send(message);
     } catch (error) {
-      if (error instanceof MessageIdempotencyConflictError) {
-        return reply.code(409).send(conflictResponse("Idempotency key was already used"));
-      }
-
-      if (error instanceof MessageRepositoryConfigurationError) {
-        request.log.warn({ error }, "Message create failed");
-        return reply.code(503).send(serviceUnavailableResponse("Messages are not configured"));
-      }
+      const handled = messageMutationErrorReply(request, reply, error);
+      if (handled) return handled;
 
       throw error;
     }
@@ -174,7 +261,8 @@ export async function registerMessageRoutes(
     const conversationId = (request.params as { conversationId?: string }).conversationId ?? "";
 
     try {
-      assertSolanaAddress(platformFeeWallet);      const price = await options.messageRepository.findConversationPrice({
+      assertSolanaAddress(platformFeeWallet);
+      const price = await options.messageRepository.findConversationPrice({
         supabaseUserId: access.supabaseUserId,
         conversationId
       });
@@ -246,7 +334,34 @@ export async function registerMessageRoutes(
         return reply.code(503).send(serviceUnavailableResponse("Paid messages are not configured"));
       }
 
+      const handled = messageMutationErrorReply(request, reply, error);
+      if (handled) return handled;
+
       throw error;
     }
   });
+}
+
+function messageMutationErrorReply(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  error: unknown
+) {
+  if (error instanceof MessageIdempotencyConflictError) {
+    return reply.code(409).send(conflictResponse("Idempotency key was already used"));
+  }
+  if (error instanceof MessageBlockedError) {
+    return reply.code(403).send({ code: "forbidden", message: "Messaging is unavailable for this relationship" });
+  }
+  if (error instanceof MessageRequestForbiddenError) {
+    return reply.code(403).send({ code: "forbidden", message: "This message request does not allow that action" });
+  }
+  if (error instanceof MessageRequestLimitError) {
+    return reply.code(409).send(conflictResponse("The recipient must accept this request before more messages can be sent"));
+  }
+  if (error instanceof MessageRepositoryConfigurationError) {
+    request.log.warn({ error }, "Message mutation failed");
+    return reply.code(503).send(serviceUnavailableResponse("Messages are not configured"));
+  }
+  return null;
 }

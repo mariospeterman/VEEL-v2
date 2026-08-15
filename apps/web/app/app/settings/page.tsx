@@ -21,6 +21,7 @@ import { Card, ErrorState, Fact, PageHeader, StatusPill } from "../../ui";
 import { mapApiFailure } from "@/api-errors";
 import { McpConnectionsPanel } from "../../settings/mcp-connections-panel";
 import { NotificationEnrollment } from "../../settings/notification-enrollment";
+import { NotificationPreferencesPanel } from "../../settings/notification-preferences-panel";
 import { RecoveryAccessPanel } from "../../settings/recovery-access-panel";
 import { SessionSecurityActions } from "../../settings/session-security-actions";
 
@@ -117,20 +118,7 @@ function NotificationFacts({
 
   return (
     <div className="grid gap-4">
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Fact label="Messages" value={enabledLabel(preferences.messagesEnabled)} />
-        <Fact label="Engagement" value={enabledLabel(preferences.engagementEnabled)} />
-        <Fact label="Live" value={enabledLabel(preferences.liveEnabled)} />
-        <Fact label="Payments" value={enabledLabel(preferences.paymentsEnabled)} />
-        <Fact label="Memberships" value={enabledLabel(preferences.membershipsEnabled)} />
-        <Fact label="Event access" value={enabledLabel(preferences.eventAccessEnabled)} />
-        <Fact label="Mutuals" value={enabledLabel(preferences.mutualsEnabled)} />
-        <Fact label="Safety" value={enabledLabel(preferences.safetyEnabled)} />
-        <Fact label="Wallet" value={enabledLabel(preferences.walletEnabled)} />
-        <Fact label="Creator setup" value={enabledLabel(preferences.creatorSetupEnabled)} />
-        <Fact label="Studio setup" value={enabledLabel(preferences.studioSetupEnabled)} />
-        <Fact label="Push" value={enabledLabel(preferences.pushEnabled)} />
-      </div>
+      <NotificationPreferencesPanel initial={preferences} />
       <NotificationEnrollment pushConfig={pushConfig} />
     </div>
   );
@@ -211,10 +199,6 @@ function SettingsGroup({
 
 function resultLabel<T>(result: ApiResult<T>) {
   return result.ok ? "ready" : mapApiFailure(result, "Settings").title;
-}
-
-function enabledLabel(enabled: boolean) {
-  return enabled ? "enabled" : "disabled";
 }
 
 function shorten(value: string) {

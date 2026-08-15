@@ -5240,7 +5240,8 @@ describe("buildApi", () => {
         LIVEPEER_API_BASE_URL: "https://livepeer.studio/api",
         LIVEPEER_HTTP_TIMEOUT_MS: 10_000,
         LIVEPEER_ADULT_LIVE_ENABLED: false,
-        MEDIA_MODERATION_MODE: "disabled_fail_closed"
+        MEDIA_MODERATION_MODE: "disabled_fail_closed",
+        REALTIME_JWT_TTL_SECONDS: 300
       },
       fetchMock
     );
@@ -5345,7 +5346,8 @@ describe("buildApi", () => {
       LIVEPEER_API_BASE_URL: "https://livepeer.studio/api",
       LIVEPEER_HTTP_TIMEOUT_MS: 10_000,
       LIVEPEER_ADULT_LIVE_ENABLED: false,
-      MEDIA_MODERATION_MODE: "disabled_fail_closed"
+      MEDIA_MODERATION_MODE: "disabled_fail_closed",
+      REALTIME_JWT_TTL_SECONDS: 300
     });
     const providerAssetId = "eb1c4f77-0cda-46be-b47d-1118ad7c2ffe";
     const expires = 1_780_531_200 + 900;
@@ -10778,6 +10780,9 @@ function fakeMessageRepository(
   overrides: Partial<{
     onListConversations: MessageRepository["listConversations"];
     onListMessages: MessageRepository["listMessages"];
+    onCreateDirectConversation: MessageRepository["createDirectConversation"];
+    onRespondToMessageRequest: MessageRepository["respondToMessageRequest"];
+    onMarkConversationRead: MessageRepository["markConversationRead"];
     onCreateMessage: MessageRepository["createMessage"];
     onFindConversationPrice: MessageRepository["findConversationPrice"];
     onRecordPaidMessageDraft: MessageRepository["recordPaidMessageDraft"];
@@ -10793,6 +10798,10 @@ function fakeMessageRepository(
               type: "direct",
               title: "Maki",
               unreadCount: 1,
+              counterpart: homeFeedItem.creator,
+              requestState: "accepted",
+              requestRole: "initiator",
+              canSend: true,
               lastMessage: {
                 body: "Visible message",
                 sender: homeFeedItem.creator,
@@ -10812,6 +10821,37 @@ function fakeMessageRepository(
     },
     async createMessage(input) {
       return overrides.onCreateMessage?.(input) ?? messageFixture({ conversationId: input.conversationId });
+    },
+    async createDirectConversation(input) {
+      return overrides.onCreateDirectConversation?.(input) ?? {
+        id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab10",
+        type: "direct",
+        title: "Maki",
+        unreadCount: 0,
+        counterpart: homeFeedItem.creator,
+        requestState: "pending",
+        requestRole: "initiator",
+        canSend: true
+      };
+    },
+    async respondToMessageRequest(input) {
+      return overrides.onRespondToMessageRequest?.(input) ?? {
+        id: input.conversationId,
+        type: "direct",
+        title: "Maki",
+        unreadCount: 1,
+        counterpart: homeFeedItem.creator,
+        requestState: input.action === "accept" ? "accepted" : "declined",
+        requestRole: "recipient",
+        canSend: input.action === "accept"
+      };
+    },
+    async markConversationRead(input) {
+      return overrides.onMarkConversationRead?.(input) ?? {
+        conversationId: input.conversationId,
+        unreadCount: 0,
+        readAt: "2026-06-04T23:50:00.000Z"
+      };
     },
     async findConversationPrice(input) {
       return (

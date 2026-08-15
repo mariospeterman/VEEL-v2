@@ -158,6 +158,8 @@ Wallet is not required for public landing pages, public teaser/deep-link capture
 
 Use RLS for tables that clients may subscribe to or read directly. Migration `0017_rls_policy_baseline.sql` enables RLS on current public-schema tables and adds explicit authenticated read policies scoped to owners, participants, creators, active pass holders, or staff.
 
+Migration `0095` narrows the Realtime message/notification projection further: token minting and RLS both require current protected-app readiness, message rows must be visible, and message-request/notification rows are participant/self only. Age expiry or revocation therefore closes both new token minting and already-issued token reads; staff access uses audited backend/admin projections.
+
 The browser Supabase key is read-only for app data. Fastify remains the only mutation surface for money, access, messages, live rooms, wallet records, provider callbacks, and admin state.
 
 Use direct Supabase reads/realtime only for:
@@ -198,7 +200,9 @@ Use:
 - Broadcast for typing, live viewer presence, lightweight room events.
 - Presence for online state.
 - Postgres Changes for messages, notifications, room status, and activity projections after RLS review.
-- Current implementation publishes only `notifications`, `messages`, and `conversation_members` to `supabase_realtime`; browser code uses these changes to invalidate typed API caches and refresh server-owned projections.
+- Current implementation publishes only `notifications`, `messages`, `conversation_members`, and `direct_message_requests` to `supabase_realtime`; browser code uses these changes to invalidate typed API caches and refresh server-owned projections.
+- Realtime authorization derives from the canonical opaque WeVid application session. Fastify mints a five-minute ES256 custom JWT with canonical user `sub`, `role=authenticated`, and the server-only `wevid_session=true` marker. RLS distinguishes this path from optional Supabase recovery identities; recovery remains optional and is never required to make wallet-first Realtime work.
+- `REALTIME_JWT_PRIVATE_JWK`, `REALTIME_JWT_KEY_ID`, and `REALTIME_JWT_ISSUER` are server-only imported-signing-key configuration. Missing configuration fails token minting closed without changing application-session authority.
 - Do not add money, provider, device-secret, compliance, admin, or raw payload tables to the realtime publication.
 
 Avoid:

@@ -5,6 +5,7 @@ import {
   type Message,
 } from "@/api-client";
 import { MessageComposer } from "../../messages/message-composer";
+import { ConversationStateActions } from "../../messages/conversation-state-actions";
 import { requireAppAccess } from "@/supabase/route-guard";
 import { AppShell } from "../../app-shell";
 import { Card, EmptyState, ErrorState, PageHeader, StatusPill } from "../../ui";
@@ -73,6 +74,10 @@ export default async function MessagesPage({
                   {selectedConversation.type} conversation
                 </p>
               </div>
+              <ConversationStateActions
+                conversation={selectedConversation}
+                messagesVisible={messages?.ok === true}
+              />
 
               <div className="grid gap-3 p-4">
                 {messages?.ok ? (

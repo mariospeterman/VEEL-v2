@@ -11,3 +11,24 @@ export class MessageIdempotencyConflictError extends Error {
     this.name = "MessageIdempotencyConflictError";
   }
 }
+
+export class MessageBlockedError extends Error {
+  constructor() {
+    super("MESSAGE_BLOCKED");
+    this.name = "MessageBlockedError";
+  }
+}
+
+export class MessageRequestForbiddenError extends Error {
+  constructor() {
+    super("MESSAGE_REQUEST_FORBIDDEN");
+    this.name = "MessageRequestForbiddenError";
+  }
+}
+
+export class MessageRequestLimitError extends Error {
+  constructor() {
+    super("MESSAGE_REQUEST_LIMIT_REACHED");
+    this.name = "MessageRequestLimitError";
+  }
+}

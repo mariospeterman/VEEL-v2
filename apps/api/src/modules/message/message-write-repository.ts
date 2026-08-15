@@ -5,61 +5,522 @@ import {
   messageSelectSql,
   toMessage
 } from "./message-repository-mappers.js";
-import { MessageIdempotencyConflictError } from "./message-errors.js";
-import type { ConversationInput, CreateMessageInput, CreatePaidMessageDraftInput } from "./types.js";
+import {
+  MessageBlockedError,
+  MessageIdempotencyConflictError,
+  MessageRequestForbiddenError,
+  MessageRequestLimitError
+} from "./message-errors.js";
+import { readConversationByUserId } from "./message-read-repository.js";
+import type {
+  Conversation,
+  ConversationInput,
+  ConversationReadState,
+  CreateDirectConversationInput,
+  CreateMessageInput,
+  CreatePaidMessageDraftInput,
+  MarkConversationReadInput,
+  RespondToMessageRequestInput
+} from "./types.js";
+
+interface ConversationContextRow {
+  actor_id: string;
+  other_user_id: string;
+  conversation_state: string;
+  request_state: "pending" | "accepted" | "declined" | null;
+  initiator_user_id: string | null;
+  recipient_user_id: string | null;
+  requester_message_count: number | null;
+}
+
+interface MessageActionReceiptRow<T> {
+  action: string;
+  request_hash: string;
+  conversation_id: string;
+  response_body: T;
+}
+
+type MessageActionResponse = Conversation | ConversationReadState;
+
+export async function createDirectConversation(
+  sql: postgres.Sql,
+  input: CreateDirectConversationInput
+) {
+  return sql.begin(async (transaction) => {
+    const identities = await transaction<{
+      actor_id: string;
+      target_id: string;
+    }[]>`
+      select actor.id as actor_id, target.id as target_id
+      from users actor
+      join users target on target.id = ${input.targetUserId}
+      join profiles target_profile on target_profile.user_id = target.id
+      where actor.supabase_user_id = ${input.supabaseUserId}
+        and actor.id <> target.id
+        and actor.state = 'active'
+        and target.state = 'active'
+        and target_profile.visibility = 'public'
+      limit 1
+    `;
+    const identity = identities[0];
+    if (!identity) return null;
+
+    await transaction`
+      select id from users
+      where id in (${identity.actor_id}, ${identity.target_id})
+      order by id
+      for update
+    `;
+    await assertNotBlocked(transaction, identity.actor_id, identity.target_id);
+
+    const replay = await readMessageActionReceipt<Conversation>(
+      transaction,
+      identity.actor_id,
+      input.idempotencyKey
+    );
+    if (replay) {
+      assertReceiptMatches(replay, "conversation.create", input.requestHash);
+      return replay.response_body;
+    }
+
+    const existing = await transaction<{ conversation_id: string }[]>`
+      select conversation_id
+      from direct_message_requests
+      where least(initiator_user_id, recipient_user_id) = least(${identity.actor_id}::uuid, ${identity.target_id}::uuid)
+        and greatest(initiator_user_id, recipient_user_id) = greatest(${identity.actor_id}::uuid, ${identity.target_id}::uuid)
+      limit 1
+      for update
+    `;
+    const conversationId = existing[0]?.conversation_id ?? randomUUID();
+
+    if (!existing[0]) {
+      const requestState = await hasTrustedRelationship(
+        transaction,
+        identity.actor_id,
+        identity.target_id
+      ) ? "accepted" : "pending";
+
+      await transaction`
+        insert into conversations (id, type, state)
+        values (${conversationId}, 'direct', 'active')
+      `;
+      await transaction`
+        insert into conversation_members (conversation_id, user_id)
+        values (${conversationId}, ${identity.actor_id}), (${conversationId}, ${identity.target_id})
+      `;
+      await transaction`
+        insert into direct_message_requests (
+          conversation_id,
+          initiator_user_id,
+          recipient_user_id,
+          state,
+          responded_at
+        ) values (
+          ${conversationId},
+          ${identity.actor_id},
+          ${identity.target_id},
+          ${requestState},
+          ${requestState === "accepted" ? new Date() : null}
+        )
+      `;
+    } else {
+      await promoteTrustedMessageRequest(
+        transaction,
+        conversationId,
+        identity.actor_id,
+        identity.target_id
+      );
+    }
+
+    const response = await readConversationByUserId(
+      transaction,
+      identity.actor_id,
+      conversationId
+    );
+    if (!response) return null;
+    await recordMessageAction(
+      transaction,
+      identity.actor_id,
+      input.idempotencyKey,
+      "conversation.create",
+      input.requestHash,
+      conversationId,
+      response
+    );
+    await transaction`
+      insert into audit_events (
+        id, actor_user_id, subject_type, subject_id, action, idempotency_key, metadata
+      ) values (
+        ${randomUUID()}, ${identity.actor_id}, 'conversation', ${conversationId},
+        'conversation.created_or_reused', ${input.idempotencyKey},
+        ${transaction.json({ targetUserId: identity.target_id, newConversation: !existing[0] })}
+      ) on conflict do nothing
+    `;
+
+    return response;
+  });
+}
+
+export async function respondToMessageRequest(
+  sql: postgres.Sql,
+  input: RespondToMessageRequestInput
+) {
+  return sql.begin(async (transaction) => {
+    const context = await lockConversationContext(transaction, input);
+    if (!context) return null;
+    const replay = await readMessageActionReceipt<Conversation>(
+      transaction,
+      context.actor_id,
+      input.idempotencyKey
+    );
+    if (replay) {
+      assertReceiptMatches(replay, "conversation.request.respond", input.requestHash);
+      return replay.response_body;
+    }
+    if (
+      context.request_state !== "pending" ||
+      context.recipient_user_id !== context.actor_id
+    ) {
+      throw new MessageRequestForbiddenError();
+    }
+    if (input.action === "accept") {
+      await assertNotBlocked(transaction, context.actor_id, context.other_user_id);
+    }
+
+    await transaction`
+      update direct_message_requests
+      set state = ${input.action === "accept" ? "accepted" : "declined"},
+          responded_at = now(),
+          updated_at = now()
+      where conversation_id = ${input.conversationId}
+    `;
+    const response = await readConversationByUserId(
+      transaction,
+      context.actor_id,
+      input.conversationId
+    );
+    if (!response) return null;
+    await recordMessageAction(
+      transaction,
+      context.actor_id,
+      input.idempotencyKey,
+      "conversation.request.respond",
+      input.requestHash,
+      input.conversationId,
+      response
+    );
+    await transaction`
+      insert into audit_events (
+        id, actor_user_id, subject_type, subject_id, action, idempotency_key, metadata
+      ) values (
+        ${randomUUID()}, ${context.actor_id}, 'conversation', ${input.conversationId},
+        ${input.action === "accept" ? "message_request.accepted" : "message_request.declined"},
+        ${input.idempotencyKey}, '{}'::jsonb
+      ) on conflict do nothing
+    `;
+
+    return response;
+  });
+}
+
+export async function markConversationRead(
+  sql: postgres.Sql,
+  input: MarkConversationReadInput
+) {
+  return sql.begin(async (transaction) => {
+    const context = await lockConversationContext(transaction, input);
+    if (!context) return null;
+    const replay = await readMessageActionReceipt<ConversationReadState>(
+      transaction,
+      context.actor_id,
+      input.idempotencyKey
+    );
+    if (replay) {
+      assertReceiptMatches(replay, "conversation.read", input.requestHash);
+      return replay.response_body;
+    }
+
+    const rows = await transaction<{ last_read_at: Date }[]>`
+      update conversation_members
+      set last_read_at = greatest(coalesce(last_read_at, '-infinity'::timestamptz), now())
+      where conversation_id = ${input.conversationId}
+        and user_id = ${context.actor_id}
+      returning last_read_at
+    `;
+    const readAt = rows[0]?.last_read_at;
+    if (!readAt) return null;
+
+    const response = {
+      conversationId: input.conversationId,
+      unreadCount: 0 as const,
+      readAt: readAt.toISOString()
+    };
+    await recordMessageAction(
+      transaction,
+      context.actor_id,
+      input.idempotencyKey,
+      "conversation.read",
+      input.requestHash,
+      input.conversationId,
+      response
+    );
+    return response;
+  });
+}
 
 export async function createMessage(sql: postgres.Sql, input: CreateMessageInput) {
-  const messageId = randomUUID();
-  const receiptRows = await sql<{ id: string; request_matches: boolean }[]>`
-    with actor as (
-      select id
-      from users
-      where supabase_user_id = ${input.supabaseUserId}
+  return sql.begin(async (transaction) => {
+    const context = await lockConversationContext(transaction, input);
+    if (!context) return null;
+    if (context.conversation_state !== "active") {
+      throw new MessageRequestForbiddenError();
+    }
+    await assertNotBlocked(transaction, context.actor_id, context.other_user_id);
+    await promoteTrustedMessageRequest(
+      transaction,
+      input.conversationId,
+      context.actor_id,
+      context.other_user_id,
+      context
+    );
+
+    const existing = await transaction<{ id: string; conversation_id: string; body: string }[]>`
+      select id, conversation_id, body
+      from messages
+      where sender_user_id = ${context.actor_id}
+        and idempotency_key = ${input.idempotencyKey}
       limit 1
-    ),
-    participant as (
-      select cm.conversation_id, actor.id as actor_user_id
-      from conversation_members cm
-      join actor on actor.id = cm.user_id
-      where cm.conversation_id = ${input.conversationId}
-      limit 1
-    )
-    insert into messages (
-      id,
-      conversation_id,
-      sender_user_id,
-      body,
-      idempotency_key
-    )
-    select
-      ${messageId},
-      conversation_id,
-      actor_user_id,
-      ${input.body},
-      ${input.idempotencyKey}
-    from participant
-    on conflict (sender_user_id, idempotency_key) where idempotency_key is not null
-    do update set idempotency_key = messages.idempotency_key
-    returning
-      id,
-      conversation_id = ${input.conversationId} and body = ${input.body} as request_matches
-  `;
-  const receipt = receiptRows[0];
+    `;
+    if (existing[0]) {
+      if (existing[0].conversation_id !== input.conversationId || existing[0].body !== input.body) {
+        throw new MessageIdempotencyConflictError();
+      }
+      return readMessage(transaction, existing[0].id);
+    }
 
-  if (!receipt) {
-    return null;
-  }
+    if (context.request_state === "declined") {
+      throw new MessageRequestForbiddenError();
+    }
+    if (context.request_state === "pending") {
+      if (context.initiator_user_id !== context.actor_id) {
+        throw new MessageRequestForbiddenError();
+      }
+      if (Number(context.requester_message_count) >= 2) {
+        throw new MessageRequestLimitError();
+      }
+    }
 
-  if (!receipt.request_matches) {
-    throw new MessageIdempotencyConflictError();
-  }
+    const messageId = randomUUID();
+    await transaction`
+      insert into messages (id, conversation_id, sender_user_id, body, idempotency_key)
+      values (${messageId}, ${input.conversationId}, ${context.actor_id}, ${input.body}, ${input.idempotencyKey})
+    `;
+    if (context.request_state === "pending") {
+      await transaction`
+        update direct_message_requests
+        set requester_message_count = requester_message_count + 1, updated_at = now()
+        where conversation_id = ${input.conversationId}
+      `;
+    }
 
+    await transaction`
+      insert into notifications (
+        id, user_id, kind, title, body, action_url,
+        related_resource_type, related_resource_id, idempotency_key
+      )
+      select
+        ${randomUUID()}, ${context.other_user_id}, 'message',
+        'New message', '@' || sender_profile.handle || ' sent you a message.',
+        '/app/messages?conversation=' || ${input.conversationId},
+        'message', ${messageId}, 'message:' || ${messageId}
+      from profiles sender_profile
+      where sender_profile.user_id = ${context.actor_id}
+      on conflict (user_id, idempotency_key) do nothing
+    `;
+    await transaction`
+      insert into audit_events (
+        id, actor_user_id, subject_type, subject_id, action, idempotency_key, metadata
+      ) values (
+        ${randomUUID()}, ${context.actor_id}, 'message', ${messageId}, 'message.sent',
+        ${input.idempotencyKey}, ${transaction.json({ conversationId: input.conversationId })}
+      ) on conflict do nothing
+    `;
+
+    return readMessage(transaction, messageId);
+  });
+}
+
+async function readMessage(sql: postgres.ISql, messageId: string) {
   const rows = await sql<MessageRow[]>`
     ${messageSelectSql(sql)}
-    where m.id = ${receipt.id}
+    where m.id = ${messageId}
   `;
-
   return rows[0] ? toMessage(rows[0]) : null;
+}
+
+async function lockConversationContext(
+  transaction: postgres.TransactionSql,
+  input: ConversationInput
+): Promise<ConversationContextRow | null> {
+  const rows = await transaction<ConversationContextRow[]>`
+    with actor as (
+      select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
+    )
+    select
+      actor.id as actor_id,
+      other_member.user_id as other_user_id,
+      c.state as conversation_state,
+      request.state as request_state,
+      request.initiator_user_id,
+      request.recipient_user_id,
+      request.requester_message_count
+    from actor
+    join conversation_members own_member on own_member.user_id = actor.id
+    join conversations c on c.id = own_member.conversation_id
+    join conversation_members other_member
+      on other_member.conversation_id = c.id and other_member.user_id <> actor.id
+    left join direct_message_requests request on request.conversation_id = c.id
+    where c.id = ${input.conversationId}
+    limit 1
+    for update of c, own_member, other_member
+  `;
+  const context = rows[0];
+  if (!context) return null;
+
+  await transaction`
+    select id from users
+    where id in (${context.actor_id}, ${context.other_user_id})
+    order by id
+    for update
+  `;
+  if (context.request_state) {
+    const request = await transaction<Pick<
+      ConversationContextRow,
+      "request_state" | "initiator_user_id" | "recipient_user_id" | "requester_message_count"
+    >[]>`
+      select
+        state as request_state,
+        initiator_user_id,
+        recipient_user_id,
+        requester_message_count
+      from direct_message_requests
+      where conversation_id = ${input.conversationId}
+      for update
+    `;
+    Object.assign(context, request[0]);
+  }
+
+  return context;
+}
+
+async function assertNotBlocked(
+  transaction: postgres.TransactionSql,
+  userAId: string,
+  userBId: string
+) {
+  const rows = await transaction<{ blocked: boolean }[]>`
+    select exists (
+      select 1 from blocks
+      where (blocker_user_id = ${userAId} and blocked_user_id = ${userBId})
+         or (blocker_user_id = ${userBId} and blocked_user_id = ${userAId})
+    ) as blocked
+  `;
+  if (rows[0]?.blocked) throw new MessageBlockedError();
+}
+
+async function hasTrustedRelationship(
+  transaction: postgres.TransactionSql,
+  userAId: string,
+  userBId: string
+) {
+  const rows = await transaction<{ trusted: boolean }[]>`
+    select (
+      (
+        exists (
+          select 1 from user_follows
+          where follower_user_id = ${userAId}
+            and followed_user_id = ${userBId}
+            and state = 'active'
+        )
+        and exists (
+          select 1 from user_follows
+          where follower_user_id = ${userBId}
+            and followed_user_id = ${userAId}
+            and state = 'active'
+        )
+      )
+      or exists (
+        select 1 from mutuals
+        where user_a_id = least(${userAId}::uuid, ${userBId}::uuid)
+          and user_b_id = greatest(${userAId}::uuid, ${userBId}::uuid)
+          and state = 'active'
+      )
+    ) as trusted
+  `;
+  return Boolean(rows[0]?.trusted);
+}
+
+async function promoteTrustedMessageRequest(
+  transaction: postgres.TransactionSql,
+  conversationId: string,
+  userAId: string,
+  userBId: string,
+  context?: ConversationContextRow
+) {
+  if (context && context.request_state !== "pending") return;
+  if (!await hasTrustedRelationship(transaction, userAId, userBId)) return;
+
+  const updated = await transaction<{ state: "accepted" }[]>`
+    update direct_message_requests
+    set state = 'accepted', responded_at = coalesce(responded_at, now()), updated_at = now()
+    where conversation_id = ${conversationId}
+      and state = 'pending'
+    returning state
+  `;
+  if (updated[0] && context) context.request_state = "accepted";
+}
+
+async function readMessageActionReceipt<T extends MessageActionResponse>(
+  transaction: postgres.TransactionSql,
+  actorUserId: string,
+  idempotencyKey: string
+) {
+  const rows = await transaction<MessageActionReceiptRow<T>[]>`
+    select action, request_hash, conversation_id, response_body
+    from message_action_receipts
+    where actor_user_id = ${actorUserId} and idempotency_key = ${idempotencyKey}
+    limit 1
+  `;
+  return rows[0] ?? null;
+}
+
+function assertReceiptMatches<T extends MessageActionResponse>(
+  receipt: MessageActionReceiptRow<T>,
+  action: string,
+  requestHash: string
+) {
+  if (receipt.action !== action || receipt.request_hash !== requestHash) {
+    throw new MessageIdempotencyConflictError();
+  }
+}
+
+async function recordMessageAction(
+  transaction: postgres.TransactionSql,
+  actorUserId: string,
+  idempotencyKey: string,
+  action: string,
+  requestHash: string,
+  conversationId: string,
+  response: MessageActionResponse
+) {
+  await transaction`
+    insert into message_action_receipts (
+      actor_user_id, idempotency_key, action, request_hash, conversation_id, response_body
+    ) values (
+      ${actorUserId}, ${idempotencyKey}, ${action}, ${requestHash}, ${conversationId},
+      ${transaction.json(response)}
+    )
+  `;
 }
 
 export async function findConversationPrice(sql: postgres.Sql, input: ConversationInput) {
@@ -70,10 +531,21 @@ export async function findConversationPrice(sql: postgres.Sql, input: Conversati
       where supabase_user_id = ${input.supabaseUserId}
       limit 1
     )
-    select cm.user_id as recipient_user_id
-    from conversation_members cm
-    where cm.conversation_id = ${input.conversationId}
-      and cm.user_id <> (select id from actor)
+    select recipient.user_id as recipient_user_id
+    from actor
+    join conversation_members own_member
+      on own_member.conversation_id = ${input.conversationId}
+      and own_member.user_id = actor.id
+    join conversations c on c.id = own_member.conversation_id and c.state = 'active'
+    join conversation_members recipient
+      on recipient.conversation_id = c.id and recipient.user_id <> actor.id
+    left join direct_message_requests request on request.conversation_id = c.id
+    where not exists (
+      select 1 from blocks b
+      where (b.blocker_user_id = actor.id and b.blocked_user_id = recipient.user_id)
+         or (b.blocker_user_id = recipient.user_id and b.blocked_user_id = actor.id)
+    )
+      and coalesce(request.state, 'accepted') <> 'declined'
     limit 1
   `;
   const row = rows[0];
@@ -92,38 +564,35 @@ export async function recordPaidMessageDraft(
   sql: postgres.Sql,
   input: CreatePaidMessageDraftInput
 ) {
-  await sql`
-    with actor as (
-      select id
-      from users
-      where supabase_user_id = ${input.supabaseUserId}
-      limit 1
-    ),
-    recipient as (
-      select cm.user_id
-      from conversation_members cm
-      where cm.conversation_id = ${input.conversationId}
-        and cm.user_id <> (select id from actor)
-      limit 1
-    )
-    insert into paid_message_delivery_requests (
-      payment_intent_id,
-      conversation_id,
-      sender_user_id,
-      recipient_user_id,
-      body,
-      amount_minor,
-      currency
-    )
-    select
-      ${input.paymentIntentId},
-      ${input.conversationId},
-      actor.id,
-      recipient.user_id,
-      ${input.body},
-      ${input.amountMinor},
-      ${input.currency}
-    from actor, recipient
-    on conflict (payment_intent_id) do nothing
-  `;
+  await sql.begin(async (transaction) => {
+    const context = await lockConversationContext(transaction, input);
+    if (!context || context.conversation_state !== "active") {
+      throw new MessageRequestForbiddenError();
+    }
+    await assertNotBlocked(transaction, context.actor_id, context.other_user_id);
+    if (context.request_state === "declined") {
+      throw new MessageRequestForbiddenError();
+    }
+
+    await transaction`
+      insert into paid_message_delivery_requests (
+        payment_intent_id,
+        conversation_id,
+        sender_user_id,
+        recipient_user_id,
+        body,
+        amount_minor,
+        currency
+      ) values (
+        ${input.paymentIntentId},
+        ${input.conversationId},
+        ${context.actor_id},
+        ${context.other_user_id},
+        ${input.body},
+        ${input.amountMinor},
+        ${input.currency}
+      )
+      on conflict (payment_intent_id) do nothing
+    `;
+  });
 }

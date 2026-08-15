@@ -20,6 +20,7 @@ import { registerPerformerRoutes } from "./modules/performer/performer-routes.js
 import { registerProfileRoutes } from "./modules/profile/profile-routes.js";
 import { registerReferralRoutes } from "./modules/referral/referral-routes.js";
 import { registerRefundRoutes } from "./modules/refund/refund-routes.js";
+import { registerRealtimeRoutes } from "./modules/realtime/realtime-routes.js";
 import { registerSessionRoutes } from "./modules/session/session-routes.js";
 import { registerSubscriptionRoutes } from "./modules/subscription/subscription-routes.js";
 import { registerVerificationRoutes } from "./modules/verification/verification-routes.js";
@@ -65,13 +66,21 @@ export async function registerApiRoutes(
     verificationRepository,
     verificationProviderWaterfall,
     walletAuthRepository,
-    onrampProvider
+    onrampProvider,
+    realtimeTokenIssuer
   } = dependencies;
 
   await registerWalletAuthRoutes(app, {
     authVerifier,
     recoveryIdentityVerifier,
     walletAuthRepository
+  });
+  await registerRealtimeRoutes(app, {
+    authVerifier,
+    sessionRepository,
+    ageRepository,
+    walletRepository,
+    realtimeTokenIssuer
   });
   await registerSessionRoutes(app, {
     authVerifier,

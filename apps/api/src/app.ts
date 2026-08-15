@@ -26,11 +26,14 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
         "res.headers.set-cookie",
         "SUPABASE_SECRET_KEY",
         "SUPABASE_SERVICE_ROLE_KEY",
+        "REALTIME_JWT_PRIVATE_JWK",
         "DATABASE_URL",
         "HELIUS_API_KEY",
         "HELIUS_WEBHOOK_SECRET",
         "COINBASE_CDP_API_KEY_SECRET",
-        "SUMSUB_WEBHOOK_SECRET"
+        "SUMSUB_WEBHOOK_SECRET",
+        "NOTIFICATION_DEVICE_ENCRYPTION_KEY",
+        "WEB_PUSH_VAPID_PRIVATE_KEY"
       ]
     }
   });

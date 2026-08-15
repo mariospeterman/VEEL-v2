@@ -2,14 +2,20 @@ import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.j
 import { MessageRepositoryConfigurationError } from "./message-errors.js";
 import { listConversations, listMessages } from "./message-read-repository.js";
 import {
+  createDirectConversation,
   createMessage,
   findConversationPrice,
-  recordPaidMessageDraft
+  markConversationRead,
+  recordPaidMessageDraft,
+  respondToMessageRequest
 } from "./message-write-repository.js";
 import type { MessageRepository } from "./types.js";
 
 export {
+  MessageBlockedError,
   MessageIdempotencyConflictError,
+  MessageRequestForbiddenError,
+  MessageRequestLimitError,
   MessageRepositoryConfigurationError
 } from "./message-errors.js";
 
@@ -23,6 +29,15 @@ export function createPostgresMessageRepository(database?: string | PostgresSql)
         throw new MessageRepositoryConfigurationError();
       },
       async createMessage() {
+        throw new MessageRepositoryConfigurationError();
+      },
+      async createDirectConversation() {
+        throw new MessageRepositoryConfigurationError();
+      },
+      async respondToMessageRequest() {
+        throw new MessageRepositoryConfigurationError();
+      },
+      async markConversationRead() {
         throw new MessageRepositoryConfigurationError();
       },
       async findConversationPrice() {
@@ -45,6 +60,15 @@ export function createPostgresMessageRepository(database?: string | PostgresSql)
     },
     async createMessage(input) {
       return createMessage(sql, input);
+    },
+    async createDirectConversation(input) {
+      return createDirectConversation(sql, input);
+    },
+    async respondToMessageRequest(input) {
+      return respondToMessageRequest(sql, input);
+    },
+    async markConversationRead(input) {
+      return markConversationRead(sql, input);
     },
     async findConversationPrice(input) {
       return findConversationPrice(sql, input);

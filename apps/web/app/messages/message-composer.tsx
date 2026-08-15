@@ -101,6 +101,10 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
         <textarea
           className="min-h-28 resize-none rounded border border-(--line) bg-(--background) p-3 text-sm outline-none focus:border-(--accent)"
           maxLength={4000}
+          disabled={
+            !conversation.canSend &&
+            !(conversation.requestState === "pending" && conversation.requestRole === "initiator")
+          }
           onChange={(event) => setBody(event.target.value)}
           placeholder="Write a message..."
           value={body}
@@ -109,7 +113,7 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
       <div className="mt-3 flex flex-wrap gap-2">
         <button
           className="rounded bg-(--foreground) px-3 py-2 text-sm font-semibold text-(--background) disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={isBusy || !trimmedBody}
+          disabled={isBusy || !trimmedBody || !conversation.canSend}
           onClick={sendVisibleMessage}
           type="button"
         >
@@ -117,7 +121,12 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
         </button>
         <button
           className="rounded border border-(--line) px-3 py-2 text-sm font-semibold text-(--foreground) disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={isBusy || !trimmedBody}
+          disabled={
+            isBusy ||
+            !trimmedBody ||
+            conversation.requestState === "declined" ||
+            (conversation.requestState === "pending" && conversation.requestRole === "recipient")
+          }
           onClick={startPaidMessage}
           type="button"
         >

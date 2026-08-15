@@ -56,6 +56,7 @@ import type {
   MutualsFeedPage,
   MutualsMatchPage,
   NotificationPreferences,
+  NotificationPage,
   NotificationPushConfig,
   OrganizationDashboardPage,
   PlatformAccess,
@@ -158,6 +159,11 @@ export async function getFeedPreferences(): Promise<ApiResult<FeedPreferences>> 
 
 export async function getNotificationPreferences(): Promise<ApiResult<NotificationPreferences>> {
   return getJson<NotificationPreferences>("/v1/notifications/preferences");
+}
+
+export async function getNotifications(cursor?: string): Promise<ApiResult<NotificationPage>> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  return getJson<NotificationPage>(`/v1/notifications${query}`);
 }
 
 export async function getNotificationPushConfig(): Promise<ApiResult<NotificationPushConfig>> {

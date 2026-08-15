@@ -55,6 +55,7 @@ const validSolanaSignature =
   "5Pj5fCupXLUePYn18JkY8SrRaWFiUctuDTRwvUy2MLgVFG1FsCeezrWwZsmxkL5YJQFmQpAcY7rc5pN6vrXJt7Qp";
 const validEventAccessSolanaSignature = deterministicBase58Signature(41);
 const validPaidMessageSolanaSignature = deterministicBase58Signature(83);
+const validDeclinedPaidMessageSolanaSignature = deterministicBase58Signature(97);
 const validLivePassSolanaSignature = deterministicBase58Signature(127);
 const validSubscriptionAuthorizationSignature = deterministicBase58Signature(149);
 
@@ -326,6 +327,25 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         handle: buyerHandle,
         displayName: "Integration Buyer"
       });
+
+      const preferenceRequest = {
+        method: "PATCH" as const,
+        url: "/v1/notifications/preferences",
+        headers: authenticatedHeaders(`notification-preferences-${runId}`),
+        payload: { messagesEnabled: false, pushEnabled: false }
+      };
+      const [preferenceResponse, concurrentPreferenceResponse] = await Promise.all([
+        app.inject(preferenceRequest),
+        app.inject(preferenceRequest)
+      ]);
+      expect(preferenceResponse.statusCode, preferenceResponse.body).toBe(200);
+      expect(concurrentPreferenceResponse.statusCode, concurrentPreferenceResponse.body).toBe(200);
+      expect(concurrentPreferenceResponse.json()).toEqual(preferenceResponse.json());
+      const conflictingPreferenceResponse = await app.inject({
+        ...preferenceRequest,
+        payload: { messagesEnabled: true }
+      });
+      expect(conflictingPreferenceResponse.statusCode, conflictingPreferenceResponse.body).toBe(409);
 
       const selfFollowTargetRows = await sql<{ id: string }[]>`
         select id from users where supabase_user_id = ${buyerSupabaseUserId} limit 1
@@ -1976,6 +1996,245 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         audit_event_count: "1"
       });
 
+      await sql`
+        insert into direct_message_requests (
+          conversation_id, initiator_user_id, recipient_user_id, state, requester_message_count
+        ) values (
+          ${seededConversationId}, ${buyerUserId!}, ${seededCreatorUserId}, 'pending', 0
+        )
+        on conflict (conversation_id) do update
+        set state = 'pending', requester_message_count = 0, responded_at = null, updated_at = now()
+      `;
+
+      const conversationRequestIdempotencyKey = `conversation-request-${runId}`;
+      const requestConversationResponse = await app.inject({
+        method: "POST",
+        url: "/v1/messages/conversations",
+        headers: authenticatedHeaders(conversationRequestIdempotencyKey),
+        payload: { targetUserId: seededCreatorUserId }
+      });
+      expect(requestConversationResponse.statusCode, requestConversationResponse.body).toBe(201);
+      expect(requestConversationResponse.json()).toMatchObject({
+        id: seededConversationId,
+        requestState: "pending",
+        requestRole: "initiator",
+        canSend: true
+      });
+
+      const declinedPaidIntentResponse = await app.inject({
+        method: "POST",
+        url: `/v1/messages/conversations/${seededConversationId}/paid-message-intents`,
+        headers: authenticatedHeaders(`paid-message-decline-${runId}`),
+        payload: { body: `Must not deliver after decline ${shortRunId}` }
+      });
+      expect(declinedPaidIntentResponse.statusCode, declinedPaidIntentResponse.body).toBe(201);
+      const declinedPaidIntent = declinedPaidIntentResponse.json<{ paymentIntent: { id: string } }>();
+
+      const declineBeforeSettlementResponse = await app.inject({
+        method: "PATCH",
+        url: `/v1/messages/conversations/${seededConversationId}/request`,
+        headers: creatorAuthenticatedHeaders(`request-decline-before-settlement-${runId}`),
+        payload: { action: "decline" }
+      });
+      expect(declineBeforeSettlementResponse.statusCode, declineBeforeSettlementResponse.body).toBe(200);
+
+      const declinedPaidSubmissionResponse = await app.inject({
+        method: "POST",
+        url: `/v1/payments/intents/${declinedPaidIntent.paymentIntent.id}/submissions`,
+        headers: authenticatedHeaders(`paid-message-decline-submission-${runId}`),
+        payload: { signature: validDeclinedPaidMessageSolanaSignature }
+      });
+      expect(declinedPaidSubmissionResponse.statusCode, declinedPaidSubmissionResponse.body).toBe(202);
+      const declinedDeliveryRows = await sql<{
+        delivery_state: string;
+        message_count: string;
+        recipient_notification_count: string;
+        remediation_count: string;
+      }[]>`
+        select
+          request.state as delivery_state,
+          (select count(*) from messages where payment_intent_id = request.payment_intent_id)::text as message_count,
+          (
+            select count(*) from notifications
+            where user_id = request.recipient_user_id
+              and related_resource_id = request.payment_intent_id
+          )::text as recipient_notification_count,
+          (
+            select count(*) from notifications
+            where user_id = request.sender_user_id
+              and idempotency_key = 'paid-message-remediation:' || request.payment_intent_id
+          )::text as remediation_count
+        from paid_message_delivery_requests request
+        where request.payment_intent_id = ${declinedPaidIntent.paymentIntent.id}
+      `;
+      expect(declinedDeliveryRows[0]).toEqual({
+        delivery_state: "cancelled",
+        message_count: "0",
+        recipient_notification_count: "0",
+        remediation_count: "1"
+      });
+
+      await sql`
+        update direct_message_requests
+        set state = 'pending', requester_message_count = 0, responded_at = null, updated_at = now()
+        where conversation_id = ${seededConversationId}
+      `;
+
+      const concurrentRequestMessages = await Promise.all(
+        [1, 2, 3].map((index) => app.inject({
+          method: "POST",
+          url: `/v1/messages/conversations/${seededConversationId}/messages`,
+          headers: authenticatedHeaders(`request-message-${index}-${runId}`),
+          payload: { body: `Request message ${index} ${shortRunId}` }
+        }))
+      );
+      expect(concurrentRequestMessages.map((response) => response.statusCode).sort()).toEqual([
+        201,
+        201,
+        409
+      ]);
+      const requestCeilingRows = await sql<{
+        message_count: string;
+        requester_message_count: number;
+      }[]>`
+        select
+          count(m.id)::text as message_count,
+          request.requester_message_count
+        from direct_message_requests request
+        left join messages m
+          on m.conversation_id = request.conversation_id
+          and m.idempotency_key like ${`request-message-%-${runId}`}
+        where request.conversation_id = ${seededConversationId}
+        group by request.requester_message_count
+      `;
+      expect(requestCeilingRows[0]).toEqual({
+        message_count: "2",
+        requester_message_count: 2
+      });
+
+      await sql`
+        insert into user_follows (follower_user_id, followed_user_id, state)
+        values (${seededCreatorUserId}, ${buyerUserId!}, 'active')
+        on conflict (follower_user_id, followed_user_id) do update
+        set state = 'active', updated_at = now()
+      `;
+      const trustedRelationshipConversation = await app.inject({
+        method: "POST",
+        url: "/v1/messages/conversations",
+        headers: authenticatedHeaders(`conversation-trusted-${runId}`),
+        payload: { targetUserId: seededCreatorUserId }
+      });
+      expect(
+        trustedRelationshipConversation.statusCode,
+        trustedRelationshipConversation.body
+      ).toBe(201);
+      expect(trustedRelationshipConversation.json()).toMatchObject({
+        id: seededConversationId,
+        requestState: "accepted",
+        canSend: true
+      });
+      await sql`
+        update direct_message_requests
+        set state = 'pending', responded_at = null, updated_at = now()
+        where conversation_id = ${seededConversationId}
+      `;
+      await sql`
+        update user_follows
+        set state = 'inactive', updated_at = now()
+        where follower_user_id = ${seededCreatorUserId}
+          and followed_user_id = ${buyerUserId!}
+      `;
+
+      const acceptedRequest = await app.inject({
+        method: "PATCH",
+        url: `/v1/messages/conversations/${seededConversationId}/request`,
+        headers: creatorAuthenticatedHeaders(`request-accept-${runId}`),
+        payload: { action: "accept" }
+      });
+      expect(acceptedRequest.statusCode, acceptedRequest.body).toBe(200);
+      expect(acceptedRequest.json()).toMatchObject({ requestState: "accepted", canSend: true });
+
+      const acceptedRequestReplay = await app.inject({
+        method: "PATCH",
+        url: `/v1/messages/conversations/${seededConversationId}/request`,
+        headers: creatorAuthenticatedHeaders(`request-accept-${runId}`),
+        payload: { action: "accept" }
+      });
+      expect(acceptedRequestReplay.statusCode, acceptedRequestReplay.body).toBe(200);
+      expect(acceptedRequestReplay.json()).toEqual(acceptedRequest.json());
+
+      const terminalRequestResponse = await app.inject({
+        method: "PATCH",
+        url: `/v1/messages/conversations/${seededConversationId}/request`,
+        headers: creatorAuthenticatedHeaders(`request-decline-after-accept-${runId}`),
+        payload: { action: "decline" }
+      });
+      expect(terminalRequestResponse.statusCode, terminalRequestResponse.body).toBe(403);
+
+      const originalConversationReplay = await app.inject({
+        method: "POST",
+        url: "/v1/messages/conversations",
+        headers: authenticatedHeaders(conversationRequestIdempotencyKey),
+        payload: { targetUserId: seededCreatorUserId }
+      });
+      expect(originalConversationReplay.statusCode, originalConversationReplay.body).toBe(201);
+      expect(originalConversationReplay.json()).toEqual(requestConversationResponse.json());
+
+      const postAcceptanceMessage = await app.inject({
+        method: "POST",
+        url: `/v1/messages/conversations/${seededConversationId}/messages`,
+        headers: authenticatedHeaders(`request-message-after-accept-${runId}`),
+        payload: { body: `Accepted request message ${shortRunId}` }
+      });
+      expect(postAcceptanceMessage.statusCode, postAcceptanceMessage.body).toBe(201);
+
+      const readConversationResponse = await app.inject({
+        method: "PATCH",
+        url: `/v1/messages/conversations/${seededConversationId}/read`,
+        headers: creatorAuthenticatedHeaders(`conversation-read-${runId}`),
+        payload: {}
+      });
+      expect(readConversationResponse.statusCode, readConversationResponse.body).toBe(200);
+      expect(readConversationResponse.json()).toMatchObject({
+        conversationId: seededConversationId,
+        unreadCount: 0
+      });
+      const readConversationReplay = await app.inject({
+        method: "PATCH",
+        url: `/v1/messages/conversations/${seededConversationId}/read`,
+        headers: creatorAuthenticatedHeaders(`conversation-read-${runId}`),
+        payload: {}
+      });
+      expect(readConversationReplay.statusCode, readConversationReplay.body).toBe(200);
+      expect(readConversationReplay.json()).toEqual(readConversationResponse.json());
+
+      const creatorNotifications = await app.inject({
+        method: "GET",
+        url: "/v1/notifications",
+        headers: creatorAuthenticatedHeaders(`notification-list-${runId}`)
+      });
+      expect(creatorNotifications.statusCode, creatorNotifications.body).toBe(200);
+      const notificationItems = creatorNotifications.json<{ items: Array<{ id: string; state: string }> }>().items;
+      expect(notificationItems.length).toBeGreaterThanOrEqual(2);
+      const notificationReadRequest = {
+        method: "PATCH" as const,
+        url: `/v1/notifications/${notificationItems[0]!.id}/read`,
+        headers: creatorAuthenticatedHeaders(`notification-read-${runId}`),
+        payload: {}
+      };
+      const [notificationRead, concurrentNotificationRead] = await Promise.all([
+        app.inject(notificationReadRequest),
+        app.inject(notificationReadRequest)
+      ]);
+      expect(notificationRead.statusCode, notificationRead.body).toBe(200);
+      expect(concurrentNotificationRead.statusCode, concurrentNotificationRead.body).toBe(200);
+      expect(concurrentNotificationRead.json()).toEqual(notificationRead.json());
+      const conflictingNotificationRead = await app.inject({
+        ...notificationReadRequest,
+        url: `/v1/notifications/${notificationItems[1]!.id}/read`
+      });
+      expect(conflictingNotificationRead.statusCode, conflictingNotificationRead.body).toBe(409);
+
       const lockedLiveRoomResponse = await app.inject({
         method: "GET",
         url: `/v1/live/rooms/${seededLiveRoomId}`,
@@ -2040,15 +2299,15 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         state: "confirmed",
         productType: "live_pass"
       });
-      expect(settlementInputs).toHaveLength(4);
-      expect(settlementInputs[3]).toEqual(
+      expect(settlementInputs).toHaveLength(5);
+      expect(settlementInputs[4]).toEqual(
         expect.objectContaining({
           signature: validLivePassSolanaSignature,
           treasuryWallet,
           totalAmountMinor: livePassIntent.amountMinor
         })
       );
-      expect(settlementInputs[3]?.referenceAddress).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
+      expect(settlementInputs[4]?.referenceAddress).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
 
       const activeLiveRoomResponse = await app.inject({
         method: "GET",
@@ -3979,6 +4238,18 @@ async function cleanupRun(
       `;
       await tx`
         delete from notifications
+        where user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from notification_action_receipts
+        where actor_user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from notification_devices
+        where user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from notification_preferences
         where user_id in ${tx(userIds)}
       `;
       await tx`
