@@ -21,9 +21,10 @@ const videoId = typeof created.guid === "string" ? created.guid : null;
 if (!videoId) throw new Error("Bunny did not return a video id");
 
 const expiration = Math.floor(Date.now() / 1000) + 60 * 60;
-const signature = createHash("sha256")
-  .update(`${libraryId}${apiKey}${expiration}${videoId}`)
-  .digest("hex");
+const signatureInput = `${libraryId}${apiKey}${expiration}${videoId}`;
+// Bunny's protocol mandates this ephemeral TUS authorization digest; it is not a stored password hash.
+// lgtm[js/insufficient-password-hash]
+const signature = createHash("sha256").update(signatureInput).digest("hex");
 const bytes = await readFile(proofPath);
 
 await new Promise((resolve, reject) => {
