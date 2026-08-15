@@ -687,6 +687,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/realtime/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mint a short-lived Supabase Realtime token from the canonical application session */
+        post: operations["createRealtimeAccessToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/notifications/{notificationId}/read": {
         parameters: {
             query?: never;
@@ -1297,11 +1314,46 @@ export interface paths {
         /** Conversation list */
         get: operations["listConversations"];
         put?: never;
-        post?: never;
+        /** Create or reuse a direct conversation under message-request policy */
+        post: operations["createDirectConversation"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/messages/conversations/{conversationId}/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Accept or decline a direct-message request as its recipient */
+        patch: operations["respondToMessageRequest"];
+        trace?: never;
+    };
+    "/v1/messages/conversations/{conversationId}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Advance the authenticated participant read cursor */
+        patch: operations["markConversationRead"];
         trace?: never;
     };
     "/v1/messages/conversations/{conversationId}/messages": {
@@ -3435,6 +3487,11 @@ export interface components {
             /** Format: date-time */
             updatedAt?: string | null;
         };
+        RealtimeAccessToken: {
+            readonly token: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
         UpdateNotificationPreferencesRequest: {
             messagesEnabled?: boolean;
             engagementEnabled?: boolean;
@@ -3924,7 +3981,29 @@ export interface components {
             type: "direct" | "match" | "paid";
             title: string;
             unreadCount: number;
+            counterpart: components["schemas"]["User"];
+            /** @enum {string} */
+            requestState: "not_required" | "pending" | "accepted" | "declined";
+            /** @enum {string} */
+            requestRole: "none" | "initiator" | "recipient";
+            canSend: boolean;
             lastMessage?: components["schemas"]["MessagePreview"];
+        };
+        CreateDirectConversationRequest: {
+            /** Format: uuid */
+            targetUserId: string;
+        };
+        RespondToMessageRequest: {
+            /** @enum {string} */
+            action: "accept" | "decline";
+        };
+        ConversationReadState: {
+            /** Format: uuid */
+            conversationId: string;
+            /** @constant */
+            unreadCount: 0;
+            /** Format: date-time */
+            readAt: string;
         };
         CreateMessageRequest: {
             body: string;
@@ -5781,6 +5860,15 @@ export interface components {
                 "application/json": components["schemas"]["NotificationDevice"];
             };
         };
+        /** @description Short-lived user-scoped Realtime access token */
+        RealtimeAccessToken: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["RealtimeAccessToken"];
+            };
+        };
         /** @description Content item */
         ContentItem: {
             headers: {
@@ -5946,6 +6034,24 @@ export interface components {
                 "application/json": {
                     items: components["schemas"]["Conversation"][];
                 };
+            };
+        };
+        /** @description Direct or matched conversation */
+        Conversation: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Conversation"];
+            };
+        };
+        /** @description Participant read cursor state */
+        ConversationReadState: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ConversationReadState"];
             };
         };
         /** @description Messages */
@@ -6987,6 +7093,16 @@ export interface components {
                 "application/json": components["schemas"]["CreateMessageRequest"];
             };
         };
+        CreateDirectConversation: {
+            content: {
+                "application/json": components["schemas"]["CreateDirectConversationRequest"];
+            };
+        };
+        RespondToMessageRequest: {
+            content: {
+                "application/json": components["schemas"]["RespondToMessageRequest"];
+            };
+        };
         CreatePaidMessageIntent: {
             content: {
                 "application/json": components["schemas"]["CreatePaidMessageIntentRequest"];
@@ -7351,6 +7467,7 @@ export interface operations {
             201: components["responses"]["AgeSession"];
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
             429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
@@ -7892,6 +8009,26 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
         };
     };
+    createRealtimeAccessToken: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: components["responses"]["RealtimeAccessToken"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     markNotificationRead: {
         parameters: {
             query?: never;
@@ -7907,8 +8044,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["Notification"];
+            400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
         };
     };
     getNotificationPreferences: {
@@ -7939,6 +8079,8 @@ export interface operations {
             200: components["responses"]["NotificationPreferences"];
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
         };
     };
     getNotificationPushConfig: {
@@ -7968,6 +8110,7 @@ export interface operations {
             201: components["responses"]["NotificationDevice"];
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
+            429: components["responses"]["RateLimited"];
         };
     };
     deleteNotificationDevice: {
@@ -7985,8 +8128,10 @@ export interface operations {
         requestBody?: never;
         responses: {
             202: components["responses"]["Accepted"];
+            400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
         };
     };
     createContent: {
@@ -8043,6 +8188,7 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -8088,6 +8234,7 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -8800,6 +8947,76 @@ export interface operations {
             200: components["responses"]["ConversationList"];
         };
     };
+    createDirectConversation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["CreateDirectConversation"];
+        responses: {
+            201: components["responses"]["Conversation"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    respondToMessageRequest: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["RespondToMessageRequest"];
+        responses: {
+            200: components["responses"]["Conversation"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    markConversationRead: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ConversationReadState"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     listConversationMessages: {
         parameters: {
             query?: never;
@@ -8838,6 +9055,7 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -8861,6 +9079,7 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };

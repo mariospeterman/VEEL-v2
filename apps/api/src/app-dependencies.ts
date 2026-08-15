@@ -51,6 +51,8 @@ import { createPostgresReferralRepository } from "./modules/referral/referral-re
 import type { ReferralRepository } from "./modules/referral/types.js";
 import { createPostgresRefundRepository } from "./modules/refund/refund-repository.js";
 import type { RefundRepository } from "./modules/refund/types.js";
+import { createRealtimeTokenIssuer } from "./modules/realtime/realtime-token.js";
+import type { RealtimeTokenIssuer } from "./modules/realtime/types.js";
 import { createPostgresSessionRepository } from "./modules/session/session-repository.js";
 import {
   createApplicationSessionVerifier,
@@ -116,6 +118,7 @@ export interface BuildApiOptions {
   mcpRepository?: McpRepository;
   verificationRepository?: VerificationRepository;
   verificationProviderWaterfall?: VerificationProviderWaterfall;
+  realtimeTokenIssuer?: RealtimeTokenIssuer;
   postgresClient?: PostgresSql;
 }
 
@@ -156,6 +159,7 @@ export interface ApiDependencies {
   mcpRepository: McpRepository;
   verificationRepository: VerificationRepository;
   verificationProviderWaterfall: VerificationProviderWaterfall;
+  realtimeTokenIssuer: RealtimeTokenIssuer;
 }
 
 export function createApiDependencies(
@@ -236,6 +240,8 @@ export function createApiDependencies(
     verificationRepository:
       options.verificationRepository ?? createPostgresVerificationRepository(postgresClient),
     verificationProviderWaterfall:
-      options.verificationProviderWaterfall ?? createVerificationProviderWaterfall(app.config)
+      options.verificationProviderWaterfall ?? createVerificationProviderWaterfall(app.config),
+    realtimeTokenIssuer:
+      options.realtimeTokenIssuer ?? createRealtimeTokenIssuer(app.config)
   };
 }

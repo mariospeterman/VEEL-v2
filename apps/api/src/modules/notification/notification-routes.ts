@@ -1,8 +1,12 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { mutationRateLimit } from "../../shared/rate-limits.js";
 import { requireIdempotencyKey as requireSharedIdempotencyKey } from "../../shared/idempotency.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { ApplicationSessionVerifier } from "../session/types.js";
-import { NotificationRepositoryConfigurationError } from "./notification-repository.js";
+import {
+  NotificationIdempotencyConflictError,
+  NotificationRepositoryConfigurationError
+} from "./notification-repository.js";
 import type {
   NotificationRepository,
   NotificationPushConfig,
@@ -60,7 +64,7 @@ export async function registerNotificationRoutes(
     );
   });
 
-  app.patch("/v1/notifications/:notificationId/read", async (request, reply) => {
+  app.patch("/v1/notifications/:notificationId/read", mutationRateLimit("accessMutation"), async (request, reply) => {
     const access = await verifyNotificationAccess(request, options);
     if (!access.ok) return reply.code(access.statusCode).send(access.body);
     const idempotencyError = requireIdempotencyKey(request);
@@ -99,7 +103,7 @@ export async function registerNotificationRoutes(
     );
   });
 
-  app.patch("/v1/notifications/preferences", async (request, reply) => {
+  app.patch("/v1/notifications/preferences", mutationRateLimit("accessMutation"), async (request, reply) => {
     const access = await verifyNotificationAccess(request, options);
     if (!access.ok) return reply.code(access.statusCode).send(access.body);
     const idempotencyError = requireIdempotencyKey(request);
@@ -119,7 +123,7 @@ export async function registerNotificationRoutes(
     );
   });
 
-  app.post("/v1/notifications/devices", async (request, reply) => {
+  app.post("/v1/notifications/devices", mutationRateLimit("accessMutation"), async (request, reply) => {
     const access = await verifyNotificationAccess(request, options);
     if (!access.ok) return reply.code(access.statusCode).send(access.body);
     const idempotencyError = requireIdempotencyKey(request);
@@ -149,7 +153,7 @@ export async function registerNotificationRoutes(
     );
   });
 
-  app.delete("/v1/notifications/devices/:notificationDeviceId", async (request, reply) => {
+  app.delete("/v1/notifications/devices/:notificationDeviceId", mutationRateLimit("accessMutation"), async (request, reply) => {
     const access = await verifyNotificationAccess(request, options);
     if (!access.ok) return reply.code(access.statusCode).send(access.body);
     const idempotencyError = requireIdempotencyKey(request);
@@ -219,6 +223,13 @@ async function repositoryReply<T>(
 }
 
 function repositoryErrorReply(request: FastifyRequest, reply: FastifyReply, error: unknown) {
+  if (error instanceof NotificationIdempotencyConflictError) {
+    return reply.code(409).send({
+      code: "conflict",
+      message: "Idempotency key was already used"
+    });
+  }
+
   if (error instanceof NotificationRepositoryConfigurationError) {
     request.log.warn({ error }, "Notification repository is not configured");
     return reply.code(503).send({

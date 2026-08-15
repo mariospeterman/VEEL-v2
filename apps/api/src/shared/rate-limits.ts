@@ -3,6 +3,7 @@ import { contractRouteSchema } from "./openapi-route-schema.js";
 
 type MutationRateLimitPreset =
   | "walletMutation"
+  | "sessionMutation"
   | "paymentMutation"
   | "accessMutation"
   | "messageMutation"
@@ -19,6 +20,7 @@ const mutationRateLimitPresets: Record<
   }
 > = {
   walletMutation: { max: 20, timeWindow: "1 minute" },
+  sessionMutation: { max: 20, timeWindow: "1 minute" },
   paymentMutation: { max: 12, timeWindow: "1 minute" },
   accessMutation: { max: 20, timeWindow: "1 minute" },
   messageMutation: { max: 30, timeWindow: "1 minute" },

@@ -50,8 +50,8 @@ The historical milestones below remain useful implementation context. New produc
 | 01 | Executable contracts and platform security boundary | Merged through PR #42 at `9081bd0`; local browser/Postgres proof passed, while shared Supabase migration/advisor proof and production-like Redis/provider staging remain release blockers |
 | 02 | Three-step onboarding, canonical session, optional recovery, and earnings readiness | Identity/session/recovery and the three-step onboarding foundation merged with Launch 01; earnings readiness remains incomplete and real provider acceptance evidence remains a launch gate |
 | 03A | SFW media publishing and moderation | `CODE_COMPLETE_PROVIDER_BLOCKED` on PR #44; contracts, reversible migration, owner/admin workflows, real-Postgres proof, and desktop/mobile browser proof are green. Bunny staging credentials and launch-approved classifier/hash evidence remain the fail-closed provider gate |
-| 04 | Core social graph and real feeds | Local green; CI/review pending (PR #45) |
-| 05 | Realtime messages and notifications | Not started |
+| 04 | Core social graph and real feeds | Merged through PR #45 at `327b95d`; protected CI, isolated Postgres, review, and desktop/mobile browser proof passed |
+| 05 | Realtime messages and notifications | In progress on `codex/launch-05-realtime-messages` |
 | 06 | One-time monetisation and Event Access completion, including narrow Commerce Kit Solana Pay convergence and one shared checkout presentation | Not started |
 | 07 | SFW live host, viewer, chat, and operational controls | Not started |
 | 08 | Recurring platform subscriptions and creator memberships | Not started |

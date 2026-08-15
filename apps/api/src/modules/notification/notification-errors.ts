@@ -4,3 +4,10 @@ export class NotificationRepositoryConfigurationError extends Error {
     this.name = "NotificationRepositoryConfigurationError";
   }
 }
+
+export class NotificationIdempotencyConflictError extends Error {
+  constructor() {
+    super("NOTIFICATION_IDEMPOTENCY_CONFLICT");
+    this.name = "NotificationIdempotencyConflictError";
+  }
+}

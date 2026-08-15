@@ -107,6 +107,7 @@ function ShellIcon({ name }: { name: string }) {
     create: PlusSquare,
     home: Home,
     messages: MessageCircle,
+    notifications: Bell,
     profile: UserRound,
     settings: Settings,
     subscriptions: Bell,

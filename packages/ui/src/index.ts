@@ -11,6 +11,7 @@ export const appShellNavItems = [
 
 export const appShellTopActionItems = [
   { href: "/app/wallet", icon: "wallet", label: "Wallet" },
+  { href: "/app/notifications", icon: "notifications", label: "Notifications" },
   { href: "/app/subscriptions", icon: "subscriptions", label: "Subscriptions" },
   { href: "/app/settings", icon: "settings", label: "Settings" }
 ] as const;

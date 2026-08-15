@@ -3,6 +3,7 @@ import { getCreatorProfile, getFollowState, type CreatorProfile, type FollowStat
 import { ErrorState } from "../../ui";
 import { CreatorSupportPanel } from "./creator-support-panel";
 import { ProfileFollowPanel } from "./profile-follow-panel";
+import { ProfileMessageButton } from "./profile-message-button";
 
 export default async function PublicCreatorProfilePage({
   params
@@ -73,6 +74,7 @@ function ProfileView({ followState, profile }: { followState: FollowState | null
           {!followState ? <Stat label="Followers" value={profile.stats.followerCount} /> : null}
         </div>
         {followState ? <ProfileFollowPanel initialState={followState} /> : null}
+        {followState ? <ProfileMessageButton userId={profile.user.id} /> : null}
         <CreatorSupportPanel profile={profile} />
       </aside>
 

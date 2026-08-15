@@ -3,7 +3,10 @@
 import { useMemo, useState } from "react";
 import type { ApiResult, NotificationPushConfig } from "@/api-client";
 import { mapApiFailure } from "@/api-errors";
-import { readPublicWebEnv } from "@/public-env";
+import {
+  registerNotificationDevice,
+  type RegisterNotificationDeviceRequest
+} from "@/api-mutations";
 
 type EnrollmentState = "idle" | "working" | "registered" | "blocked" | "unsupported" | "unavailable";
 
@@ -57,23 +60,7 @@ export function NotificationEnrollment({
       });
       const device = pushSubscriptionToDevice(subscription);
 
-      const apiBaseUrl = readPublicWebEnv().NEXT_PUBLIC_API_BASE_URL;
-      const response = await fetch(new URL("/v1/notifications/devices", apiBaseUrl), {
-        credentials: "include",
-        method: "POST",
-        headers: {
-          accept: "application/json",
-          "content-type": "application/json",
-          "idempotency-key": crypto.randomUUID()
-        },
-        body: JSON.stringify(device)
-      });
-
-      if (!response.ok) {
-        setState("unavailable");
-        setMessage("Device registration is temporarily unavailable.");
-        return;
-      }
+      await registerNotificationDevice(device);
 
       setState("registered");
       setMessage("Browser push is registered for this device.");
@@ -123,7 +110,7 @@ function stateLabel(state: EnrollmentState) {
   return state.replace("_", " ");
 }
 
-function pushSubscriptionToDevice(subscription: PushSubscription) {
+function pushSubscriptionToDevice(subscription: PushSubscription): RegisterNotificationDeviceRequest {
   const p256dh = subscription.getKey("p256dh");
   const auth = subscription.getKey("auth");
 
@@ -141,7 +128,7 @@ function pushSubscriptionToDevice(subscription: PushSubscription) {
   };
 }
 
-function platform() {
+function platform(): RegisterNotificationDeviceRequest["platform"] {
   const userAgent = navigator.userAgent.toLowerCase();
   if (/iphone|ipad/.test(userAgent)) return "ios";
   if (userAgent.includes("android")) return "android";

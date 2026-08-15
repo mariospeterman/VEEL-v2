@@ -1,12 +1,16 @@
+import { createHash } from "node:crypto";
 import { parseAes256GcmKey } from "@veel/config";
 import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import { createNotificationDeviceRepositoryMethods } from "./notification-device-repository.js";
-import { NotificationRepositoryConfigurationError } from "./notification-errors.js";
+import {
+  NotificationIdempotencyConflictError,
+  NotificationRepositoryConfigurationError
+} from "./notification-errors.js";
 import { toNotification, toNotificationPage, toPreferences } from "./notification-repository-mappers.js";
 import type { NotificationRow, PreferenceRow } from "./notification-repository-rows.js";
-import type { NotificationRepository } from "./types.js";
+import type { Notification, NotificationPreferences, NotificationRepository } from "./types.js";
 
-export { NotificationRepositoryConfigurationError } from "./notification-errors.js";
+export { NotificationIdempotencyConflictError, NotificationRepositoryConfigurationError } from "./notification-errors.js";
 
 interface NotificationRepositoryOptions {
   encryptionKey?: string | undefined;
@@ -53,26 +57,29 @@ export function createPostgresNotificationRepository(
       return toNotificationPage(rows, input.limit);
     },
     async markRead(input) {
-      const rows = await sql<NotificationRow[]>`
-        with target_user as (
-          select id
-          from users
-          where supabase_user_id = ${input.supabaseUserId}
-          limit 1
-        ),
-        updated as (
+      return sql.begin(async (transaction) => {
+        const actor = await lockNotificationActor(transaction, input.supabaseUserId);
+        if (!actor) return null;
+        const requestHash = hashNotificationAction("notification.read", { notificationId: input.notificationId });
+        const replay = await readNotificationReceipt<Notification>(transaction, actor, input.idempotencyKey);
+        if (replay) {
+          assertNotificationReceipt(replay, "notification.read", requestHash);
+          return replay.response_body;
+        }
+
+        const rows = await transaction<NotificationRow[]>`
           update notifications n
           set state = 'read', read_at = coalesce(n.read_at, now())
-          from target_user tu
           where n.id = ${input.notificationId}
-            and n.user_id = tu.id
+            and n.user_id = ${actor}
           returning n.id, n.kind, n.title, n.body, n.action_url, n.state, n.related_resource_type, n.related_resource_id::text as related_resource_id, n.created_at, n.read_at
-        )
-        select * from updated
-      `;
-
-      const row = rows[0];
-      return row ? toNotification(row) : null;
+        `;
+        const row = rows[0];
+        if (!row) return null;
+        const response = toNotification(row);
+        await recordNotificationReceipt(transaction, actor, input.idempotencyKey, "notification.read", requestHash, response);
+        return response;
+      });
     },
     async getPreferences(input) {
       const rows = await sql<PreferenceRow[]>`
@@ -127,14 +134,17 @@ export function createPostgresNotificationRepository(
       return toPreferences(rows[0]);
     },
     async updatePreferences(input) {
-      const rows = await sql<PreferenceRow[]>`
-        with target_user as (
-          select id
-          from users
-          where supabase_user_id = ${input.supabaseUserId}
-          limit 1
-        ),
-        upserted as (
+      return sql.begin(async (transaction) => {
+        const actor = await lockNotificationActor(transaction, input.supabaseUserId);
+        if (!actor) return toPreferences(undefined);
+        const requestHash = hashNotificationAction("notification.preferences.update", input.body);
+        const replay = await readNotificationReceipt<NotificationPreferences>(transaction, actor, input.idempotencyKey);
+        if (replay) {
+          assertNotificationReceipt(replay, "notification.preferences.update", requestHash);
+          return replay.response_body;
+        }
+
+        const rows = await transaction<PreferenceRow[]>`
           insert into notification_preferences (
             user_id,
             messages_enabled,
@@ -151,8 +161,8 @@ export function createPostgresNotificationRepository(
             push_enabled,
             updated_at
           )
-          select
-            target_user.id,
+          values (
+            ${actor},
             coalesce(${input.body.messagesEnabled ?? null}, true),
             coalesce(${input.body.engagementEnabled ?? null}, true),
             coalesce(${input.body.liveEnabled ?? null}, true),
@@ -166,7 +176,7 @@ export function createPostgresNotificationRepository(
             coalesce(${input.body.studioSetupEnabled ?? null}, true),
             coalesce(${input.body.pushEnabled ?? null}, false),
             now()
-          from target_user
+          )
           on conflict (user_id) do update
           set
             messages_enabled = coalesce(${input.body.messagesEnabled ?? null}, notification_preferences.messages_enabled),
@@ -182,9 +192,7 @@ export function createPostgresNotificationRepository(
             studio_setup_enabled = coalesce(${input.body.studioSetupEnabled ?? null}, notification_preferences.studio_setup_enabled),
             push_enabled = coalesce(${input.body.pushEnabled ?? null}, notification_preferences.push_enabled),
             updated_at = now()
-          returning *
-        )
-        select
+          returning
           messages_enabled,
           engagement_enabled,
           live_enabled,
@@ -198,10 +206,19 @@ export function createPostgresNotificationRepository(
           studio_setup_enabled,
           push_enabled,
           updated_at
-        from upserted
-      `;
+        `;
 
-      return toPreferences(rows[0]);
+        const response = toPreferences(rows[0]);
+        await recordNotificationReceipt(
+          transaction,
+          actor,
+          input.idempotencyKey,
+          "notification.preferences.update",
+          requestHash,
+          response
+        );
+        return response;
+      });
     },
     ...createNotificationDeviceRepositoryMethods(sql, encryptionKey),
     async close() {
@@ -210,6 +227,68 @@ export function createPostgresNotificationRepository(
       }
     }
   };
+}
+
+interface NotificationReceiptRow<T> {
+  action: string;
+  request_hash: string;
+  response_body: T;
+}
+
+async function lockNotificationActor(
+  transaction: import("postgres").TransactionSql,
+  supabaseUserId: string
+) {
+  const rows = await transaction<{ id: string }[]>`
+    select id from users where supabase_user_id = ${supabaseUserId} limit 1 for update
+  `;
+  return rows[0]?.id ?? null;
+}
+
+async function readNotificationReceipt<T>(
+  transaction: import("postgres").TransactionSql,
+  actorUserId: string,
+  idempotencyKey: string
+) {
+  const rows = await transaction<NotificationReceiptRow<T>[]>`
+    select action, request_hash, response_body
+    from notification_action_receipts
+    where actor_user_id = ${actorUserId} and idempotency_key = ${idempotencyKey}
+    limit 1
+  `;
+  return rows[0] ?? null;
+}
+
+function assertNotificationReceipt<T>(
+  receipt: NotificationReceiptRow<T>,
+  action: string,
+  requestHash: string
+) {
+  if (receipt.action !== action || receipt.request_hash !== requestHash) {
+    throw new NotificationIdempotencyConflictError();
+  }
+}
+
+async function recordNotificationReceipt(
+  transaction: import("postgres").TransactionSql,
+  actorUserId: string,
+  idempotencyKey: string,
+  action: string,
+  requestHash: string,
+  response: Notification | NotificationPreferences
+) {
+  await transaction`
+    insert into notification_action_receipts (
+      actor_user_id, idempotency_key, action, request_hash, response_body
+    ) values (
+      ${actorUserId}, ${idempotencyKey}, ${action}, ${requestHash}, ${transaction.json(response)}
+    )
+  `;
+}
+
+function hashNotificationAction(action: string, body: object) {
+  const normalized = Object.fromEntries(Object.entries(body).sort(([left], [right]) => left.localeCompare(right)));
+  return createHash("sha256").update(JSON.stringify({ action, body: normalized })).digest("hex");
 }
 
 function createUnavailableNotificationRepository(): NotificationRepository {

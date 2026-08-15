@@ -17,6 +17,16 @@ export type CreateWalletAuthSessionRequest =
 export type WalletAuthChallenge = components["schemas"]["WalletAuthChallenge"];
 export type WalletAuthSession = components["schemas"]["WalletAuthSession"];
 export type ApplicationSessionExpiry = components["schemas"]["ApplicationSessionExpiry"];
+export type RealtimeAccessToken = components["schemas"]["RealtimeAccessToken"];
+export type Conversation = components["schemas"]["Conversation"];
+export type ConversationReadState = components["schemas"]["ConversationReadState"];
+export type CreateDirectConversationRequest = components["schemas"]["CreateDirectConversationRequest"];
+export type RespondToMessageRequest = components["schemas"]["RespondToMessageRequest"];
+export type Notification = components["schemas"]["Notification"];
+export type NotificationPreferences = components["schemas"]["NotificationPreferences"];
+export type UpdateNotificationPreferencesRequest = components["schemas"]["UpdateNotificationPreferencesRequest"];
+export type NotificationDevice = components["schemas"]["NotificationDevice"];
+export type RegisterNotificationDeviceRequest = components["schemas"]["RegisterNotificationDeviceRequest"];
 export type CreateWalletLinkChallengeRequest =
   components["schemas"]["CreateWalletLinkChallengeRequest"];
 export type WalletLinkChallenge = components["schemas"]["WalletLinkChallenge"];

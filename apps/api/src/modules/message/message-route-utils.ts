@@ -24,6 +24,7 @@ export interface RegisterMessageRoutesOptions {
 export type MessageReadyAccessResult =
   | {
       ok: true;
+      userId: string;
       supabaseUserId: string;
     }
   | {
@@ -73,6 +74,7 @@ export async function verifyMessageReadyAccess(
 
   return {
     ok: true,
+    userId: verifiedSession.userId,
     supabaseUserId: verifiedSession.supabaseUserId
   };
 }
@@ -105,6 +107,10 @@ export function hashPaymentRequest(value: unknown): string {
 
 export function hashMessageBody(value: string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+export function hashMessageActionRequest(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
 export function validationResponse(message: string) {

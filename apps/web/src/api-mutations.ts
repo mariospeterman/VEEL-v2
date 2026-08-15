@@ -40,6 +40,16 @@ export type {
   CreateWalletAuthChallengeRequest,
   CreateWalletAuthSessionRequest,
   ApplicationSessionExpiry,
+  RealtimeAccessToken,
+  Conversation,
+  ConversationReadState,
+  CreateDirectConversationRequest,
+  RespondToMessageRequest,
+  Notification,
+  NotificationPreferences,
+  UpdateNotificationPreferencesRequest,
+  NotificationDevice,
+  RegisterNotificationDeviceRequest,
   LinkWalletRequest,
   McpConnection,
   McpOAuthRedirect,
@@ -100,6 +110,16 @@ import type {
   CreateWalletAuthChallengeRequest,
   CreateWalletAuthSessionRequest,
   ApplicationSessionExpiry,
+  RealtimeAccessToken,
+  Conversation,
+  ConversationReadState,
+  CreateDirectConversationRequest,
+  RespondToMessageRequest,
+  Notification,
+  NotificationPreferences,
+  UpdateNotificationPreferencesRequest,
+  NotificationDevice,
+  RegisterNotificationDeviceRequest,
   LinkWalletRequest,
   McpConnection,
   McpOAuthRedirect,
@@ -170,6 +190,10 @@ export async function revokeWalletAuthSession(): Promise<void> {
 
 export async function revokeAllApplicationSessions(): Promise<void> {
   return authenticatedEmptyMutation("/v1/auth/sessions/logout-all", "POST", {});
+}
+
+export async function createRealtimeAccessToken(): Promise<RealtimeAccessToken> {
+  return authenticatedMutation<RealtimeAccessToken>("/v1/realtime/token", "POST", {});
 }
 
 export async function createRecoveryLinkIntent(): Promise<ApplicationSessionExpiry> {
@@ -403,6 +427,57 @@ export async function createMessage(
     body,
     idempotencyKey
   );
+}
+
+export async function createDirectConversation(
+  body: CreateDirectConversationRequest
+): Promise<Conversation> {
+  return authenticatedMutation<Conversation>("/v1/messages/conversations", "POST", body);
+}
+
+export async function respondToMessageRequest(
+  conversationId: string,
+  body: RespondToMessageRequest
+): Promise<Conversation> {
+  return authenticatedMutation<Conversation>(
+    `/v1/messages/conversations/${encodeURIComponent(conversationId)}/request`,
+    "PATCH",
+    body
+  );
+}
+
+export async function markConversationRead(
+  conversationId: string
+): Promise<ConversationReadState> {
+  return authenticatedMutation<ConversationReadState>(
+    `/v1/messages/conversations/${encodeURIComponent(conversationId)}/read`,
+    "PATCH",
+    {}
+  );
+}
+
+export async function markNotificationRead(notificationId: string): Promise<Notification> {
+  return authenticatedMutation<Notification>(
+    `/v1/notifications/${encodeURIComponent(notificationId)}/read`,
+    "PATCH",
+    {}
+  );
+}
+
+export async function updateNotificationPreferences(
+  body: UpdateNotificationPreferencesRequest
+): Promise<NotificationPreferences> {
+  return authenticatedMutation<NotificationPreferences>(
+    "/v1/notifications/preferences",
+    "PATCH",
+    body
+  );
+}
+
+export async function registerNotificationDevice(
+  body: RegisterNotificationDeviceRequest
+): Promise<NotificationDevice> {
+  return authenticatedMutation<NotificationDevice>("/v1/notifications/devices", "POST", body);
 }
 
 export async function createPaidMessageIntent(

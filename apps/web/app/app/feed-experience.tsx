@@ -102,10 +102,12 @@ export function FeedExperience({
     };
     const target = scrollContainer ?? window;
     target.addEventListener("scroll", save, { passive: true });
+    feedRef.current?.setAttribute("data-scroll-persistence", "ready");
     return () => {
       cancelAnimationFrame(frame);
       if (saveFrame !== null) cancelAnimationFrame(saveFrame);
       target.removeEventListener("scroll", save);
+      feedRef.current?.removeAttribute("data-scroll-persistence");
     };
   }, [restoreKey, surface]);
 

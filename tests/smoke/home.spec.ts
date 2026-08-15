@@ -6,6 +6,7 @@ const rawBackendCopy = /HTTP (401|403|404|429|500|503)|Missing or invalid bearer
 const e2eToken = "veel-e2e-token";
 const firstConversationId = "00000000-0000-4000-8000-000000000081";
 const secondConversationId = "00000000-0000-4000-8000-000000000082";
+const unavailableConversationId = "00000000-0000-4000-8000-000000000083";
 let apiServer: Server;
 
 test.beforeAll(async () => {
@@ -125,11 +126,23 @@ test("renders the canonical protected app home shell through /app", async ({ con
   await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
 });
 
+test("retries Realtime token acquisition after a transient API failure", async ({ context, page }) => {
+  await addE2eCookie(context);
+  let tokenRequests = 0;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/v1/realtime/token")) tokenRequests += 1;
+  });
+  await page.goto("/app/home", { waitUntil: "domcontentloaded", timeout: 45_000 });
+
+  await expect.poll(() => tokenRequests, { timeout: 8_000 }).toBeGreaterThanOrEqual(2);
+});
+
 test("follows from the real Home feed and renders the immersive Bits surface", async ({ context, page }) => {
   await addE2eCookie(context);
   await page.goto("/app/home", { waitUntil: "domcontentloaded", timeout: 45_000 });
 
   await expect(page.getByRole("article", { name: "Post by Aria Moon" }).first()).toBeVisible();
+  await expect(page.locator(".home-feed")).toHaveAttribute("data-scroll-persistence", "ready");
   await page.addStyleTag({ content: ".home-feed { min-height: 3000px; }" });
   await page.locator(".page-frame").evaluate((frame) => frame.scrollTo({ top: 480 }));
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem("wevid:home:recommended:scroll")))
@@ -201,6 +214,13 @@ test("selects a requested conversation and keeps the inbox within the viewport",
   await expect(page.getByRole("article").getByText("Second thread message", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: /Production notes/ })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("link", { name: /Studio team/ })).not.toHaveAttribute("aria-current", "page");
+  await expect(page.getByText("Message request", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Accept", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Conversation safety" })).toBeVisible();
+  await page.getByRole("button", { name: "Report", exact: true }).click();
+  await page.getByLabel("Report reason").fill("Unsafe account behavior in this conversation");
+  await page.getByRole("button", { name: "Submit report" }).click();
+  await expect(page.getByText("Report submitted for safety review.")).toBeVisible();
   await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
 
   const layout = await page.evaluate(() => ({
@@ -208,6 +228,35 @@ test("selects a requested conversation and keeps the inbox within the viewport",
     scrollWidth: document.documentElement.scrollWidth
   }));
   expect(layout.scrollWidth).toBe(layout.clientWidth);
+});
+
+test("does not clear unread state when conversation messages fail to load", async ({ context, page }) => {
+  await addE2eCookie(context);
+  let readRequests = 0;
+  page.on("request", (request) => {
+    if (request.url().endsWith(`/v1/messages/conversations/${unavailableConversationId}/read`)) {
+      readRequests += 1;
+    }
+  });
+  await page.goto(`/app/messages?conversation=${unavailableConversationId}`, {
+    waitUntil: "domcontentloaded",
+    timeout: 45_000
+  });
+
+  await expect(page.getByRole("heading", { name: "Conversation unavailable" })).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(readRequests).toBe(0);
+});
+
+test("renders the account notification inbox and marks activity read", async ({ context, page }) => {
+  await addE2eCookie(context);
+  await page.goto("/app/notifications", { waitUntil: "domcontentloaded", timeout: 45_000 });
+
+  await expect(page.getByRole("heading", { name: "Notifications" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Message request received" })).toBeVisible();
+  await page.getByRole("button", { name: "Mark read" }).click();
+  await expect(page.getByRole("button", { name: "Mark read" })).toHaveCount(0);
+  await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
 });
 
 test("keeps content detail route reachable", async ({ page }) => {
@@ -449,11 +498,57 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
     return;
   }
 
+  const conversationActionMatch = url.pathname.match(
+    /^\/v1\/messages\/conversations\/([0-9a-f-]+)\/(request|read)$/
+  );
+  if (method === "PATCH" && conversationActionMatch) {
+    if (!hasIdempotencyKey(request)) {
+      sendJson(response, 400, { message: "Idempotency-Key header is required" });
+      return;
+    }
+    const conversationId = conversationActionMatch[1]!;
+    if (conversationActionMatch[2] === "read") {
+      sendJson(response, 200, {
+        conversationId,
+        unreadCount: 0,
+        readAt: "2026-08-15T12:05:00.000Z"
+      });
+      return;
+    }
+    sendJson(response, 200, {
+      ...conversation(conversationId, "Production notes", "Second thread message", 0, "accepted"),
+      requestRole: "recipient",
+      canSend: true
+    });
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/v1/notifications") {
+    sendJson(response, 200, { items: [notification("unread")], nextCursor: null });
+    return;
+  }
+
+  if (
+    method === "PATCH" &&
+    url.pathname === "/v1/notifications/00000000-0000-4000-8000-0000000000d1/read"
+  ) {
+    if (!hasIdempotencyKey(request)) {
+      sendJson(response, 400, { message: "Idempotency-Key header is required" });
+      return;
+    }
+    sendJson(response, 200, notification("read"));
+    return;
+  }
+
   const conversationMessagesMatch = url.pathname.match(
     /^\/v1\/messages\/conversations\/([0-9a-f-]+)\/messages$/
   );
   if (method === "GET" && conversationMessagesMatch) {
     const conversationId = conversationMessagesMatch[1];
+    if (conversationId === unavailableConversationId) {
+      sendJson(response, 503, { message: "Transient message projection failure" });
+      return;
+    }
     if (conversationId !== firstConversationId && conversationId !== secondConversationId) {
       sendJson(response, 404, { message: "Conversation not found" });
       return;
@@ -602,22 +697,47 @@ function subscriptionPlan(id: string, label: string, amountMinor: number) {
 
 function conversations() {
   return [
-    conversation(firstConversationId, "Studio team", "First thread message", 0),
-    conversation(secondConversationId, "Production notes", "Second thread message", 2)
+    conversation(firstConversationId, "Studio team", "First thread message", 0, "accepted"),
+    conversation(secondConversationId, "Production notes", "Second thread message", 2, "pending"),
+    conversation(unavailableConversationId, "Unavailable thread", "Unread message", 1, "pending")
   ];
 }
 
-function conversation(id: string, title: string, body: string, unreadCount: number) {
+function conversation(
+  id: string,
+  title: string,
+  body: string,
+  unreadCount: number,
+  requestState: "accepted" | "pending"
+) {
   return {
     id,
     type: "direct",
     title,
     unreadCount,
+    counterpart: user(),
+    requestState,
+    requestRole: "recipient",
+    canSend: requestState === "accepted",
     lastMessage: {
       body,
       sender: user(),
       createdAt: "2026-08-11T10:00:00.000Z"
     }
+  };
+}
+
+function notification(state: "unread" | "read") {
+  return {
+    id: "00000000-0000-4000-8000-0000000000d1",
+    kind: "message",
+    title: "Message request received",
+    body: "Aria Moon would like to start a conversation.",
+    actionUrl: `/app/messages?conversation=${secondConversationId}`,
+    state,
+    relatedResource: { type: "message", id: secondConversationId },
+    createdAt: "2026-08-15T12:00:00.000Z",
+    readAt: state === "read" ? "2026-08-15T12:05:00.000Z" : null
   };
 }
 

@@ -37,13 +37,13 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `3dd79aefe2bf8bdcb64bfe20544910aa53af0c72` (Launch 03A, PR #44) |
-| Active slice | Launch 04 — Core social graph, Home, and Bits |
-| Branch | `codex/launch-04-social-feed` |
-| Pull request | #45 |
-| State | `LOCAL_GREEN` |
-| Slice blockers | None; the follow graph and deterministic feeds have no external-provider dependency |
-| Next unfinished slice | Launch 05 — Realtime messages and notifications |
+| Merged baseline | `main` at `327b95d` (Launch 04, PR #45) |
+| Active slice | Launch 05 — Realtime messages and notifications |
+| Branch | `codex/launch-05-realtime-messages` |
+| Pull request | #46 |
+| State | `ACTIVE` |
+| Slice blockers | Code can complete locally; real Supabase Realtime signing-key/channel proof and VAPID browser delivery remain pre-production staging gates |
+| Next unfinished slice | Launch 06 — One-time monetisation and Event Access completion, including narrow Commerce Kit Solana Pay convergence and one shared checkout presentation |
 
 Current human/provider gates do not block this process slice: shared staging credentials,
 provider dashboard/webhook/domain configuration, migration `0091` shared-project proof,
@@ -73,7 +73,7 @@ and fail-closed.
 | One-time payments and access | Backend-owned SOL and supported one-time USDC intent, settlement, receipt, and entitlement paths exist. | Mainnet/provider evidence, operational reconciliation, and full consumer journey proof remain required. |
 | Media and live | Bunny/Livepeer boundaries and quarantine/release authorities exist. | Automated moderation is not launch-approved; adult live is disabled; provider staging evidence is absent. |
 | Recurring subscriptions | Domain, worker, and fail-closed adapter boundaries exist. | Sales remain disabled until an official on-chain provider/program is configured and proven. |
-| Frontend | Broad app-shell, direct provider-first entry, onboarding, creation, access, admin, canonical Home/Bits feeds, and desktop/mobile browser smoke surfaces exist. | Realtime completion, full accessibility/cross-browser QA, and the final visual system remain unfinished. |
+| Frontend | Broad app-shell, direct provider-first entry, onboarding, creation, access, admin, canonical Home/Bits feeds, messages/notifications with reconnecting Realtime invalidation, and desktop/mobile browser smoke surfaces exist. | Real Supabase/VAPID proof, full accessibility/cross-browser QA, and the final visual system remain unfinished. |
 | Delivery and operations | Build, migration, security, preview, staging, and production preflight workflows exist. | No workflow deploys an artifact. Hosting, immutable promotion, telemetry, alerts, backup/restore, and rollback evidence belong to Slice 11. |
 
 ## Unsafe Capability Flags
@@ -137,7 +137,7 @@ Public product copy and API metadata use WeVid and Support. Technical package sc
 - Age session creation has real backend HTTP adapters for Yoti, Persona, Veriff, and Sumsub behind the provider waterfall, with unconfigured providers failing closed. Didit V3 owns separate contextual creator-verification purposes, including signed and replay-safe webhook ingestion and documentary/liveness/face-match evidence; ordinary onboarding requests only over-18 access and contains no adult-publisher intent. Launch readiness still requires configured provider sandbox credentials, public callback/webhook proof, provider-contract and retention approval, and admin evidence review.
 - Embedded wallet provider remains a boundary until a launch-approved noncustodial provider is configured and tested.
 - Payment settlement is native SOL devnet first with server-composed creator split transactions for one-time creator monetization and a supported one-time USDC path. Recurring subscriptions are token-based only and fail closed without official Solana subscription/delegation verification; native SOL recurring subscriptions, real transactional email domain/API-key configuration and staging deliverability smoke for withdrawal-waiver confirmations, and provider replay side-effect handlers still need launch-scope completion.
-- Launch 04 follow/unfollow, projected counts, feed/profile viewer state, durable command/impression receipts, and deterministic Home/Bits ranking are code-complete locally. Follow stays social-only; blocks suppress/deactivate edges; purchases and money never affect people/feed ranking. Shared CI/preview review remains before merge.
+- Launch 04 follow/unfollow, projected counts, feed/profile viewer state, durable command/impression receipts, and deterministic Home/Bits ranking are merged. Follow stays social-only; blocks suppress/deactivate edges; purchases and money never affect people/feed ranking. Protected CI, isolated Postgres, review, and desktop/mobile browser proof passed on PR #45.
 - Subscription renewals are architected as auto-renewing backend/worker collections, but production collection requires official provider/program configuration, authority/subscription/delegation verification, launch-approved token plans, collector signing support, and staging evidence.
 - Remote MCP production connector compatibility still requires public HTTPS staging deployment, exact redirect URI allowlists for each real client, MCP Inspector proof, Claude Code proof, Claude custom connector proof, OpenAI-compatible proof, revocation proof, and audit-row confirmation against the deployed database.
 - Media creation has backend draft, admin-tunable draft/upload abuse policy enforcement with safe defaults, metadata/preview update, Event Access draft linking, persisted upload-session handoff, TUS browser upload/resume wiring, provider-status sync UI, entitlement-aware content playback rendering, explicit publish submission, and a separate `publish_state`.

@@ -27,6 +27,7 @@
     "fastify-plugin": "^6.0.0",
     "fastify-raw-body": "^5.0.0",
     "ioredis": "5.11.1",
+    "jose": "6.2.8",
     "openapi-types": "^12.1.3",
     "postgres": "^3.4.9",
     "tweetnacl": "^1.0.3",

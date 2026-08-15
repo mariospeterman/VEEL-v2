@@ -22,11 +22,13 @@ describe("app shell navigation contract", () => {
   it("keeps secondary workspaces out of primary navigation", () => {
     expect(appShellTopActionItems.map((item) => item.label)).toEqual([
       "Wallet",
+      "Notifications",
       "Subscriptions",
       "Settings"
     ]);
     expect(appShellTopActionItems.map((item) => item.href)).toEqual([
       "/app/wallet",
+      "/app/notifications",
       "/app/subscriptions",
       "/app/settings"
     ]);
