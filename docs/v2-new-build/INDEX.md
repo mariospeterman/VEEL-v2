@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: canonical architecture, current implementation truth, and production completion plan
-Last updated: 2026-08-14
+Last updated: 2026-08-15
 Source of truth: yes
 
 Owns:
@@ -48,6 +48,7 @@ This folder is the canonical WeVid engineering pack. Technical `veel` identifier
 | Database shape | `packages/database/schema-blueprint.sql` until migrations exist | Migrations must be derived slice-by-slice from the blueprint. |
 | Money/access/referral/tax truth | `liability-compliance-audit.md`, `payments-and-monetisation.md`, `business-monetisation.md`, `noncustodial-money-compliance.md`, `compliance/dac7-dac8-vat-system.md`, OpenAPI | Backend owns final state; frontend is UX/cache only. |
 | Payment/access/reporting/bookkeeping truth | `business-monetisation.md`, `liability-compliance-audit.md`, `compliance/dac7-dac8-vat-system.md`, OpenAPI, schema | Blockchain = payment truth; entitlements = access truth; compliance ledger = reporting truth; accounting integration = bookkeeping truth. No duplicate authority. |
+| Native creator commerce | `business-monetisation.md`, `payments-and-monetisation.md`, `providers/provider-map.md`, ADR 0002 | WeVid owns Product Offers and lightweight Orders/Fulfillment. Selected Solana Commerce Kit primitives provide payment presentation/interoperability only; no full commerce engine is canonical. |
 | Provider boundaries | `providers/provider-map.md`, provider-specific docs, ADRs | Use official provider docs/SDKs first; adapters hide secrets. |
 | Universal identity and onboarding | `embedded-wallet-onboarding.md`, `auth-supabase-realtime.md`, `providers/identity-provider-wiring.md` | One WeVid user/profile; three visible steps; Privy or external wallet converge on one backend session; Supabase recovery is optional. |
 | Security/compliance | compliance docs, `safety-admin-ai.md`, ADRs | Age, moderation, audit, and privacy rules block launch if incomplete. |
@@ -121,7 +122,8 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 46. [Deployment topology](deployment-topology.md)
 47. [Slice workflow](slice-workflow.md)
 48. [Production branch inventory](production-branch-inventory.md)
-49. `staging-evidence/` for redacted provider proof tied to a commit and environment
+49. [Production dependency security status](dependency-security-status.md)
+50. `staging-evidence/` for redacted provider proof tied to a commit and environment
 
 ## How To Use In A New Repo
 

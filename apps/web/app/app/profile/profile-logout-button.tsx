@@ -5,7 +5,6 @@ import { revokeWalletAuthSession } from "@/api-mutations";
 import { createSupabaseBrowserClient } from "@/supabase/client";
 import { e2eAuthCookieName } from "@/supabase/auth-cookie";
 import { useProviderSessionLogout } from "@/wallet/provider-session-logout";
-import { clearWalletSession } from "@/wallet/wallet-session";
 
 export function ProfileLogoutButton() {
   const [pending, setPending] = useState(false);
@@ -15,23 +14,17 @@ export function ProfileLogoutButton() {
   async function logout() {
     setPending(true);
     setError(null);
-    clearBrowserSessionState();
-
-    const redirectFallback = window.setTimeout(() => {
-      window.location.replace("/");
-    }, 2_500);
 
     try {
+      await withTimeout(revokeWalletAuthSession(), 10_000);
+      clearBrowserSessionState();
       await Promise.allSettled([
-        withTimeout(revokeWalletAuthSession(), 1_200),
         withTimeout(logoutProviderSessions(), 1_800),
         withTimeout(logoutSupabase(), 1_200),
         withTimeout(clearServerSession(), 1_200)
       ]);
-      window.clearTimeout(redirectFallback);
       window.location.replace("/");
     } catch {
-      window.clearTimeout(redirectFallback);
       setError("Logout could not finish. Check your connection and try again.");
       setPending(false);
     }
@@ -68,7 +61,6 @@ async function clearServerSession() {
 }
 
 function clearBrowserSessionState() {
-  runBestEffort(clearWalletSession);
   runBestEffort(() => clearCookie(e2eAuthCookieName));
 }
 

@@ -85,9 +85,7 @@ export async function registerPaymentIntentRoutes(
       assertSolanaAddress(platformFeeWallet);
       if (app.config.PAYMENT_USDC_MINT) {
         assertSolanaAddress(app.config.PAYMENT_USDC_MINT);
-      }
-      await options.sessionRepository.ensureUserForSupabaseId(access.supabaseUserId);
-      const intentBody = body as CreatePaymentIntentRequest & { amountMinor: number };
+      }      const intentBody = body as CreatePaymentIntentRequest & { amountMinor: number };
       const intent = await options.paymentRepository.createOrReuseIntent({
         supabaseUserId: access.supabaseUserId,
         idempotencyKey,

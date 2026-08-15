@@ -1,14 +1,14 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { AgeRepository } from "../age/types.js";
-import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
+import type { SessionRepository, ApplicationSessionVerifier } from "../session/types.js";
 import {
   OrganizationRepositoryConfigurationError
 } from "./organization-repository.js";
 import type { OrganizationRepository } from "./types.js";
 
 interface RegisterOrganizationRoutesOptions {
-  authVerifier: SupabaseAuthVerifier;
+  authVerifier: ApplicationSessionVerifier;
   sessionRepository: SessionRepository;
   ageRepository: AgeRepository;
   organizationRepository: OrganizationRepository;
@@ -66,7 +66,7 @@ async function requireOrganizationAccess(
     options.ageRepository.findLatestAgeStatusBySupabaseUserId(verifiedSession.supabaseUserId)
   ]);
 
-  if (!profile?.handle || !profile.displayName || ageStatus.state !== "verified") {
+  if (profile?.state !== "active" || !profile.handle || !profile.displayName || ageStatus.state !== "verified") {
     reply.code(403).send({
       code: "forbidden",
       message: "Organization dashboards require profile and age verification"

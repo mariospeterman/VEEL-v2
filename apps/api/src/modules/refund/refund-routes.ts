@@ -2,12 +2,12 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { readIdempotentMutationRequest } from "../../shared/idempotency.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { AgeRepository } from "../age/types.js";
-import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
+import type { SessionRepository, ApplicationSessionVerifier } from "../session/types.js";
 import { RefundIdempotencyConflictError, RefundRepositoryConfigurationError } from "./refund-repository.js";
 import type { CreateRefundDisputeRequest, RefundRepository } from "./types.js";
 
 interface RegisterRefundRoutesOptions {
-  authVerifier: SupabaseAuthVerifier;
+  authVerifier: ApplicationSessionVerifier;
   sessionRepository: SessionRepository;
   ageRepository: AgeRepository;
   refundRepository: RefundRepository;
@@ -128,7 +128,7 @@ async function verifyRefundAccess(
     options.ageRepository.findLatestAgeStatusBySupabaseUserId(verifiedSession.supabaseUserId)
   ]);
 
-  if (!profile?.handle || !profile.displayName || ageStatus.state !== "verified") {
+  if (profile?.state !== "active" || !profile.handle || !profile.displayName || ageStatus.state !== "verified") {
     return {
       ok: false,
       statusCode: 403,

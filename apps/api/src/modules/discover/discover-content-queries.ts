@@ -108,6 +108,7 @@ export async function listContent(
       limit 1
     ) eg on true
     where ci.state = 'ready'
+      and creator.state = 'active'
       and ci.publish_state = 'published'
       and ci.visibility = 'public'
       and ci.moderation_state = 'approved'

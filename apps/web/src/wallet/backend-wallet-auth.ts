@@ -7,7 +7,6 @@ import {
   type LinkWalletRequest
 } from "@/api-mutations";
 import { readPublicWebEnv } from "@/public-env";
-import { saveWalletSession } from "./wallet-session";
 
 export type WalletAuthProvider = CreateWalletAuthChallengeRequest["provider"];
 export type WalletChain = LinkWalletRequest["chain"];
@@ -38,12 +37,6 @@ export async function createBackendWalletSession({
       signature: bytesToBase64(signature),
       signatureEncoding: "base64"
     }
-  });
-
-  saveWalletSession({
-    expiresAt: session.expiresAt,
-    address: session.wallet.address,
-    provider: session.wallet.provider
   });
 
   return session;

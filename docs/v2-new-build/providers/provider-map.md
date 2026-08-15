@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: provider ownership, boundaries, integrations
-Last updated: 2026-08-14
+Last updated: 2026-08-15
 Source of truth: yes for v2 provider relations
 
 Owns:
@@ -40,9 +40,10 @@ This map defines which provider does which job and what WeVid owns. It exists to
 | Sumsub | reusable KYC/KYB and creator compliance candidate | reusable identity, copied applicant, applicant/session mapping, minimal state | provider redirect/widget only | signed webhook/result |
 | Veriff | creator KYC/KYB heavy fallback and returning-user biometric candidate | applicant/session mapping, minimal state | provider redirect/widget only | signed webhook/result |
 | Wallet funding/onramp | user-owned wallet funding only | start session, show funding state | funding widget/session only | provider callback for funding status only |
+| Solana Commerce Kit, selected package only | standards-compliant Solana Pay URL encode/parse and QR/deep-link interoperability through `@solana-commerce/solana-pay` | payment intents, immutable prices/recipients/splits, checkout capability, transaction composition, exact settlement verification, receipts, domain outcome, and unified checkout policy | WeVid checkout UI and wallet handoff only; no raw package/provider payload | `candidate` for Slice 06; exact `0.1.1` baseline reviewed, exact version and upstream source must be re-verified and pinned before installation |
 | Email/push provider | notifications | notification policy, templates, retries | no secrets | delivery status |
 | OpenTelemetry/logging | observability | traces, logs, redaction | none | trace/log pipeline |
-| Shopify, future only | creator-owned physical catalog, variants, inventory, cart, merchant checkout, shipping, tax, discounts, order/refund workflow | approved catalog display, content attachment, safe attribution, redirect | Storefront-safe catalog/cart handoff only | DEFERRED; no SDK/schema/runtime in core launch |
+| WeVid-native physical commerce | no external commerce engine; WeVid Product Offers plus lightweight Orders/Fulfillment | seller eligibility, catalog, attachment, stock reservation, immutable order/shipping snapshot, payment linkage, fulfillment, refunds/disputes, moderation, privacy, audit, and frontend-safe projections | profile/content-native product detail, checkout, and order status | DEFERRED post-core; no schema, routes, SDK, or runtime in Launch 01; policy/legal/operations gates required |
 
 Turnkey is an unbundled embedded-wallet fallback only. It has no parallel login, wallet UI, or runtime. Indexed PostgreSQL is the initial search authority. Transactional email, web push, and OpenTelemetry remain adapter boundaries; managed providers are selected and proven in their owning deployment slice rather than replaced by custom infrastructure.
 
@@ -60,7 +61,7 @@ API
   -> computes amount, recipients, splits, reference, memo
   -> builds transaction request
   -> verifies confirmed transaction facts
-  -> grants entitlement / earning record / commission
+  -> grants the domain outcome: receipt, entitlement, Event Access Pass, message delivery, or paid order
 
 Helius/RPC
   -> supplies confirmed transaction evidence
@@ -108,7 +109,7 @@ KYC/KYB for earning:
 - Every provider callback is authenticated, idempotent, replay-safe, and audited.
 - Provider outage behavior must be visible in admin/ops and recoverable in user UI.
 - Prefer one primary provider, one documented fallback, and one canonical adapter. A new provider decision must identify the obsolete path it replaces.
-- WeVid custom code is reserved for product authority: universal capabilities, onboarding orchestration, payment/split/settlement verification, entitlements, social/feed policy, Mutuals consent, performer consent, moderation/HITL policy, Event Access, and product UI/analytics. Providers own commodity identity checks, key storage, encoding/CDN, live ingest/transcoding, merchant commerce, delivery infrastructure, and managed observability storage.
+- WeVid custom code is reserved for product authority: universal capabilities, onboarding orchestration, payment/split/settlement verification, entitlements, native Product Offers and lightweight Orders/Fulfillment, social/feed policy, Mutuals consent, performer consent, moderation/HITL policy, Event Access, and product UI/analytics. Providers own commodity identity checks, key storage, Solana Pay interoperability, encoding/CDN, live ingest/transcoding, delivery infrastructure, and managed observability storage.
 
 ## Required Provider Decisions Before Coding
 

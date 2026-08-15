@@ -122,7 +122,7 @@ describe("MCP proof helpers", () => {
       API_RATE_LIMIT_STORE_DRIVER: "process_memory"
     });
     expect(localLimiter.status).not.toBe(0);
-    expect(localLimiter.stderr).toContain("distributed adapter");
+    expect(localLimiter.stderr).toContain("implemented Redis adapter");
 
     const adultLive = runDeployCheck({
       MCP_ENABLED: "false",
@@ -168,7 +168,8 @@ function productionDeployEnv() {
     AGE_VERIFICATION_DRIVER: "sumsub",
     TRANSACTIONAL_EMAIL_PROVIDER: "disabled",
     PAYMENT_DEFAULT_ASSET: "SOL",
-    API_RATE_LIMIT_STORE_DRIVER: "external",
+    API_RATE_LIMIT_STORE_DRIVER: "redis",
+    API_RATE_LIMIT_REDIS_URL: "rediss://redis.example.test:6380",
     LIVEPEER_ADULT_LIVE_ENABLED: "false",
     MEDIA_MODERATION_MODE: "launch_approved",
     MCP_ENABLED: "true",

@@ -12,9 +12,15 @@ import type {
 } from "../src/modules/payment/types";
 import { createPostgresLiveRepository } from "../src/modules/live/live-repository";
 import type {
-  SupabaseAuthVerifier,
-  VerifiedSupabaseSession
+  ApplicationSessionVerifier,
+  VerifiedApplicationSession
 } from "../src/modules/session/types";
+import {
+  createPostgresWalletAuthRepository,
+  hashToken,
+  WalletAuthChallengeInvalidError,
+  WalletRecoveryLinkConflictError
+} from "../src/modules/auth/wallet-auth-repository";
 import type { SubscriptionAuthorizationVerifier } from "../src/modules/subscription/types";
 import { createPostgresClient, type PostgresSql } from "../src/shared/postgres";
 import {
@@ -80,6 +86,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     const seededEnterpriseWaiverId = randomUUID();
     const providerReference = `sumsub-${runId}`;
     const ageProviderWaterfall = createIntegrationAgeWaterfall(providerReference);
+    const walletAuthRepository = createPostgresWalletAuthRepository(sql);
     const settlementInputs: PaymentSettlementInput[] = [];
     const settlementVerifier: PaymentSettlementVerifier = {
       async verifyTransfer(input) {
@@ -119,6 +126,12 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     const liveRepository = createPostgresLiveRepository(sql);
     const app = await buildApi({
       authVerifier: integrationAuthVerifier,
+      walletAuthRepository: {
+        ...walletAuthRepository,
+        async rotateSessionToken(input) {
+          return { accessToken: input.sessionToken, expiresAt: new Date(Date.now() + 10 * 60 * 1000) };
+        }
+      },
       ageProviderWaterfall,
       settlementVerifier,
       subscriptionAuthorizationVerifier,
@@ -160,6 +173,19 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         seededProviderReplayRequestId,
         seededOrganizationId
       });
+      await seedCanonicalIntegrationUser(sql, {
+        userId: buyerSupabaseUserId,
+        supabaseUserId: buyerSupabaseUserId
+      });
+      await sql`
+        insert into app_sessions (
+          id, user_id, wallet_id, token_hash, expires_at, authentication_method, authenticated_at
+        )
+        values (
+          ${randomUUID()}, ${buyerSupabaseUserId}, null, ${hashToken(authToken)},
+          now() + interval '30 minutes', 'supabase_recovery', now()
+        )
+      `;
       await seedCreatorPaidContent(sql, {
         creatorUserId: seededCreatorUserId,
         creatorSupabaseUserId,
@@ -2103,6 +2129,281 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       vi.unstubAllEnvs();
     }
   }, 120_000);
+
+  it("fails closed when a link intent targets a blocked recovery identity", async () => {
+    const databaseUrl = integrationDatabaseUrl();
+    assertIntegrationDatabaseIsAllowed(databaseUrl);
+
+    const sql = createPostgresClient(databaseUrl);
+    const userId = randomUUID();
+    const providerSubject = randomUUID();
+    const providerIdentityId = randomUUID();
+    const sessionId = randomUUID();
+    const intentId = randomUUID();
+    const sessionToken = `wevid_session_${randomUUID()}`;
+    const linkIntentToken = `wevid_recovery_link_${randomUUID()}`;
+    const repository = createPostgresWalletAuthRepository(sql);
+
+    try {
+      await sql`
+        insert into users (id, supabase_user_id)
+        values (${userId}, ${providerSubject})
+      `;
+      await sql`
+        insert into user_provider_identities (
+          id, provider, provider_subject, user_id, status, linked_at, last_used_at
+        )
+        values (
+          ${providerIdentityId}, 'supabase', ${providerSubject}, ${userId}, 'blocked', now(), now()
+        )
+      `;
+      await sql`
+        insert into app_sessions (
+          id, user_id, wallet_id, provider_identity_id, token_hash, expires_at,
+          authentication_method, authenticated_at
+        )
+        values (
+          ${sessionId}, ${userId}, null, ${providerIdentityId}, ${hashToken(sessionToken)},
+          now() + interval '10 minutes', 'supabase_recovery', now()
+        )
+      `;
+      await sql`
+        insert into recovery_link_intents (
+          id, user_id, session_id, token_hash, expires_at
+        )
+        values (
+          ${intentId}, ${userId}, ${sessionId}, ${hashToken(linkIntentToken)},
+          now() + interval '10 minutes'
+        )
+      `;
+
+      await expect(
+        repository.exchangeRecoveryIdentity({
+          provider: "supabase",
+          providerSubject,
+          linkIntentToken,
+          sessionExpiresAt: new Date(Date.now() + 10 * 60 * 1000)
+        })
+      ).rejects.toBeInstanceOf(WalletRecoveryLinkConflictError);
+
+      const identityRows = await sql<{ status: string }[]>`
+        select status
+        from user_provider_identities
+        where id = ${providerIdentityId}
+      `;
+      expect(identityRows[0]?.status).toBe("blocked");
+    } finally {
+      await sql`delete from recovery_link_intents where id = ${intentId}`;
+      await sql`delete from app_sessions where id = ${sessionId}`;
+      await sql`delete from user_provider_identities where id = ${providerIdentityId}`;
+      await sql`delete from users where id = ${userId}`;
+      await sql.end();
+    }
+  }, 30_000);
+
+  it("preserves authentication freshness and lifetime when rotating a session", async () => {
+    const databaseUrl = integrationDatabaseUrl();
+    assertIntegrationDatabaseIsAllowed(databaseUrl);
+
+    const sql = createPostgresClient(databaseUrl);
+    const userId = randomUUID();
+    const supabaseUserId = randomUUID();
+    const walletId = randomUUID();
+    const sessionId = randomUUID();
+    const intentId = randomUUID();
+    const sessionToken = `wevid_session_${randomUUID()}`;
+    const linkIntentToken = `wevid_recovery_link_${randomUUID()}`;
+    const authenticatedAt = new Date(Date.now() - 20 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    const repository = createPostgresWalletAuthRepository(sql);
+
+    try {
+      await sql`insert into users (id, supabase_user_id) values (${userId}, ${supabaseUserId})`;
+      await sql`
+        insert into wallets (id, user_id, provider, address, chain, is_primary)
+        values (${walletId}, ${userId}, 'phantom', ${randomUUID()}, 'solana_devnet', true)
+      `;
+      await sql`
+        insert into app_sessions (
+          id, user_id, wallet_id, token_hash, expires_at, authentication_method, authenticated_at
+        )
+        values (
+          ${sessionId}, ${userId}, ${walletId}, ${hashToken(sessionToken)}, ${expiresAt},
+          'wallet', ${authenticatedAt}
+        )
+      `;
+      await sql`
+        insert into recovery_link_intents (id, user_id, session_id, token_hash, expires_at)
+        values (
+          ${intentId}, ${userId}, ${sessionId}, ${hashToken(linkIntentToken)},
+          now() + interval '10 minutes'
+        )
+      `;
+
+      const rotated = await repository.rotateSessionToken({ sessionToken });
+      expect(rotated.expiresAt.getTime()).toBe(expiresAt.getTime());
+
+      const activeSessions = await sql<{ authenticated_at: Date; expires_at: Date }[]>`
+        select authenticated_at, expires_at
+        from app_sessions
+        where user_id = ${userId}
+          and revoked_at is null
+      `;
+      expect(activeSessions).toHaveLength(1);
+      expect(activeSessions[0]?.authenticated_at.getTime()).toBe(authenticatedAt.getTime());
+      expect(activeSessions[0]?.expires_at.getTime()).toBe(expiresAt.getTime());
+
+      await expect(
+        repository.exchangeRecoveryIdentity({
+          provider: "supabase",
+          providerSubject: randomUUID(),
+          linkIntentToken,
+          sessionExpiresAt: new Date(Date.now() + 10 * 60 * 1000)
+        })
+      ).rejects.toBeInstanceOf(WalletAuthChallengeInvalidError);
+
+      await repository.revokeSessionToken(rotated.accessToken);
+      const activeAfterLogout = await sql<{ count: string }[]>`
+        select count(*)::text as count
+        from app_sessions
+        where user_id = ${userId}
+          and revoked_at is null
+      `;
+      expect(activeAfterLogout[0]?.count).toBe("0");
+    } finally {
+      await sql`delete from recovery_link_intents where id = ${intentId}`;
+      await sql`delete from app_sessions where user_id = ${userId}`;
+      await sql`delete from wallets where id = ${walletId}`;
+      await sql`delete from users where id = ${userId}`;
+      await sql.end();
+    }
+  }, 30_000);
+
+  it("keeps device sessions independent, logs out all devices, and makes account-security revocation idempotent", async () => {
+    const databaseUrl = integrationDatabaseUrl();
+    assertIntegrationDatabaseIsAllowed(databaseUrl);
+
+    const sql = createPostgresClient(databaseUrl);
+    const repository = createPostgresWalletAuthRepository(sql);
+    const address = `session-scope-${randomUUID()}`;
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    let userId: string | null = null;
+
+    try {
+      const challengeA = await repository.createChallenge({
+        chain: "solana_devnet",
+        provider: "phantom",
+        address,
+        message: `device-a-${randomUUID()}`,
+        nonceHash: randomUUID(),
+        expiresAt
+      });
+      const sessionA = await repository.createSessionFromChallenge({
+        challengeId: challengeA.id,
+        expiresAt
+      });
+      const verifiedA = await repository.verifySessionToken(sessionA.accessToken);
+      expect(verifiedA).not.toBeNull();
+      userId = verifiedA?.userId ?? null;
+
+      const challengeB = await repository.createChallenge({
+        chain: "solana_devnet",
+        provider: "phantom",
+        address,
+        message: `device-b-${randomUUID()}`,
+        nonceHash: randomUUID(),
+        expiresAt
+      });
+      const sessionB = await repository.createSessionFromChallenge({
+        challengeId: challengeB.id,
+        expiresAt
+      });
+
+      expect(await repository.verifySessionToken(sessionA.accessToken)).not.toBeNull();
+      expect(await repository.verifySessionToken(sessionB.accessToken)).not.toBeNull();
+
+      const rotatedA = await repository.rotateSessionToken({ sessionToken: sessionA.accessToken });
+      expect(await repository.verifySessionToken(sessionA.accessToken)).toBeNull();
+      expect(await repository.verifySessionToken(rotatedA.accessToken)).not.toBeNull();
+      expect(await repository.verifySessionToken(sessionB.accessToken)).not.toBeNull();
+      await expect(
+        repository.rotateSessionToken({ sessionToken: sessionA.accessToken })
+      ).rejects.toBeInstanceOf(WalletAuthChallengeInvalidError);
+
+      await repository.revokeSessionToken(rotatedA.accessToken);
+      expect(await repository.verifySessionToken(rotatedA.accessToken)).toBeNull();
+      expect(await repository.verifySessionToken(sessionB.accessToken)).not.toBeNull();
+
+      expect(userId).not.toBeNull();
+      const challengeC = await repository.createChallenge({
+        chain: "solana_devnet",
+        provider: "phantom",
+        address,
+        message: `device-c-${randomUUID()}`,
+        nonceHash: randomUUID(),
+        expiresAt
+      });
+      const sessionC = await repository.createSessionFromChallenge({
+        challengeId: challengeC.id,
+        expiresAt
+      });
+
+      const logoutAllCount = await repository.revokeAllSessions({
+        userId: userId as string,
+        actorUserId: userId as string,
+        reason: "user_logout_all"
+      });
+      expect(logoutAllCount).toBe(2);
+      expect(await repository.verifySessionToken(sessionB.accessToken)).toBeNull();
+      expect(await repository.verifySessionToken(sessionC.accessToken)).toBeNull();
+
+      const challengeD = await repository.createChallenge({
+        chain: "solana_devnet",
+        provider: "phantom",
+        address,
+        message: `device-d-${randomUUID()}`,
+        nonceHash: randomUUID(),
+        expiresAt
+      });
+      const sessionD = await repository.createSessionFromChallenge({
+        challengeId: challengeD.id,
+        expiresAt
+      });
+      const accountSecurityCount = await repository.revokeAllSessions({
+        userId: userId as string,
+        actorUserId: userId as string,
+        reason: "account_security"
+      });
+      expect(accountSecurityCount).toBe(1);
+      expect(await repository.verifySessionToken(sessionD.accessToken)).toBeNull();
+
+      const replayedRevocationCount = await repository.revokeAllSessions({
+        userId: userId as string,
+        actorUserId: userId as string,
+        reason: "account_security"
+      });
+      expect(replayedRevocationCount).toBe(0);
+
+      const audits = await sql<{ count: string }[]>`
+        select count(*)::text as count
+        from audit_events
+        where actor_user_id = ${userId}
+          and subject_id = ${userId}
+          and action = 'auth.sessions_revoked_all'
+      `;
+      expect(audits[0]?.count).toBe("2");
+    } finally {
+      if (userId) {
+        await sql`delete from audit_events where actor_user_id = ${userId}`;
+        await sql`delete from recovery_link_intents where user_id = ${userId}`;
+        await sql`delete from app_sessions where user_id = ${userId}`;
+        await sql`delete from wallets where user_id = ${userId}`;
+        await sql`delete from users where id = ${userId}`;
+      }
+      await sql`delete from wallet_auth_challenges where address = ${address}`;
+      await sql.end();
+    }
+  }, 30_000);
 });
 
 function integrationDatabaseUrl(): string {
@@ -2149,20 +2450,24 @@ function creatorAuthenticatedHeaders(idempotencyKey: string): Record<string, str
   };
 }
 
-const integrationAuthVerifier: SupabaseAuthVerifier = {
-  async verifyBearerToken(token: string): Promise<VerifiedSupabaseSession | null> {
+const integrationAuthVerifier: ApplicationSessionVerifier = {
+  async verifyToken(token: string): Promise<VerifiedApplicationSession | null> {
     if (token === authToken) {
       return {
+        userId: buyerSupabaseUserId,
         supabaseUserId: buyerSupabaseUserId,
-        email: "integration-buyer@example.test",
-        role: "authenticated"
+        sessionId: buyerSupabaseUserId,
+        authenticatedAt: new Date(),
+        authenticationMethod: "wallet"
       };
     }
     if (token === creatorAuthToken) {
       return {
+        userId: creatorSupabaseUserId,
         supabaseUserId: creatorSupabaseUserId,
-        email: "integration-creator@example.test",
-        role: "authenticated"
+        sessionId: creatorSupabaseUserId,
+        authenticatedAt: new Date(),
+        authenticationMethod: "wallet"
       };
     }
     return null;
@@ -2204,11 +2509,10 @@ async function seedCreatorPaidContent(
   }
 ): Promise<void> {
   const recipientWalletId = randomUUID();
-  await sql`
-    insert into users (id, supabase_user_id)
-    values (${input.creatorUserId}, ${input.creatorSupabaseUserId})
-    on conflict (supabase_user_id) do update set state = 'active'
-  `;
+  await seedCanonicalIntegrationUser(sql, {
+    userId: input.creatorUserId,
+    supabaseUserId: input.creatorSupabaseUserId
+  });
   await sql`
     insert into profiles (user_id, handle, display_name, bio)
     values (${input.creatorUserId}, ${input.creatorHandle}, 'Integration Creator', 'Paid test creator')
@@ -2368,6 +2672,41 @@ async function seedCreatorPaidContent(
       'SOL',
       'active'
     )
+  `;
+}
+
+async function seedCanonicalIntegrationUser(
+  sql: PostgresSql,
+  input: { userId: string; supabaseUserId: string }
+): Promise<void> {
+  await sql`
+    insert into users (id, supabase_user_id)
+    values (${input.userId}, ${input.supabaseUserId})
+    on conflict (supabase_user_id) do update set state = 'active'
+  `;
+  await sql`
+    insert into user_provider_identities (
+      id,
+      provider,
+      provider_subject,
+      user_id,
+      status,
+      linked_at,
+      last_used_at
+    )
+    values (
+      ${randomUUID()},
+      'supabase',
+      ${input.supabaseUserId},
+      ${input.userId},
+      'active',
+      now(),
+      now()
+    )
+    on conflict (provider, provider_subject) do update set
+      user_id = excluded.user_id,
+      status = 'active',
+      last_used_at = now()
   `;
 }
 
@@ -3124,6 +3463,14 @@ async function cleanupRun(
         where user_id in ${tx(userIds)}
       `;
       await tx`
+        delete from recovery_link_intents
+        where user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from app_sessions
+        where user_id in ${tx(userIds)}
+      `;
+      await tx`
         delete from wallets
         where user_id in ${tx(userIds)}
       `;
@@ -3398,6 +3745,10 @@ async function cleanupRun(
       await tx`
         delete from idempotency_keys
         where actor_user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from user_provider_identities
+        where user_id in ${tx(userIds)}
       `;
       await tx`
         delete from users

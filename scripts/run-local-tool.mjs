@@ -106,7 +106,7 @@ const resolveTool = () => {
     return {
       executable: join(repoRoot, "apps/web/node_modules/next/dist/bin/next"),
       cwd: join(repoRoot, "apps/web"),
-      args: ["build", ...args]
+      args: ["build", "--webpack", ...args]
     };
   }
 

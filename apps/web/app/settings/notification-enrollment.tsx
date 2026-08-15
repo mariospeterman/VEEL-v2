@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { createSupabaseBrowserClient } from "@/supabase/client";
 import type { ApiResult, NotificationPushConfig } from "@/api-client";
 import { mapApiFailure } from "@/api-errors";
 import { readPublicWebEnv } from "@/public-env";
@@ -57,22 +56,13 @@ export function NotificationEnrollment({
         applicationServerKey: base64UrlToArrayBuffer(vapidPublicKey)
       });
       const device = pushSubscriptionToDevice(subscription);
-      const supabase = createSupabaseBrowserClient();
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-
-      if (!token) {
-        setState("blocked");
-        setMessage("Sign in before enabling browser push.");
-        return;
-      }
 
       const apiBaseUrl = readPublicWebEnv().NEXT_PUBLIC_API_BASE_URL;
       const response = await fetch(new URL("/v1/notifications/devices", apiBaseUrl), {
+        credentials: "include",
         method: "POST",
         headers: {
           accept: "application/json",
-          authorization: `Bearer ${token}`,
           "content-type": "application/json",
           "idempotency-key": crypto.randomUUID()
         },

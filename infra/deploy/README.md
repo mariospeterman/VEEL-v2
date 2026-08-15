@@ -23,6 +23,8 @@ Server-only settings:
 - `API_URL`
 - `WEB_URL`
 - `DATABASE_URL`
+- `API_RATE_LIMIT_STORE_DRIVER=redis`
+- `API_RATE_LIMIT_REDIS_URL` from the deployment secret store; the production entrypoint has no generic external-store injection path
 - `SUPABASE_URL`
 - `SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY` during legacy compatibility
 - `PAYMENT_PLATFORM_TREASURY_WALLET`

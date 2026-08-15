@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { AgeRepository } from "../age/types.js";
-import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
+import type { SessionRepository, ApplicationSessionVerifier } from "../session/types.js";
 import type { WalletRepository } from "../wallet/types.js";
 import {
   ReferralIdempotencyConflictError,
@@ -11,7 +11,7 @@ import {
 import type { CreateReferralTokenRequest, ReferralRepository } from "./types.js";
 
 interface RegisterReferralRoutesOptions {
-  authVerifier: SupabaseAuthVerifier;
+  authVerifier: ApplicationSessionVerifier;
   sessionRepository: SessionRepository;
   ageRepository: AgeRepository;
   walletRepository: WalletRepository;
@@ -161,7 +161,7 @@ async function verifyReferralReadyAccess(
     options.walletRepository.hasWalletBySupabaseUserId(verifiedSession.supabaseUserId)
   ]);
 
-  if (!profile?.handle || !profile.displayName || ageStatus.state !== "verified" || !hasWallet) {
+  if (profile?.state !== "active" || !profile.handle || !profile.displayName || ageStatus.state !== "verified" || !hasWallet) {
     return {
       ok: false,
       statusCode: 403,

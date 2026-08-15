@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: full product architecture
-Last updated: 2026-06-14
+Last updated: 2026-08-15
 Source of truth: yes
 
 Owns:
@@ -150,7 +150,7 @@ flowchart TB
 | Contracts | OpenAPI generated from Fastify schemas or shared Zod schema source | API contracts must remain source of truth for frontend client types. |
 | Package manager | pnpm workspaces | Current repo already uses pnpm; lowest migration risk for monorepo and CI. |
 | Runtime | Node.js LTS | Best provider SDK and ops compatibility for launch. |
-| Payments | Official Solana JS/Solana Pay tooling and Solana Subscriptions/Allowances after staging approval | Solana ecosystem is TypeScript-first; server composes transaction requests and keeps recurring billing noncustodial. |
+| Payments | Official Solana JS/Solana Pay tooling, selected Commerce Kit Solana Pay codec in Slice 06, and Solana Subscriptions/Allowances after staging approval | Server composes requests and retains exact split/settlement authority; Commerce Kit is an isolated URL/QR/deep-link interoperability dependency, not a second wallet, checkout, order, or verifier. |
 | Media | Bunny Stream for VOD, Livepeer for live/replay | Provider-first, no custom media infra. |
 | Observability | OpenTelemetry + structured logs + provider/audit tables | Required for payments, media, safety, and launch ops. |
 

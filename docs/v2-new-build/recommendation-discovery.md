@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Home feed, Bits feed, Discover, hashtags, mentions, NSFW controls, ranking safety
-Last updated: 2026-08-14
+Last updated: 2026-08-15
 Source of truth: yes for v2 content delivery and discovery
 
 Owns:
@@ -55,6 +55,8 @@ Mutuals Mode
 ```
 
 Home/Bits gesture lock: the visible action rail owns like, comment, save, share, and Support; Not interested remains a visible action/menu. Horizontal swipes never create Mutuals, buy a product, join an event, grant paid access, or send funds. Event and future product media may expose at most one primary contextual CTA (`View Event`/`Get Access` or `View Product`/`Buy Product`), followed by explicit detail and confirmation. Money never affects ranking, Mutuals priority, or message priority.
+
+Future native Product Offers are contextual metadata, not ranking authority. A profile, Post, Bit, or live stream may expose one eligible offer after backend policy/moderation filtering, but purchase value, wallet balance, checkout completion, seller revenue, or Commerce Kit events cannot buy recommendation weight, creator visibility, Mutuals priority, or message priority. Commerce Kit has no role in feed selection.
 
 ## Feed Modes
 

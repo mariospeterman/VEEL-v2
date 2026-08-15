@@ -2,7 +2,6 @@
 
 import { readPublicWebEnv } from "@/public-env";
 import { e2eAuthCookieName } from "@/supabase/auth-cookie";
-import { createSupabaseBrowserClient } from "@/supabase/client";
 import { ApiMutationError } from "./api-mutation-types";
 
 const browserE2eAuthEnabled =
@@ -123,20 +122,7 @@ async function mutationFetch(input: URL, init: RequestInit) {
 
 async function browserSessionToken() {
   const e2eToken = browserE2eAccessToken();
-  if (e2eToken) {
-    return { token: e2eToken };
-  }
-
-  const supabase = createSupabaseBrowserClient();
-  const {
-    data: { session }
-  } = await supabase.auth.getSession();
-
-  if (!session?.access_token) {
-    return { token: null };
-  }
-
-  return { token: session.access_token };
+  return { token: e2eToken };
 }
 
 function browserE2eAccessToken() {

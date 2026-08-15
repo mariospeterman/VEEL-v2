@@ -11,7 +11,7 @@ servers:
   - url: http://localhost:4000
     description: Local
 security:
-  - bearerAuth: []
+  - appSessionCookie: []
 tags:
   - name: Health
   - name: Auth
@@ -70,13 +70,13 @@ paths:
       tags: [Auth]
       security: []
       summary: Create a wallet-first login challenge
-      parameters:
-        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      x-idempotency-policy: single-use-auth-proof
       requestBody:
         $ref: "#/components/requestBodies/CreateWalletAuthChallenge"
       responses:
         "201": { $ref: "#/components/responses/WalletAuthChallenge" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/auth/wallet/sessions:
     post:
@@ -84,38 +84,80 @@ paths:
       tags: [Auth]
       security: []
       summary: Verify a wallet challenge and create a WeVid session
-      parameters:
-        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      x-idempotency-policy: single-use-auth-proof
       requestBody:
         $ref: "#/components/requestBodies/CreateWalletAuthSession"
       responses:
         "201": { $ref: "#/components/responses/WalletAuthSession" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/auth/wallet/logout:
     post:
       operationId: revokeWalletAuthSession
       tags: [Auth]
       summary: Revoke the current HttpOnly wallet session
-      parameters:
-        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      x-idempotency-policy: single-use-auth-proof
       responses:
         "204": { description: Wallet session revoked }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
-  /v1/auth/recovery-link:
+  /v1/auth/sessions/logout-all:
     post:
-      operationId: linkSupabaseRecovery
+      operationId: revokeAllApplicationSessions
       tags: [Auth]
-      summary: Link a Supabase recovery identity to a wallet-created WeVid account
+      summary: Revoke every application session after recent authentication
+      x-idempotency-policy: idempotent-state-transition
       parameters:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
-      requestBody:
-        $ref: "#/components/requestBodies/LinkSupabaseRecovery"
       responses:
-        "200": { $ref: "#/components/responses/AuthRecoveryLink" }
+        "204": { description: All application sessions revoked }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/auth/recovery/link-intents:
+    post:
+      operationId: createRecoveryLinkIntent
+      tags: [Auth]
+      summary: Create a short-lived recovery-link intent for the current recent application session
+      x-idempotency-policy: single-use-auth-proof
+      responses:
+        "201": { $ref: "#/components/responses/ApplicationSessionExpiry" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/auth/recovery/exchange:
+    post:
+      operationId: exchangeRecoveryIdentity
+      tags: [Auth]
+      security:
+        - recoveryBearer: []
+      summary: Exchange an explicit Supabase recovery credential for a rotated WeVid application session
+      x-idempotency-policy: single-use-auth-proof
+      responses:
+        "200": { $ref: "#/components/responses/ApplicationSessionExpiry" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/auth/recovery/unlink:
+    post:
+      operationId: unlinkRecoveryIdentity
+      tags: [Auth]
+      summary: Unlink Supabase recovery and rotate the current WeVid application session
+      x-idempotency-policy: single-use-auth-proof
+      responses:
+        "200": { $ref: "#/components/responses/ApplicationSessionExpiry" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/age/sessions:
     post:
@@ -130,6 +172,7 @@ paths:
         "201": { $ref: "#/components/responses/AgeSession" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "409": { $ref: "#/components/responses/Conflict" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/age/status:
@@ -167,6 +210,7 @@ paths:
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/webhooks/verification/{provider}:
     post:
@@ -194,41 +238,48 @@ paths:
       operationId: createWalletLinkChallenge
       tags: [Wallets]
       summary: Create a server-owned wallet-link signing challenge
-      parameters:
-        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      x-idempotency-policy: single-use-auth-proof
       requestBody:
         $ref: "#/components/requestBodies/CreateWalletLinkChallenge"
       responses:
         "201": { $ref: "#/components/responses/WalletLinkChallenge" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/wallets/link:
     post:
       operationId: linkWallet
       tags: [Wallets]
       summary: Link embedded or external wallet after backend challenge verification
-      parameters:
-        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      x-idempotency-policy: single-use-auth-proof
       requestBody:
         $ref: "#/components/requestBodies/LinkWallet"
       responses:
         "201": { $ref: "#/components/responses/Wallet" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/wallets/{walletId}/primary:
     patch:
       operationId: setPrimaryWallet
       tags: [Wallets]
       summary: Set primary wallet
+      x-idempotency-policy: single-use-auth-proof
       parameters:
         - $ref: "#/components/parameters/WalletId"
-        - $ref: "#/components/parameters/RequiredIdempotencyKey"
       responses:
         "200": { $ref: "#/components/responses/Wallet" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/wallets/onramp-sessions:
     post:
       operationId: createOnrampSession
@@ -255,19 +306,6 @@ paths:
         $ref: "#/components/requestBodies/UpdateProfile"
       responses:
         "200": { $ref: "#/components/responses/User" }
-        "400": { $ref: "#/components/responses/ValidationFailed" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "409": { $ref: "#/components/responses/Conflict" }
-  /v1/profiles/me/starter:
-    post:
-      operationId: createStarterProfile
-      tags: [Profiles]
-      summary: Create a backend-owned starter profile for onboarding
-      parameters:
-        - $ref: "#/components/parameters/RequiredIdempotencyKey"
-      responses:
-        "200": { $ref: "#/components/responses/User" }
-        "201": { $ref: "#/components/responses/User" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "409": { $ref: "#/components/responses/Conflict" }
@@ -313,6 +351,17 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/CreatorProfile" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /v1/profiles/handles/{handle}/availability:
+    get:
+      operationId: getProfileHandleAvailability
+      tags: [Profiles]
+      security: []
+      summary: Check normalized handle availability; database uniqueness remains authoritative
+      parameters:
+        - $ref: "#/components/parameters/Handle"
+      responses:
+        "200": { $ref: "#/components/responses/HandleAvailability" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/content/feed:
     get:
       operationId: getContentFeed
@@ -2295,7 +2344,11 @@ paths:
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 components:
   securitySchemes:
-    bearerAuth:
+    appSessionCookie:
+      type: apiKey
+      in: cookie
+      name: wevid_session
+    recoveryBearer:
       type: http
       scheme: bearer
       bearerFormat: JWT
@@ -2305,7 +2358,7 @@ components:
       in: header
       required: true
       schema: { type: string, minLength: 12, maxLength: 128 }
-      description: Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations.
+      description: Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations.
     OptionalIdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -2360,7 +2413,7 @@ components:
     MembershipId: { name: membershipId, in: path, required: true, schema: { type: string, format: uuid } }
     FeatureFlagKey: { name: featureFlagKey, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9_.:-]{2,120}$" } }
     Slug: { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9-]{1,80}$" } }
-    Handle: { name: handle, in: path, required: true, schema: { type: string, pattern: "^[a-zA-Z0-9_]{2,32}$" } }
+    Handle: { name: handle, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9_]{2,32}$" } }
     MediaProvider:
       name: provider
       in: path
@@ -2381,7 +2434,6 @@ components:
     CreateVerificationSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateVerificationSessionRequest" } } } }
     CreateWalletAuthChallenge: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateWalletAuthChallengeRequest" } } } }
     CreateWalletAuthSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateWalletAuthSessionRequest" } } } }
-    LinkSupabaseRecovery: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/LinkSupabaseRecoveryRequest" } } } }
     CreateWalletLinkChallenge: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateWalletLinkChallengeRequest" } } } }
     LinkWallet: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/LinkWalletRequest" } } } }
     CreateOnrampSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateOnrampSessionRequest" } } } }
@@ -2468,9 +2520,9 @@ components:
     NotFound: { description: Not found, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     ValidationFailed: { description: Validation failed, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     Conflict: { description: Conflict, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+    RateLimited: { description: Rate limited, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     NotImplemented: { description: Not implemented, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     ServiceUnavailable: { description: Service unavailable, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
-    RateLimited: { description: Rate limited, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     SessionState: { description: Session state, content: { application/json: { schema: { $ref: "#/components/schemas/SessionState" } } } }
     AgeSession: { description: Age assurance session, content: { application/json: { schema: { $ref: "#/components/schemas/AgeSession" } } } }
     AgeStatus: { description: Age state, content: { application/json: { schema: { $ref: "#/components/schemas/AgeStatus" } } } }
@@ -2479,7 +2531,8 @@ components:
     ProviderWebhookReceipt: { description: Provider webhook receipt, content: { application/json: { schema: { $ref: "#/components/schemas/ProviderWebhookReceipt" } } } }
     WalletAuthChallenge: { description: Wallet auth challenge, content: { application/json: { schema: { $ref: "#/components/schemas/WalletAuthChallenge" } } } }
     WalletAuthSession: { description: Wallet auth session, content: { application/json: { schema: { $ref: "#/components/schemas/WalletAuthSession" } } } }
-    AuthRecoveryLink: { description: Recovery identity link result, content: { application/json: { schema: { $ref: "#/components/schemas/AuthRecoveryLink" } } } }
+    ApplicationSessionExpiry: { description: Rotated application session expiry; opaque token is set only as HttpOnly cookie, content: { application/json: { schema: { $ref: "#/components/schemas/ApplicationSessionExpiry" } } } }
+    HandleAvailability: { description: Normalized handle availability, content: { application/json: { schema: { $ref: "#/components/schemas/HandleAvailability" } } } }
     WalletLinkChallenge: { description: Wallet link challenge, content: { application/json: { schema: { $ref: "#/components/schemas/WalletLinkChallenge" } } } }
     WalletList: { description: Wallets, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Wallet" } } } } } } }
     Wallet: { description: Wallet, content: { application/json: { schema: { $ref: "#/components/schemas/Wallet" } } } }
@@ -2619,7 +2672,7 @@ components:
               message: { type: string }
     ErrorCode:
       type: string
-      enum: [unauthorized, forbidden, not_found, validation_failed, rate_limited, conflict, idempotency_conflict, provider_unavailable, payment_not_confirmed, webhook_signature_invalid]
+      enum: [unauthorized, forbidden, not_found, validation_failed, rate_limited, conflict, idempotency_conflict, provider_unavailable, service_unavailable, recent_authentication_required, payment_not_confirmed, webhook_signature_invalid]
     ErrorResponse:
       type: object
       required: [code, message]
@@ -2642,6 +2695,7 @@ components:
         user: { $ref: "#/components/schemas/User" }
     CreateAgeSessionRequest:
       type: object
+      additionalProperties: false
       required: [providerPreference]
       properties:
         providerPreference: { type: string, enum: [reusable_first, didit, yoti, sumsub, veriff, persona] }
@@ -2666,7 +2720,7 @@ components:
         purpose: { type: string, enum: [adult_publisher_eligibility, creator_kyc, org_kyb] }
         providerPreference: { type: string, enum: [provider_first, sumsub, didit, persona, veriff], default: provider_first }
         organizationId: { type: string, format: uuid, nullable: true }
-        source: { type: string, enum: [onboarding, create, earnings, organization], default: create }
+        source: { type: string, enum: [create, earnings, organization], default: create }
         adultPublisherTermsAccepted: { type: boolean, default: false }
     VerificationSession:
       type: object
@@ -2725,16 +2779,17 @@ components:
         id: { type: string, format: uuid }
         chain: { type: string, enum: [solana_devnet, solana_mainnet] }
         address: { type: string }
-        provider: { type: string, enum: [embedded_privy, embedded_turnkey, phantom, solflare, wallet_adapter] }
+        provider: { type: string, enum: [embedded_privy, phantom, solflare, wallet_adapter] }
         isPrimary: { type: boolean }
     WalletProvider:
       type: string
-      enum: [embedded_privy, embedded_turnkey, phantom, solflare, wallet_adapter]
+      enum: [embedded_privy, phantom, solflare, wallet_adapter]
     ExternalWalletProvider:
       type: string
       enum: [phantom, solflare, wallet_adapter]
     CreateWalletAuthChallengeRequest:
       type: object
+      additionalProperties: false
       required: [chain, address, provider]
       properties:
         chain: { type: string, enum: [solana_devnet, solana_mainnet] }
@@ -2752,6 +2807,7 @@ components:
         expiresAt: { type: string, format: date-time }
     WalletAuthProof:
       type: object
+      additionalProperties: false
       required: [challengeId, message, signature, signatureEncoding]
       properties:
         challengeId: { type: string, format: uuid }
@@ -2760,6 +2816,7 @@ components:
         signatureEncoding: { type: string, enum: [base58, base64] }
     CreateWalletAuthSessionRequest:
       type: object
+      additionalProperties: false
       required: [provider, address, chain, proof]
       properties:
         provider: { $ref: "#/components/schemas/WalletProvider" }
@@ -2772,17 +2829,20 @@ components:
       properties:
         expiresAt: { type: string, format: date-time }
         wallet: { $ref: "#/components/schemas/Wallet" }
-    LinkSupabaseRecoveryRequest:
+    ApplicationSessionExpiry:
       type: object
-      additionalProperties: false
-    AuthRecoveryLink:
-      type: object
-      required: [state, provider]
+      required: [expiresAt]
       properties:
-        state: { type: string, enum: [linked] }
-        provider: { type: string, enum: [supabase] }
+        expiresAt: { type: string, format: date-time }
+    HandleAvailability:
+      type: object
+      required: [handle, available]
+      properties:
+        handle: { type: string, pattern: "^[a-z0-9_]{2,32}$" }
+        available: { type: boolean }
     CreateWalletLinkChallengeRequest:
       type: object
+      additionalProperties: false
       required: [chain, address, provider]
       properties:
         chain: { type: string, enum: [solana_devnet, solana_mainnet] }
@@ -2800,6 +2860,7 @@ components:
         expiresAt: { type: string, format: date-time }
     WalletLinkProof:
       type: object
+      additionalProperties: false
       required: [challengeId, message, signature, signatureEncoding]
       properties:
         challengeId: { type: string, format: uuid }
@@ -2808,6 +2869,7 @@ components:
         signatureEncoding: { type: string, enum: [base58, base64] }
     LinkWalletRequest:
       type: object
+      additionalProperties: false
       required: [provider, address, chain, proof]
       properties:
         provider: { $ref: "#/components/schemas/ExternalWalletProvider" }
@@ -2936,9 +2998,10 @@ components:
         currency: { $ref: "#/components/schemas/Currency" }
     UpdateProfileRequest:
       type: object
-      required: [handle, displayName]
+      additionalProperties: false
+      required: [handle]
       properties:
-        handle: { type: string, pattern: "^[a-zA-Z0-9_]{2,32}$" }
+        handle: { type: string, pattern: "^[a-z0-9_]{2,32}$" }
         displayName: { type: string, minLength: 1, maxLength: 80 }
         avatarUrl: { type: string, format: uri, nullable: true, maxLength: 2048 }
         bio: { type: string, maxLength: 500 }
@@ -2955,6 +3018,7 @@ components:
         url: { type: string, format: uri, maxLength: 2048 }
     UploadProfileAvatarRequest:
       type: object
+      additionalProperties: false
       required: [contentType, dataBase64]
       properties:
         fileName: { type: string, maxLength: 160 }

@@ -1,7 +1,18 @@
 import { randomBytes } from "node:crypto";
-import type { FastifyInstance } from "fastify";
-import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
-import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import {
+  extractRequestSessionToken,
+  hasRecentAuthentication,
+  unauthorizedResponse,
+  verifyRequestSession
+} from "../auth/http-auth.js";
+import { walletSessionCookie } from "../auth/wallet-auth-routes.js";
+import {
+  WalletAuthChallengeInvalidError,
+  WalletAuthRepositoryConfigurationError,
+  type WalletAuthRepository
+} from "../auth/wallet-auth-repository.js";
+import type { SessionRepository, ApplicationSessionVerifier } from "../session/types.js";
 import {
   WalletLinkChallengeNotFoundError,
   WalletLinkConflictError,
@@ -12,8 +23,7 @@ import { WalletOnrampProviderNotConfiguredError } from "./wallet-onramp-adapter.
 import {
   buildWalletLinkMessage,
   hashNonce,
-  validateChallengeRequest,
-  validateLinkWalletRequest,
+  isValidSolanaAddress,
   validateOnrampSessionRequest,
   verifySolanaMessageSignature
 } from "./wallet-route-utils.js";
@@ -24,11 +34,13 @@ import type {
   WalletOnrampProviderAdapter,
   WalletRepository
 } from "./types.js";
+import { mutationRateLimit } from "../../shared/rate-limits.js";
 
 interface RegisterWalletRoutesOptions {
-  authVerifier: SupabaseAuthVerifier;
+  authVerifier: ApplicationSessionVerifier;
   sessionRepository: SessionRepository;
   walletRepository: WalletRepository;
+  walletAuthRepository: WalletAuthRepository;
   onrampProvider: WalletOnrampProviderAdapter;
 }
 
@@ -44,7 +56,6 @@ export async function registerWalletRoutes(
     if (!verifiedSession) {
       return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
     }
-
     try {
       const wallets = await options.walletRepository.listWalletsBySupabaseUserId(
         verifiedSession.supabaseUserId
@@ -61,29 +72,30 @@ export async function registerWalletRoutes(
         });
       }
 
+      if (error instanceof WalletAuthRepositoryConfigurationError) {
+        request.log.warn({ error }, "Application session rotation is not configured");
+        return reply.code(503).send({ code: "service_unavailable", message: "Application session rotation is unavailable" });
+      }
+
       throw error;
     }
   });
 
-  app.post("/v1/wallets/link-challenges", async (request, reply) => {
+  app.post<{ Body: CreateWalletLinkChallengeRequest }>("/v1/wallets/link-challenges", mutationRateLimit("walletMutation", "createWalletLinkChallenge"), async (request, reply) => {
     const verifiedSession = await verifyRequestSession(request, options.authVerifier);
 
     if (!verifiedSession) {
       return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
     }
-
-    if (!request.headers["idempotency-key"]) {
-      return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
+    if (!hasRecentAuthentication(verifiedSession.authenticatedAt)) {
+      return reply.code(403).send(recentAuthenticationRequired());
     }
 
-    const body = request.body as CreateWalletLinkChallengeRequest | undefined;
-    const validationError = validateChallengeRequest(body);
-
-    if (validationError) {
-      return reply.code(400).send(validationResponse(validationError));
+    if (!isValidSolanaAddress(request.body.address)) {
+      return reply.code(400).send(validationResponse("Invalid Solana wallet address"));
     }
 
-    const challengeBody = body as CreateWalletLinkChallengeRequest;
+    const challengeBody = request.body;
     const nonce = randomBytes(18).toString("base64url");
     const issuedAt = new Date();
     const expiresAt = new Date(issuedAt.getTime() + walletChallengeTtlMs);
@@ -98,7 +110,6 @@ export async function registerWalletRoutes(
     });
 
     try {
-      await options.sessionRepository.ensureUserForSupabaseId(verifiedSession.supabaseUserId);
       const challenge = await options.walletRepository.createLinkChallenge({
         supabaseUserId: verifiedSession.supabaseUserId,
         chain: challengeBody.chain,
@@ -116,29 +127,30 @@ export async function registerWalletRoutes(
         return reply.code(401).send(unauthorizedResponse("Wallet storage is not configured"));
       }
 
+      if (error instanceof WalletAuthRepositoryConfigurationError) {
+        request.log.warn({ error }, "Application session rotation is not configured");
+        return reply.code(503).send({ code: "service_unavailable", message: "Application session rotation is unavailable" });
+      }
+
       throw error;
     }
   });
 
-  app.post("/v1/wallets/link", async (request, reply) => {
+  app.post<{ Body: LinkWalletRequest }>("/v1/wallets/link", mutationRateLimit("walletMutation", "linkWallet"), async (request, reply) => {
     const verifiedSession = await verifyRequestSession(request, options.authVerifier);
 
     if (!verifiedSession) {
       return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
     }
-
-    if (!request.headers["idempotency-key"]) {
-      return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
+    if (!hasRecentAuthentication(verifiedSession.authenticatedAt)) {
+      return reply.code(403).send(recentAuthenticationRequired());
     }
 
-    const body = request.body as LinkWalletRequest | undefined;
-    const validationError = validateLinkWalletRequest(body);
-
-    if (validationError) {
-      return reply.code(400).send(validationResponse(validationError));
+    if (!isValidSolanaAddress(request.body.address)) {
+      return reply.code(400).send(validationResponse("Invalid Solana wallet address"));
     }
 
-    const linkBody = body as LinkWalletRequest;
+    const linkBody = request.body;
     try {
       const challenge = await options.walletRepository.findLinkChallenge({
         challengeId: linkBody.proof.challengeId,
@@ -171,12 +183,16 @@ export async function registerWalletRoutes(
         return reply.code(400).send(validationResponse("Wallet signature is invalid"));
       }
 
-      const wallet = await options.walletRepository.consumeVerifiedExternalWalletLink({
+      const sessionToken = extractRequestSessionToken(request);
+      if (!sessionToken) return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
+      const result = await options.walletRepository.consumeVerifiedExternalWalletLink({
         challengeId: challenge.id,
-        supabaseUserId: verifiedSession.supabaseUserId
+        supabaseUserId: verifiedSession.supabaseUserId,
+        sessionToken
       });
+      reply.header("set-cookie", walletSessionCookie(result.session.accessToken, result.session.expiresAt, app.config.WALLET_AUTH_COOKIE_DOMAIN));
 
-      return reply.code(201).send(wallet);
+      return reply.code(201).send(result.wallet);
     } catch (error) {
       if (error instanceof WalletLinkConflictError) {
         return reply.code(409).send({
@@ -194,19 +210,25 @@ export async function registerWalletRoutes(
         return reply.code(401).send(unauthorizedResponse("Wallet storage is not configured"));
       }
 
+      if (error instanceof WalletAuthRepositoryConfigurationError) {
+        return sessionRotationUnavailable(request, reply, error);
+      }
+      if (error instanceof WalletAuthChallengeInvalidError) {
+        return reply.code(401).send(unauthorizedResponse("Application session is missing or expired"));
+      }
+
       throw error;
     }
   });
 
-  app.patch("/v1/wallets/:walletId/primary", async (request, reply) => {
+  app.patch("/v1/wallets/:walletId/primary", mutationRateLimit("walletMutation", "setPrimaryWallet"), async (request, reply) => {
     const verifiedSession = await verifyRequestSession(request, options.authVerifier);
 
     if (!verifiedSession) {
       return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
     }
-
-    if (!request.headers["idempotency-key"]) {
-      return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
+    if (!hasRecentAuthentication(verifiedSession.authenticatedAt)) {
+      return reply.code(403).send(recentAuthenticationRequired());
     }
 
     const walletId = (request.params as { walletId?: string }).walletId;
@@ -216,12 +238,16 @@ export async function registerWalletRoutes(
     }
 
     try {
-      const wallet = await options.walletRepository.setPrimaryWallet({
+      const sessionToken = extractRequestSessionToken(request);
+      if (!sessionToken) return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
+      const result = await options.walletRepository.setPrimaryWallet({
         walletId,
-        supabaseUserId: verifiedSession.supabaseUserId
+        supabaseUserId: verifiedSession.supabaseUserId,
+        sessionToken
       });
+      reply.header("set-cookie", walletSessionCookie(result.session.accessToken, result.session.expiresAt, app.config.WALLET_AUTH_COOKIE_DOMAIN));
 
-      return reply.code(200).send(wallet);
+      return reply.code(200).send(result.wallet);
     } catch (error) {
       if (error instanceof WalletNotFoundError) {
         return reply.code(404).send({
@@ -233,6 +259,13 @@ export async function registerWalletRoutes(
       if (error instanceof WalletRepositoryConfigurationError) {
         request.log.warn({ error }, "Wallet repository is not configured");
         return reply.code(401).send(unauthorizedResponse("Wallet storage is not configured"));
+      }
+
+      if (error instanceof WalletAuthRepositoryConfigurationError) {
+        return sessionRotationUnavailable(request, reply, error);
+      }
+      if (error instanceof WalletAuthChallengeInvalidError) {
+        return reply.code(401).send(unauthorizedResponse("Application session is missing or expired"));
       }
 
       throw error;
@@ -336,4 +369,20 @@ function validationResponse(message: string) {
     code: "validation_failed",
     message
   };
+}
+
+function recentAuthenticationRequired() {
+  return {
+    code: "recent_authentication_required",
+    message: "Authenticate again before changing wallet access"
+  };
+}
+
+function sessionRotationUnavailable(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  error: WalletAuthRepositoryConfigurationError
+) {
+  request.log.warn({ error }, "Application session rotation is not configured");
+  return reply.code(503).send({ code: "service_unavailable", message: "Application session rotation is unavailable" });
 }

@@ -3,7 +3,7 @@ import type { FastifyRequest } from "fastify";
 import { readIdempotencyKey } from "../../shared/idempotency.js";
 import type { AgeRepository } from "../age/types.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
-import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
+import type { SessionRepository, ApplicationSessionVerifier } from "../session/types.js";
 import type {
   MutualsInterestRequest,
   MutualsRepository,
@@ -11,7 +11,7 @@ import type {
 } from "./types.js";
 
 export interface RegisterMutualsRoutesOptions {
-  authVerifier: SupabaseAuthVerifier;
+  authVerifier: ApplicationSessionVerifier;
   sessionRepository: SessionRepository;
   ageRepository: AgeRepository;
   mutualsRepository: MutualsRepository;
@@ -50,7 +50,7 @@ export async function verifyMutualsAccess(
     options.ageRepository.findLatestAgeStatusBySupabaseUserId(verifiedSession.supabaseUserId)
   ]);
 
-  if (!profile?.handle || !profile.displayName || ageStatus.state !== "verified") {
+  if (profile?.state !== "active" || !profile.handle || !profile.displayName || ageStatus.state !== "verified") {
     return {
       ok: false,
       statusCode: 403,

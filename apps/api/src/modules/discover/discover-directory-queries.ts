@@ -167,6 +167,7 @@ export async function listLive(
     join users creator on creator.id = lr.creator_user_id
     join profiles p on p.user_id = creator.id
     where lr.state in ('waiting', 'live', 'replay_ready')
+      and creator.state = 'active'
       and (${input.cursor ?? null}::uuid is null or lr.id > ${input.cursor ?? null}::uuid)
     order by case lr.state when 'live' then 0 when 'waiting' then 1 else 2 end, lr.created_at desc
     limit ${input.limit + 1}

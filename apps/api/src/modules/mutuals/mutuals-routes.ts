@@ -44,9 +44,7 @@ export async function registerMutualsRoutes(
       return reply.code(400).send(validationResponse("consentVersion is required"));
     }
 
-    try {
-      await options.sessionRepository.ensureUserForSupabaseId(access.supabaseUserId);
-      const profile = await options.mutualsRepository.activate({
+    try {      const profile = await options.mutualsRepository.activate({
         supabaseUserId: access.supabaseUserId,
         consentVersion: body.consentVersion.trim()
       });

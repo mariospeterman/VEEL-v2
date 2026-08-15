@@ -959,4 +959,26 @@ describe("database migrations", () => {
     expect(downSql).toContain("drop table if exists managed_creator_relationships");
     expect(sql).not.toMatch(/creator_balance|withdrawal_queue|payout_queue|escrow|private_key|seed_phrase|mnemonic/i);
   });
+  it("adds canonical provider identities, opaque sessions, and one-use recovery intents", () => {
+    const sql = readMigration("0091_canonical_identity_session_security.sql");
+    const downSql = readMigration("0091_canonical_identity_session_security.down.sql");
+
+    expect(sql).toContain("create table user_provider_identities");
+    expect(sql).toContain("provider text not null check (provider = 'supabase')");
+    expect(sql).toContain("unique (provider, provider_subject)");
+    expect(sql).toContain("user_provider_identities_one_active_provider_idx");
+    expect(sql).toContain("alter table wallet_auth_sessions rename to app_sessions");
+    expect(sql).toContain("update users set supabase_user_id = id");
+    expect(sql).toContain("update app_sessions set authenticated_at = created_at");
+    expect(sql).toContain("token_hash");
+    expect(sql).toContain("create table recovery_link_intents");
+    expect(sql).toContain("profiles_handle_lower_unique");
+    expect(sql).toContain("profiles_handle_reserved_check");
+    expect(sql).toContain("profile handle case collisions must be resolved before migration");
+    expect(sql).toContain("invalid or reserved profile handles must be resolved before migration");
+    expect(sql).toContain("alter column visibility set default 'private'");
+    expect(downSql).toContain("alter table app_sessions rename to wallet_auth_sessions");
+    expect(sql).not.toContain("'privy'");
+    expect(sql).not.toMatch(/email\s*=|raw_payload|private_key|seed_phrase|mnemonic/i);
+  });
 });

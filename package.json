@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "packageManager": "pnpm@10.0.0",
   "scripts": {
+    "dev": "node --env-file-if-exists=.env scripts/run-development.mjs",
     "bootstrap": "corepack enable && corepack prepare pnpm@10.0.0 --activate && pnpm install --frozen-lockfile",
     "check": "pnpm docs:check && pnpm db:migrations:check && pnpm deploy:check && pnpm lint && pnpm typecheck && pnpm test",
     "doctor": "bash scripts/toolchain-doctor.sh",
@@ -40,6 +41,7 @@
     ],
     "overrides": {
       "axios@>=1.15.2 <1.18.0": "1.18.0",
+      "jayson@4.3.0>uuid": "11.1.1",
       "ws@>=8.0.0 <8.21.0": "8.21.3"
     }
   },

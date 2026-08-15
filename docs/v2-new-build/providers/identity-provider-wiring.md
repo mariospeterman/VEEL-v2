@@ -74,7 +74,7 @@ Current implementation state:
 
 - There is no generic Solana Mobile Wallet Adapter equivalent for iOS web in this repo. Current Solana Mobile Wallet Adapter web support is Android/Chrome-oriented.
 - iOS and macOS support should prefer wallet-standard/Safari Web Extension discovery where available. If the user has no wallet context, send them to the wallet's official install page or the Solana wallet directory, then return to the WeVid wallet chooser.
-- Privy is the selected iOS-safe embedded onboarding candidate once its Solana signing UX is verified on the production domain. Turnkey remains an unbundled ADR fallback.
+- Privy is the selected iOS-safe embedded onboarding candidate once its Solana signing UX is verified on the production domain. No parallel embedded-wallet provider is active.
 - When configured for staging, Privy login and teardown stay inside the official SDK boundary, including `logout`. Privy is not launch-approved until the production-domain checks below pass.
 
 ### Public web env
@@ -89,8 +89,8 @@ Current implementation state:
 
 - Email magic links use `verifyOtp({ token_hash, type })`.
 - Social/OAuth providers use PKCE and must exchange the returned `code` with `exchangeCodeForSession(code)` in `/auth/confirm`.
-- Supabase recovery auth is not a second account path. It links to an existing wallet-created account only after the browser proves both sessions: active wallet session token and Supabase bearer token. If the Supabase identity already belongs to another user row, the API returns conflict instead of merging profiles, wallets, age state, payments, creator KYC, or organization KYB.
-- Locked target: recovery is optional and primarily benefits external-wallet-only users. Privy users are not asked to repeat equivalent recovery setup. A short-lived backend linking intent and audited subject mapping must precede production enablement; matching email never authorizes a merge.
+- Supabase recovery auth is not a second account path. Linking begins from a recently authenticated WeVid session, issues a short-lived one-use HttpOnly intent, then verifies the Supabase subject on the server. If that subject belongs to another user, the API returns conflict instead of merging profiles, wallets, age state, payments, creator KYC, or organization KYB.
+- Recovery is optional and primarily benefits external-wallet-only users. Privy users are not asked to repeat equivalent recovery setup. Recovery login resolves an existing provider-subject mapping and rotates the canonical WeVid session; it never creates a user from a matching email.
 - Local preview on port `3008` requires the local web env and Supabase dashboard redirect allowlist to include `http://localhost:3008/auth/confirm` and, when testing through Playwright or `127.0.0.1`, `http://127.0.0.1:3008/auth/confirm`.
 
 ### Production rollout notes

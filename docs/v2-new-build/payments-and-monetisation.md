@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Solana Pay, monetisation, referrals
-Last updated: 2026-08-14
+Last updated: 2026-08-15
 Source of truth: yes
 
 Owns:
@@ -115,7 +115,15 @@ WeVid stays noncustodial:
 - backend verifies chain facts before granting access or recording final revenue
 - frontend wallet success is not final payment proof
 
-One-time WeVid digital products remain server-priced SOL/approved USDC intents with backend chain verification and entitlement truth. An onramp only funds the user-owned wallet and never grants access. Future Shopify physical commerce is DEFERRED and merchant-owned; it must not reuse these product intents, splits, entitlements, order/refund authority, or the assumed digital platform fee.
+One-time WeVid products remain server-priced SOL/approved USDC intents with backend chain verification. An onramp only funds the user-owned wallet and never grants access. Slice 06 will replace manual transaction-request URL construction with an exact-pinned `@solana-commerce/solana-pay` codec for standards-compliant encode/parse and QR/deep-link handoff. The package is not installed in Launch 01, and its callback, parser, QR, wallet state, or generic verifier can never confirm settlement or grant a domain outcome.
+
+The codec belongs inside the existing payment module and may expose only the URL parsing/encoding, validation, and safe QR behavior that WeVid needs. It must not introduce another wallet provider, RPC client, `PaymentButton`, checkout UI, payment intent, transaction composer, verifier, receipt, entitlement, order, referral, or KYC authority. The opaque short-lived checkout capability remains the transaction-request link; price, recipients, splits, entitlements, shipping addresses, private order data, and KYC state never enter user-controlled Solana Pay data. Commerce Kit types do not cross the adapter or become persisted truth.
+
+`@solana-commerce/kit`, `@solana-commerce/react`, `@solana-commerce/connector`, `@solana-commerce/sdk`, and `@solana-commerce/headless` are not initially selected dependencies. `@solana-commerce/headless` may be reconsidered only after a focused benchmark proves that a request-shaping primitive removes meaningful custom code without duplicating payment, checkout, cart, or order authority. Because Commerce Kit is pre-1.0 infrastructure, the installed version must be exact-pinned, tied to the reviewed upstream source, covered by parser round-trip/compatibility tests, and replaceable at the narrow adapter boundary.
+
+One reusable WeVid checkout presentation serves Support, content unlock, paid message, Event Access, paid live, and later physical products. Its shared state is `idle -> loading_quote -> review -> wallet_approval -> submitted -> confirming -> confirmed | failed_or_expired`; the backend owns every transition after intent creation. The browser shows one clear CTA, exact total/asset and product identity, cancellation/refund terms, direct approval through the current Privy/external wallet when available, and an accessible QR/deep-link fallback without blockchain jargon. Retry must reuse the existing intent where valid.
+
+Shared presentation does not collapse outcomes: Support creates a receipt only; content creates an entitlement; paid message follows its delivery entitlement; Event Access creates a Pass; paid live creates live/replay access; a future physical product creates a paid Order/Fulfillment state. The blockchain remains payment truth and each owning domain remains outcome truth.
 
 Required settlement ordering:
 
@@ -123,7 +131,7 @@ Required settlement ordering:
 confirmed chain evidence
   -> immutable compliance ledger entry
   -> receipt and VAT/invoice determination
-  -> entitlement/access/membership grant
+  -> product-specific outcome: receipt only, entitlement/pass/message delivery, membership, or paid order
   -> activity/admin projection
 ```
 

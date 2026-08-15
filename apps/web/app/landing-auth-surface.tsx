@@ -1,48 +1,31 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
-import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState, type ComponentType, type FormEvent } from "react";
 import { safeMutationMessage } from "@/api-errors";
 import {
   ApiMutationError,
   createAgeSession,
-  createVerificationSession,
-  createStarterProfile,
   getCurrentSession,
   updateMyProfile,
   uploadMyProfileAvatar
 } from "@/api-mutations";
-import { embeddedWalletProviderConfig } from "@/providers/onboarding-provider-config";
-import { readPublicWebEnv } from "@/public-env";
 import type { WebAuthState } from "@/supabase/auth-state";
-
-const SupabaseAuthPanel = dynamic(
-  () => import("@/supabase/supabase-auth-panel").then((mod) => mod.SupabaseAuthPanel),
-  { ssr: false }
-);
 
 type LandingWalletRuntimeProps = {
   authState: WebAuthState;
   onLinked?: ((address: string) => void) | undefined;
 };
 
-type ProfileLinkDraft = {
-  id: string;
-  label: string;
-  url: string;
-};
-
 const onboardingSteps = [
   {
     eyebrow: "1 / 3",
-    title: "Connect wallet",
-    copy: "Choose the wallet you want to use with WeVid."
+    title: "Wallet",
+    copy: "Continue with your account or connect an existing Solana wallet."
   },
   {
     eyebrow: "2 / 3",
     title: "Profile details",
-    copy: "Add public details now, or create a starter profile and edit it later."
+    copy: "Choose your unique handle. A display name and photo are optional."
   },
   {
     eyebrow: "3 / 3",
@@ -85,18 +68,9 @@ export function LandingAuthSurface({
 
 function LandingLoginForm({ authState }: { authState: WebAuthState }) {
   return (
-    <>
-      <div className="landing-auth-block">
-        <p>Wallet login</p>
-        <span>Choose a Solana wallet and sign once.</span>
-        <LandingWalletList authState={authState} />
-      </div>
-      <div className="landing-auth-block">
-        <p>Supabase auth</p>
-        <span>Email or social login for an account that already added Supabase auth.</span>
-        <SupabaseAuthPanel mode="login" />
-      </div>
-    </>
+    <div className="landing-auth-block">
+      <LandingWalletList authState={authState} />
+    </div>
   );
 }
 
@@ -150,25 +124,24 @@ function OnboardingWalletStep({ authState, onLinked }: { authState: WebAuthState
 }
 
 function LandingWalletList({ authState, onLinked }: { authState: WebAuthState; onLinked?: (address: string) => void }) {
-  const embeddedWallets = embeddedWalletProviderConfig(readPublicWebEnv());
   const [runtime, setRuntime] = useState<ComponentType<LandingWalletRuntimeProps> | null>(null);
-  const [loadingRuntime, setLoadingRuntime] = useState(false);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
 
-  async function loadWalletRuntime() {
-    if (runtime || loadingRuntime) return;
+  useEffect(() => {
+    let cancelled = false;
 
-    setRuntimeError(null);
-    setLoadingRuntime(true);
-    try {
-      const module = await import("./landing-wallet-runtime");
-      setRuntime(() => module.LandingWalletRuntime);
-    } catch {
-      setRuntimeError("Wallet providers could not load. Refresh and try again.");
-    } finally {
-      setLoadingRuntime(false);
-    }
-  }
+    void import("./landing-wallet-runtime")
+      .then((module) => {
+        if (!cancelled) setRuntime(() => module.LandingWalletRuntime);
+      })
+      .catch(() => {
+        if (!cancelled) setRuntimeError("Sign-in options could not load. Refresh and try again.");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (runtime) {
     const Runtime = runtime;
@@ -176,36 +149,9 @@ function LandingWalletList({ authState, onLinked }: { authState: WebAuthState; o
   }
 
   return (
-    <div className="landing-wallet-runtime" aria-label="Wallet providers" data-embedded={embeddedWallets.enabled ? "true" : "false"}>
-      <p className="landing-wallet-required">Required. Load wallet providers only when you are ready to connect and sign.</p>
-      <div className="landing-wallet-connect-row">
-        <button
-          aria-busy={loadingRuntime ? "true" : undefined}
-          className="landing-button landing-wallet-launch"
-          data-tone="primary"
-          disabled={loadingRuntime}
-          onClick={() => void loadWalletRuntime()}
-          type="button"
-        >
-          <strong>{loadingRuntime ? "Loading wallet providers" : "Connect wallet"}</strong>
-          <small>Solana ownership signature only</small>
-        </button>
-      </div>
-      <div className="landing-embedded-wallets" aria-label="Embedded wallet providers">
-        <div className="landing-embedded-label">
-          <p>Embedded wallet</p>
-          <span>{embeddedWallets.enabled ? "Available after wallet providers load." : "Provider login is waiting for runtime configuration."}</span>
-        </div>
-        <button
-          className="landing-provider-disabled"
-          disabled={!embeddedWallets.provider.configured || loadingRuntime}
-          onClick={embeddedWallets.provider.configured ? () => void loadWalletRuntime() : undefined}
-          type="button"
-        >
-          <strong>{embeddedWallets.provider.label}</strong>
-          <small>{embeddedWallets.provider.configured ? "Load provider" : "Not configured"}</small>
-        </button>
-      </div>
+    <div className="landing-wallet-runtime" aria-label="Sign-in options">
+      <p className="landing-wallet-required">Choose how to continue. Your wallet stays under your control.</p>
+      {!runtimeError ? <p className="landing-wallet-required" role="status">Loading sign-in options…</p> : null}
       {runtimeError ? <p className="landing-auth-error">{runtimeError}</p> : null}
     </div>
   );
@@ -216,8 +162,6 @@ function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [handle, setHandle] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [bio, setBio] = useState("");
-  const [links, setLinks] = useState<ProfileLinkDraft[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -232,22 +176,6 @@ function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
     return () => URL.revokeObjectURL(nextPreview);
   }, [avatarFile]);
 
-  function updateLink(id: string, patch: Partial<Omit<ProfileLinkDraft, "id">>) {
-    setLinks((current) => current.map((link) => (link.id === id ? { ...link, ...patch } : link)));
-  }
-
-  function addLink() {
-    setLinks((current) =>
-      current.length >= 3
-        ? current
-        : [...current, { id: crypto.randomUUID(), label: "", url: "" }]
-    );
-  }
-
-  function removeLink(id: string) {
-    setLinks((current) => current.filter((link) => link.id !== id));
-  }
-
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -255,19 +183,8 @@ function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
     const normalizedHandle = normalizeHandle(handle);
     const normalizedDisplayName = displayName.trim();
 
-    if (!normalizedHandle || !/^[a-zA-Z0-9_]{2,32}$/.test(normalizedHandle)) {
-      setError("Add a handle with 2-32 letters, numbers, or underscores.");
-      return;
-    }
-
-    if (!normalizedDisplayName) {
-      setError("Add a display name or use the starter profile.");
-      return;
-    }
-
-    const normalizedLinks = normalizeProfileLinks(links);
-    if (normalizedLinks instanceof Error) {
-      setError(normalizedLinks.message);
+    if (!normalizedHandle || !/^[a-z0-9_]{2,32}$/.test(normalizedHandle)) {
+      setError("Add a lowercase handle with 2-32 letters, numbers, or underscores.");
       return;
     }
 
@@ -276,26 +193,10 @@ function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
     try {
       const profilePayload = await buildProfilePayload({
         avatarFile,
-        bio,
         displayName: normalizedDisplayName,
-        handle: normalizedHandle,
-        links: normalizedLinks
+        handle: normalizedHandle
       });
       await updateMyProfile(profilePayload);
-      await continueFromProfile();
-    } catch (reason) {
-      setError(reason instanceof Error && !(reason instanceof ApiMutationError) ? reason.message : safeMutationMessage(reason, "Profile setup"));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function createStarter() {
-    setError(null);
-    setSubmitting(true);
-
-    try {
-      await createStarterProfile();
       await continueFromProfile();
     } catch (reason) {
       setError(reason instanceof Error && !(reason instanceof ApiMutationError) ? reason.message : safeMutationMessage(reason, "Profile setup"));
@@ -319,7 +220,7 @@ function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
     }
 
     if (reason === "identity_required") {
-      setError("Handle and display name are required before entering WeVid.");
+      setError("Choose a handle before entering WeVid.");
       return;
     }
 
@@ -369,85 +270,23 @@ function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
               value={displayName}
             />
           </label>
-          <label className="landing-form-wide">
-            <span>Bio</span>
-            <textarea
-              name="bio"
-              onChange={(event) => setBio(event.target.value)}
-              placeholder="Short creator bio"
-              rows={3}
-              value={bio}
-            />
-          </label>
-        </div>
-        <div className="landing-profile-links" aria-label="Profile links">
-          <div className="landing-profile-links-header">
-            <p>Links</p>
-            <button aria-label="Add profile link" disabled={links.length >= 3} onClick={addLink} type="button">
-              <Plus aria-hidden="true" size={14} />
-            </button>
-          </div>
-          {links.length > 0 ? (
-            <div className="landing-profile-link-list">
-              {links.map((link, index) => (
-                <div className="landing-profile-link-row" key={link.id}>
-                  <input
-                    aria-label={`Link ${index + 1} label`}
-                    onChange={(event) => updateLink(link.id, { label: event.target.value })}
-                    placeholder="Website"
-                    type="text"
-                    value={link.label}
-                  />
-                  <input
-                    aria-label={`Link ${index + 1} URL`}
-                    inputMode="url"
-                    onChange={(event) => updateLink(link.id, { url: event.target.value })}
-                    placeholder="https://..."
-                    type="url"
-                    value={link.url}
-                  />
-                  <button
-                    aria-label={`Remove link ${index + 1}`}
-                    onClick={() => removeLink(link.id)}
-                    type="button"
-                  >
-                    <Trash2 aria-hidden="true" size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="landing-profile-empty">Add links later or use + for up to 3 now.</p>
-          )}
         </div>
         <div className="landing-step-actions">
           <button className="landing-button" data-tone="primary" disabled={submitting} type="submit">
             {submitting ? "Saving" : "Save and continue"}
           </button>
-          <button className="landing-inline-link" disabled={submitting} onClick={() => void createStarter()} type="button">
-            Create starter profile
-          </button>
         </div>
       </form>
-      <details className="landing-auth-block landing-supabase-auth-toggle">
-        <summary>
-          <span>Supabase auth</span>
-          <small>Optional email or social login</small>
-        </summary>
-        <SupabaseAuthPanel mode="profile" next="/?mode=onboarding&step=profile" />
-      </details>
       {error ? <p className="landing-auth-error">{error}</p> : null}
     </>
   );
 }
 
 function OnboardingAgeStep() {
-  const [startingAction, setStartingAction] = useState<"age" | "adult" | "return" | null>(null);
+  const [startingAction, setStartingAction] = useState<"age" | "return" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [canContinue, setCanContinue] = useState(false);
-  const [adultIntent, setAdultIntent] = useState(false);
-  const [adultTermsAccepted, setAdultTermsAccepted] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -521,32 +360,6 @@ function OnboardingAgeStep() {
     }
   }
 
-  async function startAdultCreatorVerification() {
-    if (!adultTermsAccepted) {
-      setError("Accept the Adult Publisher Terms to continue.");
-      return;
-    }
-
-    setStartingAction("adult");
-    setMessage(null);
-    setError(null);
-    setCanContinue(false);
-    try {
-      const session = await createVerificationSession({
-        purpose: "adult_publisher_eligibility",
-        providerPreference: "provider_first",
-        source: "onboarding",
-        adultPublisherTermsAccepted: true
-      });
-      setMessage("Opening one secure identity and age check. WeVid stores only the result.");
-      window.location.assign(session.launchUrl);
-    } catch (reason) {
-      setError(safeMutationMessage(reason, "Adult creator verification"));
-    } finally {
-      setStartingAction(null);
-    }
-  }
-
   async function continueToWeVid() {
     setStartingAction("return");
     setError(null);
@@ -597,29 +410,6 @@ function OnboardingAgeStep() {
             <strong>{startingAction === "age" ? "Opening age check" : "Verify age"}</strong>
           </button>
         </div>
-        <label className="landing-adult-intent">
-          <input
-            checked={adultIntent}
-            onChange={(event) => {
-              setAdultIntent(event.target.checked);
-              setAdultTermsAccepted(false);
-              setError(null);
-            }}
-            type="checkbox"
-          />
-          <span><strong>I plan to publish adult content</strong><small>Optional. Complete identity and age once now, or do it later when you publish.</small></span>
-        </label>
-        {adultIntent ? (
-          <div className="landing-adult-verification">
-            <label>
-              <input checked={adultTermsAccepted} onChange={(event) => setAdultTermsAccepted(event.target.checked)} type="checkbox" />
-              <span>I am 18+ and agree to the Adult Publisher Terms.</span>
-            </label>
-            <button className="landing-button" disabled={startingAction !== null || !adultTermsAccepted} onClick={() => void startAdultCreatorVerification()} type="button">
-              <strong>{startingAction === "adult" ? "Opening identity check" : "Verify identity and age"}</strong>
-            </button>
-          </div>
-        ) : null}
       </div>
       {message ? <p className="landing-auth-message">{message}</p> : null}
       {error ? <p className="landing-auth-error">{error}</p> : null}
@@ -637,51 +427,24 @@ function shortAddress(address: string) {
 }
 
 function normalizeHandle(value: string) {
-  return value.trim().replace(/^@+/, "");
-}
-
-function normalizeProfileLinks(links: ProfileLinkDraft[]) {
-  const normalized = links
-    .map((link) => ({
-      label: link.label.trim(),
-      url: link.url.trim()
-    }))
-    .filter((link) => link.label || link.url);
-
-  for (const link of normalized) {
-    if (!link.label || !link.url) {
-      return new Error("Complete both label and URL for each link, or remove the row.");
-    }
-
-    if (!link.url.startsWith("https://")) {
-      return new Error("Profile links must start with https://");
-    }
-  }
-
-  return normalized;
+  return value.trim().replace(/^@+/, "").toLowerCase();
 }
 
 async function buildProfilePayload({
   avatarFile,
-  bio,
   displayName,
-  handle,
-  links
+  handle
 }: {
   avatarFile: File | null;
-  bio: string;
   displayName: string;
   handle: string;
-  links: Array<{ label: string; url: string }>;
 }) {
   const avatarUrl = avatarFile ? await uploadAvatarFile(avatarFile) : null;
 
   return {
     ...(avatarUrl ? { avatarUrl } : {}),
-    ...(bio.trim() ? { bio: bio.trim() } : {}),
-    displayName,
-    handle,
-    links
+    ...(displayName ? { displayName } : {}),
+    handle
   };
 }
 

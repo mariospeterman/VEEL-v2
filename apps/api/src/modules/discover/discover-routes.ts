@@ -1,13 +1,13 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AgeRepository } from "../age/types.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
-import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
+import type { SessionRepository, ApplicationSessionVerifier } from "../session/types.js";
 import type { WalletRepository } from "../wallet/types.js";
 import { DiscoverRepositoryConfigurationError } from "./discover-repository.js";
 import type { DiscoverRepository } from "./types.js";
 
 interface RegisterDiscoverRoutesOptions {
-  authVerifier: SupabaseAuthVerifier;
+  authVerifier: ApplicationSessionVerifier;
   sessionRepository: SessionRepository;
   ageRepository: AgeRepository;
   walletRepository: WalletRepository;
@@ -175,7 +175,7 @@ async function verifyDiscoverAccess(
     options.walletRepository.hasWalletBySupabaseUserId(verifiedSession.supabaseUserId)
   ]);
 
-  if (!profile?.handle || !profile.displayName || ageStatus.state !== "verified" || !hasWallet) {
+  if (profile?.state !== "active" || !profile.handle || !profile.displayName || ageStatus.state !== "verified" || !hasWallet) {
     return {
       ok: false,
       statusCode: 403,

@@ -71,8 +71,13 @@ function assertProductionProviderSafety() {
     throw new Error("Production readiness is blocked: PAYMENT_USDC_MINT is required for USDC settlement.");
   }
 
-  if (process.env.API_RATE_LIMIT_STORE_DRIVER !== "external") {
-    throw new Error("Production readiness is blocked: API_RATE_LIMIT_STORE_DRIVER must select a configured distributed adapter.");
+  const rateLimitStoreDriver = process.env.API_RATE_LIMIT_STORE_DRIVER;
+  if (rateLimitStoreDriver !== "redis") {
+    throw new Error("Production readiness is blocked: API_RATE_LIMIT_STORE_DRIVER must select the implemented Redis adapter.");
+  }
+
+  if (!process.env.API_RATE_LIMIT_REDIS_URL) {
+    throw new Error("Production readiness is blocked: API_RATE_LIMIT_REDIS_URL is required when Redis rate limiting is selected.");
   }
 
   if (process.env.LIVEPEER_ADULT_LIVE_ENABLED === "true") {

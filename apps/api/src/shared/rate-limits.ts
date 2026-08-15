@@ -1,4 +1,5 @@
 import type { RouteShorthandOptions } from "fastify";
+import { contractRouteSchema } from "./openapi-route-schema.js";
 
 type MutationRateLimitPreset =
   | "walletMutation"
@@ -25,8 +26,12 @@ const mutationRateLimitPresets: Record<
   adminMutation: { max: 30, timeWindow: "1 minute" }
 };
 
-export function mutationRateLimit(preset: MutationRateLimitPreset): RouteShorthandOptions {
+export function mutationRateLimit(
+  preset: MutationRateLimitPreset,
+  operationId?: string
+): RouteShorthandOptions {
   return {
+    ...(operationId ? { schema: contractRouteSchema(operationId) } : {}),
     config: {
       rateLimit: mutationRateLimitPresets[preset]
     }

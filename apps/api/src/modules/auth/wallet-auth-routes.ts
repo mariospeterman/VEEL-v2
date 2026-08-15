@@ -1,70 +1,52 @@
 import { randomBytes } from "node:crypto";
-import type { FastifyInstance } from "fastify";
+import type { components } from "@veel/contracts";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { mutationRateLimit } from "../../shared/rate-limits.js";
 import {
   extractBearerToken,
   extractCookieToken,
+  extractRequestSessionToken,
+  hasRecentAuthentication,
+  recoveryLinkIntentCookieName,
   unauthorizedResponse,
   walletSessionCookieName
 } from "./http-auth.js";
-import type { SupabaseAuthVerifier } from "../session/types.js";
+import { SupabaseAuthConfigurationError } from "../session/supabase-auth.js";
+import type {
+  ApplicationSessionVerifier,
+  RecoveryIdentityVerifier
+} from "../session/types.js";
 import {
   buildWalletLinkMessage,
   hashNonce,
   verifySolanaMessageSignature
 } from "../wallet/wallet-route-utils.js";
-import type { WalletChain, WalletProvider } from "../wallet/types.js";
 import {
   WalletAuthChallengeInvalidError,
   WalletAuthRepositoryConfigurationError,
+  WalletRecoveryCredentialRequiredError,
   WalletRecoveryLinkConflictError,
   type WalletAuthRepository
 } from "./wallet-auth-repository.js";
 
 interface RegisterWalletAuthRoutesOptions {
-  authVerifier: SupabaseAuthVerifier;
+  authVerifier: ApplicationSessionVerifier;
+  recoveryIdentityVerifier: RecoveryIdentityVerifier;
   walletAuthRepository: WalletAuthRepository;
 }
 
-interface CreateWalletAuthChallengeRequest {
-  chain: WalletChain;
-  provider: WalletProvider;
-  address: string;
-}
-
-interface CreateWalletAuthSessionRequest {
-  provider: WalletProvider;
-  address: string;
-  chain: WalletChain;
-  proof: {
-    challengeId: string;
-    message: string;
-    signature: string;
-    signatureEncoding: "base58" | "base64";
-  };
-}
-
-type LinkSupabaseRecoveryRequest = Record<string, never>;
+type CreateWalletAuthChallengeRequest = components["schemas"]["CreateWalletAuthChallengeRequest"];
+type CreateWalletAuthSessionRequest = components["schemas"]["CreateWalletAuthSessionRequest"];
 
 const walletAuthChallengeTtlMs = 10 * 60 * 1000;
+const recoveryLinkIntentTtlMs = 10 * 60 * 1000;
 
 export async function registerWalletAuthRoutes(
   app: FastifyInstance,
   options: RegisterWalletAuthRoutesOptions
 ): Promise<void> {
-  app.post("/v1/auth/wallet/challenges", mutationRateLimit("walletMutation"), async (request, reply) => {
-    if (!request.headers["idempotency-key"]) {
-      return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
-    }
-
-    const body = request.body as CreateWalletAuthChallengeRequest | undefined;
-    const validationError = validateWalletAuthChallengeRequest(body);
-
-    if (validationError) {
-      return reply.code(400).send(validationResponse(validationError));
-    }
-
-    const challengeBody = body as CreateWalletAuthChallengeRequest;
+  app.post<{ Body: CreateWalletAuthChallengeRequest }>("/v1/auth/wallet/challenges", mutationRateLimit("walletMutation", "createWalletAuthChallenge"), async (request, reply) => {
+    const challengeBody = request.body;
     const nonce = randomBytes(18).toString("base64url");
     const issuedAt = new Date();
     const expiresAt = new Date(issuedAt.getTime() + walletAuthChallengeTtlMs);
@@ -106,19 +88,8 @@ export async function registerWalletAuthRoutes(
     }
   });
 
-  app.post("/v1/auth/wallet/sessions", mutationRateLimit("walletMutation"), async (request, reply) => {
-    if (!request.headers["idempotency-key"]) {
-      return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
-    }
-
-    const body = request.body as CreateWalletAuthSessionRequest | undefined;
-    const validationError = validateWalletAuthSessionRequest(body);
-
-    if (validationError) {
-      return reply.code(400).send(validationResponse(validationError));
-    }
-
-    const sessionBody = body as CreateWalletAuthSessionRequest;
+  app.post<{ Body: CreateWalletAuthSessionRequest }>("/v1/auth/wallet/sessions", mutationRateLimit("walletMutation", "createWalletAuthSession"), async (request, reply) => {
+    const sessionBody = request.body;
 
     try {
       const challenge = await options.walletAuthRepository.findChallenge({
@@ -178,11 +149,7 @@ export async function registerWalletAuthRoutes(
     }
   });
 
-  app.post("/v1/auth/wallet/logout", mutationRateLimit("walletMutation"), async (request, reply) => {
-    if (!request.headers["idempotency-key"]) {
-      return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
-    }
-
+  app.post("/v1/auth/wallet/logout", mutationRateLimit("walletMutation", "revokeWalletAuthSession"), async (request, reply) => {
     const token = extractCookieToken(request.headers.cookie, walletSessionCookieName);
 
     try {
@@ -192,7 +159,10 @@ export async function registerWalletAuthRoutes(
 
       reply.header(
         "set-cookie",
-        expiredWalletSessionCookie(app.config.WALLET_AUTH_COOKIE_DOMAIN)
+        [
+          expiredWalletSessionCookie(app.config.WALLET_AUTH_COOKIE_DOMAIN),
+          expiredRecoveryIntentCookie(app.config.WALLET_AUTH_COOKIE_DOMAIN)
+        ]
       );
       return reply.code(204).send();
     } catch (error) {
@@ -208,133 +178,140 @@ export async function registerWalletAuthRoutes(
     }
   });
 
-  app.post("/v1/auth/recovery-link", mutationRateLimit("walletMutation"), async (request, reply) => {
-    if (!request.headers["idempotency-key"]) {
-      return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
-    }
-
-    const bearerToken = extractBearerToken(request.headers.authorization);
-
-    if (!bearerToken) {
-      return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
-    }
-
-    const verifiedSession = await options.authVerifier.verifyBearerToken(bearerToken);
+  app.post("/v1/auth/sessions/logout-all", mutationRateLimit("walletMutation", "revokeAllApplicationSessions"), async (request, reply) => {
+    const sessionToken = extractRequestSessionToken(request);
+    const verifiedSession = sessionToken ? await options.authVerifier.verifyToken(sessionToken) : null;
 
     if (!verifiedSession) {
-      return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
+      return reply.code(401).send(unauthorizedResponse("Application session is missing or expired"));
     }
-
-    const body = request.body as LinkSupabaseRecoveryRequest | undefined;
-    const validationError = validateRecoveryLinkRequest(body);
-
-    if (validationError) {
-      return reply.code(400).send(validationResponse(validationError));
+    if (!hasRecentAuthentication(verifiedSession.authenticatedAt)) {
+      return reply.code(403).send({
+        code: "recent_authentication_required",
+        message: "Authenticate again before logging out every device"
+      });
     }
 
     try {
-      const walletSessionToken = extractCookieToken(
-        request.headers.cookie,
-        walletSessionCookieName
+      await options.walletAuthRepository.revokeAllSessions({
+        userId: verifiedSession.userId,
+        actorUserId: verifiedSession.userId,
+        reason: "user_logout_all"
+      });
+      reply.header("set-cookie", [
+        expiredWalletSessionCookie(app.config.WALLET_AUTH_COOKIE_DOMAIN),
+        expiredRecoveryIntentCookie(app.config.WALLET_AUTH_COOKIE_DOMAIN)
+      ]);
+      return reply.code(204).send();
+    } catch (error) {
+      return handleRepositoryError(request, reply, error);
+    }
+  });
+
+  app.post("/v1/auth/recovery/link-intents", mutationRateLimit("walletMutation", "createRecoveryLinkIntent"), async (request, reply) => {
+    const sessionToken = extractRequestSessionToken(request);
+    const verifiedSession = sessionToken
+      ? await options.authVerifier.verifyToken(sessionToken)
+      : null;
+    if (!verifiedSession) return reply.code(401).send(unauthorizedResponse("Application session is missing or expired"));
+    if (!hasRecentAuthentication(verifiedSession.authenticatedAt)) {
+      return reply.code(403).send({ code: "recent_authentication_required", message: "Authenticate again before changing recovery access" });
+    }
+
+    try {
+      const intent = await options.walletAuthRepository.createRecoveryLinkIntent({
+        sessionToken: sessionToken as string,
+        expiresAt: new Date(Date.now() + recoveryLinkIntentTtlMs)
+      });
+      reply.header(
+        "set-cookie",
+        recoveryIntentCookie(
+          intent.token,
+          intent.expiresAt,
+          app.config.WALLET_AUTH_COOKIE_DOMAIN
+        )
       );
-
-      if (!walletSessionToken) {
-        return reply.code(401).send(unauthorizedResponse("Wallet session is missing or expired"));
-      }
-
-      await options.walletAuthRepository.linkSupabaseRecovery({
-        walletSessionToken,
-        supabaseUserId: verifiedSession.supabaseUserId
-      });
-
-      return reply.code(200).send({
-        state: "linked",
-        provider: "supabase"
-      });
+      return reply.code(201).send({ expiresAt: intent.expiresAt.toISOString() });
     } catch (error) {
       if (error instanceof WalletAuthChallengeInvalidError) {
-        return reply.code(401).send(unauthorizedResponse("Wallet session is missing or expired"));
+        return reply.code(401).send(unauthorizedResponse("Application session is missing or expired"));
+      }
+      return handleRepositoryError(request, reply, error);
+    }
+  });
+
+  app.post("/v1/auth/recovery/exchange", mutationRateLimit("walletMutation", "exchangeRecoveryIdentity"), async (request, reply) => {
+    const recoveryToken = extractBearerToken(request.headers.authorization);
+    if (!recoveryToken) return reply.code(401).send(unauthorizedResponse("Recovery credential is missing or invalid"));
+
+    try {
+      const recoveryIdentity = await options.recoveryIdentityVerifier.verifyToken(recoveryToken);
+      if (!recoveryIdentity) return reply.code(401).send(unauthorizedResponse("Recovery credential is missing or invalid"));
+
+      const linkIntentToken = extractCookieToken(request.headers.cookie, recoveryLinkIntentCookieName);
+      const session = await options.walletAuthRepository.exchangeRecoveryIdentity({
+        provider: recoveryIdentity.provider,
+        providerSubject: recoveryIdentity.providerSubject,
+        ...(linkIntentToken ? { linkIntentToken } : {}),
+        sessionExpiresAt: new Date(Date.now() + app.config.WALLET_AUTH_SESSION_TTL_SECONDS * 1000)
+      });
+      reply.header("set-cookie", [
+        walletSessionCookie(session.accessToken, session.expiresAt, app.config.WALLET_AUTH_COOKIE_DOMAIN),
+        expiredRecoveryIntentCookie(app.config.WALLET_AUTH_COOKIE_DOMAIN)
+      ]);
+      return reply.code(200).send({ expiresAt: session.expiresAt.toISOString() });
+    } catch (error) {
+      if (error instanceof SupabaseAuthConfigurationError) {
+        request.log.warn({ error }, "Recovery identity verification is not configured");
+        return reply.code(503).send({ code: "provider_unavailable", message: "Recovery identity verification is unavailable" });
+      }
+      if (error instanceof WalletAuthChallengeInvalidError) {
+        return reply.code(401).send(unauthorizedResponse("Recovery exchange is invalid or expired"));
       }
 
       if (error instanceof WalletRecoveryLinkConflictError) {
         return reply.code(409).send({
           code: "conflict",
-          message: "Supabase recovery is already linked to another WeVid account"
+          message: "Recovery identity is already linked to another WeVid account"
         });
       }
 
-      if (error instanceof WalletAuthRepositoryConfigurationError) {
-        request.log.warn({ error }, "Wallet auth repository is not configured");
-        return reply.code(503).send({
-          code: "provider_unavailable",
-          message: "Wallet auth storage is not configured"
+      return handleRepositoryError(request, reply, error);
+    }
+  });
+
+  app.post("/v1/auth/recovery/unlink", mutationRateLimit("walletMutation", "unlinkRecoveryIdentity"), async (request, reply) => {
+    const sessionToken = extractRequestSessionToken(request);
+    const verifiedSession = sessionToken ? await options.authVerifier.verifyToken(sessionToken) : null;
+    if (!verifiedSession) return reply.code(401).send(unauthorizedResponse("Application session is missing or expired"));
+    if (!hasRecentAuthentication(verifiedSession.authenticatedAt)) {
+      return reply.code(403).send({ code: "recent_authentication_required", message: "Authenticate again before changing recovery access" });
+    }
+
+    try {
+      const session = await options.walletAuthRepository.unlinkRecoveryIdentity({
+        sessionToken: sessionToken as string,
+        provider: "supabase"
+      });
+      reply.header("set-cookie", walletSessionCookie(session.accessToken, session.expiresAt, app.config.WALLET_AUTH_COOKIE_DOMAIN));
+      return reply.code(200).send({ expiresAt: session.expiresAt.toISOString() });
+    } catch (error) {
+      if (error instanceof WalletAuthChallengeInvalidError) {
+        return reply.code(401).send(unauthorizedResponse("Application session is missing or expired"));
+      }
+      if (error instanceof WalletRecoveryCredentialRequiredError) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: "Link a wallet before removing your only recovery method"
         });
       }
 
-      throw error;
+      return handleRepositoryError(request, reply, error);
     }
   });
 }
 
-function validateWalletAuthChallengeRequest(
-  body: CreateWalletAuthChallengeRequest | undefined
-): string | null {
-  if (!body || typeof body !== "object") {
-    return "Request body is required";
-  }
-
-  if (!isWalletChain(body.chain)) {
-    return "Unsupported wallet chain";
-  }
-
-  if (!isWalletProvider(body.provider)) {
-    return "Unsupported wallet provider";
-  }
-
-  if (typeof body.address !== "string" || body.address.length < 32 || body.address.length > 64) {
-    return "Invalid Solana wallet address";
-  }
-
-  return null;
-}
-
-function validateWalletAuthSessionRequest(
-  body: CreateWalletAuthSessionRequest | undefined
-): string | null {
-  const challengeError = validateWalletAuthChallengeRequest(body);
-
-  if (challengeError) {
-    return challengeError;
-  }
-
-  if (!body?.proof || typeof body.proof !== "object") {
-    return "Wallet auth proof is required";
-  }
-
-  if (!body.proof.challengeId || !body.proof.message || !body.proof.signature) {
-    return "Wallet auth proof is incomplete";
-  }
-
-  if (body.proof.signatureEncoding !== "base58" && body.proof.signatureEncoding !== "base64") {
-    return "Unsupported wallet signature encoding";
-  }
-
-  return null;
-}
-
-function validateRecoveryLinkRequest(body: LinkSupabaseRecoveryRequest | undefined): string | null {
-  if (body !== undefined && (!body || typeof body !== "object")) {
-    return "Request body must be an object";
-  }
-
-  if (body && Object.keys(body).length > 0) {
-    return "Request body must be empty";
-  }
-
-  return null;
-}
-
-function walletSessionCookie(token: string, expiresAt: Date, domain?: string) {
+export function walletSessionCookie(token: string, expiresAt: Date, domain?: string) {
   const maxAge = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
   const parts = [
     `${walletSessionCookieName}=${encodeURIComponent(token)}`,
@@ -355,6 +332,37 @@ function walletSessionCookie(token: string, expiresAt: Date, domain?: string) {
   return parts.join("; ");
 }
 
+function recoveryIntentCookie(token: string, expiresAt: Date, domain?: string) {
+  const maxAge = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
+  return serializeRecoveryIntentCookie(encodeURIComponent(token), maxAge, domain);
+}
+
+function expiredRecoveryIntentCookie(domain?: string) {
+  return serializeRecoveryIntentCookie("", 0, domain);
+}
+
+function serializeRecoveryIntentCookie(value: string, maxAge: number, domain?: string) {
+  const parts = [
+    `${recoveryLinkIntentCookieName}=${value}`,
+    "Path=/",
+    `Max-Age=${maxAge}`,
+    "HttpOnly",
+    "SameSite=Lax"
+  ];
+
+  if (domain) parts.push(`Domain=${domain}`);
+  if (process.env.NODE_ENV === "production") parts.push("Secure");
+  return parts.join("; ");
+}
+
+function handleRepositoryError(request: FastifyRequest, reply: FastifyReply, error: unknown) {
+  if (error instanceof WalletAuthRepositoryConfigurationError) {
+    request.log.warn({ error }, "Wallet auth repository is not configured");
+    return reply.code(503).send({ code: "provider_unavailable", message: "Application session storage is not configured" });
+  }
+  throw error;
+}
+
 function expiredWalletSessionCookie(domain?: string) {
   const parts = [
     `${walletSessionCookieName}=`,
@@ -373,20 +381,6 @@ function expiredWalletSessionCookie(domain?: string) {
   }
 
   return parts.join("; ");
-}
-
-function isWalletChain(value: string): value is WalletChain {
-  return value === "solana_devnet" || value === "solana_mainnet";
-}
-
-function isWalletProvider(value: string): value is WalletProvider {
-  return (
-    value === "embedded_privy" ||
-    value === "embedded_turnkey" ||
-    value === "phantom" ||
-    value === "solflare" ||
-    value === "wallet_adapter"
-  );
 }
 
 function validationResponse(message: string) {

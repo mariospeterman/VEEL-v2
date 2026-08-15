@@ -107,7 +107,7 @@ for (const match of openapi.matchAll(/^  (\/[^\n:]+):|^    (get|post|patch|put|d
 const fastifyOperations = new Set();
 for (const file of apiRouteFiles) {
   const text = readFileSync(file, "utf8");
-  for (const match of text.matchAll(/app\.(get|post|patch|put|delete)\(\s*["'`](\/v1\/[A-Za-z0-9{}:_/-]+)["'`]/g)) {
+  for (const match of text.matchAll(/app\.(get|post|patch|put|delete)(?:<[^>]+>)?\(\s*["'`](\/v1\/[A-Za-z0-9{}:_/-]+)["'`]/g)) {
     fastifyOperations.add(`${match[1].toUpperCase()} ${normalizePath(match[2])}`);
   }
 }
@@ -281,7 +281,15 @@ for (const [, path, block] of pathBlocks) {
     const hasCheckoutCapabilityPolicy = methodBlock.includes(
       "x-idempotency-policy: checkout-capability"
     );
-    if (!hasRequiredIdempotencyKey && !hasCheckoutCapabilityPolicy && !path.includes("/webhooks/")) {
+    const hasSingleUseAuthProofPolicy = methodBlock.includes(
+      "x-idempotency-policy: single-use-auth-proof"
+    );
+    if (
+      !hasRequiredIdempotencyKey &&
+      !hasCheckoutCapabilityPolicy &&
+      !hasSingleUseAuthProofPolicy &&
+      !path.includes("/webhooks/")
+    ) {
       criticalMethodsMissingRequiredIdempotency.push(`${methodMatch[1].toUpperCase()} ${path}`);
     }
   }

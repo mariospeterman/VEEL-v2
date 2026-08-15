@@ -106,7 +106,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/auth/recovery-link": {
+    "/v1/auth/sessions/logout-all": {
         parameters: {
             query?: never;
             header?: never;
@@ -115,8 +115,59 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Link a Supabase recovery identity to a wallet-created WeVid account */
-        post: operations["linkSupabaseRecovery"];
+        /** Revoke every application session after recent authentication */
+        post: operations["revokeAllApplicationSessions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/recovery/link-intents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a short-lived recovery-link intent for the current recent application session */
+        post: operations["createRecoveryLinkIntent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/recovery/exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Exchange an explicit Supabase recovery credential for a rotated WeVid application session */
+        post: operations["exchangeRecoveryIdentity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/recovery/unlink": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unlink Supabase recovery and rotate the current WeVid application session */
+        post: operations["unlinkRecoveryIdentity"];
         delete?: never;
         options?: never;
         head?: never;
@@ -310,23 +361,6 @@ export interface paths {
         patch: operations["updateMyProfile"];
         trace?: never;
     };
-    "/v1/profiles/me/starter": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create a backend-owned starter profile for onboarding */
-        post: operations["createStarterProfile"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/profiles/me/avatar": {
         parameters: {
             query?: never;
@@ -387,6 +421,23 @@ export interface paths {
         };
         /** Public profile by handle */
         get: operations["getProfileByHandle"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/profiles/handles/{handle}/availability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Check normalized handle availability; database uniqueness remains authoritative */
+        get: operations["getProfileHandleAvailability"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2912,7 +2963,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "unauthorized" | "forbidden" | "not_found" | "validation_failed" | "rate_limited" | "conflict" | "idempotency_conflict" | "provider_unavailable" | "payment_not_confirmed" | "webhook_signature_invalid";
+        ErrorCode: "unauthorized" | "forbidden" | "not_found" | "validation_failed" | "rate_limited" | "conflict" | "idempotency_conflict" | "provider_unavailable" | "service_unavailable" | "recent_authentication_required" | "payment_not_confirmed" | "webhook_signature_invalid";
         ErrorResponse: {
             code: components["schemas"]["ErrorCode"];
             message: string;
@@ -2960,7 +3011,7 @@ export interface components {
              * @default create
              * @enum {string}
              */
-            source: "onboarding" | "create" | "earnings" | "organization";
+            source: "create" | "earnings" | "organization";
             /** @default false */
             adultPublisherTermsAccepted: boolean;
         };
@@ -3020,11 +3071,11 @@ export interface components {
             chain: "solana_devnet" | "solana_mainnet";
             address: string;
             /** @enum {string} */
-            provider: "embedded_privy" | "embedded_turnkey" | "phantom" | "solflare" | "wallet_adapter";
+            provider: "embedded_privy" | "phantom" | "solflare" | "wallet_adapter";
             isPrimary: boolean;
         };
         /** @enum {string} */
-        WalletProvider: "embedded_privy" | "embedded_turnkey" | "phantom" | "solflare" | "wallet_adapter";
+        WalletProvider: "embedded_privy" | "phantom" | "solflare" | "wallet_adapter";
         /** @enum {string} */
         ExternalWalletProvider: "phantom" | "solflare" | "wallet_adapter";
         CreateWalletAuthChallengeRequest: {
@@ -3064,12 +3115,13 @@ export interface components {
             expiresAt: string;
             wallet: components["schemas"]["Wallet"];
         };
-        LinkSupabaseRecoveryRequest: Record<string, never>;
-        AuthRecoveryLink: {
-            /** @enum {string} */
-            state: "linked";
-            /** @enum {string} */
-            provider: "supabase";
+        ApplicationSessionExpiry: {
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        HandleAvailability: {
+            handle: string;
+            available: boolean;
         };
         CreateWalletLinkChallengeRequest: {
             /** @enum {string} */
@@ -3216,7 +3268,7 @@ export interface components {
         };
         UpdateProfileRequest: {
             handle: string;
-            displayName: string;
+            displayName?: string;
             /** Format: uri */
             avatarUrl?: string | null;
             bio?: string;
@@ -5313,6 +5365,15 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
+        /** @description Rate limited */
+        RateLimited: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
         /** @description Not implemented */
         NotImplemented: {
             headers: {
@@ -5324,15 +5385,6 @@ export interface components {
         };
         /** @description Service unavailable */
         ServiceUnavailable: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description Rate limited */
-        RateLimited: {
             headers: {
                 [name: string]: unknown;
             };
@@ -5412,13 +5464,22 @@ export interface components {
                 "application/json": components["schemas"]["WalletAuthSession"];
             };
         };
-        /** @description Recovery identity link result */
-        AuthRecoveryLink: {
+        /** @description Rotated application session expiry; opaque token is set only as HttpOnly cookie */
+        ApplicationSessionExpiry: {
             headers: {
                 [name: string]: unknown;
             };
             content: {
-                "application/json": components["schemas"]["AuthRecoveryLink"];
+                "application/json": components["schemas"]["ApplicationSessionExpiry"];
+            };
+        };
+        /** @description Normalized handle availability */
+        HandleAvailability: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["HandleAvailability"];
             };
         };
         /** @description Wallet link challenge */
@@ -6586,7 +6647,7 @@ export interface components {
         };
     };
     parameters: {
-        /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+        /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
         RequiredIdempotencyKey: string;
         /** @description Optional idempotency key for non-critical replay-safe requests. */
         OptionalIdempotencyKey: string;
@@ -6647,11 +6708,6 @@ export interface components {
         CreateWalletAuthSession: {
             content: {
                 "application/json": components["schemas"]["CreateWalletAuthSessionRequest"];
-            };
-        };
-        LinkSupabaseRecovery: {
-            content: {
-                "application/json": components["schemas"]["LinkSupabaseRecoveryRequest"];
             };
         };
         CreateWalletLinkChallenge: {
@@ -6987,10 +7043,7 @@ export interface operations {
     createWalletAuthChallenge: {
         parameters: {
             query?: never;
-            header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
-                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -6998,16 +7051,14 @@ export interface operations {
         responses: {
             201: components["responses"]["WalletAuthChallenge"];
             400: components["responses"]["ValidationFailed"];
+            429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
     createWalletAuthSession: {
         parameters: {
             query?: never;
-            header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
-                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -7015,16 +7066,14 @@ export interface operations {
         responses: {
             201: components["responses"]["WalletAuthSession"];
             400: components["responses"]["ValidationFailed"];
+            429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
     revokeWalletAuthSession: {
         parameters: {
             query?: never;
-            header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
-                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -7037,25 +7086,85 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["ValidationFailed"];
+            429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
-    linkSupabaseRecovery: {
+    revokeAllApplicationSessions: {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["LinkSupabaseRecovery"];
+        requestBody?: never;
         responses: {
-            200: components["responses"]["AuthRecoveryLink"];
+            /** @description All application sessions revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createRecoveryLinkIntent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: components["responses"]["ApplicationSessionExpiry"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    exchangeRecoveryIdentity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ApplicationSessionExpiry"];
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    unlinkRecoveryIdentity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ApplicationSessionExpiry"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -7063,7 +7172,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -7075,6 +7184,7 @@ export interface operations {
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -7111,7 +7221,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -7123,6 +7233,7 @@ export interface operations {
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -7159,10 +7270,7 @@ export interface operations {
     createWalletLinkChallenge: {
         parameters: {
             query?: never;
-            header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
-                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -7171,15 +7279,15 @@ export interface operations {
             201: components["responses"]["WalletLinkChallenge"];
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     linkWallet: {
         parameters: {
             query?: never;
-            header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
-                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -7188,16 +7296,16 @@ export interface operations {
             201: components["responses"]["Wallet"];
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     setPrimaryWallet: {
         parameters: {
             query?: never;
-            header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
-                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
-            };
+            header?: never;
             path: {
                 walletId: components["parameters"]["WalletId"];
             };
@@ -7208,14 +7316,17 @@ export interface operations {
             200: components["responses"]["Wallet"];
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     createOnrampSession: {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -7234,7 +7345,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -7248,30 +7359,11 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
-    createStarterProfile: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
-                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["User"];
-            201: components["responses"]["User"];
-            400: components["responses"]["ValidationFailed"];
-            401: components["responses"]["Unauthorized"];
-            409: components["responses"]["Conflict"];
-        };
-    };
     uploadMyProfileAvatar: {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -7326,6 +7418,21 @@ export interface operations {
         responses: {
             200: components["responses"]["CreatorProfile"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    getProfileHandleAvailability: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                handle: components["parameters"]["Handle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["HandleAvailability"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     getContentFeed: {
@@ -7465,7 +7572,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -7480,7 +7587,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -7495,7 +7602,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -7510,7 +7617,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -7540,7 +7647,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7572,7 +7679,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -7601,7 +7708,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -7618,7 +7725,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7637,7 +7744,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -7677,7 +7784,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7699,7 +7806,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7748,7 +7855,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7785,7 +7892,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7843,7 +7950,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7873,7 +7980,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7930,7 +8037,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7963,7 +8070,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -7999,7 +8106,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8032,7 +8139,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8066,7 +8173,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8099,7 +8206,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -8120,7 +8227,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8142,7 +8249,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -8198,7 +8305,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8220,7 +8327,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8260,7 +8367,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8282,7 +8389,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8299,7 +8406,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8332,7 +8439,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8349,7 +8456,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -8364,7 +8471,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -8379,7 +8486,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8426,7 +8533,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8449,7 +8556,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8472,7 +8579,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -8556,7 +8663,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8592,7 +8699,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8615,7 +8722,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -8659,7 +8766,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -8704,7 +8811,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -8724,7 +8831,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8762,7 +8869,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -8783,7 +8890,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8805,7 +8912,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8827,7 +8934,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -8856,7 +8963,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8873,7 +8980,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8890,7 +8997,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8907,7 +9014,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -8924,7 +9031,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -8939,7 +9046,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -8954,7 +9061,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -8997,7 +9104,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -9098,7 +9205,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -9113,7 +9220,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -9157,7 +9264,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path?: never;
@@ -9194,7 +9301,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -9392,7 +9499,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -9473,7 +9580,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -9506,7 +9613,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -9571,7 +9678,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -9604,7 +9711,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -9638,7 +9745,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -9672,7 +9779,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -9707,7 +9814,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -10010,7 +10117,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -10047,7 +10154,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
@@ -10081,7 +10188,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Required for money, entitlement, Event Access, message, Mutuals, age, wallet, moderation, and admin mutations. */
+                /** @description Required for replay-safe money, entitlement, Event Access, message, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {

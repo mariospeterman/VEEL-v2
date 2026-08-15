@@ -21,6 +21,8 @@ import { Card, ErrorState, Fact, PageHeader, StatusPill } from "../../ui";
 import { mapApiFailure } from "@/api-errors";
 import { McpConnectionsPanel } from "../../settings/mcp-connections-panel";
 import { NotificationEnrollment } from "../../settings/notification-enrollment";
+import { RecoveryAccessPanel } from "../../settings/recovery-access-panel";
+import { SessionSecurityActions } from "../../settings/session-security-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -158,7 +160,7 @@ function ProfileFacts({ session }: { session: ApiResult<SessionState> }) {
     <div className="grid gap-3 sm:grid-cols-2">
       <Fact label="Handle" value={session.data.user?.handle ? `@${session.data.user.handle}` : "not set"} />
       <Fact label="Display name" value={session.data.user?.displayName ?? "not set"} />
-      <Fact label="Session" value={session.data.authenticated ? "Supabase verified" : "not authenticated"} />
+      <Fact label="Session" value={session.data.authenticated ? "application session active" : "not authenticated"} />
       <Fact label="Access" value={session.data.appAccessState.allowed ? "ready" : session.data.appAccessState.reason} />
     </div>
   );
@@ -177,10 +179,12 @@ function SecurityFacts({
 
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      <Fact label="Session" value={session.ok && session.data.authenticated ? "Supabase verified" : resultLabel(session)} />
+      <Fact label="Session" value={session.ok && session.data.authenticated ? "application session active" : resultLabel(session)} />
       <Fact label="Age assurance" value={ageStatus.ok ? `${ageStatus.data.state} via ${ageStatus.data.provider ?? "none"}` : resultLabel(ageStatus)} />
       <Fact label="Primary wallet" value={primaryWallet ? shorten(primaryWallet.address) : resultLabel(wallets)} />
       <Fact label="Wallet chain" value={primaryWallet?.chain ?? "not ready"} />
+      <RecoveryAccessPanel />
+      <SessionSecurityActions />
     </div>
   );
 }

@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import type { SessionProfile, SessionRepository } from "./types.js";
 
@@ -20,7 +19,7 @@ interface SessionProfileRow {
 export function createPostgresSessionRepository(database?: string | PostgresSql): SessionRepository {
   if (!database) {
     return {
-      async ensureUserForSupabaseId() {
+      async findProfileByUserId() {
         throw new SessionRepositoryConfigurationError();
       },
       async findProfileBySupabaseUserId() {
@@ -32,12 +31,21 @@ export function createPostgresSessionRepository(database?: string | PostgresSql)
   const { sql, ownsClient } = resolvePostgresClient(database);
 
   return {
-    async ensureUserForSupabaseId(supabaseUserId: string): Promise<void> {
-      await sql`
-        insert into users (id, supabase_user_id)
-        values (${randomUUID()}, ${supabaseUserId})
-        on conflict (supabase_user_id) do nothing
+    async findProfileByUserId(userId: string): Promise<SessionProfile | null> {
+      const rows = await sql<SessionProfileRow[]>`
+        select
+          u.id,
+          u.state,
+          p.handle,
+          p.display_name,
+          p.avatar_url
+        from users u
+        left join profiles p on p.user_id = u.id
+        where u.id = ${userId}
+        limit 1
       `;
+
+      return rows[0] ? toSessionProfile(rows[0]) : null;
     },
     async findProfileBySupabaseUserId(supabaseUserId: string): Promise<SessionProfile | null> {
       const rows = await sql<SessionProfileRow[]>`
@@ -59,18 +67,22 @@ export function createPostgresSessionRepository(database?: string | PostgresSql)
         return null;
       }
 
-      return {
-        id: row.id,
-        state: row.state,
-        handle: row.handle,
-        displayName: row.display_name,
-        avatarUrl: row.avatar_url
-      };
+      return toSessionProfile(row);
     },
     async close() {
       if (ownsClient) {
         await sql.end({ timeout: 5 });
       }
     }
+  };
+}
+
+function toSessionProfile(row: SessionProfileRow): SessionProfile {
+  return {
+    id: row.id,
+    state: row.state,
+    handle: row.handle,
+    displayName: row.display_name,
+    avatarUrl: row.avatar_url
   };
 }

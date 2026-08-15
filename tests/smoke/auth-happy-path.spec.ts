@@ -66,7 +66,7 @@ test("covers authenticated app access to profile wallet age home create and unlo
   await expect(page.getByText("Funding sessions do not unlock")).toBeVisible();
 
   await page.goto("/age");
-  await expect(page.getByRole("heading", { name: "Provider-backed 18+ gate" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Confirm you're 18+" })).toBeVisible();
   await expect(page.getByText("Current status")).toBeVisible();
   await expect(page.getByText("verified", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Start age verification" })).toBeEnabled();
@@ -174,6 +174,12 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
   }
 
   const body = method === "POST" || method === "PATCH" ? await readJsonBody(request) : null;
+
+  if (method === "POST" && url.pathname === "/v1/auth/wallet/logout") {
+    response.writeHead(204);
+    response.end();
+    return;
+  }
 
   if (method === "GET" && url.pathname === "/v1/session") {
     sendJson(response, 200, sessionState());

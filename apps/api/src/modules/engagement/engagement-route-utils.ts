@@ -5,7 +5,7 @@ import {
 } from "../../shared/idempotency.js";
 import type { AgeRepository } from "../age/types.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
-import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
+import type { SessionRepository, ApplicationSessionVerifier } from "../session/types.js";
 import {
   EngagementIdempotencyConflictError,
   EngagementPolicyError,
@@ -19,7 +19,7 @@ import type {
 } from "./types.js";
 
 export interface RegisterEngagementRoutesOptions {
-  authVerifier: SupabaseAuthVerifier;
+  authVerifier: ApplicationSessionVerifier;
   sessionRepository: SessionRepository;
   ageRepository: AgeRepository;
   engagementRepository: EngagementRepository;
@@ -84,7 +84,7 @@ export async function verifyEngagementAccess(
     options.ageRepository.findLatestAgeStatusBySupabaseUserId(verifiedSession.supabaseUserId)
   ]);
 
-  if (!profile?.handle || !profile.displayName || ageStatus.state !== "verified") {
+  if (profile?.state !== "active" || !profile.handle || !profile.displayName || ageStatus.state !== "verified") {
     return {
       ok: false,
       statusCode: 403,

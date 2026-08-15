@@ -1,8 +1,15 @@
 import type { FastifyRequest } from "fastify";
-import { SupabaseAuthConfigurationError } from "../session/supabase-auth.js";
-import type { SupabaseAuthVerifier, VerifiedSupabaseSession } from "../session/types.js";
+import type { ApplicationSessionVerifier, VerifiedApplicationSession } from "../session/types.js";
 
-export const walletSessionCookieName = "veel_wallet_session_token";
+export const walletSessionCookieName = "wevid_session";
+export const recoveryLinkIntentCookieName = "veel_recovery_link_intent";
+
+export const recentAuthenticationWindowMs = 15 * 60 * 1000;
+
+export function hasRecentAuthentication(authenticatedAt: Date, now = new Date()): boolean {
+  const ageMs = now.getTime() - authenticatedAt.getTime();
+  return ageMs >= 0 && ageMs <= recentAuthenticationWindowMs;
+}
 
 export function extractBearerToken(authorization: string | undefined): string | null {
   if (!authorization) {
@@ -27,7 +34,12 @@ export function extractCookieToken(cookieHeader: string | undefined, name: strin
     const [rawName, ...rawValue] = part.trim().split("=");
     if (rawName === name) {
       const value = rawValue.join("=");
-      return value ? decodeURIComponent(value) : null;
+      if (!value) return null;
+      try {
+        return decodeURIComponent(value);
+      } catch {
+        return null;
+      }
     }
   }
 
@@ -36,26 +48,22 @@ export function extractCookieToken(cookieHeader: string | undefined, name: strin
 
 export async function verifyRequestSession(
   request: FastifyRequest,
-  authVerifier: SupabaseAuthVerifier
-): Promise<VerifiedSupabaseSession | null> {
-  const token =
-    extractBearerToken(request.headers.authorization) ??
-    extractCookieToken(request.headers.cookie, walletSessionCookieName);
+  authVerifier: ApplicationSessionVerifier
+): Promise<VerifiedApplicationSession | null> {
+  const token = extractRequestSessionToken(request);
 
   if (!token) {
     return null;
   }
 
-  try {
-    return await authVerifier.verifyBearerToken(token);
-  } catch (error) {
-    if (error instanceof SupabaseAuthConfigurationError) {
-      request.log.warn({ error }, "Supabase auth is not configured");
-      return null;
-    }
+  return authVerifier.verifyToken(token);
+}
 
-    throw error;
-  }
+export function extractRequestSessionToken(request: FastifyRequest): string | null {
+  return (
+    extractCookieToken(request.headers.cookie, walletSessionCookieName) ??
+    extractBearerToken(request.headers.authorization)
+  );
 }
 
 export function unauthorizedResponse(message: string) {

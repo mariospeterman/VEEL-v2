@@ -65,7 +65,6 @@ Provider docs checked for this implementation slice on 2026-06-14, with login an
 
 - Privy docs: React setup uses a `PrivyProvider` with `appId`; Solana support is exposed through Privy wallet APIs and must be configured with the project app id before embedded-wallet buttons are enabled.
 - Privy login configuration should not set wallet-first modal ordering unless external wallet login is also enabled in Privy login methods. Veel uses Privy email/social/passkey login to create or unlock a noncustodial embedded Solana wallet, while external wallet ownership remains handled by the Solana Wallet Adapter plus backend challenge flow.
-- Turnkey remains a documented fallback candidate only. Its SDK is not bundled while Privy is the selected launch candidate.
 - Solana Wallet Adapter docs: browser wallet connection should use wallet adapter/injected-wallet support for desktop and Android-compatible browsers, with backend nonce signing for authentication.
 - Solana Mobile Wallet Adapter docs: Android Chrome supports mobile wallet adapter flows through wallet adapter; iOS mobile wallet adapter support is not currently available, so iOS web must use wallet-specific universal/deep links or embedded providers.
 - Dynamic docs: embedded wallets support noncustodial MPC, Solana via EdDSA/FROST, and can remain an evaluated fallback.
@@ -78,14 +77,13 @@ External wallet docs checked for the browser wallet-link handoff on 2026-06-07:
 
 Runtime/session behavior:
 
-- Landing dynamically loads one canonical wallet runtime only after explicit user action. Configured Privy calls its official React SDK login and Solana signing APIs; Solana Wallet Adapter remains the single external-wallet chooser.
-- The authenticated app mounts the same provider boundary so profile logout can terminate active provider state with supported SDK methods. Logout calls Privy `logout` and Solana Wallet Adapter `disconnect`, then clears the app-owned wallet session and local Supabase session and expires server cookies before redirecting to `/`.
+- Landing preloads one canonical wallet runtime when the login/onboarding frame opens so the first visible provider click directly opens Privy or the Solana wallet chooser. Configured Privy calls its official React SDK login and Solana signing APIs; Solana Wallet Adapter remains the single external-wallet chooser.
+- The authenticated app mounts the same provider boundary so profile logout can terminate active provider state with supported SDK methods. Logout calls Privy `logout` and Solana Wallet Adapter `disconnect`, revokes the canonical WeVid application session, clears the optional local Supabase recovery state, and expires server cookies before redirecting to `/`.
 - Provider SDK storage keys are not guessed or deleted by application code. Provider teardown errors are isolated so one unavailable SDK cannot prevent other sessions from closing or block the landing redirect.
 
 Provider decision:
 
 - Privy is the sole embedded-wallet launch runtime, still fail-closed until staging confirms Solana creation/retrieval, challenge signing, recovery/export, mobile PWA behavior, adult-platform account acceptance, and the required noncustodial/user-controlled posture.
-- Turnkey is a documented fallback only: not bundled, initialized, shown, or operated in parallel. Historical enum compatibility remains because persisted migrations cannot be rewritten.
 - Do not introduce Dynamic or another embedded-wallet runtime without a new provider decision that replaces the canonical owner and removes obsolete overlap.
 - Wallet funding should be provided through the selected embedded-wallet or funding path and must fund the user-owned wallet, not a Veel custodial account or product checkout balance.
 
@@ -181,9 +179,9 @@ Implementation contract:
 - `PATCH /v1/wallets/{walletId}/primary` changes only the authenticated user's primary wallet, requires idempotency, and audits the change.
 - Wallet link completion is an audit event, not payment proof.
 - Current supported external provider values are `phantom`, `solflare`, and `wallet_adapter`.
-- The schema retains `embedded_privy` and `embedded_turnkey` as normalized historical/provider values, but the current web runtime implements only `embedded_privy`. It is enabled only when `NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED=true`, the Privy app id is configured, and the provider ADR is staging/launch approved.
+- The active contract and runtime support `embedded_privy` only for embedded wallets. Historical migrations are immutable, but the current API does not accept the former fallback enum. Privy is enabled only when `NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED=true`, the app id is configured, and the provider ADR is staging/launch approved.
 - The current PWA handoff detects injected Solana wallets on landing onboarding and `/app/wallet`, asks the wallet to connect, signs the returned backend challenge using `signMessage`, base64-encodes the signature, and submits it back to the API. The UI must present the signature as ownership-only and must not imply payment, subscription, entitlement, or protected-access completion.
-- Current difference: the embedded flow can stop after Privy wallet creation and require another user action to sign the challenge. That is implemented-but-incomplete behavior, not accepted UX; Slice 02 owns the continuous orchestration after Slice 01 locks the session/security contract.
+- The Privy adapter preserves the provisioned wallet if signing is interrupted and retries the ownership-signature stage without restarting provider authentication. Real target-domain staging proof of the continuous flow remains blocked without approved credentials.
 
 ## Minimal Profile And Age Steps
 
@@ -194,7 +192,7 @@ Implementation contract:
 
 ## Optional Supabase Recovery
 
-Supabase signup is not a fourth step. Privy users already have their provider-supported recovery path and are not prompted to repeat it. Settings may later offer external-wallet-only users “Add account recovery.” The target flow requires an active WeVid session, short-lived backend link intent, Supabase identity proof, collision rejection, audit, and mapping to the existing user. It creates no profile or wallet and does not repeat age. The current recovery-link route proves both sessions and rejects collisions; complete link-intent and recovery-return session proof remains Slice 01/02 work and stays fail-closed until verified.
+Supabase signup is not a fourth step. Privy users already have their provider-supported recovery path and are not prompted to repeat it. Settings offers “Add account recovery.” Linking requires a recently authenticated WeVid session, a short-lived one-use backend intent, Supabase subject proof, collision rejection, an audit event, and session rotation. Recovery exchange resolves an existing subject mapping only; it creates no user, profile, or wallet, does not match on email, and does not repeat age. Real provider return-login proof remains blocked until approved Supabase staging configuration is available.
 
 ## Device Behavior
 
@@ -305,7 +303,7 @@ Non-wallet actions:
 
 ## Provider Launch Gate
 
-Privy is the sole launch runtime, but remains disabled until staging proves the required UX, security, account acceptance, recovery/export, signing, and device behavior. Replacing it with Turnkey would require a new explicit ADR and removal of the obsolete runtime; it is not an in-slice switch or parallel option.
+Privy is the sole launch runtime, but remains disabled until staging proves the required UX, security, account acceptance, recovery/export, signing, and device behavior. Replacing it would require a new explicit ADR and removal of the obsolete runtime; parallel embedded-wallet runtimes are not allowed.
 
 Current implementation state:
 
@@ -314,7 +312,7 @@ Current implementation state:
 - `PATCH /v1/wallets/{walletId}/primary` safely switches the user's primary wallet and writes an audit event.
 - `POST /v1/wallets/onramp-sessions` creates an idempotent user-wallet funding session when the provider is configured, otherwise returns service unavailable without fabricating a checkout URL.
 - `/wallet` reads linked wallets and backend-observed wallet transactions through the typed web API helper. It does not render fixture wallets or fabricated funding provider URLs.
-- The Privy browser adapter is implemented behind an explicit runtime gate. It is not launch-approved until staging credentials, provider account acceptance, recovery/export behavior, mobile flow, and exact signing behavior are confirmed. Turnkey remains an unbundled fallback only.
+- The Privy browser adapter is implemented behind an explicit runtime gate. It is not launch-approved until staging credentials, provider account acceptance, recovery/export behavior, mobile flow, and exact signing behavior are confirmed.
 - Coinbase funding is a server-side provider boundary only. It funds user-owned wallets and is not product billing or payment proof.
 
 Recommended decision record:

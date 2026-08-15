@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
-import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
+import type { SessionRepository, ApplicationSessionVerifier } from "../session/types.js";
 import { AgeRepositoryConfigurationError } from "./age-repository.js";
 import {
   AgeWebhookConfigurationError,
@@ -21,9 +21,10 @@ import type {
   CreateAgeSessionRequest
 } from "./types.js";
 import { mutationRateLimit } from "../../shared/rate-limits.js";
+import { contractRouteSchema } from "../../shared/openapi-route-schema.js";
 
 interface RegisterAgeRoutesOptions {
-  authVerifier: SupabaseAuthVerifier;
+  authVerifier: ApplicationSessionVerifier;
   sessionRepository: SessionRepository;
   ageRepository: AgeRepository;
   ageProviderWaterfall: AgeProviderWaterfall;
@@ -108,7 +109,7 @@ export async function registerAgeRoutes(
     }
   );
 
-  app.post("/v1/age/sessions", mutationRateLimit("ageMutation"), async (request, reply) => {
+  app.post("/v1/age/sessions", mutationRateLimit("ageMutation", "createAgeSession"), async (request, reply) => {
     const verifiedSession = await verifyRequestSession(request, options.authVerifier);
 
     if (!verifiedSession) {
@@ -134,9 +135,7 @@ export async function registerAgeRoutes(
       });
     }
 
-    try {
-      await options.sessionRepository.ensureUserForSupabaseId(verifiedSession.supabaseUserId);
-      const latestAgeStatus = await options.ageRepository.findLatestAgeStatusBySupabaseUserId(
+    try {      const latestAgeStatus = await options.ageRepository.findLatestAgeStatusBySupabaseUserId(
         verifiedSession.supabaseUserId
       );
 
@@ -206,7 +205,7 @@ export async function registerAgeRoutes(
     }
   });
 
-  app.get("/v1/age/status", async (request, reply) => {
+  app.get("/v1/age/status", { schema: contractRouteSchema("getAgeStatus") }, async (request, reply) => {
     const verifiedSession = await verifyRequestSession(request, options.authVerifier);
 
     if (!verifiedSession) {

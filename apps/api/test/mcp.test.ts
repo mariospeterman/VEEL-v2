@@ -15,7 +15,7 @@ import type {
   OAuthClient
 } from "../src/modules/mcp/types";
 import type { ProfileRepository } from "../src/modules/profile/types";
-import type { SessionRepository, SupabaseAuthVerifier } from "../src/modules/session/types";
+import type { SessionRepository, ApplicationSessionVerifier } from "../src/modules/session/types";
 import type { WalletRepository } from "../src/modules/wallet/types";
 
 const previousEnv = { ...process.env };
@@ -410,14 +410,22 @@ function testDependencies(input: {
   };
 }
 
-const fakeAuthVerifier: SupabaseAuthVerifier = {
-  async verifyBearerToken(token) {
-    return token === "valid-token" ? { supabaseUserId } : null;
+const fakeAuthVerifier: ApplicationSessionVerifier = {
+  async verifyToken(token) {
+    return token === "valid-token" ? {
+      userId: supabaseUserId,
+      supabaseUserId,
+      sessionId: "00000000-0000-4000-8000-000000000099",
+      authenticatedAt: new Date(),
+      authenticationMethod: "wallet"
+    } : null;
   }
 };
 
 const fakeSessionRepository: SessionRepository = {
-  async ensureUserForSupabaseId() {},
+  async findProfileByUserId() {
+    return this.findProfileBySupabaseUserId(supabaseUserId);
+  },
   async findProfileBySupabaseUserId() {
     return {
       id: "00000000-0000-4000-8000-000000000010",

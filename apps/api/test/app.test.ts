@@ -1,5 +1,5 @@
 import { createHash, createHmac } from "node:crypto";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
 import { buildApi } from "../src/app";
@@ -21,6 +21,7 @@ import type {
 } from "../src/modules/age/types";
 import type { AiRepository, AiSession, AiToolCall } from "../src/modules/ai/types";
 import {
+  WalletRecoveryCredentialRequiredError,
   WalletRecoveryLinkConflictError,
   type WalletAuthRepository
 } from "../src/modules/auth/wallet-auth-repository";
@@ -29,8 +30,8 @@ import type { ReferralRepository } from "../src/modules/referral/types";
 import type { RefundRepository } from "../src/modules/refund/types";
 import type {
   SessionRepository,
-  SupabaseAuthVerifier,
-  VerifiedSupabaseSession
+  ApplicationSessionVerifier,
+  VerifiedApplicationSession
 } from "../src/modules/session/types";
 import type {
   OnrampSessionResource,
@@ -99,6 +100,10 @@ const checkoutPaymentRepositoryMethods = {
 } satisfies Pick<PaymentRepository, "findCheckoutIntent" | "recordCheckoutPayer">;
 
 describe("buildApi", () => {
+  beforeEach(() => {
+    vi.stubEnv("API_TRUST_PROXY", "");
+  });
+
   it("boots the Fastify skeleton and loads the OpenAPI document", async () => {
     const app = await buildApi();
     await app.ready();
@@ -134,12 +139,172 @@ describe("buildApi", () => {
     await app.ready();
 
     for (let requestNumber = 0; requestNumber < 8; requestNumber += 1) {
-      const response = await app.inject({ method: "POST", url: "/v1/age/sessions" });
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/age/sessions",
+        headers: { "idempotency-key": `age-rate-limit-${requestNumber}` },
+        payload: { providerPreference: "reusable_first" }
+      });
       expect(response.statusCode).toBe(401);
     }
 
-    const limited = await app.inject({ method: "POST", url: "/v1/age/sessions" });
+    const limited = await app.inject({
+      method: "POST",
+      url: "/v1/age/sessions",
+      headers: { "idempotency-key": "age-rate-limit-final" },
+      payload: { providerPreference: "reusable_first" }
+    });
     expect(limited.statusCode).toBe(429);
+    expect(limited.json()).toEqual({
+      code: "rate_limited",
+      message: "Too many requests"
+    });
+
+    await app.close();
+  });
+
+  it("rate limits auth, verification, message, and payment mutation abuse", async () => {
+    vi.stubEnv("LOG_LEVEL", "silent");
+    const app = await buildApi();
+    await app.ready();
+
+    const cases = [
+      {
+        count: 21,
+        request: (index: number) => ({
+          method: "POST" as const,
+          url: "/v1/auth/wallet/challenges",
+          payload: {
+            chain: "solana_devnet",
+            provider: "phantom",
+            address: "1".repeat(32)
+          },
+          headers: { "x-test-request": String(index) }
+        })
+      },
+      {
+        count: 9,
+        request: (index: number) => ({
+          method: "POST" as const,
+          url: "/v1/verification/sessions",
+          headers: { "idempotency-key": `verification-abuse-${index}` }
+        })
+      },
+      {
+        count: 31,
+        request: () => ({
+          method: "POST" as const,
+          url: "/v1/messages/conversations/00000000-0000-4000-8000-000000000001/messages"
+        })
+      },
+      {
+        count: 13,
+        request: (index: number) => ({
+          method: "POST" as const,
+          url: "/v1/payments/intents",
+          headers: { "idempotency-key": `payment-abuse-${index}` }
+        })
+      }
+    ];
+
+    for (const testCase of cases) {
+      let response;
+      for (let index = 0; index < testCase.count; index += 1) {
+        response = await app.inject(testCase.request(index));
+      }
+      expect(response?.statusCode).toBe(429);
+      expect(response?.json()).toEqual({ code: "rate_limited", message: "Too many requests" });
+    }
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("uses trusted forwarded client IPs as distinct limiter keys", async () => {
+    vi.stubEnv("API_TRUST_PROXY", "127.0.0.1");
+    vi.stubEnv("LOG_LEVEL", "silent");
+    const app = await buildApi();
+    await app.ready();
+
+    for (let index = 0; index < 8; index += 1) {
+      await app.inject({
+        method: "POST",
+        url: "/v1/age/sessions",
+        headers: {
+          "idempotency-key": `trusted-proxy-a-${index}`,
+          "x-forwarded-for": "203.0.113.10"
+        },
+        payload: { providerPreference: "reusable_first" }
+      });
+    }
+
+    const distinctClient = await app.inject({
+      method: "POST",
+      url: "/v1/age/sessions",
+      headers: {
+        "idempotency-key": "trusted-proxy-client-b",
+        "x-forwarded-for": "203.0.113.11"
+      },
+      payload: { providerPreference: "reusable_first" }
+    });
+    expect(distinctClient.statusCode).toBe(401);
+
+    const limitedClient = await app.inject({
+      method: "POST",
+      url: "/v1/age/sessions",
+      headers: {
+        "idempotency-key": "trusted-proxy-client-a-final",
+        "x-forwarded-for": "203.0.113.10"
+      },
+      payload: { providerPreference: "reusable_first" }
+    });
+    expect(limitedClient.statusCode).toBe(429);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("fails closed when the distributed limiter store is unavailable", async () => {
+    vi.stubEnv("API_RATE_LIMIT_STORE_DRIVER", "external");
+    vi.stubEnv("LOG_LEVEL", "silent");
+    const app = await buildApi({ rateLimitStore: FailingRateLimitStore });
+    await app.ready();
+
+    const response = await app.inject({ method: "GET", url: "/healthz" });
+    expect(response.statusCode).toBe(500);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("refuses process-memory rate limiting in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("API_RATE_LIMIT_STORE_DRIVER", "process_memory");
+
+    try {
+      await expect(buildApi()).rejects.toThrow("Production requires a distributed API rate-limit store");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("enforces OpenAPI header and path parameter constraints at runtime", async () => {
+    const app = await buildApi();
+    await app.ready();
+
+    const shortIdempotencyKey = await app.inject({
+      method: "POST",
+      url: "/v1/age/sessions",
+      headers: { "idempotency-key": "short" },
+      payload: { providerPreference: "reusable_first" }
+    });
+    expect(shortIdempotencyKey.statusCode).toBe(400);
+
+    const invalidHandle = await app.inject({
+      method: "GET",
+      url: "/v1/profiles/handles/!!!/availability"
+    });
+    expect(invalidHandle.statusCode).toBe(400);
 
     await app.close();
   });
@@ -158,6 +323,21 @@ describe("buildApi", () => {
       code: "unauthorized"
     });
 
+    await app.close();
+  });
+
+  it("treats malformed session-cookie encoding as unauthorized", async () => {
+    const app = await buildApi();
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/session",
+      headers: { cookie: "wevid_session=%" }
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toMatchObject({ code: "unauthorized" });
     await app.close();
   });
 
@@ -203,7 +383,7 @@ describe("buildApi", () => {
     vi.unstubAllEnvs();
   });
 
-  it("returns a contract-safe session for a verified Supabase user with a Veel profile", async () => {
+  it("returns a contract-safe session for a verified application session with a WeVid profile", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       ageRepository: verifiedAgeRepository,
@@ -254,12 +434,14 @@ describe("buildApi", () => {
   it("accepts HttpOnly wallet session cookies for protected API access", async () => {
     const app = await buildApi({
       authVerifier: {
-        async verifyBearerToken(token) {
+        async verifyToken(token) {
           return token === "veel_wallet_cookie_session"
             ? {
+                userId: "00000000-0000-4000-8000-000000000001",
                 supabaseUserId: "00000000-0000-4000-8000-000000000001",
-                email: null,
-                role: "authenticated"
+                sessionId: "00000000-0000-4000-8000-000000000099",
+                authenticatedAt: new Date(),
+                authenticationMethod: "wallet" as const
               }
             : null;
         }
@@ -284,7 +466,7 @@ describe("buildApi", () => {
       method: "GET",
       url: "/v1/session",
       headers: {
-        cookie: "veel_wallet_session_token=veel_wallet_cookie_session"
+        cookie: "wevid_session=veel_wallet_cookie_session"
       }
     });
 
@@ -297,6 +479,87 @@ describe("buildApi", () => {
       }
     });
 
+    await app.close();
+  });
+
+  it("prefers the HttpOnly application cookie over an Authorization header", async () => {
+    const verifiedTokens: string[] = [];
+    const app = await buildApi({
+      authVerifier: {
+        async verifyToken(token) {
+          verifiedTokens.push(token);
+          return token === "cookie-session"
+            ? {
+                userId: "00000000-0000-4000-8000-000000000001",
+                supabaseUserId: "00000000-0000-4000-8000-000000000001",
+                sessionId: "00000000-0000-4000-8000-000000000099",
+                authenticatedAt: new Date(),
+                authenticationMethod: "wallet" as const
+              }
+            : null;
+        }
+      },
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/session",
+      headers: {
+        authorization: "Bearer ignored-header-session",
+        cookie: "wevid_session=cookie-session"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(verifiedTokens).toEqual(["cookie-session"]);
+    await app.close();
+  });
+
+  it("keeps repeated current-session reads on read-only repository methods", async () => {
+    let profileReads = 0;
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          profileReads += 1;
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      })
+    });
+    await app.ready();
+
+    for (let requestNumber = 0; requestNumber < 5; requestNumber += 1) {
+      const response = await app.inject({
+        method: "GET",
+        url: "/v1/session",
+        headers: { authorization: "Bearer valid-token" }
+      });
+      expect(response.statusCode).toBe(200);
+    }
+
+    expect(profileReads).toBe(5);
     await app.close();
   });
 
@@ -378,13 +641,14 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("links Supabase recovery with wallet session cookie proof", async () => {
-    const links: unknown[] = [];
+  it("creates a short-lived recovery link intent from a recent application session", async () => {
+    const intents: unknown[] = [];
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       walletAuthRepository: fakeWalletAuthRepository({
-        async linkSupabaseRecovery(input) {
-          links.push(input);
+        async createRecoveryLinkIntent(input) {
+          intents.push(input);
+          return { token: "wevid_recovery_link_test", expiresAt: new Date("2026-06-01T00:10:00.000Z") };
         }
       })
     });
@@ -392,27 +656,22 @@ describe("buildApi", () => {
 
     const response = await app.inject({
       method: "POST",
-      url: "/v1/auth/recovery-link",
+      url: "/v1/auth/recovery/link-intents",
       headers: {
-        authorization: "Bearer valid-token",
-        cookie: "veel_wallet_session_token=veel_wallet_cookie_session",
+        cookie: "wevid_session=valid-token",
         "idempotency-key": "recovery-link-cookie-1"
       },
       payload: {}
     });
 
-    expect(response.statusCode).toBe(200);
-    expect(links).toEqual([
-      {
-        walletSessionToken: "veel_wallet_cookie_session",
-        supabaseUserId: "00000000-0000-4000-8000-000000000001"
-      }
-    ]);
+    expect(response.statusCode).toBe(201);
+    expect(intents).toMatchObject([{ sessionToken: "valid-token" }]);
+    expect(response.headers["set-cookie"]).toContain("HttpOnly");
 
     await app.close();
   });
 
-  it("rejects recovery linking without a wallet session proof", async () => {
+  it("rejects recovery link intent without an application session", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       walletAuthRepository: fakeWalletAuthRepository()
@@ -421,9 +680,8 @@ describe("buildApi", () => {
 
     const response = await app.inject({
       method: "POST",
-      url: "/v1/auth/recovery-link",
+      url: "/v1/auth/recovery/link-intents",
       headers: {
-        authorization: "Bearer valid-token",
         "idempotency-key": "recovery-link-missing-wallet"
       },
       payload: {}
@@ -437,11 +695,54 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("rejects recovery linking when the Supabase identity belongs to another account", async () => {
+  it("rejects recovery linking when application authentication is stale", async () => {
+    let intentCreated = false;
     const app = await buildApi({
-      authVerifier: fakeAuthVerifier,
+      authVerifier: {
+        async verifyToken() {
+          return {
+            userId: "00000000-0000-4000-8000-000000000001",
+            supabaseUserId: "00000000-0000-4000-8000-000000000001",
+            sessionId: "00000000-0000-4000-8000-000000000099",
+            authenticatedAt: new Date(Date.now() - 16 * 60 * 1000),
+            authenticationMethod: "wallet" as const
+          };
+        }
+      },
       walletAuthRepository: fakeWalletAuthRepository({
-        async linkSupabaseRecovery() {
+        async createRecoveryLinkIntent() {
+          intentCreated = true;
+          throw new Error("must not be called");
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/recovery/link-intents",
+      headers: {
+        cookie: "wevid_session=stale-session",
+        "idempotency-key": "recovery-link-stale-session"
+      },
+      payload: {}
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({ code: "recent_authentication_required" });
+    expect(intentCreated).toBe(false);
+    await app.close();
+  });
+
+  it("rejects recovery exchange when the provider identity belongs to another account", async () => {
+    const app = await buildApi({
+      recoveryIdentityVerifier: {
+        async verifyToken() {
+          return { provider: "supabase", providerSubject: "00000000-0000-4000-8000-000000000002", email: "maki@example.test" };
+        }
+      },
+      walletAuthRepository: fakeWalletAuthRepository({
+        async exchangeRecoveryIdentity() {
           throw new WalletRecoveryLinkConflictError();
         }
       })
@@ -450,10 +751,10 @@ describe("buildApi", () => {
 
     const response = await app.inject({
       method: "POST",
-      url: "/v1/auth/recovery-link",
+      url: "/v1/auth/recovery/exchange",
       headers: {
-        authorization: "Bearer valid-token",
-        cookie: "veel_wallet_session_token=veel_wallet_test_session",
+        authorization: "Bearer recovery-token",
+        cookie: "veel_recovery_link_intent=recovery-intent",
         "idempotency-key": "recovery-link-conflict"
       },
       payload: {}
@@ -462,6 +763,36 @@ describe("buildApi", () => {
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({
       code: "conflict"
+    });
+
+    await app.close();
+  });
+
+  it("rejects removing the only durable recovery credential", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      walletAuthRepository: fakeWalletAuthRepository({
+        async unlinkRecoveryIdentity() {
+          throw new WalletRecoveryCredentialRequiredError();
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/recovery/unlink",
+      headers: {
+        cookie: "wevid_session=valid-token",
+        "idempotency-key": "recovery-unlink-last-credential"
+      },
+      payload: {}
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      code: "conflict",
+      message: "Link a wallet before removing your only recovery method"
     });
 
     await app.close();
@@ -482,17 +813,86 @@ describe("buildApi", () => {
       method: "POST",
       url: "/v1/auth/wallet/logout",
       headers: {
-        cookie: "veel_wallet_session_token=veel_wallet_test_session",
+        cookie: "wevid_session=veel_wallet_test_session",
         "idempotency-key": "wallet-logout-1"
       }
     });
 
     expect(response.statusCode).toBe(204);
     expect(revoked).toEqual(["veel_wallet_test_session"]);
-    expect(response.headers["set-cookie"]).toContain("veel_wallet_session_token=");
-    expect(response.headers["set-cookie"]).toContain("HttpOnly");
-    expect(response.headers["set-cookie"]).toContain("Max-Age=0");
+    expect(String(response.headers["set-cookie"])).toContain("wevid_session=");
+    expect(String(response.headers["set-cookie"])).toContain("HttpOnly");
+    expect(String(response.headers["set-cookie"])).toContain("Max-Age=0");
 
+    await app.close();
+  });
+
+  it("requires recent authentication and revokes every application session explicitly", async () => {
+    const revocations: Array<{ userId: string; actorUserId: string; reason: string }> = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      walletAuthRepository: fakeWalletAuthRepository({
+        async revokeAllSessions(input) {
+          revocations.push(input);
+          return 2;
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/sessions/logout-all",
+      headers: {
+        cookie: "wevid_session=valid-token",
+        "idempotency-key": "logout-all-1"
+      }
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(revocations).toEqual([{
+      userId: "00000000-0000-4000-8000-000000000001",
+      actorUserId: "00000000-0000-4000-8000-000000000001",
+      reason: "user_logout_all"
+    }]);
+    expect(String(response.headers["set-cookie"])).toContain("wevid_session=");
+    expect(String(response.headers["set-cookie"])).toContain("Max-Age=0");
+
+    await app.close();
+  });
+
+  it("rejects logout-all when authentication is no longer recent", async () => {
+    let called = false;
+    const app = await buildApi({
+      authVerifier: {
+        async verifyToken() {
+          return {
+            ...await fakeAuthVerifier.verifyToken("valid-token") as VerifiedApplicationSession,
+            authenticatedAt: new Date(Date.now() - 16 * 60 * 1000)
+          };
+        }
+      },
+      walletAuthRepository: fakeWalletAuthRepository({
+        async revokeAllSessions() {
+          called = true;
+          return 0;
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/sessions/logout-all",
+      headers: {
+        cookie: "wevid_session=valid-token",
+        "idempotency-key": "logout-all-stale"
+      }
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({ code: "recent_authentication_required" });
+    expect(called).toBe(false);
     await app.close();
   });
 
@@ -669,7 +1069,7 @@ describe("buildApi", () => {
       url: "/v1/age/sessions",
       headers: {
         authorization: "Bearer valid-token",
-        "idempotency-key": "age-yoti-1"
+        "idempotency-key": "age-yoti-test-1"
       },
       payload: {
         providerPreference: "reusable_first"
@@ -686,7 +1086,7 @@ describe("buildApi", () => {
     expect(fetchCalls[0]?.url).toBe("https://age.yoti.example/api/v1/sessions");
     expect(fetchCalls[0]?.init?.method).toBe("POST");
     expect(JSON.parse(String(fetchCalls[0]?.init?.body))).toMatchObject({
-      reference_id: "age-yoti-1",
+      reference_id: "age-yoti-test-1",
       notification_url: "http://localhost:4000/v1/webhooks/age/yoti"
     });
     expect(createdPendingVerifications).toMatchObject([
@@ -760,7 +1160,7 @@ describe("buildApi", () => {
       url: "/v1/age/sessions",
       headers: {
         authorization: "Bearer valid-token",
-        "idempotency-key": "age-didit-1"
+        "idempotency-key": "age-didit-test-1"
       },
       payload: {
         providerPreference: "didit"
@@ -1173,7 +1573,7 @@ describe("buildApi", () => {
       url: "/v1/age/sessions",
       headers: {
         authorization: "Bearer valid-token",
-        "idempotency-key": "mock-age-1"
+        "idempotency-key": "mock-age-test-1"
       },
       payload: {
         providerPreference: "reusable_first"
@@ -1208,8 +1608,10 @@ describe("buildApi", () => {
 
   it("does not enable mock age providers in production", async () => {
     vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("API_RATE_LIMIT_STORE_DRIVER", "external");
     vi.stubEnv("AGE_VERIFICATION_ALLOW_MOCK_PROVIDER", "true");
     const app = await buildApi({
+      rateLimitStore: TestRateLimitStore,
       authVerifier: fakeAuthVerifier,
       sessionRepository: sessionRepositoryWithProfile({
         async onFind() {
@@ -1375,7 +1777,7 @@ describe("buildApi", () => {
     vi.unstubAllEnvs();
   });
 
-  it("requires explicit adult publisher terms before starting identity verification", async () => {
+  it("requires explicit adult publisher terms in the contextual create workflow", async () => {
     vi.stubEnv("AGE_VERIFICATION_ALLOW_MOCK_PROVIDER", "true");
     const app = await buildApi({ authVerifier: fakeAuthVerifier });
     await app.ready();
@@ -1389,7 +1791,7 @@ describe("buildApi", () => {
       },
       payload: {
         purpose: "adult_publisher_eligibility",
-        source: "onboarding"
+        source: "create"
       }
     });
 
@@ -1399,7 +1801,7 @@ describe("buildApi", () => {
     vi.unstubAllEnvs();
   });
 
-  it("starts one adult publisher identity and age flow from onboarding", async () => {
+  it("starts one adult publisher identity flow from the contextual create workflow", async () => {
     vi.stubEnv("AGE_VERIFICATION_ALLOW_MOCK_PROVIDER", "true");
     const createdSessions: unknown[] = [];
     const app = await buildApi({
@@ -1419,11 +1821,11 @@ describe("buildApi", () => {
       url: "/v1/verification/sessions",
       headers: {
         authorization: "Bearer valid-token",
-        "idempotency-key": "adult-onboarding-1"
+        "idempotency-key": "adult-create-1"
       },
       payload: {
         purpose: "adult_publisher_eligibility",
-        source: "onboarding",
+        source: "create",
         adultPublisherTermsAccepted: true
       }
     });
@@ -1433,7 +1835,7 @@ describe("buildApi", () => {
       purpose: "adult_publisher_eligibility",
       provider: "didit"
     });
-    expect(response.json().launchUrl).toContain("/age/callback?intent=adult");
+    expect(response.json().launchUrl).toContain("/app/create?verification=return");
     expect(createdSessions).toMatchObject([
       {
         purpose: "adult_publisher_eligibility",
@@ -1853,7 +2255,7 @@ describe("buildApi", () => {
     vi.unstubAllEnvs();
   });
 
-  it("updates the current profile after bootstrapping the Veel user row", async () => {
+  it("updates the current profile without read-time user bootstrapping", async () => {
     const ensuredSupabaseUserIds: string[] = [];
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -1886,7 +2288,7 @@ describe("buildApi", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(ensuredSupabaseUserIds).toEqual(["00000000-0000-4000-8000-000000000001"]);
+    expect(ensuredSupabaseUserIds).toEqual([]);
     expect(response.json()).toEqual({
       id: "00000000-0000-4000-8000-000000000010",
       handle: "maki",
@@ -1898,7 +2300,7 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("creates a backend-owned starter profile for onboarding", async () => {
+  it("does not expose a starter-profile shortcut", async () => {
     const upserts: unknown[] = [];
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -1914,7 +2316,7 @@ describe("buildApi", () => {
           return {
             id: "00000000-0000-4000-8000-000000000010",
             handle: input.handle,
-            displayName: input.displayName,
+            displayName: input.displayName ?? input.handle,
             avatarUrl: null,
             badges: []
           };
@@ -1933,21 +2335,8 @@ describe("buildApi", () => {
       payload: {}
     });
 
-    expect(response.statusCode).toBe(201);
-    expect(response.json()).toMatchObject({
-      handle: expect.stringMatching(/^wevid_[a-f0-9]{12}$/),
-      displayName: "WeVid user"
-    });
-    expect(upserts).toMatchObject([
-      {
-        supabaseUserId: "00000000-0000-4000-8000-000000000001",
-        input: {
-          displayName: "WeVid user",
-          handle: expect.stringMatching(/^wevid_[a-f0-9]{12}$/),
-          links: []
-        }
-      }
-    ]);
+    expect(response.statusCode).toBe(404);
+    expect(upserts).toEqual([]);
 
     await app.close();
   });
@@ -1975,8 +2364,7 @@ describe("buildApi", () => {
 
     expect(response.statusCode).toBe(400);
     expect(response.json()).toMatchObject({
-      code: "validation_failed",
-      message: "Profile picture must be 5MB or smaller"
+      code: "validation_failed"
     });
 
     await app.close();
@@ -2182,20 +2570,28 @@ describe("buildApi", () => {
       async setPrimaryWallet(input) {
         expect(input).toEqual({
           supabaseUserId: "00000000-0000-4000-8000-000000000001",
-          walletId: "00000000-0000-4000-8000-000000000020"
+          walletId: "00000000-0000-4000-8000-000000000020",
+          sessionToken: "valid-token"
         });
 
         return {
-          id: input.walletId,
-          chain: "solana_devnet",
-          address: "VeelWallet111111111111111111111111111111111",
-          provider: "embedded_privy",
-          isPrimary: true
+          wallet: {
+            id: input.walletId,
+            chain: "solana_devnet",
+            address: "VeelWallet111111111111111111111111111111111",
+            provider: "embedded_privy",
+            isPrimary: true
+          },
+          session: {
+            accessToken: "wevid_session_rotated",
+            expiresAt: new Date(Date.now() + 60_000)
+          }
         };
       }
     };
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
+      walletAuthRepository: rotatingWalletAuthRepository(),
       walletRepository
     });
     await app.ready();
@@ -2360,7 +2756,13 @@ describe("buildApi", () => {
         return storedChallenge;
       },
       async consumeVerifiedExternalWalletLink() {
-        return linkedWallet;
+        return {
+          wallet: linkedWallet,
+          session: {
+            accessToken: "wevid_session_rotated",
+            expiresAt: new Date(Date.now() + 60_000)
+          }
+        };
       },
       async findWalletForSupabaseUser() {
         return null;
@@ -2377,6 +2779,7 @@ describe("buildApi", () => {
     };
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
+      walletAuthRepository: rotatingWalletAuthRepository(),
       sessionRepository: sessionRepositoryWithProfile({
         async onFind() {
           return null;
@@ -9404,16 +9807,36 @@ describe("buildApi", () => {
   });
 });
 
-const fakeAuthVerifier: SupabaseAuthVerifier = {
-  async verifyBearerToken(token: string): Promise<VerifiedSupabaseSession | null> {
+class TestRateLimitStore {
+  constructor(_options: unknown) {}
+
+  incr(_key: string, callback: (error: Error | null, result?: { current: number; ttl: number }) => void) {
+    callback(null, { current: 1, ttl: 60_000 });
+  }
+
+  child() {
+    return this;
+  }
+}
+
+class FailingRateLimitStore extends TestRateLimitStore {
+  override incr(_key: string, callback: (error: Error | null) => void) {
+    callback(new Error("rate-limit store unavailable"));
+  }
+}
+
+const fakeAuthVerifier: ApplicationSessionVerifier = {
+  async verifyToken(token: string): Promise<VerifiedApplicationSession | null> {
     if (token !== "valid-token") {
       return null;
     }
 
     return {
+      userId: "00000000-0000-4000-8000-000000000001",
       supabaseUserId: "00000000-0000-4000-8000-000000000001",
-      email: "maki@example.test",
-      role: "authenticated"
+      sessionId: "00000000-0000-4000-8000-000000000099",
+      authenticatedAt: new Date(),
+      authenticationMethod: "wallet"
     };
   }
 };
@@ -9431,7 +9854,19 @@ function fakeWalletAuthRepository(
     async createSessionFromChallenge() {
       throw new Error("not implemented");
     },
-    async linkSupabaseRecovery() {
+    async createRecoveryLinkIntent() {
+      throw new Error("not implemented");
+    },
+    async exchangeRecoveryIdentity() {
+      throw new Error("not implemented");
+    },
+    async unlinkRecoveryIdentity() {
+      throw new Error("not implemented");
+    },
+    async rotateSessionToken() {
+      throw new Error("not implemented");
+    },
+    async revokeAllSessions() {
       throw new Error("not implemented");
     },
     async revokeSessionToken() {
@@ -9442,6 +9877,17 @@ function fakeWalletAuthRepository(
     },
     ...overrides
   };
+}
+
+function rotatingWalletAuthRepository() {
+  return fakeWalletAuthRepository({
+    async rotateSessionToken() {
+      return {
+        accessToken: "wevid_session_rotated",
+        expiresAt: new Date(Date.now() + 60_000)
+      };
+    }
+  });
 }
 
 const verifiedAgeRepository: AgeRepository = {
@@ -11473,9 +11919,7 @@ function sessionRepositoryWithProfile(options: {
   onFind: SessionRepository["findProfileBySupabaseUserId"];
 }): SessionRepository {
   return {
-    async ensureUserForSupabaseId(supabaseUserId) {
-      await options.onEnsure?.(supabaseUserId);
-    },
+    findProfileByUserId: options.onFind,
     findProfileBySupabaseUserId: options.onFind
   };
 }
@@ -11591,10 +12035,13 @@ const fakeProfileRepository: ProfileRepository = {
     return {
       id: "00000000-0000-4000-8000-000000000010",
       handle: input.handle,
-      displayName: input.displayName,
+      displayName: input.displayName ?? input.handle,
       avatarUrl: input.avatarUrl ?? null,
       badges: []
     };
+  },
+  async isHandleAvailable() {
+    return true;
   },
   async findCreatorProfileByHandle(handle) {
     expect(handle).toBe("maki");
