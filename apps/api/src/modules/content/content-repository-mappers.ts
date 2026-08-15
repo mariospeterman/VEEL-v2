@@ -27,7 +27,10 @@ export function toContentItem(
       likeCount: Number(row.like_count ?? 0),
       commentCount: Number(row.comment_count ?? 0),
       shareCount: Number(row.share_count ?? 0)
-    }
+    },
+    ...(typeof row.viewer_following_creator === "boolean"
+      ? { viewerFollowingCreator: row.viewer_following_creator }
+      : {})
   };
 }
 

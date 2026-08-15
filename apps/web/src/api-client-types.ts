@@ -32,6 +32,7 @@ export type PlatformPlaybackSession = components["schemas"]["PlatformPlaybackSes
 export type DiscoverPage = components["schemas"]["DiscoverPage"];
 export type FeedPage = components["schemas"]["FeedPage"];
 export type FeedPreferences = components["schemas"]["FeedPreferences"];
+export type FollowState = components["schemas"]["FollowState"];
 export type NotificationPreferences = components["schemas"]["NotificationPreferences"];
 export type NotificationPushConfig = components["schemas"]["NotificationPushConfig"];
 export type AgeStatus = components["schemas"]["AgeStatus"];

@@ -11,6 +11,7 @@ import type { WalletRepository } from "../wallet/types.js";
 import type {
   ContentRepository,
   FeedMode,
+  FeedSurface,
   MediaUploadProviderAdapter
 } from "./types.js";
 
@@ -26,7 +27,8 @@ export interface RegisterContentRoutesOptions {
   subscriptionRepository: SubscriptionRepository;
 }
 
-export const feedModes = new Set(["recommended", "following", "nsfw", "sfw", "live", "premium"]);
+export const feedModes = new Set(["recommended", "following", "nsfw", "sfw"]);
+export const feedSurfaces = new Set(["home", "bits"]);
 export const contentMediaTypes = new Set(["bit", "clip", "image", "vod", "live_replay"]);
 export const contentVisibilityValues = new Set(["public", "followers", "subscribers", "private"]);
 export const nsfwLabels = new Set(["none", "adult", "explicit"]);
@@ -54,6 +56,10 @@ export const defaultContentCreationAbusePolicy: ContentCreationAbusePolicy = {
 
 export function feedModeFromQuery(mode: string | undefined): FeedMode {
   return feedModes.has(mode ?? "") ? (mode as FeedMode) : "recommended";
+}
+
+export function feedSurfaceFromQuery(surface: string | undefined): FeedSurface {
+  return feedSurfaces.has(surface ?? "") ? (surface as FeedSurface) : "home";
 }
 
 export function rawBodyBuffer(rawBody: unknown): Buffer {

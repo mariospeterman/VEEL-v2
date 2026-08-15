@@ -13,6 +13,14 @@ import type {
   ShareReplayRow
 } from "./engagement-repository-rows.js";
 
+interface BlockActorRow {
+  actor_id: string;
+}
+
+interface BlockTargetRow {
+  target_id: string;
+}
+
 export function createEngagementIntakeRepositoryMethods(
   sql: postgres.Sql
 ): Pick<EngagementRepository, "createShare" | "createReport" | "blockUser"> {
@@ -205,23 +213,59 @@ export function createEngagementIntakeRepositoryMethods(
     },
     async blockUser(input) {
       return sql.begin(async (transaction) => {
+        const actors = await transaction<BlockActorRow[]>`
+          select id as actor_id
+          from users
+          where supabase_user_id = ${input.supabaseUserId}
+          limit 1
+        `;
+        const actor = actors[0];
+        if (!actor) throw new EngagementPolicyError("Block is not allowed");
+
+        // Preserve idempotency precedence even when a replay names a target
+        // that would otherwise fail policy validation (including the actor).
+        const replays = await transaction<BlockReplayRow[]>`
+          select blocker_user_id, blocked_user_id, idempotency_key
+          from blocks
+          where blocker_user_id = ${actor.actor_id}
+            and idempotency_key = ${input.idempotencyKey}
+          limit 1
+        `;
+        const replay = replays[0];
+        if (replay) {
+          if (replay.blocked_user_id !== input.blockedUserId) {
+            throw new EngagementIdempotencyConflictError();
+          }
+          return { blocked: true, blockedUserId: replay.blocked_user_id };
+        }
+
+        const targets = await transaction<BlockTargetRow[]>`
+          select id as target_id
+          from users
+          where id = ${input.blockedUserId}
+            and id <> ${actor.actor_id}
+          limit 1
+        `;
+        const target = targets[0];
+        if (!target) throw new EngagementPolicyError("Block is not allowed");
+
+        // Follow and block mutations take the same ordered pair lock. Whichever
+        // commits second must observe and preserve the block/follow invariant.
+        await transaction`
+          select id
+          from users
+          where id in (${actor.actor_id}, ${target.target_id})
+          order by id
+          for update
+        `;
+
         const insertedRows = await transaction<BlockReplayRow[]>`
-          with actor as (
-            select id
-            from users
-            where supabase_user_id = ${input.supabaseUserId}
-            limit 1
-          ),
-          target_user as (
-            select id
-            from users
-            where id = ${input.blockedUserId}
-            limit 1
-          )
           insert into blocks (blocker_user_id, blocked_user_id, idempotency_key)
-          select actor.id, target_user.id, ${input.idempotencyKey}
-          from actor, target_user
-          where actor.id <> target_user.id
+          values (
+            ${actor.actor_id},
+            ${target.target_id},
+            ${input.idempotencyKey}
+          )
           on conflict do nothing
           returning blocker_user_id, blocked_user_id, idempotency_key
         `;

@@ -331,7 +331,7 @@ async function respond(transaction: PostgresTransaction, input: {
       select
         pcr.content_item_id, pcr.performer_subject_id, coalesce(ps.linked_user_id, pcr.requested_by_user_id),
         pcr.allowed_uses, pcr.policy_version, pcr.release_version, 'active',
-        encode(digest(pcr.id::text || ':' || pcr.content_revision::text, 'sha256'), 'hex'),
+        encode(extensions.digest(pcr.id::text || ':' || pcr.content_revision::text, 'sha256'), 'hex'),
         'performer_consent_request:' || pcr.id::text, now(), pcr.content_revision
       from performer_consent_requests pcr
       join performer_subjects ps on ps.id = pcr.performer_subject_id

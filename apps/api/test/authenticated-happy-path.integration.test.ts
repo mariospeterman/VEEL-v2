@@ -326,6 +326,305 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         handle: buyerHandle,
         displayName: "Integration Buyer"
       });
+
+      const selfFollowTargetRows = await sql<{ id: string }[]>`
+        select id from users where supabase_user_id = ${buyerSupabaseUserId} limit 1
+      `;
+      const selfFollowStateResponse = await app.inject({
+        method: "GET",
+        url: `/v1/follows/${selfFollowTargetRows[0]!.id}`,
+        headers: authenticatedHeaders(`self-follow-read-${runId}`)
+      });
+      expect(selfFollowStateResponse.statusCode, selfFollowStateResponse.body).toBe(404);
+
+      const feedFixtureIds = await seedFeedVolumeFixtures(sql, {
+        creatorUserId: seededCreatorUserId,
+        count: 24,
+        runId
+      });
+
+      const projectionRaceContentId = feedFixtureIds.at(-1)!;
+      await Promise.all([
+        sql`
+          insert into content_reactions (
+            user_id, content_item_id, reaction_key, state, last_idempotency_key
+          ) values (
+            ${selfFollowTargetRows[0]!.id}, ${projectionRaceContentId}, 'like', 'active',
+            ${`projection-race-buyer-${runId}`}
+          )
+        `,
+        sql`
+          insert into content_reactions (
+            user_id, content_item_id, reaction_key, state, last_idempotency_key
+          ) values (
+            ${seededCreatorUserId}, ${projectionRaceContentId}, 'like', 'active',
+            ${`projection-race-creator-${runId}`}
+          )
+        `
+      ]);
+      const projectionRaceRows = await sql<{ like_count: string }[]>`
+        select like_count
+        from content_engagement_counters
+        where content_item_id = ${projectionRaceContentId}
+      `;
+      expect(projectionRaceRows[0]?.like_count).toBe("2");
+      await sql`
+        delete from content_reactions
+        where content_item_id = ${projectionRaceContentId}
+          and user_id in (${selfFollowTargetRows[0]!.id}, ${seededCreatorUserId})
+      `;
+      const projectionAfterDeleteRows = await sql<{ like_count: string }[]>`
+        select like_count
+        from content_engagement_counters
+        where content_item_id = ${projectionRaceContentId}
+      `;
+      expect(projectionAfterDeleteRows[0]?.like_count).toBe("0");
+
+      const followIdempotencyKey = `follow-${runId}`;
+      const concurrentFollowResponses = await Promise.all([
+        app.inject({
+          method: "POST",
+          url: `/v1/follows/${seededCreatorUserId}`,
+          headers: authenticatedHeaders(followIdempotencyKey)
+        }),
+        app.inject({
+          method: "POST",
+          url: `/v1/follows/${seededCreatorUserId}`,
+          headers: authenticatedHeaders(followIdempotencyKey)
+        })
+      ]);
+      expect(concurrentFollowResponses.map((response) => response.statusCode)).toEqual([200, 200]);
+      expect(concurrentFollowResponses[0]?.json()).toMatchObject({
+        userId: seededCreatorUserId,
+        following: true,
+        followerCount: 1
+      });
+
+      const followStateResponse = await app.inject({
+        method: "GET",
+        url: `/v1/follows/${seededCreatorUserId}`,
+        headers: authenticatedHeaders(`follow-read-${runId}`)
+      });
+      expect(followStateResponse.statusCode, followStateResponse.body).toBe(200);
+      expect(followStateResponse.json()).toMatchObject({ following: true, followerCount: 1 });
+
+      await sql`
+        update profiles set visibility = 'private' where user_id = ${seededCreatorUserId}
+      `;
+      const privateCreatorFeedResponse = await app.inject({
+        method: "GET",
+        url: "/v1/content/feed?mode=following&surface=home",
+        headers: authenticatedHeaders(`private-creator-feed-${runId}`)
+      });
+      expect(privateCreatorFeedResponse.statusCode, privateCreatorFeedResponse.body).toBe(200);
+      expect(privateCreatorFeedResponse.json()).toMatchObject({ items: [] });
+
+      const hiddenTargetFollowReplay = await app.inject({
+        method: "POST",
+        url: `/v1/follows/${seededCreatorUserId}`,
+        headers: authenticatedHeaders(followIdempotencyKey)
+      });
+      expect(hiddenTargetFollowReplay.statusCode, hiddenTargetFollowReplay.body).toBe(200);
+      expect(hiddenTargetFollowReplay.json()).toMatchObject({ following: true, followerCount: 1 });
+
+      const hiddenTargetUnfollowResponse = await app.inject({
+        method: "DELETE",
+        url: `/v1/follows/${seededCreatorUserId}`,
+        headers: authenticatedHeaders(`hidden-target-unfollow-${runId}`)
+      });
+      expect(hiddenTargetUnfollowResponse.statusCode, hiddenTargetUnfollowResponse.body).toBe(200);
+      expect(hiddenTargetUnfollowResponse.json()).toMatchObject({
+        following: false,
+        followerCount: 0
+      });
+      await sql`
+        update profiles set visibility = 'public' where user_id = ${seededCreatorUserId}
+      `;
+      const refollowResponse = await app.inject({
+        method: "POST",
+        url: `/v1/follows/${seededCreatorUserId}`,
+        headers: authenticatedHeaders(`refollow-${runId}`)
+      });
+      expect(refollowResponse.statusCode, refollowResponse.body).toBe(200);
+      expect(refollowResponse.json()).toMatchObject({ following: true, followerCount: 1 });
+
+      const followingFeedResponse = await app.inject({
+        method: "GET",
+        url: "/v1/content/feed?mode=following&surface=home",
+        headers: authenticatedHeaders(`following-feed-${runId}`)
+      });
+      expect(followingFeedResponse.statusCode, followingFeedResponse.body).toBe(200);
+      expect(followingFeedResponse.json()).toMatchObject({
+        mode: "following",
+        surface: "home",
+        rankingVersion: "deterministic_v1"
+      });
+      const staleFollowingPage = followingFeedResponse.json<{
+        items: Array<{ id: string; creator: { id: string }; viewerFollowingCreator: boolean }>;
+        nextCursor: string | null;
+      }>();
+      expect(staleFollowingPage.nextCursor).toEqual(expect.any(String));
+      await sql`
+        update content_engagement_counters
+        set like_count = like_count + 1, updated_at = now()
+        where content_item_id = ${feedFixtureIds[0]!}
+      `;
+      const staleRankingCursorResponse = await app.inject({
+        method: "GET",
+        url: `/v1/content/feed?mode=following&surface=home&cursor=${encodeURIComponent(staleFollowingPage.nextCursor!)}`,
+        headers: authenticatedHeaders(`following-feed-stale-${runId}`)
+      });
+      expect(staleRankingCursorResponse.statusCode, staleRankingCursorResponse.body).toBe(409);
+      expect(staleRankingCursorResponse.json()).toMatchObject({ code: "feed_cursor_stale" });
+
+      const refreshedFollowingFeedResponse = await app.inject({
+        method: "GET",
+        url: "/v1/content/feed?mode=following&surface=home",
+        headers: authenticatedHeaders(`following-feed-refreshed-${runId}`)
+      });
+      expect(refreshedFollowingFeedResponse.statusCode, refreshedFollowingFeedResponse.body).toBe(200);
+      const firstFollowingPage = refreshedFollowingFeedResponse.json<{
+        items: Array<{ id: string; creator: { id: string }; viewerFollowingCreator: boolean }>;
+        nextCursor: string | null;
+      }>();
+      expect(firstFollowingPage.items).toHaveLength(20);
+      expect(firstFollowingPage.items.every((item) =>
+        item.creator.id === seededCreatorUserId && item.viewerFollowingCreator
+      )).toBe(true);
+      expect(firstFollowingPage.nextCursor).toEqual(expect.any(String));
+
+      const crossSurfaceCursorResponse = await app.inject({
+        method: "GET",
+        url: `/v1/content/feed?mode=following&surface=bits&cursor=${encodeURIComponent(firstFollowingPage.nextCursor!)}`,
+        headers: authenticatedHeaders(`following-feed-cross-surface-${runId}`)
+      });
+      expect(crossSurfaceCursorResponse.statusCode, crossSurfaceCursorResponse.body).toBe(400);
+
+      const paginationImpressionResponse = await app.inject({
+        method: "POST",
+        url: "/v1/feed/impressions",
+        headers: authenticatedHeaders(`feed-page-impression-${runId}`),
+        payload: { contentId: firstFollowingPage.items[0]!.id }
+      });
+      expect(paginationImpressionResponse.statusCode, paginationImpressionResponse.body).toBe(202);
+
+      const secondFollowingFeedResponse = await app.inject({
+        method: "GET",
+        url: `/v1/content/feed?mode=following&surface=home&cursor=${encodeURIComponent(firstFollowingPage.nextCursor!)}`,
+        headers: authenticatedHeaders(`following-feed-next-${runId}`)
+      });
+      expect(secondFollowingFeedResponse.statusCode, secondFollowingFeedResponse.body).toBe(200);
+      const secondFollowingPage = secondFollowingFeedResponse.json<{ items: Array<{ id: string }> }>();
+      const firstPageIds = new Set(firstFollowingPage.items.map((item) => item.id));
+      expect(secondFollowingPage.items.some((item) => firstPageIds.has(item.id))).toBe(false);
+      expect(new Set([
+        ...firstFollowingPage.items.map((item) => item.id),
+        ...secondFollowingPage.items.map((item) => item.id)
+      ]).size).toBeGreaterThanOrEqual(feedFixtureIds.length);
+
+      const bitsFeedResponse = await app.inject({
+        method: "GET",
+        url: "/v1/content/feed?mode=following&surface=bits",
+        headers: authenticatedHeaders(`bits-feed-${runId}`)
+      });
+      expect(bitsFeedResponse.statusCode, bitsFeedResponse.body).toBe(200);
+      expect(bitsFeedResponse.json().items).toHaveLength(20);
+      expect(bitsFeedResponse.json().items.every((item: { mediaType: string }) =>
+        item.mediaType === "bit" || item.mediaType === "clip"
+      )).toBe(true);
+
+      const malformedFeedCursorResponse = await app.inject({
+        method: "GET",
+        url: "/v1/content/feed?mode=following&surface=home&cursor=not-a-cursor",
+        headers: authenticatedHeaders(`following-feed-invalid-${runId}`)
+      });
+      expect(malformedFeedCursorResponse.statusCode, malformedFeedCursorResponse.body).toBe(400);
+
+      const [impressionBaseline] = await sql<{ impression_count: number | string }[]>`
+        select coalesce(impression.impression_count, 0) as impression_count
+        from users viewer
+        left join viewer_content_impressions impression
+          on impression.user_id = viewer.id
+         and impression.content_item_id = ${seededFreeContentId}
+        where viewer.supabase_user_id = ${buyerSupabaseUserId}
+      `;
+      const impressionIdempotencyKey = `feed-impression-${runId}`;
+      const impressionResponses = await Promise.all([
+        app.inject({
+          method: "POST",
+          url: "/v1/feed/impressions",
+          headers: authenticatedHeaders(impressionIdempotencyKey),
+          payload: { contentId: seededFreeContentId }
+        }),
+        app.inject({
+          method: "POST",
+          url: "/v1/feed/impressions",
+          headers: authenticatedHeaders(impressionIdempotencyKey),
+          payload: { contentId: seededFreeContentId }
+        })
+      ]);
+      expect(impressionResponses.map((response) => response.statusCode)).toEqual([202, 202]);
+
+      const secondImpressionKey = `feed-impression-second-${runId}`;
+      const secondImpressionResponse = await app.inject({
+        method: "POST",
+        url: "/v1/feed/impressions",
+        headers: authenticatedHeaders(secondImpressionKey),
+        payload: { contentId: seededFreeContentId }
+      });
+      expect(secondImpressionResponse.statusCode, secondImpressionResponse.body).toBe(202);
+
+      const oldImpressionReplayResponse = await app.inject({
+        method: "POST",
+        url: "/v1/feed/impressions",
+        headers: authenticatedHeaders(impressionIdempotencyKey),
+        payload: { contentId: seededFreeContentId }
+      });
+      expect(oldImpressionReplayResponse.statusCode, oldImpressionReplayResponse.body).toBe(202);
+
+      const impressionCountRows = await sql<{ impression_count: number }[]>`
+        select impression.impression_count
+        from viewer_content_impressions impression
+        join users viewer on viewer.id = impression.user_id
+        where viewer.supabase_user_id = ${buyerSupabaseUserId}
+          and impression.content_item_id = ${seededFreeContentId}
+      `;
+      expect(Number(impressionCountRows[0]?.impression_count)).toBe(
+        Number(impressionBaseline?.impression_count) + 2
+      );
+
+      const conflictingImpressionResponse = await app.inject({
+        method: "POST",
+        url: "/v1/feed/impressions",
+        headers: authenticatedHeaders(impressionIdempotencyKey),
+        payload: { contentId: feedFixtureIds[0] }
+      });
+      expect(conflictingImpressionResponse.statusCode, conflictingImpressionResponse.body).toBe(409);
+
+      await sql`
+        update feed_impression_receipts receipt
+        set expires_at = now() - interval '1 second'
+        from users viewer
+        where viewer.id = receipt.user_id
+          and viewer.supabase_user_id = ${buyerSupabaseUserId}
+          and receipt.idempotency_key = ${impressionIdempotencyKey}
+      `;
+      const receiptCleanupResponse = await app.inject({
+        method: "POST",
+        url: "/v1/feed/impressions",
+        headers: authenticatedHeaders(`feed-impression-cleanup-${runId}`),
+        payload: { contentId: seededFreeContentId }
+      });
+      expect(receiptCleanupResponse.statusCode, receiptCleanupResponse.body).toBe(202);
+      const expiredReceiptRows = await sql<{ receipt_count: string }[]>`
+        select count(*) as receipt_count
+        from feed_impression_receipts receipt
+        join users viewer on viewer.id = receipt.user_id
+        where viewer.supabase_user_id = ${buyerSupabaseUserId}
+          and receipt.idempotency_key = ${impressionIdempotencyKey}
+      `;
+      expect(expiredReceiptRows[0]?.receipt_count).toBe("0");
+
       await seedDirectConversation(sql, {
         conversationId: seededConversationId,
         buyerSupabaseUserId,
@@ -484,6 +783,21 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         report_audit_count: "1",
         share_count: "1",
         share_audit_count: "1"
+      });
+
+      const [engagementProjection] = await sql<{
+        comment_count: string;
+        like_count: string;
+        share_count: string;
+      }[]>`
+        select like_count, comment_count, share_count
+        from content_engagement_counters
+        where content_item_id = ${seededFreeContentId}
+      `;
+      expect(engagementProjection).toEqual({
+        comment_count: "1",
+        like_count: "1",
+        share_count: "1"
       });
 
       const adultDraftResponse = await app.inject({
@@ -2252,8 +2566,20 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         provider_event_count: "1"
       });
 
+      const preBlockUnfollowResponse = await app.inject({
+        method: "DELETE",
+        url: `/v1/follows/${seededCreatorUserId}`,
+        headers: authenticatedHeaders(`pre-block-unfollow-${runId}`)
+      });
+      expect(preBlockUnfollowResponse.statusCode, preBlockUnfollowResponse.body).toBe(200);
+
       const blockIdempotencyKey = `engagement-block-${runId}`;
-      const concurrentBlockResponses = await Promise.all([
+      const [concurrentFollowDuringBlock, ...concurrentBlockResponses] = await Promise.all([
+        app.inject({
+          method: "POST",
+          url: `/v1/follows/${seededCreatorUserId}`,
+          headers: authenticatedHeaders(`concurrent-follow-block-${runId}`)
+        }),
         app.inject({
           method: "POST",
           url: `/v1/blocks/${seededCreatorUserId}`,
@@ -2265,6 +2591,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           headers: authenticatedHeaders(blockIdempotencyKey)
         })
       ]);
+      expect([200, 409]).toContain(concurrentFollowDuringBlock.statusCode);
       expect(concurrentBlockResponses.map((response) => response.statusCode)).toEqual([200, 200]);
       expect(concurrentBlockResponses[0]?.json()).toEqual(concurrentBlockResponses[1]?.json());
 
@@ -2290,6 +2617,26 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           ) as audit_count
       `;
       expect(blockRows).toEqual({ audit_count: "1", block_count: "1" });
+      const [blockedFollowRows] = await sql<{
+        follower_count: string;
+        follow_state: string;
+        following_count: string;
+      }[]>`
+        select
+          follow.state as follow_state,
+          creator_counts.follower_count,
+          buyer_counts.following_count
+        from user_follows follow
+        join user_social_counts creator_counts on creator_counts.user_id = follow.followed_user_id
+        join user_social_counts buyer_counts on buyer_counts.user_id = follow.follower_user_id
+        where follow.follower_user_id = ${buyerUserId!}
+          and follow.followed_user_id = ${seededCreatorUserId}
+      `;
+      expect(blockedFollowRows).toEqual({
+        follower_count: "0",
+        follow_state: "inactive",
+        following_count: "0"
+      });
     } finally {
       await cleanupRun(sql, {
         buyerHandle,
@@ -2310,7 +2657,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       await app.close();
       vi.unstubAllEnvs();
     }
-  }, 120_000);
+  }, 180_000);
 
   it("fails closed when a link intent targets a blocked recovery identity", async () => {
     const databaseUrl = integrationDatabaseUrl();
@@ -2696,12 +3043,13 @@ async function seedCreatorPaidContent(
     supabaseUserId: input.creatorSupabaseUserId
   });
   await sql`
-    insert into profiles (user_id, handle, display_name, bio)
-    values (${input.creatorUserId}, ${input.creatorHandle}, 'Integration Creator', 'Paid test creator')
+    insert into profiles (user_id, handle, display_name, bio, visibility)
+    values (${input.creatorUserId}, ${input.creatorHandle}, 'Integration Creator', 'Paid test creator', 'public')
     on conflict (user_id) do update set
       handle = excluded.handle,
       display_name = excluded.display_name,
       bio = excluded.bio,
+      visibility = excluded.visibility,
       updated_at = now()
   `;
   await sql`
@@ -2956,6 +3304,73 @@ async function seedCreatorFreeVideo(
     rating: "none",
     representationMode: "not_declared"
   });
+}
+
+async function seedFeedVolumeFixtures(
+  sql: PostgresSql,
+  input: { creatorUserId: string; count: number; runId: string }
+): Promise<string[]> {
+  const ids: string[] = [];
+  for (let index = 0; index < input.count; index += 1) {
+    const contentId = randomUUID();
+    const mediaAssetId = randomUUID();
+    ids.push(contentId);
+    await sql`
+      insert into content_items (
+        id,
+        creator_user_id,
+        media_type,
+        state,
+        publish_state,
+        caption,
+        visibility,
+        nsfw_label,
+        moderation_state,
+        created_at
+      ) values (
+        ${contentId},
+        ${input.creatorUserId},
+        ${index % 2 === 0 ? "bit" : "clip"},
+        'ready',
+        'submitted_for_review',
+        ${`Feed volume fixture ${input.runId} ${index}`},
+        'public',
+        'none',
+        'pending',
+        now() - interval '2 days' - (${index} * interval '1 second')
+      )
+    `;
+    await sql`
+      insert into media_assets (
+        id,
+        content_item_id,
+        provider,
+        provider_asset_id,
+        provider_state,
+        poster_url,
+        playback_url,
+        provider_playable,
+        ready_at
+      ) values (
+        ${mediaAssetId},
+        ${contentId},
+        'bunny',
+        ${`integration-feed-${input.runId}-${index}`},
+        'ready',
+        ${`https://media.example.test/feed-${index}.jpg`},
+        ${`https://video.example.test/${mediaAssetId}/playlist.m3u8`},
+        true,
+        now()
+      )
+    `;
+    await approveSeededContent(sql, {
+      contentId,
+      creatorUserId: input.creatorUserId,
+      rating: "none",
+      representationMode: "not_declared"
+    });
+  }
+  return ids;
 }
 
 async function approveSeededContent(
@@ -3431,6 +3846,20 @@ async function cleanupRun(
         delete from platform_usage_windows
         where user_id in ${tx(userIds)}
       `;
+      await tx`
+        delete from viewer_content_impressions
+        where user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from follow_action_receipts
+        where actor_user_id in ${tx(userIds)}
+           or target_user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from user_follows
+        where follower_user_id in ${tx(userIds)}
+           or followed_user_id in ${tx(userIds)}
+      `;
     }
     await tx`
       delete from tier_waivers
@@ -3808,6 +4237,10 @@ async function cleanupRun(
         `;
       }
       await tx`
+        delete from viewer_content_impressions
+        where content_item_id in ${tx(contentIds)}
+      `;
+      await tx`
         delete from engagement_action_receipts
         where target_id in ${tx(contentIds)}
       `;
@@ -3848,6 +4281,10 @@ async function cleanupRun(
       await tx`
         delete from audit_events
         where subject_id in ${tx(contentIds)}
+      `;
+      await tx`
+        delete from content_engagement_counters
+        where content_item_id in ${tx(contentIds)}
       `;
       await tx`
         delete from content_items
@@ -3930,6 +4367,10 @@ async function cleanupRun(
       `;
       await tx`
         delete from user_provider_identities
+        where user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from user_social_counts
         where user_id in ${tx(userIds)}
       `;
       await tx`

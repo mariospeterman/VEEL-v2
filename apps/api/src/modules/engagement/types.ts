@@ -8,13 +8,27 @@ export type CreateReportRequest = components["schemas"]["CreateReportRequest"];
 export type CreateShareRequest = components["schemas"]["CreateShareRequest"];
 export type EngagementState = components["schemas"]["EngagementState"];
 export type FeedPreferences = components["schemas"]["FeedPreferences"];
+export type FollowState = components["schemas"]["FollowState"];
 export type HideFeedCreatorRequest = components["schemas"]["HideFeedCreatorRequest"];
 export type HideFeedTopicRequest = components["schemas"]["HideFeedTopicRequest"];
 export type ModerationIntake = components["schemas"]["ModerationIntake"];
+export type RecordFeedImpressionRequest = components["schemas"]["RecordFeedImpressionRequest"];
 export type ShareResult = components["schemas"]["ShareResult"];
 export type UpdateFeedPreferencesRequest = components["schemas"]["UpdateFeedPreferencesRequest"];
 
 export interface EngagementRepository {
+  getFollowState(input: { supabaseUserId: string; targetUserId: string }): Promise<FollowState>;
+  setFollowState(input: {
+    supabaseUserId: string;
+    targetUserId: string;
+    following: boolean;
+    idempotencyKey: string;
+  }): Promise<FollowState>;
+  recordFeedImpression(input: {
+    supabaseUserId: string;
+    body: RecordFeedImpressionRequest;
+    idempotencyKey: string;
+  }): Promise<void>;
   getFeedPreferences(input: { supabaseUserId: string }): Promise<FeedPreferences>;
   updateFeedPreferences(input: {
     supabaseUserId: string;

@@ -18,20 +18,48 @@ export function preferencesSelectSql(sql: postgres.Sql, source: string) {
   `);
 }
 
-export function visibleContentSql(sql: postgres.Sql, contentId: string, supabaseUserId: string) {
+export function visibleContentSql(
+  sql: postgres.Sql | postgres.TransactionSql,
+  contentId: string,
+  supabaseUserId: string
+) {
   return sql`
     select ci.id, ci.creator_user_id
     from content_items ci
     join users viewer on viewer.supabase_user_id = ${supabaseUserId}
+    join users creator on creator.id = ci.creator_user_id and creator.state = 'active'
     where ci.id = ${contentId}
       and ci.state = 'ready'
+      and ci.publish_state = 'published'
       and ci.visibility = 'public'
       and ci.moderation_state = 'approved'
+      and not exists (
+        select 1
+        from viewer_hidden_creators hidden
+        where hidden.user_id = viewer.id
+          and hidden.creator_user_id = ci.creator_user_id
+      )
+      and not exists (
+        select 1
+        from viewer_hidden_topics hidden_topic
+        join hashtags hashtag on hashtag.slug = hidden_topic.topic
+        join content_hashtags content_hashtag
+          on content_hashtag.hashtag_id = hashtag.id
+          and content_hashtag.content_item_id = ci.id
+        where hidden_topic.user_id = viewer.id
+      )
       and not exists (
         select 1
         from blocks b
         where (b.blocker_user_id = viewer.id and b.blocked_user_id = ci.creator_user_id)
            or (b.blocker_user_id = ci.creator_user_id and b.blocked_user_id = viewer.id)
+      )
+      and not exists (
+        select 1
+        from reports report
+        where report.reporter_user_id = viewer.id
+          and report.subject_type = 'content'
+          and report.subject_id = ci.id
       )
   `;
 }
@@ -62,9 +90,11 @@ export async function engagementState(
           and cs.user_id = viewer.id
           and cs.state = 'active'
       ) as saved,
-      (select count(*) from content_reactions where content_item_id = ${contentId} and reaction_key = 'like' and state = 'active') as like_count,
-      (select count(*) from comments where content_item_id = ${contentId} and moderation_state = 'visible') as comment_count,
-      (select count(*) from share_records where target_type = 'content' and target_id = ${contentId} and state = 'created') as share_count
+      coalesce(counter.like_count, 0) as like_count,
+      coalesce(counter.comment_count, 0) as comment_count,
+      coalesce(counter.share_count, 0) as share_count
+    from (select 1) anchor
+    left join content_engagement_counters counter on counter.content_item_id = ${contentId}
   `;
 
   const row = rows[0];

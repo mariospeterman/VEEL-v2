@@ -6,7 +6,8 @@ export type CreateContentRequest = components["schemas"]["CreateContentRequest"]
 export type CreateUploadRequest = components["schemas"]["CreateUploadRequest"];
 export type Entitlement = components["schemas"]["Entitlement"];
 export type FeedPage = components["schemas"]["FeedPage"];
-export type FeedMode = "recommended" | "following" | "nsfw" | "sfw" | "live" | "premium";
+export type FeedMode = "recommended" | "following" | "nsfw" | "sfw";
+export type FeedSurface = "home" | "bits";
 export type UploadSession = components["schemas"]["UploadSession"];
 export type UpdateContentRequest = components["schemas"]["UpdateContentRequest"];
 export type PublishContentRequest = components["schemas"]["PublishContentRequest"];
@@ -18,6 +19,7 @@ export type CreateMediaModerationAppealRequest =
 export interface ListHomeFeedInput {
   supabaseUserId: string;
   mode: FeedMode;
+  surface: FeedSurface;
   cursor?: string;
   limit: number;
 }

@@ -18,3 +18,10 @@ export class EngagementIdempotencyConflictError extends Error {
     this.name = "EngagementIdempotencyConflictError";
   }
 }
+
+export class EngagementNotFoundError extends Error {
+  constructor() {
+    super("ENGAGEMENT_TARGET_NOT_FOUND");
+    this.name = "EngagementNotFoundError";
+  }
+}

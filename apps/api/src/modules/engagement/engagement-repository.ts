@@ -5,6 +5,7 @@ import { createEngagementCommentRepositoryMethods } from "./engagement-comment-r
 import { createEngagementContentActionRepositoryMethods } from "./engagement-content-actions-repository.js";
 import { createEngagementIntakeRepositoryMethods } from "./engagement-intake-repository.js";
 import { createEngagementPreferencesRepositoryMethods } from "./engagement-preferences-repository.js";
+import { createEngagementSocialRepositoryMethods } from "./engagement-social-repository.js";
 
 export {
   EngagementIdempotencyConflictError,
@@ -16,6 +17,15 @@ export function createPostgresEngagementRepository(database?: string | PostgresS
   if (!database) {
     return {
       async getFeedPreferences() {
+        throw new EngagementRepositoryConfigurationError();
+      },
+      async getFollowState() {
+        throw new EngagementRepositoryConfigurationError();
+      },
+      async setFollowState() {
+        throw new EngagementRepositoryConfigurationError();
+      },
+      async recordFeedImpression() {
         throw new EngagementRepositoryConfigurationError();
       },
       async updateFeedPreferences() {
@@ -57,6 +67,7 @@ export function createPostgresEngagementRepository(database?: string | PostgresS
   const { sql, ownsClient } = resolvePostgresClient(database);
 
   return {
+    ...createEngagementSocialRepositoryMethods(sql),
     ...createEngagementPreferencesRepositoryMethods(sql),
     ...createEngagementContentActionRepositoryMethods(sql),
     ...createEngagementCommentRepositoryMethods(sql),

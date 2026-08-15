@@ -7,6 +7,7 @@ import { AdminRepositoryStateConflictError } from "../src/modules/admin/admin-re
 import type { AdminRepository } from "../src/modules/admin/types";
 import type { ActivityRepository } from "../src/modules/activity/types";
 import { createBunnyStreamUploadAdapter } from "../src/modules/content/media-upload-adapter";
+import { StaleFeedCursorError } from "../src/modules/content/content-feed-cursor";
 import { ContentDraftQuotaExceededError } from "../src/modules/content/content-repository";
 import type {
   ContentItem,
@@ -356,6 +357,26 @@ describe("buildApi", () => {
 
     expect(response.statusCode).toBe(204);
     expect(response.headers["access-control-allow-methods"]).toContain("PATCH");
+
+    await app.close();
+  });
+
+  it("allows browser unfollow mutations through CORS preflight", async () => {
+    const app = await buildApi();
+    await app.ready();
+
+    const response = await app.inject({
+      method: "OPTIONS",
+      url: "/v1/follows/00000000-0000-4000-8000-000000000011",
+      headers: {
+        origin: "http://localhost:3000",
+        "access-control-request-method": "DELETE",
+        "access-control-request-headers": "authorization,content-type,idempotency-key"
+      }
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(response.headers["access-control-allow-methods"]).toContain("DELETE");
 
     await app.close();
   });
@@ -2862,12 +2883,17 @@ describe("buildApi", () => {
         expect(input).toEqual({
           supabaseUserId: "00000000-0000-4000-8000-000000000001",
           mode: "recommended",
+          surface: "home",
           limit: 20
         });
 
         return {
           items: [homeFeedItem],
-          nextCursor: null
+          nextCursor: null,
+          mode: "recommended",
+          surface: "home",
+          rankingVersion: "deterministic_v1",
+          generatedAt: "2026-06-05T12:00:00.000Z"
         };
       }
     };
@@ -2902,9 +2928,56 @@ describe("buildApi", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       items: [homeFeedItem],
-      nextCursor: null
+      nextCursor: null,
+      mode: "recommended",
+      surface: "home",
+      rankingVersion: "deterministic_v1",
+      generatedAt: "2026-06-05T12:00:00.000Z"
     });
 
+    await app.close();
+  });
+
+  it("requires a first-page refresh when mutable feed ranking inputs changed", async () => {
+    const contentRepository: ContentRepository = {
+      async createDraft() { throw new Error("not implemented"); },
+      async createMediaAsset() { throw new Error("not implemented"); },
+      async findContentDetail() { throw new Error("not implemented"); },
+      async findContentUnlockOffer() { throw new Error("not implemented"); },
+      async findOwnedContentForUpload() { throw new Error("not implemented"); },
+      async listHomeFeed() { throw new StaleFeedCursorError(); }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      verificationRepository: creatorVerifiedVerificationRepository(),
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/content/feed?cursor=opaque-cursor",
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      code: "feed_cursor_stale",
+      message: "Feed ranking changed; restart from the first page"
+    });
     await app.close();
   });
 
@@ -9642,6 +9715,66 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("reads and mutates the canonical follow graph and records feed impressions", async () => {
+    const calls: Array<{ kind: string; input: unknown }> = [];
+    const targetUserId = "00000000-0000-4000-8000-000000000011";
+    const contentId = "00000000-0000-4000-8000-000000000040";
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      engagementRepository: fakeEngagementRepository({
+        async onGetFollowState(input) {
+          calls.push({ kind: "read", input });
+        },
+        async onSetFollowState(input) {
+          calls.push({ kind: input.following ? "follow" : "unfollow", input });
+        },
+        async onRecordFeedImpression(input) {
+          calls.push({ kind: "impression", input });
+        }
+      })
+    });
+    await app.ready();
+
+    const read = await app.inject({
+      method: "GET",
+      url: `/v1/follows/${targetUserId}`,
+      headers: { authorization: "Bearer valid-token" }
+    });
+    const follow = await app.inject({
+      method: "POST",
+      url: `/v1/follows/${targetUserId}`,
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "follow-command-1" }
+    });
+    const unfollow = await app.inject({
+      method: "DELETE",
+      url: `/v1/follows/${targetUserId}`,
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "unfollow-command-1" }
+    });
+    const impression = await app.inject({
+      method: "POST",
+      url: "/v1/feed/impressions",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "impression-1" },
+      payload: { contentId }
+    });
+
+    expect(read.statusCode).toBe(200);
+    expect(follow.statusCode).toBe(200);
+    expect(follow.json().following).toBe(true);
+    expect(unfollow.statusCode).toBe(200);
+    expect(unfollow.json().following).toBe(false);
+    expect(impression.statusCode).toBe(202);
+    expect(calls).toMatchObject([
+      { kind: "read", input: { targetUserId } },
+      { kind: "follow", input: { targetUserId, following: true, idempotencyKey: "follow-command-1" } },
+      { kind: "unfollow", input: { targetUserId, following: false, idempotencyKey: "unfollow-command-1" } },
+      { kind: "impression", input: { body: { contentId }, idempotencyKey: "impression-1" } }
+    ]);
+
+    await app.close();
+  });
+
   it("blocks engagement before age verification", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -10708,6 +10841,9 @@ const fakeUnconfirmedSettlementVerifier: PaymentSettlementVerifier = {
 function fakeEngagementRepository(
   overrides: Partial<{
     onGetFeedPreferences: EngagementCallback<"getFeedPreferences">;
+    onGetFollowState: EngagementCallback<"getFollowState">;
+    onSetFollowState: EngagementCallback<"setFollowState">;
+    onRecordFeedImpression: EngagementCallback<"recordFeedImpression">;
     onUpdateFeedPreferences: EngagementCallback<"updateFeedPreferences">;
     onResetFeedRecommendations: EngagementCallback<"resetFeedRecommendations">;
     onHideCreator: EngagementCallback<"hideCreator">;
@@ -10722,6 +10858,17 @@ function fakeEngagementRepository(
   }> = {}
 ): EngagementRepository {
   return {
+    async getFollowState(input) {
+      await overrides.onGetFollowState?.(input);
+      return { userId: input.targetUserId, following: false, followerCount: 0, followingCount: 0 };
+    },
+    async setFollowState(input) {
+      await overrides.onSetFollowState?.(input);
+      return { userId: input.targetUserId, following: input.following, followerCount: input.following ? 1 : 0, followingCount: 0 };
+    },
+    async recordFeedImpression(input) {
+      await overrides.onRecordFeedImpression?.(input);
+    },
     async getFeedPreferences(input) {
       await overrides.onGetFeedPreferences?.(input);
       return {
@@ -12234,7 +12381,8 @@ const fakeProfileRepository: ProfileRepository = {
         contentCount: 2,
         liveRoomCount: 1,
         confirmedPaymentCount: 3,
-        followerCount: 0
+        followerCount: 0,
+        followingCount: 0
       },
       monetisation: {
         supportEnabled: true,

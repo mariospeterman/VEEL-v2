@@ -83,7 +83,7 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   await app.register(cors, {
     origin: allowedWebOrigins(app.config.WEB_URL, app.config.NODE_ENV),
     credentials: true,
-    methods: ["GET", "HEAD", "POST", "PATCH", "OPTIONS"]
+    methods: ["DELETE", "GET", "HEAD", "POST", "PATCH", "OPTIONS"]
   });
 
   if (app.config.API_RATE_LIMIT_STORE_DRIVER === "external" && !options.rateLimitStore) {
