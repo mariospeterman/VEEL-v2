@@ -28,8 +28,8 @@ Current implementation state:
 - `GET /v1/discover/search`, `/hashtags`, `/hashtags/{slug}`, `/creators`, `/events`, and `/live` are implemented as protected Discover read models.
 - The route requires authenticated app readiness server-side: profile, verified age state, and wallet readiness.
 - Captions are parsed server-side for normalized hashtags. Frontend does not submit trusted hashtag state.
-- Eligibility is applied before scoring: ready/published/approved public media, active creator, viewer NSFW preference, hidden creators, blocks, and viewer reports. Bits additionally accepts only Bit/clip media. Following has no recommendation fallback and returns active followed creators only.
-- `deterministic_v1` freezes `generatedAt` and the prior-impression baseline on page one, then carries the same instant, feed mode/surface, and `(ranking_score, created_at, id)` in a validated opaque cursor. New posts and impressions emitted by the active scroll cannot shift that walk; cross-surface reuse and duplicate regressions are covered against more than one page of real Postgres fixtures. Engagement changes remain live ranking inputs, and access-rule/entitlement validity is always evaluated at request time, so the client also reconciles IDs defensively between pages.
+- Eligibility is applied before scoring: ready/published/approved public media, active creator, viewer NSFW preference, hidden creators/topics, blocks, and viewer reports. Bits additionally accepts only Bit/clip media. Following has no recommendation fallback and returns active followed creators only.
+- `deterministic_v1` freezes `generatedAt` and the prior-impression baseline on page one, then carries the same instant, feed mode/surface, an opaque fingerprint of the viewer's eligible ranking inputs, and `(ranking_score, created_at, id)` in a validated cursor. New posts and impressions emitted by the active scroll cannot shift that walk. Eligibility, follow, or engagement changes alter the read-time fingerprint and make the client restart from page one instead of skipping re-ranked items. This avoids any global mutation lock. Cross-surface reuse, stale fingerprints, and duplicate regressions are covered against more than one page of real Postgres fixtures. Access-rule and entitlement validity is always evaluated at request time.
 - Ranking uses only follow, bounded freshness, projected engagement quality, creator diversity, bounded exploration, and prior-impression de-prioritisation. Purchase value, wallet balance, settlement, creator earnings, checkout, membership, and Commerce Kit data are not queried and cannot influence ranking.
 - Engagement counters and follow counts are maintained as bounded write-time projections. The feed reads those projections, selects page IDs before playback/access lateral reads, and avoids count-correlated subqueries and per-card API calls.
 - The web Home surface renders the mixed feed plus its real live rail. `/app/bits` renders the same canonical projection as an immersive vertical surface. Both mount playback only for the active item, preload only the next poster, restore route scroll, reconcile real engagement/follow mutations, and render explicit loading/error/empty/exhausted states. Neither surface renders local business-data fixtures or raw provider payloads.
@@ -262,7 +262,7 @@ The launch `deterministic_v1` pipeline is:
 5. diversify creators
 6. apply NSFW preference
 7. apply prior-impression de-prioritisation and bounded deterministic exploration
-8. freeze the page-one timestamp and impression baseline, bind the cursor to mode/surface, and paginate by `(ranking_score, created_at, id)`
+8. freeze the page-one timestamp and impression baseline, bind the cursor to mode/surface and an eligible-input fingerprint, and paginate by `(ranking_score, created_at, id)`
 
 Only add ML/vector personalization after enough data exists.
 

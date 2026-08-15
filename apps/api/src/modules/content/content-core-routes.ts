@@ -7,7 +7,10 @@ import {
   ContentPublishConflictError,
   ContentRepositoryConfigurationError
 } from "./content-repository.js";
-import { InvalidFeedCursorError } from "./content-feed-cursor.js";
+import {
+  isInvalidFeedCursorError,
+  isStaleFeedCursorError
+} from "./content-feed-cursor.js";
 import { hashIdempotencyPayload, readIdempotencyKey } from "../../shared/idempotency.js";
 import { validateEventDraft } from "../event/event-route-shared.js";
 import type {
@@ -211,8 +214,15 @@ export async function registerContentCoreRoutes(
         });
       }
 
-      if (error instanceof InvalidFeedCursorError) {
+      if (isInvalidFeedCursorError(error)) {
         return reply.code(400).send({ code: "validation_failed", message: "Invalid feed cursor" });
+      }
+
+      if (isStaleFeedCursorError(error)) {
+        return reply.code(409).send({
+          code: "feed_cursor_stale",
+          message: "Feed ranking changed; restart from the first page"
+        });
       }
 
       throw error;

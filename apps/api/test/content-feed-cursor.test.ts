@@ -11,6 +11,7 @@ describe("content feed compound cursor", () => {
       mode: "recommended",
       surface: "home",
       asOf: "2026-08-15T10:00:00.000Z",
+      rankingRevision: "0123456789abcdef0123456789abcdef",
       score: 418,
       createdAt: "2026-08-14T09:30:00.000Z",
       id: "00000000-0000-4000-8000-000000000040"
@@ -21,6 +22,7 @@ describe("content feed compound cursor", () => {
       mode: "recommended",
       surface: "home",
       asOf: "2026-08-15T10:00:00.000Z",
+      rankingRevision: "0123456789abcdef0123456789abcdef",
       score: 418,
       createdAt: "2026-08-14T09:30:00.000Z",
       id: "00000000-0000-4000-8000-000000000040"
@@ -37,12 +39,14 @@ describe("content feed compound cursor", () => {
   it.each([
     { score: 2_147_483_648 },
     { createdAt: "2026-08-16T10:00:00.000Z" },
-    { asOf: "9999-08-15T10:00:00.000Z" }
+    { asOf: "9999-08-15T10:00:00.000Z" },
+    { rankingRevision: "not-a-ranking-fingerprint" }
   ])("rejects an unsafe tuple %#", (override) => {
     const cursor = encodeFeedCursor({
       mode: "recommended",
       surface: "home",
       asOf: "2026-08-15T10:00:00.000Z",
+      rankingRevision: "0123456789abcdef0123456789abcdef",
       score: 418,
       createdAt: "2026-08-14T09:30:00.000Z",
       id: "00000000-0000-4000-8000-000000000040",

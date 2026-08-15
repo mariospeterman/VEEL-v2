@@ -130,6 +130,10 @@ test("follows from the real Home feed and renders the immersive Bits surface", a
   await page.goto("/app/home", { waitUntil: "domcontentloaded", timeout: 45_000 });
 
   await expect(page.getByRole("article", { name: "Post by Aria Moon" }).first()).toBeVisible();
+  await page.addStyleTag({ content: ".home-feed { min-height: 3000px; }" });
+  await page.locator(".page-frame").evaluate((frame) => frame.scrollTo({ top: 480 }));
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem("wevid:home:recommended:scroll")))
+    .toBe("480");
   await expect(page.getByRole("button", { name: "Follow", exact: true })).toHaveCount(2);
   const followResponse = page.waitForResponse((response) =>
     response.request().method() === "POST" && response.url().endsWith(`/v1/follows/${user().id}`)

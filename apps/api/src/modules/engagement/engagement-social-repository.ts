@@ -16,6 +16,7 @@ interface FollowActorTargetRow {
 interface CurrentFollowRelationshipRow {
   blocked: boolean;
   following: boolean;
+  target_followable: boolean;
 }
 
 interface FollowReceiptRow {
@@ -46,10 +47,7 @@ export function createEngagementSocialRepositoryMethods(
             target.id as target_id
           from users actor
           join users target on target.id = ${input.targetUserId}
-          join profiles profile on profile.user_id = target.id
           where actor.supabase_user_id = ${input.supabaseUserId}
-            and target.state = 'active'
-            and profile.visibility = 'public'
         `;
 
         const relationship = relationships[0];
@@ -68,6 +66,26 @@ export function createEngagementSocialRepositoryMethods(
           for update
         `;
 
+        const action = input.following ? "follow" : "unfollow";
+        const priorReceipts = await transaction<FollowReceiptRow[]>`
+          select target_user_id, action
+          from follow_action_receipts
+          where actor_user_id = ${relationship.actor_id}
+            and idempotency_key = ${input.idempotencyKey}
+          limit 1
+        `;
+        const priorReceipt = priorReceipts[0];
+        if (priorReceipt) {
+          if (priorReceipt.target_user_id !== relationship.target_id || priorReceipt.action !== action) {
+            throw new EngagementIdempotencyConflictError();
+          }
+          return readFollowStateForMutation(
+            transaction,
+            relationship.actor_id,
+            relationship.target_id
+          );
+        }
+
         const currentRelationships = await transaction<CurrentFollowRelationshipRow[]>`
           select
             exists (
@@ -76,6 +94,14 @@ export function createEngagementSocialRepositoryMethods(
                  or (block.blocker_user_id = ${relationship.target_id} and block.blocked_user_id = ${relationship.actor_id})
             ) as blocked,
             exists (
+              select 1
+              from users target
+              join profiles profile on profile.user_id = target.id
+              where target.id = ${relationship.target_id}
+                and target.state = 'active'
+                and profile.visibility = 'public'
+            ) as target_followable,
+            exists (
               select 1 from user_follows follow
               where follow.follower_user_id = ${relationship.actor_id}
                 and follow.followed_user_id = ${relationship.target_id}
@@ -83,11 +109,13 @@ export function createEngagementSocialRepositoryMethods(
             ) as following
         `;
         const currentRelationship = currentRelationships[0];
-        if (!currentRelationship || currentRelationship.blocked) {
+        if (
+          !currentRelationship ||
+          (input.following && (currentRelationship.blocked || !currentRelationship.target_followable))
+        ) {
           throw new EngagementPolicyError("Follow is unavailable for this profile");
         }
 
-        const action = input.following ? "follow" : "unfollow";
         const receipts = await transaction<FollowReceiptRow[]>`
           insert into follow_action_receipts (
             actor_user_id,
@@ -116,7 +144,11 @@ export function createEngagementSocialRepositoryMethods(
           if (replay[0]?.target_user_id !== relationship.target_id || replay[0]?.action !== action) {
             throw new EngagementIdempotencyConflictError();
           }
-          return readFollowState(transaction, input.supabaseUserId, input.targetUserId);
+          return readFollowStateForMutation(
+            transaction,
+            relationship.actor_id,
+            relationship.target_id
+          );
         }
 
         await transaction`
@@ -186,7 +218,11 @@ export function createEngagementSocialRepositoryMethods(
           `;
         }
 
-        return readFollowState(transaction, input.supabaseUserId, input.targetUserId);
+        return readFollowStateForMutation(
+          transaction,
+          relationship.actor_id,
+          relationship.target_id
+        );
       });
     },
 
@@ -204,6 +240,13 @@ export function createEngagementSocialRepositoryMethods(
         if (visibleRows[0]?.id !== input.body.contentId) {
           throw new EngagementPolicyError("Content is not available in this feed");
         }
+
+        await transaction`
+          delete from feed_impression_receipts
+          where user_id = ${actorId}
+            and idempotency_key = ${input.idempotencyKey}
+            and expires_at <= now()
+        `;
 
         await transaction`
           delete from feed_impression_receipts receipt
@@ -298,6 +341,34 @@ async function readFollowState(
         where (block.blocker_user_id = actor.id and block.blocked_user_id = target.id)
            or (block.blocker_user_id = target.id and block.blocked_user_id = actor.id)
       )
+    limit 1
+  `;
+  const row = rows[0];
+  if (!row) throw new EngagementNotFoundError();
+  return {
+    userId: row.target_id,
+    following: row.following,
+    followerCount: Number(row.follower_count),
+    followingCount: Number(row.following_count)
+  };
+}
+
+async function readFollowStateForMutation(
+  sql: QueryableSql,
+  actorUserId: string,
+  targetUserId: string
+): Promise<FollowState> {
+  const rows = await sql<FollowStateRow[]>`
+    select
+      target.id as target_id,
+      coalesce(follow.state = 'active', false) as following,
+      coalesce(counts.follower_count, 0) as follower_count,
+      coalesce(counts.following_count, 0) as following_count
+    from users target
+    left join user_follows follow
+      on follow.follower_user_id = ${actorUserId} and follow.followed_user_id = target.id
+    left join user_social_counts counts on counts.user_id = target.id
+    where target.id = ${targetUserId}
     limit 1
   `;
   const row = rows[0];

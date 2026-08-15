@@ -233,7 +233,7 @@ POST   /v1/feed/impressions
 GET    /v1/activity
 ```
 
-Follow/unfollow is implemented through the canonical `user_follows` graph with projected follower/following counts, viewer-specific feed/profile state, durable command receipts, server-side block/public-profile constraints, social-only audit metadata, and new-follow notifications. It never implies Mutuals, messaging permission, membership, content access, or preferential paid treatment. Feed impressions use separate seven-day receipts so non-adjacent retries and concurrent delivery remain exactly idempotent inside the retry window; each write amortizes bounded expired-receipt cleanup.
+Follow/unfollow is implemented through the canonical `user_follows` graph with projected follower/following counts, viewer-specific feed/profile state, durable command receipts, server-side block/public-profile constraints, social-only audit metadata, and new-follow notifications. Follow and block take the same ordered user-pair locks, so a concurrent block cannot leave an active edge; unfollow remains available after a target becomes private or inactive, while a new follow still requires a public active profile. Follow never implies Mutuals, messaging permission, membership, content access, or preferential paid treatment. Feed impressions use separate seven-day receipts so non-adjacent retries and concurrent delivery remain exactly idempotent inside the retry window; each write amortizes bounded expired-receipt cleanup.
 
 ## Tests
 

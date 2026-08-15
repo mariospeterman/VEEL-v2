@@ -210,6 +210,8 @@ create trigger blocks_remove_follow_edges
 after insert on blocks
 for each row execute function private.remove_blocked_follow_edges();
 
+-- Apply only the changed row's contribution. The counter-row upsert is atomic,
+-- so concurrent reactions cannot overwrite one another with a stale recount.
 create or replace function private.refresh_content_engagement_counter()
 returns trigger
 language plpgsql
@@ -218,16 +220,37 @@ set search_path = public, pg_temp
 as $$
 declare
   projection_content_id uuid;
+  like_delta integer := 0;
+  comment_delta integer := 0;
+  share_delta integer := 0;
 begin
   if tg_table_name = 'content_reactions' then
     projection_content_id := coalesce(new.content_item_id, old.content_item_id);
+    if tg_op <> 'INSERT' and old.reaction_key = 'like' and old.state = 'active' then
+      like_delta := like_delta - 1;
+    end if;
+    if tg_op <> 'DELETE' and new.reaction_key = 'like' and new.state = 'active' then
+      like_delta := like_delta + 1;
+    end if;
   elsif tg_table_name = 'comments' then
     projection_content_id := coalesce(new.content_item_id, old.content_item_id);
+    if tg_op <> 'INSERT' and old.moderation_state = 'visible' then
+      comment_delta := comment_delta - 1;
+    end if;
+    if tg_op <> 'DELETE' and new.moderation_state = 'visible' then
+      comment_delta := comment_delta + 1;
+    end if;
   else
     if coalesce(new.target_type, old.target_type) <> 'content' then
       return coalesce(new, old);
     end if;
     projection_content_id := coalesce(new.target_id, old.target_id);
+    if tg_op <> 'INSERT' and old.target_type = 'content' and old.state = 'created' then
+      share_delta := share_delta - 1;
+    end if;
+    if tg_op <> 'DELETE' and new.target_type = 'content' and new.state = 'created' then
+      share_delta := share_delta + 1;
+    end if;
   end if;
 
   insert into content_engagement_counters (
@@ -239,16 +262,16 @@ begin
   )
   select
     projection_content_id,
-    (select count(*) from content_reactions reaction where reaction.content_item_id = projection_content_id and reaction.reaction_key = 'like' and reaction.state = 'active'),
-    (select count(*) from comments comment where comment.content_item_id = projection_content_id and comment.moderation_state = 'visible'),
-    (select count(*) from share_records share where share.target_type = 'content' and share.target_id = projection_content_id and share.state = 'created'),
+    greatest(like_delta, 0),
+    greatest(comment_delta, 0),
+    greatest(share_delta, 0),
     now()
   where exists (select 1 from content_items content where content.id = projection_content_id)
   on conflict (content_item_id) do update
   set
-    like_count = excluded.like_count,
-    comment_count = excluded.comment_count,
-    share_count = excluded.share_count,
+    like_count = greatest(0, content_engagement_counters.like_count + like_delta),
+    comment_count = greatest(0, content_engagement_counters.comment_count + comment_delta),
+    share_count = greatest(0, content_engagement_counters.share_count + share_delta),
     updated_at = excluded.updated_at;
 
   return coalesce(new, old);

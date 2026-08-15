@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { ContentItem, FeedPage } from "@/api-client";
 import {
+  ApiMutationError,
   getFeedPage,
   recordFeedImpression,
   type FollowState
@@ -56,8 +57,20 @@ export function FeedExperience({
       retryRef.current = null;
       return true;
     } catch (failure) {
+      let reportedFailure = failure;
+      if (cursor && failure instanceof ApiMutationError && failure.status === 409) {
+        try {
+          const fresh = await getFeedPage(nextMode, surface);
+          setPage(fresh);
+          setActiveId(fresh.items[0]?.id ?? null);
+          retryRef.current = null;
+          return true;
+        } catch (refreshFailure) {
+          reportedFailure = refreshFailure;
+        }
+      }
       retryRef.current = { mode: nextMode, ...(cursor ? { cursor } : {}) };
-      setError(safeMutationMessage(failure, "Feed"));
+      setError(safeMutationMessage(reportedFailure, "Feed"));
       return false;
     } finally {
       pendingRef.current = false;
@@ -66,7 +79,9 @@ export function FeedExperience({
   }, [surface]);
 
   useEffect(() => {
-    const scrollContainer = surface === "bits" ? feedRef.current : null;
+    const scrollContainer = surface === "bits"
+      ? feedRef.current
+      : feedRef.current?.closest<HTMLElement>(".page-frame") ?? null;
     const frame = requestAnimationFrame(() => {
       const saved = Number(sessionStorage.getItem(restoreKey));
       if (Number.isFinite(saved) && saved > 0) {

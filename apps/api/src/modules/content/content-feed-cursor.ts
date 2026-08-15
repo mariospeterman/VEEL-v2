@@ -3,16 +3,36 @@ interface FeedCursorPayload {
   mode: "recommended" | "following" | "nsfw" | "sfw";
   surface: "home" | "bits";
   asOf: string;
+  rankingRevision: string;
   score: number;
   createdAt: string;
   id: string;
 }
 
 export class InvalidFeedCursorError extends Error {
+  readonly code = "INVALID_FEED_CURSOR";
+
   constructor() {
     super("INVALID_FEED_CURSOR");
     this.name = "InvalidFeedCursorError";
   }
+}
+
+export class StaleFeedCursorError extends Error {
+  readonly code = "STALE_FEED_CURSOR";
+
+  constructor() {
+    super("STALE_FEED_CURSOR");
+    this.name = "StaleFeedCursorError";
+  }
+}
+
+export function isInvalidFeedCursorError(error: unknown): boolean {
+  return error instanceof InvalidFeedCursorError || hasFeedCursorErrorCode(error, "INVALID_FEED_CURSOR");
+}
+
+export function isStaleFeedCursorError(error: unknown): boolean {
+  return error instanceof StaleFeedCursorError || hasFeedCursorErrorCode(error, "STALE_FEED_CURSOR");
 }
 
 export function encodeFeedCursor(payload: Omit<FeedCursorPayload, "version">): string {
@@ -32,6 +52,7 @@ export function decodeFeedCursor(cursor: string): FeedCursorPayload {
       !["recommended", "following", "nsfw", "sfw"].includes(value.mode ?? "") ||
       !["home", "bits"].includes(value.surface ?? "") ||
       !isCanonicalTimestamp(value.asOf) ||
+      !isRankingRevision(value.rankingRevision) ||
       !isCanonicalTimestamp(value.createdAt) ||
       !Number.isInteger(value.score) ||
       value.score! < -2_147_483_648 ||
@@ -54,4 +75,12 @@ function isCanonicalTimestamp(value: unknown): value is string {
   if (typeof value !== "string") return false;
   const parsed = new Date(value);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString() === value;
+}
+
+function isRankingRevision(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9a-f]{32}$/.test(value);
+}
+
+function hasFeedCursorErrorCode(error: unknown, code: string): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === code;
 }

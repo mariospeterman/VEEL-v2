@@ -7,6 +7,7 @@ import { AdminRepositoryStateConflictError } from "../src/modules/admin/admin-re
 import type { AdminRepository } from "../src/modules/admin/types";
 import type { ActivityRepository } from "../src/modules/activity/types";
 import { createBunnyStreamUploadAdapter } from "../src/modules/content/media-upload-adapter";
+import { StaleFeedCursorError } from "../src/modules/content/content-feed-cursor";
 import { ContentDraftQuotaExceededError } from "../src/modules/content/content-repository";
 import type {
   ContentItem,
@@ -2934,6 +2935,49 @@ describe("buildApi", () => {
       generatedAt: "2026-06-05T12:00:00.000Z"
     });
 
+    await app.close();
+  });
+
+  it("requires a first-page refresh when mutable feed ranking inputs changed", async () => {
+    const contentRepository: ContentRepository = {
+      async createDraft() { throw new Error("not implemented"); },
+      async createMediaAsset() { throw new Error("not implemented"); },
+      async findContentDetail() { throw new Error("not implemented"); },
+      async findContentUnlockOffer() { throw new Error("not implemented"); },
+      async findOwnedContentForUpload() { throw new Error("not implemented"); },
+      async listHomeFeed() { throw new StaleFeedCursorError(); }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      verificationRepository: creatorVerifiedVerificationRepository(),
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/content/feed?cursor=opaque-cursor",
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      code: "feed_cursor_stale",
+      message: "Feed ranking changed; restart from the first page"
+    });
     await app.close();
   });
 
