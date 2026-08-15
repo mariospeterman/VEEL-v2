@@ -5,12 +5,12 @@ import {
   type ValidationErrorResponse
 } from "../../shared/idempotency.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
-import type { SupabaseAuthVerifier } from "../session/types.js";
+import type { ApplicationSessionVerifier } from "../session/types.js";
 import { AdminRepositoryConfigurationError } from "./admin-repository.js";
 import type { AdminRepository } from "./types.js";
 
 export interface RegisterAdminRoutesOptions {
-  authVerifier: SupabaseAuthVerifier;
+  authVerifier: ApplicationSessionVerifier;
   adminRepository: AdminRepository;
 }
 

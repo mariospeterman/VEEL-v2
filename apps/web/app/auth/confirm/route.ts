@@ -3,7 +3,6 @@ import { NextResponse, type NextRequest } from "next/server";
 import { parsePublicWebEnv } from "@veel/config/public";
 import { createSupabaseServerClient } from "@/supabase/server";
 
-const walletSessionCookieName = "veel_wallet_session_token";
 type AppAccessReason =
   | "age_pending"
   | "age_required"
@@ -11,6 +10,8 @@ type AppAccessReason =
   | "identity_required"
   | "ready"
   | "wallet_required";
+
+const recoveryLinkIntentCookieName = "veel_recovery_link_intent";
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
@@ -27,21 +28,23 @@ export async function GET(request: NextRequest) {
       : { data: null, error: new Error("Supabase is not configured") };
 
     if (!error) {
-      const linkError = await linkWalletRecoveryIfPresent(request, data?.session?.access_token ?? null);
-      if (linkError) {
+      const exchange = await exchangeRecoveryIdentity(request, data?.session?.access_token ?? null);
+      if (exchange.error) {
         redirectUrl.pathname = "/";
         redirectUrl.search = "";
         redirectUrl.searchParams.set("mode", "login");
-        redirectUrl.searchParams.set("error", linkError);
+        redirectUrl.searchParams.set("error", exchange.error);
         return NextResponse.redirect(redirectUrl);
       }
 
+      let destination = redirectUrl;
       if (next.startsWith("/app/")) {
-        const resolvedRedirect = await resolveRecoveryRedirect(requestUrl.origin, next, data?.session?.access_token ?? null);
-        return NextResponse.redirect(resolvedRedirect);
+        destination = await resolveRecoveryRedirect(requestUrl.origin, next, exchange.applicationCookie);
       }
 
-      return NextResponse.redirect(redirectUrl);
+      const response = NextResponse.redirect(destination);
+      for (const cookie of exchange.setCookies) response.headers.append("set-cookie", cookie);
+      return response;
     }
   }
 
@@ -75,37 +78,43 @@ async function confirmSupabaseAuth(
   return { data: null, error: new Error("Missing Supabase auth confirmation parameters") };
 }
 
-async function linkWalletRecoveryIfPresent(request: NextRequest, supabaseAccessToken: string | null) {
-  const walletSessionToken = request.cookies.get(walletSessionCookieName)?.value;
-
-  if (!walletSessionToken || !supabaseAccessToken) {
-    return null;
-  }
+async function exchangeRecoveryIdentity(request: NextRequest, supabaseAccessToken: string | null) {
+  if (!supabaseAccessToken) return { error: "auth_confirm_failed", setCookies: [], applicationCookie: null };
 
   const env = parsePublicWebEnv(process.env);
 
   try {
-    const response = await fetch(new URL("/v1/auth/recovery-link", env.NEXT_PUBLIC_API_BASE_URL), {
+    const response = await fetch(new URL("/v1/auth/recovery/exchange", env.NEXT_PUBLIC_API_BASE_URL), {
       body: JSON.stringify({}),
       cache: "no-store",
       headers: {
         accept: "application/json",
         authorization: `Bearer ${supabaseAccessToken}`,
-        cookie: `${walletSessionCookieName}=${encodeURIComponent(walletSessionToken)}`,
+        ...recoveryIntentCookieHeader(request),
         "content-type": "application/json",
         "idempotency-key": crypto.randomUUID()
       },
       method: "POST"
     });
 
-    return response.ok ? null : "recovery_link_failed";
+    if (!response.ok) return { error: "recovery_exchange_failed", setCookies: [], applicationCookie: null };
+    const setCookies = responseSetCookies(response.headers);
+    const applicationCookie = setCookies.find((value) => value.startsWith("wevid_session=")) ?? null;
+    return { error: null, setCookies, applicationCookie };
   } catch {
-    return "recovery_link_failed";
+    return { error: "recovery_exchange_failed", setCookies: [], applicationCookie: null };
   }
 }
 
-async function resolveRecoveryRedirect(origin: string, next: string, supabaseAccessToken: string | null) {
-  if (!supabaseAccessToken) {
+function recoveryIntentCookieHeader(request: NextRequest) {
+  const token = request.cookies.get(recoveryLinkIntentCookieName)?.value;
+  return token
+    ? { cookie: `${recoveryLinkIntentCookieName}=${encodeURIComponent(token)}` }
+    : {};
+}
+
+async function resolveRecoveryRedirect(origin: string, next: string, applicationCookie: string | null) {
+  if (!applicationCookie) {
     return landingRedirect(origin, { error: "auth_confirm_failed", mode: "login" });
   }
 
@@ -116,7 +125,7 @@ async function resolveRecoveryRedirect(origin: string, next: string, supabaseAcc
       cache: "no-store",
       headers: {
         accept: "application/json",
-        authorization: `Bearer ${supabaseAccessToken}`
+        cookie: applicationCookie.split(";", 1)[0] ?? ""
       }
     });
 
@@ -139,6 +148,11 @@ async function resolveRecoveryRedirect(origin: string, next: string, supabaseAcc
   } catch {
     return landingRedirect(origin, { error: "recovery_needs_wallet", mode: "onboarding", step: "wallet", next });
   }
+}
+
+function responseSetCookies(headers: Headers): string[] {
+  const withGetSetCookie = headers as Headers & { getSetCookie?: () => string[] };
+  return withGetSetCookie.getSetCookie?.() ?? (headers.get("set-cookie") ? [headers.get("set-cookie") as string] : []);
 }
 
 function recoveryRedirectForReason(origin: string, next: string, reason: AppAccessReason | undefined) {

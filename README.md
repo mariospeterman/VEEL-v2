@@ -110,7 +110,7 @@ Do not start by coding random screens. Start with repo foundation, contracts, da
 
 ## Current Validation
 
-The implementation includes the Next.js PWA, Fastify API, worker, migrations through `0090`, shared contracts/config/UI, broad domain routes, and real unit/browser/Postgres integration coverage. See the current implementation status for verified boundaries and launch blockers.
+The implementation includes the Next.js PWA, Fastify API, worker, migrations through `0091`, shared contracts/config/UI, broad domain routes, and real unit/browser/Postgres integration coverage. See the current implementation status for verified boundaries and launch blockers.
 
 Run the local web and API processes from separate terminals:
 

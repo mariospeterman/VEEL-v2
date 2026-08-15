@@ -44,11 +44,11 @@ Do not bulk-copy external implementation code. Any outside repository is histori
 
 The historical milestones below remain useful implementation context. New production work follows this ordered slice program and must stop after one reviewed slice.
 
-| Slice | Goal | State at Launch 00 |
+| Slice | Goal | Current state |
 | --- | --- | --- |
 | 00 | Baseline, governance, and truth lock | Implemented on `codex/launch-00-baseline-governance`; merge gated by required checks |
-| 01 | Executable contracts and platform security boundary | Not started |
-| 02 | Three-step onboarding, canonical session, optional recovery, and earnings readiness | Not started |
+| 01 | Executable contracts and platform security boundary | Implemented locally in Launch 01; shared Supabase migration/advisor proof and production-like Redis/provider staging remain release blockers |
+| 02 | Three-step onboarding, canonical session, optional recovery, and earnings readiness | Identity/session/recovery and the three-step onboarding foundation are implemented locally in Launch 01; earnings readiness remains contextual and incomplete, and real provider/browser acceptance evidence remains blocked or incomplete |
 | 03 | VOD creation, multi-performer enrollment, and moderation operations | Not started |
 | 04 | Core social graph and real feeds | Not started |
 | 05 | Realtime messages and notifications | Not started |
@@ -58,7 +58,7 @@ The historical milestones below remain useful implementation context. New produc
 | 09 | Enterprise managed creators | Not started |
 | 10 | Frontend system, accessibility, cross-browser, and PWA completion | Not started |
 | 11 | Actual deployment, observability, recovery, and legal launch | Not started |
-| Post-core | Expanded Mutuals, Shopify-connected physical commerce, adult live, full AI/MCP, NFT/transferable passes, resale, custom contracts, and uncommitted advanced Enterprise work | Separately gated; disabled or absent |
+| Post-core | Expanded Mutuals, Vendure-backed native creator commerce (Medusa fallback; Shopify connector-only), adult live, full AI/MCP, NFT/transferable passes, resale, custom contracts, and uncommitted advanced Enterprise work | Separately gated; disabled or absent; commerce requires its focused ADR before code |
 
 Core SFW launch requires Slices 00–07 and 10–11. Slice 08 is required only before recurring platform plans or Profile Memberships are sold. Slice 09 is required only before Enterprise customers are onboarded. Existing safe foundations for conditional/post-core work may remain, but incomplete capabilities stay hidden, disabled, and fail-closed.
 

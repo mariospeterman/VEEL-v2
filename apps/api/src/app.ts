@@ -3,6 +3,7 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import sensible from "@fastify/sensible";
 import Fastify, { type FastifyInstance } from "fastify";
+import { Redis } from "ioredis";
 import rawBody from "fastify-raw-body";
 import { createApiDependencies, type BuildApiOptions } from "./app-dependencies.js";
 import { registerApiHealthRoutes } from "./app-health.js";
@@ -36,6 +37,33 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
 
   await app.register(sensible);
   await app.register(envPlugin);
+  app.setErrorHandler((error, request, reply) => {
+    const validationError = error as {
+      validation?: unknown;
+      validationContext?: unknown;
+    };
+    if (Array.isArray(validationError.validation)) {
+      request.log.info(
+        { validationContext: validationError.validationContext },
+        "API contract validation rejected request"
+      );
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: "Request does not match the API contract"
+      });
+    }
+    const statusCode = (error as { statusCode?: unknown }).statusCode;
+    if (typeof statusCode === "number" && statusCode >= 400 && statusCode <= 599) {
+      if ((error as { code?: unknown }).code === "rate_limited") {
+        return reply.code(statusCode).send({
+          code: "rate_limited",
+          message: "Too many requests"
+        });
+      }
+      return reply.code(statusCode).send(error);
+    }
+    return reply.send(error);
+  });
   await app.register(helmet, {
     contentSecurityPolicy: {
       directives: {
@@ -64,17 +92,41 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
     );
   }
 
+  if (app.config.API_RATE_LIMIT_STORE_DRIVER === "redis" && !app.config.API_RATE_LIMIT_REDIS_URL) {
+    throw new Error("API_RATE_LIMIT_STORE_DRIVER=redis requires API_RATE_LIMIT_REDIS_URL");
+  }
+
+  if (app.config.NODE_ENV === "production" && app.config.API_RATE_LIMIT_STORE_DRIVER === "process_memory") {
+    throw new Error("Production requires a distributed API rate-limit store");
+  }
+
+  const rateLimitRedis = app.config.API_RATE_LIMIT_STORE_DRIVER === "redis"
+    ? new Redis(app.config.API_RATE_LIMIT_REDIS_URL as string, {
+        lazyConnect: true,
+        maxRetriesPerRequest: 1,
+        enableOfflineQueue: false
+      })
+    : undefined;
+
+  if (rateLimitRedis) {
+    await rateLimitRedis.connect();
+    app.addHook("onClose", async () => {
+      rateLimitRedis.disconnect();
+    });
+  }
+
   await app.register(rateLimit, {
     max: 100,
     timeWindow: "1 minute",
+    skipOnError: false,
+    errorResponseBuilder: () => ({
+      statusCode: 429,
+      code: "rate_limited",
+      message: "Too many requests"
+    }),
+    ...(rateLimitRedis ? { redis: rateLimitRedis } : {}),
     ...(options.rateLimitStore ? { store: options.rateLimitStore } : {})
   });
-
-  if (app.config.NODE_ENV === "production" && !options.rateLimitStore) {
-    app.log.warn(
-      "API rate limiting is process-local; horizontally scaled production readiness is blocked"
-    );
-  }
   await app.register(rawBody, {
     field: "rawBody",
     global: false,

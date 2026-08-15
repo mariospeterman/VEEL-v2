@@ -16,7 +16,6 @@ type ProviderLogoName =
   | "privy"
   | "solflare"
   | "sumsub"
-  | "turnkey"
   | "veriff"
   | "wallet"
   | "x"
@@ -30,7 +29,6 @@ const providerLogoSources: Partial<Record<ProviderLogoName, string>> = {
   privy: "/provider-icons/privy.png",
   solflare: "/provider-icons/solflare.svg",
   sumsub: "/provider-icons/sumsub.svg",
-  turnkey: "/provider-icons/turnkey.svg",
   veriff: "/provider-icons/veriff.svg",
   yoti: "/provider-icons/yoti.svg"
 };

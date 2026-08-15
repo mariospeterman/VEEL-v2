@@ -42,7 +42,9 @@ This map defines which provider does which job and what WeVid owns. It exists to
 | Wallet funding/onramp | user-owned wallet funding only | start session, show funding state | funding widget/session only | provider callback for funding status only |
 | Email/push provider | notifications | notification policy, templates, retries | no secrets | delivery status |
 | OpenTelemetry/logging | observability | traces, logs, redaction | none | trace/log pipeline |
-| Shopify, future only | creator-owned physical catalog, variants, inventory, cart, merchant checkout, shipping, tax, discounts, order/refund workflow | approved catalog display, content attachment, safe attribution, redirect | Storefront-safe catalog/cart handoff only | DEFERRED; no SDK/schema/runtime in core launch |
+| Vendure, future preferred | canonical native creator-commerce engine primitives behind the WeVid adapter | seller/channel authorization, provider mapping, product-content attachment, moderation, audit, and frontend-safe projections | WeVid-native commerce UI only | DEFERRED; focused ADR and production-hardening proof required; no SDK/schema/runtime now |
+| Medusa, future fallback | fallback commerce engine if Vendure is rejected | custom vendor models, routes, workflows, order splitting, policy, and adapter normalization | WeVid-native commerce UI only | DEFERRED; not a drop-in marketplace |
+| Shopify, optional connector | external creator-store catalog display and checkout redirect | connector authorization, safe catalog projection, attribution, and redirect | Storefront-safe external-store handoff only | Never canonical commerce truth; no core dependency |
 
 Turnkey is an unbundled embedded-wallet fallback only. It has no parallel login, wallet UI, or runtime. Indexed PostgreSQL is the initial search authority. Transactional email, web push, and OpenTelemetry remain adapter boundaries; managed providers are selected and proven in their owning deployment slice rather than replaced by custom infrastructure.
 

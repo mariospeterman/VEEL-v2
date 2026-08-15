@@ -4,7 +4,7 @@ import { readIdempotencyKey } from "../../shared/idempotency.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { AgeRepository } from "../age/types.js";
 import type { PaymentRepository } from "../payment/types.js";
-import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
+import type { SessionRepository, ApplicationSessionVerifier } from "../session/types.js";
 import type { WalletRepository } from "../wallet/types.js";
 import type {
   AccessPass,
@@ -15,7 +15,7 @@ import type {
 } from "./types.js";
 
 export interface RegisterEventRoutesOptions {
-  authVerifier: SupabaseAuthVerifier;
+  authVerifier: ApplicationSessionVerifier;
   sessionRepository: SessionRepository;
   ageRepository: AgeRepository;
   walletRepository: WalletRepository;
@@ -56,7 +56,7 @@ export async function verifyEventAccess(
     options.ageRepository.findLatestAgeStatusBySupabaseUserId(verifiedSession.supabaseUserId)
   ]);
 
-  if (!profile?.handle || !profile.displayName || ageStatus.state !== "verified") {
+  if (profile?.state !== "active" || !profile.handle || !profile.displayName || ageStatus.state !== "verified") {
     return {
       ok: false,
       statusCode: 403,

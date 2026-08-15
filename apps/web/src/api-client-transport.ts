@@ -1,5 +1,4 @@
 import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
 import { parsePublicWebEnv } from "@veel/config/public";
 import { getE2eAccessToken } from "./supabase/e2e-auth";
 import type { ApiResult } from "./api-client-types";
@@ -9,12 +8,13 @@ const apiFetchTimeoutMs = 2_500;
 export async function getJson<T>(path: string): Promise<ApiResult<T>> {
   const env = parsePublicWebEnv(process.env);
   const url = new URL(path, env.NEXT_PUBLIC_API_BASE_URL);
-  const token = await getSupabaseAccessToken(env);
+  const { token, cookie } = await getApplicationSessionTransport();
   const headers = new Headers({ accept: "application/json" });
 
   if (token) {
     headers.set("authorization", `Bearer ${token}`);
   }
+  if (cookie) headers.set("cookie", cookie);
 
   try {
     const response = await fetch(url, {
@@ -44,42 +44,21 @@ export async function getJson<T>(path: string): Promise<ApiResult<T>> {
   }
 }
 
-export async function getSupabaseAccessToken(env: ReturnType<typeof parsePublicWebEnv>) {
+export async function getApplicationSessionTransport() {
   const cookieStore = await cookies();
-  const walletToken = cookieStore.get("veel_wallet_session_token")?.value;
+  const walletToken = cookieStore.get("wevid_session")?.value;
   if (walletToken) {
-    return walletToken;
+    return {
+      token: null,
+      cookie: `wevid_session=${encodeURIComponent(walletToken)}`
+    };
   }
 
   const e2eAccessToken = await getE2eAccessToken();
   if (e2eAccessToken) {
-    return e2eAccessToken;
+    return { token: e2eAccessToken, cookie: null };
   }
-
-  const supabaseKey = env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!env.NEXT_PUBLIC_SUPABASE_URL || !supabaseKey) {
-    return null;
-  }
-
-  const supabase = createServerClient(env.NEXT_PUBLIC_SUPABASE_URL, supabaseKey, {
-    cookies: {
-      getAll() {
-        return cookieStore.getAll();
-      },
-      setAll() {
-        // Server Components cannot persist refreshed cookies. Auth-changing flows run client-side.
-      }
-    }
-  });
-  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
-  if (claimsError || !claimsData?.claims) {
-    return null;
-  }
-
-  const { data } = await supabase.auth.getSession();
-
-  return data.session?.access_token ?? null;
+  return { token: null, cookie: null };
 }
 
 export async function getErrorMessage(response: Response) {
@@ -101,7 +80,7 @@ export async function getErrorMessage(response: Response) {
 export async function patchJson<T>(path: string, body: unknown, idempotencyKey: string): Promise<ApiResult<T>> {
   const env = parsePublicWebEnv(process.env);
   const url = new URL(path, env.NEXT_PUBLIC_API_BASE_URL);
-  const token = await getSupabaseAccessToken(env);
+  const { token, cookie } = await getApplicationSessionTransport();
   const headers = new Headers({
     accept: "application/json",
     "content-type": "application/json",
@@ -111,6 +90,7 @@ export async function patchJson<T>(path: string, body: unknown, idempotencyKey: 
   if (token) {
     headers.set("authorization", `Bearer ${token}`);
   }
+  if (cookie) headers.set("cookie", cookie);
 
   try {
     const response = await fetch(url, {

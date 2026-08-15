@@ -6,15 +6,20 @@ import type { ProfileRepository } from "./types.js";
 
 export function createProfileMutationRepositoryMethods(
   sql: postgres.Sql
-): Pick<ProfileRepository, "upsertMyProfile"> {
+): Pick<ProfileRepository, "upsertMyProfile" | "isHandleAvailable"> {
   return {
-    async upsertMyProfile(supabaseUserId, input) {
+    async upsertMyProfile(userId, input) {
+      const hasDisplayName = Object.hasOwn(input, "displayName");
+      const hasAvatarUrl = Object.hasOwn(input, "avatarUrl");
+      const hasBio = Object.hasOwn(input, "bio");
+      const hasLinks = Object.hasOwn(input, "links");
+      const hasLocationLabel = Object.hasOwn(input, "locationLabel");
       try {
         const rows = await sql<ProfileRow[]>`
           with target_user as (
             select id
             from users
-            where supabase_user_id = ${supabaseUserId}
+            where id = ${userId}
             limit 1
           ),
           upserted_profile as (
@@ -30,8 +35,8 @@ export function createProfileMutationRepositoryMethods(
             )
             select
               id,
-              ${input.handle},
-              ${input.displayName},
+              ${input.handle.toLowerCase()},
+              ${input.displayName ?? input.handle},
               ${input.avatarUrl ?? null},
               ${input.bio ?? null},
               ${sql.json(input.links ?? [])},
@@ -40,11 +45,11 @@ export function createProfileMutationRepositoryMethods(
             from target_user
             on conflict (user_id) do update set
               handle = excluded.handle,
-              display_name = excluded.display_name,
-              avatar_url = excluded.avatar_url,
-              bio = excluded.bio,
-              profile_links = excluded.profile_links,
-              location_label = excluded.location_label,
+              display_name = case when ${hasDisplayName} then ${input.displayName ?? input.handle} else profiles.display_name end,
+              avatar_url = case when ${hasAvatarUrl} then ${input.avatarUrl ?? null} else profiles.avatar_url end,
+              bio = case when ${hasBio} then ${input.bio ?? null} else profiles.bio end,
+              profile_links = case when ${hasLinks} then ${sql.json(input.links ?? [])} else profiles.profile_links end,
+              location_label = case when ${hasLocationLabel} then ${input.locationLabel ?? null} else profiles.location_label end,
               updated_at = now()
             returning user_id, handle, display_name, avatar_url, profile_links
           )
@@ -72,6 +77,14 @@ export function createProfileMutationRepositoryMethods(
 
         throw error;
       }
+    },
+    async isHandleAvailable(handle) {
+      const rows = await sql<{ available: boolean }[]>`
+        select not exists (
+          select 1 from profiles where lower(handle) = lower(${handle})
+        ) as available
+      `;
+      return rows[0]?.available ?? false;
     }
   };
 }

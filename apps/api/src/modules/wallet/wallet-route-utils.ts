@@ -2,68 +2,7 @@ import { createHash } from "node:crypto";
 import { PublicKey } from "@solana/web3.js";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
-import type {
-  CreateOnrampSessionRequest,
-  CreateWalletLinkChallengeRequest,
-  LinkWalletRequest
-} from "./types.js";
-
-const externalWalletProviders = new Set(["phantom", "solflare", "wallet_adapter"]);
-const walletChains = new Set(["solana_devnet", "solana_mainnet"]);
-
-export function validateChallengeRequest(
-  body: CreateWalletLinkChallengeRequest | undefined
-): string | null {
-  if (!body || typeof body !== "object") {
-    return "Request body is required";
-  }
-
-  if (!walletChains.has(body.chain)) {
-    return "Unsupported wallet chain";
-  }
-
-  if (!externalWalletProviders.has(body.provider)) {
-    return "Unsupported external wallet provider";
-  }
-
-  if (!isValidSolanaAddress(body.address)) {
-    return "Invalid Solana wallet address";
-  }
-
-  return null;
-}
-
-export function validateLinkWalletRequest(body: LinkWalletRequest | undefined): string | null {
-  if (!body || typeof body !== "object") {
-    return "Request body is required";
-  }
-
-  if (!walletChains.has(body.chain)) {
-    return "Unsupported wallet chain";
-  }
-
-  if (!externalWalletProviders.has(body.provider)) {
-    return "Unsupported external wallet provider";
-  }
-
-  if (!isValidSolanaAddress(body.address)) {
-    return "Invalid Solana wallet address";
-  }
-
-  if (!body.proof || typeof body.proof !== "object") {
-    return "Wallet link proof is required";
-  }
-
-  if (!body.proof.challengeId || !body.proof.message || !body.proof.signature) {
-    return "Wallet link proof is incomplete";
-  }
-
-  if (body.proof.signatureEncoding !== "base58" && body.proof.signatureEncoding !== "base64") {
-    return "Unsupported wallet signature encoding";
-  }
-
-  return null;
-}
+import type { CreateOnrampSessionRequest } from "./types.js";
 
 export function validateOnrampSessionRequest(
   body: CreateOnrampSessionRequest | undefined
@@ -136,7 +75,7 @@ export function verifySolanaMessageSignature(
   }
 }
 
-function isValidSolanaAddress(address: string): boolean {
+export function isValidSolanaAddress(address: string): boolean {
   try {
     const publicKey = new PublicKey(address);
     return PublicKey.isOnCurve(publicKey.toBytes());

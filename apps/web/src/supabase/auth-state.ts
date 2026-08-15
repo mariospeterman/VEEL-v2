@@ -6,7 +6,7 @@ export interface WebAuthState {
   configured: boolean;
   authenticated: boolean;
   email: string | null;
-  method?: "wallet" | "supabase" | "e2e";
+  method?: "wallet" | "e2e";
 }
 
 export async function getWebAuthState(): Promise<WebAuthState> {
@@ -16,7 +16,7 @@ export async function getWebAuthState(): Promise<WebAuthState> {
   }
 
   const cookieStore = await cookies();
-  if (cookieStore.get("veel_wallet_session_token")?.value) {
+  if (cookieStore.get("wevid_session")?.value) {
     return {
       configured: true,
       authenticated: true,
@@ -35,21 +35,9 @@ export async function getWebAuthState(): Promise<WebAuthState> {
     };
   }
 
-  const { data, error } = await supabase.auth.getClaims();
-  const email = typeof data?.claims?.email === "string" ? data.claims.email : null;
-
-  if (error || !data?.claims) {
-    return {
-      configured: true,
-      authenticated: false,
-      email
-    };
-  }
-
   return {
     configured: true,
-    authenticated: true,
-    email,
-    method: "supabase"
+    authenticated: false,
+    email: null
   };
 }

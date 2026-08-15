@@ -290,7 +290,11 @@ Recipient monetisation readiness has one backend authority. â€œEnable Earningsâ€
 
 ## Deferred Physical Commerce Boundary
 
-Physical goods are post-core and must not use WeVid's digital payment/entitlement system. The preferred future model connects a creator-owned Shopify store: the creator remains merchant of record; Shopify owns catalog, variants, inventory, cart, shipping, tax, discounts, orders, merchant checkout, and merchant refunds. WeVid may display approved Storefront data, attach one product to media, record safe attribution, and redirect to merchant checkout. WeVid holds no product funds, inventory, fulfillment, tax, order, refund, or commerce-split authority. No normal digital-content fee is assumed; possible revenue is limited to Studio/Enterprise, a separately approved affiliate agreement, or another provider-supported commercial agreement.
+Physical goods are post-core and must not reuse WeVid's digital payment intents or entitlement system. The locked future direction is native creator commerce through one WeVid-owned `CommerceProvider` adapter. Vendure is the preferred canonical engine because its channel, seller, product/variant, inventory, order-splitting strategy, payment-handler, and fulfillment extension points fit the domain. This is an architecture lock, not approval to install Vendure or create commerce tables in the current launch slice.
+
+Medusa is the documented fallback if Vendure fails staging, operational, licensing, or adult-platform acceptance. Medusa's marketplace recipe requires custom vendor models, routes, workflows, and order splitting, so it is not treated as a drop-in marketplace engine. Shopify is optional connector-only: a creator may connect an external store for catalog display and redirect, but Shopify never becomes WeVid's canonical catalog, order, seller, or commerce source of truth.
+
+Before implementation, a focused commerce ADR must decide merchant of record, payment routing, tax, shipping, returns/refunds, seller onboarding, moderation, product-content attachment, and operational ownership. Vendure's official multi-vendor example is educational and explicitly requires production hardening; its primitives do not remove WeVid's responsibility to validate isolation, authorization, webhook idempotency, and operational workflows. Until that ADR and provider staging approval exist, there is no SDK, runtime, schema, checkout, cart, inventory, order, or fulfillment code in core launch.
 
 ## Subscription State Machine
 

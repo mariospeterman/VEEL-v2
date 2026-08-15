@@ -270,6 +270,27 @@ async function applyAgeWebhookDecision(
     returning id
   `;
 
+  if (input.state === "verified") {
+    await tx`
+      with eligible_user as (
+        update users
+        set state = case when state = 'provisional' then 'active' else state end,
+            updated_at = now()
+        where id = ${session.subject_id}
+          and state in ('provisional', 'active')
+        returning id
+      )
+      update profiles
+      set visibility = 'public', updated_at = now()
+      where user_id = (select id from eligible_user)
+    `;
+  } else if (input.state === "failed") {
+    await tx`
+      update profiles set visibility = 'private', updated_at = now()
+      where user_id = ${session.subject_id}
+    `;
+  }
+
   if (trackEvent) {
     await tx`
       update verification_events

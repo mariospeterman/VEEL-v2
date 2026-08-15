@@ -16,8 +16,7 @@ export type CreateWalletAuthSessionRequest =
   components["schemas"]["CreateWalletAuthSessionRequest"];
 export type WalletAuthChallenge = components["schemas"]["WalletAuthChallenge"];
 export type WalletAuthSession = components["schemas"]["WalletAuthSession"];
-export type LinkSupabaseRecoveryRequest = components["schemas"]["LinkSupabaseRecoveryRequest"];
-export type AuthRecoveryLink = components["schemas"]["AuthRecoveryLink"];
+export type ApplicationSessionExpiry = components["schemas"]["ApplicationSessionExpiry"];
 export type CreateWalletLinkChallengeRequest =
   components["schemas"]["CreateWalletLinkChallengeRequest"];
 export type WalletLinkChallenge = components["schemas"]["WalletLinkChallenge"];

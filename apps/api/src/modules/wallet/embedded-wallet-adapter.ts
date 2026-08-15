@@ -16,7 +16,7 @@ export class UnconfiguredEmbeddedWalletProviderAdapter
   implements EmbeddedWalletProviderAdapter
 {
   constructor(
-    readonly provider: Extract<WalletProvider, "embedded_privy" | "embedded_turnkey">
+    readonly provider: Extract<WalletProvider, "embedded_privy">
   ) {}
 
   async provisionWallet(

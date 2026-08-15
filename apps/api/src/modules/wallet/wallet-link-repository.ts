@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
+import { rotateApplicationSessionInTransaction } from "../auth/wallet-auth-repository.js";
 import type { WalletRepository } from "./types.js";
 import {
   WalletLinkChallengeNotFoundError,
@@ -83,12 +84,13 @@ export function createWalletLinkRepositoryMethods(
     },
     async consumeVerifiedExternalWalletLink(input) {
       try {
-        const rows = await sql.begin(async (tx) => {
+        const result = await sql.begin(async (tx) => {
           const challengeRows = await tx<WalletChallengeRow[]>`
             update wallet_link_challenges
             set consumed_at = now()
-            where id = ${input.challengeId}
-              and consumed_at is null
+          where id = ${input.challengeId}
+            and consumed_at is null
+            and expires_at > now()
             returning id, user_id, chain, provider, address, message, expires_at, consumed_at
           `;
 
@@ -119,7 +121,11 @@ export function createWalletLinkRepositoryMethods(
               throw new WalletLinkConflictError();
             }
 
-            return [existingWallet];
+            const session = await rotateApplicationSessionInTransaction(tx, {
+              sessionToken: input.sessionToken,
+              userId: challenge.user_id
+            });
+            return { wallet: existingWallet, session };
           }
 
           const hasWalletRows = await tx<{ exists: boolean }[]>`
@@ -173,16 +179,20 @@ export function createWalletLinkRepositoryMethods(
             )
           `;
 
-          return walletRows;
+          const wallet = walletRows[0];
+          if (!wallet) throw new WalletLinkChallengeNotFoundError();
+          const session = await rotateApplicationSessionInTransaction(tx, {
+            sessionToken: input.sessionToken,
+            userId: challenge.user_id
+          });
+          return { wallet, session };
         });
 
-        const wallet = rows[0];
-
-        if (!wallet) {
+        if (!result.wallet) {
           throw new WalletLinkChallengeNotFoundError();
         }
 
-        return toWalletResource(wallet);
+        return { wallet: toWalletResource(result.wallet), session: result.session };
       } catch (error) {
         if (error instanceof WalletLinkChallengeNotFoundError) {
           throw error;

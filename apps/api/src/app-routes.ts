@@ -32,6 +32,7 @@ export async function registerApiRoutes(
 ): Promise<void> {
   const {
     authVerifier,
+    recoveryIdentityVerifier,
     sessionRepository,
     ageRepository,
     ageProviderWaterfall,
@@ -69,6 +70,7 @@ export async function registerApiRoutes(
 
   await registerWalletAuthRoutes(app, {
     authVerifier,
+    recoveryIdentityVerifier,
     walletAuthRepository
   });
   await registerSessionRoutes(app, {
@@ -229,6 +231,7 @@ export async function registerApiRoutes(
     authVerifier,
     sessionRepository,
     walletRepository,
+    walletAuthRepository,
     onrampProvider
   });
 }

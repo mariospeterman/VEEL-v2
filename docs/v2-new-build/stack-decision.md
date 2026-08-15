@@ -37,7 +37,7 @@ Runtime:    Node.js LTS first; Bun evaluated later
 Deploy:     Docker first; serverless/edge only for proven slices
 ```
 
-Wallet onboarding uses Privy for mainstream email/social/passkey users and the existing Solana Wallet Standard/wallet-adapter boundary for intentional external wallets. Both paths sign the same WeVid backend challenge and converge on one application-session authority. The embedded wallet mode must be noncustodial/user-controlled and must not create a WeVid-controlled balance. Turnkey is an unbundled fallback only.
+Wallet onboarding uses Privy for mainstream email/social/passkey users and the existing Solana Wallet Standard/wallet-adapter boundary for intentional external wallets. Both paths sign the same WeVid backend challenge and converge on one application-session authority. The embedded wallet mode must be noncustodial/user-controlled and must not create a WeVid-controlled balance. No second embedded-wallet runtime is part of the launch architecture.
 
 ## Official Documentation Checked
 
@@ -47,7 +47,7 @@ Wallet onboarding uses Privy for mainstream email/social/passkey users and the e
 - Supabase architecture, RLS, Realtime authorization: `https://supabase.com/docs/architecture`, `https://supabase.com/docs/guides/database/postgres/row-level-security`, `https://supabase.com/docs/guides/realtime/authorization`
 - Solana Pay specification and transaction requests: `https://docs.solanapay.com/`, `https://solana.com/docs/tools/solana-pay/quickstart/transaction-requests`
 - Solana Subscriptions and Allowances: `https://solana.com/docs/payments/subscriptions/overview`, `https://solana.com/docs/payments/subscriptions/fixed-delegation`, `https://solana.com/docs/payments/subscriptions/recurring-delegation`, `https://solana.com/docs/payments/subscriptions/subscription-plan`
-- Embedded wallet providers to evaluate: `https://docs.privy.io/`, `https://www.dynamic.xyz/docs/wallets/mpc/overview`, `https://docs.turnkey.com/embedded-wallets`
+- Embedded wallet launch provider: `https://docs.privy.io/`
 - Wallet funding/onramp paths to evaluate only for funding user-controlled wallets: `https://docs.cdp.coinbase.com/onramp/docs/welcome`
 - Bunny Stream TUS: `https://docs.bunny.net/stream/tus-resumable-uploads`
 - Livepeer stream creation/playback policy: `Livepeer stream create API reference at docs.livepeer.org`
@@ -118,6 +118,8 @@ Controllers/routes remain thin:
 ```text
 authenticate -> validate -> authorize -> service/action -> resource/response
 ```
+
+OpenAPI is the application HTTP contract source of truth. Fastify route schemas for the highest-risk identity mutations are resolved from the operation's OpenAPI request schema at registration time; generated TypeScript clients come from the same document. Do not add an independent handwritten or Zod/TypeBox request schema for those operations. Manual checks may enforce contextual policy such as idempotency, cryptographic proof, or authorization, but must not redefine the request shape.
 
 ## Supabase Decision
 

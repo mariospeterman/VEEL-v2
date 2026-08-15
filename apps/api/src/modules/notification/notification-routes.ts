@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { requireIdempotencyKey as requireSharedIdempotencyKey } from "../../shared/idempotency.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
-import type { SupabaseAuthVerifier } from "../session/types.js";
+import type { ApplicationSessionVerifier } from "../session/types.js";
 import { NotificationRepositoryConfigurationError } from "./notification-repository.js";
 import type {
   NotificationRepository,
@@ -11,7 +11,7 @@ import type {
 } from "./types.js";
 
 interface RegisterNotificationRoutesOptions {
-  authVerifier: SupabaseAuthVerifier;
+  authVerifier: ApplicationSessionVerifier;
   notificationRepository: NotificationRepository;
   vapidPublicKey?: string | undefined;
 }

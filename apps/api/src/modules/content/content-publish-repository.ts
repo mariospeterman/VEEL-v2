@@ -23,6 +23,7 @@ export function createContentPublishRepositoryMethods(
             select id
             from users
             where supabase_user_id = ${input.supabaseUserId}
+              and state = 'active'
             limit 1
           ),
           current_content as (

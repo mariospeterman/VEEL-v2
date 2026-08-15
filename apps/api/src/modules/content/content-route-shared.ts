@@ -3,7 +3,7 @@ import type { components } from "@veel/contracts";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { AgeRepository } from "../age/types.js";
 import type { LiveRepository } from "../live/types.js";
-import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
+import type { SessionRepository, ApplicationSessionVerifier } from "../session/types.js";
 import type { SubscriptionRepository } from "../subscription/types.js";
 import { VerificationRepositoryConfigurationError } from "../verification/verification-repository.js";
 import type { VerificationRepository } from "../verification/types.js";
@@ -15,7 +15,7 @@ import type {
 } from "./types.js";
 
 export interface RegisterContentRoutesOptions {
-  authVerifier: SupabaseAuthVerifier;
+  authVerifier: ApplicationSessionVerifier;
   sessionRepository: SessionRepository;
   ageRepository: AgeRepository;
   walletRepository: WalletRepository;
@@ -252,7 +252,7 @@ export async function verifyAppReadyAccess(
     options.walletRepository.hasWalletBySupabaseUserId(verifiedSession.supabaseUserId)
   ]);
 
-  if (!profile?.handle || !profile.displayName || ageStatus.state !== "verified" || !hasWallet) {
+  if (profile?.state !== "active" || !profile.handle || !profile.displayName || ageStatus.state !== "verified" || !hasWallet) {
     return {
       ok: false,
       statusCode: 403,

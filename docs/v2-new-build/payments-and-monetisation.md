@@ -115,7 +115,7 @@ WeVid stays noncustodial:
 - backend verifies chain facts before granting access or recording final revenue
 - frontend wallet success is not final payment proof
 
-One-time WeVid digital products remain server-priced SOL/approved USDC intents with backend chain verification and entitlement truth. An onramp only funds the user-owned wallet and never grants access. Future Shopify physical commerce is DEFERRED and merchant-owned; it must not reuse these product intents, splits, entitlements, order/refund authority, or the assumed digital platform fee.
+One-time WeVid digital products remain server-priced SOL/approved USDC intents with backend chain verification and entitlement truth. An onramp only funds the user-owned wallet and never grants access. Future Vendure-backed native creator commerce is DEFERRED and must sit behind the separate WeVid commerce adapter; it must not reuse digital product intents, splits, entitlements, order/refund authority, or the assumed digital platform fee. Medusa is fallback and Shopify is connector-only.
 
 Required settlement ordering:
 

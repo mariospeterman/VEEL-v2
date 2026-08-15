@@ -62,9 +62,7 @@ export async function registerLiveRoomRoutes(
     };
     const requestHash = hashLiveRequest(normalizedBody);
 
-    try {
-      await options.sessionRepository.ensureUserForSupabaseId(access.supabaseUserId);
-      const existingRoom = await options.liveRepository.findOwnedRoomByIdempotency({
+    try {      const existingRoom = await options.liveRepository.findOwnedRoomByIdempotency({
         supabaseUserId: access.supabaseUserId,
         idempotencyKey
       });

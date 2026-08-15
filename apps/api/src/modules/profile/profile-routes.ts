@@ -1,23 +1,29 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { AgeRepository } from "../age/types.js";
-import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
+import type { SessionRepository, ApplicationSessionVerifier } from "../session/types.js";
 import {
   ProfileHandleConflictError,
   ProfileRepositoryConfigurationError
 } from "./profile-repository.js";
 import type { ProfileRepository, UpdateProfileRequest } from "./types.js";
+import { contractRouteSchema } from "../../shared/openapi-route-schema.js";
 
 interface RegisterProfileRoutesOptions {
-  authVerifier: SupabaseAuthVerifier;
+  authVerifier: ApplicationSessionVerifier;
   sessionRepository: SessionRepository;
   ageRepository: AgeRepository;
   profileRepository: ProfileRepository;
 }
 
-const handlePattern = /^[a-zA-Z0-9_]{2,32}$/;
+const handlePattern = /^[a-z0-9_]{2,32}$/;
+const reservedHandles = new Set([
+  "admin", "administrator", "api", "app", "auth", "help", "legal", "login",
+  "moderator", "privacy", "root", "security", "settings", "staff", "support",
+  "system", "terms", "wevid", "veel"
+]);
 const avatarContentTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const maxAvatarBytes = 5_000_000;
 
@@ -65,6 +71,27 @@ export async function registerProfileRoutes(
     }
   });
 
+  app.get("/v1/profiles/handles/:handle/availability", { schema: contractRouteSchema("getProfileHandleAvailability") }, async (request, reply) => {
+    const rawHandle = (request.params as { handle?: string }).handle ?? "";
+    const handle = rawHandle.toLowerCase();
+    if (!handlePattern.test(handle) || reservedHandles.has(handle)) {
+      return reply.code(200).send({ handle, available: false });
+    }
+
+    try {
+      return reply.code(200).send({
+        handle,
+        available: await options.profileRepository.isHandleAvailable(handle)
+      });
+    } catch (error) {
+      if (error instanceof ProfileRepositoryConfigurationError) {
+        request.log.warn({ error }, "Profile repository is not configured");
+        return reply.code(503).send({ code: "service_unavailable", message: "Profile storage is not configured" });
+      }
+      throw error;
+    }
+  });
+
   app.get("/v1/profiles/me/creator-dashboard", async (request, reply) => {
     const access = await requireCreatorDashboardAccess(request, reply, options);
 
@@ -100,9 +127,7 @@ export async function registerProfileRoutes(
       return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
     }
 
-    try {
-      await options.sessionRepository.ensureUserForSupabaseId(verifiedSession.supabaseUserId);
-      const onboarding = await options.profileRepository.getMyCreatorOnboarding(
+    try {      const onboarding = await options.profileRepository.getMyCreatorOnboarding(
         verifiedSession.supabaseUserId
       );
 
@@ -124,7 +149,7 @@ export async function registerProfileRoutes(
     }
   });
 
-  app.patch("/v1/profiles/me", async (request, reply) => {
+  app.patch("/v1/profiles/me", { schema: contractRouteSchema("updateMyProfile") }, async (request, reply) => {
     const verifiedSession = await verifyRequestSession(request, options.authVerifier);
 
     if (!verifiedSession) {
@@ -150,18 +175,17 @@ export async function registerProfileRoutes(
       });
     }
 
-    const updateProfile = body as Required<Pick<UpdateProfileRequest, "handle" | "displayName">> &
-      Pick<UpdateProfileRequest, "avatarUrl" | "bio" | "locationLabel" | "links">;
+    const updateProfile = body as Required<Pick<UpdateProfileRequest, "handle">> &
+      Pick<UpdateProfileRequest, "displayName" | "avatarUrl" | "bio" | "locationLabel" | "links">;
 
     try {
-      await options.sessionRepository.ensureUserForSupabaseId(verifiedSession.supabaseUserId);
-      const user = await options.profileRepository.upsertMyProfile(verifiedSession.supabaseUserId, {
-        handle: updateProfile.handle,
-        displayName: updateProfile.displayName,
-        avatarUrl: updateProfile.avatarUrl,
-        bio: updateProfile.bio,
-        locationLabel: updateProfile.locationLabel,
-        links: updateProfile.links
+      const user = await options.profileRepository.upsertMyProfile(verifiedSession.userId, {
+        handle: updateProfile.handle.toLowerCase(),
+        ...(Object.hasOwn(updateProfile, "displayName") ? { displayName: updateProfile.displayName } : {}),
+        ...(Object.hasOwn(updateProfile, "avatarUrl") ? { avatarUrl: updateProfile.avatarUrl } : {}),
+        ...(Object.hasOwn(updateProfile, "bio") ? { bio: updateProfile.bio } : {}),
+        ...(Object.hasOwn(updateProfile, "locationLabel") ? { locationLabel: updateProfile.locationLabel } : {}),
+        ...(Object.hasOwn(updateProfile, "links") ? { links: updateProfile.links } : {})
       });
 
       return reply.code(200).send(user);
@@ -182,64 +206,11 @@ export async function registerProfileRoutes(
     }
   });
 
-  app.post("/v1/profiles/me/starter", async (request, reply) => {
-    const verifiedSession = await verifyRequestSession(request, options.authVerifier);
-
-    if (!verifiedSession) {
-      return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
-    }
-
-    if (!request.headers["idempotency-key"]) {
-      return reply.code(400).send({
-        code: "validation_failed",
-        message: "Idempotency-Key header is required"
-      });
-    }
-
-    try {
-      await options.sessionRepository.ensureUserForSupabaseId(verifiedSession.supabaseUserId);
-      const existingProfile = await options.sessionRepository.findProfileBySupabaseUserId(
-        verifiedSession.supabaseUserId
-      );
-
-      if (existingProfile?.handle && existingProfile.displayName) {
-        return reply.code(200).send({
-          id: existingProfile.id,
-          handle: existingProfile.handle,
-          displayName: existingProfile.displayName,
-          avatarUrl: existingProfile.avatarUrl,
-          badges: []
-        });
-      }
-
-      const user = await options.profileRepository.upsertMyProfile(verifiedSession.supabaseUserId, {
-        displayName: "WeVid user",
-        handle: starterProfileHandle(verifiedSession.supabaseUserId),
-        links: []
-      });
-
-      return reply.code(201).send(user);
-    } catch (error) {
-      if (error instanceof ProfileHandleConflictError) {
-        return reply.code(409).send({
-          code: "conflict",
-          message: "Starter profile handle is already in use"
-        });
-      }
-
-      if (error instanceof ProfileRepositoryConfigurationError) {
-        request.log.warn({ error }, "Profile repository is not configured");
-        return reply.code(401).send(unauthorizedResponse("Profile storage is not configured"));
-      }
-
-      throw error;
-    }
-  });
-
   app.post(
     "/v1/profiles/me/avatar",
     {
-      bodyLimit: Math.ceil(maxAvatarBytes * 1.45)
+      bodyLimit: Math.ceil(maxAvatarBytes * 1.45),
+      schema: contractRouteSchema("uploadMyProfileAvatar")
     },
     async (request, reply) => {
       const verifiedSession = await verifyRequestSession(request, options.authVerifier);
@@ -320,11 +291,6 @@ export async function registerProfileRoutes(
   );
 }
 
-function starterProfileHandle(supabaseUserId: string) {
-  const suffix = createHash("sha256").update(supabaseUserId).digest("hex").slice(0, 12);
-  return `wevid_${suffix}`;
-}
-
 async function requireCreatorDashboardAccess(
   request: FastifyRequest,
   reply: FastifyReply,
@@ -342,7 +308,7 @@ async function requireCreatorDashboardAccess(
     options.ageRepository.findLatestAgeStatusBySupabaseUserId(verifiedSession.supabaseUserId)
   ]);
 
-  if (!profile?.handle || !profile.displayName || ageStatus.state !== "verified") {
+  if (profile?.state !== "active" || !profile.handle || ageStatus.state !== "verified") {
     reply.code(403).send({
       code: "forbidden",
       message: "Creator dashboard requires profile and age verification"
@@ -363,12 +329,13 @@ function getUpdateProfileValidationError(
     return "Request body is required";
   }
 
-  if (!body.handle || !handlePattern.test(body.handle)) {
-    return "Profile handle must be 2-32 letters, numbers, or underscores";
+  const normalizedHandle = body.handle?.toLowerCase();
+  if (!normalizedHandle || !handlePattern.test(normalizedHandle) || reservedHandles.has(normalizedHandle)) {
+    return "Profile handle must be an available 2-32 character lowercase handle";
   }
 
-  if (!body.displayName || body.displayName.length > 80) {
-    return "Display name is required and must be 80 characters or fewer";
+  if (body.displayName !== undefined && (!body.displayName || body.displayName.length > 80)) {
+    return "Display name must be 80 characters or fewer";
   }
 
   if (

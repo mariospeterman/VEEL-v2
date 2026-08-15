@@ -54,17 +54,19 @@ test("renders inline login and onboarding entry surfaces", async ({ page }) => {
   await page.goto("/?mode=login", { waitUntil: "domcontentloaded", timeout: 20_000 });
 
   await expect(page.getByRole("heading", { name: "Login to WeVid" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Connect wallet" })).toBeVisible();
-  await expect(page.getByText("Privy", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Continue with Google, email, or passkey/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Use an existing wallet Connect wallet/ })).toBeVisible();
+  await expect(page.getByText("Privy", { exact: true })).toHaveCount(0);
 
   await page.goto("/?mode=onboarding", { waitUntil: "domcontentloaded", timeout: 20_000 });
 
   await expect(page.getByRole("heading", { name: "Set up access." })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Connect wallet" })).toBeVisible();
-  await expect(page.getByText("Required. Load wallet providers only when you are ready to connect and sign.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Continue with Google, email, or passkey/ })).toBeVisible();
+  await expect(page.getByText("Continue securely. Your wallet remains user-controlled.")).toBeVisible();
 
-  await page.getByRole("button", { name: /Connect wallet Solana ownership signature only/ }).click();
-  await expect(page.getByText("Required. Connect a Solana wallet and sign the backend ownership challenge.")).toBeVisible();
+  await page.getByRole("button", { name: /Use an existing wallet Connect wallet/ }).click();
+  await expect(page.getByText("Connect your Solana wallet and confirm ownership.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Connect wallet" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Set up access." })).toBeVisible();
   await expect(page.locator(".landing-progress-topic")).toHaveText("Onboarding");
 });
@@ -84,7 +86,7 @@ test("renders a deep-linked onboarding step without an entrance-animation delay"
 test("renders the standalone age handoff without raw API/provider errors", async ({ page }) => {
   await page.goto("/age");
 
-  await expect(page.getByRole("heading", { name: "Provider-backed 18+ gate" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Confirm you're 18+" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Age status unavailable" })).toBeVisible();
   await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Start age verification" })).toBeDisabled();

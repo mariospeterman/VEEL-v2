@@ -10,12 +10,13 @@ import type {
   SessionProfile,
   SessionRepository,
   SessionState,
-  SupabaseAuthVerifier,
+  ApplicationSessionVerifier,
   UserResource
 } from "./types.js";
+import { contractRouteSchema } from "../../shared/openapi-route-schema.js";
 
 interface RegisterSessionRoutesOptions {
-  authVerifier: SupabaseAuthVerifier;
+  authVerifier: ApplicationSessionVerifier;
   sessionRepository: SessionRepository;
   ageRepository: AgeRepository;
   walletRepository: WalletRepository;
@@ -25,19 +26,16 @@ export async function registerSessionRoutes(
   app: FastifyInstance,
   options: RegisterSessionRoutesOptions
 ): Promise<void> {
-  app.get("/v1/session", async (request, reply) => {
+  app.get("/v1/session", { schema: contractRouteSchema("getSession") }, async (request, reply) => {
     const verifiedSession = await verifyRequestSession(request, options.authVerifier);
 
     if (!verifiedSession) {
-      return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
+      return reply.code(401).send(unauthorizedResponse("Application session is missing or expired"));
     }
 
     try {
-      await options.sessionRepository.ensureUserForSupabaseId(verifiedSession.supabaseUserId);
       const [profile, ageStatus, hasWallet] = await Promise.all([
-        options.sessionRepository.findProfileBySupabaseUserId(
-          verifiedSession.supabaseUserId
-        ),
+        options.sessionRepository.findProfileByUserId(verifiedSession.userId),
         options.ageRepository.findLatestAgeStatusBySupabaseUserId(
           verifiedSession.supabaseUserId
         ),
@@ -49,18 +47,14 @@ export async function registerSessionRoutes(
       return reply.code(200).send(toSessionState(profile, ageStatus, hasWallet));
     } catch (error) {
       if (error instanceof AgeRepositoryConfigurationError) {
-        const profile = await options.sessionRepository.findProfileBySupabaseUserId(
-          verifiedSession.supabaseUserId
-        );
+        const profile = await options.sessionRepository.findProfileByUserId(verifiedSession.userId);
 
         return reply.code(200).send(toSessionState(profile, requiredAgeStatus(), false));
       }
 
       if (error instanceof WalletRepositoryConfigurationError) {
         const [profile, ageStatus] = await Promise.all([
-          options.sessionRepository.findProfileBySupabaseUserId(
-            verifiedSession.supabaseUserId
-          ),
+          options.sessionRepository.findProfileByUserId(verifiedSession.userId),
           options.ageRepository.findLatestAgeStatusBySupabaseUserId(
             verifiedSession.supabaseUserId
           )
@@ -92,8 +86,8 @@ function toSessionState(
   }
 
   const appAccessState: AppAccessState =
-    profile.state === "active"
-      ? profile.handle && profile.displayName
+    profile.state === "active" || profile.state === "provisional"
+      ? profile.handle
         ? toAppAccessState(ageStatus, hasWallet)
         : identityRequired()
       : { allowed: false, reason: "blocked" };
@@ -103,7 +97,7 @@ function toSessionState(
     appAccessState
   };
 
-  if (profile.handle && profile.displayName) {
+  if (profile.handle) {
     sessionState.user = toUserResource(profile);
   }
 
@@ -114,7 +108,7 @@ function toUserResource(profile: SessionProfile): UserResource {
   return {
     id: profile.id,
     handle: profile.handle ?? "",
-    displayName: profile.displayName ?? "",
+    displayName: profile.displayName ?? profile.handle ?? "",
     avatarUrl: profile.avatarUrl ?? null,
     badges: []
   };

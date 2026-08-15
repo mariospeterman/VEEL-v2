@@ -2,14 +2,14 @@ import { createHash, randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { mutationRateLimit } from "../../shared/rate-limits.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
-import type { SupabaseAuthVerifier } from "../session/types.js";
+import type { ApplicationSessionVerifier } from "../session/types.js";
 import { VerificationProviderUnavailableError } from "../verification/verification-provider-adapters.js";
 import type { VerificationProviderWaterfall } from "../verification/types.js";
 import { PerformerRepositoryConfigurationError } from "./performer-repository.js";
 import type { PerformerAllowedUse, PerformerRepository } from "./types.js";
 
 interface PerformerRouteOptions {
-  authVerifier: SupabaseAuthVerifier;
+  authVerifier: ApplicationSessionVerifier;
   performerRepository: PerformerRepository;
   verificationProviderWaterfall: VerificationProviderWaterfall;
 }

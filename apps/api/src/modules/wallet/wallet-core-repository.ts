@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
+import { rotateApplicationSessionInTransaction } from "../auth/wallet-auth-repository.js";
 import type { WalletRepository } from "./types.js";
 import { WalletNotFoundError } from "./wallet-errors.js";
 import { toWalletResource } from "./wallet-repository-mappers.js";
@@ -121,16 +122,20 @@ export function createWalletCoreRepositoryMethods(
           )
         `;
 
-        return primaryRows;
+        const primaryWallet = primaryRows[0];
+        if (!primaryWallet) throw new WalletNotFoundError();
+        const session = await rotateApplicationSessionInTransaction(tx, {
+          sessionToken: input.sessionToken,
+          userId: wallet.user_id
+        });
+        return { wallet: primaryWallet, session };
       });
 
-      const wallet = rows[0];
-
-      if (!wallet) {
+      if (!rows.wallet) {
         throw new WalletNotFoundError();
       }
 
-      return toWalletResource(wallet);
+      return { wallet: toWalletResource(rows.wallet), session: rows.session };
     }
   };
 }

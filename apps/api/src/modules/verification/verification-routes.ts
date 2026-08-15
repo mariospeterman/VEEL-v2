@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { createHash } from "node:crypto";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
-import type { SupabaseAuthVerifier } from "../session/types.js";
+import type { ApplicationSessionVerifier } from "../session/types.js";
 import {
   isMockVerificationProviderReference,
   VerificationProviderHttpError,
@@ -18,7 +18,7 @@ import type { CreateVerificationSessionInput, VerificationProvider, Verification
 import { mutationRateLimit } from "../../shared/rate-limits.js";
 
 interface RegisterVerificationRoutesOptions {
-  authVerifier: SupabaseAuthVerifier;
+  authVerifier: ApplicationSessionVerifier;
   verificationRepository: VerificationRepository;
   verificationProviderWaterfall: VerificationProviderWaterfall;
 }
@@ -26,7 +26,7 @@ interface RegisterVerificationRoutesOptions {
 const verificationProviders = new Set<VerificationProvider>(["sumsub", "didit", "persona", "veriff"]);
 const verificationPurposes = new Set(["adult_publisher_eligibility", "creator_kyc", "org_kyb"]);
 const providerPreferences = new Set(["provider_first", "sumsub", "didit", "persona", "veriff"]);
-const verificationSources = new Set(["onboarding", "create", "earnings", "organization"]);
+const verificationSources = new Set(["create", "earnings", "organization"]);
 const adultPublisherPolicyVersion = "adult-publisher-2026-08-v1";
 
 export async function registerVerificationRoutes(
@@ -97,7 +97,7 @@ export async function registerVerificationRoutes(
     }
   );
 
-  app.post("/v1/verification/sessions", mutationRateLimit("ageMutation"), async (request, reply) => {
+  app.post("/v1/verification/sessions", mutationRateLimit("ageMutation", "createVerificationSession"), async (request, reply) => {
     const verifiedSession = await verifyRequestSession(request, options.authVerifier);
 
     if (!verifiedSession) {
@@ -158,7 +158,7 @@ export async function registerVerificationRoutes(
         providerPreference,
         organizationId: typeof body?.organizationId === "string" ? body.organizationId : null,
         idempotencyKey,
-        callbackUrl: verificationCallbackUrl(app.config.WEB_URL, purpose, source),
+        callbackUrl: verificationCallbackUrl(app.config.WEB_URL, purpose),
         webhookBaseUrl: `${app.config.API_URL}/v1/webhooks/verification`,
         policyVersion,
         termsAcceptedAt
@@ -261,10 +261,7 @@ export async function registerVerificationRoutes(
   });
 }
 
-function verificationCallbackUrl(webUrl: string, purpose: string, source: string): string {
-  if (purpose === "adult_publisher_eligibility" && source === "onboarding") {
-    return `${webUrl}/age/callback?intent=adult`;
-  }
+function verificationCallbackUrl(webUrl: string, purpose: string): string {
   if (purpose === "adult_publisher_eligibility") return `${webUrl}/app/create?verification=return`;
   if (purpose === "org_kyb") return `${webUrl}/app/profile?verification=organization`;
   return `${webUrl}/app/profile?verification=earnings`;

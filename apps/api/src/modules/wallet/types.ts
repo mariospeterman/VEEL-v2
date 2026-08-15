@@ -15,10 +15,10 @@ export interface WalletRepository {
   listWalletsBySupabaseUserId(supabaseUserId: string): Promise<WalletResource[]>;
   hasWalletBySupabaseUserId(supabaseUserId: string): Promise<boolean>;
   createLinkChallenge(input: CreateWalletChallengeInput): Promise<WalletLinkChallenge>;
-  consumeVerifiedExternalWalletLink(input: ConsumeVerifiedExternalWalletLinkInput): Promise<WalletResource>;
+  consumeVerifiedExternalWalletLink(input: ConsumeVerifiedExternalWalletLinkInput): Promise<SecuredWalletMutationResult>;
   findLinkChallenge(input: FindWalletLinkChallengeInput): Promise<StoredWalletLinkChallenge | null>;
   findWalletForSupabaseUser(input: FindWalletForSupabaseUserInput): Promise<WalletResource | null>;
-  setPrimaryWallet(input: SetPrimaryWalletInput): Promise<WalletResource>;
+  setPrimaryWallet(input: SetPrimaryWalletInput): Promise<SecuredWalletMutationResult>;
   findOnrampSessionByIdempotencyKey(
     input: FindOnrampSessionByIdempotencyKeyInput
   ): Promise<OnrampSessionResource | null>;
@@ -55,6 +55,7 @@ export interface FindWalletLinkChallengeInput {
 export interface ConsumeVerifiedExternalWalletLinkInput {
   challengeId: string;
   supabaseUserId: string;
+  sessionToken: string;
 }
 
 export interface FindWalletForSupabaseUserInput {
@@ -65,6 +66,15 @@ export interface FindWalletForSupabaseUserInput {
 export interface SetPrimaryWalletInput {
   walletId: string;
   supabaseUserId: string;
+  sessionToken: string;
+}
+
+export interface SecuredWalletMutationResult {
+  wallet: WalletResource;
+  session: {
+    accessToken: string;
+    expiresAt: Date;
+  };
 }
 
 export interface FindOnrampSessionByIdempotencyKeyInput {
@@ -112,14 +122,14 @@ export interface EmbeddedWalletProvisionRequest {
 }
 
 export interface EmbeddedWalletProvisionResult {
-  provider: Extract<WalletProvider, "embedded_privy" | "embedded_turnkey">;
+  provider: Extract<WalletProvider, "embedded_privy">;
   providerWalletReference: string;
   address: string;
   chain: WalletChain;
 }
 
 export interface EmbeddedWalletProviderAdapter {
-  readonly provider: Extract<WalletProvider, "embedded_privy" | "embedded_turnkey">;
+  readonly provider: Extract<WalletProvider, "embedded_privy">;
   provisionWallet(
     request: EmbeddedWalletProvisionRequest
   ): Promise<EmbeddedWalletProvisionResult>;

@@ -36,7 +36,7 @@ export type {
   CreateWalletLinkChallengeRequest,
   CreateWalletAuthChallengeRequest,
   CreateWalletAuthSessionRequest,
-  LinkSupabaseRecoveryRequest,
+  ApplicationSessionExpiry,
   LinkWalletRequest,
   McpConnection,
   McpOAuthRedirect,
@@ -60,7 +60,6 @@ export type {
   Wallet,
   WalletAuthChallenge,
   WalletAuthSession,
-  AuthRecoveryLink,
   WalletLinkChallenge
 } from "./api-mutation-types";
 import type {
@@ -92,7 +91,7 @@ import type {
   CreateWalletLinkChallengeRequest,
   CreateWalletAuthChallengeRequest,
   CreateWalletAuthSessionRequest,
-  LinkSupabaseRecoveryRequest,
+  ApplicationSessionExpiry,
   LinkWalletRequest,
   McpConnection,
   McpOAuthRedirect,
@@ -116,7 +115,6 @@ import type {
   Wallet,
   WalletAuthChallenge,
   WalletAuthSession,
-  AuthRecoveryLink,
   WalletLinkChallenge
 } from "./api-mutation-types";
 
@@ -136,10 +134,6 @@ export async function createVerificationSession(
 
 export async function updateMyProfile(body: UpdateProfileRequest): Promise<User> {
   return authenticatedMutation<User>("/v1/profiles/me", "PATCH", body);
-}
-
-export async function createStarterProfile(): Promise<User> {
-  return authenticatedMutation<User>("/v1/profiles/me/starter", "POST", {});
 }
 
 export async function uploadMyProfileAvatar(
@@ -164,10 +158,12 @@ export async function revokeWalletAuthSession(): Promise<void> {
   return authenticatedEmptyMutation("/v1/auth/wallet/logout", "POST", {});
 }
 
-export async function linkSupabaseRecovery(
-  body: LinkSupabaseRecoveryRequest
-): Promise<AuthRecoveryLink> {
-  return authenticatedMutation<AuthRecoveryLink>("/v1/auth/recovery-link", "POST", body);
+export async function createRecoveryLinkIntent(): Promise<ApplicationSessionExpiry> {
+  return authenticatedMutation<ApplicationSessionExpiry>("/v1/auth/recovery/link-intents", "POST", {});
+}
+
+export async function unlinkRecoveryIdentity(): Promise<ApplicationSessionExpiry> {
+  return authenticatedMutation<ApplicationSessionExpiry>("/v1/auth/recovery/unlink", "POST", {});
 }
 
 export async function createWalletLinkChallenge(

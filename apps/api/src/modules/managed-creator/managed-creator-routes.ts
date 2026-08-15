@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
-import type { SupabaseAuthVerifier } from "../session/types.js";
+import type { ApplicationSessionVerifier } from "../session/types.js";
 import { ManagedCreatorRepositoryConfigurationError } from "./managed-creator-repository.js";
 import type { ManagedCreatorPermission, ManagedCreatorRepository } from "./types.js";
 
@@ -10,7 +10,7 @@ const permissionValues = new Set<ManagedCreatorPermission>([
 ]);
 
 export async function registerManagedCreatorRoutes(app: FastifyInstance, options: {
-  authVerifier: SupabaseAuthVerifier; managedCreatorRepository: ManagedCreatorRepository;
+  authVerifier: ApplicationSessionVerifier; managedCreatorRepository: ManagedCreatorRepository;
 }) {
   app.get("/v1/managed-creator-relationships", async (request, reply) => {
     const session = await verifyRequestSession(request, options.authVerifier);

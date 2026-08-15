@@ -94,8 +94,8 @@ describe("managed creator routes", () => {
 async function authenticatedApp(repository: ManagedCreatorRepository) {
   return buildApi({
     authVerifier: {
-      async verifyBearerToken() {
-        return { supabaseUserId: "00000000-0000-4000-8000-000000000001" };
+      async verifyToken() {
+        return { userId: "00000000-0000-4000-8000-000000000001", supabaseUserId: "00000000-0000-4000-8000-000000000001", sessionId: "00000000-0000-4000-8000-000000000099", authenticatedAt: new Date(), authenticationMethod: "wallet" as const };
       }
     },
     managedCreatorRepository: repository

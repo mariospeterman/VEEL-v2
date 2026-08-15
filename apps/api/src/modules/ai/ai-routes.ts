@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AdminRepository } from "../admin/types.js";
 import type { AgeRepository } from "../age/types.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
-import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
+import type { SessionRepository, ApplicationSessionVerifier } from "../session/types.js";
 import { AiRepositoryConfigurationError } from "./ai-repository.js";
 import {
   allowedToolsForScope,
@@ -23,7 +23,7 @@ import type {
 } from "./types.js";
 
 interface RegisterAiRoutesOptions {
-  authVerifier: SupabaseAuthVerifier;
+  authVerifier: ApplicationSessionVerifier;
   sessionRepository: SessionRepository;
   ageRepository: AgeRepository;
   adminRepository: AdminRepository;
@@ -215,7 +215,7 @@ async function verifyAiAccess(
     options.ageRepository.findLatestAgeStatusBySupabaseUserId(verifiedSession.supabaseUserId)
   ]);
 
-  if (!profile?.handle || !profile.displayName || ageStatus.state !== "verified") {
+  if (profile?.state !== "active" || !profile.handle || !profile.displayName || ageStatus.state !== "verified") {
     return {
       ok: false,
       statusCode: 403,

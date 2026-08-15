@@ -44,8 +44,6 @@ export async function registerContentUnlockPaymentRoutes(
 
     try {
       assertSolanaAddress(platformFeeWallet);
-      await options.sessionRepository.ensureUserForSupabaseId(access.supabaseUserId);
-
       const offer = await options.contentRepository.findContentUnlockOffer({
         supabaseUserId: access.supabaseUserId,
         contentId: params.contentId

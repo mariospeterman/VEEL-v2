@@ -15,7 +15,6 @@ import { ProviderLogo } from "@/brand/provider-logo";
 import { safeMutationMessage } from "@/api-errors";
 import type { WebAuthState } from "@/supabase/auth-state";
 import { bytesToBase64, createBackendWalletSession, walletChain } from "./backend-wallet-auth";
-import { clearWalletSession } from "./wallet-session";
 
 type ExternalWalletProvider = LinkWalletRequest["provider"];
 
@@ -99,7 +98,6 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
         await disconnect();
       }
     } finally {
-      clearWalletSession();
       setLinkedAddress(null);
       setState("idle");
       setMessage("Wallet disconnected.");
@@ -190,7 +188,7 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
         <div>
           <p className="text-xs font-semibold uppercase text-(--accent)">Wallet</p>
           <h2 className="mt-2 text-base font-semibold tracking-normal">
-            {authState.method === "supabase" ? "Link Solana wallet" : "Enter with Solana"}
+            Enter with Solana
           </h2>
           <p className="mt-2 text-sm leading-6 text-(--muted)">
             Choose a Solana wallet and sign the backend challenge. This proves ownership only.
@@ -278,7 +276,7 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
           onClick={startWalletFlow}
           type="button"
         >
-          <span>{state === "linking" || connecting ? "Waiting for wallet" : authState.method === "supabase" ? "Connect and link" : "Connect wallet"}</span>
+          <span>{state === "linking" || connecting ? "Waiting for wallet" : "Connect wallet"}</span>
         </button>
       )}
 

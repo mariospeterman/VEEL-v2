@@ -6,7 +6,7 @@ import type { AgeRepository } from "../age/types.js";
 import { extractBearerToken, unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { ContentRepository } from "../content/types.js";
 import type { ProfileRepository } from "../profile/types.js";
-import type { SessionRepository, SupabaseAuthVerifier } from "../session/types.js";
+import type { SessionRepository, ApplicationSessionVerifier } from "../session/types.js";
 import type { WalletRepository } from "../wallet/types.js";
 import { McpRepositoryConfigurationError } from "./mcp-repository.js";
 import {
@@ -35,7 +35,7 @@ import type {
 } from "./types.js";
 
 interface RegisterMcpRoutesOptions {
-  authVerifier: SupabaseAuthVerifier;
+  authVerifier: ApplicationSessionVerifier;
   sessionRepository: SessionRepository;
   ageRepository: AgeRepository;
   walletRepository: WalletRepository;
@@ -644,7 +644,7 @@ async function verifyRoleAccess(
     options.walletRepository.hasWalletBySupabaseUserId(supabaseUserId)
   ]);
 
-  return profile?.handle && profile.displayName && ageStatus.state === "verified" && hasWallet
+  return profile?.state === "active" && profile.handle && profile.displayName && ageStatus.state === "verified" && hasWallet
     ? { ok: true, supabaseUserId }
     : {
         ok: false,

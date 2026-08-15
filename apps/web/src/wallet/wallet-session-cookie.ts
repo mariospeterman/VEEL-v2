@@ -1,1 +1,1 @@
-export const walletSessionCookieName = "veel_wallet_session_token";
+export const walletSessionCookieName = "wevid_session";

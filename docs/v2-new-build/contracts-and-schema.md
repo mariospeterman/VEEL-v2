@@ -72,6 +72,15 @@ The first contract skeleton is in `packages/contracts/openapi.yaml`. It intentio
 - all admin mutations write audit events
 - all adult/content/Mutuals/event state is explicit and queryable
 
+## Canonical Identity And Session Tables
+
+- `users` is the sole WeVid person/account identity.
+- `user_provider_identities` maps a normalized provider plus immutable provider subject to exactly one user. Email is never a join key.
+- `app_sessions` stores only token hashes, authentication method/time, expiry, revocation, and rotation lineage. Session verification is SELECT-only.
+- `recovery_link_intents` stores only hashed, expiring, one-use intent tokens bound to a recent application session.
+- `profiles` enforces lowercase reserved-name-safe handles with database uniqueness and defaults to private. Age verification owns the transition from provisional/private to active/public.
+- `users.supabase_user_id` remains a nullable compatibility lookup for older repositories during migration; it is not an authentication authority or provider mapping source.
+
 ## Implementation Rule
 
 Before building a slice:

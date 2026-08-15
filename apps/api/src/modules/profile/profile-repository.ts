@@ -31,6 +31,9 @@ function createUnavailableProfileRepository(): ProfileRepository {
     async upsertMyProfile() {
       throw new ProfileRepositoryConfigurationError();
     },
+    async isHandleAvailable() {
+      throw new ProfileRepositoryConfigurationError();
+    },
     async findCreatorProfileByHandle() {
       throw new ProfileRepositoryConfigurationError();
     },

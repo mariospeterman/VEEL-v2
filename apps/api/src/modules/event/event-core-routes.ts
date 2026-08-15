@@ -41,9 +41,7 @@ export async function registerEventCoreRoutes(
       return reply.code(400).send(validationResponse(validationError));
     }
 
-    try {
-      await options.sessionRepository.ensureUserForSupabaseId(access.supabaseUserId);
-      const eventBody = body as CreateEventRequest;
+    try {      const eventBody = body as CreateEventRequest;
       const event = await options.eventRepository.createEvent({
         supabaseUserId: access.supabaseUserId,
         idempotencyKey,

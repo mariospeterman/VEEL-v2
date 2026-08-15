@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: wallet, onramp, payments, subscriptions, media, live, age/KYC, AI, events
-Last updated: 2026-08-14
+Last updated: 2026-08-15
 Source of truth: yes for provider topology; vendor/account approval remains provider-specific
 
 Owns:
@@ -44,7 +44,7 @@ This ADR turns the v2 blueprint into concrete provider defaults for the first im
 | Event Access | Internal backend QR/pass entitlement + Solana Pay settlement first; NFT/Solana pass ADR later | Proven, simple, noncustodial split settlement without premature custom smart contracts. |
 | Event location | Browser geolocation with permission + manual OSM-backed place search | Free/low-cost launch UX without platform handling private location carelessly. |
 | Share | Internal Veel share/repost/message has no referral commission; external share tab uses backend referral URL | Keeps social sharing clean while preserving referral attribution for off-platform conversion. |
-| Physical commerce | Deferred creator-owned Shopify integration | Creator remains merchant of record; Shopify owns catalog/cart/inventory/shipping/tax/order/refund workflow; WeVid displays approved data, attributes, and redirects without custody or commerce authority. |
+| Physical commerce | Deferred native commerce: Vendure preferred behind WeVid adapter; Medusa fallback; Shopify connector-only | Keeps WeVid-native UX and one provider boundary without installing a speculative commerce runtime before merchant, tax, fulfillment, return, and moderation decisions are approved. |
 
 ## Provider Acceptance States
 
@@ -115,7 +115,10 @@ Before implementation, verify the latest official docs for each provider/API. Th
 | Privy user authentication | `https://docs.privy.io/authentication/user-authentication/privy-auth` |
 | Privy Solana setup | `https://docs.privy.io/recipes/solana/getting-started-with-privy-and-solana` |
 | Privy external-wallet connectors | `https://docs.privy.io/wallets/connectors/setup/configuring-external-connector-wallets` |
-| Shopify Storefront Cart | `https://shopify.dev/docs/api/storefront/latest/objects/Cart` |
+| Vendure multi-vendor guide | `https://docs.vendure.io/guides/how-to/multi-vendor-marketplaces/` |
+| Vendure channels and sellers | `https://docs.vendure.io/guides/core-concepts/channels/`, `https://docs.vendure.io/reference/typescript-api/entities/seller/` |
+| Vendure payment handlers | `https://docs.vendure.io/reference/typescript-api/payment/payment-method-handler/` |
+| Medusa marketplace recipe | `https://docs.medusajs.com/resources/recipes/marketplace` |
 | MCP authorization | `https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization` |
 | MCP security best practices | `https://modelcontextprotocol.io/docs/tutorials/security/security_best_practices` |
 | OpenAI MCP/connectors | `https://developers.openai.com/api/docs/guides/tools-connectors-mcp` |

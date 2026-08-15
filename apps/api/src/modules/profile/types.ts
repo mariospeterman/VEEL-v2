@@ -9,7 +9,7 @@ export type CreatorOnboardingResource = components["schemas"]["CreatorOnboarding
 
 export interface UpsertMyProfileInput {
   handle: string;
-  displayName: string;
+  displayName?: string | undefined;
   avatarUrl?: string | null | undefined;
   bio?: string | undefined;
   locationLabel?: string | undefined;
@@ -18,9 +18,10 @@ export interface UpsertMyProfileInput {
 
 export interface ProfileRepository {
   upsertMyProfile(
-    supabaseUserId: string,
+    userId: string,
     input: UpsertMyProfileInput
   ): Promise<UserResource>;
+  isHandleAvailable(handle: string): Promise<boolean>;
   findCreatorProfileByHandle(handle: string): Promise<CreatorProfileResource | null>;
   getMyCreatorDashboard(
     supabaseUserId: string

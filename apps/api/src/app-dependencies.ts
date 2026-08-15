@@ -52,8 +52,15 @@ import type { ReferralRepository } from "./modules/referral/types.js";
 import { createPostgresRefundRepository } from "./modules/refund/refund-repository.js";
 import type { RefundRepository } from "./modules/refund/types.js";
 import { createPostgresSessionRepository } from "./modules/session/session-repository.js";
-import { createSupabaseAuthVerifier } from "./modules/session/supabase-auth.js";
-import type { SessionRepository, SupabaseAuthVerifier } from "./modules/session/types.js";
+import {
+  createApplicationSessionVerifier,
+  createSupabaseRecoveryVerifier
+} from "./modules/session/supabase-auth.js";
+import type {
+  SessionRepository,
+  ApplicationSessionVerifier,
+  RecoveryIdentityVerifier
+} from "./modules/session/types.js";
 import {
   createPostgresWalletAuthRepository,
   type WalletAuthRepository
@@ -74,7 +81,8 @@ import { createPostgresClient, type PostgresSql } from "./shared/postgres.js";
 
 export interface BuildApiOptions {
   rateLimitStore?: FastifyRateLimitStoreCtor;
-  authVerifier?: SupabaseAuthVerifier;
+  authVerifier?: ApplicationSessionVerifier;
+  recoveryIdentityVerifier?: RecoveryIdentityVerifier;
   sessionRepository?: SessionRepository;
   ageRepository?: AgeRepository;
   ageProviderWaterfall?: AgeProviderWaterfall;
@@ -113,7 +121,8 @@ export interface BuildApiOptions {
 
 export interface ApiDependencies {
   postgresClient: PostgresSql | undefined;
-  authVerifier: SupabaseAuthVerifier;
+  authVerifier: ApplicationSessionVerifier;
+  recoveryIdentityVerifier: RecoveryIdentityVerifier;
   sessionRepository: SessionRepository;
   ageRepository: AgeRepository;
   ageProviderWaterfall: AgeProviderWaterfall;
@@ -164,7 +173,9 @@ export function createApiDependencies(
     walletAuthRepository,
     authVerifier:
       options.authVerifier ??
-      createSupabaseAuthVerifier(app.config, walletAuthRepository),
+      createApplicationSessionVerifier(walletAuthRepository),
+    recoveryIdentityVerifier:
+      options.recoveryIdentityVerifier ?? createSupabaseRecoveryVerifier(app.config),
     sessionRepository:
       options.sessionRepository ?? createPostgresSessionRepository(postgresClient),
     ageRepository: options.ageRepository ?? createPostgresAgeRepository(postgresClient),

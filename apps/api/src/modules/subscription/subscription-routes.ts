@@ -137,9 +137,6 @@ export async function registerSubscriptionRoutes(
       if (readiness.config.collectorWallet) {
         assertSolanaAddress(readiness.config.collectorWallet);
       }
-
-      await options.sessionRepository.ensureUserForSupabaseId(access.supabaseUserId);
-
       const intentBody = body as CreateSubscriptionIntentRequest;
       const intent = await options.subscriptionRepository.createAuthorizationIntent({
         supabaseUserId: access.supabaseUserId,

@@ -174,9 +174,7 @@ export async function registerMessageRoutes(
     const conversationId = (request.params as { conversationId?: string }).conversationId ?? "";
 
     try {
-      assertSolanaAddress(platformFeeWallet);
-      await options.sessionRepository.ensureUserForSupabaseId(access.supabaseUserId);
-      const price = await options.messageRepository.findConversationPrice({
+      assertSolanaAddress(platformFeeWallet);      const price = await options.messageRepository.findConversationPrice({
         supabaseUserId: access.supabaseUserId,
         conversationId
       });

@@ -51,9 +51,7 @@ export async function registerLivePassRoutes(
     const roomId = (request.params as { roomId?: string }).roomId ?? "";
 
     try {
-      assertSolanaAddress(platformFeeWallet);
-      await options.sessionRepository.ensureUserForSupabaseId(access.supabaseUserId);
-      const room = await options.liveRepository.findRoom({
+      assertSolanaAddress(platformFeeWallet);      const room = await options.liveRepository.findRoom({
         supabaseUserId: access.supabaseUserId,
         roomId
       });
