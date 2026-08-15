@@ -40,7 +40,7 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Merged baseline | `main` at `9081bd0f4fb8433e1f63422fd294ba8601c851b2` (Launch 01, PR #42) |
 | Active slice | Production-loop process tooling |
 | Branch | `chore/wevid-production-loop` |
-| Pull request | Not opened yet |
+| Pull request | #43 (draft) |
 | State | `LOCAL_GREEN` |
 | Slice blockers | None |
 | Next unfinished slice | Launch 03A — SFW media publishing and moderation |
