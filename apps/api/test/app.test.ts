@@ -827,6 +827,75 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("requires recent authentication and revokes every application session explicitly", async () => {
+    const revocations: Array<{ userId: string; actorUserId: string; reason: string }> = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      walletAuthRepository: fakeWalletAuthRepository({
+        async revokeAllSessions(input) {
+          revocations.push(input);
+          return 2;
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/sessions/logout-all",
+      headers: {
+        cookie: "wevid_session=valid-token",
+        "idempotency-key": "logout-all-1"
+      }
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(revocations).toEqual([{
+      userId: "00000000-0000-4000-8000-000000000001",
+      actorUserId: "00000000-0000-4000-8000-000000000001",
+      reason: "user_logout_all"
+    }]);
+    expect(String(response.headers["set-cookie"])).toContain("wevid_session=");
+    expect(String(response.headers["set-cookie"])).toContain("Max-Age=0");
+
+    await app.close();
+  });
+
+  it("rejects logout-all when authentication is no longer recent", async () => {
+    let called = false;
+    const app = await buildApi({
+      authVerifier: {
+        async verifyToken() {
+          return {
+            ...await fakeAuthVerifier.verifyToken("valid-token") as VerifiedApplicationSession,
+            authenticatedAt: new Date(Date.now() - 16 * 60 * 1000)
+          };
+        }
+      },
+      walletAuthRepository: fakeWalletAuthRepository({
+        async revokeAllSessions() {
+          called = true;
+          return 0;
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/sessions/logout-all",
+      headers: {
+        cookie: "wevid_session=valid-token",
+        "idempotency-key": "logout-all-stale"
+      }
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({ code: "recent_authentication_required" });
+    expect(called).toBe(false);
+    await app.close();
+  });
+
   it("keeps authenticated users gated until the Veel profile exists", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -9795,6 +9864,9 @@ function fakeWalletAuthRepository(
       throw new Error("not implemented");
     },
     async rotateSessionToken() {
+      throw new Error("not implemented");
+    },
+    async revokeAllSessions() {
       throw new Error("not implemented");
     },
     async revokeSessionToken() {

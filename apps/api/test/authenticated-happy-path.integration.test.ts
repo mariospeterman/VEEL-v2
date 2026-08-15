@@ -2278,6 +2278,132 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       await sql.end();
     }
   }, 30_000);
+
+  it("keeps device sessions independent, logs out all devices, and makes account-security revocation idempotent", async () => {
+    const databaseUrl = integrationDatabaseUrl();
+    assertIntegrationDatabaseIsAllowed(databaseUrl);
+
+    const sql = createPostgresClient(databaseUrl);
+    const repository = createPostgresWalletAuthRepository(sql);
+    const address = `session-scope-${randomUUID()}`;
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    let userId: string | null = null;
+
+    try {
+      const challengeA = await repository.createChallenge({
+        chain: "solana_devnet",
+        provider: "phantom",
+        address,
+        message: `device-a-${randomUUID()}`,
+        nonceHash: randomUUID(),
+        expiresAt
+      });
+      const sessionA = await repository.createSessionFromChallenge({
+        challengeId: challengeA.id,
+        expiresAt
+      });
+      const verifiedA = await repository.verifySessionToken(sessionA.accessToken);
+      expect(verifiedA).not.toBeNull();
+      userId = verifiedA?.userId ?? null;
+
+      const challengeB = await repository.createChallenge({
+        chain: "solana_devnet",
+        provider: "phantom",
+        address,
+        message: `device-b-${randomUUID()}`,
+        nonceHash: randomUUID(),
+        expiresAt
+      });
+      const sessionB = await repository.createSessionFromChallenge({
+        challengeId: challengeB.id,
+        expiresAt
+      });
+
+      expect(await repository.verifySessionToken(sessionA.accessToken)).not.toBeNull();
+      expect(await repository.verifySessionToken(sessionB.accessToken)).not.toBeNull();
+
+      const rotatedA = await repository.rotateSessionToken({ sessionToken: sessionA.accessToken });
+      expect(await repository.verifySessionToken(sessionA.accessToken)).toBeNull();
+      expect(await repository.verifySessionToken(rotatedA.accessToken)).not.toBeNull();
+      expect(await repository.verifySessionToken(sessionB.accessToken)).not.toBeNull();
+      await expect(
+        repository.rotateSessionToken({ sessionToken: sessionA.accessToken })
+      ).rejects.toBeInstanceOf(WalletAuthChallengeInvalidError);
+
+      await repository.revokeSessionToken(rotatedA.accessToken);
+      expect(await repository.verifySessionToken(rotatedA.accessToken)).toBeNull();
+      expect(await repository.verifySessionToken(sessionB.accessToken)).not.toBeNull();
+
+      expect(userId).not.toBeNull();
+      const challengeC = await repository.createChallenge({
+        chain: "solana_devnet",
+        provider: "phantom",
+        address,
+        message: `device-c-${randomUUID()}`,
+        nonceHash: randomUUID(),
+        expiresAt
+      });
+      const sessionC = await repository.createSessionFromChallenge({
+        challengeId: challengeC.id,
+        expiresAt
+      });
+
+      const logoutAllCount = await repository.revokeAllSessions({
+        userId: userId as string,
+        actorUserId: userId as string,
+        reason: "user_logout_all"
+      });
+      expect(logoutAllCount).toBe(2);
+      expect(await repository.verifySessionToken(sessionB.accessToken)).toBeNull();
+      expect(await repository.verifySessionToken(sessionC.accessToken)).toBeNull();
+
+      const challengeD = await repository.createChallenge({
+        chain: "solana_devnet",
+        provider: "phantom",
+        address,
+        message: `device-d-${randomUUID()}`,
+        nonceHash: randomUUID(),
+        expiresAt
+      });
+      const sessionD = await repository.createSessionFromChallenge({
+        challengeId: challengeD.id,
+        expiresAt
+      });
+      const accountSecurityCount = await repository.revokeAllSessions({
+        userId: userId as string,
+        actorUserId: userId as string,
+        reason: "account_security"
+      });
+      expect(accountSecurityCount).toBe(1);
+      expect(await repository.verifySessionToken(sessionD.accessToken)).toBeNull();
+
+      const replayedRevocationCount = await repository.revokeAllSessions({
+        userId: userId as string,
+        actorUserId: userId as string,
+        reason: "account_security"
+      });
+      expect(replayedRevocationCount).toBe(0);
+
+      const audits = await sql<{ count: string }[]>`
+        select count(*)::text as count
+        from audit_events
+        where actor_user_id = ${userId}
+          and subject_id = ${userId}
+          and action = 'auth.sessions_revoked_all'
+      `;
+      expect(audits[0]?.count).toBe("2");
+    } finally {
+      if (userId) {
+        await sql`delete from audit_events where actor_user_id = ${userId}`;
+        await sql`delete from recovery_link_intents where user_id = ${userId}`;
+        await sql`delete from app_sessions where user_id = ${userId}`;
+        await sql`delete from wallets where user_id = ${userId}`;
+        await sql`delete from users where id = ${userId}`;
+      }
+      await sql`delete from wallet_auth_challenges where address = ${address}`;
+      await sql.end();
+    }
+  }, 30_000);
 });
 
 function integrationDatabaseUrl(): string {

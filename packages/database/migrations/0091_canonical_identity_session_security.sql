@@ -3,7 +3,7 @@
 
 create table user_provider_identities (
   id uuid primary key,
-  provider text not null check (provider in ('privy', 'supabase')),
+  provider text not null check (provider = 'supabase'),
   provider_subject text not null,
   user_id uuid not null references users(id),
   status text not null default 'active' check (status in ('pending', 'active', 'revoked', 'blocked')),
@@ -43,6 +43,11 @@ from users u
 where u.supabase_user_id is not null
 on conflict (provider, provider_subject) do nothing;
 
+-- Legacy repositories still resolve through this column during the transition,
+-- but it now contains only the canonical WeVid user id. Provider subjects live
+-- exclusively in user_provider_identities.
+update users set supabase_user_id = id;
+
 alter table users alter column supabase_user_id drop not null;
 
 alter table wallet_auth_sessions rename to app_sessions;
@@ -54,7 +59,7 @@ alter table app_sessions
   alter column wallet_id drop not null,
   add column provider_identity_id uuid references user_provider_identities(id),
   add column authentication_method text not null default 'wallet'
-    check (authentication_method in ('wallet', 'privy', 'supabase_recovery')),
+    check (authentication_method in ('wallet', 'supabase_recovery')),
   add column authenticated_at timestamptz,
   add column rotated_from_session_id uuid references app_sessions(id);
 

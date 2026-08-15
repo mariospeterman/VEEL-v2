@@ -13,15 +13,14 @@ import type { WebAuthState } from "@/supabase/auth-state";
 
 type LandingWalletRuntimeProps = {
   authState: WebAuthState;
-  entry: "account" | "wallet";
   onLinked?: ((address: string) => void) | undefined;
 };
 
 const onboardingSteps = [
   {
     eyebrow: "1 / 3",
-    title: "Account + Wallet",
-    copy: "Continue with Google, email, or passkey. You can also use an existing Solana wallet."
+    title: "Wallet",
+    copy: "Continue with your account or connect an existing Solana wallet."
   },
   {
     eyebrow: "2 / 3",
@@ -70,8 +69,6 @@ export function LandingAuthSurface({
 function LandingLoginForm({ authState }: { authState: WebAuthState }) {
   return (
     <div className="landing-auth-block">
-      <p>Continue to WeVid</p>
-      <span>Use your account or an existing Solana wallet.</span>
       <LandingWalletList authState={authState} />
     </div>
   );
@@ -128,62 +125,33 @@ function OnboardingWalletStep({ authState, onLinked }: { authState: WebAuthState
 
 function LandingWalletList({ authState, onLinked }: { authState: WebAuthState; onLinked?: (address: string) => void }) {
   const [runtime, setRuntime] = useState<ComponentType<LandingWalletRuntimeProps> | null>(null);
-  const [runtimeEntry, setRuntimeEntry] = useState<"account" | "wallet">("account");
-  const [loadingRuntime, setLoadingRuntime] = useState(false);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
 
-  async function loadWalletRuntime(entry: "account" | "wallet") {
-    if (runtime || loadingRuntime) return;
+  useEffect(() => {
+    let cancelled = false;
 
-    setRuntimeEntry(entry);
-    setRuntimeError(null);
-    setLoadingRuntime(true);
-    try {
-      const module = await import("./landing-wallet-runtime");
-      setRuntime(() => module.LandingWalletRuntime);
-    } catch {
-      setRuntimeError("Wallet providers could not load. Refresh and try again.");
-    } finally {
-      setLoadingRuntime(false);
-    }
-  }
+    void import("./landing-wallet-runtime")
+      .then((module) => {
+        if (!cancelled) setRuntime(() => module.LandingWalletRuntime);
+      })
+      .catch(() => {
+        if (!cancelled) setRuntimeError("Sign-in options could not load. Refresh and try again.");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (runtime) {
     const Runtime = runtime;
-    return <Runtime authState={authState} entry={runtimeEntry} onLinked={onLinked} />;
+    return <Runtime authState={authState} onLinked={onLinked} />;
   }
 
   return (
     <div className="landing-wallet-runtime" aria-label="Sign-in options">
-      <p className="landing-wallet-required">Continue securely. Your wallet remains user-controlled.</p>
-      <div className="landing-wallet-connect-row">
-        <button
-          aria-busy={loadingRuntime ? "true" : undefined}
-          className="landing-button landing-wallet-launch"
-          data-tone="primary"
-          disabled={loadingRuntime}
-          onClick={() => void loadWalletRuntime("account")}
-          type="button"
-        >
-          <strong>{loadingRuntime ? "Opening sign in" : "Continue with Google, email, or passkey"}</strong>
-          <small>Powered by the configured account provider</small>
-        </button>
-      </div>
-      <div className="landing-embedded-wallets" aria-label="Existing wallet option">
-        <div className="landing-embedded-label">
-          <p>Use an existing wallet</p>
-          <span>Connect a supported Solana wallet.</span>
-        </div>
-        <button
-          className="landing-provider-disabled"
-          disabled={loadingRuntime}
-          onClick={() => void loadWalletRuntime("wallet")}
-          type="button"
-        >
-          <strong>Use an existing wallet</strong>
-          <small>Connect wallet</small>
-        </button>
-      </div>
+      <p className="landing-wallet-required">Choose how to continue. Your wallet stays under your control.</p>
+      {!runtimeError ? <p className="landing-wallet-required" role="status">Loading sign-in options…</p> : null}
       {runtimeError ? <p className="landing-auth-error">{runtimeError}</p> : null}
     </div>
   );

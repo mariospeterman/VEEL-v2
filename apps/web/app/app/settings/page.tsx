@@ -22,6 +22,7 @@ import { mapApiFailure } from "@/api-errors";
 import { McpConnectionsPanel } from "../../settings/mcp-connections-panel";
 import { NotificationEnrollment } from "../../settings/notification-enrollment";
 import { RecoveryAccessPanel } from "../../settings/recovery-access-panel";
+import { SessionSecurityActions } from "../../settings/session-security-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -183,6 +184,7 @@ function SecurityFacts({
       <Fact label="Primary wallet" value={primaryWallet ? shorten(primaryWallet.address) : resultLabel(wallets)} />
       <Fact label="Wallet chain" value={primaryWallet?.chain ?? "not ready"} />
       <RecoveryAccessPanel />
+      <SessionSecurityActions />
     </div>
   );
 }

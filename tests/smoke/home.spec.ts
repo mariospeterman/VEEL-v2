@@ -53,21 +53,23 @@ test("renders the public landing with the current WeVid visual contract", async 
 test("renders inline login and onboarding entry surfaces", async ({ page }) => {
   await page.goto("/?mode=login", { waitUntil: "domcontentloaded", timeout: 20_000 });
 
-  await expect(page.getByRole("heading", { name: "Login to WeVid" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Continue with Google, email, or passkey/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Use an existing wallet Connect wallet/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Log in." })).toBeVisible();
+  await expect(
+    page
+      .getByRole("button", { name: "Continue" })
+      .or(page.getByRole("button", { name: "Connect wallet" }))
+      .first()
+  ).toBeVisible();
   await expect(page.getByText("Privy", { exact: true })).toHaveCount(0);
 
   await page.goto("/?mode=onboarding", { waitUntil: "domcontentloaded", timeout: 20_000 });
 
-  await expect(page.getByRole("heading", { name: "Set up access." })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Continue with Google, email, or passkey/ })).toBeVisible();
-  await expect(page.getByText("Continue securely. Your wallet remains user-controlled.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Create your account." })).toBeVisible();
+  await expect(page.getByText("Choose how to continue. Your wallet stays under your control.")).toBeVisible();
 
-  await page.getByRole("button", { name: /Use an existing wallet Connect wallet/ }).click();
-  await expect(page.getByText("Connect your Solana wallet and confirm ownership.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Connect wallet" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Set up access." })).toBeVisible();
+  await page.getByRole("button", { name: /Connect wallet/ }).click();
+  await expect(page.getByRole("dialog", { name: /wallet.*Solana|need a wallet/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Create your account." })).toBeVisible();
   await expect(page.locator(".landing-progress-topic")).toHaveText("Onboarding");
 });
 
@@ -77,7 +79,7 @@ test("renders a deep-linked onboarding step without an entrance-animation delay"
     timeout: 20_000
   });
 
-  await expect(page.getByRole("heading", { name: "Set up access." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Create your account." })).toBeVisible();
   await expect(page.getByLabel("Handle")).toBeVisible();
   await expect(page.locator(".landing-auth-inline")).toHaveCSS("opacity", "1");
   await expect(page.locator(".landing-auth-inline")).toHaveCSS("visibility", "visible");
@@ -121,6 +123,16 @@ test("renders the canonical protected app home shell through /app", async ({ con
   await expect(page.getByRole("link", { name: "WeVid app home" }).first()).toBeVisible();
   await expect(page.getByRole("heading", { name: /Mixed media feed|Enter WeVid/ }).first()).toBeVisible();
   await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
+});
+
+test("requires confirmation before logging out every device", async ({ context, page }) => {
+  await addE2eCookie(context);
+  await page.goto("/app/settings#security", { waitUntil: "domcontentloaded", timeout: 45_000 });
+
+  await page.getByRole("button", { name: "Log out all devices" }).click();
+  await expect(page.getByRole("button", { name: "Confirm log out all devices" })).toBeVisible();
+  await page.getByRole("button", { name: "Confirm log out all devices" }).click();
+  await expect(page).toHaveURL(/\/$/);
 });
 
 test("separates platform plans from creator memberships responsively", async ({ context, page }) => {
@@ -250,6 +262,16 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
 
   if (method === "GET" && url.pathname === "/v1/session") {
     sendJson(response, 200, sessionState());
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/v1/auth/sessions/logout-all") {
+    if (!hasIdempotencyKey(request)) {
+      sendJson(response, 400, { message: "Idempotency-Key header is required" });
+      return;
+    }
+    response.writeHead(204);
+    response.end();
     return;
   }
 

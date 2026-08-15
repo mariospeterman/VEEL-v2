@@ -77,7 +77,7 @@ External wallet docs checked for the browser wallet-link handoff on 2026-06-07:
 
 Runtime/session behavior:
 
-- Landing dynamically loads one canonical wallet runtime only after explicit user action. Configured Privy calls its official React SDK login and Solana signing APIs; Solana Wallet Adapter remains the single external-wallet chooser.
+- Landing preloads one canonical wallet runtime when the login/onboarding frame opens so the first visible provider click directly opens Privy or the Solana wallet chooser. Configured Privy calls its official React SDK login and Solana signing APIs; Solana Wallet Adapter remains the single external-wallet chooser.
 - The authenticated app mounts the same provider boundary so profile logout can terminate active provider state with supported SDK methods. Logout calls Privy `logout` and Solana Wallet Adapter `disconnect`, revokes the canonical WeVid application session, clears the optional local Supabase recovery state, and expires server cookies before redirecting to `/`.
 - Provider SDK storage keys are not guessed or deleted by application code. Provider teardown errors are isolated so one unavailable SDK cannot prevent other sessions from closing or block the landing redirect.
 

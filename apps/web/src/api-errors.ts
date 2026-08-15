@@ -117,10 +117,10 @@ export function safeMutationMessage(error: unknown, context = "This action") {
   if (error instanceof ApiMutationError) {
     if (error.message === "API is unavailable") {
       if (context.toLowerCase().includes("wallet")) {
-        return "Wallet connected, but the WeVid API is not reachable from the browser. Check the API server and try again.";
+        return "WeVid could not finish connecting your wallet. Your wallet is unchanged; try again in a moment.";
       }
 
-      return `${context} could not reach the WeVid API from the browser. Check the API server and try again.`;
+      return `${context} could not connect to WeVid. Try again in a moment.`;
     }
 
     if (!error.status && error.message) {

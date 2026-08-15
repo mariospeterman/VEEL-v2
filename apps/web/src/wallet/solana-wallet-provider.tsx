@@ -4,7 +4,7 @@ import { clusterApiUrl } from "@solana/web3.js";
 import { ConnectionProvider, useWallet, WalletProvider } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { readPublicWebEnv } from "@/public-env";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useProviderSessionLogoutRegistration } from "./provider-session-logout";
 
 export function SolanaWalletProvider({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -20,12 +20,34 @@ export function SolanaWalletProvider({ children }: Readonly<{ children: React.Re
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider autoConnect wallets={[]}>
         <WalletModalProvider>
+          <WalletModalAccessibilityBridge />
           <SolanaSessionLogoutRegistration />
           {children}
         </WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>
   );
+}
+
+function WalletModalAccessibilityBridge() {
+  useEffect(() => {
+    const labelWalletModal = () => {
+      for (const modal of document.querySelectorAll<HTMLElement>(".wallet-adapter-modal")) {
+        const title = modal.querySelector<HTMLElement>(".wallet-adapter-modal-title");
+        const closeButton = modal.querySelector<HTMLElement>(".wallet-adapter-modal-button-close");
+
+        if (title) title.id = "wallet-adapter-modal-title";
+        if (closeButton) closeButton.setAttribute("aria-label", "Close wallet chooser");
+      }
+    };
+
+    labelWalletModal();
+    const observer = new MutationObserver(labelWalletModal);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
+
+  return null;
 }
 
 function SolanaSessionLogoutRegistration() {

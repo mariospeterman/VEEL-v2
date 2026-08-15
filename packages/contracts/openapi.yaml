@@ -103,6 +103,20 @@ paths:
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/auth/sessions/logout-all:
+    post:
+      operationId: revokeAllApplicationSessions
+      tags: [Auth]
+      summary: Revoke every application session after recent authentication
+      x-idempotency-policy: idempotent-state-transition
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "204": { description: All application sessions revoked }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/auth/recovery/link-intents:
     post:
       operationId: createRecoveryLinkIntent

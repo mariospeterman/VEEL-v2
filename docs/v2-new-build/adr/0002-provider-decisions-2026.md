@@ -96,7 +96,7 @@ No provider can be treated as launch-approved until its staging smoke, security 
 
 ## Universal Account And Session Lock
 
-One WeVid user owns one profile, one or more wallets with one primary wallet, and optional Privy identity, Supabase recovery identity, verification records, earning readiness, performer records, and organization memberships. Viewer, creator, buyer, performer, manager, and Enterprise participation are capabilities/relationships, never account types. Wallet, Privy, and Supabase subject collisions fail closed; duplicate callbacks and link replays are idempotently rejected; email equality never silently merges users.
+One WeVid user owns one profile, one or more wallets with one primary wallet, and optional Supabase recovery identity, verification records, earning readiness, performer records, and organization memberships. Privy is the embedded-wallet UX; WeVid authenticates its Solana wallet signature and does not store a separate unverified Privy subject. Viewer, creator, buyer, performer, manager, and Enterprise participation are capabilities/relationships, never account types. Wallet and recovery-subject collisions fail closed; duplicate callbacks and link replays are idempotently rejected; email equality never silently merges users.
 
 Privy mainstream entry and external-wallet entry both sign the normal domain-bound wallet challenge. The backend-issued WeVid session is the authorization authority after Step 1. The preferred target keeps the raw token only in a secure HttpOnly cookie and only a hash server-side, with rotation, revocation, device audit, and recent-auth step-up for high-risk wallet/recovery operations. Slice 00 documents this target; Slices 01–02 own remaining contract/runtime convergence.
 

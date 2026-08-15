@@ -178,6 +178,36 @@ export async function registerWalletAuthRoutes(
     }
   });
 
+  app.post("/v1/auth/sessions/logout-all", mutationRateLimit("walletMutation", "revokeAllApplicationSessions"), async (request, reply) => {
+    const sessionToken = extractRequestSessionToken(request);
+    const verifiedSession = sessionToken ? await options.authVerifier.verifyToken(sessionToken) : null;
+
+    if (!verifiedSession) {
+      return reply.code(401).send(unauthorizedResponse("Application session is missing or expired"));
+    }
+    if (!hasRecentAuthentication(verifiedSession.authenticatedAt)) {
+      return reply.code(403).send({
+        code: "recent_authentication_required",
+        message: "Authenticate again before logging out every device"
+      });
+    }
+
+    try {
+      await options.walletAuthRepository.revokeAllSessions({
+        userId: verifiedSession.userId,
+        actorUserId: verifiedSession.userId,
+        reason: "user_logout_all"
+      });
+      reply.header("set-cookie", [
+        expiredWalletSessionCookie(app.config.WALLET_AUTH_COOKIE_DOMAIN),
+        expiredRecoveryIntentCookie(app.config.WALLET_AUTH_COOKIE_DOMAIN)
+      ]);
+      return reply.code(204).send();
+    } catch (error) {
+      return handleRepositoryError(request, reply, error);
+    }
+  });
+
   app.post("/v1/auth/recovery/link-intents", mutationRateLimit("walletMutation", "createRecoveryLinkIntent"), async (request, reply) => {
     const sessionToken = extractRequestSessionToken(request);
     const verifiedSession = sessionToken

@@ -6,10 +6,11 @@ export type AppAccessState = components["schemas"]["AppAccessState"];
 
 export interface VerifiedApplicationSession {
   userId: string;
+  /** @deprecated Canonical user-id compatibility alias for repositories pending the identity-parameter migration. */
   supabaseUserId: string;
   sessionId: string;
   authenticatedAt: Date;
-  authenticationMethod: "wallet" | "privy" | "supabase_recovery";
+  authenticationMethod: "wallet" | "supabase_recovery";
 }
 
 export interface ApplicationSessionVerifier {

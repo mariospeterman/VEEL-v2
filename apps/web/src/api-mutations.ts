@@ -158,6 +158,10 @@ export async function revokeWalletAuthSession(): Promise<void> {
   return authenticatedEmptyMutation("/v1/auth/wallet/logout", "POST", {});
 }
 
+export async function revokeAllApplicationSessions(): Promise<void> {
+  return authenticatedEmptyMutation("/v1/auth/sessions/logout-all", "POST", {});
+}
+
 export async function createRecoveryLinkIntent(): Promise<ApplicationSessionExpiry> {
   return authenticatedMutation<ApplicationSessionExpiry>("/v1/auth/recovery/link-intents", "POST", {});
 }

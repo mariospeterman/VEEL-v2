@@ -64,6 +64,13 @@ alter index app_sessions_expires_at_idx rename to wallet_auth_sessions_expires_a
 alter index app_sessions_user_created_idx rename to wallet_auth_sessions_user_created_idx;
 alter table app_sessions rename to wallet_auth_sessions;
 
+update users u
+set supabase_user_id = identity.provider_subject::uuid
+from user_provider_identities identity
+where identity.user_id = u.id
+  and identity.provider = 'supabase'
+  and identity.status = 'active';
+
 drop index if exists user_provider_identities_user_status_idx;
 drop index if exists user_provider_identities_one_active_provider_idx;
 drop table if exists user_provider_identities;

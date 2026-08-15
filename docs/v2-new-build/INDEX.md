@@ -122,7 +122,8 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 46. [Deployment topology](deployment-topology.md)
 47. [Slice workflow](slice-workflow.md)
 48. [Production branch inventory](production-branch-inventory.md)
-49. `staging-evidence/` for redacted provider proof tied to a commit and environment
+49. [Production dependency security status](dependency-security-status.md)
+50. `staging-evidence/` for redacted provider proof tied to a commit and environment
 
 ## How To Use In A New Repo
 
