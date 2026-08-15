@@ -37,13 +37,13 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `327b95d` (Launch 04, PR #45) |
-| Active slice | Launch 05 — Realtime messages and notifications |
-| Branch | `codex/launch-05-realtime-messages` |
-| Pull request | #46 |
+| Merged baseline | `main` at `890e0ad` (Launch 05, PR #46) |
+| Active slice | Launch 06 — One-time monetisation and Event Access completion |
+| Branch | `codex/launch-06-one-time-monetisation` |
+| Pull request | Pending |
 | State | `ACTIVE` |
-| Slice blockers | Code can complete locally; real Supabase Realtime signing-key/channel proof and VAPID browser delivery remain pre-production staging gates |
-| Next unfinished slice | Launch 06 — One-time monetisation and Event Access completion, including narrow Commerce Kit Solana Pay convergence and one shared checkout presentation |
+| Slice blockers | Code can complete locally; real staging Solana devnet wallets/RPC settlement proof, policy-approved KYC evidence, and exact provider dashboard configuration remain pre-production gates |
+| Next unfinished slice | Launch 07 — SFW live host, viewer, chat, and operational controls |
 
 Current human/provider gates do not block this process slice: shared staging credentials,
 provider dashboard/webhook/domain configuration, migration `0091` shared-project proof,
