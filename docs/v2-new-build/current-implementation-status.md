@@ -40,7 +40,7 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Merged baseline | `main` at `36fc65d004eaa587d1f9987393ad59ec15046c85` (production loop, PR #43) |
 | Active slice | Launch 03A — SFW media publishing and moderation |
 | Branch | `codex/launch-03-sfw-publish-moderation` |
-| Pull request | Not opened yet |
+| Pull request | #44 (draft) |
 | State | `ACTIVE` |
 | Slice blockers | Bunny staging credentials and launch-approved classifier/hash evidence are unavailable; implementation continues with deterministic fixtures and production release remains fail-closed |
 | Next unfinished slice | Launch 04 — Core social graph and real feeds |
