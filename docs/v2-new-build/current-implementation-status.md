@@ -37,13 +37,13 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `9081bd0f4fb8433e1f63422fd294ba8601c851b2` (Launch 01, PR #42) |
-| Active slice | Production-loop process tooling |
-| Branch | `chore/wevid-production-loop` |
-| Pull request | #43 (ready) |
-| State | `MERGE_READY` |
-| Slice blockers | None; provider proof is not applicable to this process-only slice |
-| Next unfinished slice | Launch 03A — SFW media publishing and moderation |
+| Merged baseline | `main` at `36fc65d004eaa587d1f9987393ad59ec15046c85` (production loop, PR #43) |
+| Active slice | Launch 03A — SFW media publishing and moderation |
+| Branch | `codex/launch-03-sfw-publish-moderation` |
+| Pull request | Not opened yet |
+| State | `ACTIVE` |
+| Slice blockers | Bunny staging credentials and launch-approved classifier/hash evidence are unavailable; implementation continues with deterministic fixtures and production release remains fail-closed |
+| Next unfinished slice | Launch 04 — Core social graph and real feeds |
 
 Current human/provider gates do not block this process slice: shared staging credentials,
 provider dashboard/webhook/domain configuration, migration `0091` shared-project proof,
