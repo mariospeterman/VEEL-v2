@@ -1,15 +1,17 @@
-import { getMyCreatorDashboard, getMyCreatorOnboarding } from "@/api-client";
+import { getMyCreatorDashboard, getMyCreatorOnboarding, getWallets } from "@/api-client";
 import { requireAppAccess } from "@/supabase/route-guard";
 import { AppShell } from "../../../app-shell";
 import { Card, ErrorState, Fact, PageHeader, StatusPill } from "../../../ui";
+import { EarningsSetupForm } from "./earnings-setup-form";
 
 export const dynamic = "force-dynamic";
 
 export default async function EarningsSetupPage() {
   await requireAppAccess("/app/profile/earnings");
-  const [dashboard, onboarding] = await Promise.all([
+  const [dashboard, onboarding, wallets] = await Promise.all([
     getMyCreatorDashboard(),
-    getMyCreatorOnboarding()
+    getMyCreatorOnboarding(),
+    getWallets()
   ]);
 
   return (
@@ -65,6 +67,15 @@ export default async function EarningsSetupPage() {
               <Fact label="Recipient wallet" value={dashboard.data.readiness.recipientWalletState} />
             </div>
           </Card>
+        ) : null}
+
+        {dashboard.ok && onboarding.ok && wallets.ok ? (
+          <EarningsSetupForm
+            initialOnboarding={onboarding.data}
+            wallets={wallets.data.items}
+          />
+        ) : !wallets.ok ? (
+          <ErrorState result={wallets} title="Linked wallets unavailable" context="Earnings wallet" />
         ) : null}
 
         <Card className="p-4">

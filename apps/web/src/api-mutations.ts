@@ -4,6 +4,7 @@ import {
   authenticatedEmptyMutation,
   authenticatedGet,
   authenticatedMutation,
+  publicCapabilityMutation,
   publicMutation
 } from "./api-mutation-transport";
 export { ApiMutationError } from "./api-mutation-types";
@@ -66,12 +67,16 @@ export type {
   Subscription,
   SubscriptionAuthorizationIntent,
   TransactionRequest,
+  TransactionRequestPostResponse,
+  AcceptPaymentIntentTermsRequest,
   UpdateContentRequest,
   UpdateProfileRequest,
+  UpdateCreatorOnboardingRequest,
   UploadProfileAvatarRequest,
   UploadSession,
   VerificationSession,
   User,
+  CreatorOnboarding,
   Wallet,
   WalletAuthChallenge,
   WalletAuthSession,
@@ -136,12 +141,16 @@ import type {
   Subscription,
   SubscriptionAuthorizationIntent,
   TransactionRequest,
+  TransactionRequestPostResponse,
+  AcceptPaymentIntentTermsRequest,
   UpdateContentRequest,
   UpdateProfileRequest,
+  UpdateCreatorOnboardingRequest,
   UploadProfileAvatarRequest,
   UploadSession,
   VerificationSession,
   User,
+  CreatorOnboarding,
   Wallet,
   WalletAuthChallenge,
   WalletAuthSession,
@@ -164,6 +173,18 @@ export async function createVerificationSession(
 
 export async function updateMyProfile(body: UpdateProfileRequest): Promise<User> {
   return authenticatedMutation<User>("/v1/profiles/me", "PATCH", body);
+}
+
+export async function updateMyCreatorOnboarding(
+  body: UpdateCreatorOnboardingRequest,
+  idempotencyKey?: string
+): Promise<CreatorOnboarding> {
+  return authenticatedMutation<CreatorOnboarding>(
+    "/v1/profiles/me/creator-onboarding",
+    "PATCH",
+    body,
+    idempotencyKey
+  );
 }
 
 export async function uploadMyProfileAvatar(
@@ -276,11 +297,15 @@ export async function getContentForMutation(contentId: string): Promise<ContentI
   return authenticatedGet<ContentItem>(`/v1/content/${encodeURIComponent(contentId)}`);
 }
 
-export async function createContentUnlockIntent(contentId: string): Promise<ContentUnlockIntent> {
+export async function createContentUnlockIntent(
+  contentId: string,
+  idempotencyKey?: string
+): Promise<ContentUnlockIntent> {
   return authenticatedMutation<ContentUnlockIntent>(
     `/v1/content/${encodeURIComponent(contentId)}/unlock-intents`,
     "POST",
-    {}
+    {},
+    idempotencyKey
   );
 }
 
@@ -397,22 +422,28 @@ export async function recordFeedImpression(
   await authenticatedEmptyMutation("/v1/feed/impressions", "POST", body, idempotencyKey);
 }
 
-export async function createLiveEventAccessIntent(liveRoomId: string): Promise<PaymentIntent> {
+export async function createLiveEventAccessIntent(
+  liveRoomId: string,
+  idempotencyKey?: string
+): Promise<PaymentIntent> {
   return authenticatedMutation<PaymentIntent>(
     `/v1/live/rooms/${encodeURIComponent(liveRoomId)}/event-access-intents`,
     "POST",
-    {}
+    {},
+    idempotencyKey
   );
 }
 
 export async function createEventAccessPassIntent(
   eventId: string,
-  body: CreateAccessPassIntentRequest
+  body: CreateAccessPassIntentRequest,
+  idempotencyKey?: string
 ): Promise<AccessPassIntent> {
   return authenticatedMutation<AccessPassIntent>(
     `/v1/events/${encodeURIComponent(eventId)}/access-passes/intents`,
     "POST",
-    body
+    body,
+    idempotencyKey
   );
 }
 
@@ -493,13 +524,60 @@ export async function createPaidMessageIntent(
   );
 }
 
-export async function createPaymentIntent(body: CreatePaymentIntentRequest): Promise<PaymentIntent> {
-  return authenticatedMutation<PaymentIntent>("/v1/payments/intents", "POST", body);
+export async function createPaymentIntent(
+  body: CreatePaymentIntentRequest,
+  idempotencyKey?: string
+): Promise<PaymentIntent> {
+  return authenticatedMutation<PaymentIntent>(
+    "/v1/payments/intents",
+    "POST",
+    body,
+    idempotencyKey
+  );
+}
+
+export async function getPaymentIntent(paymentIntentId: string): Promise<PaymentIntent> {
+  return authenticatedGet<PaymentIntent>(
+    `/v1/payments/intents/${encodeURIComponent(paymentIntentId)}`
+  );
+}
+
+export async function acceptPaymentIntentTerms(
+  paymentIntentId: string,
+  body: AcceptPaymentIntentTermsRequest,
+  idempotencyKey?: string
+): Promise<PaymentIntent> {
+  return authenticatedMutation<PaymentIntent>(
+    `/v1/payments/intents/${encodeURIComponent(paymentIntentId)}/consent`,
+    "POST",
+    body,
+    idempotencyKey
+  );
 }
 
 export async function getPaymentTransactionRequest(paymentIntentId: string): Promise<TransactionRequest> {
   return authenticatedGet<TransactionRequest>(
     `/v1/payments/intents/${encodeURIComponent(paymentIntentId)}/transaction-request`
+  );
+}
+
+export async function createSolanaPayCheckoutTransaction(
+  checkoutUrl: string,
+  account: string
+): Promise<TransactionRequestPostResponse> {
+  return publicCapabilityMutation<TransactionRequestPostResponse>(checkoutUrl, { account });
+}
+
+export async function submitPaymentSignature(
+  paymentIntentId: string,
+  signature: string,
+  idempotencyKey?: string
+): Promise<void> {
+  return authenticatedEmptyMutation(
+    `/v1/payments/intents/${encodeURIComponent(paymentIntentId)}/submissions`,
+    "POST",
+    { signature },
+    idempotencyKey
   );
 }
 

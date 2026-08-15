@@ -409,7 +409,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Configure the canonical noncustodial Enable Earnings boundary */
+        patch: operations["updateMyCreatorOnboarding"];
         trace?: never;
     };
     "/v1/profiles/{handle}": {
@@ -1436,6 +1437,23 @@ export interface paths {
         get: operations["getPaymentTransactionRequest"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/payments/intents/{paymentIntentId}/consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record explicit checkout terms and immediate-access acknowledgement */
+        post: operations["acceptPaymentIntentTerms"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3364,7 +3382,15 @@ export interface components {
             nextAction?: string | null;
             /** @enum {string} */
             policyBoundary: "creator_records_only_no_balances_payout_queue_or_social_priority";
+            configuration: components["schemas"]["CreatorOnboardingConfiguration"];
             steps: components["schemas"]["CreatorOnboardingStep"][];
+        };
+        CreatorOnboardingConfiguration: {
+            /** Format: uuid */
+            recipientWalletId: string | null;
+            /** @enum {string|null} */
+            earningsTermsVersion: "wevid-creator-earnings-v1" | null;
+            products: components["schemas"]["CreatorProductSelection"];
         };
         CreatorOnboardingStep: {
             /** @enum {string} */
@@ -3374,6 +3400,21 @@ export interface components {
             state: "complete" | "action_required" | "review_required" | "blocked" | "not_required";
             required: boolean;
             actionHref?: string | null;
+        };
+        UpdateCreatorOnboardingRequest: {
+            /** Format: uuid */
+            recipientWalletId: string;
+            /** @enum {string} */
+            earningsTermsVersion: "wevid-creator-earnings-v1";
+            /** @enum {boolean} */
+            earningsTermsAccepted: true;
+            products: components["schemas"]["CreatorProductSelection"];
+        };
+        CreatorProductSelection: {
+            support: boolean;
+            contentUnlocks: boolean;
+            eventAccessAndLive: boolean;
+            paidMessages: boolean;
         };
         CreatorEarningsSummary: {
             currency: components["schemas"]["Currency"];
@@ -4085,6 +4126,11 @@ export interface components {
         SubmitPaymentSignatureRequest: {
             signature: string;
         };
+        AcceptPaymentIntentTermsRequest: {
+            termsVersion: string;
+            withdrawalWaiverVersion: string;
+            immediateAccessAcknowledged: boolean;
+        };
         /** @description Helius enhanced webhook payload. Raw provider data is accepted server-side only and never exposed in frontend resources. */
         SolanaIndexerWebhookPayload: {
             [key: string]: unknown;
@@ -4128,6 +4174,13 @@ export interface components {
         TransactionRequest: {
             /** Format: uri */
             transactionRequestUrl: string;
+            /**
+             * Format: uri
+             * @description Short-lived capability URL used only by the selected wallet client.
+             */
+            checkoutUrl: string;
+            /** @description Commerce Kit generated QR fallback for the same short-lived transaction request. */
+            qrDataUrl: string;
             /** Format: date-time */
             expiresAt: string;
         };
@@ -7108,9 +7161,19 @@ export interface components {
                 "application/json": components["schemas"]["CreatePaidMessageIntentRequest"];
             };
         };
+        UpdateCreatorOnboarding: {
+            content: {
+                "application/json": components["schemas"]["UpdateCreatorOnboardingRequest"];
+            };
+        };
         CreatePaymentIntent: {
             content: {
                 "application/json": components["schemas"]["CreatePaymentIntentRequest"];
+            };
+        };
+        AcceptPaymentIntentTerms: {
+            content: {
+                "application/json": components["schemas"]["AcceptPaymentIntentTermsRequest"];
             };
         };
         SubmitPaymentSignature: {
@@ -7688,6 +7751,27 @@ export interface operations {
             200: components["responses"]["CreatorOnboarding"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    updateMyCreatorOnboarding: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["UpdateCreatorOnboarding"];
+        responses: {
+            200: components["responses"]["CreatorOnboarding"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     getProfileByHandle: {
@@ -9128,9 +9212,35 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["TransactionRequest"];
+            400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    acceptPaymentIntentTerms: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                paymentIntentId: components["parameters"]["PaymentIntentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["AcceptPaymentIntentTerms"];
+        responses: {
+            200: components["responses"]["PaymentIntent"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -9186,6 +9296,8 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };

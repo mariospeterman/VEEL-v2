@@ -48,13 +48,13 @@ export function CreatorSupportPanel({ profile }: CreatorSupportPanelProps) {
         </div>
 
         <PaymentHandoffPanel
-          createIntent={() =>
+          createIntent={(idempotencyKey) =>
             createPaymentIntent({
               amountMinor,
               currency: "USDC",
               productType: "support",
               targetId: profile.user.id
-            })
+            }, idempotencyKey)
           }
           ctaLabel="Support creator"
           disabled={!supportEnabled}

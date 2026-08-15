@@ -17,7 +17,15 @@ export async function grantAccessPass(
 ): Promise<AccessPassRow[]> {
   const qrToken = newQrToken();
 
-  return sql<AccessPassRow[]>`
+  return sql.begin(async (transaction) => {
+    // The advisory lock must be acquired in a separate statement. A lock CTE in
+    // the inventory statement would retain the statement snapshot taken before
+    // a concurrent waiter acquired the lock and could therefore over-issue.
+    await transaction`
+      select pg_advisory_xact_lock(hashtextextended(${input.accessPassTypeId}, 0))
+    `;
+
+    return transaction<AccessPassRow[]>`
     with holder as (
       select id
       from users
@@ -42,9 +50,6 @@ export async function grantAccessPass(
         and te.state in ('active', 'checked_in')
       limit 1
     ),
-    ticket_lock as (
-      select pg_advisory_xact_lock(hashtextextended(${input.accessPassTypeId}, 0))
-    ),
     inventory as (
       select
         tt.id,
@@ -52,7 +57,6 @@ export async function grantAccessPass(
         tt.capacity,
         count(te.id) filter (where te.state in ('active', 'checked_in')) as issued_count
       from event_access_pass_types tt
-      cross join ticket_lock
       left join event_access_passes te on te.access_pass_type_id = tt.id
       where tt.id = ${input.accessPassTypeId}
         and tt.event_id = ${input.eventId}
@@ -60,6 +64,13 @@ export async function grantAccessPass(
         and not exists (select 1 from existing_access_pass)
       group by tt.id
       having count(te.id) filter (where te.state in ('active', 'checked_in')) < tt.capacity
+        and count(te.id) filter (where te.state in ('active', 'checked_in')) + (
+          select count(*)
+          from event_access_purchase_requests eapr
+          where eapr.access_pass_type_id = tt.id
+            and eapr.state = 'pending_payment'
+            and eapr.reserved_until > now()
+        ) < tt.capacity
       limit 1
     ),
     inserted_access_pass as (
@@ -109,7 +120,8 @@ export async function grantAccessPass(
       created_at
     from existing_access_pass
     limit 1
-  `;
+    `;
+  });
 }
 
 function newQrToken(): string {

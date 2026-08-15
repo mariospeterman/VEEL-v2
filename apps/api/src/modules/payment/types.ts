@@ -5,6 +5,7 @@ export type CreatePaymentIntentRequest = components["schemas"]["CreatePaymentInt
 export type PaymentIntent = components["schemas"]["PaymentIntent"];
 export type ProductType = components["schemas"]["ProductType"];
 export type SubmitPaymentSignatureRequest = components["schemas"]["SubmitPaymentSignatureRequest"];
+export type AcceptPaymentIntentTermsRequest = components["schemas"]["AcceptPaymentIntentTermsRequest"];
 export type TransactionRequest = components["schemas"]["TransactionRequest"];
 export type TransactionRequestPostRequest = components["schemas"]["TransactionRequestPostRequest"];
 export type TransactionRequestPostResponse = components["schemas"]["TransactionRequestPostResponse"];
@@ -48,6 +49,16 @@ export interface RecordTransactionRequestInput {
   publicTransactionRequestUrl: string;
   storedTransactionRequestUrl: string;
   checkoutTokenHash: string;
+}
+
+export interface AcceptPaymentIntentTermsInput {
+  supabaseUserId: string;
+  paymentIntentId: string;
+  idempotencyKey: string;
+  requestHash: string;
+  termsVersion: string;
+  withdrawalWaiverVersion: string;
+  immediateAccessAcknowledged: boolean;
 }
 
 export interface FindCheckoutPaymentIntentInput {
@@ -99,7 +110,10 @@ export interface PaymentRepository {
   createOrReuseIntent(input: CreatePaymentIntentInput): Promise<StoredPaymentIntent>;
   findIntent(input: FindPaymentIntentInput): Promise<StoredPaymentIntent | null>;
   findCheckoutIntent(input: FindCheckoutPaymentIntentInput): Promise<StoredPaymentIntent | null>;
-  recordTransactionRequest(input: RecordTransactionRequestInput): Promise<TransactionRequest | null>;
+  acceptCheckoutTerms?(input: AcceptPaymentIntentTermsInput): Promise<StoredPaymentIntent | null>;
+  recordTransactionRequest(
+    input: RecordTransactionRequestInput
+  ): Promise<Pick<TransactionRequest, "transactionRequestUrl" | "expiresAt"> | null>;
   recordCheckoutPayer(input: RecordCheckoutPayerInput): Promise<StoredPaymentIntent | null>;
   recordSubmission(input: RecordPaymentSubmissionInput): Promise<void>;
   close?(): Promise<void>;

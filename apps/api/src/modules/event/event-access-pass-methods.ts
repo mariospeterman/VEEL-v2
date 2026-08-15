@@ -69,31 +69,97 @@ export function createEventAccessPassRepositoryMethods(
       } satisfies AccessPassOffer;
     },
     async recordAccessPassPurchaseRequest(input) {
-      await sql`
-        with buyer as (
-          select id
-          from users
-          where supabase_user_id = ${input.supabaseUserId}
+      return sql.begin(async (transaction) => {
+        // Acquire inventory serialization before the capacity statement. Keeping the
+        // lock inside that statement would let a waiter retain its pre-lock snapshot.
+        await transaction`
+          select pg_advisory_xact_lock(hashtextextended(${input.accessPassTypeId}, 0))
+        `;
+        const rows = await transaction<{ payment_intent_id: string }[]>`
+          with buyer as (
+            select id from users
+            where supabase_user_id = ${input.supabaseUserId}
+            limit 1
+          ),
+          payment as (
+            select pi.id, pi.expires_at
+            from payment_intents pi
+            join buyer on buyer.id = pi.user_id
+            where pi.id = ${input.paymentIntentId}
+              and pi.target_id = ${input.eventId}
+              and pi.amount_minor = ${input.amountMinor}
+              and pi.currency = ${input.currency}
+              and pi.state in ('pending', 'transaction_requested')
+              and pi.expires_at > now()
+          ),
+          existing as (
+            select eapr.payment_intent_id
+            from event_access_purchase_requests eapr
+            join buyer on buyer.id = eapr.buyer_user_id
+            where eapr.payment_intent_id = ${input.paymentIntentId}
+              and eapr.event_id = ${input.eventId}
+              and eapr.access_pass_type_id = ${input.accessPassTypeId}
+              and eapr.state = 'pending_payment'
+              and eapr.reserved_until > now()
+          ),
+          available as (
+            select tt.id
+            from event_access_pass_types tt
+            where tt.id = ${input.accessPassTypeId}
+              and tt.event_id = ${input.eventId}
+              and tt.state = 'active'
+              and not exists (select 1 from existing)
+              and (
+                select count(*) from event_access_passes eap
+                where eap.access_pass_type_id = tt.id
+                  and eap.state in ('active', 'checked_in')
+              ) + (
+                select count(*) from event_access_purchase_requests eapr
+                where eapr.access_pass_type_id = tt.id
+                  and eapr.state = 'pending_payment'
+                  and eapr.reserved_until > now()
+              ) < tt.capacity
+              and (
+                select count(*) from event_access_passes eap, buyer
+                where eap.access_pass_type_id = tt.id
+                  and eap.holder_user_id = buyer.id
+                  and eap.state in ('active', 'checked_in')
+              ) + (
+                select count(*) from event_access_purchase_requests eapr, buyer
+                where eapr.access_pass_type_id = tt.id
+                  and eapr.buyer_user_id = buyer.id
+                  and eapr.state = 'pending_payment'
+                  and eapr.reserved_until > now()
+              ) < tt.per_user_limit
+          ),
+          inserted as (
+            insert into event_access_purchase_requests (
+              payment_intent_id, event_id, access_pass_type_id, buyer_user_id,
+              amount_minor, currency, reserved_until
+            )
+            select
+              payment.id, ${input.eventId}, available.id, buyer.id,
+              ${input.amountMinor}, ${input.currency}, payment.expires_at
+            from buyer, payment, available
+            returning payment_intent_id
+          )
+          select payment_intent_id from inserted
+          union all
+          select payment_intent_id from existing
           limit 1
-        )
-        insert into event_access_purchase_requests (
-          payment_intent_id,
-          event_id,
-          access_pass_type_id,
-          buyer_user_id,
-          amount_minor,
-          currency
-        )
-        select
-          ${input.paymentIntentId},
-          ${input.eventId},
-          ${input.accessPassTypeId},
-          id,
-          ${input.amountMinor},
-          ${input.currency}
-        from buyer
-        on conflict (payment_intent_id) do nothing
-      `;
+        `;
+
+        if (!rows[0]) {
+          await transaction`
+            update payment_intents
+            set state = 'cancelled', updated_at = now()
+            where id = ${input.paymentIntentId}
+              and state in ('pending', 'transaction_requested')
+          `;
+          return false;
+        }
+        return true;
+      });
     },
     async grantFreeAccessPass(input) {
       const rows = await grantAccessPass(sql, {

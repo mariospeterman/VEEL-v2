@@ -10,6 +10,9 @@ export type VerificationSession = components["schemas"]["VerificationSession"];
 export type UpdateProfileRequest = components["schemas"]["UpdateProfileRequest"];
 export type UploadProfileAvatarRequest = components["schemas"]["UploadProfileAvatarRequest"];
 export type ProfileAvatarUpload = components["schemas"]["ProfileAvatarUpload"];
+export type UpdateCreatorOnboardingRequest =
+  components["schemas"]["UpdateCreatorOnboardingRequest"];
+export type CreatorOnboarding = components["schemas"]["CreatorOnboarding"];
 export type CreateWalletAuthChallengeRequest =
   components["schemas"]["CreateWalletAuthChallengeRequest"];
 export type CreateWalletAuthSessionRequest =
@@ -64,6 +67,10 @@ export type PaidMessageIntent = components["schemas"]["PaidMessageIntent"];
 export type CreatePaymentIntentRequest = components["schemas"]["CreatePaymentIntentRequest"];
 export type PaymentIntent = components["schemas"]["PaymentIntent"];
 export type TransactionRequest = components["schemas"]["TransactionRequest"];
+export type TransactionRequestPostResponse =
+  components["schemas"]["TransactionRequestPostResponse"];
+export type AcceptPaymentIntentTermsRequest =
+  components["schemas"]["AcceptPaymentIntentTermsRequest"];
 export type CreateSubscriptionIntentRequest =
   components["schemas"]["CreateSubscriptionIntentRequest"];
 export type SubscriptionAuthorizationIntent =

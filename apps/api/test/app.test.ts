@@ -2554,6 +2554,105 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("updates the canonical creator earnings boundary with one idempotent request", async () => {
+    let updateCalled = false;
+    const profileRepository: ProfileRepository = {
+      ...fakeProfileRepository,
+      async updateMyCreatorOnboarding(input) {
+        expect(input).toMatchObject({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          idempotencyKey: "earnings-setup-1",
+          expectedWalletChain: "solana_devnet",
+          request: {
+            recipientWalletId: "00000000-0000-4000-8000-000000000070",
+            earningsTermsVersion: "wevid-creator-earnings-v1",
+            earningsTermsAccepted: true,
+            products: {
+              support: true,
+              contentUnlocks: true,
+              eventAccessAndLive: true,
+              paidMessages: false
+            }
+          }
+        });
+        expect(input.requestHash).toMatch(/^[a-f0-9]{64}$/);
+        updateCalled = true;
+        return {
+          state: "ready",
+          canStartEarning: true,
+          readinessScore: 100,
+          nextAction: null,
+          policyBoundary: "creator_records_only_no_balances_payout_queue_or_social_priority",
+          configuration: {
+            recipientWalletId: "00000000-0000-4000-8000-000000000070",
+            earningsTermsVersion: "wevid-creator-earnings-v1",
+            products: {
+              support: true,
+              contentUnlocks: true,
+              eventAccessAndLive: true,
+              paidMessages: false
+            }
+          },
+          steps: []
+        };
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      profileRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/profiles/me/creator-onboarding",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "earnings-setup-1"
+      },
+      payload: {
+        recipientWalletId: "00000000-0000-4000-8000-000000000070",
+        earningsTermsVersion: "wevid-creator-earnings-v1",
+        earningsTermsAccepted: true,
+        products: {
+          support: true,
+          contentUnlocks: true,
+          eventAccessAndLive: true,
+          paidMessages: false
+        }
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(updateCalled).toBe(true);
+    expect(response.json()).toMatchObject({ state: "ready", canStartEarning: true });
+
+    updateCalled = false;
+    const rejectedTerms = await app.inject({
+      method: "PATCH",
+      url: "/v1/profiles/me/creator-onboarding",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "earnings-setup-rejected-terms"
+      },
+      payload: {
+        recipientWalletId: "00000000-0000-4000-8000-000000000070",
+        earningsTermsVersion: "wevid-creator-earnings-v1",
+        earningsTermsAccepted: false,
+        products: {
+          support: true,
+          contentUnlocks: true,
+          eventAccessAndLive: true,
+          paidMessages: false
+        }
+      }
+    });
+    expect(rejectedTerms.statusCode).toBe(400);
+    expect(updateCalled).toBe(false);
+    await app.close();
+  });
+
   it("lists authenticated user wallets", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -6125,6 +6224,7 @@ describe("buildApi", () => {
           amountMinor: 10000000,
           currency: "SOL"
         });
+        return true;
       },
       async grantFreeAccessPass() {
         throw new Error("not implemented");
@@ -8523,23 +8623,125 @@ describe("buildApi", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    const body = response.json() as { transactionRequestUrl: string; expiresAt: string };
+    const body = response.json() as {
+      transactionRequestUrl: string;
+      checkoutUrl: string;
+      qrDataUrl: string;
+      expiresAt: string;
+    };
     expect(body.transactionRequestUrl).toMatch(
-      /^solana:http:\/\/localhost:4000\/v1\/payments\/checkout\/[A-Za-z0-9_-]{43}$/
+      /^solana:http:\/\/localhost:4000\/v1\/payments\/checkout\/[A-Za-z0-9_-]{43}\?label=WeVid&message=/
     );
+    expect(body.checkoutUrl).toMatch(
+      /^http:\/\/localhost:4000\/v1\/payments\/checkout\/[A-Za-z0-9_-]{43}$/
+    );
+    expect(body.qrDataUrl).toMatch(/^data:image\/svg\+xml;base64,/);
     expect(recordedRequests[0]?.publicTransactionRequestUrl).toBe(body.transactionRequestUrl);
-    expect(recordedRequests[0]?.storedTransactionRequestUrl).toContain("[redacted]");
+    expect(recordedRequests[0]?.storedTransactionRequestUrl).toContain("/redacted?");
     expect(recordedRequests[0]?.checkoutTokenHash).toMatch(/^[a-f0-9]{64}$/);
 
     const walletMetadata = await app.inject({
       method: "GET",
-      url: new URL(body.transactionRequestUrl.slice("solana:".length)).pathname
+      url: new URL(body.checkoutUrl).pathname
     });
     expect(walletMetadata.statusCode).toBe(200);
     expect(walletMetadata.json()).toEqual({
       label: "WeVid",
       icon: "http://localhost:3000/favicon.ico"
     });
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("requires and records explicit checkout consent before minting a wallet capability", async () => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const withoutConsent: StoredPaymentIntent = {
+      ...storedPaymentIntent,
+      refundPolicy: {
+        ...storedPaymentIntent.refundPolicy,
+        withdrawalWaiverAcceptedAt: null
+      },
+      withdrawalWaiverAcceptedAt: null
+    };
+    let consentRecorded = false;
+    const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
+      async createOrReuseIntent() {
+        throw new Error("not implemented");
+      },
+      async findIntent() {
+        return withoutConsent;
+      },
+      async acceptCheckoutTerms(input) {
+        expect(input).toMatchObject({
+          paymentIntentId: storedPaymentIntent.id,
+          idempotencyKey: "checkout-consent-1",
+          termsVersion: storedPaymentIntent.termsVersion,
+          withdrawalWaiverVersion: storedPaymentIntent.withdrawalWaiverVersion,
+          immediateAccessAcknowledged: true
+        });
+        consentRecorded = true;
+        return storedPaymentIntent;
+      },
+      async recordTransactionRequest() {
+        throw new Error("must not mint before consent");
+      },
+      async recordSubmission() {
+        throw new Error("not implemented");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      paymentRepository
+    });
+    await app.ready();
+
+    const blocked = await app.inject({
+      method: "GET",
+      url: `/v1/payments/intents/${storedPaymentIntent.id}/transaction-request`,
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(blocked.statusCode).toBe(409);
+
+    const consent = await app.inject({
+      method: "POST",
+      url: `/v1/payments/intents/${storedPaymentIntent.id}/consent`,
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "checkout-consent-1"
+      },
+      payload: {
+        termsVersion: storedPaymentIntent.termsVersion,
+        withdrawalWaiverVersion: storedPaymentIntent.withdrawalWaiverVersion,
+        immediateAccessAcknowledged: true
+      }
+    });
+    expect(consent.statusCode).toBe(200);
+    expect(consentRecorded).toBe(true);
+    expect(consent.json()).toMatchObject({
+      id: storedPaymentIntent.id,
+      refundPolicy: { withdrawalWaiverAcceptedAt: "2026-06-04T23:00:00.000Z" }
+    });
+
+    consentRecorded = false;
+    const invalidConsent = await app.inject({
+      method: "POST",
+      url: `/v1/payments/intents/${storedPaymentIntent.id}/consent`,
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "checkout-consent-invalid"
+      },
+      payload: {
+        termsVersion: storedPaymentIntent.termsVersion,
+        withdrawalWaiverVersion: storedPaymentIntent.withdrawalWaiverVersion
+      }
+    });
+    expect(invalidConsent.statusCode).toBe(400);
+    expect(consentRecorded).toBe(false);
 
     await app.close();
     vi.unstubAllEnvs();
@@ -12485,6 +12687,16 @@ const fakeProfileRepository: ProfileRepository = {
       readinessScore: 60,
       nextAction: "/wallet",
       policyBoundary: "creator_records_only_no_balances_payout_queue_or_social_priority",
+      configuration: {
+        recipientWalletId: null,
+        earningsTermsVersion: null,
+        products: {
+          support: false,
+          contentUnlocks: false,
+          eventAccessAndLive: false,
+          paidMessages: false
+        }
+      },
       steps: [
         {
           key: "profile",

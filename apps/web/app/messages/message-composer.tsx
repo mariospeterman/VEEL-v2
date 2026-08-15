@@ -6,14 +6,11 @@ import {
   ApiMutationError,
   createMessage,
   createPaidMessageIntent,
-  getPaymentTransactionRequest,
-  type Message,
-  type PaymentIntent,
-  type TransactionRequest
+  type Message
 } from "@/api-mutations";
 import { safeMutationMessage } from "@/api-errors";
 import { createMutationIdempotencyKey } from "@/api-mutation-transport";
-import { formatAssetAmount } from "@/format-asset-amount";
+import { PaymentHandoffPanel } from "@/payment-handoff-panel";
 
 interface MessageComposerProps {
   conversation: Conversation;
@@ -24,10 +21,7 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
   const [state, setState] = useState<"idle" | "sending" | "payment" | "ready" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [sentMessage, setSentMessage] = useState<Message | null>(null);
-  const [intent, setIntent] = useState<PaymentIntent | null>(null);
-  const [transaction, setTransaction] = useState<TransactionRequest | null>(null);
   const messageAttempt = useRef<{ body: string; idempotencyKey: string } | null>(null);
-  const paidMessageAttempt = useRef<{ body: string; idempotencyKey: string } | null>(null);
   const trimmedBody = body.trim();
   const isBusy = state === "sending" || state === "payment";
 
@@ -49,40 +43,35 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
     }
   }
 
-  async function startPaidMessage() {
-    if (!trimmedBody) return;
+  async function startPaidMessage(checkoutIdempotencyKey: string) {
+    if (!trimmedBody) return null;
     resetResult("payment");
 
     try {
-      const idempotencyKey = idempotencyKeyForBody(paidMessageAttempt, trimmedBody);
       const result = await createPaidMessageIntent(
         conversation.id,
         { body: trimmedBody },
-        idempotencyKey
+        checkoutIdempotencyKey
       );
 
       if (result.state === "already_delivered") {
-        paidMessageAttempt.current = null;
         setSentMessage(result.message ?? null);
         setBody("");
         setState("ready");
         setMessage("Paid message delivery is already reflected by the backend projection.");
-        return;
+        return null;
       }
 
       if (!result.paymentIntent) {
         throw new ApiMutationError("Paid message requires payment but no payment intent was returned.");
       }
 
-      const transactionRequest = await getPaymentTransactionRequest(result.paymentIntent.id);
-      paidMessageAttempt.current = null;
-      setIntent(result.paymentIntent);
-      setTransaction(transactionRequest);
-      setState("ready");
-      setMessage("Open the wallet request. Paid message delivery changes only after backend settlement verification.");
+      setState("idle");
+      return result.paymentIntent;
     } catch (error) {
       setState("error");
       setMessage(errorMessage(error));
+      throw error;
     }
   }
 
@@ -90,8 +79,6 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
     setState(nextState);
     setMessage(null);
     setSentMessage(null);
-    setIntent(null);
-    setTransaction(null);
   }
 
   return (
@@ -119,36 +106,20 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
         >
           {state === "sending" ? "Sending" : "Send"}
         </button>
-        <button
-          className="rounded border border-(--line) px-3 py-2 text-sm font-semibold text-(--foreground) disabled:cursor-not-allowed disabled:opacity-60"
+      </div>
+      <div className="mt-3">
+        <PaymentHandoffPanel
+          createIntent={startPaidMessage}
+          ctaLabel="Send as paid message"
           disabled={
-            isBusy ||
-            !trimmedBody ||
-            conversation.requestState === "declined" ||
+            isBusy || !trimmedBody || conversation.requestState === "declined" ||
             (conversation.requestState === "pending" && conversation.requestRole === "recipient")
           }
-          onClick={startPaidMessage}
-          type="button"
-        >
-          {state === "payment" ? "Creating intent" : "Create paid message intent"}
-        </button>
+          idleCopy="Paid delivery uses the same review, consent, wallet approval, and backend settlement flow as other one-time products."
+          pendingLabel="Preparing paid message"
+          readyCopy="Paid message delivery is reflected by the backend conversation projection."
+        />
       </div>
-
-      {intent ? (
-        <div className="mt-3 grid gap-2 rounded border border-(--line) bg-(--background) p-3 text-sm">
-          <Fact label="Amount" value={formatAssetAmount(intent.amountMinor, intent.currency)} />
-          <Fact label="Intent" value={intent.state} />
-        </div>
-      ) : null}
-
-      {transaction ? (
-        <a
-          className="mt-3 block rounded border border-(--line) px-3 py-2 text-center text-sm font-semibold text-(--foreground)"
-          href={transaction.transactionRequestUrl}
-        >
-          Open wallet request
-        </a>
-      ) : null}
 
       {sentMessage ? (
         <p className="mt-3 rounded border border-(--line) bg-(--background) px-3 py-2 text-sm text-(--muted)">
@@ -168,15 +139,6 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
         </p>
       ) : null}
     </section>
-  );
-}
-
-function Fact({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-xs uppercase text-(--muted)">{label}</p>
-      <p className="mt-1 truncate font-medium">{value}</p>
-    </div>
   );
 }
 

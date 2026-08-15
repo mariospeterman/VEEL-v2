@@ -53,6 +53,10 @@ export async function recordPaymentSubmission(
               and u.supabase_user_id = ${input.supabaseUserId}
               and pi.id = ${input.paymentIntentId}
               and pi.state in ('pending', 'transaction_requested', 'submitted')
+              and (
+                not pi.withdrawal_waiver_required
+                or pi.withdrawal_waiver_accepted_at is not null
+              )
             returning
               pi.id as payment_intent_id,
               pi.user_id,

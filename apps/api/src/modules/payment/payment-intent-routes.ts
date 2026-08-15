@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { Connection } from "@solana/web3.js";
+import { createHash } from "node:crypto";
 import {
+  PaymentConsentConflictError,
   PaymentIdempotencyConflictError,
   PaymentRecipientNotReadyError,
   PaymentRepositoryConfigurationError
@@ -8,15 +10,18 @@ import {
 import {
   assertSolanaAddress,
   buildCreatorSplitTransaction,
-  buildSolanaPayTransactionRequestUrl,
-  buildStoredSolanaPayTransactionRequestUrl,
   createPaymentCheckoutToken,
   createSolanaReferenceAddress,
   hashPaymentCheckoutToken,
   paymentMemo,
   SolanaPaymentConfigurationError
 } from "./solana-payment.js";
+import {
+  createStoredWeVidTransactionRequestUrl,
+  createWeVidTransactionRequest
+} from "./solana-pay-codec.js";
 import type {
+  AcceptPaymentIntentTermsRequest,
   CreatePaymentIntentRequest,
   SubmitPaymentSignatureRequest,
   TransactionRequestPostRequest
@@ -171,6 +176,94 @@ export async function registerPaymentIntentRoutes(
     }
   });
 
+  app.post(
+    "/v1/payments/intents/:paymentIntentId/consent",
+    mutationRateLimit("paymentMutation", "acceptPaymentIntentTerms"),
+    async (request, reply) => {
+      const access = await verifyPaymentReadyAccess(request, options);
+
+      if (!access.ok) {
+        return reply.code(access.statusCode).send(access.body);
+      }
+
+      const idempotencyKey = requiredIdempotencyKey(request);
+      if (!idempotencyKey) {
+        return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
+      }
+
+      const body = request.body as Partial<AcceptPaymentIntentTermsRequest> | undefined;
+      if (
+        !body ||
+        typeof body.termsVersion !== "string" ||
+        typeof body.withdrawalWaiverVersion !== "string" ||
+        typeof body.immediateAccessAcknowledged !== "boolean"
+      ) {
+        return reply.code(400).send(validationResponse("Checkout consent fields are required"));
+      }
+
+      const params = request.params as { paymentIntentId?: string };
+      const paymentIntentId = params.paymentIntentId ?? "";
+      const requestHash = createHash("sha256")
+        .update(
+          JSON.stringify({
+            paymentIntentId,
+            termsVersion: body.termsVersion,
+            withdrawalWaiverVersion: body.withdrawalWaiverVersion,
+            immediateAccessAcknowledged: body.immediateAccessAcknowledged
+          })
+        )
+        .digest("hex");
+
+      try {
+        if (!options.paymentRepository.acceptCheckoutTerms) {
+          return reply.code(503).send({
+            code: "service_unavailable",
+            message: "Checkout consent storage is not configured"
+          });
+        }
+
+        const intent = await options.paymentRepository.acceptCheckoutTerms({
+          supabaseUserId: access.supabaseUserId,
+          paymentIntentId,
+          idempotencyKey,
+          requestHash,
+          termsVersion: body.termsVersion,
+          withdrawalWaiverVersion: body.withdrawalWaiverVersion,
+          immediateAccessAcknowledged: body.immediateAccessAcknowledged
+        });
+
+        if (!intent) {
+          return reply.code(404).send(notFoundResponse("Payment intent was not found"));
+        }
+
+        return reply.code(200).send(toPaymentIntentResponse(intent));
+      } catch (error) {
+        if (error instanceof PaymentIdempotencyConflictError) {
+          return reply.code(409).send({
+            code: "conflict",
+            message: "Idempotency key was already used for different checkout consent"
+          });
+        }
+
+        if (error instanceof PaymentConsentConflictError) {
+          return reply.code(409).send({
+            code: "conflict",
+            message: "Checkout terms changed, expired, or were not acknowledged"
+          });
+        }
+
+        if (error instanceof PaymentRepositoryConfigurationError) {
+          return reply.code(503).send({
+            code: "service_unavailable",
+            message: "Payments are not configured"
+          });
+        }
+
+        throw error;
+      }
+    }
+  );
+
   app.get("/v1/payments/intents/:paymentIntentId/transaction-request", async (request, reply) => {
     const access = await verifyPaymentReadyAccess(request, options);
 
@@ -201,24 +294,35 @@ export async function registerPaymentIntentRoutes(
         return reply.code(400).send(validationResponse("Payment intent is expired"));
       }
 
+      if (intent.withdrawalWaiverRequired && !intent.withdrawalWaiverAcceptedAt) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: "Review and accept the checkout terms before opening a wallet request"
+        });
+      }
+
       const checkoutToken = createPaymentCheckoutToken();
-      const transactionRequestUrl = buildSolanaPayTransactionRequestUrl({
+      const transactionRequest = await createWeVidTransactionRequest({
         apiUrl: app.config.API_URL,
         checkoutToken
       });
-      const transactionRequest = await options.paymentRepository.recordTransactionRequest({
+      const recordedTransactionRequest = await options.paymentRepository.recordTransactionRequest({
         supabaseUserId: access.supabaseUserId,
         paymentIntentId: intent.id,
-        publicTransactionRequestUrl: transactionRequestUrl,
-        storedTransactionRequestUrl: buildStoredSolanaPayTransactionRequestUrl(app.config.API_URL),
+        publicTransactionRequestUrl: transactionRequest.transactionRequestUrl,
+        storedTransactionRequestUrl: createStoredWeVidTransactionRequestUrl(app.config.API_URL),
         checkoutTokenHash: hashPaymentCheckoutToken(checkoutToken)
       });
 
-      if (!transactionRequest) {
+      if (!recordedTransactionRequest) {
         return reply.code(404).send(notFoundResponse("Payment intent was not found"));
       }
 
-      return reply.code(200).send(transactionRequest);
+      return reply.code(200).send({
+        ...recordedTransactionRequest,
+        checkoutUrl: transactionRequest.checkoutUrl,
+        qrDataUrl: transactionRequest.qrDataUrl
+      });
     } catch (error) {
       if (
         error instanceof PaymentRepositoryConfigurationError ||
@@ -363,6 +467,13 @@ export async function registerPaymentIntentRoutes(
 
         if (!intent) {
           return reply.code(404).send(notFoundResponse("Payment intent was not found"));
+        }
+
+        if (intent.withdrawalWaiverRequired && !intent.withdrawalWaiverAcceptedAt) {
+          return reply.code(409).send({
+            code: "conflict",
+            message: "Review and accept the checkout terms before submitting payment"
+          });
         }
 
         const settlement = await options.settlementVerifier.verifyTransfer({

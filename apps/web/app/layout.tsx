@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { WalletRuntimeProviders } from "@/wallet/wallet-runtime-providers";
 import "@solana/wallet-adapter-react-ui/styles.css";
 import "./globals.css";
 
@@ -42,7 +43,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body suppressHydrationWarning>
-        {children}
+        <WalletRuntimeProviders>{children}</WalletRuntimeProviders>
       </body>
     </html>
   );

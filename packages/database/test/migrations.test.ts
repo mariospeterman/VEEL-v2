@@ -981,4 +981,18 @@ describe("database migrations", () => {
     expect(sql).not.toContain("'privy'");
     expect(sql).not.toMatch(/email\s*=|raw_payload|private_key|seed_phrase|mnemonic/i);
   });
+
+  it("makes Launch 06 consent, creator readiness, and scarce inventory fail closed", () => {
+    const sql = readMigration("0096_one_time_monetisation_checkout.sql");
+    const downSql = readMigration("0096_one_time_monetisation_checkout.down.sql");
+
+    expect(sql).toContain("where withdrawal_waiver_accepted_at is not null");
+    expect(sql).toContain("explicit_checkout_consent_required_after_launch_06");
+    expect(sql).toContain("create trigger payment_intents_explicit_checkout_consent");
+    expect(sql).toContain("creator_monetisation_settings_ready_terms_check");
+    expect(sql).toContain("earnings_terms_version = 'wevid-creator-earnings-v1'");
+    expect(sql).toContain("event_access_purchase_requests_active_reservation_idx");
+    expect(downSql).toContain("drop trigger if exists payment_intents_explicit_checkout_consent");
+    expect(downSql).toContain("0096 rollback refused");
+  });
 });

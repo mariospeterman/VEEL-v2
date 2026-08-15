@@ -5,11 +5,20 @@ import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js
 import type { AgeRepository } from "../age/types.js";
 import type { SessionRepository, ApplicationSessionVerifier } from "../session/types.js";
 import {
+  CreatorOnboardingIdempotencyConflictError,
+  CreatorOnboardingTermsRequiredError,
+  CreatorOnboardingWalletConflictError,
   ProfileHandleConflictError,
   ProfileRepositoryConfigurationError
 } from "./profile-repository.js";
-import type { ProfileRepository, UpdateProfileRequest } from "./types.js";
+import type {
+  ProfileRepository,
+  UpdateCreatorOnboardingRequest,
+  UpdateProfileRequest
+} from "./types.js";
 import { contractRouteSchema } from "../../shared/openapi-route-schema.js";
+import { readIdempotentMutationRequest } from "../../shared/idempotency.js";
+import { mutationRateLimit } from "../../shared/rate-limits.js";
 
 interface RegisterProfileRoutesOptions {
   authVerifier: ApplicationSessionVerifier;
@@ -148,6 +157,78 @@ export async function registerProfileRoutes(
       throw error;
     }
   });
+
+  app.patch(
+    "/v1/profiles/me/creator-onboarding",
+    mutationRateLimit("paymentMutation", "updateMyCreatorOnboarding"),
+    async (request, reply) => {
+      const verifiedSession = await verifyRequestSession(request, options.authVerifier);
+
+      if (!verifiedSession) {
+        return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
+      }
+
+      const body = request.body as UpdateCreatorOnboardingRequest;
+      const mutation = readIdempotentMutationRequest(request, body);
+      if ("code" in mutation) {
+        return reply.code(400).send(mutation);
+      }
+
+      if (!options.profileRepository.updateMyCreatorOnboarding) {
+        return reply.code(503).send({
+          code: "service_unavailable",
+          message: "Creator earnings setup is not configured"
+        });
+      }
+
+      try {
+        const onboarding = await options.profileRepository.updateMyCreatorOnboarding({
+          supabaseUserId: verifiedSession.supabaseUserId,
+          idempotencyKey: mutation.idempotencyKey,
+          requestHash: mutation.requestHash,
+          expectedWalletChain:
+            app.config.SOLANA_CLUSTER === "mainnet-beta" ? "solana_mainnet" : "solana_devnet",
+          request: body
+        });
+
+        if (!onboarding) {
+          return reply.code(403).send({
+            code: "forbidden",
+            message: "Creator onboarding requires an active WeVid account"
+          });
+        }
+
+        return reply.code(200).send(onboarding);
+      } catch (error) {
+        if (error instanceof CreatorOnboardingIdempotencyConflictError) {
+          return reply.code(409).send({
+            code: "conflict",
+            message: "Idempotency key was already used for a different earnings setup"
+          });
+        }
+        if (error instanceof CreatorOnboardingWalletConflictError) {
+          return reply.code(409).send({
+            code: "conflict",
+            message: "Select a linked Solana wallet for the current network"
+          });
+        }
+        if (error instanceof CreatorOnboardingTermsRequiredError) {
+          return reply.code(400).send({
+            code: "validation_failed",
+            message: "Accept the current Creator Earnings Terms"
+          });
+        }
+        if (error instanceof ProfileRepositoryConfigurationError) {
+          request.log.warn({ error }, "Profile repository is not configured");
+          return reply.code(503).send({
+            code: "service_unavailable",
+            message: "Creator earnings setup is not configured"
+          });
+        }
+        throw error;
+      }
+    }
+  );
 
   app.patch("/v1/profiles/me", { schema: contractRouteSchema("updateMyProfile") }, async (request, reply) => {
     const verifiedSession = await verifyRequestSession(request, options.authVerifier);
