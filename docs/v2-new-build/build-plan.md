@@ -46,9 +46,9 @@ The historical milestones below remain useful implementation context. New produc
 
 | Slice | Goal | Current state |
 | --- | --- | --- |
-| 00 | Baseline, governance, and truth lock | Implemented on `codex/launch-00-baseline-governance`; merge gated by required checks |
-| 01 | Executable contracts and platform security boundary | Implemented locally in Launch 01; shared Supabase migration/advisor proof and production-like Redis/provider staging remain release blockers |
-| 02 | Three-step onboarding, canonical session, optional recovery, and earnings readiness | Identity/session/recovery and the three-step onboarding foundation are implemented locally in Launch 01; earnings readiness remains contextual and incomplete, and real provider/browser acceptance evidence remains blocked or incomplete |
+| 00 | Baseline, governance, and truth lock | Merged through PR #35 at `b441532`; required main checks passed |
+| 01 | Executable contracts and platform security boundary | Merged through PR #42 at `9081bd0`; local browser/Postgres proof passed, while shared Supabase migration/advisor proof and production-like Redis/provider staging remain release blockers |
+| 02 | Three-step onboarding, canonical session, optional recovery, and earnings readiness | Identity/session/recovery and the three-step onboarding foundation merged with Launch 01; earnings readiness remains incomplete and real provider acceptance evidence remains a launch gate |
 | 03 | VOD creation, multi-performer enrollment, and moderation operations | Not started |
 | 04 | Core social graph and real feeds | Not started |
 | 05 | Realtime messages and notifications | Not started |

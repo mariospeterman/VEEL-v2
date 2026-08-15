@@ -10,6 +10,8 @@ const required = [
   "docs/v2-new-build/infra-decisions.md",
   "docs/v2-new-build/app-architecture.md",
   "docs/v2-new-build/stack-decision.md",
+  "docs/v2-new-build/current-implementation-status.md",
+  "docs/v2-new-build/slice-workflow.md",
   "docs/v2-new-build/adr/0001-fastify-supabase-decision.md",
   "docs/v2-new-build/adr/0002-provider-decisions-2026.md",
   "docs/v2-new-build/contracts-and-schema.md",
@@ -33,6 +35,8 @@ const required = [
   "CLAUDE.md",
   ".cursor/rules/veel-v2.mdc",
   "docs/ai-tooling/agent-operating-rules.md",
+  ".agents/skills/wevid-production-loop/SKILL.md",
+  ".agents/skills/wevid-production-loop/agents/openai.yaml",
   ".env.example",
   "packages/contracts/openapi.yaml",
   "packages/database/schema-blueprint.sql"
@@ -51,6 +55,57 @@ if (missing.length > 0) {
 const openapi = readFileSync("packages/contracts/openapi.yaml", "utf8");
 const routeMap = readFileSync("docs/v2-new-build/route-map.md", "utf8");
 const schemaBlueprint = readFileSync("packages/database/schema-blueprint.sql", "utf8");
+const agentsRouter = readFileSync("AGENTS.md", "utf8");
+const implementationStatus = readFileSync(
+  "docs/v2-new-build/current-implementation-status.md",
+  "utf8",
+);
+const sliceWorkflow = readFileSync("docs/v2-new-build/slice-workflow.md", "utf8");
+
+const walkTestRequirements = [
+  ["AGENTS production-loop skill", agentsRouter, "$wevid-production-loop"],
+  ["AGENTS current-state route", agentsRouter, "docs/v2-new-build/current-implementation-status.md"],
+  ["AGENTS build-plan route", agentsRouter, "docs/v2-new-build/build-plan.md"],
+  ["AGENTS slice-workflow route", agentsRouter, "docs/v2-new-build/slice-workflow.md"],
+  ["status merged baseline", implementationStatus, "| Merged baseline |"],
+  ["status active slice", implementationStatus, "| Active slice |"],
+  ["status branch", implementationStatus, "| Branch |"],
+  ["status pull request", implementationStatus, "| Pull request |"],
+  ["status state", implementationStatus, "| State |"],
+  ["status blockers", implementationStatus, "| Slice blockers |"],
+  ["status next slice", implementationStatus, "| Next unfinished slice |"],
+  ["status provider-blocked state", implementationStatus, "CODE_COMPLETE_PROVIDER_BLOCKED"],
+  ["workflow walk test", sliceWorkflow, "### Five-Minute Walk Test"],
+  ["workflow active mutex", sliceWorkflow, "wevid-active-slice"],
+  ["workflow protected main", sliceWorkflow, "protected `main`"],
+];
+
+for (const [label, source, expected] of walkTestRequirements) {
+  if (!source.includes(expected)) {
+    console.error(`Production walk test failed: missing ${label} (${expected}).`);
+    process.exit(1);
+  }
+}
+
+const activeStateMatches = [
+  ...implementationStatus.matchAll(/^\| State \| `([^`]+)` \|$/gm),
+];
+const allowedActiveStates = new Set([
+  "PLANNED",
+  "ACTIVE",
+  "CODE_COMPLETE",
+  "LOCAL_GREEN",
+  "CI_GREEN",
+  "PROVIDER_PROVEN",
+  "CODE_COMPLETE_PROVIDER_BLOCKED",
+  "REVIEW_GREEN",
+  "MERGE_READY",
+  "MERGED",
+]);
+if (activeStateMatches.length !== 1 || !allowedActiveStates.has(activeStateMatches[0]?.[1])) {
+  console.error("Production walk test failed: expected exactly one valid active-slice state.");
+  process.exit(1);
+}
 
 const normalizePath = (path) =>
   path

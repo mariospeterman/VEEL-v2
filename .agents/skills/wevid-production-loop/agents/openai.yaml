@@ -1,0 +1,4 @@
+interface:
+  display_name: "WeVid Production Loop"
+  short_description: "Run the next protected WeVid production slice"
+  default_prompt: "Use $wevid-production-loop to select, build, validate, and land the next unblocked WeVid production slice."
