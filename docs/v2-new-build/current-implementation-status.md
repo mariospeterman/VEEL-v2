@@ -37,13 +37,13 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `36fc65d004eaa587d1f9987393ad59ec15046c85` (production loop, PR #43) |
-| Active slice | Launch 03A — SFW media publishing and moderation |
-| Branch | `codex/launch-03-sfw-publish-moderation` |
-| Pull request | #44 |
-| State | `CODE_COMPLETE_PROVIDER_BLOCKED` |
-| Slice blockers | Bunny staging credentials and launch-approved classifier/hash evidence are unavailable; local implementation and deterministic/real-Postgres/browser proof are complete and production release remains fail-closed |
-| Next unfinished slice | Launch 04 — Core social graph and real feeds |
+| Merged baseline | `main` at `3dd79aefe2bf8bdcb64bfe20544910aa53af0c72` (Launch 03A, PR #44) |
+| Active slice | Launch 04 — Core social graph, Home, and Bits |
+| Branch | `codex/launch-04-social-feed` |
+| Pull request | #45 |
+| State | `ACTIVE` |
+| Slice blockers | None; the follow graph and deterministic feeds have no external-provider dependency |
+| Next unfinished slice | Launch 05 — Realtime messages and notifications |
 
 Current human/provider gates do not block this process slice: shared staging credentials,
 provider dashboard/webhook/domain configuration, migration `0091` shared-project proof,
