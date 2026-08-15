@@ -44,7 +44,18 @@ This ADR turns the v2 blueprint into concrete provider defaults for the first im
 | Event Access | Internal backend QR/pass entitlement + Solana Pay settlement first; NFT/Solana pass ADR later | Proven, simple, noncustodial split settlement without premature custom smart contracts. |
 | Event location | Browser geolocation with permission + manual OSM-backed place search | Free/low-cost launch UX without platform handling private location carelessly. |
 | Share | Internal Veel share/repost/message has no referral commission; external share tab uses backend referral URL | Keeps social sharing clean while preserving referral attribution for off-platform conversion. |
-| Physical commerce | Deferred native commerce: Vendure preferred behind WeVid adapter; Medusa fallback; Shopify connector-only | Keeps WeVid-native UX and one provider boundary without installing a speculative commerce runtime before merchant, tax, fulfillment, return, and moderation decisions are approved. |
+| Commerce interoperability | Selected Solana Commerce Kit primitive: exact-pinned `@solana-commerce/solana-pay` behind the existing payment module in Slice 06 | Replaces manual Solana Pay URL/QR plumbing without replacing WeVid payment intents, wallets, checkout UI, transaction composition, exact split verification, or domain outcomes. |
+| Physical commerce | Deferred WeVid-native Product Offers plus lightweight Orders/Fulfillment; no full commerce engine | Content remains the advertisement and the profile the storefront while existing identity, wallet, payment, verification, dispute, notification, and audit authorities are reused. |
+
+## Commerce Kit And Native Commerce Lock
+
+The superseded commerce-engine direction is rejected. Vendure, Medusa, Shopify, WooCommerce, and other full commerce engines are not canonical providers or core dependencies. Shopify may be reconsidered much later only as an optional import/synchronisation connector for professional sellers, and any such connector requires a new ADR; it cannot own WeVid product identity, checkout, seller identity, customer identity, orders, payments, or fulfillment.
+
+The reviewed Commerce Kit baseline on 2026-08-15 is `@solana-commerce/solana-pay` version `0.1.1` and official upstream repository HEAD `6164d5104f3d1bd4cfbb637075f000d6ac23d6c3`. Launch 01 records the decision only and installs nothing. Slice 06 must re-check the official package/source, pin the exact accepted version without a floating range, record the reviewed tag/commit and API surface, and add compatibility, upgrade, bundle, and rollback proof.
+
+Only `@solana-commerce/solana-pay` is initially selected, for Solana Pay URL encode/parse, transaction-request URLs, QR data generation, and deep-link/cross-device wallet handoff. `@solana-commerce/kit`, `@solana-commerce/react`, `@solana-commerce/connector`, `@solana-commerce/sdk`, and `@solana-commerce/headless` are excluded initially because they would add unused meta functionality or duplicate WeVid checkout UI, wallet connection/state, transaction approval, cart, order, or payment-flow authority. `@solana-commerce/headless` may return for review only after a focused benchmark proves meaningful code removal without creating a competing authority.
+
+Commerce Kit is isolated behind the existing payment module. It never confirms settlement, computes price or recipients, composes WeVid's exact split transaction, grants entitlement/access, creates an order, or replaces Privy/Wallet Standard. A Commerce Kit callback, wallet approval, QR, or submitted signature is presentation/pending evidence only; blockchain settlement verified against the stored WeVid `PaymentIntent` remains payment truth.
 
 ## Provider Acceptance States
 
@@ -79,6 +90,7 @@ Current provider gate:
 | Payment evidence | Helius | candidate | Devnet/staging webhook, scoped watched addresses/references, signature/replay validation, confirmed payment fixture. |
 | Onramp/funding | Embedded-wallet funding UI | candidate | User-controlled wallet funding, provider KYC handled by provider, no entitlement on funding completion. |
 | Subscriptions/allowances | Solana Subscription Delegation Program | candidate | Devnet/staging authority setup, revoke, collection, wallet UX, token support, unsafe-extension rejection, event/reconciliation fixtures, direct recipient settlement, cancellation, no custody, no merchant checkout. |
+| Commerce interoperability | `@solana-commerce/solana-pay` | candidate, deferred to Slice 06 | Re-verify and exact-pin the reviewed package, isolate it behind a narrow codec, prove URL parser round trips and safe QR/deep links, measure bundle impact, and retain the current exact multi-recipient verifier. |
 
 No provider can be treated as launch-approved until its staging smoke, security review, account/terms review, and fallback/rollback notes are documented.
 
@@ -102,6 +114,9 @@ Before implementation, verify the latest official docs for each provider/API. Th
 | Supabase Realtime | `https://supabase.com/docs/guides/realtime` |
 | Solana Pay | `https://docs.solanapay.com/` |
 | Solana Pay transaction requests | `https://solana.com/docs/tools/solana-pay/quickstart/transaction-requests` |
+| Solana Commerce Kit overview | `https://solana.com/docs/tools/commerce-kit` |
+| Solana Commerce Kit source | `https://github.com/solana-foundation/commerce-kit` |
+| Commerce Kit Solana Pay package | `https://github.com/solana-foundation/commerce-kit/tree/main/packages/solana-pay` |
 | Solana Subscriptions overview | `https://solana.com/docs/payments/subscriptions/overview` |
 | Solana Subscriptions fixed delegation | `https://solana.com/docs/payments/subscriptions/fixed-delegation` |
 | Solana Subscriptions recurring delegation | `https://solana.com/docs/payments/subscriptions/recurring-delegation` |
@@ -115,10 +130,6 @@ Before implementation, verify the latest official docs for each provider/API. Th
 | Privy user authentication | `https://docs.privy.io/authentication/user-authentication/privy-auth` |
 | Privy Solana setup | `https://docs.privy.io/recipes/solana/getting-started-with-privy-and-solana` |
 | Privy external-wallet connectors | `https://docs.privy.io/wallets/connectors/setup/configuring-external-connector-wallets` |
-| Vendure multi-vendor guide | `https://docs.vendure.io/guides/how-to/multi-vendor-marketplaces/` |
-| Vendure channels and sellers | `https://docs.vendure.io/guides/core-concepts/channels/`, `https://docs.vendure.io/reference/typescript-api/entities/seller/` |
-| Vendure payment handlers | `https://docs.vendure.io/reference/typescript-api/payment/payment-method-handler/` |
-| Medusa marketplace recipe | `https://docs.medusajs.com/resources/recipes/marketplace` |
 | MCP authorization | `https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization` |
 | MCP security best practices | `https://modelcontextprotocol.io/docs/tutorials/security/security_best_practices` |
 | OpenAI MCP/connectors | `https://developers.openai.com/api/docs/guides/tools-connectors-mcp` |

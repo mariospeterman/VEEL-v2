@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: canonical implementation and production-completion order
-Last updated: 2026-08-14
+Last updated: 2026-08-15
 Source of truth: yes
 
 Owns:
@@ -52,13 +52,13 @@ The historical milestones below remain useful implementation context. New produc
 | 03 | VOD creation, multi-performer enrollment, and moderation operations | Not started |
 | 04 | Core social graph and real feeds | Not started |
 | 05 | Realtime messages and notifications | Not started |
-| 06 | One-time monetisation and Event Access completion | Not started |
+| 06 | One-time monetisation and Event Access completion, including narrow Commerce Kit Solana Pay convergence and one shared checkout presentation | Not started |
 | 07 | SFW live host, viewer, chat, and operational controls | Not started |
 | 08 | Recurring platform subscriptions and creator memberships | Not started |
 | 09 | Enterprise managed creators | Not started |
 | 10 | Frontend system, accessibility, cross-browser, and PWA completion | Not started |
 | 11 | Actual deployment, observability, recovery, and legal launch | Not started |
-| Post-core | Expanded Mutuals, Vendure-backed native creator commerce (Medusa fallback; Shopify connector-only), adult live, full AI/MCP, NFT/transferable passes, resale, custom contracts, and uncommitted advanced Enterprise work | Separately gated; disabled or absent; commerce requires its focused ADR before code |
+| Post-core | Expanded Mutuals, WeVid-native Product Offers plus lightweight Orders/Fulfillment, adult live, full AI/MCP, NFT/transferable passes, resale, custom contracts, and uncommitted advanced Enterprise work | Separately gated and disabled or absent; physical commerce reuses the Slice 06 payment boundary and requires seller/trader, product-safety, shipping/privacy, tax, refund, and operations approval before code |
 
 Core SFW launch requires Slices 00–07 and 10–11. Slice 08 is required only before recurring platform plans or Profile Memberships are sold. Slice 09 is required only before Enterprise customers are onboarded. Existing safe foundations for conditional/post-core work may remain, but incomplete capabilities stay hidden, disabled, and fail-closed.
 

@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: documentation
-Last updated: 2026-06-13
+Last updated: 2026-08-15
 Source of truth: yes
 
 Owns:
@@ -46,6 +46,8 @@ Repeated controls should use:
 Native controls are allowed when the browser behavior is the product behavior, currently file inputs and media-editor range sliders.
 
 Product CSS should own layout, media-stage composition, route-specific density, and specialized capture/playback affordances. It should not reintroduce generic button, sheet, segmented-control, or form control systems.
+
+`CheckoutSheet` is the single reusable one-time purchase presentation over the shared `Sheet`, button, form, status, and error primitives. Product-specific wrappers may supply safe display context for Support, unlock, paid message, Event Access, paid live, or a future physical Product Offer, but must not fork the wallet handoff or payment-state UI. The sheet keeps content context visible, presents one primary CTA, exact total/asset and plain-language terms, uses the already-mounted Privy/external-wallet boundary, and offers an accessible high-contrast QR plus ordinary `Open wallet` fallback. It never renders raw HTML from QR/provider output or exposes split internals, atomic units, references, capability tokens, provider endpoints, or shipping/private identity data.
 
 Rules:
 

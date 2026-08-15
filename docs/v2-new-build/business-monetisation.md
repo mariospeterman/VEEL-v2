@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: business model, monetisation, noncustodial money movement
-Last updated: 2026-08-14
+Last updated: 2026-08-15
 Source of truth: yes
 
 Owns:
@@ -190,7 +190,7 @@ platform_subscription
 
 `tip` is a legacy-read settlement value only. New contracts, intents, UI copy, and provider requests use `support`; do not create a second tip flow.
 
-Future products such as drops, resale, NFT pass/ticketing, bundles, gifts, or premium-room variants require a separate ADR and must not appear in launch contracts or schema until approved.
+Future products such as physical product orders, drops, resale, NFT pass/ticketing, bundles, gifts, or premium-room variants require their owning post-core decision and must not appear in launch contracts or schema until approved. The physical-commerce slice may add a product-specific payment type such as `physical_product_order`; it is not part of the launch enum above.
 
 Target product language for new docs/UI:
 
@@ -290,11 +290,17 @@ Recipient monetisation readiness has one backend authority. â€œEnable Earningsâ€
 
 ## Deferred Physical Commerce Boundary
 
-Physical goods are post-core and must not reuse WeVid's digital payment intents or entitlement system. The locked future direction is native creator commerce through one WeVid-owned `CommerceProvider` adapter. Vendure is the preferred canonical engine because its channel, seller, product/variant, inventory, order-splitting strategy, payment-handler, and fulfillment extension points fit the domain. This is an architecture lock, not approval to install Vendure or create commerce tables in the current launch slice.
+Physical goods remain post-core. The locked direction is WeVid-native Product Offers plus deliberately small Orders/Fulfillment over the existing identity, profile, wallet, recipient-readiness, payment-intent, exact-split, settlement-verification, receipt, refund/dispute, notification, moderation, and audit authorities. No full commerce engine is part of the canonical dependency graph. This architecture lock does not add commerce routes, tables, SDKs, inventory, checkout, order, or fulfillment runtime to the current launch slice.
 
-Medusa is the documented fallback if Vendure fails staging, operational, licensing, or adult-platform acceptance. Medusa's marketplace recipe requires custom vendor models, routes, workflows, and order splitting, so it is not treated as a drop-in marketplace engine. Shopify is optional connector-only: a creator may connect an external store for catalog display and redirect, but Shopify never becomes WeVid's canonical catalog, order, seller, or commerce source of truth.
+The initial physical-commerce scope is one seller and one product per checkout, optional quantity, simple variants only when necessary, seller-configured fixed shipping zones/rates, simple stock reservation, seller fulfillment, tracking, and the existing refund/dispute workflow. Cross-seller carts, promotions, warehouses, label generation, escrow, resale, and automatic platform-funded refunds are excluded. A future same-seller cart requires measured demand.
 
-Before implementation, a focused commerce ADR must decide merchant of record, payment routing, tax, shipping, returns/refunds, seller onboarding, moderation, product-content attachment, and operational ownership. Vendure's official multi-vendor example is educational and explicitly requires production hardening; its primitives do not remove WeVid's responsibility to validate isolation, authorization, webhook idempotency, and operational workflows. Until that ADR and provider staging approval exist, there is no SDK, runtime, schema, checkout, cart, inventory, order, or fulfillment code in core launch.
+Physical purchase reuses the canonical `PaymentIntent` system but adds a product-specific type only when its slice is implemented. The backend reserves stock, creates the immutable order and shipping-price snapshot, then creates the intent. Confirmed settlement marks exactly one order paid; it does not create a digital entitlement. Duplicate settlement cannot create another order or reduce stock twice. Product price, shipping amount, seller wallet, platform/referral/managed-creator allocation, stock, and paid state are never browser-owned.
+
+The minimum new domain concepts are Product Offer, content/profile/live attachment, shipping profile, Order, stock reservation, and Fulfillment. They must not duplicate user, profile, wallet, verification, payment, settlement, receipt, dispute, notification, or audit records. Shipping data is sensitive: collect only fulfillment fields, protect them through the approved encryption/key-version boundary, never log or place them on-chain or in Solana Pay data, expose them to the seller only after confirmed payment, audit staff access, and apply retention/deletion policy.
+
+Commerce activation is independently policy-gated. Seller/trader identity, lawful seller disclosures, shipping/return policy, prohibited-product screening, product safety/traceability, recall handling, jurisdiction, tax readiness, and EU DSA/GPSR obligations require legal and operational approval. Noncustodial direct settlement does not remove marketplace responsibilities. Launch, when approved, begins with lawful low-risk creator merchandise.
+
+Profile-native UX is canonical: content is the advertisement, the creator profile is the storefront, the wallet is the payment account, selected Commerce Kit primitives are invisible payment interoperability, and WeVid owns the social experience and business rules. A Product Offer may attach to a profile, Post, Bit, or live stream, with at most one explicit contextual `View product` or `Buy product` action. Products do not enter the five primary navigation items, open checkout automatically, alter feed ranking, or grant access to people.
 
 ## Subscription State Machine
 

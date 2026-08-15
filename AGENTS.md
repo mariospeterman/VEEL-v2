@@ -32,6 +32,7 @@ Before implementing or changing provider code, re-check the latest official prov
 - No custom media infrastructure when Bunny/Livepeer do the provider job.
 - No custom key custody. Embedded wallet provider must be noncustodial/user-controlled.
 - No wallet approval treated as payment proof. Backend settlement verification is required.
+- No full commerce engine in the core architecture. Physical commerce is WeVid-native Product Offers plus lightweight Orders/Fulfillment over the existing payment, wallet, verification, dispute, notification, and audit authorities. Selected Commerce Kit primitives may improve Solana Pay interoperability but never become payment, order, entitlement, wallet, or checkout authority.
 - No raw provider payloads in frontend resources.
 - No stale copy, in-place upgrade, or reference-code import plans.
 - No provider-dependent production path can ship while its ADR state is only `candidate`; it must be `staging-approved` or `launch-approved` for the exact use case.
@@ -44,6 +45,7 @@ Before implementing or changing provider code, re-check the latest official prov
 - DB/Auth/Realtime: Supabase Postgres/Auth/Realtime.
 - Contracts: OpenAPI/schema-first.
 - Payments: Solana Pay, native SOL devnet first, SPL/USDC capable.
+- Commerce: `@solana-commerce/solana-pay` is the only initially selected Commerce Kit package and belongs to Slice 06 behind a narrow adapter; `@solana-commerce/headless` requires a later measured justification. Physical Product Offers, Orders, and Fulfillment remain post-core.
 - Wallets: embedded noncustodial wallet provider plus external Solana wallets.
 - Media: Bunny Stream for VOD, Livepeer for live/replay.
 - Package manager: pnpm.

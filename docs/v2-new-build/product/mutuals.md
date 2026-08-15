@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Mutuals, interest signaling, safety, mutual chat
-Last updated: 2026-08-14
+Last updated: 2026-08-15
 Source of truth: yes for v2 Mutuals
 
 Owns:
@@ -42,6 +42,7 @@ Money can never buy access to people, visibility, matches, recommendations, or p
 - Money, reporting, blocking, and Mutual actions always have visible controls, not gesture-only controls.
 - Paid content access, support, memberships, or platform plan status never imply romantic consent, social consent, visibility priority, or Mutuals interest.
 - Paid products never increase Mutuals feed position, match probability, message priority, social reputation, or eligibility to contact a person outside ordinary backend safety/access rules.
+- Commerce Kit and native Product Offers have no Mutuals role. Support or a purchase cannot activate Mutuals, create interest, imply consent or reply obligation, unlock contact, or change Mutuals eligibility/ranking.
 
 ## Routes
 
