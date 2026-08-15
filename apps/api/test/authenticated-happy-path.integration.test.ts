@@ -3199,6 +3199,7 @@ async function seedFeedVolumeFixtures(
   const ids: string[] = [];
   for (let index = 0; index < input.count; index += 1) {
     const contentId = randomUUID();
+    const mediaAssetId = randomUUID();
     ids.push(contentId);
     await sql`
       insert into content_items (
@@ -3223,6 +3224,29 @@ async function seedFeedVolumeFixtures(
         'none',
         'pending',
         now() - interval '2 days' - (${index} * interval '1 second')
+      )
+    `;
+    await sql`
+      insert into media_assets (
+        id,
+        content_item_id,
+        provider,
+        provider_asset_id,
+        provider_state,
+        poster_url,
+        playback_url,
+        provider_playable,
+        ready_at
+      ) values (
+        ${mediaAssetId},
+        ${contentId},
+        'bunny',
+        ${`integration-feed-${input.runId}-${index}`},
+        'ready',
+        ${`https://media.example.test/feed-${index}.jpg`},
+        ${`https://video.example.test/${mediaAssetId}/playlist.m3u8`},
+        true,
+        now()
       )
     `;
     await approveSeededContent(sql, {
