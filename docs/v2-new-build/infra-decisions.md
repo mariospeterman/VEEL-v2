@@ -62,7 +62,7 @@ Current workflows run docs/contract/schema checks, database migration checks, de
 
 Current executable state:
 
-- The canonical CI proof job is `pinned-toolchain-proof`; it reads `.node-version`, installs `pnpm@10.0.0` through `pnpm/action-setup@v4`, prints both tool versions, installs with `pnpm install --frozen-lockfile`, then runs docs, migrations, deploy readiness, lint, typecheck, and tests.
+- The canonical CI proof job is `pinned-toolchain-proof`; it reads `.node-version`, installs `pnpm@10.0.0` through `pnpm/action-setup@v6`, prints both tool versions, installs with `pnpm install --frozen-lockfile`, then runs docs, dependency policy, migrations, deploy readiness, lint, typecheck, tests, build, and browser smoke checks.
 - Local macOS hosts install optional Darwin `rolldown` native bindings for Vitest/Vite and use `pnpm run doctor` to resolve the pinned Node.js/Corepack toolchain even when the interactive shell points at an older Node. Do not bypass tests; local proof and the pinned Linux CI proof are both required before launch-scope changes are considered validated.
 - `preview` installs dependencies, builds deployable apps, and verifies the deploy skeleton.
 - `release-artifacts` runs only after green `main` CI, publishes non-root web/API/worker images to GHCR, emits GitHub attestations, and uploads one immutable release manifest.

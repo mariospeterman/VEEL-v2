@@ -23,6 +23,7 @@
     "@veel/config": "workspace:*",
     "@veel/observability": "workspace:*",
     "bs58": "6.0.0",
+    "fastestsmallesttextencoderdecoder": "1.0.22",
     "postgres": "^3.4.9",
     "web-push": "^3.6.7"
   },
