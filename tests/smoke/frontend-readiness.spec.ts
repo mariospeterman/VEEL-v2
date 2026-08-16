@@ -48,6 +48,9 @@ test("offline recovery actions remain reachable on a short viewport", async ({ p
   const recoveryLink = page.getByRole("link", { name: "Go to WeVid" });
   await recoveryLink.scrollIntoViewIfNeeded();
   await expect(recoveryLink).toBeInViewport();
+  const retryForm = page.getByRole("button", { name: "Try again" }).locator("xpath=ancestor::form");
+  await expect(retryForm).toHaveAttribute("method", "get");
+  await expect(retryForm).not.toHaveAttribute("action", /.+/);
 });
 
 test("manifest, install icons, and service worker meet the public PWA contract", async ({ request }) => {

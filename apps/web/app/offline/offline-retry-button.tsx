@@ -1,9 +1,9 @@
-"use client";
-
 export function OfflineRetryButton() {
   return (
-    <button className="primary-button" onClick={() => window.location.reload()} type="button">
-      Try again
-    </button>
+    <form method="get">
+      <button className="primary-button" type="submit">
+        Try again
+      </button>
+    </form>
   );
 }

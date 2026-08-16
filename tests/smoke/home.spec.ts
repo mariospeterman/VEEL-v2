@@ -398,14 +398,16 @@ test("records explicit Mutuals choices through the canonical API", async ({ cont
   const firstMutationResponse = page.waitForResponse((response) =>
     response.request().method() === "POST" && response.url().endsWith("/v1/mutuals/interests")
   );
-  await page.getByRole("button", { name: "Interested" }).click();
+  await page.getByRole("button", { name: "Interested", exact: true }).click();
   expect((await firstMutationResponse).status()).toBe(503);
-  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page.getByRole("alert").filter({ hasText: "Mutuals choice" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Interested", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Not interested", exact: true })).toBeDisabled();
 
   const mutationRequest = page.waitForRequest((request) =>
     request.method() === "POST" && request.url().endsWith("/v1/mutuals/interests")
   );
-  await page.getByRole("button", { name: "Interested" }).click();
+  await page.getByRole("button", { name: "Interested", exact: true }).click();
   const request = await mutationRequest;
 
   expect(request.headers()["idempotency-key"]).toBeTruthy();
@@ -417,8 +419,8 @@ test("records explicit Mutuals choices through the canonical API", async ({ cont
     targetUserId: user().id
   });
   await expect(page.getByText("Interest saved. Nothing is shared unless it becomes mutual.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Interested" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Not interested" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Interested", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Not interested", exact: true })).toBeDisabled();
 });
 
 test("keeps compatibility aliases intentional", async ({ request }) => {
