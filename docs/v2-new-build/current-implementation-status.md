@@ -37,13 +37,13 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `2cc1712` (Launch 07, PR #48) |
-| Active slice | Launch 08 — Recurring platform subscriptions and creator memberships |
-| Branch | `codex/launch-08-recurring-memberships` |
-| Pull request | #49 |
-| State | `CODE_COMPLETE_PROVIDER_BLOCKED` |
-| Slice blockers | Local code, migration, build, unit, provider-boundary, and real-Postgres integration proof are complete. Real Solana devnet program/RPC/mint proof, a launch-approved collector signer, funded test wallets, and target-wallet authorization/revocation evidence remain pre-production gates. Recurring sales stay fail-closed until that evidence exists. |
-| Next unfinished slice | Launch 09 — Enterprise managed creators |
+| Merged baseline | `main` at `c7717a5` (Launch 08, PR #49) |
+| Active slice | Launch 09 — Enterprise managed creators |
+| Branch | `codex/launch-09-enterprise-managed-creators` |
+| Pull request | Pending |
+| State | `ACTIVE` |
+| Slice blockers | Enterprise onboarding must remain fail-closed until organization authority, bilateral creator consent, KYB/entitlement readiness, exact management allocation, revocation, audit, and browser/real-Postgres proof converge on one backend-owned path. Real KYB/provider and Enterprise contract evidence remain pre-production gates. |
+| Next unfinished slice | Launch 10 — Frontend system, accessibility, cross-browser, and PWA completion |
 
 Current human/provider gates do not block this process slice: shared staging credentials,
 provider dashboard/webhook/domain configuration, migration `0091` shared-project proof,
