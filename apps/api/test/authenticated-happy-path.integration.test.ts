@@ -1817,6 +1817,22 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         id: unlock.paymentIntent.id,
         state: "confirmed"
       });
+
+      const confirmedCheckoutConsentReplay = await app.inject({
+        method: "POST",
+        url: `/v1/payments/intents/${unlock.paymentIntent.id}/consent`,
+        headers: authenticatedHeaders(contentUnlockConsent.idempotencyKey),
+        payload: {
+          termsVersion: "veel-terms-v1",
+          withdrawalWaiverVersion: "instant-digital-access-v1",
+          immediateAccessAcknowledged: true
+        }
+      });
+      expect(confirmedCheckoutConsentReplay.statusCode, confirmedCheckoutConsentReplay.body).toBe(200);
+      expect(confirmedCheckoutConsentReplay.json()).toMatchObject({
+        id: unlock.paymentIntent.id,
+        state: "confirmed"
+      });
       expect(settlementInputs).toHaveLength(1);
       expect(settlementInputs[0]).toEqual(
         expect.objectContaining({

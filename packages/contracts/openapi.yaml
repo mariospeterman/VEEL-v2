@@ -1478,7 +1478,7 @@ paths:
       operationId: acceptPaymentIntentTerms
       tags: [Payments]
       summary: Record explicit checkout terms and immediate-access acknowledgement
-      description: Exact retries replay the original consent result for the lifetime of the logical checkout-consent operation; reusing the key with changed consent evidence returns conflict.
+      description: Exact retries remain accepted for the lifetime of the logical checkout-consent operation and return the current canonical payment-intent state; reusing the key with changed consent evidence returns conflict.
       x-idempotency-policy: durable-state-transition
       parameters:
         - $ref: "#/components/parameters/PaymentIntentId"
