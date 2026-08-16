@@ -32,6 +32,20 @@ const nextConfig: NextConfig = {
     root: repoRoot
   },
   typedRoutes: true,
+  async headers() {
+    return [
+      {
+        source: "/veel-sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+          { key: "Content-Security-Policy", value: "default-src 'none'; script-src 'self'; connect-src 'self'" },
+          { key: "Service-Worker-Allowed", value: "/" },
+          { key: "X-Content-Type-Options", value: "nosniff" }
+        ]
+      }
+    ];
+  },
   async redirects() {
     return [
       { source: "/activity", destination: "/app/activity", permanent: false },

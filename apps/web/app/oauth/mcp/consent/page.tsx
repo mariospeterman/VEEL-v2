@@ -38,7 +38,7 @@ export default async function McpOAuthConsentPage({
 
       <section className="mx-auto grid w-full max-w-3xl gap-5 px-5 py-8">
         <header>
-          <p className="text-sm font-medium text-(--accent)">MCP connection</p>
+          <p className="text-sm font-medium text-(--accent-text)">MCP connection</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-normal">Approve connector access</h1>
         </header>
 

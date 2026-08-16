@@ -65,7 +65,7 @@ function LiveStage({ room }: { room: LiveRoom }) {
         </span>
       </div>
       <div className="absolute inset-x-0 bottom-0 p-5">
-        <p className="text-sm font-medium text-(--accent)">@{room.creator.handle}</p>
+        <p className="text-sm font-medium text-(--accent-text)">@{room.creator.handle}</p>
         <h1 className="mt-2 max-w-3xl text-2xl font-semibold tracking-normal">Live room</h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-200">{room.title}</p>
       </div>

@@ -53,7 +53,7 @@ export function NotificationEnrollment({
         return;
       }
 
-      const registration = await navigator.serviceWorker.register("/veel-sw.js");
+      const registration = await existingOrRegisterServiceWorker();
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: base64UrlToArrayBuffer(vapidPublicKey)
@@ -88,6 +88,12 @@ export function NotificationEnrollment({
       </div>
     </div>
   );
+}
+
+async function existingOrRegisterServiceWorker() {
+  const existing = await navigator.serviceWorker.getRegistration("/");
+  if (existing) return existing;
+  return navigator.serviceWorker.register("/veel-sw.js", { scope: "/" });
 }
 
 function EnrollmentStatus({ message, state }: { message: string; state: EnrollmentState }) {

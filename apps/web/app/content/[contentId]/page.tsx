@@ -60,7 +60,7 @@ function MediaStage({ item }: { item: ContentItem }) {
         {item.mediaType.toUpperCase()}
       </div>
       <div className="absolute bottom-0 left-0 right-0 p-5">
-        <p className="text-sm font-medium text-(--accent)">@{item.creator.handle}</p>
+        <p className="text-sm font-medium text-(--accent-text)">@{item.creator.handle}</p>
         <h1 className="mt-2 max-w-3xl text-2xl font-semibold tracking-normal">
           Media viewer
         </h1>

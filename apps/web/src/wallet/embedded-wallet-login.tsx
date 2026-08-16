@@ -14,10 +14,12 @@ import { createBackendWalletSession } from "./backend-wallet-auth";
 
 export function EmbeddedWalletLoginButton({
   label,
-  onLinked
+  onLinked,
+  secondary = false
 }: {
   label: string;
   onLinked?: ((address: string) => void) | undefined;
+  secondary?: boolean;
 }) {
   const { authenticated, ready } = usePrivy();
   const [flowRequested, setFlowRequested] = useState(false);
@@ -105,6 +107,7 @@ export function EmbeddedWalletLoginButton({
       logo="privy"
       message={message}
       onClick={start}
+      secondary={secondary}
       status={state === "working" ? "Opening" : "Connect and sign"}
       tone={state === "error" ? "error" : "muted"}
     />
@@ -117,6 +120,7 @@ function EmbeddedButtonFrame({
   logo,
   message,
   onClick,
+  secondary,
   status,
   tone
 }: {
@@ -125,12 +129,13 @@ function EmbeddedButtonFrame({
   logo: "privy";
   message: string | null;
   onClick: () => void;
+  secondary: boolean;
   status: string;
   tone: "error" | "muted";
 }) {
   return (
     <div className="auth-provider-button-stack">
-      <button className="auth-provider-button" disabled={disabled} onClick={onClick} type="button">
+      <button className={`auth-provider-button${secondary ? " auth-provider-button-secondary" : ""}`} disabled={disabled} onClick={onClick} type="button">
         <ProviderLogo label={label} name={logo} />
         <span>
           <strong>{label}</strong>

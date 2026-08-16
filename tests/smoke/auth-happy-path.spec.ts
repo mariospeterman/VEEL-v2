@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
 
 const e2eToken = "veel-e2e-token";
+const e2eOrigin = new URL(process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000").origin;
 const contentId = "00000000-0000-4000-8000-000000000040";
 const draftContentId = "00000000-0000-4000-8000-000000000041";
 const mediaAssetId = "00000000-0000-4000-8000-000000000042";
@@ -38,8 +39,7 @@ test.beforeEach(async ({ context }) => {
     {
       name: "veel_e2e_access_token",
       value: e2eToken,
-      domain: "127.0.0.1",
-      path: "/",
+      url: e2eOrigin,
       httpOnly: false,
       sameSite: "Lax"
     }
@@ -107,7 +107,7 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
       await route.fulfill({
         status: 201,
         headers: {
-          "Access-Control-Allow-Origin": "http://127.0.0.1:3000",
+          "Access-Control-Allow-Origin": e2eOrigin,
           "Access-Control-Expose-Headers": "Location,Upload-Offset,Tus-Resumable",
           Location: "https://bunny.example.test/tus/studio-session/upload-1",
           "Tus-Resumable": "1.0.0"
@@ -119,7 +119,7 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
       await route.fulfill({
         status: 204,
         headers: {
-          "Access-Control-Allow-Origin": "http://127.0.0.1:3000",
+          "Access-Control-Allow-Origin": e2eOrigin,
           "Access-Control-Expose-Headers": "Upload-Offset,Tus-Resumable",
           "Upload-Offset": "10",
           "Tus-Resumable": "1.0.0"
@@ -314,7 +314,7 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
     sendJson(response, 201, {
       id: "00000000-0000-4000-8000-000000000060",
       provider: "yoti",
-      launchUrl: "http://127.0.0.1:3000/age?provider=yoti-e2e",
+      launchUrl: `${e2eOrigin}/age?provider=yoti-e2e`,
       expiresAt: "2026-06-12T10:45:00.000Z"
     });
     return;
@@ -425,7 +425,7 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
 }
 
 function setCorsHeaders(response: ServerResponse) {
-  response.setHeader("Access-Control-Allow-Origin", "http://127.0.0.1:3000");
+  response.setHeader("Access-Control-Allow-Origin", e2eOrigin);
   response.setHeader("Access-Control-Allow-Credentials", "true");
   response.setHeader("Access-Control-Allow-Headers", "authorization,content-type,idempotency-key,accept");
   response.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,OPTIONS");

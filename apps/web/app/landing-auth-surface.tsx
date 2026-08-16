@@ -10,6 +10,7 @@ import {
   uploadMyProfileAvatar
 } from "@/api-mutations";
 import type { WebAuthState } from "@/supabase/auth-state";
+import { ProviderLogo } from "@/brand/provider-logo";
 
 type LandingWalletRuntimeProps = {
   authState: WebAuthState;
@@ -20,7 +21,7 @@ const onboardingSteps = [
   {
     eyebrow: "1 / 3",
     title: "Wallet",
-    copy: "Continue with your account or connect an existing Solana wallet."
+    copy: "Connect a wallet you control. You can create one here if needed."
   },
   {
     eyebrow: "2 / 3",
@@ -126,6 +127,7 @@ function OnboardingWalletStep({ authState, onLinked }: { authState: WebAuthState
 function LandingWalletList({ authState, onLinked }: { authState: WebAuthState; onLinked?: (address: string) => void }) {
   const [runtime, setRuntime] = useState<ComponentType<LandingWalletRuntimeProps> | null>(null);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  const [runtimeAttempt, setRuntimeAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -141,7 +143,7 @@ function LandingWalletList({ authState, onLinked }: { authState: WebAuthState; o
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [runtimeAttempt]);
 
   if (runtime) {
     const Runtime = runtime;
@@ -150,9 +152,24 @@ function LandingWalletList({ authState, onLinked }: { authState: WebAuthState; o
 
   return (
     <div className="landing-wallet-runtime" aria-label="Sign-in options">
-      <p className="landing-wallet-required">Choose how to continue. Your wallet stays under your control.</p>
-      {!runtimeError ? <p className="landing-wallet-required" role="status">Loading sign-in options…</p> : null}
-      {runtimeError ? <p className="landing-auth-error">{runtimeError}</p> : null}
+      {!runtimeError ? (
+        <>
+          <button aria-describedby="wallet-runtime-status" className="auth-provider-button" disabled type="button">
+            <ProviderLogo label="Connect wallet" name="wallet" />
+            <span><strong>Connect wallet</strong></span>
+          </button>
+          <p className="sr-only" id="wallet-runtime-status" role="status">Preparing wallet connection</p>
+        </>
+      ) : null}
+      {runtimeError ? (
+        <div className="landing-wallet-retry">
+          <p className="landing-auth-error">{runtimeError}</p>
+          <button className="auth-provider-button" onClick={() => {
+            setRuntimeError(null);
+            setRuntimeAttempt((attempt) => attempt + 1);
+          }} type="button">Retry wallet connection</button>
+        </div>
+      ) : null}
     </div>
   );
 }

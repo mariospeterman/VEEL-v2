@@ -70,12 +70,12 @@ export default async function AppHomePage() {
 function LiveRoomRailCard({ room }: { room: LiveRoom }) {
   return (
     <Card className="overflow-hidden">
-      <div className="aspect-video bg-[#080b11] p-4">
+      <div className="aspect-video bg-(--panel-strong) p-4">
         <div className="flex h-full flex-col justify-between rounded border border-(--line) bg-(--glass) p-3">
           <StatusPill tone={room.state === "live" ? "good" : "warn"}>{room.state}</StatusPill>
           <div>
             <p className="font-semibold">{room.title}</p>
-            <p className="mt-1 text-sm text-(--muted)">@{room.creator.handle}</p>
+            <p className="mt-1 text-sm text-(--text-soft)">@{room.creator.handle}</p>
           </div>
         </div>
       </div>

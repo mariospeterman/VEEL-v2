@@ -10,7 +10,7 @@ import { legalDocLabels, legalDocSlugs, legalDocs, type LegalDocSlug } from "./l
 const LandingAuthSurface = dynamic(
   () => import("./landing-auth-surface").then((module) => module.LandingAuthSurface),
   {
-    loading: () => <div aria-busy="true" aria-label="Loading access setup" className="landing-auth-inline" />,
+    loading: () => <div aria-busy="true" aria-label="Loading access setup" className="landing-auth-inline" role="status" />,
     ssr: false
   }
 );
@@ -335,13 +335,15 @@ export function LandingExperience() {
           </div>
 
           <section
+            aria-labelledby={`${activeFrame.id}-title`}
             className={`landing-story ${activeAuth ? "landing-story-auth" : ""}`}
             id={activeFrame.id}
             key={activeFrame.id}
             ref={copyRef}
+            tabIndex={activeAuth ? 0 : undefined}
           >
             <p className="landing-eyebrow" data-story-part>{activeFrame.kicker}</p>
-            <h1 data-story-part>{activeFrame.title}</h1>
+            <h1 data-story-part id={`${activeFrame.id}-title`}>{activeFrame.title}</h1>
             <p className="landing-copy" data-story-part>{activeFrame.copy}</p>
             {authCallbackError && activeAuth ? (
               <p className="landing-auth-error" data-story-part>{authCallbackError}</p>

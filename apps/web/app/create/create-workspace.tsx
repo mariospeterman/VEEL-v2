@@ -24,7 +24,7 @@ export function CreateWorkspace({
     <section className="overflow-hidden rounded border border-(--line) bg-(--panel)">
       <form className="grid gap-5 p-4 sm:p-5" onSubmit={actions.onCreateAndUpload}>
         <div>
-          <p className="text-sm font-medium text-(--accent)">Media</p>
+          <p className="text-sm font-medium text-(--accent-text)">Media</p>
           <h2 className="mt-1 text-lg font-semibold tracking-normal">Choose your video</h2>
           <p className="mt-1 text-sm leading-6 text-(--muted)">You see it first. Your post stays private until review is complete.</p>
         </div>

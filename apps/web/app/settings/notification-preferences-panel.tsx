@@ -55,7 +55,7 @@ export function NotificationPreferencesPanel({ initial }: { initial: Notificatio
           type="button"
         >
           <span>{label}</span>
-          <span className={preferences[key] ? "text-(--accent)" : "text-(--muted)"}>
+          <span className={preferences[key] ? "text-(--accent-text)" : "text-(--muted)"}>
             {pending === key ? "Saving" : preferences[key] ? "On" : "Off"}
           </span>
         </button>

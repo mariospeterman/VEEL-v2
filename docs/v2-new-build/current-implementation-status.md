@@ -37,13 +37,13 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `c7717a5` (Launch 08, PR #49) |
-| Active slice | Launch 09 — Enterprise managed creators |
-| Branch | `codex/launch-09-enterprise-managed-creators` |
-| Pull request | #50 |
+| Merged baseline | `main` at `0627737` (Launch 09, PR #50) |
+| Active slice | Launch 10 — Frontend system, accessibility, cross-browser, and PWA completion |
+| Branch | `codex/launch-10-frontend-system` |
+| Pull request | #51 |
 | State | `CODE_COMPLETE_PROVIDER_BLOCKED` |
-| Slice blockers | Enterprise onboarding must remain fail-closed until organization authority, bilateral creator consent, KYB/entitlement readiness, exact management allocation, revocation, audit, and browser/real-Postgres proof converge on one backend-owned path. Real KYB/provider and Enterprise contract evidence remain pre-production gates. |
-| Next unfinished slice | Launch 10 — Frontend system, accessibility, cross-browser, and PWA completion |
+| Slice blockers | Linux CI WebKit must pass before merge. Real wallet extensions, the embedded-wallet provider on approved target domains/devices, push delivery, installed iOS PWA, manual screen-reader/zoom, and staging Web Vitals remain pre-production evidence gates; all stay fail-closed or outside production enablement until proven. |
+| Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
 
 Current human/provider gates do not block this process slice: shared staging credentials,
 provider dashboard/webhook/domain configuration, migration `0091` shared-project proof,
@@ -61,6 +61,15 @@ management UI. Migration `0099` was applied to local Supabase/Postgres and passe
 proof; the real-Postgres journey and desktop/mobile production-preview browser proof are green.
 Real KYB callbacks, approved commercial evidence, and Solana devnet allocation settlement remain
 `CODE_COMPLETE_PROVIDER_BLOCKED` pre-production gates.
+
+Launch 10 local acceptance now includes a direct two-choice wallet entry with provider implementation
+copy removed, wallet/payment SDKs deferred to their interaction boundaries, a single keyboard-addressable
+main region, corrected light/dark contrast and form labels, reduced-motion behavior, a privacy-safe
+network-first offline fallback, install-grade manifest/icons, and representative authenticated Axe scans.
+The Node 22 production-preview matrix passed 49 desktop/mobile Chromium tests and 24 Firefox tests;
+Firefox intentionally skips the Chromium-only service-worker-control assertion. Playwright 1.60 cannot
+run WebKit on the local macOS 12 host, so desktop/mobile WebKit remains a required Linux CI and real-device
+staging gate rather than fabricated local evidence.
 
 ## Launch Baseline And Architecture Lock
 
@@ -84,7 +93,7 @@ Real KYB callbacks, approved commercial evidence, and Solana devnet allocation s
 | One-time payments and access | Backend-owned SOL and supported one-time USDC intent, settlement, receipt, and entitlement paths exist. | Mainnet/provider evidence, operational reconciliation, and full consumer journey proof remain required. |
 | Media and live | Bunny/Livepeer boundaries and quarantine/release authorities exist. | Automated moderation is not launch-approved; adult live is disabled; provider staging evidence is absent. |
 | Recurring subscriptions | Official recurring-delegation transaction construction and verification, first-payment activation, exact-split worker collection, renewal/grace/revocation handling, cancellation, creator membership offers, consumer Join UX, admin readiness, and staging proof tooling are implemented locally. | Sales remain disabled until the official on-chain program, collector signer, supported mint, devnet authorization/collection signatures, and provider dashboard evidence are configured and proven. |
-| Frontend | Broad app-shell, direct provider-first entry, onboarding, creation, access, admin, canonical Home/Bits feeds, messages/notifications with reconnecting Realtime invalidation, Enterprise team/managed-creator management, and desktop/mobile browser smoke surfaces exist. | Real Supabase/VAPID/provider proof, full accessibility/cross-browser QA, and the final visual system remain unfinished. |
+| Frontend | The public entry presents direct external-wallet connection plus a quiet embedded-wallet option, provider SDKs load at narrow interaction boundaries, the unified app shell and product workspaces are responsive, automated WCAG 2.2 A/AA blocking findings are clear on representative routes, and the privacy-safe install/offline contract is implemented. | Linux CI WebKit plus real target-device wallet/provider, push, installed-iOS, manual screen-reader/zoom, and staging Web Vitals evidence remain required. |
 | Delivery and operations | Build, migration, security, preview, staging, and production preflight workflows exist. | No workflow deploys an artifact. Hosting, immutable promotion, telemetry, alerts, backup/restore, and rollback evidence belong to Slice 11. |
 
 ## Unsafe Capability Flags
@@ -153,7 +162,7 @@ Public product copy and API metadata use WeVid and Support. Technical package sc
 - Remote MCP production connector compatibility still requires public HTTPS staging deployment, exact redirect URI allowlists for each real client, MCP Inspector proof, Claude Code proof, Claude custom connector proof, OpenAI-compatible proof, revocation proof, and audit-row confirmation against the deployed database.
 - Media creation has backend draft, admin-tunable draft/upload abuse policy enforcement with safe defaults, metadata/preview update, Event Access draft linking, persisted upload-session handoff, TUS browser upload/resume wiring, provider-status sync UI, entitlement-aware content playback rendering, explicit publish submission, and a separate `publish_state`.
 - Launch 03A adds a preview-first SFW-only Create journey, required people/rights declaration, one-action draft-and-upload handoff, paginated owner publication/review workspace, uploader-safe request-changes/rejection reasons, request-bound replay-safe appeals, transactional appeal closure/restoration, and an explicit public-profile `publish_state = 'published'` guard. Representation-only edits to existing adult content re-check adult-publisher capability across every editable state. Code and real local Postgres proof are complete; Bunny staging and launch-approved classifier/hash evidence remain the provider gate.
-- Frontend visual polish remains iterative: main app-shell routes now follow the mockup-derived shell and safe state model, but contextual detail/admin routes still need a final responsive visual QA pass against the mockup screenshots before the frontend should be called design-complete.
+- Launch 10 has converged the public entry, app shell, representative product workspaces, accessibility baseline, cross-browser smoke matrix, and PWA/offline contract. Final provider-backed visual journeys, manual assistive-technology/zoom checks, target-device iOS install/push behavior, and performance evidence belong to pre-production staging convergence.
 - Admin dashboard is substantial; organization KYB/member, support policy/case, moderation/report, refund/dispute, data-request, and feature-flag mutations now share the admin mutation route-policy/idempotency/rate-limit guard, but final role matrix coverage and removal of any remaining compatibility aliases after migrations and clients are updated still remain.
 - Delivery has executable build/migration gates, health/readiness probes, rollback documentation, and release preflight workflows. These workflows do not deploy. Production remains blocked until Slice 11 adds a real hosting target, immutable artifact promotion, database backup/restore proof, provider staging smoke, alert routing, environment-scoped credentials, and rollback evidence.
 - Local macOS Vitest/Vite execution is covered by optional `rolldown` Darwin native bindings and `pnpm run doctor`, which resolves the pinned Node.js/Corepack toolchain even when the interactive shell points at an older Node. Tests must still run locally and in the pinned Linux CI proof before provider or frontend slices are considered validated.

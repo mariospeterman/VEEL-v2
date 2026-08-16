@@ -202,10 +202,12 @@ export function FeedExperience({
         : (currentIndex + direction + options.length) % options.length;
     const nextMode = options[nextIndex];
     if (!nextMode) return;
-    event.currentTarget.parentElement
-      ?.querySelector<HTMLButtonElement>(`#feed-mode-${nextMode}`)
-      ?.focus();
-    void selectMode(nextMode);
+    const nextButton = event.currentTarget.parentElement
+      ?.querySelector<HTMLButtonElement>(`#feed-mode-${nextMode}`);
+    nextButton?.focus();
+    void selectMode(nextMode).finally(() => {
+      window.requestAnimationFrame(() => nextButton?.focus());
+    });
   }
 
   return (

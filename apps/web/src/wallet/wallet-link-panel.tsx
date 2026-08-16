@@ -186,7 +186,7 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
     <section className={`auth-wallet-connect-card ${loginSimple ? "auth-wallet-connect-simple" : ""}`}>
       {!loginSimple && (
         <div>
-          <p className="text-xs font-semibold uppercase text-(--accent)">Wallet</p>
+          <p className="text-xs font-semibold uppercase text-(--accent-text)">Wallet</p>
           <h2 className="mt-2 text-base font-semibold tracking-normal">
             Enter with Solana
           </h2>

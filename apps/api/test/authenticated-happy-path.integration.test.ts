@@ -3443,7 +3443,16 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           headers: authenticatedHeaders(blockIdempotencyKey)
         })
       ]);
-      expect([200, 409]).toContain(concurrentFollowDuringBlock.statusCode);
+      // The ordered pair lock permits either mutation to win the race. If the
+      // block commits first, the follow must fail closed; if the follow commits
+      // first, the block trigger removes it before the final state is observed.
+      expect([200, 403, 409]).toContain(concurrentFollowDuringBlock.statusCode);
+      if (concurrentFollowDuringBlock.statusCode === 403) {
+        expect(concurrentFollowDuringBlock.json()).toEqual({
+          code: "forbidden",
+          message: "Follow is unavailable for this profile"
+        });
+      }
       expect(concurrentBlockResponses.map((response) => response.statusCode)).toEqual([200, 200]);
       expect(concurrentBlockResponses[0]?.json()).toEqual(concurrentBlockResponses[1]?.json());
 

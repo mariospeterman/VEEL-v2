@@ -63,7 +63,7 @@ function ProfileView({ followState, profile }: { followState: FollowState | null
     <section className="mx-auto grid w-full max-w-6xl gap-6 px-5 py-6 lg:grid-cols-[320px_minmax(0,1fr)]">
       <aside className="grid content-start gap-4">
         <div>
-          <p className="text-sm font-medium text-(--accent)">Creator profile</p>
+          <p className="text-sm font-medium text-(--accent-text)">Creator profile</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-normal">{profile.user.displayName}</h1>
           <p className="mt-1 text-sm text-(--muted)">@{profile.user.handle}</p>
         </div>

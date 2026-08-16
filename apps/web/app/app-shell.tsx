@@ -24,7 +24,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   return (
-    <main className="app-root">
+    <div className="app-root">
+      <a className="skip-link" href="#main-content">Skip to main content</a>
       <div className="app-shell">
         <aside className="app-rail" aria-label="Primary">
           <Link className="brand-lockup" href="/app/home" aria-label="WeVid app home">
@@ -79,7 +80,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </nav>
           </header>
 
-          <div className="page-frame">{children}</div>
+          <main className="page-frame" id="main-content" tabIndex={0}>{children}</main>
         </div>
 
         <nav className="bottom-nav" aria-label="Primary mobile">
@@ -97,7 +98,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           ))}
         </nav>
       </div>
-    </main>
+    </div>
   );
 }
 
