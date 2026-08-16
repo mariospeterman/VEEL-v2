@@ -33,7 +33,18 @@ export function createAccessRepository(
       return Boolean(rows[0]?.allowed);
     },
     async getOpsSummary() {
-      const [paymentRows, unlockRows, providerRows, subscriptionRows, subscriptionProviderRows, reportRows, workerQueueRows] = await Promise.all([
+      const [
+        paymentRows,
+        unlockRows,
+        providerRows,
+        subscriptionRows,
+        subscriptionProviderRows,
+        organizationRows,
+        managedCreatorRows,
+        enterpriseAllocationRows,
+        reportRows,
+        workerQueueRows
+      ] = await Promise.all([
         sql<CountRow[]>`
           select
             count(*) as total,
@@ -74,6 +85,36 @@ export function createAccessRepository(
           select
             exists (select 1 from subscription_plans where provider_state = 'launch_approved' and state = 'active') as launch_approved,
             exists (select 1 from subscription_plans where provider_state = 'staging_required') as staging_required
+        `,
+        sql<CountRow[]>`
+          select count(*) as total,
+            count(*) filter (where state = 'pending_kyb') as pending,
+            0 as submitted,
+            count(*) filter (where state = 'active') as confirmed,
+            count(*) filter (where state in ('suspended', 'archived')) as failed
+          from organizations
+        `,
+        sql<CountRow[]>`
+          select count(*) as total,
+            count(*) filter (where state = 'invited') as pending,
+            count(*) filter (where state = 'active' and exists (
+              select 1 from managed_creator_agreements agreement
+              where agreement.relationship_id = managed_creator_relationships.id and agreement.state = 'proposed'
+            )) as submitted,
+            count(*) filter (where state = 'active' and exists (
+              select 1 from managed_creator_agreements agreement
+              where agreement.relationship_id = managed_creator_relationships.id and agreement.state = 'accepted'
+            )) as confirmed,
+            count(*) filter (where state in ('declined', 'suspended', 'terminated', 'expired')) as failed
+          from managed_creator_relationships
+        `,
+        sql<CountRow[]>`
+          select count(*) as total,
+            count(*) filter (where state = 'pending') as pending,
+            0 as submitted,
+            count(*) filter (where state = 'confirmed') as confirmed,
+            count(*) filter (where state in ('failed', 'reversed')) as failed
+          from managed_creator_allocation_records
         `,
         sql<{ open_reports: string | number }[]>`
           select 0 as open_reports
@@ -144,6 +185,9 @@ export function createAccessRepository(
         unlockCounts: toCounts(unlockRows[0]),
         providerEventCounts: providerCounts,
         subscriptionCounts: toCounts(subscriptionRows[0]),
+        organizationCounts: toCounts(organizationRows[0]),
+        managedCreatorCounts: toCounts(managedCreatorRows[0]),
+        enterpriseAllocationCounts: toCounts(enterpriseAllocationRows[0]),
         subscriptionProviderReadiness: subscriptionProvider?.launch_approved
           ? "launch_approved"
           : subscriptionProvider?.staging_required

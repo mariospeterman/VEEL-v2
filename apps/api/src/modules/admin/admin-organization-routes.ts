@@ -1,10 +1,11 @@
+import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { RegisterAdminRoutesOptions } from "./admin-route-auth.js";
 import { AdminRepositoryStateConflictError } from "./admin-repository.js";
 import { mutationRateLimit } from "../../shared/rate-limits.js";
 import { adminListInput, requireAdminAccess, requireAdminMutation } from "./admin-route-auth.js";
-import { validateFeatureFlagPatch, validateOrganizationKybAction, validateOrganizationMemberAction } from "./admin-route-validators.js";
-import type { AdminFeatureFlagPatchRequest, AdminOrganizationKybActionRequest, AdminOrganizationMemberActionRequest } from "./types.js";
+import { validateFeatureFlagPatch, validateOrganizationKybAction, validateOrganizationMemberAction, validateOrganizationProvision } from "./admin-route-validators.js";
+import type { AdminFeatureFlagPatchRequest, AdminOrganizationKybActionRequest, AdminOrganizationMemberActionRequest, AdminOrganizationProvisionRequest } from "./types.js";
 
 export function registerAdminOrganizationRoutes(
   app: FastifyInstance,
@@ -16,6 +17,40 @@ export function registerAdminOrganizationRoutes(
 
     const query = request.query as { cursor?: string };
     return reply.code(200).send(await options.adminRepository.listOrganizations(adminListInput(query)));
+  });
+
+  app.post("/v1/admin/organizations", mutationRateLimit("adminMutation"), async (request, reply) => {
+    const mutation = await requireAdminMutation<AdminOrganizationProvisionRequest>(
+      request,
+      reply,
+      options,
+      { action: "organization_provisioned" },
+      validateOrganizationProvision
+    );
+    if (!mutation) return reply;
+
+    try {
+      const body = {
+        name: mutation.body.name.trim(),
+        ownerHandle: mutation.body.ownerHandle.trim().toLowerCase(),
+        reason: mutation.body.reason.trim()
+      };
+      const organization = await options.adminRepository.provisionOrganization({
+        supabaseUserId: mutation.supabaseUserId,
+        body,
+        idempotencyKey: mutation.idempotencyKey,
+        requestHash: createHash("sha256").update(JSON.stringify(body)).digest("hex")
+      });
+      if (!organization) {
+        return reply.code(404).send({ code: "not_found", message: "Owner account was not found" });
+      }
+      return reply.code(201).send(organization);
+    } catch (error) {
+      if (error instanceof AdminRepositoryStateConflictError) {
+        return reply.code(409).send({ code: "conflict", message: error.message });
+      }
+      throw error;
+    }
   });
 
   app.patch("/v1/admin/organizations/:organizationId/kyb", mutationRateLimit("adminMutation"), async (request, reply) => {

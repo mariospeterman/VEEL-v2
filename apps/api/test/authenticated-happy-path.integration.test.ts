@@ -1,4 +1,4 @@
-import { createHmac, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { TextEncoder } from "node:util";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
@@ -1334,6 +1334,48 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       `;
       const buyerUserId = buyerRows[0]?.id;
       expect(buyerUserId).toBeTruthy();
+      const adminRepository = createPostgresAdminRepository(sql);
+      const provisionBody = {
+        name: `Provisioned Organization ${runId}`,
+        ownerHandle: creatorHandle,
+        reason: "Approved integration onboarding"
+      };
+      const provisionRequest = {
+        supabaseUserId: buyerSupabaseUserId,
+        body: provisionBody,
+        idempotencyKey: `organization-provision-${runId}`,
+        requestHash: createHash("sha256").update(JSON.stringify(provisionBody)).digest("hex")
+      };
+      const provisionedOrganization = await adminRepository.provisionOrganization(provisionRequest);
+      expect(provisionedOrganization).toMatchObject({
+        name: provisionBody.name,
+        state: "pending_kyb",
+        plan: "enterprise",
+        kybState: "not_started"
+      });
+      expect(await adminRepository.provisionOrganization(provisionRequest)).toEqual(provisionedOrganization);
+      await expect(adminRepository.provisionOrganization({
+        ...provisionRequest,
+        requestHash: "f".repeat(64)
+      })).rejects.toThrow(/Idempotency key/);
+      const provisionedOrganizationId = provisionedOrganization?.id;
+      expect(provisionedOrganizationId).toBeTruthy();
+      const provisionedMembershipRows = await sql<Array<{ id: string; role: string; state: string }>>`
+        select id, role, state from organization_memberships
+        where organization_id = ${provisionedOrganizationId!}
+      `;
+      expect(provisionedMembershipRows).toMatchObject([{ role: "owner", state: "invited" }]);
+      const provisionedMembershipId = provisionedMembershipRows[0]?.id;
+      await sql`
+        delete from notifications
+        where related_resource_type = 'organization_membership'
+          and related_resource_id = ${provisionedMembershipId!}
+      `;
+      await sql`delete from enterprise_action_receipts where organization_id = ${provisionedOrganizationId!}`;
+      await sql`delete from organization_memberships where organization_id = ${provisionedOrganizationId!}`;
+      await sql`delete from audit_events where subject_type = 'organization' and subject_id = ${provisionedOrganizationId!}`;
+      await sql`delete from organizations where id = ${provisionedOrganizationId!}`;
+
       await sql`
         insert into organizations (id, name, state, kyb_state)
         values (${seededOrganizationId}, ${`Integration Organization ${runId}`}, 'active', 'verified')
@@ -1347,6 +1389,15 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           'owner',
           'active',
           now()
+        )
+      `;
+      await sql`
+        insert into verification_records (
+          subject_type, subject_id, purpose, status, provider, provider_reference,
+          method, assurance_level, verified_at, reusable
+        ) values (
+          'organization', ${seededOrganizationId}, 'org_kyb', 'valid', 'manual',
+          ${`integration-org-kyb-${runId}`}, 'manual_review', 'business_verified', now(), false
         )
       `;
 
@@ -1442,6 +1493,133 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           }
         ]
       });
+
+      const managedCreatorInviteRequest = {
+        method: "POST" as const,
+        url: `/v1/organizations/${seededOrganizationId}/managed-creators`,
+        headers: authenticatedHeaders(`managed-creator-invite-${runId}`),
+        payload: {
+          creatorHandle,
+          permissions: ["revenue_allocation", "analytics_view"],
+          enterpriseManagementShareBps: 1_750,
+          settlementWalletId: linkedWallet.id
+        }
+      };
+      const managedCreatorInviteResponse = await app.inject(managedCreatorInviteRequest);
+      expect(managedCreatorInviteResponse.statusCode, managedCreatorInviteResponse.body).toBe(201);
+      expect(managedCreatorInviteResponse.json()).toMatchObject({
+        state: "invited",
+        agreementState: "proposed",
+        creatorShareBps: 8_250,
+        enterpriseManagementShareBps: 1_750,
+        organizationKybReady: true,
+        enterpriseEntitlementReady: true,
+        settlementWalletReady: true
+      });
+      const invitedRelationship = managedCreatorInviteResponse.json<{ id: string; agreementId: string }>();
+
+      const managedCreatorInviteReplay = await app.inject(managedCreatorInviteRequest);
+      expect(managedCreatorInviteReplay.statusCode, managedCreatorInviteReplay.body).toBe(201);
+      expect(managedCreatorInviteReplay.json()).toEqual(managedCreatorInviteResponse.json());
+      const managedCreatorInviteConflict = await app.inject({
+        ...managedCreatorInviteRequest,
+        payload: { ...managedCreatorInviteRequest.payload, enterpriseManagementShareBps: 2_000 }
+      });
+      expect(managedCreatorInviteConflict.statusCode, managedCreatorInviteConflict.body).toBe(409);
+
+      const managedCreatorAcceptResponse = await app.inject({
+        method: "POST",
+        url: `/v1/managed-creator-relationships/${invitedRelationship.id}/responses`,
+        headers: creatorAuthenticatedHeaders(`managed-creator-accept-${runId}`),
+        payload: { decision: "accept" }
+      });
+      expect(managedCreatorAcceptResponse.statusCode, managedCreatorAcceptResponse.body).toBe(200);
+      expect(managedCreatorAcceptResponse.json()).toMatchObject({
+        state: "active",
+        agreementState: "accepted",
+        viewerRole: "creator",
+        availableActions: expect.arrayContaining(["terminate_relationship"])
+      });
+
+      const initialAllocation = await sql<Array<{
+        enterprise_wallet: string;
+        enterprise_management_share_bps: number;
+      }>>`
+        select enterprise_wallet, enterprise_management_share_bps
+        from private.resolve_managed_creator_allocation(${seededCreatorUserId}, 'solana_devnet'::wallet_chain)
+      `;
+      expect(initialAllocation).toEqual([{
+        enterprise_wallet: walletAddress,
+        enterprise_management_share_bps: 1_750
+      }]);
+
+      const changedAgreementResponse = await app.inject({
+        method: "POST",
+        url: `/v1/managed-creator-relationships/${invitedRelationship.id}/agreements`,
+        headers: authenticatedHeaders(`managed-agreement-change-${runId}`),
+        payload: {
+          permissions: ["analytics_view", "revenue_allocation"],
+          enterpriseManagementShareBps: 2_000
+        }
+      });
+      expect(changedAgreementResponse.statusCode, changedAgreementResponse.body).toBe(201);
+      expect(changedAgreementResponse.json()).toMatchObject({ agreementState: "proposed" });
+      const changedAgreement = changedAgreementResponse.json<{ agreementId: string }>();
+
+      const unchangedAllocation = await sql<Array<{ enterprise_management_share_bps: number }>>`
+        select enterprise_management_share_bps
+        from private.resolve_managed_creator_allocation(${seededCreatorUserId}, 'solana_devnet'::wallet_chain)
+      `;
+      expect(unchangedAllocation[0]?.enterprise_management_share_bps).toBe(1_750);
+
+      const changedAgreementAcceptResponse = await app.inject({
+        method: "POST",
+        url: `/v1/managed-creator-relationships/${invitedRelationship.id}/agreements/${changedAgreement.agreementId}/responses`,
+        headers: creatorAuthenticatedHeaders(`managed-agreement-accept-${runId}`),
+        payload: { decision: "accept" }
+      });
+      expect(changedAgreementAcceptResponse.statusCode, changedAgreementAcceptResponse.body).toBe(200);
+      expect(changedAgreementAcceptResponse.json()).toMatchObject({
+        agreementState: "accepted",
+        creatorShareBps: 8_000,
+        enterpriseManagementShareBps: 2_000
+      });
+
+      const changedAllocation = await sql<Array<{ enterprise_management_share_bps: number }>>`
+        select enterprise_management_share_bps
+        from private.resolve_managed_creator_allocation(${seededCreatorUserId}, 'solana_devnet'::wallet_chain)
+      `;
+      expect(changedAllocation[0]?.enterprise_management_share_bps).toBe(2_000);
+
+      const managedReportingResponse = await app.inject({
+        method: "GET",
+        url: `/v1/managed-creator-relationships/${invitedRelationship.id}/reporting`,
+        headers: authenticatedHeaders(`managed-reporting-${runId}`)
+      });
+      expect(managedReportingResponse.statusCode, managedReportingResponse.body).toBe(200);
+      expect(managedReportingResponse.json()).toMatchObject({
+        totals: [],
+        financeBoundary: "confirmed_allocations_only_no_balance_no_withdrawal_no_payout_queue"
+      });
+
+      const managedCreatorTerminationResponse = await app.inject({
+        method: "POST",
+        url: `/v1/managed-creator-relationships/${invitedRelationship.id}/termination`,
+        headers: creatorAuthenticatedHeaders(`managed-creator-termination-${runId}`),
+        payload: { reason: "Integration journey completed" }
+      });
+      expect(managedCreatorTerminationResponse.statusCode, managedCreatorTerminationResponse.body).toBe(200);
+      expect(managedCreatorTerminationResponse.json()).toMatchObject({
+        state: "terminated",
+        agreementState: "terminated"
+      });
+
+      const managedAuthorityEvidence = await sql<Array<{ receipt_count: string; audit_count: string }>>`
+        select
+          (select count(*) from enterprise_action_receipts where relationship_id = ${invitedRelationship.id}) as receipt_count,
+          (select count(*) from audit_events where subject_type = 'managed_creator_relationship' and subject_id = ${invitedRelationship.id}) as audit_count
+      `;
+      expect(managedAuthorityEvidence[0]).toEqual({ receipt_count: "5", audit_count: "5" });
 
       await sql`
         update creator_monetisation_settings
@@ -4604,6 +4782,40 @@ async function cleanupRun(
            or followed_user_id in ${tx(userIds)}
       `;
     }
+    await tx`
+      delete from managed_creator_allocation_records
+      where relationship_id in (
+        select id from managed_creator_relationships where organization_id = ${input.seededOrganizationId}
+      )
+    `;
+    await tx`
+      delete from managed_creator_agreements
+      where relationship_id in (
+        select id from managed_creator_relationships where organization_id = ${input.seededOrganizationId}
+      )
+    `;
+    await tx`
+      delete from enterprise_action_receipts
+      where organization_id = ${input.seededOrganizationId}
+        or relationship_id in (
+          select id from managed_creator_relationships where organization_id = ${input.seededOrganizationId}
+        )
+        or membership_id in (
+          select id from organization_memberships where organization_id = ${input.seededOrganizationId}
+        )
+    `;
+    await tx`
+      delete from managed_creator_relationships
+      where organization_id = ${input.seededOrganizationId}
+    `;
+    await tx`
+      delete from organization_settlement_wallets
+      where organization_id = ${input.seededOrganizationId}
+    `;
+    await tx`
+      delete from verification_records
+      where subject_type = 'organization' and subject_id = ${input.seededOrganizationId}
+    `;
     await tx`
       delete from tier_waivers
       where subject_type = 'organization'

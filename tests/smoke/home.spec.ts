@@ -7,6 +7,8 @@ const e2eToken = "veel-e2e-token";
 const firstConversationId = "00000000-0000-4000-8000-000000000081";
 const secondConversationId = "00000000-0000-4000-8000-000000000082";
 const unavailableConversationId = "00000000-0000-4000-8000-000000000083";
+const organizationId = "00000000-0000-4000-8000-000000000140";
+const managedRelationshipId = "00000000-0000-4000-8000-000000000143";
 let apiServer: Server;
 
 test.beforeAll(async () => {
@@ -124,6 +126,27 @@ test("renders the canonical protected app home shell through /app", async ({ con
   await expect(page.getByRole("link", { name: "WeVid app home" }).first()).toBeVisible();
   await expect(page.getByRole("heading", { name: /Your feed|Enter WeVid/ }).first()).toBeVisible();
   await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
+});
+
+test("renders the provider-first Enterprise workspace without custody or payout controls", async ({ context, page }) => {
+  await addE2eCookie(context);
+  await page.goto("/app/studio", { waitUntil: "domcontentloaded", timeout: 45_000 });
+
+  await expect(page.getByRole("heading", { name: "Studio / Enterprise capabilities" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Teams and managed creators" })).toBeVisible();
+  await expect(page.getByText("Enterprise active")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Invite team member" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Invite creator" })).toBeVisible();
+  await expect(page.getByText("Confirmed allocation reporting", { exact: true })).toBeVisible();
+  await expect(page.getByText("2 payments · creator 8 USDC · management 2 USDC")).toBeVisible();
+  await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /withdraw|payout|cash out/i })).toHaveCount(0);
+
+  const layout = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth
+  }));
+  expect(layout.scrollWidth).toBe(layout.clientWidth);
 });
 
 test("retries Realtime token acquisition after a transient API failure", async ({ context, page }) => {
@@ -483,6 +506,60 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
     return;
   }
 
+  if (method === "GET" && url.pathname === "/v1/organizations") {
+    sendJson(response, 200, { items: [organizationDashboard()], nextCursor: null });
+    return;
+  }
+
+  if (method === "GET" && url.pathname === `/v1/organizations/${organizationId}/members`) {
+    sendJson(response, 200, { items: organizationMembers() });
+    return;
+  }
+
+  if (method === "POST" && url.pathname === `/v1/organizations/${organizationId}/members`) {
+    if (!hasIdempotencyKey(request)) {
+      sendJson(response, 400, { message: "Idempotency-Key header is required" });
+      return;
+    }
+    sendJson(response, 201, organizationMembers()[1]);
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/v1/managed-creator-relationships") {
+    sendJson(response, 200, { items: [managedCreatorRelationship()] });
+    return;
+  }
+
+  if (method === "GET" && url.pathname === `/v1/managed-creator-relationships/${managedRelationshipId}/reporting`) {
+    sendJson(response, 200, {
+      relationshipId: managedRelationshipId,
+      organizationId,
+      creatorUserId: user().id,
+      totals: [{
+        currency: "USDC",
+        confirmedPaymentCount: 2,
+        creatorSideProceedsMinor: 10_000_000,
+        creatorNetMinor: 8_000_000,
+        enterpriseManagementMinor: 2_000_000
+      }],
+      generatedAt: "2026-08-16T10:00:00.000Z",
+      financeBoundary: "confirmed_allocations_only_no_balance_no_withdrawal_no_payout_queue"
+    });
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/v1/wallets") {
+    sendJson(response, 200, { items: [{
+      id: "00000000-0000-4000-8000-000000000145",
+      provider: "wallet_adapter",
+      address: "11111111111111111111111111111112",
+      chain: "solana_devnet",
+      isPrimary: true,
+      linkedAt: "2026-08-16T10:00:00.000Z"
+    }] });
+    return;
+  }
+
   if (method === "GET" && url.pathname === "/v1/subscriptions/plans") {
     sendJson(response, 200, { items: subscriptionPlans() });
     return;
@@ -647,6 +724,98 @@ function platformAccess() {
     },
     tiers,
     policyBoundary: "platform_tiers_buy_software_and_public_media_allowance_never_social_priority"
+  };
+}
+
+function organizationDashboard() {
+  return {
+    organization: {
+      id: "00000000-0000-4000-8000-000000000141",
+      organizationId,
+      name: "Creator House",
+      state: "active",
+      plan: "enterprise",
+      kybState: "verified",
+      role: "owner",
+      membershipState: "active",
+      createdAt: "2026-08-16T09:00:00.000Z",
+      joinedAt: "2026-08-16T09:05:00.000Z"
+    },
+    governance: {
+      kybState: "verified",
+      memberCount: 2,
+      activeMemberCount: 2,
+      tierWaiverState: "active",
+      supportState: "priority"
+    },
+    capabilities: {
+      rbacEnabled: true,
+      teamPublishingEnabled: true,
+      consolidatedReportingEnabled: true,
+      complianceExportsEnabled: true
+    },
+    rolePermissions: [
+      { key: "manage_members", label: "Manage members", allowed: true, reason: "allowed" },
+      { key: "publish_team_content", label: "Publish team content", allowed: true, reason: "allowed" },
+      { key: "view_consolidated_reporting", label: "View consolidated reporting", allowed: true, reason: "allowed" },
+      { key: "manage_compliance_exports", label: "Manage compliance exports", allowed: true, reason: "allowed" }
+    ],
+    financeBoundary: "no_custody_no_payout_queue",
+    notices: []
+  };
+}
+
+function organizationMembers() {
+  return [
+    {
+      id: "00000000-0000-4000-8000-000000000141",
+      organizationId,
+      userId: sessionState().user.id,
+      handle: sessionState().user.handle,
+      displayName: sessionState().user.displayName,
+      role: "owner",
+      state: "active",
+      invitedByUserId: null,
+      joinedAt: "2026-08-16T09:05:00.000Z",
+      createdAt: "2026-08-16T09:00:00.000Z",
+      isCurrentUser: true
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000142",
+      organizationId,
+      userId: user().id,
+      handle: user().handle,
+      displayName: user().displayName,
+      role: "member",
+      state: "active",
+      invitedByUserId: sessionState().user.id,
+      joinedAt: "2026-08-16T09:30:00.000Z",
+      createdAt: "2026-08-16T09:25:00.000Z",
+      isCurrentUser: false
+    }
+  ];
+}
+
+function managedCreatorRelationship() {
+  return {
+    id: managedRelationshipId,
+    organizationId,
+    organizationName: "Creator House",
+    creatorUserId: user().id,
+    creatorHandle: user().handle,
+    state: "active",
+    agreementId: "00000000-0000-4000-8000-000000000144",
+    agreementVersion: 2,
+    agreementState: "accepted",
+    permissions: ["analytics_view", "revenue_allocation"],
+    creatorShareBps: 8_000,
+    enterpriseManagementShareBps: 2_000,
+    organizationKybReady: true,
+    enterpriseEntitlementReady: true,
+    settlementWalletReady: true,
+    viewerRole: "organization_member",
+    organizationRole: "owner",
+    availableActions: ["propose_agreement", "terminate_relationship"]
   };
 }
 

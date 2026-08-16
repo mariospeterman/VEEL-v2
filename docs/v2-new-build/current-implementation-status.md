@@ -37,13 +37,13 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `2cc1712` (Launch 07, PR #48) |
-| Active slice | Launch 08 — Recurring platform subscriptions and creator memberships |
-| Branch | `codex/launch-08-recurring-memberships` |
-| Pull request | #49 |
+| Merged baseline | `main` at `c7717a5` (Launch 08, PR #49) |
+| Active slice | Launch 09 — Enterprise managed creators |
+| Branch | `codex/launch-09-enterprise-managed-creators` |
+| Pull request | #50 |
 | State | `CODE_COMPLETE_PROVIDER_BLOCKED` |
-| Slice blockers | Local code, migration, build, unit, provider-boundary, and real-Postgres integration proof are complete. Real Solana devnet program/RPC/mint proof, a launch-approved collector signer, funded test wallets, and target-wallet authorization/revocation evidence remain pre-production gates. Recurring sales stay fail-closed until that evidence exists. |
-| Next unfinished slice | Launch 09 — Enterprise managed creators |
+| Slice blockers | Enterprise onboarding must remain fail-closed until organization authority, bilateral creator consent, KYB/entitlement readiness, exact management allocation, revocation, audit, and browser/real-Postgres proof converge on one backend-owned path. Real KYB/provider and Enterprise contract evidence remain pre-production gates. |
+| Next unfinished slice | Launch 10 — Frontend system, accessibility, cross-browser, and PWA completion |
 
 Current human/provider gates do not block this process slice: shared staging credentials,
 provider dashboard/webhook/domain configuration, migration `0091` shared-project proof,
@@ -51,6 +51,16 @@ production hosting/DNS approval, mainnet wallet approval, and unsettled legal/co
 decisions remain release gates. Provider-dependent product work may reach
 `CODE_COMPLETE_PROVIDER_BLOCKED` and merge only while the production path remains explicit
 and fail-closed.
+
+Launch 09 local acceptance now includes migration `0099`, audited/idempotent organization
+provisioning, explicit owner/team/creator consent, normalized organization-KYB authorization,
+independent Enterprise entitlement, versioned managed-creator agreements, ownership-proven
+settlement-wallet resolution, exact creator/management basis-point allocation, historical
+confirmed-allocation reporting, prospective termination, admin operations counts, and Studio
+management UI. Migration `0099` was applied to local Supabase/Postgres and passed rollback/reapply
+proof; the real-Postgres journey and desktop/mobile production-preview browser proof are green.
+Real KYB callbacks, approved commercial evidence, and Solana devnet allocation settlement remain
+`CODE_COMPLETE_PROVIDER_BLOCKED` pre-production gates.
 
 ## Launch Baseline And Architecture Lock
 
@@ -69,12 +79,12 @@ and fail-closed.
 
 | Area | Verified state | Launch blocker |
 | --- | --- | --- |
-| Architecture and data authority | Substantial and merged through migration `0091`; server authority, RLS, idempotency, and provider adapters are present. | Migration `0091` and the identity/session flow still require isolated Supabase staging proof. |
+| Architecture and data authority | Substantial and implemented through migration `0099`; server authority, RLS, idempotency, and provider adapters are present. | Shared staging migration and identity/session/provider proof still require isolated Supabase staging evidence. |
 | Auth, wallet, age, and profile | Canonical opaque application sessions, explicit recovery exchange, read-only session GET, three-step onboarding, minimal handle profile, provisional privacy, age activation, multi-device session scope, and fail-closed provider boundaries are merged. | Privy and age-provider real staging evidence and distributed Redis environment proof remain absent. |
 | One-time payments and access | Backend-owned SOL and supported one-time USDC intent, settlement, receipt, and entitlement paths exist. | Mainnet/provider evidence, operational reconciliation, and full consumer journey proof remain required. |
 | Media and live | Bunny/Livepeer boundaries and quarantine/release authorities exist. | Automated moderation is not launch-approved; adult live is disabled; provider staging evidence is absent. |
 | Recurring subscriptions | Official recurring-delegation transaction construction and verification, first-payment activation, exact-split worker collection, renewal/grace/revocation handling, cancellation, creator membership offers, consumer Join UX, admin readiness, and staging proof tooling are implemented locally. | Sales remain disabled until the official on-chain program, collector signer, supported mint, devnet authorization/collection signatures, and provider dashboard evidence are configured and proven. |
-| Frontend | Broad app-shell, direct provider-first entry, onboarding, creation, access, admin, canonical Home/Bits feeds, messages/notifications with reconnecting Realtime invalidation, and desktop/mobile browser smoke surfaces exist. | Real Supabase/VAPID proof, full accessibility/cross-browser QA, and the final visual system remain unfinished. |
+| Frontend | Broad app-shell, direct provider-first entry, onboarding, creation, access, admin, canonical Home/Bits feeds, messages/notifications with reconnecting Realtime invalidation, Enterprise team/managed-creator management, and desktop/mobile browser smoke surfaces exist. | Real Supabase/VAPID/provider proof, full accessibility/cross-browser QA, and the final visual system remain unfinished. |
 | Delivery and operations | Build, migration, security, preview, staging, and production preflight workflows exist. | No workflow deploys an artifact. Hosting, immutable promotion, telemetry, alerts, backup/restore, and rollback evidence belong to Slice 11. |
 
 ## Unsafe Capability Flags
@@ -108,7 +118,7 @@ Public product copy and API metadata use WeVid and Support. Technical package sc
 - OpenAPI, route map, and Fastify route registration are checked for route drift. The canonical follow endpoints are present only with their migration, repository, abuse/idempotency controls, feed impact, and real-Postgres/browser proof; no contract-only current-viewer alias is restored because the session endpoint remains that boundary.
 - Fastify API bootstrap with route registration, dependency construction, shared app-level Postgres client construction, close-hook lifecycle, env validation, raw-body support for signed webhooks, global rate limit, OpenAPI plugin, and Supabase boundary plugin.
 - Shared backend helpers now cover the app-level Postgres client, explicit transaction boundary, common Idempotency-Key parsing/validation, stable idempotency request hashing, route-specific mutation rate-limit presets, and the first admin mutation route-policy guard for migrated route utilities.
-- Root Supabase CLI project is initialized with committed `supabase/config.toml`, repo-local Supabase CLI pinned to `2.113.0`, and `supabase/migrations` linked to the canonical `packages/database/migrations` SQL files. Local/CI startup runs through the repository wrapper, which constructs an ephemeral workdir containing forward migrations only; canonical `*.down.sql` rollback files are never presented to the Supabase migration runner. Repository history now includes migrations through `0098`; `0098` was applied and exercised against an isolated local Supabase/Postgres stack. The shared-project migration history and pending staging applications remain release blockers and must use approved migration procedures. Generic application `DATABASE_URL` is never used by remote migration commands.
+- Root Supabase CLI project is initialized with committed `supabase/config.toml`, repo-local Supabase CLI pinned to `2.113.0`, and `supabase/migrations` linked to the canonical `packages/database/migrations` SQL files. Local/CI startup runs through the repository wrapper, which constructs an ephemeral workdir containing forward migrations only; canonical `*.down.sql` rollback files are never presented to the Supabase migration runner. Repository history now includes migrations through `0099`; `0099` was applied and exercised against an isolated local Supabase/Postgres stack with rollback/reapply proof. The shared-project migration history and pending staging applications remain release blockers and must use approved migration procedures. Generic application `DATABASE_URL` is never used by remote migration commands.
 - Opaque application-session verification boundary, explicit Supabase recovery verification/exchange, web recovery confirmation route, minimal profile mutation UI, external wallet challenge handoff UI, configured-session redirects, backend app-access redirects for protected app-shell pages, and backend session/profile readiness projections. Ordinary API transports send only the HttpOnly application cookie; browser Supabase credentials are confined to recovery exchange. Service-role and secret keys stay server-side.
 - Age provider waterfall boundary, `/age` provider-session start UI, and normalized webhook/test paths, with unavailable providers failing closed when not configured. Local/test-only mock age and creator verification adapters exist behind explicit mock guards for end-to-end development; production provider paths still require real provider credentials, webhook secrets, callback allowlists, and provider dashboard configuration.
 - External wallet challenge/link/revoke/status flow with backend signature verification and replay/expiry checks; landing onboarding and `/app/wallet` can now coordinate Solana wallet-adapter challenge signing while keeping wallet truth server-side. The landing wallet chooser filters to intentionally supported Solana wallet surfaces and the Privy embedded-wallet button remains disabled unless its runtime env is configured; onramp provider boundary fails closed unless configured.
@@ -180,7 +190,7 @@ The controlling branch evidence is recorded in `production-branch-inventory.md`.
 
 ### P1 Universal Account, Plans, Memberships, And Usage
 
-- [x] Keep one account and profile; model app access, SFW/adult publishing, earning, and identity readiness as server-owned capabilities. Live, buying, memberships, organization, and paid-plan capability composition still requires completion.
+- [x] Keep one account and profile; model app access, SFW/adult publishing, earning, identity readiness, organization roles, and managed-creator consent as independent server-owned capabilities.
 - [x] Separate WeVid platform plans from `Join @handle` Profile Membership in schema, contracts, API projections, consumer copy, and tests. Profile Membership readiness is not a Studio capability.
 - [x] Implement backend-configurable Free, Plus, Ultra, Studio, and Enterprise policy projection without browser-owned commercial truth; historical persisted labels remain compatibility data and paid provider plans remain fail-closed until launch-approved configuration.
 - [x] Meter only free public long-form VOD and public live delivery through server-owned idempotent sessions/heartbeats; exclude Bits, previews, paid unlocks, joined-profile media, paid events, own uploads, and promotional excerpts.

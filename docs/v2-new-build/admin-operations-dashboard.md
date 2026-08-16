@@ -117,6 +117,8 @@ Role permissions should be explicit in code and documented as policy tests.
 
 ## Dashboard Overview
 
+Launch 09 adds organization, managed-creator relationship, and confirmed management-allocation counts to the summary. These are operational state counts only; they do not represent balances, withdrawals, escrow, or a payout queue. Organization KYB and Enterprise entitlement remain independent gates, and operations must see pending invitations/proposals plus failed or terminated relationships without raw provider evidence.
+
 The admin landing dashboard should show:
 
 - GMV, platform revenue, creator earnings, referral commissions

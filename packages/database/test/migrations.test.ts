@@ -1007,4 +1007,20 @@ describe("database migrations", () => {
     expect(downSql).toContain("drop trigger if exists payment_intents_explicit_checkout_consent");
     expect(downSql).toContain("0096 rollback refused");
   });
+
+  it("makes Enterprise actions replay-safe and normalized KYB authoritative", () => {
+    const sql = readMigration("0099_enterprise_managed_creator_authority.sql");
+    const downSql = readMigration("0099_enterprise_managed_creator_authority.down.sql");
+
+    expect(sql).toContain("create table enterprise_action_receipts");
+    expect(sql).toContain("unique (actor_user_id, action, idempotency_key)");
+    expect(sql).toContain("revoke all on table enterprise_action_receipts from public, anon, authenticated");
+    expect(sql).toContain("verification.subject_type = 'organization'");
+    expect(sql).toContain("verification.purpose = 'org_kyb'");
+    expect(sql).toContain("verification.status = 'valid'");
+    expect(sql).not.toContain("organization.kyb_state = 'verified'");
+    expect(downSql).toContain("organization.kyb_state = 'verified'");
+    expect(downSql).toContain("drop table if exists enterprise_action_receipts");
+    expect(sql).not.toMatch(/creator_balance|withdrawal_queue|payout_queue|escrow|private_key|seed_phrase|mnemonic/i);
+  });
 });

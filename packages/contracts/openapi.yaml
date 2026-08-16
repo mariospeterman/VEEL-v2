@@ -916,6 +916,23 @@ paths:
                   items: { type: array, items: { $ref: "#/components/schemas/ManagedCreatorRelationship" } }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/managed-creator-relationships/{relationshipId}/reporting:
+    get:
+      operationId: getManagedCreatorReporting
+      tags: [Managed Creators]
+      summary: Read confirmed historical allocation reporting as an authorized relationship party
+      parameters:
+        - name: relationshipId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Confirmed managed-creator allocation totals
+          content: { application/json: { schema: { $ref: "#/components/schemas/ManagedCreatorReporting" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/organizations/{organizationId}/managed-creators:
     post:
       operationId: inviteManagedCreator
@@ -2108,6 +2125,103 @@ paths:
         "200": { $ref: "#/components/responses/OrganizationDashboardPage" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/organizations/{organizationId}/members:
+    get:
+      operationId: listOrganizationMembers
+      tags: [Organizations]
+      summary: List member-safe team roles for an active organization member
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Organization members
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/OrganizationMember" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    post:
+      operationId: inviteOrganizationMember
+      tags: [Organizations]
+      summary: Invite an existing universal account into an Enterprise team role
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/InviteOrganizationMemberRequest" } } }
+      responses:
+        "201":
+          description: Organization member invitation
+          content: { application/json: { schema: { $ref: "#/components/schemas/OrganizationMember" } } }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/organization-memberships/{membershipId}/responses:
+    post:
+      operationId: respondToOrganizationMembership
+      tags: [Organizations]
+      summary: Accept or decline an Enterprise team invitation as the invited user
+      parameters:
+        - name: membershipId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/OrganizationMembershipDecision" } } }
+      responses:
+        "200":
+          description: Updated organization membership
+          content: { application/json: { schema: { $ref: "#/components/schemas/OrganizationMember" } } }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/organizations/{organizationId}/members/{membershipId}:
+    patch:
+      operationId: updateOrganizationMember
+      tags: [Organizations]
+      summary: Update a non-owner Enterprise team role as the active organization owner
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: membershipId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateOrganizationMemberRequest" } } }
+      responses:
+        "200":
+          description: Updated organization member
+          content: { application/json: { schema: { $ref: "#/components/schemas/OrganizationMember" } } }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/admin/ops/summary:
     get:
       operationId: getAdminOpsSummary
@@ -2574,6 +2688,19 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/AdminOrganizationPage" }
         "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      operationId: provisionAdminOrganization
+      tags: [Admin]
+      summary: Provision an Enterprise organization with an invited existing-account owner
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/AdminOrganizationProvision"
+      responses:
+        "201": { $ref: "#/components/responses/AdminOrganization" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /v1/admin/organizations/{organizationId}/kyb:
     patch:
       operationId: updateAdminOrganizationKyb
@@ -2854,6 +2981,7 @@ components:
     AdminRefundDisputeAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminRefundDisputeActionRequest" } } } }
     AdminDataRequestAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminDataRequestActionRequest" } } } }
     AdminOrganizationKybAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOrganizationKybActionRequest" } } } }
+    AdminOrganizationProvision: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOrganizationProvisionRequest" } } } }
     AdminOrganizationMemberAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOrganizationMemberActionRequest" } } } }
     AdminFeatureFlagPatch: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminFeatureFlagPatchRequest" } } } }
     AdminLiveRoomSuspension: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminLiveRoomSuspensionRequest" } } } }
@@ -3686,7 +3814,7 @@ components:
       enum: [profile_readiness_view, monetisation_settings_manage, content_manage, analytics_view, revenue_allocation]
     ManagedCreatorRelationship:
       type: object
-      required: [id, organizationId, organizationName, creatorUserId, creatorHandle, state, agreementId, agreementVersion, agreementState, permissions, creatorShareBps, enterpriseManagementShareBps, organizationKybReady, enterpriseEntitlementReady, settlementWalletReady]
+      required: [id, organizationId, organizationName, creatorUserId, creatorHandle, state, agreementId, agreementVersion, agreementState, permissions, creatorShareBps, enterpriseManagementShareBps, organizationKybReady, enterpriseEntitlementReady, settlementWalletReady, viewerRole, organizationRole, availableActions]
       properties:
         id: { type: string, format: uuid }
         organizationId: { type: string, format: uuid }
@@ -3703,6 +3831,14 @@ components:
         organizationKybReady: { type: boolean }
         enterpriseEntitlementReady: { type: boolean }
         settlementWalletReady: { type: boolean }
+        viewerRole: { type: string, enum: [creator, organization_member] }
+        organizationRole: { type: string, enum: [owner, admin, member, viewer], nullable: true }
+        availableActions:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: [accept_relationship, decline_relationship, propose_agreement, accept_agreement, reject_agreement, terminate_relationship]
     InviteManagedCreatorRequest:
       type: object
       required: [creatorHandle, permissions, enterpriseManagementShareBps]
@@ -3735,6 +3871,25 @@ components:
       required: [reason]
       properties:
         reason: { type: string, minLength: 1, maxLength: 240 }
+    ManagedCreatorAllocationTotal:
+      type: object
+      required: [currency, confirmedPaymentCount, creatorSideProceedsMinor, creatorNetMinor, enterpriseManagementMinor]
+      properties:
+        currency: { type: string, enum: [SOL, USDC] }
+        confirmedPaymentCount: { type: integer, minimum: 0 }
+        creatorSideProceedsMinor: { type: integer, minimum: 0, maximum: 9007199254740991 }
+        creatorNetMinor: { type: integer, minimum: 0, maximum: 9007199254740991 }
+        enterpriseManagementMinor: { type: integer, minimum: 0, maximum: 9007199254740991 }
+    ManagedCreatorReporting:
+      type: object
+      required: [relationshipId, organizationId, creatorUserId, totals, generatedAt, financeBoundary]
+      properties:
+        relationshipId: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        creatorUserId: { type: string, format: uuid }
+        totals: { type: array, items: { $ref: "#/components/schemas/ManagedCreatorAllocationTotal" } }
+        generatedAt: { type: string, format: date-time }
+        financeBoundary: { type: string, enum: [confirmed_allocations_only_no_balance_no_withdrawal_no_payout_queue] }
     PlaybackResource:
       type: object
       required: [state, url, provider]
@@ -4987,6 +5142,38 @@ components:
           type: array
           items: { $ref: "#/components/schemas/OrganizationDashboard" }
         nextCursor: { type: string, nullable: true }
+    OrganizationMember:
+      type: object
+      required: [id, organizationId, userId, handle, role, state, joinedAt, createdAt, isCurrentUser]
+      properties:
+        id: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        handle: { type: string }
+        displayName: { type: string, nullable: true }
+        role: { type: string, enum: [owner, admin, member, viewer] }
+        state: { type: string, enum: [invited, active, suspended, removed] }
+        invitedByUserId: { type: string, format: uuid, nullable: true }
+        joinedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        isCurrentUser: { type: boolean }
+    InviteOrganizationMemberRequest:
+      type: object
+      required: [handle, role]
+      properties:
+        handle: { type: string, minLength: 1, maxLength: 64 }
+        role: { type: string, enum: [admin, member, viewer] }
+    OrganizationMembershipDecision:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [accept, decline] }
+    UpdateOrganizationMemberRequest:
+      type: object
+      required: [role, state]
+      properties:
+        role: { type: string, enum: [admin, member, viewer] }
+        state: { type: string, enum: [active, suspended, removed] }
     OrganizationMembership:
       type: object
       required: [id, organizationId, name, state, plan, role, membershipState, createdAt]
@@ -5061,7 +5248,7 @@ components:
           items: { $ref: "#/components/schemas/OrganizationNotice" }
     AdminOpsSummary:
       type: object
-      required: [providerHealth, queueHealth, workerQueues, openReports, paymentCounts, unlockCounts, providerEventCounts, subscriptionCounts, subscriptionProviderReadiness]
+      required: [providerHealth, queueHealth, workerQueues, openReports, paymentCounts, unlockCounts, providerEventCounts, subscriptionCounts, subscriptionProviderReadiness, organizationCounts, managedCreatorCounts, enterpriseAllocationCounts]
       properties:
         providerHealth: { type: string, enum: [ok, degraded, down] }
         queueHealth: { type: string, enum: [ok, degraded, down] }
@@ -5074,6 +5261,9 @@ components:
         providerEventCounts: { $ref: "#/components/schemas/AdminStateCounts" }
         subscriptionCounts: { $ref: "#/components/schemas/AdminStateCounts" }
         subscriptionProviderReadiness: { type: string, enum: [not_configured, staging_required, launch_approved] }
+        organizationCounts: { $ref: "#/components/schemas/AdminStateCounts" }
+        managedCreatorCounts: { $ref: "#/components/schemas/AdminStateCounts" }
+        enterpriseAllocationCounts: { $ref: "#/components/schemas/AdminStateCounts" }
     AdminWorkerQueueHealth:
       type: object
       required: [name, pendingCount, processingCount, failedCount, deadLetterCount, oldestPendingAt]
@@ -5583,6 +5773,13 @@ components:
       required: [kybState, reason]
       properties:
         kybState: { type: string, enum: [not_started, pending, verified, rejected] }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+    AdminOrganizationProvisionRequest:
+      type: object
+      required: [name, ownerHandle, reason]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        ownerHandle: { type: string, pattern: "^[a-zA-Z0-9_]{3,32}$" }
         reason: { type: string, minLength: 3, maxLength: 500 }
     AdminOrganizationMemberActionRequest:
       type: object

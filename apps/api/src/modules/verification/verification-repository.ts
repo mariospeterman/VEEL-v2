@@ -36,6 +36,9 @@ interface VerificationRecordRow {
 export function createPostgresVerificationRepository(database?: string | PostgresSql): VerificationRepository {
   if (!database) {
     return {
+      async authorizeOrganizationVerification() {
+        throw new VerificationRepositoryConfigurationError();
+      },
       async createPendingSession() {
         throw new VerificationRepositoryConfigurationError();
       },
@@ -60,6 +63,23 @@ export function createPostgresVerificationRepository(database?: string | Postgre
   const { sql, ownsClient } = resolvePostgresClient(database);
 
   return {
+    async authorizeOrganizationVerification(input) {
+      const rows = await sql<Array<{ allowed: boolean }>>`
+        select exists (
+          select 1
+          from organization_memberships membership
+          join users actor on actor.id = membership.user_id
+          where actor.supabase_user_id = ${input.supabaseUserId}
+            and membership.organization_id = ${input.organizationId}
+            and membership.state = 'active'
+            and (
+              ${input.access} = 'read'
+              or membership.role in ('owner', 'admin')
+            )
+        ) as allowed
+      `;
+      return rows[0]?.allowed === true;
+    },
     async createPendingSession(input) {
       const subject = await resolveSessionSubject(sql, input);
       const providerSession = input.providerSession;
@@ -219,6 +239,13 @@ export function createPostgresVerificationRepository(database?: string | Postgre
       return rows[0] ? toRecord(rows[0]) : null;
     },
     async resolveCapabilities(input) {
+      if (input.organizationId && !(await this.authorizeOrganizationVerification({
+        supabaseUserId: input.supabaseUserId,
+        organizationId: input.organizationId,
+        access: "read"
+      }))) {
+        throw new Error("ORGANIZATION_ACCESS_REQUIRED");
+      }
       const [ageAccess, adultPublisherEligibility, creatorKyc, orgKyb] = await Promise.all([
         this.findLatestUserVerification({
           supabaseUserId: input.supabaseUserId,
@@ -404,6 +431,7 @@ async function resolveSessionSubject(
       where u.supabase_user_id = ${input.supabaseUserId}
         and om.organization_id = ${input.organizationId}
         and om.state = 'active'
+        and om.role in ('owner', 'admin')
       limit 1
     `;
 

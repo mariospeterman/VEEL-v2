@@ -61,6 +61,9 @@ import type {
   NotificationPage,
   NotificationPushConfig,
   OrganizationDashboardPage,
+  OrganizationMember,
+  ManagedCreatorRelationship,
+  ManagedCreatorReporting,
   PlatformAccess,
   PerformerConsentRequest,
   SessionState,
@@ -219,6 +222,26 @@ export async function getMcpConsentRequest(requestId: string): Promise<ApiResult
 
 export async function getOrganizationDashboards(): Promise<ApiResult<OrganizationDashboardPage>> {
   return getJson<OrganizationDashboardPage>("/v1/organizations");
+}
+
+export async function getOrganizationMembers(
+  organizationId: string
+): Promise<ApiResult<{ items: OrganizationMember[] }>> {
+  return getJson<{ items: OrganizationMember[] }>(
+    `/v1/organizations/${encodeURIComponent(organizationId)}/members`
+  );
+}
+
+export async function getManagedCreatorRelationships(): Promise<ApiResult<{ items: ManagedCreatorRelationship[] }>> {
+  return getJson<{ items: ManagedCreatorRelationship[] }>("/v1/managed-creator-relationships");
+}
+
+export async function getManagedCreatorReporting(
+  relationshipId: string
+): Promise<ApiResult<ManagedCreatorReporting>> {
+  return getJson<ManagedCreatorReporting>(
+    `/v1/managed-creator-relationships/${encodeURIComponent(relationshipId)}/reporting`
+  );
 }
 
 export async function getVerificationStatus(): Promise<ApiResult<VerificationStatus>> {

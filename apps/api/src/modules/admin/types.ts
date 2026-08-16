@@ -27,6 +27,8 @@ export type AdminOrganizationMember = components["schemas"]["AdminOrganizationMe
 export type AdminFeatureFlag = components["schemas"]["AdminFeatureFlag"];
 export type AdminOrganizationKybActionRequest =
   components["schemas"]["AdminOrganizationKybActionRequest"];
+export type AdminOrganizationProvisionRequest =
+  components["schemas"]["AdminOrganizationProvisionRequest"];
 export type AdminLiveRoom = components["schemas"]["AdminLiveRoom"];
 export type AdminMediaAsset = components["schemas"]["AdminMediaAsset"];
 export type AdminAgeCheck = components["schemas"]["AdminAgeCheck"];
@@ -142,6 +144,12 @@ export interface AdminRepository {
   listPartnerCampaigns(input: { cursor?: string }): Promise<AdminPage<AdminPartnerCampaign>>;
   listTierWaivers(input: { cursor?: string }): Promise<AdminPage<AdminTierWaiver>>;
   listOrganizations(input: { cursor?: string }): Promise<AdminPage<AdminOrganization>>;
+  provisionOrganization(input: {
+    supabaseUserId: string;
+    body: AdminOrganizationProvisionRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<AdminOrganization | null>;
   updateOrganizationKyb(input: {
     supabaseUserId: string;
     organizationId: string;

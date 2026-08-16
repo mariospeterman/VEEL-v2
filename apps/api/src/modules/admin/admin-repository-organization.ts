@@ -13,7 +13,7 @@ import {
 
 export function createOrganizationRepository(
   sql: postgres.Sql
-): Pick<AdminRepository, "listOrganizations" | "updateOrganizationKyb" | "listOrganizationMembers" | "updateOrganizationMember"> {
+): Pick<AdminRepository, "listOrganizations" | "provisionOrganization" | "updateOrganizationKyb" | "listOrganizationMembers" | "updateOrganizationMember"> {
   return {
     async listOrganizations(input) {
       const rows = await sql<OrganizationRow[]>`
@@ -25,6 +25,108 @@ export function createOrganizationRepository(
       `;
 
       return page(rows, toOrganization);
+    },
+    async provisionOrganization(input) {
+      const rows = await sql.begin(async (transaction): Promise<OrganizationRow[]> => {
+        const parties = await transaction<Array<{ actor_id: string; owner_id: string }>>`
+          select actor.id as actor_id, owner.id as owner_id
+          from users actor
+          join profiles owner_profile on lower(owner_profile.handle) = lower(${input.body.ownerHandle})
+          join users owner on owner.id = owner_profile.user_id and owner.state = 'active'
+          where actor.supabase_user_id = ${input.supabaseUserId}
+          limit 1
+        `;
+        const party = parties[0];
+        if (!party) return [];
+
+        await transaction`
+          select pg_advisory_xact_lock(
+            hashtextextended(${`enterprise-action:${party.actor_id}:organization_provision:${input.idempotencyKey}`}, 0)
+          )
+        `;
+        const receipts = await transaction<Array<{ request_hash: string; organization_id: string | null }>>`
+          select request_hash, organization_id
+          from enterprise_action_receipts
+          where actor_user_id = ${party.actor_id}
+            and action = 'organization_provision'
+            and idempotency_key = ${input.idempotencyKey}
+          limit 1
+        `;
+        const receipt = receipts[0];
+        if (receipt) {
+          if (receipt.request_hash !== input.requestHash) {
+            throw new AdminRepositoryStateConflictError("Idempotency key was already used for a different organization request");
+          }
+          if (!receipt.organization_id) return [];
+          return transaction<OrganizationRow[]>`
+            select id, name, state, plan, kyb_state, created_at
+            from organizations where id = ${receipt.organization_id} limit 1
+          `;
+        }
+
+        const duplicates = await transaction<Array<{ id: string }>>`
+          select id from organizations
+          where lower(name) = lower(${input.body.name}) and state <> 'archived'
+          limit 1
+        `;
+        if (duplicates[0]) {
+          throw new AdminRepositoryStateConflictError("An active organization with this name already exists");
+        }
+
+        const organizations = await transaction<OrganizationRow[]>`
+          insert into organizations (id, name, state, plan, kyb_state)
+          values (gen_random_uuid(), ${input.body.name}, 'pending_kyb', 'enterprise', 'not_started')
+          returning id, name, state, plan, kyb_state, created_at
+        `;
+        const organization = organizations[0];
+        if (!organization) return [];
+        const memberships = await transaction<Array<{ id: string }>>`
+          insert into organization_memberships (
+            id, organization_id, user_id, role, state, invited_by_user_id, joined_at
+          ) values (
+            gen_random_uuid(), ${organization.id}, ${party.owner_id}, 'owner', 'invited', ${party.actor_id}, null
+          )
+          returning id
+        `;
+        const membership = memberships[0];
+        if (!membership) return [];
+        await transaction`
+          insert into notifications (
+            id, user_id, kind, title, body, action_url, related_resource_type, related_resource_id, idempotency_key
+          ) values (
+            gen_random_uuid(), ${party.owner_id}, 'studio_setup', 'Enterprise organization invitation',
+            'Review and accept the owner role before starting organization KYB.', '/app/studio',
+            'organization_membership', ${membership.id}, ${`organization-provision:${organization.id}`}
+          )
+          on conflict (user_id, idempotency_key) do nothing
+        `;
+        await transaction`
+          insert into audit_events (
+            id, actor_user_id, subject_type, subject_id, action, metadata, idempotency_key
+          ) values (
+            gen_random_uuid(), ${party.actor_id}, 'organization', ${organization.id},
+            'organization.provisioned',
+            ${JSON.stringify({
+              ownerUserId: party.owner_id,
+              ownerMembershipId: membership.id,
+              reason: input.body.reason,
+              initialState: "pending_kyb",
+              ownerConsentState: "invited"
+            })}::jsonb,
+            ${input.idempotencyKey}
+          )
+        `;
+        await transaction`
+          insert into enterprise_action_receipts (
+            actor_user_id, organization_id, membership_id, action, idempotency_key, request_hash
+          ) values (
+            ${party.actor_id}, ${organization.id}, ${membership.id}, 'organization_provision',
+            ${input.idempotencyKey}, ${input.requestHash}
+          )
+        `;
+        return [organization];
+      });
+      return rows[0] ? toOrganization(rows[0]) : null;
     },
     async updateOrganizationKyb(input) {
       const rows = await sql.begin(async (transaction) => {

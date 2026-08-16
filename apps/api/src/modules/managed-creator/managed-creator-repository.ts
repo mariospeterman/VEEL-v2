@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { resolvePostgresClient, type PostgresSql, type PostgresTransaction } from "../../shared/postgres.js";
-import type { ManagedCreatorRelationshipResource, ManagedCreatorRepository } from "./types.js";
+import type {
+  ManagedCreatorRelationshipResource,
+  ManagedCreatorReportingResource,
+  ManagedCreatorRepository
+} from "./types.js";
 
 interface Row {
   id: string; organization_id: string; organization_name: string; creator_user_id: string;
@@ -8,10 +12,20 @@ interface Row {
   agreement_state: string; permissions: ManagedCreatorRelationshipResource["permissions"];
   creator_share_bps: number; enterprise_management_share_bps: number;
   organization_kyb_ready: boolean; enterprise_entitlement_ready: boolean; settlement_wallet_ready: boolean;
+  viewer_role: "creator" | "organization_member";
+  organization_role: "owner" | "admin" | "member" | "viewer" | null;
 }
 
 export class ManagedCreatorRepositoryConfigurationError extends Error {
   constructor() { super("MANAGED_CREATOR_REPOSITORY_NOT_CONFIGURED"); this.name = "ManagedCreatorRepositoryConfigurationError"; }
+}
+
+export class ManagedCreatorIdempotencyConflictError extends Error {
+  constructor() { super("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST"); this.name = "ManagedCreatorIdempotencyConflictError"; }
+}
+
+export class ManagedCreatorStateConflictError extends Error {
+  constructor(message: string) { super(message); this.name = "ManagedCreatorStateConflictError"; }
 }
 
 export function createPostgresManagedCreatorRepository(database?: string | PostgresSql): ManagedCreatorRepository {
@@ -19,6 +33,7 @@ export function createPostgresManagedCreatorRepository(database?: string | Postg
     const unavailable = async () => { throw new ManagedCreatorRepositoryConfigurationError(); };
     return {
       listMine: unavailable,
+      getReporting: unavailable,
       invite: unavailable,
       respond: unavailable,
       proposeAgreement: unavailable,
@@ -34,6 +49,71 @@ export function createPostgresManagedCreatorRepository(database?: string | Postg
           or exists (select 1 from organization_memberships mine where mine.organization_id = r.organization_id and mine.user_id = actor.id and mine.state = 'active')
         order by r.updated_at desc`, [input.supabaseUserId]));
     },
+    async getReporting(input) {
+      const rows = await sql<Array<{
+        organization_id: string;
+        creator_user_id: string;
+        currency: "SOL" | "USDC" | null;
+        confirmed_payment_count: number;
+        creator_side_proceeds_minor: string | null;
+        creator_net_minor: string | null;
+        enterprise_management_minor: string | null;
+      }>>`
+        with actor as (
+          select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
+        ), authorized_relationship as (
+          select relationship.organization_id, relationship.creator_user_id
+          from managed_creator_relationships relationship
+          join actor on true
+          where relationship.id = ${input.relationshipId}
+            and (
+              relationship.creator_user_id = actor.id
+              or (
+                exists (
+                  select 1 from organization_memberships membership
+                  where membership.organization_id = relationship.organization_id
+                    and membership.user_id = actor.id
+                    and membership.state = 'active'
+                )
+                and exists (
+                  select 1 from managed_creator_agreements agreement
+                  where agreement.relationship_id = relationship.id
+                    and agreement.permissions @> array['analytics_view']::text[]
+                    and agreement.state in ('accepted', 'superseded', 'terminated')
+                )
+              )
+            )
+        )
+        select authorized.organization_id, authorized.creator_user_id,
+          allocation.currency,
+          count(allocation.id)::int as confirmed_payment_count,
+          coalesce(sum(allocation.creator_side_proceeds_minor), 0)::text as creator_side_proceeds_minor,
+          coalesce(sum(allocation.creator_net_minor), 0)::text as creator_net_minor,
+          coalesce(sum(allocation.enterprise_management_minor), 0)::text as enterprise_management_minor
+        from authorized_relationship authorized
+        left join managed_creator_allocation_records allocation
+          on allocation.relationship_id = ${input.relationshipId}
+          and allocation.state = 'confirmed'
+        group by authorized.organization_id, authorized.creator_user_id, allocation.currency
+        order by allocation.currency nulls last
+      `;
+      const first = rows[0];
+      if (!first) return null;
+      return {
+        relationshipId: input.relationshipId,
+        organizationId: first.organization_id,
+        creatorUserId: first.creator_user_id,
+        totals: rows.flatMap((row) => row.currency ? [{
+          currency: row.currency,
+          confirmedPaymentCount: Number(row.confirmed_payment_count),
+          creatorSideProceedsMinor: safeInteger(row.creator_side_proceeds_minor),
+          creatorNetMinor: safeInteger(row.creator_net_minor),
+          enterpriseManagementMinor: safeInteger(row.enterprise_management_minor)
+        }] : []),
+        generatedAt: new Date().toISOString(),
+        financeBoundary: "confirmed_allocations_only_no_balance_no_withdrawal_no_payout_queue"
+      } satisfies ManagedCreatorReportingResource;
+    },
     async invite(input) {
       const rows = await sql.begin(async (tx): Promise<Row[]> => {
         await tx`select pg_advisory_xact_lock(hashtextextended(${`${input.organizationId}:${input.idempotencyKey}`}, 0))`;
@@ -45,17 +125,31 @@ export function createPostgresManagedCreatorRepository(database?: string | Postg
           join users creator on creator.id = profile.user_id and creator.state = 'active'
           where actor.supabase_user_id = ${input.supabaseUserId}
             and member.organization_id = ${input.organizationId}
-            and member.state = 'active' and member.role in ('owner', 'admin', 'manager')
+            and member.state = 'active' and member.role in ('owner', 'admin')
           limit 1
         `;
         const party = parties[0];
         if (!party || party.actor_id === party.creator_id) return [];
+        const replayRelationshipId = await findActionReceipt(
+          tx, party.actor_id, "managed_creator_invite", input.idempotencyKey, input.requestHash
+        );
+        if (replayRelationshipId) return selectById(tx, replayRelationshipId, input.supabaseUserId);
         const existingRows = await tx<{ id: string }[]>`
           select id from managed_creator_relationships
           where organization_id = ${input.organizationId} and idempotency_key = ${input.idempotencyKey}
           limit 1
         `;
-        if (existingRows[0]) return selectById(tx, existingRows[0].id, input.supabaseUserId);
+        if (existingRows[0]) {
+          await recordActionReceipt(tx, {
+            actorUserId: party.actor_id,
+            organizationId: input.organizationId,
+            relationshipId: existingRows[0].id,
+            action: "managed_creator_invite",
+            idempotencyKey: input.idempotencyKey,
+            requestHash: input.requestHash
+          });
+          return selectById(tx, existingRows[0].id, input.supabaseUserId);
+        }
 
         const currentRows = await tx<{ id: string; state: string }[]>`
           select id, state from managed_creator_relationships
@@ -64,7 +158,7 @@ export function createPostgresManagedCreatorRepository(database?: string | Postg
         `;
         const current = currentRows[0];
         if (current?.state === "active" || current?.state === "invited") {
-          return selectById(tx, current.id, input.supabaseUserId);
+          throw new ManagedCreatorStateConflictError("Creator already has an active or pending relationship");
         }
 
         if (input.settlementWalletId) {
@@ -120,6 +214,28 @@ export function createPostgresManagedCreatorRepository(database?: string | Postg
             'managed_creator_relationship', ${relationshipId}, ${`managed-creator:${relationshipId}`})
           on conflict (user_id, idempotency_key) do update set state = 'unread', created_at = now()
         `;
+        await recordEnterpriseAudit(tx, {
+          actorUserId: party.actor_id,
+          relationshipId,
+          action: "managed_creator.invited",
+          idempotencyKey: input.idempotencyKey,
+          metadata: {
+            organizationId: input.organizationId,
+            creatorUserId: party.creator_id,
+            permissions: input.permissions,
+            creatorShareBps: 10_000 - input.enterpriseManagementShareBps,
+            enterpriseManagementShareBps: input.enterpriseManagementShareBps,
+            termsHash: input.termsHash
+          }
+        });
+        await recordActionReceipt(tx, {
+          actorUserId: party.actor_id,
+          organizationId: input.organizationId,
+          relationshipId,
+          action: "managed_creator_invite",
+          idempotencyKey: input.idempotencyKey,
+          requestHash: input.requestHash
+        });
         return selectById(tx, relationshipId, input.supabaseUserId);
       });
       return map(rows)[0] ?? null;
@@ -136,8 +252,25 @@ export function createPostgresManagedCreatorRepository(database?: string | Postg
         `;
         const relationship = locked[0];
         if (!relationship) return [];
+        const replayRelationshipId = await findActionReceipt(
+          tx,
+          relationship.creator_user_id,
+          "managed_creator_response",
+          input.idempotencyKey,
+          input.requestHash
+        );
+        if (replayRelationshipId) return selectById(tx, replayRelationshipId, input.supabaseUserId);
         const finalState = input.decision === "accept" ? "active" : "declined";
-        if (relationship.state === finalState) return selectById(tx, relationship.id, input.supabaseUserId);
+        if (relationship.state === finalState) {
+          await recordActionReceipt(tx, {
+            actorUserId: relationship.creator_user_id,
+            relationshipId: relationship.id,
+            action: "managed_creator_response",
+            idempotencyKey: input.idempotencyKey,
+            requestHash: input.requestHash
+          });
+          return selectById(tx, relationship.id, input.supabaseUserId);
+        }
         if (relationship.state !== "invited") return [];
 
         if (input.decision === "accept") {
@@ -169,6 +302,20 @@ export function createPostgresManagedCreatorRepository(database?: string | Postg
             ended_at = case when ${finalState} = 'declined' then now() else null end, updated_at = now()
           where id = ${relationship.id}
         `;
+        await recordEnterpriseAudit(tx, {
+          actorUserId: relationship.creator_user_id,
+          relationshipId: relationship.id,
+          action: "managed_creator.responded",
+          idempotencyKey: input.idempotencyKey,
+          metadata: { decision: input.decision, relationshipState: finalState }
+        });
+        await recordActionReceipt(tx, {
+          actorUserId: relationship.creator_user_id,
+          relationshipId: relationship.id,
+          action: "managed_creator_response",
+          idempotencyKey: input.idempotencyKey,
+          requestHash: input.requestHash
+        });
         return selectById(tx, relationship.id, input.supabaseUserId);
       });
       return map(rows)[0] ?? null;
@@ -181,17 +328,35 @@ export function createPostgresManagedCreatorRepository(database?: string | Postg
           join users actor on actor.supabase_user_id = ${input.supabaseUserId}
           join organization_memberships member on member.organization_id = r.organization_id and member.user_id = actor.id
           where r.id = ${input.relationshipId} and r.state = 'active'
-            and member.state = 'active' and member.role in ('owner', 'admin', 'manager')
+            and member.state = 'active' and member.role in ('owner', 'admin')
           for update of r limit 1
         `;
         const relationship = locked[0];
         if (!relationship) return [];
-        const existing = await tx<{ id: string }[]>`
-          select id from managed_creator_agreements
+        const replayRelationshipId = await findActionReceipt(
+          tx,
+          relationship.actor_id,
+          "managed_creator_agreement_propose",
+          input.idempotencyKey,
+          input.requestHash
+        );
+        if (replayRelationshipId) return selectById(tx, replayRelationshipId, input.supabaseUserId);
+        const existing = await tx<{ id: string; terms_hash: string }[]>`
+          select id, terms_hash from managed_creator_agreements
           where relationship_id = ${relationship.id} and idempotency_key = ${input.idempotencyKey}
           limit 1
         `;
-        if (existing[0]) return selectById(tx, relationship.id, input.supabaseUserId);
+        if (existing[0]) {
+          if (existing[0].terms_hash !== input.termsHash) throw new ManagedCreatorIdempotencyConflictError();
+          await recordActionReceipt(tx, {
+            actorUserId: relationship.actor_id,
+            relationshipId: relationship.id,
+            action: "managed_creator_agreement_propose",
+            idempotencyKey: input.idempotencyKey,
+            requestHash: input.requestHash
+          });
+          return selectById(tx, relationship.id, input.supabaseUserId);
+        }
 
         await tx`
           update managed_creator_agreements set state = 'rejected', updated_at = now()
@@ -216,6 +381,25 @@ export function createPostgresManagedCreatorRepository(database?: string | Postg
             '/app/studio', 'managed_creator_relationship', ${relationship.id}, ${`managed-agreement:${relationship.id}:${input.idempotencyKey}`})
           on conflict (user_id, idempotency_key) do nothing
         `;
+        await recordEnterpriseAudit(tx, {
+          actorUserId: relationship.actor_id,
+          relationshipId: relationship.id,
+          action: "managed_creator.agreement_proposed",
+          idempotencyKey: input.idempotencyKey,
+          metadata: {
+            permissions: input.permissions,
+            creatorShareBps: 10_000 - input.enterpriseManagementShareBps,
+            enterpriseManagementShareBps: input.enterpriseManagementShareBps,
+            termsHash: input.termsHash
+          }
+        });
+        await recordActionReceipt(tx, {
+          actorUserId: relationship.actor_id,
+          relationshipId: relationship.id,
+          action: "managed_creator_agreement_propose",
+          idempotencyKey: input.idempotencyKey,
+          requestHash: input.requestHash
+        });
         return selectById(tx, relationship.id, input.supabaseUserId);
       });
       return map(rows)[0] ?? null;
@@ -233,8 +417,25 @@ export function createPostgresManagedCreatorRepository(database?: string | Postg
         `;
         const agreement = locked[0];
         if (!agreement) return [];
+        const replayRelationshipId = await findActionReceipt(
+          tx,
+          agreement.creator_user_id,
+          "managed_creator_agreement_response",
+          input.idempotencyKey,
+          input.requestHash
+        );
+        if (replayRelationshipId) return selectById(tx, replayRelationshipId, input.supabaseUserId);
         const finalState = input.decision === "accept" ? "accepted" : "rejected";
-        if (agreement.state === finalState) return selectById(tx, input.relationshipId, input.supabaseUserId);
+        if (agreement.state === finalState) {
+          await recordActionReceipt(tx, {
+            actorUserId: agreement.creator_user_id,
+            relationshipId: input.relationshipId,
+            action: "managed_creator_agreement_response",
+            idempotencyKey: input.idempotencyKey,
+            requestHash: input.requestHash
+          });
+          return selectById(tx, input.relationshipId, input.supabaseUserId);
+        }
         if (agreement.state !== "proposed") return [];
 
         if (input.decision === "accept") {
@@ -252,6 +453,20 @@ export function createPostgresManagedCreatorRepository(database?: string | Postg
         } else {
           await tx`update managed_creator_agreements set state = 'rejected', updated_at = now() where id = ${agreement.id}`;
         }
+        await recordEnterpriseAudit(tx, {
+          actorUserId: agreement.creator_user_id,
+          relationshipId: input.relationshipId,
+          action: "managed_creator.agreement_responded",
+          idempotencyKey: input.idempotencyKey,
+          metadata: { agreementId: agreement.id, decision: input.decision, agreementState: finalState }
+        });
+        await recordActionReceipt(tx, {
+          actorUserId: agreement.creator_user_id,
+          relationshipId: input.relationshipId,
+          action: "managed_creator_agreement_response",
+          idempotencyKey: input.idempotencyKey,
+          requestHash: input.requestHash
+        });
         return selectById(tx, input.relationshipId, input.supabaseUserId);
       });
       return map(rows)[0] ?? null;
@@ -268,14 +483,31 @@ export function createPostgresManagedCreatorRepository(database?: string | Postg
               or exists (
                 select 1 from organization_memberships member
                 where member.organization_id = r.organization_id and member.user_id = actor.id
-                  and member.state = 'active' and member.role in ('owner', 'admin', 'manager')
+                  and member.state = 'active' and member.role in ('owner', 'admin')
               )
             )
           for update of r limit 1
         `;
         const relationship = locked[0];
         if (!relationship) return [];
-        if (relationship.state === "terminated") return selectById(tx, relationship.id, input.supabaseUserId);
+        const replayRelationshipId = await findActionReceipt(
+          tx,
+          relationship.actor_id,
+          "managed_creator_termination",
+          input.idempotencyKey,
+          input.requestHash
+        );
+        if (replayRelationshipId) return selectById(tx, replayRelationshipId, input.supabaseUserId);
+        if (relationship.state === "terminated") {
+          await recordActionReceipt(tx, {
+            actorUserId: relationship.actor_id,
+            relationshipId: relationship.id,
+            action: "managed_creator_termination",
+            idempotencyKey: input.idempotencyKey,
+            requestHash: input.requestHash
+          });
+          return selectById(tx, relationship.id, input.supabaseUserId);
+        }
         if (relationship.state !== "active") return [];
         await tx`
           update managed_creator_agreements
@@ -298,6 +530,20 @@ export function createPostgresManagedCreatorRepository(database?: string | Postg
             '/app/studio', 'managed_creator_relationship', ${relationship.id}, ${`managed-termination:${relationship.id}`})
           on conflict (user_id, idempotency_key) do nothing
         `;
+        await recordEnterpriseAudit(tx, {
+          actorUserId: relationship.actor_id,
+          relationshipId: relationship.id,
+          action: "managed_creator.terminated",
+          idempotencyKey: input.idempotencyKey,
+          metadata: { relationshipState: "terminated" }
+        });
+        await recordActionReceipt(tx, {
+          actorUserId: relationship.actor_id,
+          relationshipId: relationship.id,
+          action: "managed_creator_termination",
+          idempotencyKey: input.idempotencyKey,
+          requestHash: input.requestHash
+        });
         return selectById(tx, relationship.id, input.supabaseUserId);
       });
       return map(rows)[0] ?? null;
@@ -311,9 +557,20 @@ function selectSql() { return `
     profile.handle as creator_handle, r.state, agreement.id as agreement_id,
     agreement.version_number, agreement.state as agreement_state, agreement.permissions,
     agreement.creator_share_bps, agreement.enterprise_management_share_bps,
-    (o.state = 'active' and o.kyb_state = 'verified') as organization_kyb_ready,
+    (o.state = 'active' and exists (
+      select 1 from verification_records verification
+      where verification.subject_type = 'organization'
+        and verification.subject_id = o.id
+        and verification.purpose = 'org_kyb'
+        and verification.status = 'valid'
+        and (verification.expires_at is null or verification.expires_at > now())
+    )) as organization_kyb_ready,
     exists (select 1 from tier_waivers tw where tw.subject_type = 'organization' and tw.subject_id = o.id and tw.tier_key = 'enterprise' and tw.state = 'active' and tw.starts_at <= now() and (tw.ends_at is null or tw.ends_at > now())) as enterprise_entitlement_ready,
     exists (select 1 from organization_settlement_wallets sw where sw.organization_id = o.id and sw.state = 'active' and sw.is_primary) as settlement_wallet_ready
+    , case when r.creator_user_id = actor.id then 'creator' else 'organization_member' end as viewer_role
+    , (select membership.role from organization_memberships membership
+       where membership.organization_id = r.organization_id and membership.user_id = actor.id and membership.state = 'active'
+       limit 1) as organization_role
   from managed_creator_relationships r
   join organizations o on o.id = r.organization_id
   join users creator on creator.id = r.creator_user_id
@@ -326,6 +583,74 @@ function selectSql() { return `
   join users actor on actor.supabase_user_id = $1
 `; }
 
+type EnterpriseAction =
+  | "managed_creator_invite"
+  | "managed_creator_response"
+  | "managed_creator_agreement_propose"
+  | "managed_creator_agreement_response"
+  | "managed_creator_termination";
+
+async function findActionReceipt(
+  tx: PostgresTransaction,
+  actorUserId: string,
+  action: EnterpriseAction,
+  idempotencyKey: string,
+  requestHash: string
+): Promise<string | null> {
+  await tx`select pg_advisory_xact_lock(hashtextextended(${`enterprise-action:${actorUserId}:${action}:${idempotencyKey}`}, 0))`;
+  const rows = await tx<Array<{ request_hash: string; relationship_id: string | null }>>`
+    select request_hash, relationship_id
+    from enterprise_action_receipts
+    where actor_user_id = ${actorUserId}
+      and action = ${action}
+      and idempotency_key = ${idempotencyKey}
+    limit 1
+  `;
+  const receipt = rows[0];
+  if (!receipt) return null;
+  if (receipt.request_hash !== requestHash) throw new ManagedCreatorIdempotencyConflictError();
+  return receipt.relationship_id;
+}
+
+async function recordActionReceipt(tx: PostgresTransaction, input: {
+  actorUserId: string;
+  organizationId?: string;
+  relationshipId: string;
+  action: EnterpriseAction;
+  idempotencyKey: string;
+  requestHash: string;
+}): Promise<void> {
+  await tx`
+    insert into enterprise_action_receipts (
+      actor_user_id, organization_id, relationship_id, action, idempotency_key, request_hash
+    ) values (
+      ${input.actorUserId}, ${input.organizationId ?? null}, ${input.relationshipId},
+      ${input.action}, ${input.idempotencyKey}, ${input.requestHash}
+    )
+    on conflict (actor_user_id, action, idempotency_key) do nothing
+  `;
+}
+
+async function recordEnterpriseAudit(tx: PostgresTransaction, input: {
+  actorUserId: string;
+  relationshipId: string;
+  action: string;
+  idempotencyKey: string;
+  metadata: Record<string, unknown>;
+}): Promise<void> {
+  await tx`
+    insert into audit_events (
+      id, actor_user_id, subject_type, subject_id, action, metadata, idempotency_key
+    ) values (
+      ${randomUUID()}, ${input.actorUserId}, 'managed_creator_relationship', ${input.relationshipId},
+      ${input.action}, ${JSON.stringify(input.metadata)}::jsonb, ${input.idempotencyKey}
+    )
+    on conflict (actor_user_id, action, idempotency_key)
+      where actor_user_id is not null and idempotency_key is not null
+      do nothing
+  `;
+}
+
 function selectById(tx: PostgresTransaction, id: string, supabaseUserId: string) {
   return tx.unsafe<Row[]>(`${selectSql()} where r.id = $2 limit 1`, [supabaseUserId, id]);
 }
@@ -337,5 +662,35 @@ function map(rows: Row[]): ManagedCreatorRelationshipResource[] {
     permissions: r.permissions, creatorShareBps: Number(r.creator_share_bps),
     enterpriseManagementShareBps: Number(r.enterprise_management_share_bps),
     organizationKybReady: r.organization_kyb_ready, enterpriseEntitlementReady: r.enterprise_entitlement_ready,
-    settlementWalletReady: r.settlement_wallet_ready }));
+    settlementWalletReady: r.settlement_wallet_ready,
+    viewerRole: r.viewer_role,
+    organizationRole: r.organization_role,
+    availableActions: availableActions(r)
+  }));
+}
+
+function availableActions(row: Row): ManagedCreatorRelationshipResource["availableActions"] {
+  const actions: ManagedCreatorRelationshipResource["availableActions"] = [];
+  if (row.viewer_role === "creator" && row.state === "invited") {
+    actions.push("accept_relationship", "decline_relationship");
+  }
+  if (row.viewer_role === "creator" && row.state === "active" && row.agreement_state === "proposed") {
+    actions.push("accept_agreement", "reject_agreement");
+  }
+  if (row.viewer_role === "organization_member" && row.state === "active" &&
+    (row.organization_role === "owner" || row.organization_role === "admin")) {
+    actions.push("propose_agreement");
+  }
+  if (row.state === "active" && (row.viewer_role === "creator" || row.organization_role === "owner" || row.organization_role === "admin")) {
+    actions.push("terminate_relationship");
+  }
+  return actions;
+}
+
+function safeInteger(value: string | null): number {
+  const parsed = Number(value ?? 0);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new ManagedCreatorStateConflictError("Enterprise reporting amount exceeds the supported range");
+  }
+  return parsed;
 }

@@ -111,6 +111,9 @@ export function SummaryMetrics({ summary }: { summary: ApiResult<AdminOpsSummary
       <Metric label="Queue" value={summary.data.queueHealth} />
       <Metric label="Payments" value={summary.data.paymentCounts.total.toString()} />
       <Metric label="Memberships" value={summary.data.subscriptionCounts.total.toString()} />
+      <Metric label="Enterprise orgs" value={summary.data.organizationCounts.total.toString()} />
+      <Metric label="Managed creators" value={summary.data.managedCreatorCounts.total.toString()} />
+      <Metric label="Managed allocations" value={summary.data.enterpriseAllocationCounts.confirmed.toString()} />
       <Metric label="Unlocks" value={summary.data.unlockCounts.total.toString()} />
     </div>
   );

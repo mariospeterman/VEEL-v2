@@ -89,7 +89,16 @@ export type {
   LiveChatPage,
   LiveRoom,
   LiveRoomPage,
-  RevealedHostConnection
+  RevealedHostConnection,
+  OrganizationMember,
+  InviteOrganizationMemberRequest,
+  OrganizationMembershipDecision,
+  UpdateOrganizationMemberRequest,
+  ManagedCreatorRelationship,
+  InviteManagedCreatorRequest,
+  ManagedCreatorAgreementTerms,
+  ManagedCreatorAgreementDecision,
+  ManagedCreatorTerminationRequest
 } from "./api-mutation-types";
 import type {
   AccessPassIntent,
@@ -172,7 +181,16 @@ import type {
   LiveChatPage,
   LiveRoom,
   LiveRoomPage,
-  RevealedHostConnection
+  RevealedHostConnection,
+  OrganizationMember,
+  InviteOrganizationMemberRequest,
+  OrganizationMembershipDecision,
+  UpdateOrganizationMemberRequest,
+  ManagedCreatorRelationship,
+  InviteManagedCreatorRequest,
+  ManagedCreatorAgreementTerms,
+  ManagedCreatorAgreementDecision,
+  ManagedCreatorTerminationRequest
 } from "./api-mutation-types";
 
 export async function createAgeSession(body: CreateAgeSessionRequest): Promise<AgeSession> {
@@ -738,5 +756,111 @@ export async function revokeMcpConnection(connectionId: string): Promise<McpConn
     `/v1/mcp/connections/${encodeURIComponent(connectionId)}/revoke`,
     "POST",
     {}
+  );
+}
+
+export async function inviteOrganizationMember(
+  organizationId: string,
+  body: InviteOrganizationMemberRequest,
+  idempotencyKey?: string
+): Promise<OrganizationMember> {
+  return authenticatedMutation<OrganizationMember>(
+    `/v1/organizations/${encodeURIComponent(organizationId)}/members`,
+    "POST",
+    body,
+    idempotencyKey
+  );
+}
+
+export async function respondToOrganizationMembership(
+  membershipId: string,
+  body: OrganizationMembershipDecision,
+  idempotencyKey?: string
+): Promise<OrganizationMember> {
+  return authenticatedMutation<OrganizationMember>(
+    `/v1/organization-memberships/${encodeURIComponent(membershipId)}/responses`,
+    "POST",
+    body,
+    idempotencyKey
+  );
+}
+
+export async function updateOrganizationMember(
+  organizationId: string,
+  membershipId: string,
+  body: UpdateOrganizationMemberRequest,
+  idempotencyKey?: string
+): Promise<OrganizationMember> {
+  return authenticatedMutation<OrganizationMember>(
+    `/v1/organizations/${encodeURIComponent(organizationId)}/members/${encodeURIComponent(membershipId)}`,
+    "PATCH",
+    body,
+    idempotencyKey
+  );
+}
+
+export async function inviteManagedCreator(
+  organizationId: string,
+  body: InviteManagedCreatorRequest,
+  idempotencyKey?: string
+): Promise<ManagedCreatorRelationship> {
+  return authenticatedMutation<ManagedCreatorRelationship>(
+    `/v1/organizations/${encodeURIComponent(organizationId)}/managed-creators`,
+    "POST",
+    body,
+    idempotencyKey
+  );
+}
+
+export async function respondToManagedCreatorRelationship(
+  relationshipId: string,
+  decision: "accept" | "decline",
+  idempotencyKey?: string
+): Promise<ManagedCreatorRelationship> {
+  return authenticatedMutation<ManagedCreatorRelationship>(
+    `/v1/managed-creator-relationships/${encodeURIComponent(relationshipId)}/responses`,
+    "POST",
+    { decision },
+    idempotencyKey
+  );
+}
+
+export async function proposeManagedCreatorAgreement(
+  relationshipId: string,
+  body: ManagedCreatorAgreementTerms,
+  idempotencyKey?: string
+): Promise<ManagedCreatorRelationship> {
+  return authenticatedMutation<ManagedCreatorRelationship>(
+    `/v1/managed-creator-relationships/${encodeURIComponent(relationshipId)}/agreements`,
+    "POST",
+    body,
+    idempotencyKey
+  );
+}
+
+export async function respondToManagedCreatorAgreement(
+  relationshipId: string,
+  agreementId: string,
+  body: ManagedCreatorAgreementDecision,
+  idempotencyKey?: string
+): Promise<ManagedCreatorRelationship> {
+  return authenticatedMutation<ManagedCreatorRelationship>(
+    `/v1/managed-creator-relationships/${encodeURIComponent(relationshipId)}/agreements/${encodeURIComponent(agreementId)}/responses`,
+    "POST",
+    body,
+    idempotencyKey
+  );
+}
+
+export async function terminateManagedCreatorRelationship(
+  relationshipId: string,
+  body: ManagedCreatorTerminationRequest,
+  idempotencyKey?: string
+): Promise<ManagedCreatorRelationship> {
+  return authenticatedMutation<ManagedCreatorRelationship>(
+    `/v1/managed-creator-relationships/${encodeURIComponent(relationshipId)}/termination`,
+    "POST",
+    body,
+    idempotencyKey
   );
 }

@@ -3,6 +3,7 @@ import type {
   AdminFeatureFlagPatchRequest,
   AdminModerationActionRequest,
   AdminOrganizationKybActionRequest,
+  AdminOrganizationProvisionRequest,
   AdminOrganizationMemberActionRequest,
   AdminReasonRequest,
   AdminRefundDisputeActionRequest,
@@ -10,6 +11,22 @@ import type {
   AdminSupportCaseActionRequest,
   AdminSupportPolicyActionRequest
 } from "./types.js";
+
+export function validateOrganizationProvision(
+  body: Partial<AdminOrganizationProvisionRequest> | undefined
+): string | null {
+  if (!body || typeof body !== "object") return "Request body is required";
+  if (!body.name || body.name.trim().length < 2 || body.name.trim().length > 120) {
+    return "name must be 2-120 characters";
+  }
+  if (!body.ownerHandle || !/^[a-zA-Z0-9_]{3,32}$/.test(body.ownerHandle.trim())) {
+    return "ownerHandle must be an existing 3-32 character WeVid handle";
+  }
+  if (!body.reason || body.reason.trim().length < 3 || body.reason.length > 500) {
+    return "reason must be 3-500 characters";
+  }
+  return null;
+}
 
 export function validateOrganizationKybAction(
   body: Partial<AdminOrganizationKybActionRequest> | undefined

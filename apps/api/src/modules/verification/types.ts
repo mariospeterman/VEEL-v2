@@ -137,6 +137,11 @@ export interface ResolveCapabilitiesInput {
 }
 
 export interface VerificationRepository {
+  authorizeOrganizationVerification(input: {
+    supabaseUserId: string;
+    organizationId: string;
+    access: "read" | "manage";
+  }): Promise<boolean>;
   createPendingSession(input: {
     supabaseUserId: string;
     purpose: Extract<

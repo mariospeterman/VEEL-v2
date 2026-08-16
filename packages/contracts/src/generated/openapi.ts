@@ -980,6 +980,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/managed-creator-relationships/{relationshipId}/reporting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read confirmed historical allocation reporting as an authorized relationship party */
+        get: operations["getManagedCreatorReporting"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/organizations/{organizationId}/managed-creators": {
         parameters: {
             query?: never;
@@ -2352,6 +2369,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/organizations/{organizationId}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List member-safe team roles for an active organization member */
+        get: operations["listOrganizationMembers"];
+        put?: never;
+        /** Invite an existing universal account into an Enterprise team role */
+        post: operations["inviteOrganizationMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/organization-memberships/{membershipId}/responses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept or decline an Enterprise team invitation as the invited user */
+        post: operations["respondToOrganizationMembership"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/organizations/{organizationId}/members/{membershipId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update a non-owner Enterprise team role as the active organization owner */
+        patch: operations["updateOrganizationMember"];
+        trace?: never;
+    };
     "/v1/admin/ops/summary": {
         parameters: {
             query?: never;
@@ -3059,7 +3128,8 @@ export interface paths {
         /** Enterprise organization, KYB, and RBAC administration */
         get: operations["listAdminOrganizations"];
         put?: never;
-        post?: never;
+        /** Provision an Enterprise organization with an invited existing-account owner */
+        post: operations["provisionAdminOrganization"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3797,6 +3867,11 @@ export interface components {
             organizationKybReady: boolean;
             enterpriseEntitlementReady: boolean;
             settlementWalletReady: boolean;
+            /** @enum {string} */
+            viewerRole: "creator" | "organization_member";
+            /** @enum {string|null} */
+            organizationRole: "owner" | "admin" | "member" | "viewer" | null;
+            availableActions: ("accept_relationship" | "decline_relationship" | "propose_agreement" | "accept_agreement" | "reject_agreement" | "terminate_relationship")[];
         };
         InviteManagedCreatorRequest: {
             creatorHandle: string;
@@ -3815,6 +3890,27 @@ export interface components {
         };
         ManagedCreatorTerminationRequest: {
             reason: string;
+        };
+        ManagedCreatorAllocationTotal: {
+            /** @enum {string} */
+            currency: "SOL" | "USDC";
+            confirmedPaymentCount: number;
+            creatorSideProceedsMinor: number;
+            creatorNetMinor: number;
+            enterpriseManagementMinor: number;
+        };
+        ManagedCreatorReporting: {
+            /** Format: uuid */
+            relationshipId: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            creatorUserId: string;
+            totals: components["schemas"]["ManagedCreatorAllocationTotal"][];
+            /** Format: date-time */
+            generatedAt: string;
+            /** @enum {string} */
+            financeBoundary: "confirmed_allocations_only_no_balance_no_withdrawal_no_payout_queue";
         };
         PlaybackResource: {
             /** @enum {string} */
@@ -4994,6 +5090,42 @@ export interface components {
             items: components["schemas"]["OrganizationDashboard"][];
             nextCursor: string | null;
         };
+        OrganizationMember: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            userId: string;
+            handle: string;
+            displayName?: string | null;
+            /** @enum {string} */
+            role: "owner" | "admin" | "member" | "viewer";
+            /** @enum {string} */
+            state: "invited" | "active" | "suspended" | "removed";
+            /** Format: uuid */
+            invitedByUserId?: string | null;
+            /** Format: date-time */
+            joinedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            isCurrentUser: boolean;
+        };
+        InviteOrganizationMemberRequest: {
+            handle: string;
+            /** @enum {string} */
+            role: "admin" | "member" | "viewer";
+        };
+        OrganizationMembershipDecision: {
+            /** @enum {string} */
+            decision: "accept" | "decline";
+        };
+        UpdateOrganizationMemberRequest: {
+            /** @enum {string} */
+            role: "admin" | "member" | "viewer";
+            /** @enum {string} */
+            state: "active" | "suspended" | "removed";
+        };
         OrganizationMembership: {
             /** Format: uuid */
             id: string;
@@ -5068,6 +5200,9 @@ export interface components {
             subscriptionCounts: components["schemas"]["AdminStateCounts"];
             /** @enum {string} */
             subscriptionProviderReadiness: "not_configured" | "staging_required" | "launch_approved";
+            organizationCounts: components["schemas"]["AdminStateCounts"];
+            managedCreatorCounts: components["schemas"]["AdminStateCounts"];
+            enterpriseAllocationCounts: components["schemas"]["AdminStateCounts"];
         };
         AdminWorkerQueueHealth: {
             /** @enum {string} */
@@ -5672,6 +5807,11 @@ export interface components {
         AdminOrganizationKybActionRequest: {
             /** @enum {string} */
             kybState: "not_started" | "pending" | "verified" | "rejected";
+            reason: string;
+        };
+        AdminOrganizationProvisionRequest: {
+            name: string;
+            ownerHandle: string;
             reason: string;
         };
         AdminOrganizationMemberActionRequest: {
@@ -7503,6 +7643,11 @@ export interface components {
                 "application/json": components["schemas"]["AdminOrganizationKybActionRequest"];
             };
         };
+        AdminOrganizationProvision: {
+            content: {
+                "application/json": components["schemas"]["AdminOrganizationProvisionRequest"];
+            };
+        };
         AdminOrganizationMemberAction: {
             content: {
                 "application/json": components["schemas"]["AdminOrganizationMemberActionRequest"];
@@ -8740,6 +8885,31 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getManagedCreatorReporting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                relationshipId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Confirmed managed-creator allocation totals */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedCreatorReporting"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -10425,6 +10595,138 @@ export interface operations {
             403: components["responses"]["Forbidden"];
         };
     };
+    listOrganizationMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Organization members */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["OrganizationMember"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    inviteOrganizationMember: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteOrganizationMemberRequest"];
+            };
+        };
+        responses: {
+            /** @description Organization member invitation */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationMember"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    respondToOrganizationMembership: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                membershipId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrganizationMembershipDecision"];
+            };
+        };
+        responses: {
+            /** @description Updated organization membership */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationMember"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    updateOrganizationMember: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                organizationId: string;
+                membershipId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateOrganizationMemberRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated organization member */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationMember"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     getAdminOpsSummary: {
         parameters: {
             query?: never;
@@ -11091,6 +11393,24 @@ export interface operations {
         responses: {
             200: components["responses"]["AdminOrganizationPage"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    provisionAdminOrganization: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["AdminOrganizationProvision"];
+        responses: {
+            201: components["responses"]["AdminOrganization"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     updateAdminOrganizationKyb: {
