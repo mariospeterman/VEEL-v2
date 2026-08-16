@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 import { access } from "node:fs/promises";
+import {
+  assertReleaseEvidenceBundle,
+  expectedEvidenceReceiptKeys,
+  parseEvidenceBundle
+} from "./release-evidence.mjs";
 
 const requiredSkeletonFiles = [
   "infra/deploy/README.md",
@@ -7,6 +12,7 @@ const requiredSkeletonFiles = [
   "infra/deploy/incident-response.md",
   "infra/deploy/legal-launch-gate.md",
   "infra/deploy/rollback-checklist.md",
+  "infra/deploy/staging-convergence.md",
   "infra/observability/README.md"
 ];
 
@@ -52,16 +58,22 @@ function assertProductionProviderSafety() {
   assertRequiredEnv([
     "RELEASE_MANIFEST_PATH",
     "EXPECTED_MANIFEST_DIGEST",
-    "STAGING_EVIDENCE_MANIFEST_DIGEST",
-    "BACKUP_RESTORE_PROOF_ID",
+    "STAGING_EVIDENCE_BUNDLE_JSON",
+    "SUBSCRIPTIONS_ENABLED",
     "OTEL_EXPORTER_OTLP_ENDPOINT",
     "LEGAL_TERMS_VERSION",
     "LEGAL_PRIVACY_VERSION",
     "LEGAL_CONTACT_EMAIL"
   ]);
 
-  if (process.env.STAGING_EVIDENCE_MANIFEST_DIGEST !== process.env.EXPECTED_MANIFEST_DIGEST) {
-    throw new Error("Production readiness is blocked: staging evidence must match the exact approved manifest digest.");
+  try {
+    assertReleaseEvidenceBundle(
+      parseEvidenceBundle(process.env.STAGING_EVIDENCE_BUNDLE_JSON),
+      process.env.EXPECTED_MANIFEST_DIGEST,
+      expectedEvidenceReceiptKeys(process.env)
+    );
+  } catch (error) {
+    throw new Error(`Production readiness is blocked: ${error instanceof Error ? error.message : "invalid_staging_evidence_bundle"}.`);
   }
 
   if (process.env.LEGAL_DOCUMENTS_APPROVED !== "true") {

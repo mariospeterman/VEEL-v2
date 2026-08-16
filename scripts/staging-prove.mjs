@@ -1,13 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-
-const proofs = [
-  { name: "release-manifest", command: ["node", "scripts/verify-release-manifest.mjs"], required: ["RELEASE_MANIFEST_PATH"] },
-  { name: "synthetic", command: ["node", "scripts/synthetic-smoke.mjs"], required: ["WEB_URL", "API_URL"] },
-  { name: "bunny-sfw", command: ["pnpm", "proof:bunny-sfw"], required: ["BUNNY_STREAM_API_KEY", "BUNNY_STREAM_LIBRARY_ID", "BUNNY_STREAM_WEBHOOK_READONLY_KEY"] },
-  { name: "subscriptions", command: ["pnpm", "proof:subscriptions"], required: ["SUBSCRIPTIONS_STAGING_AUTHORIZATION_SIGNATURE", "SUBSCRIPTIONS_STAGING_COLLECTION_SIGNATURE"] },
-  { name: "enterprise", command: ["pnpm", "proof:enterprise"], required: ["ENTERPRISE_STAGING_SESSION_COOKIE", "ENTERPRISE_STAGING_ORGANIZATION_ID", "ENTERPRISE_STAGING_RELATIONSHIP_ID"] }
-];
+import { executeStagingProofPlan } from "./staging-proof-plan.mjs";
 
 function run(command, args) {
   return new Promise((resolve, reject) => {
@@ -17,18 +10,20 @@ function run(command, args) {
   });
 }
 
-const blocked = [];
-for (const proof of proofs) {
-  const missing = proof.required.filter((key) => !process.env[key]?.trim());
-  if (missing.length > 0) {
-    blocked.push(proof.name);
-    console.log(`CODE_COMPLETE_PROVIDER_BLOCKED ${proof.name} missing=${missing.join(",")}`);
-    continue;
+const outcomes = await executeStagingProofPlan({ runCommand: run });
+for (const outcome of outcomes) {
+  if (outcome.status === "blocked") {
+    console.log(`CODE_COMPLETE_PROVIDER_BLOCKED ${outcome.name} missing=${outcome.missing.join(",")}`);
+  } else if (outcome.status === "failed") {
+    console.error(`PROOF_FAILED ${outcome.name} reason=${outcome.reason}`);
+  } else if (outcome.status === "evidence_registered") {
+    console.log(`EVIDENCE_REGISTERED ${outcome.name}`);
+  } else if (outcome.status === "skipped") {
+    console.log(`PROOF_SKIPPED ${outcome.name} reason=${outcome.reason}`);
+  } else {
+    console.log(`PROOF_PASSED ${outcome.name}`);
   }
-  await run(proof.command[0], proof.command.slice(1));
-  console.log(`PROOF_PASSED ${proof.name}`);
 }
 
-if (process.env.STAGING_REQUIRE_COMPLETE === "true" && blocked.length > 0) {
-  throw new Error(`Required staging proof is blocked: ${blocked.join(", ")}`);
-}
+if (outcomes.some((outcome) => outcome.status === "failed")) process.exitCode = 1;
+else if (outcomes.some((outcome) => outcome.status === "blocked")) process.exitCode = 2;

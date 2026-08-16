@@ -108,12 +108,11 @@ jobs:
           COINBASE_CDP_API_KEY_ID: ${{ secrets.COINBASE_CDP_API_KEY_ID }}
           COINBASE_CDP_API_KEY_SECRET: ${{ secrets.COINBASE_CDP_API_KEY_SECRET }}
           OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}
-          BACKUP_RESTORE_PROOF_ID: ${{ vars.BACKUP_RESTORE_PROOF_ID }}
+          STAGING_EVIDENCE_BUNDLE_JSON: ${{ secrets.STAGING_EVIDENCE_BUNDLE_JSON }}
           LEGAL_DOCUMENTS_APPROVED: ${{ vars.LEGAL_DOCUMENTS_APPROVED }}
           LEGAL_TERMS_VERSION: ${{ vars.LEGAL_TERMS_VERSION }}
           LEGAL_PRIVACY_VERSION: ${{ vars.LEGAL_PRIVACY_VERSION }}
           LEGAL_CONTACT_EMAIL: ${{ vars.LEGAL_CONTACT_EMAIL }}
-          STAGING_EVIDENCE_MANIFEST_DIGEST: ${{ vars.STAGING_EVIDENCE_MANIFEST_DIGEST }}
           EXPECTED_MANIFEST_DIGEST: ${{ inputs.expected_manifest_digest }}
         run: node scripts/check-deploy-readiness.mjs
       - name: Deployment-provider gate

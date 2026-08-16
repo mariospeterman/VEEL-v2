@@ -69,25 +69,42 @@ jobs:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
           SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_PRIVY_APP_ID: ${{ vars.NEXT_PUBLIC_PRIVY_APP_ID }}
+          NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED: ${{ vars.NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED }}
           SOLANA_RPC_URL: ${{ vars.SOLANA_RPC_URL }}
           PAYMENT_PLATFORM_FEE_WALLET: ${{ vars.PAYMENT_PLATFORM_FEE_WALLET }}
           HELIUS_WEBHOOK_SECRET: ${{ secrets.HELIUS_WEBHOOK_SECRET }}
+          HELIUS_CLUSTER: ${{ vars.HELIUS_CLUSTER }}
           BUNNY_STREAM_API_KEY: ${{ secrets.BUNNY_STREAM_API_KEY }}
           BUNNY_STREAM_LIBRARY_ID: ${{ vars.BUNNY_STREAM_LIBRARY_ID }}
           BUNNY_STREAM_EMBED_TOKEN_KEY: ${{ secrets.BUNNY_STREAM_EMBED_TOKEN_KEY }}
           BUNNY_STREAM_WEBHOOK_READONLY_KEY: ${{ secrets.BUNNY_STREAM_WEBHOOK_READONLY_KEY }}
+          BUNNY_PROOF_VIDEO_PATH: apps/web/public/video/Veel.mp4
           LIVEPEER_API_KEY: ${{ secrets.LIVEPEER_API_KEY }}
           LIVEPEER_WEBHOOK_SECRET: ${{ secrets.LIVEPEER_WEBHOOK_SECRET }}
           LIVEPEER_ACCESS_CONTROL_PRIVATE_KEY: ${{ secrets.LIVEPEER_ACCESS_CONTROL_PRIVATE_KEY }}
           LIVEPEER_ACCESS_CONTROL_PUBLIC_KEY: ${{ vars.LIVEPEER_ACCESS_CONTROL_PUBLIC_KEY }}
           LIVEPEER_WEBHOOK_ID: ${{ vars.LIVEPEER_WEBHOOK_ID }}
           LIVEPEER_MODERATION_MULTISTREAM_TARGET_ID: ${{ vars.LIVEPEER_MODERATION_MULTISTREAM_TARGET_ID }}
+          LIVEPEER_ADULT_LIVE_ENABLED: ${{ vars.LIVEPEER_ADULT_LIVE_ENABLED }}
+          MEDIA_MODERATION_MODE: ${{ vars.MEDIA_MODERATION_MODE }}
           AGE_VERIFICATION_DRIVER: ${{ vars.AGE_VERIFICATION_DRIVER }}
+          AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: ${{ vars.AGE_VERIFICATION_ALLOW_MOCK_PROVIDER }}
           NOTIFICATION_DEVICE_ENCRYPTION_KEY: ${{ secrets.NOTIFICATION_DEVICE_ENCRYPTION_KEY }}
           WEB_PUSH_VAPID_PUBLIC_KEY: ${{ vars.WEB_PUSH_VAPID_PUBLIC_KEY }}
           WEB_PUSH_VAPID_PRIVATE_KEY: ${{ secrets.WEB_PUSH_VAPID_PRIVATE_KEY }}
+          REALTIME_JWT_PRIVATE_JWK: ${{ secrets.REALTIME_JWT_PRIVATE_JWK }}
+          REALTIME_JWT_KEY_ID: ${{ vars.REALTIME_JWT_KEY_ID }}
+          REALTIME_JWT_ISSUER: ${{ vars.REALTIME_JWT_ISSUER }}
+          TRANSACTIONAL_EMAIL_PROVIDER: ${{ vars.TRANSACTIONAL_EMAIL_PROVIDER }}
+          TRANSACTIONAL_EMAIL_FROM: ${{ vars.TRANSACTIONAL_EMAIL_FROM }}
+          TRANSACTIONAL_EMAIL_SMOKE_TO: ${{ vars.TRANSACTIONAL_EMAIL_SMOKE_TO }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          API_RATE_LIMIT_STORE_DRIVER: ${{ vars.API_RATE_LIMIT_STORE_DRIVER }}
           API_RATE_LIMIT_REDIS_URL: ${{ secrets.API_RATE_LIMIT_REDIS_URL }}
+          OTEL_REQUIRED: ${{ vars.OTEL_REQUIRED }}
           OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}
+          SUBSCRIPTIONS_ENABLED: ${{ vars.SUBSCRIPTIONS_ENABLED }}
           LEGAL_DOCUMENTS_APPROVED: ${{ vars.LEGAL_DOCUMENTS_APPROVED }}
           LEGAL_TERMS_VERSION: ${{ vars.LEGAL_TERMS_VERSION }}
           LEGAL_PRIVACY_VERSION: ${{ vars.LEGAL_PRIVACY_VERSION }}
@@ -95,7 +112,9 @@ jobs:
         run: pnpm staging:doctor
       - name: Deployment-provider gate
         if: vars.STAGING_DEPLOY_ENABLED != 'true'
-        run: echo 'CODE_COMPLETE_PROVIDER_BLOCKED hosting adapter/OIDC is not configured; immutable manifest was verified and no deployment was attempted.'
+        run: |
+          echo 'CODE_COMPLETE_PROVIDER_BLOCKED hosting adapter/OIDC is not configured; immutable manifest was verified and no deployment was attempted.' >&2
+          exit 2
       - name: Reject enabled deployment without a repository-owned adapter
         if: vars.STAGING_DEPLOY_ENABLED == 'true'
         run: |

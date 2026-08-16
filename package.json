@@ -20,6 +20,7 @@
     "load:smoke": "node scripts/load-smoke.mjs",
     "db:backup": "node scripts/backup-supabase.mjs",
     "db:restore:prove": "node scripts/prove-backup-restore.mjs",
+    "storage:restore:prove": "node scripts/prove-storage-restore.mjs",
     "db:migrations:check": "node packages/database/scripts/check-migrations.mjs",
     "contracts:generate": "pnpm --filter @veel/contracts generate",
     "database:check": "pnpm --filter @veel/database check",
