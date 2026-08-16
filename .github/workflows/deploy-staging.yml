@@ -55,7 +55,7 @@ jobs:
       - name: Verify artifact attestations
         shell: bash
         run: |
-          node -e 'const m=require("./"+process.env.RELEASE_MANIFEST_PATH); for (const image of Object.values(m.images)) console.log(`${image.repository}@${image.digest}`)' > /tmp/images
+          node -e 'const m=require(process.env.RELEASE_MANIFEST_PATH); for (const image of Object.values(m.images)) console.log(`${image.repository}@${image.digest}`)' > /tmp/images
           while IFS= read -r image; do gh attestation verify "oci://$image" --repo "$GITHUB_REPOSITORY"; done < /tmp/images
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

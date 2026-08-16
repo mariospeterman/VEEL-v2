@@ -26,4 +26,11 @@ describe("immutable release workflows", () => {
     expect(source).toContain("PROMOTE_EXACT_STAGING_ARTIFACT");
     expect(source).toContain("STAGING_EVIDENCE_MANIFEST_DIGEST");
   });
+
+  it("loads the downloaded staging manifest from its absolute runner path", async () => {
+    const source = await workflow("deploy-staging.yml");
+
+    expect(source).toContain("require(process.env.RELEASE_MANIFEST_PATH)");
+    expect(source).not.toContain('require("./"+process.env.RELEASE_MANIFEST_PATH)');
+  });
 });
