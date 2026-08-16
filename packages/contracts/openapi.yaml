@@ -687,6 +687,7 @@ paths:
       operationId: createContent
       tags: [Content]
       summary: Create content draft
+      description: Reuses the original draft for an exact Idempotency-Key replay for the lifetime of the logical operation and rejects changed-input reuse.
       parameters:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       requestBody:
@@ -696,6 +697,7 @@ paths:
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/content/mine:

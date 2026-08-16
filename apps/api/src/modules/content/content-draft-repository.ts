@@ -33,11 +33,6 @@ export function createContentDraftRepositoryMethods(
         const storedKey = `content:create:${user.id}:${input.idempotencyKey}`;
 
         await transaction`
-          delete from idempotency_keys
-          where key = ${storedKey}
-            and expires_at <= now()
-        `;
-        await transaction`
           insert into idempotency_keys (
             key,
             actor_user_id,
@@ -50,7 +45,7 @@ export function createContentDraftRepositoryMethods(
             ${user.id},
             'content.create',
             ${input.requestHash},
-            now() + interval '24 hours'
+            'infinity'::timestamptz
           )
           on conflict (key) do nothing
         `;

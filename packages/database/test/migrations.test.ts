@@ -1023,4 +1023,14 @@ describe("database migrations", () => {
     expect(downSql).toContain("drop table if exists enterprise_action_receipts");
     expect(sql).not.toMatch(/creator_balance|withdrawal_queue|payout_queue|escrow|private_key|seed_phrase|mnemonic/i);
   });
+
+  it("promotes content-create receipts to logical-operation lifetime", () => {
+    const sql = readMigration("0100_content_draft_idempotency_lifetime.sql");
+    const downSql = readMigration("0100_content_draft_idempotency_lifetime.down.sql");
+
+    expect(sql).toContain("where scope = 'content.create'");
+    expect(sql).toContain("expires_at = 'infinity'::timestamptz");
+    expect(downSql).toContain("expires_at = created_at + interval '24 hours'");
+    expect(downSql).toContain("and expires_at = 'infinity'::timestamptz");
+  });
 });
