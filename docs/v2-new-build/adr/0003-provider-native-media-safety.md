@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Bunny Stream, Bunny Shield, Livepeer, moderation, performer consent, reporting
-Last updated: 2026-08-11
+Last updated: 2026-08-15
 Source of truth: yes
 
 Owns:
@@ -52,6 +52,10 @@ Livepeer remains the live/replay provider. Official APIs support multistream tar
 
 `LIVEPEER_ADULT_LIVE_ENABLED=false` remains the default. A thumbnail is only a fallback signal, not continuous moderation.
 
+Launch 07 implements the candidate boundary without promoting it: every room carries the exact `this_live_stream_is_sfw` declaration, creates a canonical live safety case and continuous-monitoring job, configures the official source-profile moderation multistream target at stream creation, and blocks production provider configuration unless the complete Livepeer capability tuple exists and media moderation is `launch_approved`. Staff suspension changes canonical room and safety state before the provider request. Resume releases locally only after provider confirmation. Adult live remains disabled regardless of credentials.
+
+Recorded replays are a new quarantined content revision, not permission to reuse the live playback projection. `recording.ready` creates a private replay, separate provider asset, safety case, and moderation job; playback is issued only after provider readiness plus canonical approval and publication.
+
 ## Data Minimization
 
 Veel stores normalized decisions, payload hashes, opaque provider references, confidence/ruleset metadata, consent scope/version, and reporting state. Veel does not store raw provider payloads, illegal-media copies, identity documents, selfies, biometric templates, or browser-visible provider secrets in this domain.
@@ -81,6 +85,10 @@ No candidate row can be treated as production protection.
 - Livepeer multistream: https://docs.livepeer.org/developers/guides/multistream
 - Livepeer add multistream target: https://docs.livepeer.org/api-reference/stream/add-multistream-target
 - Livepeer update stream/suspension: https://docs.livepeer.org/api-reference/stream/update
+- Livepeer terminate stream: https://docs.livepeer.org/api-reference/stream/terminate
+- Livepeer create stream/JWT/multistream fields: https://docs.livepeer.org/api-reference/stream/create
+- Livepeer webhook signatures: https://docs.livepeer.org/developers/guides/setup-and-listen-to-webhooks
+- Livepeer OBS ingest: https://docs.livepeer.org/developers/guides/stream-via-obs
 - Livepeer live thumbnails: https://docs.livepeer.org/developers/guides/thumbnails-live
 
 ## Rollback

@@ -1,6 +1,6 @@
 import type postgres from "postgres";
 
-export function liveRoomSelectSql(sql: postgres.Sql) {
+export function liveRoomSelectSql(sql: postgres.Sql, options: { includeHostSecrets?: boolean } = {}) {
   return sql`
     select
       lr.id,
@@ -13,8 +13,8 @@ export function liveRoomSelectSql(sql: postgres.Sql) {
       p.avatar_url as creator_avatar_url,
       lr.provider_stream_id,
       lr.provider_playback_id,
-      lr.host_ingest_url,
-      lr.host_stream_key,
+      ${options.includeHostSecrets ? sql`lr.host_ingest_url` : sql`null::text`} as host_ingest_url,
+      ${options.includeHostSecrets ? sql`lr.host_stream_key` : sql`null::text`} as host_stream_key,
       lr.playback_url,
       lr.preview_seconds,
       lr.event_price_minor,
@@ -23,6 +23,11 @@ export function liveRoomSelectSql(sql: postgres.Sql) {
       lr.members_included_in_paid_event,
       lr.replay_window_hours,
       lr.replay_content_item_id,
+      live_safety.state as live_safety_state,
+      live_safety.provider_release_allowed as live_provider_release_allowed,
+      coalesce(replay_release.release_allowed, false) as replay_release_allowed,
+      replay_release.playback_url as replay_playback_url,
+      replay_release.provider_playback_id as replay_provider_playback_id,
       lr.request_hash,
       exists (
         select 1
@@ -46,5 +51,38 @@ export function liveRoomSelectSql(sql: postgres.Sql) {
     from live_rooms lr
     join users creator on creator.id = lr.creator_user_id
     join profiles p on p.user_id = creator.id
+    left join lateral (
+      select msc.state, msc.provider_release_allowed
+      from media_safety_cases msc
+      where msc.live_room_id = lr.id
+        and msc.state <> 'superseded'
+      limit 1
+    ) live_safety on true
+    left join lateral (
+      select
+        (
+          ci.state = 'ready'
+          and ci.publish_state = 'published'
+          and ci.moderation_state = 'approved'
+          and msc.state = 'approved'
+          and msc.provider_release_allowed is true
+          and ma.provider_playable is true
+          and ma.ready_at is not null
+        ) as release_allowed,
+        lra.playback_url,
+        lra.provider_playback_id
+      from content_items ci
+      join media_safety_cases msc
+        on msc.content_item_id = ci.id
+        and msc.state <> 'superseded'
+      join live_replay_assets lra on lra.content_item_id = ci.id
+      join media_assets ma
+        on ma.content_item_id = ci.id
+        and ma.provider = 'livepeer'
+        and ma.provider_asset_id = lra.provider_asset_id
+      where ci.id = lr.replay_content_item_id
+      order by lra.created_at desc
+      limit 1
+    ) replay_release on true
   `;
 }

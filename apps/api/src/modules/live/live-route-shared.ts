@@ -30,6 +30,7 @@ type LiveReadyAccessResult =
       ok: true;
       supabaseUserId: string;
       appUserId: string;
+      authenticatedAt: Date;
     }
   | {
       ok: false;
@@ -65,7 +66,7 @@ export async function verifyLiveReadyAccess(
     options.walletRepository.hasWalletBySupabaseUserId(verifiedSession.supabaseUserId)
   ]);
 
-  if (profile?.state !== "active" || !profile.handle || !profile.displayName || ageStatus.state !== "verified" || !hasWallet) {
+  if (profile?.state !== "active" || !profile.handle || ageStatus.state !== "verified" || !hasWallet) {
     return {
       ok: false,
       statusCode: 403,
@@ -79,7 +80,8 @@ export async function verifyLiveReadyAccess(
   return {
     ok: true,
     supabaseUserId: verifiedSession.supabaseUserId,
-    appUserId: profile.id
+    appUserId: profile.id,
+    authenticatedAt: verifiedSession.authenticatedAt
   };
 }
 
@@ -100,6 +102,10 @@ export function validateCreateLiveRoomRequest(
 
   if (body.title.length > 120) {
     return "title must be 120 characters or fewer";
+  }
+
+  if (body.sfwAttestation !== "this_live_stream_is_sfw") {
+    return "sfwAttestation must confirm this live stream is SFW";
   }
 
   if (
@@ -225,7 +231,7 @@ export async function withSignedLivePlayback(input: {
   try {
     const jwt = await input.liveProvider.createPlaybackJwt({
       playbackId: input.room.providerPlaybackId,
-      supabaseUserId: input.supabaseUserId
+      appUserId: input.appUserId
     });
 
     if (!jwt) {
@@ -235,16 +241,14 @@ export async function withSignedLivePlayback(input: {
       };
     }
 
-    const signedUrl = new URL(playback.url);
-    signedUrl.searchParams.set("jwt", jwt);
-
     return {
       ...response,
       playback: {
         state: "full",
-        url: signedUrl.toString(),
+        url: playback.url,
         provider: "livepeer",
         resourceType: "hls",
+        jwt,
         ...(usage ? { usage } : {})
       }
     };

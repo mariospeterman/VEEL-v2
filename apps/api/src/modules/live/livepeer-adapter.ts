@@ -35,6 +35,7 @@ interface LivepeerStreamResponse {
   isActive?: boolean;
   lastTerminatedAt?: number | null;
   record?: boolean;
+  suspended?: boolean;
 }
 
 interface LivepeerPlaybackResponse {
@@ -52,7 +53,15 @@ export function createLivepeerProviderAdapter(
 ): LiveProviderAdapter {
   return {
     isConfigured() {
-      return Boolean(env.LIVEPEER_API_KEY);
+      return Boolean(
+        (env.NODE_ENV !== "production" || env.MEDIA_MODERATION_MODE === "launch_approved") &&
+        env.LIVEPEER_API_KEY &&
+          env.LIVEPEER_WEBHOOK_SECRET &&
+          env.LIVEPEER_ACCESS_CONTROL_PRIVATE_KEY &&
+          env.LIVEPEER_ACCESS_CONTROL_PUBLIC_KEY &&
+          env.LIVEPEER_MODERATION_MULTISTREAM_TARGET_ID &&
+          env.LIVEPEER_WEBHOOK_ID
+      );
     },
     async createRoom(input) {
       const apiKey = env.LIVEPEER_API_KEY;
@@ -71,6 +80,14 @@ export function createLivepeerProviderAdapter(
           name: input.title,
           playbackPolicy: { type: "jwt" },
           record: true,
+          multistream: {
+            targets: [
+              {
+                id: env.LIVEPEER_MODERATION_MULTISTREAM_TARGET_ID,
+                profile: "source"
+              }
+            ]
+          },
           userTags: {
             veelRoomId: input.roomId
           }
@@ -117,18 +134,20 @@ export function createLivepeerProviderAdapter(
         ? await findPlaybackUrl(env, fetchImpl, apiKey, providerPlaybackId)
         : null;
       const isActive = Boolean(stream.isActive);
-      const state: LiveProviderRoomStatus["state"] = isActive
-        ? "live"
-        : stream.lastTerminatedAt
-          ? "ended"
-          : "waiting";
+      const state: LiveProviderRoomStatus["state"] = stream.suspended
+        ? "suspended"
+        : isActive
+          ? "live"
+          : stream.lastTerminatedAt
+            ? "ended"
+            : "waiting";
 
       return {
         providerStreamId: stream.id ?? input.providerStreamId,
         providerPlaybackId,
-        providerState: isActive ? "active" : "idle",
+        providerState: stream.suspended ? "suspended" : isActive ? "active" : "idle",
         state,
-        playbackUrl
+        playbackUrl: stream.suspended ? null : playbackUrl
       };
     },
     async createPlaybackJwt(input) {
@@ -145,12 +164,39 @@ export function createLivepeerProviderAdapter(
           publicKey: env.LIVEPEER_ACCESS_CONTROL_PUBLIC_KEY,
           issuer: env.API_URL,
           playbackId: input.playbackId,
-          expiration: 60 * 60,
-          custom: { userId: input.supabaseUserId }
+          expiration: 5 * 60,
+          custom: { userId: input.appUserId }
         });
       } catch {
         throw new LiveProviderConfigurationError();
       }
+    },
+    async setRoomSuspended(input) {
+      const apiKey = env.LIVEPEER_API_KEY;
+      if (!apiKey) throw new LiveProviderConfigurationError();
+
+      await livepeerFetch(env, fetchImpl, `/stream/${encodeURIComponent(input.providerStreamId)}`, {
+        method: "PATCH",
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({ suspended: input.suspended })
+      });
+    },
+    async terminateRoom(input) {
+      const apiKey = env.LIVEPEER_API_KEY;
+      if (!apiKey) throw new LiveProviderConfigurationError();
+
+      await livepeerFetch(
+        env,
+        fetchImpl,
+        `/stream/${encodeURIComponent(input.providerStreamId)}/terminate`,
+        {
+          method: "DELETE",
+          headers: { authorization: `Bearer ${apiKey}` }
+        }
+      );
     }
   };
 }

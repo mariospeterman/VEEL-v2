@@ -8,7 +8,7 @@ import {
 
 describe("Livepeer provider adapter", () => {
   it("uses the configured API base URL and preserves provider stream facts", async () => {
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) =>
       new Response(
         JSON.stringify({
           id: "stream-1",
@@ -21,7 +21,7 @@ describe("Livepeer provider adapter", () => {
     );
     const adapter = createLivepeerProviderAdapter(
       livepeerEnv({ LIVEPEER_API_BASE_URL: "https://livepeer.example.test/custom-api" }),
-      fetchMock
+      fetchMock as typeof fetch
     );
 
     const room = await adapter.createRoom({ roomId: "room-1", title: "Launch room" });
@@ -33,6 +33,13 @@ describe("Livepeer provider adapter", () => {
         signal: expect.any(AbortSignal)
       })
     );
+    const createInit = fetchMock.mock.calls[0]?.[1];
+    expect(JSON.parse(String(createInit?.body))).toMatchObject({
+      multistream: { targets: [{ id: "moderation-target", profile: "source" }] },
+      playbackPolicy: { type: "jwt" },
+      record: true,
+      userTags: { veelRoomId: "room-1" }
+    });
     expect(room).toMatchObject({
       provider: "livepeer",
       providerStreamId: "stream-1",
@@ -69,7 +76,7 @@ describe("Livepeer provider adapter", () => {
 
     const token = await adapter.createPlaybackJwt({
       playbackId: "playback-1",
-      supabaseUserId: "user-1"
+      appUserId: "user-1"
     });
     const payload = JSON.parse(
       Buffer.from(token?.split(".")[1] ?? "", "base64url").toString("utf8")
@@ -84,6 +91,30 @@ describe("Livepeer provider adapter", () => {
       custom: { userId: "user-1" }
     });
   });
+
+  it("fails production configuration closed until live moderation is launch approved", () => {
+    const configured = {
+      LIVEPEER_ACCESS_CONTROL_PRIVATE_KEY: "private",
+      LIVEPEER_ACCESS_CONTROL_PUBLIC_KEY: "public",
+      LIVEPEER_MODERATION_MULTISTREAM_TARGET_ID: "moderation-target",
+      LIVEPEER_WEBHOOK_ID: "webhook-id",
+      LIVEPEER_WEBHOOK_SECRET: "webhook-secret"
+    };
+
+    expect(createLivepeerProviderAdapter(livepeerEnv({ ...configured, NODE_ENV: "production" })).isConfigured()).toBe(false);
+    expect(createLivepeerProviderAdapter(livepeerEnv({ ...configured, MEDIA_MODERATION_MODE: "launch_approved", NODE_ENV: "production" })).isConfigured()).toBe(true);
+  });
+
+  it("uses the official suspend and terminate operations", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    const adapter = createLivepeerProviderAdapter(livepeerEnv(), fetchMock);
+
+    await adapter.setRoomSuspended({ providerStreamId: "stream-1", suspended: true });
+    await adapter.terminateRoom({ providerStreamId: "stream-1" });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "https://livepeer.studio/api/stream/stream-1", expect.objectContaining({ method: "PATCH" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "https://livepeer.studio/api/stream/stream-1/terminate", expect.objectContaining({ method: "DELETE" }));
+  });
 });
 
 function livepeerEnv(overrides: Record<string, string> = {}) {
@@ -92,6 +123,11 @@ function livepeerEnv(overrides: Record<string, string> = {}) {
     API_URL: "http://localhost:4000",
     WEB_URL: "http://localhost:3000",
     LIVEPEER_API_KEY: "livepeer-api-key",
+    LIVEPEER_ACCESS_CONTROL_PRIVATE_KEY: "private",
+    LIVEPEER_ACCESS_CONTROL_PUBLIC_KEY: "public",
+    LIVEPEER_MODERATION_MULTISTREAM_TARGET_ID: "moderation-target",
+    LIVEPEER_WEBHOOK_ID: "webhook-id",
+    LIVEPEER_WEBHOOK_SECRET: "webhook-secret",
     ...overrides
   });
 }

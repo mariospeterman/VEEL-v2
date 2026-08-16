@@ -1,6 +1,7 @@
-import { patchJson } from "./api-client-transport";
+import { patchJson, postEmpty } from "./api-client-transport";
 import type {
   AdminContentItem,
+  AdminLiveRoomSuspensionRequest,
   AdminModerationActionRequest,
   AdminDataRequest,
   AdminDataRequestActionRequest,
@@ -18,6 +19,18 @@ import type {
   AdminSupportPolicyActionRequest,
   ApiResult
 } from "./api-client-types";
+
+export async function updateAdminLiveRoomSuspension(
+  roomId: string,
+  body: AdminLiveRoomSuspensionRequest,
+  idempotencyKey: string
+): Promise<ApiResult<null>> {
+  return postEmpty(
+    `/v1/admin/live/rooms/${encodeURIComponent(roomId)}/suspension`,
+    body,
+    idempotencyKey
+  );
+}
 
 export async function updateAdminContentModeration(
   contentId: string,

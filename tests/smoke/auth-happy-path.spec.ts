@@ -96,7 +96,8 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
 
   await page.goto("/app/create");
   await page.waitForLoadState("networkidle");
-  await expect(page.getByRole("heading", { name: "New post" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Share something" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Start with OBS" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Choose your video" })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.cookie.includes("veel_e2e_access_token="))).toBe(true);
 

@@ -50,6 +50,8 @@ import type {
   FeedPreferences,
   FollowState,
   LiveRoom,
+  LiveRoomPage,
+  LiveChatPage,
   McpConnectionPage,
   McpConsentRequest,
   MessagePage,
@@ -83,6 +85,14 @@ export async function getSession(): Promise<ApiResult<SessionState>> {
 
 export async function getLiveRoom(liveRoomId: string): Promise<ApiResult<LiveRoom>> {
   return getJson<LiveRoom>(`/v1/live/rooms/${encodeURIComponent(liveRoomId)}`);
+}
+
+export async function getMyLiveRooms(): Promise<ApiResult<LiveRoomPage>> {
+  return getJson<LiveRoomPage>("/v1/live/rooms/mine");
+}
+
+export async function getLiveRoomMessages(liveRoomId: string): Promise<ApiResult<LiveChatPage>> {
+  return getJson<LiveChatPage>(`/v1/live/rooms/${encodeURIComponent(liveRoomId)}/messages`);
 }
 
 export async function getCreatorProfile(handle: string): Promise<ApiResult<CreatorProfile>> {

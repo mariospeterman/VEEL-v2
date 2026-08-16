@@ -6,18 +6,22 @@ import {
 } from "../../shared/idempotency.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { ApplicationSessionVerifier } from "../session/types.js";
+import type { LiveProviderAdapter, LiveRepository } from "../live/types.js";
 import { AdminRepositoryConfigurationError } from "./admin-repository.js";
 import type { AdminRepository } from "./types.js";
 
 export interface RegisterAdminRoutesOptions {
   authVerifier: ApplicationSessionVerifier;
   adminRepository: AdminRepository;
+  liveRepository: LiveRepository;
+  liveProvider: LiveProviderAdapter;
 }
 
 export interface AdminMutationContext<Body> {
   supabaseUserId: string;
   idempotencyKey: string;
   body: Body;
+  authenticatedAt: Date;
 }
 
 export interface AdminRoutePolicy {
@@ -47,7 +51,7 @@ export async function requireAdminAccessWithUser(
   reply: FastifyReply,
   options: RegisterAdminRoutesOptions,
   policy: AdminRoutePolicy = { action: "admin.access" }
-): Promise<{ supabaseUserId: string } | null> {
+): Promise<{ supabaseUserId: string; authenticatedAt: Date } | null> {
   const verifiedSession = await verifyRequestSession(request, options.authVerifier);
 
   if (!verifiedSession) {
@@ -73,7 +77,10 @@ export async function requireAdminAccessWithUser(
       return null;
     }
 
-    return { supabaseUserId: verifiedSession.supabaseUserId };
+    return {
+      supabaseUserId: verifiedSession.supabaseUserId,
+      authenticatedAt: verifiedSession.authenticatedAt
+    };
   } catch (error) {
     if (error instanceof AdminRepositoryConfigurationError) {
       request.log.warn({ error }, "Admin repository is not configured");
@@ -126,7 +133,8 @@ export async function requireAdminMutation<Body>(
   return {
     supabaseUserId: access.supabaseUserId,
     idempotencyKey,
-    body: body as Body
+    body: body as Body,
+    authenticatedAt: access.authenticatedAt
   };
 }
 

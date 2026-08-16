@@ -147,6 +147,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       subscriptionAuthorizationVerifier,
       liveRepository,
       liveProvider: {
+        async setRoomSuspended() {},
+        async terminateRoom() {},
         isConfigured: () => true,
         async createRoom() {
           throw new Error("Integration test seeds the live room directly.");
@@ -157,7 +159,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         async createPlaybackJwt(input) {
           expect(input).toEqual({
             playbackId: `livepeer-playback-${shortRunId}`,
-            supabaseUserId: buyerSupabaseUserId
+            appUserId: buyerSupabaseUserId
           });
           return `integration-live-jwt-${shortRunId}`;
         }
@@ -2510,7 +2512,6 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(livePassIntentResponse.statusCode, livePassIntentResponse.body).toBe(201);
       expect(livePassIntentResponse.json()).toMatchObject({
         productType: "live_pass",
-        targetId: seededLiveRoomId,
         amountMinor: 50000000,
         currency: "SOL",
         state: "pending"
@@ -2578,8 +2579,9 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(activeLiveRoomResponse.json().playback.url).toContain(
         `https://livepeercdn.studio/hls/livepeer-playback-${shortRunId}/index.m3u8`
       );
-      expect(activeLiveRoomResponse.json().playback.url).toContain(
-        `jwt=integration-live-jwt-${shortRunId}`
+      expect(activeLiveRoomResponse.json().playback.url).not.toContain("jwt=");
+      expect(activeLiveRoomResponse.json().playback.jwt).toBe(
+        `integration-live-jwt-${shortRunId}`
       );
 
       const liveChatBody = `Live integration hello ${shortRunId}`;
@@ -4236,6 +4238,30 @@ async function seedCreatorLiveRoom(
       ${`https://livepeercdn.studio/hls/livepeer-playback-${input.shortRunId}/index.m3u8`},
       ${input.idempotencyKey},
       'integration-live-room'
+    )
+  `;
+  await sql`
+    insert into media_safety_cases (
+      live_room_id,
+      declared_rating,
+      state,
+      decision_source,
+      reason_code,
+      policy_version,
+      provider_release_allowed,
+      evidence_summary,
+      decided_at
+    )
+    values (
+      ${input.liveRoomId},
+      'none',
+      'approved',
+      'automated',
+      'creator_sfw_attestation',
+      'sfw-live-v1',
+      true,
+      ${sql.json({ attestation: "this_live_stream_is_sfw" })},
+      now()
     )
   `;
 }

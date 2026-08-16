@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Bunny, Livepeer, media, live
-Last updated: 2026-08-14
+Last updated: 2026-08-15
 Source of truth: yes
 
 Owns:
@@ -40,6 +40,12 @@ Current implementation state:
 - Access projection is conservative: free/teaser/pass/locked states are exposed, entitlement grants remain backend-settlement-owned, and provider management URLs are never exposed to the browser.
 - `GET /v1/content/{contentId}` fails full Bunny playback closed unless backend access is already `free`, `unlocked`, or `subscribed` and a short-lived Bunny embed token can be generated server-side.
 - `POST /v1/webhooks/media/{provider}` accepts Bunny Stream signed webhooks for the `bunny` provider and Livepeer signed stream webhooks for the `livepeer` provider, verifies raw-body HMAC signatures, records idempotent provider receipts, and applies normalized media/live processing state.
+- SFW live creation now reserves the canonical room and one atomic provider-creation claim before calling Livepeer. Concurrent retries cannot create two streams, and a created provider stream that cannot be attached is suspended and terminated as fail-closed compensation.
+- Creator OBS setup is available through an owner-only host workspace. The ordinary endpoint stays masked; the one-response reveal requires recent authentication, an explicit secret-handling acknowledgement, idempotency, no-store headers, and an audit/control receipt.
+- Viewer playback receives the short-lived Livepeer JWT as a separate player credential, never as a URL query parameter. Ordinary viewer/list repository reads select neither the ingest URL nor stream key.
+- Creator end and staff suspend/resume are backend-owned, idempotent, audited controls. Local playback/access blocking happens before the provider call; resume stays blocked until provider recovery succeeds.
+- Live chat authorization and message idempotency are one atomic database operation. Only the sanitized chat table is published to Supabase Realtime; `live_rooms` and its provider secrets are not.
+- `recording.ready` creates a private replay content item, safety case, media asset, and moderation job. A room marked replay-ready still exposes no replay playback until the canonical content, safety, and provider-ready predicates all pass.
 - Bunny playback token issuing is backend-owned through embed-view token authentication; moderation state transitions and broader locked playback policy surfaces are deferred to their owning media/access slices.
 
 Official references checked:
@@ -52,6 +58,10 @@ Official references checked:
 - Livepeer webhook setup and signatures: https://docs.livepeer.org/developers/guides/setup-and-listen-to-webhooks
 - Livepeer stream event webhooks: https://docs.livepeer.org/developers/guides/listen-to-stream-events
 - Livepeer JWT access control: https://docs.livepeer.org/developers/guides/access-control-jwt
+- Livepeer create stream: https://docs.livepeer.org/api-reference/stream/create
+- Livepeer update/suspend stream: https://docs.livepeer.org/api-reference/stream/update
+- Livepeer terminate stream: https://docs.livepeer.org/api-reference/stream/terminate
+- Livepeer OBS ingest: https://docs.livepeer.org/developers/guides/stream-via-obs
 - Livepeer asset upload reference: https://docs.livepeer.org/api-reference/asset/upload
 
 ## Provider Split
@@ -107,10 +117,11 @@ sequenceDiagram
 
   Creator->>API: Create/start room
   API->>DB: Reserve room id and idempotency record
+  API->>DB: Claim the single provider creation attempt
   API->>Livepeer: Create stream with Veel room id tag
   Livepeer-->>API: streamKey, ingest, playback
   API->>DB: Attach provider ids and host connection secrets
-  API-->>Creator: Host connection
+  API-->>Creator: Room created; reveal OBS connection on demand
   Viewer->>API: Open viewer room
   API-->>Viewer: Safe playback/access state
   Livepeer->>API: Stream webhook
@@ -119,8 +130,8 @@ sequenceDiagram
 
 Rules:
 
-- Live room creation is DB-first: the API reserves a durable room id and idempotency record before creating a Livepeer stream, then attaches provider ids and host connection fields. Retrying the same idempotency key reuses the same Veel room id instead of creating unrelated provider resources.
-- Current v2 API exposes a masked creator host connection only. A reveal/control workflow must add explicit break-glass UX, auditing, and staging provider validation before exposing full host credentials to a browser surface.
+- Live room creation is DB-first: the API reserves a durable room id and idempotency record, then atomically claims the one provider-creation lease before creating a Livepeer stream and attaching provider ids and host connection fields. Concurrent use of the same idempotency key reuses the same room and cannot run two provider creates.
+- `GET /v1/live/rooms/:id/host-connection` stays masked. `POST /v1/live/rooms/:id/host-connection/reveal` is creator-only, recent-authenticated, idempotent, audited, and no-store. The host screen keeps the revealed key in component memory only.
 - Viewer never receives stream key or ingest URL.
 - Replay state is separate from live state.
 - Paid playback access uses Livepeer JWT provider access from day one.
@@ -129,9 +140,9 @@ Rules:
 - Livepeer JWT signing keys stay backend-only.
 - Livepeer access JWTs are signed with the pinned official `@livepeer/core/crypto` `signAccessJwt` helper using P-256 keys. The API does not maintain a parallel JWT implementation.
 - Livepeer API calls honor `LIVEPEER_API_BASE_URL` and the bounded `LIVEPEER_HTTP_TIMEOUT_MS`. Configuration, authentication, not-found, rate-limit, timeout, and provider failures are typed; only provider 404 permits playback lookup fallback, while all other failures remain visible and fail closed.
-- Livepeer stream webhooks require `Livepeer-Signature` with `t=` and `v1=` values; the backend verifies the exact raw request body with `LIVEPEER_WEBHOOK_SECRET` and a five-minute replay window.
+- Livepeer stream webhooks require `Livepeer-Signature` with `t=` and one or more `v1=` values; the backend verifies the exact raw request body with `LIVEPEER_WEBHOOK_SECRET`, binds the payload timestamp to the signed header timestamp, and enforces a five-minute replay window.
 - Livepeer `stream.started`, `stream.idle`, `recording.waiting`, and `recording.ready` events are normalized into live room provider state by provider stream id. Provider payloads and host credentials are not exposed to viewer resources.
-- `recording.ready` handoff links a private, moderation-pending `live_replay` content item and Livepeer media asset to the room. Generic content playback for Livepeer replay rows fails closed until the dedicated signed replay playback slice is implemented.
+- `recording.ready` handoff links a private, moderation-pending `live_replay` content item, canonical safety case, Livepeer media asset, and moderation job to the room. Replay playback is derived from that separate asset and remains unavailable until all canonical release predicates pass.
 
 ## Live Monetisation Model
 
@@ -156,13 +167,16 @@ Current implementation slice:
 - `POST /v1/live/rooms` creates a Livepeer stream with JWT playback policy through the backend provider adapter.
 - `GET /v1/live/rooms/:id` returns viewer-safe mode, playback, membership/event access, chat, and replay projection.
 - `/live/[liveRoomId]` consumes that live-room projection through the web API helper and renders fail-closed unavailable state when the API or authorization path cannot return a viewer-safe resource.
-- Allowed Livepeer playback is signed server-side and returned as a short-lived HLS resource with a JWT query parameter. If JWT signing keys are unavailable, full playback fails closed as `blocked` even when backend access is active.
-- `GET /v1/live/rooms/:id/host-connection` returns masked host connection details only.
+- Allowed Livepeer playback is signed server-side and returned as a short-lived HLS resource plus a separate write-only JWT player credential. If JWT signing keys are unavailable, full playback fails closed as `blocked` even when backend access is active.
+- `GET /v1/live/rooms/mine` lists creator rooms; the private `/app/live/[liveRoomId]` workspace owns OBS setup, status refresh, viewer preview, and creator end.
+- `GET /v1/live/rooms/:id/host-connection` returns masked host details; the explicit reveal mutation returns credentials once per response under recent-auth and audit controls.
+- `POST /v1/live/rooms/:id/end` blocks locally before provider termination. `POST /v1/admin/live/rooms/:id/suspension` gives owner/admin/trust-safety roles an audited provider-backed suspend/resume control.
 - `POST /v1/live/rooms/:id/sync` refreshes provider state and replay projection.
 - `POST /v1/live/rooms/:id/event-access-intents` creates the room's one server-priced paid-event intent.
 - Confirmed payment settlement creates active event access server-side and closes its replay window from the backend room end time.
-- `GET/POST /v1/live/rooms/:id/messages` gates chat on backend access and optional members-only-chat policy.
-- Livepeer remains launch-gated until staging keys, JWT policy, and real provider smoke are validated.
+- `GET/POST /v1/live/rooms/:id/messages` gates chat on a fresh atomic actor/room/block/membership/pass snapshot and deduplicates actor idempotency keys.
+- The viewer surface renders the official Livepeer player with keyboard-accessible play, sound, live, and fullscreen controls plus chat, Support, Share, and Report without provider jargon.
+- Livepeer remains `CODE_COMPLETE_PROVIDER_BLOCKED`: production configuration fails closed unless the full API/webhook/JWT/moderation-target tuple exists and `MEDIA_MODERATION_MODE=launch_approved`. Real staging ingest, webhook, suspension-latency, moderation-target, recovery, and replay evidence is still required.
 
 ## Media Access Resource
 

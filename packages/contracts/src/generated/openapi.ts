@@ -1116,6 +1116,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/live/rooms/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List creator-owned live rooms without host credentials */
+        get: operations["listMyLiveRooms"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/live/rooms/{roomId}": {
         parameters: {
             query?: never;
@@ -1144,6 +1161,40 @@ export interface paths {
         get: operations["getLiveHostConnection"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/live/rooms/{roomId}/host-connection/reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reveal creator-owned OBS credentials after recent authentication and explicit acknowledgement */
+        post: operations["revealLiveHostConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/live/rooms/{roomId}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End the current creator-owned live session */
+        post: operations["endLiveRoom"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2690,6 +2741,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/live/rooms/{roomId}/suspension": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Suspend or resume a live room through canonical staff and provider controls */
+        post: operations["updateAdminLiveRoomSuspension"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/media/assets": {
         parameters: {
             query?: never;
@@ -3719,10 +3787,11 @@ export interface components {
             provider: "bunny" | "livepeer" | "none";
             /** @enum {string|null} */
             resourceType?: "embed" | "hls" | "direct" | null;
+            jwt?: string | null;
             /** Format: date-time */
             expiresAt?: string | null;
             /** @enum {string|null} */
-            blockReason?: "entitlement_required" | "allowance_exhausted" | "provider_unavailable" | null;
+            blockReason?: "entitlement_required" | "allowance_exhausted" | "provider_unavailable" | "replay_under_review" | "room_suspended" | "stream_ended" | null;
             usage?: components["schemas"]["PlaybackUsageContext"];
         };
         PlaybackUsageContext: {
@@ -3888,6 +3957,8 @@ export interface components {
         };
         CreateLiveRoomRequest: {
             title: string;
+            /** @enum {string} */
+            sfwAttestation: "this_live_stream_is_sfw";
             /**
              * @default public
              * @enum {string}
@@ -3909,7 +3980,9 @@ export interface components {
             title: string;
             creator: components["schemas"]["User"];
             /** @enum {string} */
-            state: "scheduled" | "waiting" | "live" | "ended" | "replay_ready";
+            state: "scheduled" | "waiting" | "live" | "suspended" | "ended" | "replay_ready";
+            /** @enum {string} */
+            safetyState: "quarantined" | "monitoring" | "approved" | "suspended" | "rejected";
             /** @enum {string} */
             accessMode: "public" | "profile_members" | "paid_event";
             /** @enum {string} */
@@ -3932,6 +4005,18 @@ export interface components {
             streamKeyHint: string;
             /** @enum {string} */
             provider: "livepeer";
+        };
+        RevealLiveHostConnectionRequest: {
+            /** @enum {string} */
+            acknowledgement: "i_understand_stream_keys_are_secrets";
+        };
+        RevealedHostConnection: {
+            /** @enum {string} */
+            provider: "livepeer";
+            ingestUrl: string;
+            streamKey: string;
+            /** @enum {string} */
+            securityNotice: "never_share_or_store_this_stream_key";
         };
         LiveChatState: {
             enabled: boolean;
@@ -5160,7 +5245,7 @@ export interface components {
             providerPlaybackId?: string | null;
             providerState: string;
             /** @enum {string} */
-            state: "scheduled" | "waiting" | "live" | "ended" | "replay_ready";
+            state: "scheduled" | "waiting" | "live" | "suspended" | "ended" | "replay_ready";
             /** @enum {string} */
             accessMode: "public" | "profile_members" | "paid_event";
             eventPriceMinor: number | null;
@@ -5178,6 +5263,10 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt?: string | null;
+        };
+        AdminLiveRoomSuspensionRequest: {
+            suspended: boolean;
+            reason: string;
         };
         AdminMediaAsset: {
             /** Format: uuid */
@@ -5995,6 +6084,15 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["HostConnection"];
+            };
+        };
+        /** @description One-response creator-only OBS credentials */
+        RevealedHostConnection: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["RevealedHostConnection"];
             };
         };
         /** @description Live chat messages */
@@ -6968,6 +7066,10 @@ export interface components {
         OptionalIdempotencyKey: string;
         /** @description Provider-specific signature or shared-secret header normalized by the adapter. */
         WebhookSignature: string;
+        /** @description Required for Livepeer callbacks; contains the provider timestamp and one or more v1 HMAC signatures. */
+        LivepeerSignature: string;
+        /** @description Required for Bunny callbacks. Provider-specific verification remains authoritative in the backend adapter. */
+        BunnySignature: string;
         Cursor: string;
         SearchQuery: string;
         FeedMode: "recommended" | "following" | "nsfw" | "sfw";
@@ -7119,6 +7221,11 @@ export interface components {
         CreateLiveRoom: {
             content: {
                 "application/json": components["schemas"]["CreateLiveRoomRequest"];
+            };
+        };
+        RevealLiveHostConnection: {
+            content: {
+                "application/json": components["schemas"]["RevealLiveHostConnectionRequest"];
             };
         };
         CreateLiveChatMessage: {
@@ -7326,6 +7433,11 @@ export interface components {
         AdminFeatureFlagPatch: {
             content: {
                 "application/json": components["schemas"]["AdminFeatureFlagPatchRequest"];
+            };
+        };
+        AdminLiveRoomSuspension: {
+            content: {
+                "application/json": components["schemas"]["AdminLiveRoomSuspensionRequest"];
             };
         };
         WebhookPayload: {
@@ -8782,6 +8894,22 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listMyLiveRooms: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["LiveRoomPage"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -8818,6 +8946,54 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    revealLiveHostConnection: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                roomId: components["parameters"]["RoomId"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["RevealLiveHostConnection"];
+        responses: {
+            200: components["responses"]["RevealedHostConnection"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    endLiveRoom: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                roomId: components["parameters"]["RoomId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: components["responses"]["Accepted"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -8880,6 +9056,8 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -10495,6 +10673,30 @@ export interface operations {
             403: components["responses"]["Forbidden"];
         };
     };
+    updateAdminLiveRoomSuspension: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                roomId: components["parameters"]["RoomId"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["AdminLiveRoomSuspension"];
+        responses: {
+            202: components["responses"]["Accepted"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     listAdminMediaAssets: {
         parameters: {
             query?: {
@@ -10827,9 +11029,11 @@ export interface operations {
     receiveMediaWebhook: {
         parameters: {
             query?: never;
-            header: {
-                /** @description Provider-specific signature or shared-secret header normalized by the adapter. */
-                "X-Veel-Webhook-Signature": components["parameters"]["WebhookSignature"];
+            header?: {
+                /** @description Required for Livepeer callbacks; contains the provider timestamp and one or more v1 HMAC signatures. */
+                "Livepeer-Signature"?: components["parameters"]["LivepeerSignature"];
+                /** @description Required for Bunny callbacks. Provider-specific verification remains authoritative in the backend adapter. */
+                "Bunny-Webhook-Signature"?: components["parameters"]["BunnySignature"];
             };
             path: {
                 provider: components["parameters"]["MediaProvider"];

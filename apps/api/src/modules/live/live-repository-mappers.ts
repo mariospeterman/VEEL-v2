@@ -7,8 +7,13 @@ export function toLiveRoom(row: LiveRoomRow): StoredLiveRoom {
     (row.access_rule === "profile_members" || row.members_included_in_paid_event);
   const accessAllowed =
     row.is_creator || row.access_rule === "public" || row.has_active_pass || membershipGrantsAccess;
-  const isPlayable =
-    (row.state === "live" || row.state === "replay_ready") && Boolean(row.playback_url);
+  const liveSafetyReleased =
+    row.live_safety_state === "approved" && row.live_provider_release_allowed === true;
+  const isLivePlayable = row.state === "live" && liveSafetyReleased && Boolean(row.playback_url);
+  const isReplayPlayable =
+    row.state === "replay_ready" && row.replay_release_allowed && Boolean(row.replay_playback_url);
+  const isPlayable = isLivePlayable || isReplayPlayable;
+  const playbackUrl = isReplayPlayable ? row.replay_playback_url : row.playback_url;
   const accessState = accessAllowed
     ? "allowed"
     : row.access_rule === "profile_members"
@@ -27,13 +32,14 @@ export function toLiveRoom(row: LiveRoomRow): StoredLiveRoom {
       badges: []
     },
     state: row.state,
+    safetyState: toLiveSafetyState(row),
     accessMode: row.access_rule as StoredLiveRoom["accessMode"],
     accessState,
     playback:
       isPlayable && accessAllowed
         ? {
             state: "full",
-            url: row.playback_url,
+            url: playbackUrl,
             provider: "livepeer"
           }
         : {
@@ -52,13 +58,19 @@ export function toLiveRoom(row: LiveRoomRow): StoredLiveRoom {
           }
         : null,
     chat: {
-      enabled: row.state === "live",
+      enabled: row.state === "live" && liveSafetyReleased,
       accessState:
-        row.state !== "live" ? "closed" : chatAllowed ? "allowed" : "members_only"
+        row.state !== "live" || !liveSafetyReleased
+          ? "closed"
+          : chatAllowed
+            ? "allowed"
+            : "members_only"
     },
     replayContentId: row.replay_content_item_id,
     providerStreamId: row.provider_stream_id,
-    providerPlaybackId: row.provider_playback_id,
+    providerPlaybackId: isReplayPlayable
+      ? row.replay_provider_playback_id
+      : row.provider_playback_id,
     hostIngestUrl: row.host_ingest_url,
     hostStreamKey: row.host_stream_key
   };
@@ -68,6 +80,17 @@ export function toLiveRoom(row: LiveRoomRow): StoredLiveRoom {
   }
 
   return room;
+}
+
+function toLiveSafetyState(row: LiveRoomRow): StoredLiveRoom["safetyState"] {
+  if (row.state === "suspended") return "suspended";
+  if (row.live_safety_state === "rejected" || row.live_safety_state === "held_for_reporting") {
+    return "rejected";
+  }
+  if (row.live_safety_state === "approved" && row.live_provider_release_allowed) {
+    return row.state === "live" ? "monitoring" : "approved";
+  }
+  return "quarantined";
 }
 
 export function toLiveChatMessage(row: LiveChatMessageRow): LiveChatMessage {

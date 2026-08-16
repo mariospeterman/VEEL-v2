@@ -18,7 +18,7 @@ export function SolanaWalletProvider({ children }: Readonly<{ children: React.Re
 
   return (
     <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider autoConnect wallets={[]}>
+      <WalletProvider autoConnect={false} wallets={[]}>
         <WalletModalProvider>
           <WalletModalAccessibilityBridge />
           <SolanaSessionLogoutRegistration />

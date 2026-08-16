@@ -12,6 +12,7 @@ import {
   formatDate,
   timestampLabel
 } from "./admin-ui";
+import { updateLiveRoomSuspensionAction } from "./actions";
 
 export function ProviderEventRow({ event }: { event: AdminProviderEvent }) {
   return (
@@ -52,6 +53,21 @@ export function LiveProviderRow({ room }: { room: AdminLiveRoom }) {
         <Fact label="Playback URL" value={room.hasPlaybackUrl ? "present" : "none"} />
         <Fact label="Stream key" value={room.hasHostStreamKey ? "redacted" : "none"} />
       </div>
+      <form action={updateLiveRoomSuspensionAction} className="mt-3 grid gap-2 border-t border-(--line) pt-3 sm:grid-cols-[120px_1fr_auto]">
+        <input name="roomId" type="hidden" value={room.id} />
+        <label className="grid gap-1 text-xs text-(--muted)">
+          <span>Action</span>
+          <select className="min-h-10 rounded border border-(--line) bg-(--panel) px-2 text-(--foreground)" defaultValue={room.state === "suspended" ? "false" : "true"} name="suspended">
+            <option value="true">Suspend</option>
+            <option value="false">Resume</option>
+          </select>
+        </label>
+        <label className="grid gap-1 text-xs text-(--muted)">
+          <span>Safety reason</span>
+          <input className="min-h-10 rounded border border-(--line) bg-(--panel) px-3 text-(--foreground)" maxLength={1000} name="reason" required />
+        </label>
+        <button className="min-h-10 self-end rounded border border-(--line) px-3 font-semibold" type="submit">Apply</button>
+      </form>
     </article>
   );
 }

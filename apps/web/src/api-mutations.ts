@@ -80,7 +80,14 @@ export type {
   Wallet,
   WalletAuthChallenge,
   WalletAuthSession,
-  WalletLinkChallenge
+  WalletLinkChallenge,
+  CreateLiveRoomRequest,
+  HostConnection,
+  LiveChatMessage,
+  LiveChatPage,
+  LiveRoom,
+  LiveRoomPage,
+  RevealedHostConnection
 } from "./api-mutation-types";
 import type {
   AccessPassIntent,
@@ -154,7 +161,14 @@ import type {
   Wallet,
   WalletAuthChallenge,
   WalletAuthSession,
-  WalletLinkChallenge
+  WalletLinkChallenge,
+  CreateLiveRoomRequest,
+  HostConnection,
+  LiveChatMessage,
+  LiveChatPage,
+  LiveRoom,
+  LiveRoomPage,
+  RevealedHostConnection
 } from "./api-mutation-types";
 
 export async function createAgeSession(body: CreateAgeSessionRequest): Promise<AgeSession> {
@@ -430,6 +444,71 @@ export async function createLiveEventAccessIntent(
     `/v1/live/rooms/${encodeURIComponent(liveRoomId)}/event-access-intents`,
     "POST",
     {},
+    idempotencyKey
+  );
+}
+
+export async function createLiveRoom(
+  body: CreateLiveRoomRequest,
+  idempotencyKey?: string
+): Promise<LiveRoom> {
+  return authenticatedMutation<LiveRoom>("/v1/live/rooms", "POST", body, idempotencyKey);
+}
+
+export async function getMyLiveRoomsForMutation(): Promise<LiveRoomPage> {
+  return authenticatedGet<LiveRoomPage>("/v1/live/rooms/mine");
+}
+
+export async function getLiveHostConnection(liveRoomId: string): Promise<HostConnection> {
+  return authenticatedGet<HostConnection>(
+    `/v1/live/rooms/${encodeURIComponent(liveRoomId)}/host-connection`
+  );
+}
+
+export async function revealLiveHostConnection(
+  liveRoomId: string,
+  idempotencyKey?: string
+): Promise<RevealedHostConnection> {
+  return authenticatedMutation<RevealedHostConnection>(
+    `/v1/live/rooms/${encodeURIComponent(liveRoomId)}/host-connection/reveal`,
+    "POST",
+    { acknowledgement: "i_understand_stream_keys_are_secrets" },
+    idempotencyKey
+  );
+}
+
+export async function syncLiveRoom(liveRoomId: string): Promise<LiveRoom> {
+  return authenticatedMutation<LiveRoom>(
+    `/v1/live/rooms/${encodeURIComponent(liveRoomId)}/sync`,
+    "POST",
+    {}
+  );
+}
+
+export async function endLiveRoom(liveRoomId: string, idempotencyKey?: string): Promise<void> {
+  await authenticatedEmptyMutation(
+    `/v1/live/rooms/${encodeURIComponent(liveRoomId)}/end`,
+    "POST",
+    {},
+    idempotencyKey
+  );
+}
+
+export async function getLiveChatMessages(liveRoomId: string): Promise<LiveChatPage> {
+  return authenticatedGet<LiveChatPage>(
+    `/v1/live/rooms/${encodeURIComponent(liveRoomId)}/messages`
+  );
+}
+
+export async function createLiveChatMessage(
+  liveRoomId: string,
+  body: string,
+  idempotencyKey?: string
+): Promise<LiveChatMessage> {
+  return authenticatedMutation<LiveChatMessage>(
+    `/v1/live/rooms/${encodeURIComponent(liveRoomId)}/messages`,
+    "POST",
+    { body },
     idempotencyKey
   );
 }

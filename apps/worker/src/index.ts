@@ -74,7 +74,7 @@ export const buildWorkerRuntime = () => {
       },
       {
         name: "provider-event-replays",
-        cadence: "operator_requested",
+        cadence: "every_minute",
         sourceIndex: "provider_event_replay_requests_state_created_idx"
       },
       {
@@ -233,6 +233,7 @@ export interface ScheduledWorkerTickResult {
   mediaModeration: "completed" | "failed";
   notificationDeliveries: "completed" | "failed";
   paymentConfirmationEmails: "completed" | "failed";
+  providerEventReplays: "completed" | "failed";
   subscriptionCollections: "completed" | "failed";
 }
 
@@ -245,6 +246,7 @@ export interface WorkerTickRunners {
   mediaModeration(): Promise<unknown>;
   notificationDeliveries(): Promise<unknown>;
   paymentConfirmationEmails(): Promise<unknown>;
+  providerEventReplays(): Promise<unknown>;
   subscriptionCollections(): Promise<unknown>;
 }
 
@@ -267,12 +269,14 @@ export async function runScheduledWorkerTick(input: {
     mediaModeration: () => runMediaModerationTick({ limit: config.WORKER_BATCH_LIMIT }),
     notificationDeliveries: () => runNotificationDeliveryTick({ limit: config.WORKER_BATCH_LIMIT }),
     paymentConfirmationEmails: () => runPaymentConfirmationEmailTick({ limit: config.WORKER_BATCH_LIMIT }),
+    providerEventReplays: () => runProviderEventReplayTick({ limit: config.WORKER_BATCH_LIMIT }),
     subscriptionCollections: () => runSubscriptionCollectionTick({ limit: config.WORKER_BATCH_LIMIT })
   };
   const tasks = [
     ["mediaModeration", runners.mediaModeration],
     ["notificationDeliveries", runners.notificationDeliveries],
     ["paymentConfirmationEmails", runners.paymentConfirmationEmails],
+    ["providerEventReplays", runners.providerEventReplays],
     ["subscriptionCollections", runners.subscriptionCollections]
   ] as const;
   const results = await Promise.all(
@@ -317,6 +321,7 @@ export function startWorkerProcess(input: {
         mediaModeration: "completed",
         notificationDeliveries: "completed",
         paymentConfirmationEmails: "completed",
+        providerEventReplays: "completed",
         subscriptionCollections: "completed"
       });
     }

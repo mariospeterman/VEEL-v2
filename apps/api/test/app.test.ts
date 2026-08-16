@@ -9081,6 +9081,7 @@ describe("buildApi", () => {
         }
       }),
       liveProvider: {
+        ...noopLiveProviderControls,
         isConfigured: () => true,
         async createRoom(input) {
           providerCreates.push(input);
@@ -9113,6 +9114,7 @@ describe("buildApi", () => {
       },
       payload: {
         title: "Friday live room",
+        sfwAttestation: "this_live_stream_is_sfw",
         accessMode: "paid_event",
         previewSeconds: 45,
         eventPriceMinor: 75000000,
@@ -9171,6 +9173,7 @@ describe("buildApi", () => {
         }
       }),
       liveProvider: {
+        ...noopLiveProviderControls,
         isConfigured: () => true,
         async createRoom(input) {
           providerCreates.push(input);
@@ -9195,6 +9198,7 @@ describe("buildApi", () => {
       },
       payload: {
         title: "Provider fail room",
+        sfwAttestation: "this_live_stream_is_sfw",
         accessMode: "paid_event",
         previewSeconds: 45,
         eventPriceMinor: 75000000
@@ -9208,6 +9212,140 @@ describe("buildApi", () => {
     ]);
     expect(providerAttachments).toEqual([]);
 
+    await app.close();
+  });
+
+  it("suspends then terminates an unattached provider room when database attachment fails", async () => {
+    const providerControls: string[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      liveRepository: fakeLiveRepository({
+        async onReserveRoom(input) {
+          return liveRoomFixture({
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa39",
+            providerStreamId: null,
+            providerPlaybackId: null,
+            hostIngestUrl: null,
+            hostStreamKey: null,
+            requestHash: input.requestHash
+          });
+        },
+        async onAttachProviderRoom() {
+          return null;
+        },
+        async onFindOwnedRoomByIdempotency() {
+          return null;
+        }
+      }),
+      liveProvider: {
+        isConfigured: () => true,
+        async createRoom() {
+          return {
+            provider: "livepeer" as const,
+            providerStreamId: "provider-orphan-39",
+            providerPlaybackId: "playback-orphan-39",
+            providerState: "waiting" as const,
+            playbackUrl: "https://livepeercdn.studio/hls/playback-orphan-39/index.m3u8",
+            hostIngestUrl: "rtmp://rtmp.livepeer.com/live",
+            hostStreamKey: "secret"
+          };
+        },
+        async getRoomStatus() {
+          throw new Error("not implemented");
+        },
+        async createPlaybackJwt() {
+          return null;
+        },
+        async setRoomSuspended(input) {
+          providerControls.push(`suspend:${input.providerStreamId}`);
+        },
+        async terminateRoom(input) {
+          providerControls.push(`terminate:${input.providerStreamId}`);
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/live/rooms",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "live-room-attach-fail-1"
+      },
+      payload: {
+        title: "Unattached provider room",
+        sfwAttestation: "this_live_stream_is_sfw"
+      }
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(providerControls).toEqual([
+      "suspend:provider-orphan-39",
+      "terminate:provider-orphan-39"
+    ]);
+    await app.close();
+  });
+
+  it("allows only one provider creation claimant for an idempotent live room", async () => {
+    let providerCreateCount = 0;
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      liveRepository: fakeLiveRepository({
+        async onReserveRoom(input) {
+          return liveRoomFixture({
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa29",
+            providerStreamId: null,
+            providerPlaybackId: null,
+            requestHash: input.requestHash
+          });
+        },
+        async onClaimProviderCreation() {
+          return false;
+        },
+        async onFindOwnedRoomByIdempotency() {
+          return null;
+        }
+      }),
+      liveProvider: {
+        ...noopLiveProviderControls,
+        isConfigured: () => true,
+        async createRoom() {
+          providerCreateCount += 1;
+          throw new Error("must not run");
+        },
+        async getRoomStatus() {
+          throw new Error("not implemented");
+        },
+        async createPlaybackJwt() {
+          return null;
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/live/rooms",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "live-room-claim-conflict-1"
+      },
+      payload: {
+        title: "Claimed room",
+        sfwAttestation: "this_live_stream_is_sfw"
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ message: "Live room setup is already in progress" });
+    expect(providerCreateCount).toBe(0);
     await app.close();
   });
 
@@ -9246,6 +9384,209 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("reveals creator OBS credentials only through the recent-auth audited route", async () => {
+    const reveals: unknown[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      liveRepository: fakeLiveRepository({
+        async onRevealHostConnection(input) {
+          reveals.push(input);
+          return {
+            provider: "livepeer",
+            ingestUrl: "rtmp://rtmp.livepeer.com/live",
+            streamKey: "creator-secret-key",
+            securityNotice: "never_share_or_store_this_stream_key"
+          };
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/live/rooms/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa11/host-connection/reveal",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "live-host-reveal-1"
+      },
+      payload: { acknowledgement: "i_understand_stream_keys_are_secrets" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["cache-control"]).toBe("no-store, max-age=0");
+    expect(response.json()).toEqual({
+      provider: "livepeer",
+      ingestUrl: "rtmp://rtmp.livepeer.com/live",
+      streamKey: "creator-secret-key",
+      securityNotice: "never_share_or_store_this_stream_key"
+    });
+    expect(reveals).toHaveLength(1);
+    expect(reveals[0]).toMatchObject({
+      roomId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa11",
+      idempotencyKey: "live-host-reveal-1"
+    });
+    await app.close();
+  });
+
+  it("rejects OBS credential reveal when authentication is no longer recent", async () => {
+    let revealCalled = false;
+    const app = await buildApi({
+      authVerifier: {
+        async verifyToken(token) {
+          const verified = await fakeAuthVerifier.verifyToken(token);
+          return verified
+            ? { ...verified, authenticatedAt: new Date(Date.now() - 20 * 60 * 1000) }
+            : null;
+        }
+      },
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      liveRepository: fakeLiveRepository({
+        async onRevealHostConnection() {
+          revealCalled = true;
+          return null;
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/live/rooms/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa11/host-connection/reveal",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "live-host-reveal-stale-1"
+      },
+      payload: { acknowledgement: "i_understand_stream_keys_are_secrets" }
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({ code: "recent_authentication_required" });
+    expect(revealCalled).toBe(false);
+    await app.close();
+  });
+
+  it("ends creator live rooms locally before terminating the provider stream", async () => {
+    const calls: string[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      liveRepository: fakeLiveRepository({
+        async onReserveOwnedControl() {
+          calls.push("reserve");
+          return {
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa41",
+            roomId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa12",
+            action: "creator_ended",
+            state: "pending",
+            providerStreamId: "provider-stream-12"
+          };
+        },
+        async onCompleteControl(input) {
+          calls.push(`complete:${input.state}:${input.providerState}`);
+        }
+      }),
+      liveProvider: {
+        ...noopLiveProviderControls,
+        isConfigured: () => true,
+        async createRoom() {
+          throw new Error("not implemented");
+        },
+        async getRoomStatus() {
+          throw new Error("not implemented");
+        },
+        async createPlaybackJwt() {
+          return null;
+        },
+        async terminateRoom(input) {
+          calls.push(`terminate:${input.providerStreamId}`);
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/live/rooms/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa12/end",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "live-end-room-1"
+      }
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(calls).toEqual([
+      "reserve",
+      "terminate:provider-stream-12",
+      "complete:ended:terminated"
+    ]);
+    await app.close();
+  });
+
+  it("applies staff live suspension through canonical and provider controls", async () => {
+    const calls: string[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: fakeAdminRepository,
+      liveRepository: fakeLiveRepository({
+        async onReserveStaffControl(input) {
+          calls.push(`reserve:${input.action}:${input.reason}`);
+          return {
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa42",
+            roomId: input.roomId,
+            action: input.action,
+            state: "pending",
+            providerStreamId: "provider-stream-13"
+          };
+        },
+        async onCompleteControl(input) {
+          calls.push(`complete:${input.state}:${input.providerState}`);
+        }
+      }),
+      liveProvider: {
+        ...noopLiveProviderControls,
+        isConfigured: () => true,
+        async createRoom() {
+          throw new Error("not implemented");
+        },
+        async getRoomStatus() {
+          throw new Error("not implemented");
+        },
+        async createPlaybackJwt() {
+          return null;
+        },
+        async setRoomSuspended(input) {
+          calls.push(`provider:${input.suspended}:${input.providerStreamId}`);
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/admin/live/rooms/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa13/suspension",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "admin-live-suspend-1"
+      },
+      payload: { suspended: true, reason: "Safety review" }
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(calls).toEqual([
+      "reserve:staff_suspended:Safety review",
+      "provider:true:provider-stream-13",
+      "complete:suspended:suspended"
+    ]);
+    await app.close();
+  });
+
   it("returns signed Livepeer playback only when backend access is allowed", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -9264,6 +9605,7 @@ describe("buildApi", () => {
         }
       }),
       liveProvider: {
+        ...noopLiveProviderControls,
         isConfigured: () => true,
         async createRoom() {
           throw new Error("not implemented");
@@ -9274,7 +9616,7 @@ describe("buildApi", () => {
         async createPlaybackJwt(input) {
           expect(input).toEqual({
             playbackId: "livepeer-playback-15",
-            supabaseUserId: "00000000-0000-4000-8000-000000000001"
+            appUserId: "00000000-0000-4000-8000-000000000010"
           });
           return "livepeer.jwt.token";
         }
@@ -9291,9 +9633,10 @@ describe("buildApi", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().playback).toEqual({
       state: "full",
-      url: "https://livepeercdn.studio/hls/livepeer-playback-15/index.m3u8?jwt=livepeer.jwt.token",
+      url: "https://livepeercdn.studio/hls/livepeer-playback-15/index.m3u8",
       provider: "livepeer",
-      resourceType: "hls"
+      resourceType: "hls",
+      jwt: "livepeer.jwt.token"
     });
 
     await app.close();
@@ -9317,6 +9660,7 @@ describe("buildApi", () => {
         }
       }),
       liveProvider: {
+        ...noopLiveProviderControls,
         isConfigured: () => true,
         async createRoom() {
           throw new Error("not implemented");
@@ -9416,7 +9760,6 @@ describe("buildApi", () => {
     expect(response.json()).toMatchObject({
       id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa50",
       productType: "live_pass",
-      targetId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa12",
       amountMinor: 50000000
     });
     expect(paymentCreates[0]?.productType).toBe("live_pass");
@@ -9448,6 +9791,7 @@ describe("buildApi", () => {
         }
       }),
       liveProvider: {
+        ...noopLiveProviderControls,
         isConfigured: () => true,
         async createRoom() {
           throw new Error("not implemented");
@@ -9473,7 +9817,7 @@ describe("buildApi", () => {
       url: "/v1/live/rooms/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa13/sync",
       headers: {
         authorization: "Bearer valid-token",
-        "idempotency-key": "live-sync-1"
+        "idempotency-key": "live-sync-01"
       }
     });
 
@@ -9518,7 +9862,7 @@ describe("buildApi", () => {
       url: "/v1/live/rooms/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa14/messages",
       headers: {
         authorization: "Bearer valid-token",
-        "idempotency-key": "live-chat-1"
+        "idempotency-key": "live-chat-01"
       },
       payload: { body: "Great stream" }
     });
@@ -10335,6 +10679,11 @@ class FailingRateLimitStore extends TestRateLimitStore {
   }
 }
 
+const noopLiveProviderControls = {
+  async setRoomSuspended() {},
+  async terminateRoom() {}
+};
+
 const fakeAuthVerifier: ApplicationSessionVerifier = {
   async verifyToken(token: string): Promise<VerifiedApplicationSession | null> {
     if (token !== "valid-token") {
@@ -10622,6 +10971,7 @@ function liveRoomFixture(
     title: overrides.title ?? "Live room",
     creator: overrides.creator ?? homeFeedItem.creator,
     state,
+    safetyState: overrides.safetyState ?? (state === "live" ? "monitoring" : "approved"),
     accessMode: overrides.accessMode ?? "paid_event",
     accessState: overrides.accessState ?? (hasPass ? "allowed" : "event_access_required"),
     playback:
@@ -10661,10 +11011,16 @@ function fakeLiveRepository(
   overrides: Partial<{
     onCreateRoom: LiveRepository["createRoom"];
     onReserveRoom: LiveRepository["reserveRoom"];
+    onClaimProviderCreation: LiveRepository["claimProviderCreation"];
     onAttachProviderRoom: LiveRepository["attachProviderRoom"];
     onFindRoom: LiveRepository["findRoom"];
     onFindOwnedRoom: LiveRepository["findOwnedRoom"];
     onFindOwnedRoomByIdempotency: LiveRepository["findOwnedRoomByIdempotency"];
+    onRevealHostConnection: LiveRepository["revealHostConnection"];
+    onReserveOwnedControl: LiveRepository["reserveOwnedControl"];
+    onReserveStaffControl: LiveRepository["reserveStaffControl"];
+    onCompleteControl: LiveRepository["completeControl"];
+    onFailControl: LiveRepository["failControl"];
     onRecordLivePassPurchaseRequest: LiveRepository["recordLivePassPurchaseRequest"];
     onRecordLiveProviderWebhook: NonNullable<LiveRepository["recordLiveProviderWebhook"]>;
     onUpdateRoomStatus: LiveRepository["updateRoomStatus"];
@@ -10680,6 +11036,9 @@ function fakeLiveRepository(
     async reserveRoom(input) {
       return overrides.onReserveRoom?.(input) ?? liveRoomFixture({ id: input.idempotencyKey });
     },
+    async claimProviderCreation(input) {
+      return overrides.onClaimProviderCreation?.(input) ?? true;
+    },
     async attachProviderRoom(input) {
       return overrides.onAttachProviderRoom?.(input) ?? liveRoomFixture({ id: input.roomId });
     },
@@ -10691,6 +11050,24 @@ function fakeLiveRepository(
     },
     async findOwnedRoomByIdempotency(input) {
       return overrides.onFindOwnedRoomByIdempotency?.(input) ?? null;
+    },
+    async listOwnedRooms() {
+      return { items: [], nextCursor: null };
+    },
+    async revealHostConnection(input) {
+      return overrides.onRevealHostConnection?.(input) ?? null;
+    },
+    async reserveOwnedControl(input) {
+      return overrides.onReserveOwnedControl?.(input) ?? null;
+    },
+    async reserveStaffControl(input) {
+      return overrides.onReserveStaffControl?.(input) ?? null;
+    },
+    async completeControl(input) {
+      await overrides.onCompleteControl?.(input);
+    },
+    async failControl(input) {
+      await overrides.onFailControl?.(input);
     },
     async recordLivePassPurchaseRequest(input) {
       await overrides.onRecordLivePassPurchaseRequest?.(input);

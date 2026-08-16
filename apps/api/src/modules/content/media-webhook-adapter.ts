@@ -148,6 +148,12 @@ function normalizeLivepeerWebhook(input: {
   }
 
   const mapped = mapLivepeerStreamEvent(eventType);
+  if (!mapped) {
+    throw new MediaWebhookValidationError("Unsupported Livepeer live event type");
+  }
+  if (String(body.timestamp ?? "") !== String(parsedSignature.timestamp)) {
+    throw new MediaWebhookSignatureError("livepeer");
+  }
   const providerPlaybackId = stringValue(eventObject.playbackId) ?? stringValue(eventObject.playback_id);
 
   return {
@@ -164,7 +170,7 @@ function normalizeLivepeerWebhook(input: {
     eventType,
     providerState: mapped.providerState,
     providerPlayable: mapped.roomState === "live",
-    signatureHash: sha256Hex(parsedSignature.v1),
+    signatureHash: sha256Hex(parsedSignature.v1.join(",")),
     livepeerStream: {
       providerStreamId,
       providerPlaybackId,
@@ -174,32 +180,31 @@ function normalizeLivepeerWebhook(input: {
   };
 }
 
-function verifyLivepeerSignature(input: { rawBody: Buffer; secret: string; signature: string }): boolean {
+function verifyLivepeerSignature(input: { rawBody: Buffer; secret: string; signature: string[] }): boolean {
   const expected = createHmac("sha256", input.secret).update(input.rawBody).digest("hex");
-  return secureEqualHex(expected, input.signature);
+  return input.signature.some((signature) => secureEqualHex(expected, signature));
 }
 
-function parseLivepeerSignature(header: string | null): { timestamp: number; v1: string } | null {
+function parseLivepeerSignature(header: string | null): { timestamp: number; v1: string[] } | null {
   if (!header) {
     return null;
   }
 
-  const values = new Map<string, string>();
+  let timestamp: number | null = null;
+  const signatures: string[] = [];
   for (const part of header.split(",")) {
     const [key, value] = part.split("=");
     if (key && value) {
-      values.set(key.trim(), value.trim());
+      if (key.trim() === "t") timestamp = Number(value.trim());
+      if (key.trim() === "v1") signatures.push(value.trim());
     }
   }
 
-  const timestamp = Number(values.get("t"));
-  const v1 = values.get("v1");
-
-  if (!Number.isInteger(timestamp) || !v1) {
+  if (!Number.isInteger(timestamp) || signatures.length === 0) {
     return null;
   }
 
-  return { timestamp, v1 };
+  return { timestamp: timestamp as number, v1: signatures };
 }
 
 function isRecentLivepeerTimestamp(timestamp: number): boolean {
@@ -210,7 +215,7 @@ function isRecentLivepeerTimestamp(timestamp: number): boolean {
 function mapLivepeerStreamEvent(eventType: string): {
   providerState: string;
   roomState: "waiting" | "live" | "ended" | "replay_ready";
-} {
+} | null {
   if (eventType === "stream.started") {
     return { providerState: "active", roomState: "live" };
   }
@@ -223,7 +228,7 @@ function mapLivepeerStreamEvent(eventType: string): {
     return { providerState: "idle", roomState: "ended" };
   }
 
-  return { providerState: eventType, roomState: "waiting" };
+  return null;
 }
 
 function playbackUrlFromLivepeerPlaybackId(playbackId: string | null): string | null {
