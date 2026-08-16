@@ -37,12 +37,12 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `16ae8b9` (Launch 10, PR #51) |
-| Active slice | Launch 11 — Immutable release operations, observability, recovery, and legal gates |
-| Branch | `codex/launch-11-release-operations` |
-| Pull request | #52 |
+| Merged baseline | `main` at `fba30a2` (Launch 11 plus convergence fixes, PRs #52–#54) |
+| Active slice | Launch 11B — strict staging convergence truth and complete evidence orchestration |
+| Branch | `codex/launch-11-staging-truth` |
+| Pull request | pending |
 | State | `ACTIVE` |
-| Slice blockers | A hosting target/OIDC trust, shared staging credentials, provider dashboard configuration, alert destinations, production DNS, final legal text, and production approval require account-owner or counsel action. The slice must make artifacts, promotion verification, telemetry, staging proof, recovery, and runbooks code-complete without claiming those external approvals. |
+| Slice blockers | No code blocker. Shared staging credentials, provider dashboards/domains, hosting/OIDC, alert destinations, production DNS, counsel-approved legal text, and production approval remain human gates. This slice must make their absence fail the staging gate rather than producing a green convergence result. |
 | Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
 
 Current human/provider gates do not block this process slice: shared staging credentials,
