@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: API routes, frontend routes, permissions, tests
-Last updated: 2026-08-14
+Last updated: 2026-08-16
 Source of truth: yes
 
 Owns:
@@ -39,6 +39,7 @@ Rules:
 | Route | Phase | Auth | Age | Wallet | Owner | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | `/` | MVP | no | no | no | web/landing | Public landing, attribution capture, teaser-safe marketing, login, and onboarding story surface. |
+| `/runtime-config.js` | operations | no | no | no | web/runtime | No-store JavaScript containing only schema-allowlisted public environment values. It lets one immutable web image run in preview, staging, and production; secrets are never accepted. |
 | `/` onboarding state | Slice 02 target | step 1 | pending | created/connected in step | onboarding | Three visible steps only: Wallet, Minimal Profile, Age Verification. Mainstream Privy entry and external wallet entry converge on one backend wallet challenge/session; Supabase recovery is not a step. |
 | `/age` | MVP | yes | pending | yes | onboarding | Third-party age verification session/status. |
 | `/app/home` | MVP | yes | yes | yes | home | Recommended/Following/NSFW/SFW feed. |
@@ -89,6 +90,7 @@ All routes use `/v1`.
 | Group | Routes | Phase | Notes |
 | --- | --- | --- | --- |
 | Auth/session | `POST /v1/auth/wallet/challenges`, `POST /v1/auth/wallet/sessions`, `POST /v1/auth/wallet/logout`, `POST /v1/auth/sessions/logout-all`, `POST /v1/auth/recovery/link-intents`, `POST /v1/auth/recovery/exchange`, `POST /v1/auth/recovery/unlink`, `GET /v1/session` | MVP | Embedded and external wallets converge on opaque multi-device application sessions in HttpOnly cookies. Current logout revokes only its session; logout-all is a separate recent-authenticated, audited mutation. Supabase credentials are accepted only at the explicit recovery exchange; link/unlink rotate only the current application session. |
+| Telemetry | `POST /v1/telemetry/web-vitals` | operations | Public, schema-allowlisted, rate-limited Core Web Vitals ingestion. It accepts no URL, user, wallet, content, or arbitrary attribute fields; the unique browser metric id is not used as a metric label. |
 | Age | `POST /v1/age/sessions`, `GET /v1/age/status`, `POST /v1/webhooks/age/:provider` | MVP | Provider sessions/webhooks; minimal stored result. |
 | Verification | `GET /v1/verification/status`, `POST /v1/verification/sessions`, `POST /v1/webhooks/verification/:provider` | MVP | Backend-owned capability resolver plus provider session/webhook flow across age access, creator KYC, and organization KYB. Frontend reads next action and launches hosted provider URLs; it never computes verification truth. |
 | Wallets | `GET /v1/wallets`, `POST /v1/wallets/link-challenges`, `POST /v1/wallets/link`, `PATCH /v1/wallets/:id/primary`, `POST /v1/wallets/onramp-sessions` | MVP | Embedded/native wallet path, primary wallet selection, and user-owned wallet funding session. Onramp is not payment proof. |

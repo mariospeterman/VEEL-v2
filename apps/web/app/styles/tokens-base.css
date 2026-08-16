@@ -1,5 +1,7 @@
 :root {
   color-scheme: dark;
+  --font-manrope: "Manrope Variable";
+  --font-space-grotesk: "Space Grotesk Variable";
   --background: #050608;
   --bg: #050608;
   --bg-soft: #0b0d12;

@@ -3,9 +3,13 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "files": [
+    "dist",
+    "package.json"
+  ],
   "scripts": {
-    "dev": "node --env-file=../../.env --watch --import tsx src/server.ts",
-    "start": "node --env-file=../../.env dist/server.js",
+    "dev": "node --env-file=../../.env --import @veel/observability/register --watch --import tsx src/server.ts",
+    "start": "node --import @veel/observability/register --env-file-if-exists=../../.env dist/server.js",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
@@ -17,6 +21,7 @@
     "@fastify/sensible": "^6.0.3",
     "@fastify/swagger": "^9.5.2",
     "@livepeer/core": "3.3.1",
+    "@opentelemetry/api": "1.9.1",
     "@solana-commerce/solana-pay": "0.1.1",
     "@solana/kit": "7.1.0",
     "@solana/spl-token": "0.4.15",
@@ -26,6 +31,7 @@
     "@supabase/supabase-js": "^2.107.0",
     "@veel/config": "workspace:*",
     "@veel/contracts": "workspace:*",
+    "@veel/observability": "workspace:*",
     "bs58": "^6.0.0",
     "fastify": "^5.6.2",
     "fastify-plugin": "^6.0.0",

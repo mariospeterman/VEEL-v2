@@ -3,10 +3,14 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "files": [
+    "dist",
+    "package.json"
+  ],
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "node --env-file-if-exists=../../.env --import @veel/observability/register --watch --import tsx src/index.ts",
     "email:smoke": "tsx src/payment-confirmation-email-smoke.ts",
-    "start": "node dist/index.js",
+    "start": "node --import @veel/observability/register dist/index.js",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
@@ -17,6 +21,7 @@
     "@solana/sysvars": "7.1.0",
     "@solana/web3.js": "1.98.4",
     "@veel/config": "workspace:*",
+    "@veel/observability": "workspace:*",
     "bs58": "6.0.0",
     "postgres": "^3.4.9",
     "web-push": "^3.6.7"

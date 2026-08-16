@@ -14,6 +14,7 @@ security:
   - appSessionCookie: []
 tags:
   - name: Health
+  - name: Telemetry
   - name: Auth
   - name: Age
   - name: Wallets
@@ -58,6 +59,19 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/HealthStatus" }
         "503": { $ref: "#/components/responses/HealthStatus" }
+  /v1/telemetry/web-vitals:
+    post:
+      operationId: recordWebVital
+      tags: [Telemetry]
+      security: []
+      summary: Record a privacy-minimized browser performance metric
+      x-idempotency-policy: best-effort-observation-no-business-state
+      requestBody:
+        $ref: "#/components/requestBodies/RecordWebVital"
+      responses:
+        "202": { description: Metric accepted }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "429": { $ref: "#/components/responses/RateLimited" }
   /v1/session:
     get:
       operationId: getSession
@@ -2905,6 +2919,7 @@ components:
       required: true
       schema: { type: string, enum: [sumsub, didit, persona, veriff] }
   requestBodies:
+    RecordWebVital: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RecordWebVitalRequest" } } } }
     CreateAgeSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateAgeSessionRequest" } } } }
     CreateVerificationSession: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateVerificationSessionRequest" } } } }
     CreateWalletAuthChallenge: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateWalletAuthChallengeRequest" } } } }
@@ -3146,6 +3161,16 @@ components:
     AdminFeatureFlagPage: { description: Admin feature flags, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminFeatureFlag" } } } } } } }
     AuditEventPage: { description: Audit events, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AuditEvent" } }, nextCursor: { type: string, nullable: true } } } } } }
   schemas:
+    RecordWebVitalRequest:
+      type: object
+      additionalProperties: false
+      required: [name, value, rating, navigationType, id]
+      properties:
+        name: { type: string, enum: [CLS, FCP, INP, LCP, TTFB] }
+        value: { type: number, minimum: 0, maximum: 3600000 }
+        rating: { type: string, enum: [good, needs-improvement, poor] }
+        navigationType: { type: string, enum: [navigate, reload, back-forward, back-forward-cache, prerender, restore] }
+        id: { type: string, minLength: 1, maxLength: 128 }
     HealthStatus:
       type: object
       required: [service, status, environment, version, commit, timestamp, checks]

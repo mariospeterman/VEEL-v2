@@ -1,20 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Manrope, Space_Grotesk } from "next/font/google";
+import "@fontsource-variable/manrope/wght.css";
+import "@fontsource-variable/space-grotesk/wght.css";
 import "@solana/wallet-adapter-react-ui/styles.css";
 import { PwaRuntime } from "./pwa-runtime";
+import { readServerPublicWebEnv, serializePublicWebEnvScript } from "@/public-env";
 import "./globals.css";
-
-const manrope = Manrope({
-  display: "swap",
-  subsets: ["latin"],
-  variable: "--font-manrope"
-});
-
-const spaceGrotesk = Space_Grotesk({
-  display: "swap",
-  subsets: ["latin"],
-  variable: "--font-space-grotesk"
-});
 
 export const metadata: Metadata = {
   title: "WeVid - Frame Your Way",
@@ -49,11 +39,17 @@ const themeScript = `
 })();
 `;
 
+export const dynamic = "force-dynamic";
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const publicEnv = readServerPublicWebEnv(process.env);
+  globalThis.__WEVID_PUBLIC_ENV__ = publicEnv;
+
   return (
-    <html className={`${manrope.variable} ${spaceGrotesk.variable}`} lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script dangerouslySetInnerHTML={{ __html: serializePublicWebEnvScript(publicEnv) }} />
       </head>
       <body suppressHydrationWarning>
         {children}

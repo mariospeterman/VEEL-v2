@@ -1,13 +1,11 @@
 import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import YAML from "yaml";
 import type { FastifySchema } from "fastify";
 
 type JsonObject = Record<string, unknown>;
 
-const moduleDir = dirname(fileURLToPath(import.meta.url));
-const contractPath = resolve(moduleDir, "../../../../packages/contracts/openapi.yaml");
+const contractPath = fileURLToPath(import.meta.resolve("@veel/contracts/openapi.yaml"));
 const contract = YAML.parse(readFileSync(contractPath, "utf8")) as JsonObject;
 
 export function contractRouteSchema(operationId: string): FastifySchema {

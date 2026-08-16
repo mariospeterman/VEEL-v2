@@ -1,18 +1,45 @@
-name: staging-preflight
+name: staging-convergence
 
 on:
+  workflow_run:
+    workflows: [release-artifacts]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      release_run_id:
+        description: Successful release-artifacts workflow run ID
+        required: true
 
 permissions:
   contents: read
+  actions: read
+  packages: read
+  attestations: read
+  id-token: write
 
 jobs:
-  staging-preflight:
-    name: staging-preflight
+  staging-convergence:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     environment: staging
+    timeout-minutes: 30
     steps:
+      - name: Download immutable release manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_RUN_ID: ${{ inputs.release_run_id || github.event.workflow_run.id }}
+        run: gh run download "$RELEASE_RUN_ID" --pattern 'release-manifest-*' --dir "$RUNNER_TEMP/release-download"
+      - name: Resolve immutable source
+        shell: bash
+        run: |
+          manifest="$(find "$RUNNER_TEMP/release-download" -name release-manifest.json -type f -print -quit)"
+          test -n "$manifest"
+          echo "RELEASE_MANIFEST_PATH=$manifest" >> "$GITHUB_ENV"
+          echo "RELEASE_SOURCE_SHA=$(node -p 'require(process.argv[1]).sourceSha' "$manifest")" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_SOURCE_SHA }}
       - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
@@ -20,19 +47,58 @@ jobs:
         with:
           version: 10.0.0
           run_install: false
-      - name: Print tool versions
-        run: |
-          node --version
-          pnpm --version
-      - name: Install
-        run: pnpm install --frozen-lockfile
-      - name: Build application artifact
-        run: pnpm build
-      - name: Check database migrations
-        run: pnpm database:check
-      - name: Verify staging release preflight
+      - name: Verify manifest against its exact source
         env:
-          DEPLOY_ENABLED: ${{ vars.DEPLOY_ENABLED }}
-          API_HEALTH_URL: ${{ vars.API_HEALTH_URL }}
-          API_READY_URL: ${{ vars.API_READY_URL }}
-        run: pnpm deploy:check
+          RELEASE_VERIFY_SOURCE: "true"
+          RELEASE_EXPECTED_SHA: ${{ env.RELEASE_SOURCE_SHA }}
+        run: node scripts/verify-release-manifest.mjs "$RELEASE_MANIFEST_PATH"
+      - name: Verify artifact attestations
+        shell: bash
+        run: |
+          node -e 'const m=require("./"+process.env.RELEASE_MANIFEST_PATH); for (const image of Object.values(m.images)) console.log(`${image.repository}@${image.digest}`)' > /tmp/images
+          while IFS= read -r image; do gh attestation verify "oci://$image" --repo "$GITHUB_REPOSITORY"; done < /tmp/images
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install proof tooling
+        run: pnpm install --frozen-lockfile
+      - name: Check staging configuration without exposing values
+        env:
+          WEB_URL: ${{ vars.WEB_URL }}
+          API_URL: ${{ vars.API_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+          SOLANA_RPC_URL: ${{ vars.SOLANA_RPC_URL }}
+          PAYMENT_PLATFORM_FEE_WALLET: ${{ vars.PAYMENT_PLATFORM_FEE_WALLET }}
+          HELIUS_WEBHOOK_SECRET: ${{ secrets.HELIUS_WEBHOOK_SECRET }}
+          BUNNY_STREAM_API_KEY: ${{ secrets.BUNNY_STREAM_API_KEY }}
+          BUNNY_STREAM_LIBRARY_ID: ${{ vars.BUNNY_STREAM_LIBRARY_ID }}
+          BUNNY_STREAM_EMBED_TOKEN_KEY: ${{ secrets.BUNNY_STREAM_EMBED_TOKEN_KEY }}
+          BUNNY_STREAM_WEBHOOK_READONLY_KEY: ${{ secrets.BUNNY_STREAM_WEBHOOK_READONLY_KEY }}
+          LIVEPEER_API_KEY: ${{ secrets.LIVEPEER_API_KEY }}
+          LIVEPEER_WEBHOOK_SECRET: ${{ secrets.LIVEPEER_WEBHOOK_SECRET }}
+          LIVEPEER_ACCESS_CONTROL_PRIVATE_KEY: ${{ secrets.LIVEPEER_ACCESS_CONTROL_PRIVATE_KEY }}
+          LIVEPEER_ACCESS_CONTROL_PUBLIC_KEY: ${{ vars.LIVEPEER_ACCESS_CONTROL_PUBLIC_KEY }}
+          LIVEPEER_WEBHOOK_ID: ${{ vars.LIVEPEER_WEBHOOK_ID }}
+          LIVEPEER_MODERATION_MULTISTREAM_TARGET_ID: ${{ vars.LIVEPEER_MODERATION_MULTISTREAM_TARGET_ID }}
+          AGE_VERIFICATION_DRIVER: ${{ vars.AGE_VERIFICATION_DRIVER }}
+          NOTIFICATION_DEVICE_ENCRYPTION_KEY: ${{ secrets.NOTIFICATION_DEVICE_ENCRYPTION_KEY }}
+          WEB_PUSH_VAPID_PUBLIC_KEY: ${{ vars.WEB_PUSH_VAPID_PUBLIC_KEY }}
+          WEB_PUSH_VAPID_PRIVATE_KEY: ${{ secrets.WEB_PUSH_VAPID_PRIVATE_KEY }}
+          API_RATE_LIMIT_REDIS_URL: ${{ secrets.API_RATE_LIMIT_REDIS_URL }}
+          OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}
+          LEGAL_DOCUMENTS_APPROVED: ${{ vars.LEGAL_DOCUMENTS_APPROVED }}
+          LEGAL_TERMS_VERSION: ${{ vars.LEGAL_TERMS_VERSION }}
+          LEGAL_PRIVACY_VERSION: ${{ vars.LEGAL_PRIVACY_VERSION }}
+          LEGAL_CONTACT_EMAIL: ${{ vars.LEGAL_CONTACT_EMAIL }}
+        run: pnpm staging:doctor
+      - name: Deployment-provider gate
+        if: vars.STAGING_DEPLOY_ENABLED != 'true'
+        run: echo 'CODE_COMPLETE_PROVIDER_BLOCKED hosting adapter/OIDC is not configured; immutable manifest was verified and no deployment was attempted.'
+      - name: Reject enabled deployment without a repository-owned adapter
+        if: vars.STAGING_DEPLOY_ENABLED == 'true'
+        run: |
+          echo 'STAGING_DEPLOY_ENABLED is true, but no launch-approved hosting adapter exists in this repository.' >&2
+          echo 'Add the selected provider adapter and official OIDC workflow before enabling this variable.' >&2
+          exit 1

@@ -10,6 +10,7 @@ jobs:
   preview-preflight:
     name: preview-preflight
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -25,7 +26,13 @@ jobs:
           pnpm --version
       - name: Install
         run: pnpm install --frozen-lockfile
-      - name: Build application artifact
-        run: pnpm build
+      - name: Build OCI runtime targets
+        run: |
+          docker build --target web --tag wevid-web:preview .
+          docker build --target api --tag wevid-api:preview .
+          docker build --target worker --tag wevid-worker:preview .
+          test "$(docker image inspect wevid-web:preview --format '{{.Config.User}}')" = node
+          test "$(docker image inspect wevid-api:preview --format '{{.Config.User}}')" = node
+          test "$(docker image inspect wevid-worker:preview --format '{{.Config.User}}')" = node
       - name: Verify release preflight skeleton
         run: pnpm deploy:check

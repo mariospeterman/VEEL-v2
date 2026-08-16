@@ -3,9 +3,14 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "files": [
+    "openapi.yaml",
+    "package.json"
+  ],
   "exports": {
     ".": "./src/index.ts",
-    "./generated": "./src/generated/openapi.ts"
+    "./generated": "./src/generated/openapi.ts",
+    "./openapi.yaml": "./openapi.yaml"
   },
   "scripts": {
     "generate": "openapi-typescript openapi.yaml -o src/generated/openapi.ts",

@@ -14,6 +14,8 @@ build/
 coverage/
 playwright-report/
 test-results/
+backups/
+release/
 
 # logs
 *.log

@@ -1,41 +1,65 @@
-name: production-preflight
+name: production-promotion
 
 on:
   workflow_dispatch:
+    inputs:
+      release_run_id:
+        description: Successful release-artifacts workflow run ID already proven in staging
+        required: true
+      expected_manifest_digest:
+        description: Exact sha256 manifest digest approved after staging
+        required: true
+      production_approval:
+        description: Type PROMOTE_EXACT_STAGING_ARTIFACT
+        required: true
 
 permissions:
   contents: read
+  actions: read
+  packages: read
+  attestations: read
+  id-token: write
 
 jobs:
-  production-preflight:
-    name: production-preflight
+  production-promotion:
     runs-on: ubuntu-latest
     environment: production
+    timeout-minutes: 20
     steps:
+      - name: Require explicit promotion acknowledgement
+        if: inputs.production_approval != 'PROMOTE_EXACT_STAGING_ARTIFACT'
+        run: exit 1
+      - name: Download exact release manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_RUN_ID: ${{ inputs.release_run_id }}
+        run: gh run download "$RELEASE_RUN_ID" --pattern 'release-manifest-*' --dir "$RUNNER_TEMP/release-download"
+      - name: Resolve exact approved source
+        shell: bash
+        env:
+          EXPECTED_MANIFEST_DIGEST: ${{ inputs.expected_manifest_digest }}
+        run: |
+          manifest="$(find "$RUNNER_TEMP/release-download" -name release-manifest.json -type f -print -quit)"
+          test -n "$manifest"
+          actual="$(node -p 'require(process.argv[1]).manifestDigest' "$manifest")"
+          test "$actual" = "$EXPECTED_MANIFEST_DIGEST"
+          echo "RELEASE_MANIFEST_PATH=$manifest" >> "$GITHUB_ENV"
+          echo "RELEASE_SOURCE_SHA=$(node -p 'require(process.argv[1]).sourceSha' "$manifest")" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_SOURCE_SHA }}
       - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.0.0
-          run_install: false
-      - name: Print tool versions
-        run: |
-          node --version
-          pnpm --version
-      - name: Install
-        run: pnpm install --frozen-lockfile
-      - name: Build application artifact
-        run: pnpm build
-      - name: Check database migrations
-        run: pnpm database:check
-      - name: Verify production release preflight
+      - name: Verify manifest against its exact source
+        env:
+          RELEASE_VERIFY_SOURCE: "true"
+          RELEASE_EXPECTED_SHA: ${{ env.RELEASE_SOURCE_SHA }}
+        run: node scripts/verify-release-manifest.mjs "$RELEASE_MANIFEST_PATH"
+      - name: Production safety preflight
         env:
           DEPLOY_ENV: production
-          DEPLOY_ENABLED: ${{ vars.DEPLOY_ENABLED }}
-          API_HEALTH_URL: ${{ vars.API_HEALTH_URL }}
-          API_READY_URL: ${{ vars.API_READY_URL }}
+          DEPLOY_ENABLED: "false"
           API_URL: ${{ vars.API_URL }}
           WEB_URL: ${{ vars.WEB_URL }}
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
@@ -74,10 +98,25 @@ jobs:
           SUBSCRIPTIONS_SUPPORTED_MINTS: ${{ vars.SUBSCRIPTIONS_SUPPORTED_MINTS }}
           SUBSCRIPTIONS_DEFAULT_MINT: ${{ vars.SUBSCRIPTIONS_DEFAULT_MINT }}
           SUBSCRIPTIONS_COLLECTOR_WALLET: ${{ vars.SUBSCRIPTIONS_COLLECTOR_WALLET }}
+          SUBSCRIPTIONS_COLLECTOR_PRIVATE_KEY: ${{ secrets.SUBSCRIPTIONS_COLLECTOR_PRIVATE_KEY }}
           SUBSCRIPTIONS_MERCHANT_WALLET: ${{ vars.SUBSCRIPTIONS_MERCHANT_WALLET }}
+          SUBSCRIPTIONS_STAGING_AUTHORIZATION_SIGNATURE: ${{ vars.SUBSCRIPTIONS_STAGING_AUTHORIZATION_SIGNATURE }}
+          SUBSCRIPTIONS_STAGING_COLLECTION_SIGNATURE: ${{ vars.SUBSCRIPTIONS_STAGING_COLLECTION_SIGNATURE }}
           TRANSACTIONAL_EMAIL_PROVIDER: ${{ vars.TRANSACTIONAL_EMAIL_PROVIDER }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           ONRAMP_PROVIDER: ${{ vars.ONRAMP_PROVIDER }}
           COINBASE_CDP_API_KEY_ID: ${{ secrets.COINBASE_CDP_API_KEY_ID }}
           COINBASE_CDP_API_KEY_SECRET: ${{ secrets.COINBASE_CDP_API_KEY_SECRET }}
-        run: pnpm deploy:check
+          OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}
+          BACKUP_RESTORE_PROOF_ID: ${{ vars.BACKUP_RESTORE_PROOF_ID }}
+          LEGAL_DOCUMENTS_APPROVED: ${{ vars.LEGAL_DOCUMENTS_APPROVED }}
+          LEGAL_TERMS_VERSION: ${{ vars.LEGAL_TERMS_VERSION }}
+          LEGAL_PRIVACY_VERSION: ${{ vars.LEGAL_PRIVACY_VERSION }}
+          LEGAL_CONTACT_EMAIL: ${{ vars.LEGAL_CONTACT_EMAIL }}
+          STAGING_EVIDENCE_MANIFEST_DIGEST: ${{ vars.STAGING_EVIDENCE_MANIFEST_DIGEST }}
+          EXPECTED_MANIFEST_DIGEST: ${{ inputs.expected_manifest_digest }}
+        run: node scripts/check-deploy-readiness.mjs
+      - name: Deployment-provider gate
+        run: |
+          echo 'Production promotion remains blocked until the launch-approved hosting adapter/OIDC and matching staging evidence are configured.' >&2
+          exit 1

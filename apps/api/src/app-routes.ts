@@ -23,6 +23,7 @@ import { registerRefundRoutes } from "./modules/refund/refund-routes.js";
 import { registerRealtimeRoutes } from "./modules/realtime/realtime-routes.js";
 import { registerSessionRoutes } from "./modules/session/session-routes.js";
 import { registerSubscriptionRoutes } from "./modules/subscription/subscription-routes.js";
+import { registerTelemetryRoutes } from "./modules/telemetry/telemetry-routes.js";
 import { registerVerificationRoutes } from "./modules/verification/verification-routes.js";
 import { registerWalletRoutes } from "./modules/wallet/wallet-routes.js";
 import { registerWalletAuthRoutes } from "./modules/auth/wallet-auth-routes.js";
@@ -31,6 +32,7 @@ export async function registerApiRoutes(
   app: FastifyInstance,
   dependencies: ApiDependencies
 ): Promise<void> {
+  await registerTelemetryRoutes(app);
   const {
     authVerifier,
     recoveryIdentityVerifier,

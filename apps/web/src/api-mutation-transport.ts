@@ -4,8 +4,7 @@ import { readPublicWebEnv } from "@/public-env";
 import { e2eAuthCookieName } from "@/supabase/auth-cookie";
 import { ApiMutationError } from "./api-mutation-types";
 
-const browserE2eAuthEnabled =
-  process.env.NEXT_PUBLIC_ENABLE_E2E_AUTH === "true";
+const browserE2eAuthEnabled = () => readPublicWebEnv().NEXT_PUBLIC_ENABLE_E2E_AUTH;
 
 export async function authenticatedGet<T>(path: string): Promise<T> {
   const { token } = await browserSessionToken();
@@ -153,7 +152,7 @@ async function browserSessionToken() {
 }
 
 function browserE2eAccessToken() {
-  if (!browserE2eAuthEnabled) {
+  if (!browserE2eAuthEnabled()) {
     return null;
   }
 
