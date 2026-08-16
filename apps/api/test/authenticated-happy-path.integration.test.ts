@@ -1115,6 +1115,57 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       });
       const sfwContentId = createContentResponse.json().id as string;
 
+      const contentCreateReceipt = await sql<{ expires_at: string }[]>`
+        select receipt.expires_at::text as expires_at
+        from idempotency_keys receipt
+        join users actor on actor.id = receipt.actor_user_id
+        where receipt.scope = 'content.create'
+          and actor.supabase_user_id = ${buyerSupabaseUserId}
+          and receipt.key = 'content:create:' || actor.id || ':' || ${`content-create-${runId}`}
+      `;
+      expect(contentCreateReceipt).toEqual([{ expires_at: "infinity" }]);
+
+      const replayedContentResponse = await app.inject({
+        method: "POST",
+        url: "/v1/content",
+        headers: authenticatedHeaders(`content-create-${runId}`),
+        payload: {
+          mediaType: "image",
+          visibility: "public",
+          nsfwLabel: "none",
+          representationMode: "self_only",
+          contentSafetyPolicyAccepted: true,
+          caption: `Integration draft ${runId}`
+        }
+      });
+      expect(replayedContentResponse.statusCode, replayedContentResponse.body).toBe(201);
+      expect(replayedContentResponse.json().id).toBe(sfwContentId);
+
+      const conflictingContentResponse = await app.inject({
+        method: "POST",
+        url: "/v1/content",
+        headers: authenticatedHeaders(`content-create-${runId}`),
+        payload: {
+          mediaType: "image",
+          visibility: "public",
+          nsfwLabel: "none",
+          representationMode: "self_only",
+          contentSafetyPolicyAccepted: true,
+          caption: `Changed integration draft ${runId}`
+        }
+      });
+      expect(conflictingContentResponse.statusCode, conflictingContentResponse.body).toBe(409);
+      expect(conflictingContentResponse.json()).toMatchObject({ code: "conflict" });
+
+      const contentDraftCount = await sql<{ count: number }[]>`
+        select count(*)::integer as count
+        from content_items content
+        join users creator on creator.id = content.creator_user_id
+        where creator.supabase_user_id = ${buyerSupabaseUserId}
+          and content.caption = ${`Integration draft ${runId}`}
+      `;
+      expect(contentDraftCount).toEqual([{ count: 1 }]);
+
       const ownedMediaResponse = await app.inject({
         method: "GET",
         url: "/v1/content/mine",

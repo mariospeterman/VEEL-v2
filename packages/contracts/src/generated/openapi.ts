@@ -817,7 +817,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create content draft */
+        /**
+         * Create content draft
+         * @description Reuses the original draft for an exact Idempotency-Key replay for the lifetime of the logical operation and rejects changed-input reuse.
+         */
         post: operations["createContent"];
         delete?: never;
         options?: never;
@@ -8621,6 +8624,7 @@ export interface operations {
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
             429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
         };
