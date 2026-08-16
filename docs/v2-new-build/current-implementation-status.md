@@ -40,7 +40,7 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Merged baseline | `main` at `06a2ea1` (Launch 11, staging-truth hardening, dependency graph hardening, reviewed supported upgrades, Rolldown runtime/binding alignment, and durable content-create idempotency through PR #63) |
 | Active slice | Launch 11D — lossless atomic payment values through settlement and ledger boundaries |
 | Branch | `codex/payment-atomic-safety` |
-| Pull request | Pending |
+| Pull request | #64 |
 | State | `ACTIVE` |
 | Slice blockers | No code blocker. Transaction composition, settlement verification, and the canonical ledger must reject values the number-based public contract cannot represent exactly. |
 | Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
