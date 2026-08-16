@@ -7,6 +7,7 @@ const requiredSkeletonFiles = [
   "infra/deploy/incident-response.md",
   "infra/deploy/legal-launch-gate.md",
   "infra/deploy/rollback-checklist.md",
+  "infra/deploy/staging-convergence.md",
   "infra/observability/README.md"
 ];
 
@@ -54,6 +55,15 @@ function assertProductionProviderSafety() {
     "EXPECTED_MANIFEST_DIGEST",
     "STAGING_EVIDENCE_MANIFEST_DIGEST",
     "BACKUP_RESTORE_PROOF_ID",
+    "STAGING_IDENTITY_WALLET_PROOF_ID",
+    "STAGING_VERIFICATION_PROOF_ID",
+    "STAGING_PAYMENT_PROOF_ID",
+    "STAGING_LIVEPEER_PROOF_ID",
+    "STAGING_REALTIME_PUSH_PROOF_ID",
+    "STAGING_MODERATION_PROOF_ID",
+    "STAGING_STORAGE_BACKUP_PROOF_ID",
+    "STAGING_OBSERVABILITY_PROOF_ID",
+    "STAGING_DEVICE_QA_PROOF_ID",
     "OTEL_EXPORTER_OTLP_ENDPOINT",
     "LEGAL_TERMS_VERSION",
     "LEGAL_PRIVACY_VERSION",
@@ -62,6 +72,23 @@ function assertProductionProviderSafety() {
 
   if (process.env.STAGING_EVIDENCE_MANIFEST_DIGEST !== process.env.EXPECTED_MANIFEST_DIGEST) {
     throw new Error("Production readiness is blocked: staging evidence must match the exact approved manifest digest.");
+  }
+
+  for (const key of [
+    "BACKUP_RESTORE_PROOF_ID",
+    "STAGING_IDENTITY_WALLET_PROOF_ID",
+    "STAGING_VERIFICATION_PROOF_ID",
+    "STAGING_PAYMENT_PROOF_ID",
+    "STAGING_LIVEPEER_PROOF_ID",
+    "STAGING_REALTIME_PUSH_PROOF_ID",
+    "STAGING_MODERATION_PROOF_ID",
+    "STAGING_STORAGE_BACKUP_PROOF_ID",
+    "STAGING_OBSERVABILITY_PROOF_ID",
+    "STAGING_DEVICE_QA_PROOF_ID"
+  ]) {
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:/-]{5,200}$/.test(process.env[key])) {
+      throw new Error(`Production readiness is blocked: ${key} must be an opaque redacted evidence reference.`);
+    }
   }
 
   if (process.env.LEGAL_DOCUMENTS_APPROVED !== "true") {

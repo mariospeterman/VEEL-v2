@@ -1,0 +1,107 @@
+import { spawnSync } from "node:child_process";
+import { describe, expect, it, vi } from "vitest";
+import {
+  executeStagingProofPlan,
+  inspectStagingConfiguration,
+  stagingConfigurationGroups,
+  stagingProofPlan
+} from "./staging-proof-plan.mjs";
+
+describe("strict staging convergence gates", () => {
+  it("reports every missing configuration group and rejects unsafe staging values", () => {
+    const missing = inspectStagingConfiguration({});
+    expect(missing.every((result) => result.status === "CODE_COMPLETE_PROVIDER_BLOCKED")).toBe(true);
+
+    const env = completeDoctorEnv();
+    expect(inspectStagingConfiguration(env).every((result) => result.status === "READY")).toBe(true);
+
+    env.LEGAL_DOCUMENTS_APPROVED = "false";
+    env.MEDIA_MODERATION_MODE = "disabled_fail_closed";
+    env.API_RATE_LIMIT_STORE_DRIVER = "process_memory";
+    const unsafe = inspectStagingConfiguration(env);
+    expect(unsafe.find((result) => result.name === "legal")?.invalid).toContain("LEGAL_DOCUMENTS_APPROVED=true");
+    expect(unsafe.find((result) => result.name === "live")?.invalid).toContain("MEDIA_MODERATION_MODE=launch_approved");
+    expect(unsafe.find((result) => result.name === "operations")?.invalid).toContain("API_RATE_LIMIT_STORE_DRIVER=redis");
+  });
+
+  it("runs independent configured proofs after one provider command fails", async () => {
+    const env = completeProofEnv();
+    const calls = [];
+    const runCommand = vi.fn(async (command, args) => {
+      calls.push([command, ...args].join(" "));
+      if (args.includes("proof:bunny-sfw")) throw new Error("provider unavailable with secret-value-not-logged");
+    });
+
+    const outcomes = await executeStagingProofPlan({
+      env,
+      runCommand,
+      readManifest: async () => ({ manifestDigest: env.STAGING_EVIDENCE_MANIFEST_DIGEST })
+    });
+
+    expect(outcomes.find((outcome) => outcome.name === "bunny-sfw")?.status).toBe("failed");
+    expect(outcomes.find((outcome) => outcome.name === "subscriptions")?.status).toBe("passed");
+    expect(outcomes.find((outcome) => outcome.name === "target-device-accessibility")?.status).toBe("evidence_registered");
+    expect(calls.some((call) => call.includes("proof:enterprise"))).toBe(true);
+    expect(outcomes.find((outcome) => outcome.name === "bunny-sfw")?.reason).not.toContain("secret-value-not-logged");
+  });
+
+  it("rejects evidence that is not bound to the exact release manifest", async () => {
+    const env = completeProofEnv();
+    const outcomes = await executeStagingProofPlan({
+      env,
+      runCommand: async () => {},
+      readManifest: async () => ({ manifestDigest: `sha256:${"b".repeat(64)}` })
+    });
+
+    expect(outcomes.find((outcome) => outcome.name === "release-bound-evidence")).toMatchObject({
+      status: "failed",
+      reason: "evidence_manifest_digest_mismatch"
+    });
+  });
+
+  it("returns non-zero from both CLIs when required launch evidence is absent", () => {
+    const doctor = runCli("scripts/staging-doctor.mjs");
+    expect(doctor.status).toBe(2);
+    expect(doctor.stdout).toContain("CODE_COMPLETE_PROVIDER_BLOCKED core");
+    expect(doctor.stdout).toContain("CODE_COMPLETE_PROVIDER_BLOCKED legal");
+
+    const prove = runCli("scripts/staging-prove.mjs");
+    expect(prove.status).toBe(2);
+    expect(prove.stdout).toContain("CODE_COMPLETE_PROVIDER_BLOCKED release-manifest");
+    expect(prove.stdout).toContain("CODE_COMPLETE_PROVIDER_BLOCKED target-device-accessibility");
+  });
+});
+
+function completeDoctorEnv() {
+  const env = Object.fromEntries(
+    stagingConfigurationGroups.flatMap(([, keys]) => keys.map((key) => [key, `configured-${key.toLowerCase()}`]))
+  );
+  return {
+    ...env,
+    NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED: "true",
+    HELIUS_CLUSTER: "devnet",
+    LIVEPEER_ADULT_LIVE_ENABLED: "false",
+    MEDIA_MODERATION_MODE: "launch_approved",
+    AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: "false",
+    TRANSACTIONAL_EMAIL_PROVIDER: "resend",
+    API_RATE_LIMIT_STORE_DRIVER: "redis",
+    OTEL_REQUIRED: "true",
+    LEGAL_DOCUMENTS_APPROVED: "true"
+  };
+}
+
+function completeProofEnv() {
+  const env = Object.fromEntries(
+    stagingProofPlan.flatMap((proof) => proof.required.map((key) => [key, `proof-${key.toLowerCase()}`]))
+  );
+  env.STAGING_EVIDENCE_MANIFEST_DIGEST = `sha256:${"a".repeat(64)}`;
+  return env;
+}
+
+function runCli(path) {
+  return spawnSync(process.execPath, [path], {
+    cwd: new URL("..", import.meta.url),
+    env: { PATH: process.env.PATH },
+    encoding: "utf8"
+  });
+}

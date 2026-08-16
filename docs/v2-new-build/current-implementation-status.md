@@ -40,10 +40,13 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Merged baseline | `main` at `fba30a2` (Launch 11 plus convergence fixes, PRs #52–#54) |
 | Active slice | Launch 11B — strict staging convergence truth and complete evidence orchestration |
 | Branch | `codex/launch-11-staging-truth` |
-| Pull request | pending |
-| State | `ACTIVE` |
-| Slice blockers | No code blocker. Shared staging credentials, provider dashboards/domains, hosting/OIDC, alert destinations, production DNS, counsel-approved legal text, and production approval remain human gates. This slice must make their absence fail the staging gate rather than producing a green convergence result. |
+| Pull request | #55 |
+| State | `CODE_COMPLETE_PROVIDER_BLOCKED` |
+| Slice blockers | No code blocker. Shared staging credentials, provider dashboards/domains, hosting/OIDC, alert destinations, production DNS, counsel-approved legal text, and production approval remain human gates. Their absence now produces an explicit non-zero staging result instead of a green convergence claim. |
 | Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
+
+Local repository, browser, and Supabase/Postgres proof is green; staging now fails
+closed until its real evidence exists.
 
 Current human/provider gates do not block this process slice: shared staging credentials,
 provider dashboard/webhook/domain configuration, migration `0091` shared-project proof,
@@ -74,15 +77,19 @@ staging gate rather than fabricated local evidence.
 Launch 11 local acceptance now includes runtime-neutral public web configuration, self-hosted fonts,
 non-root web/API/worker OCI targets, exact-source release manifests and attestations, build-once staging
 and production promotion workflows, API/worker OpenTelemetry bootstrap, privacy-safe Web Vitals intake,
-synthetic and bounded-load probes, and recovery/legal/incident runbooks. The production-mode wallet-first
+synthetic and bounded-load probes, strict configuration and evidence orchestration, executable database and
+Storage-object restore parity proofs, and recovery/legal/incident runbooks. The production-mode wallet-first
 entry was verified manually at desktop and 390px mobile widths. Playwright passed 77 of 78 applicable
 desktop Chromium, desktop Firefox, and mobile Chromium checks; the remaining Firefox service-worker case
 is intentionally Chromium-only. A real local Supabase/Postgres integration run passed four journeys; a
 logical backup restored 147 public tables into a disposable Supabase-compatible target with critical and
-non-empty row-count parity. Synthetic readiness passed, and a 100-request/10-concurrency liveness probe
+non-empty row-count parity. The Storage proof validates exact relative object paths, byte counts, and SHA-256
+content without logging object names. Synthetic readiness passed, and a 100-request/10-concurrency liveness probe
 completed with zero failures and 60.6ms p95 after infrastructure probes were isolated from user rate-limit
-budgets. Hosting/OIDC, shared staging credentials, immutable staging OCI evidence, real provider dashboards,
-OTLP destinations and alert routing, object backup, counsel approval, and explicit production approval remain
+budgets. The strict staging doctor and independent proof runner return non-zero for absent configuration,
+unsafe flags, failed commands, missing evidence receipts, or release-digest mismatch. Hosting/OIDC, shared
+staging credentials, immutable staging deployment evidence, real provider dashboards, OTLP destinations and
+alert routing, real database/Storage restore receipts, counsel approval, and explicit production approval remain
 pre-production gates.
 
 ## Launch Baseline And Architecture Lock
@@ -178,7 +185,7 @@ Public product copy and API metadata use WeVid and Support. Technical package sc
 - Launch 03A adds a preview-first SFW-only Create journey, required people/rights declaration, one-action draft-and-upload handoff, paginated owner publication/review workspace, uploader-safe request-changes/rejection reasons, request-bound replay-safe appeals, transactional appeal closure/restoration, and an explicit public-profile `publish_state = 'published'` guard. Representation-only edits to existing adult content re-check adult-publisher capability across every editable state. Code and real local Postgres proof are complete; Bunny staging and launch-approved classifier/hash evidence remain the provider gate.
 - Launch 10 has converged the public entry, app shell, representative product workspaces, accessibility baseline, cross-browser smoke matrix, and PWA/offline contract. Final provider-backed visual journeys, manual assistive-technology/zoom checks, target-device iOS install/push behavior, and performance evidence belong to pre-production staging convergence.
 - Admin dashboard is substantial; organization KYB/member, support policy/case, moderation/report, refund/dispute, data-request, and feature-flag mutations now share the admin mutation route-policy/idempotency/rate-limit guard, but final role matrix coverage and removal of any remaining compatibility aliases after migrations and clients are updated still remain.
-- Launch 11 now has runtime-neutral public web configuration, a secret-excluding multi-target non-root OCI build, post-green-main GHCR publication and GitHub attestations, an immutable source/contract/migration/image manifest, exact-manifest staging and manual production promotion gates, shared API/worker OTLP bootstrap, privacy-minimized Web Vitals ingestion, synthetic and bounded-load checks, logical backup plus loopback-only restore-proof tooling, expanded redaction, and incident/rollback/legal runbooks. The workflows intentionally refuse to claim deployment until a hosting target and official OIDC adapter are selected. Shared staging credentials, provider dashboards/webhooks/domains, real provider journeys, collector/dashboard/alert destinations, Storage-object backup proof, final counsel-approved legal documents, production DNS/secrets, and explicit production approval remain `CODE_COMPLETE_PROVIDER_BLOCKED` external gates.
+- Launch 11 now has runtime-neutral public web configuration, a secret-excluding multi-target non-root OCI build, post-green-main GHCR publication and GitHub attestations, an immutable source/contract/migration/image manifest, exact-manifest staging and manual production promotion gates, shared API/worker OTLP bootstrap, privacy-minimized Web Vitals ingestion, synthetic and bounded-load checks, logical database restore proof, exact Storage-object restore parity proof, strict independent staging evidence orchestration, expanded redaction, and incident/rollback/legal runbooks. The workflows intentionally refuse to claim deployment until a hosting target and official OIDC adapter are selected. Shared staging credentials, provider dashboards/webhooks/domains, real provider journeys, collector/dashboard/alert destinations, real database/Storage restore receipts, final counsel-approved legal documents, production DNS/secrets, and explicit production approval remain `CODE_COMPLETE_PROVIDER_BLOCKED` external gates.
 - Local macOS Vitest/Vite execution is covered by optional `rolldown` Darwin native bindings and `pnpm run doctor`, which resolves the pinned Node.js/Corepack toolchain even when the interactive shell points at an older Node. Tests must still run locally and in the pinned Linux CI proof before provider or frontend slices are considered validated.
 
 ## P0 Before Broad Expansion

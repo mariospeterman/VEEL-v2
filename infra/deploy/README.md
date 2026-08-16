@@ -15,7 +15,7 @@ The web image reads public configuration from the no-store `/runtime-config.js` 
 
 ## Current external gate
 
-No hosting provider has been selected or authorized. The staging workflow verifies the release manifest and attestations, reports each missing provider group as `CODE_COMPLETE_PROVIDER_BLOCKED`, and refuses to pretend it deployed. When the account owner selects the provider, add one repository-owned adapter against its current official API/OIDC documentation, obtain review, and only then set `STAGING_DEPLOY_ENABLED=true`.
+No hosting provider has been selected or authorized. The staging workflow verifies the release manifest and attestations, reports each missing provider group as `CODE_COMPLETE_PROVIDER_BLOCKED`, exits non-zero, and refuses to pretend it deployed. A missing configuration group, an unsafe launch value, or an absent hosting adapter can never produce a green staging-convergence run. When the account owner selects the provider, add one repository-owned adapter against its current official API/OIDC documentation, obtain review, and only then set `STAGING_DEPLOY_ENABLED=true`.
 
 Production requires all of the following before a hosting adapter may promote traffic:
 
@@ -28,7 +28,7 @@ Production requires all of the following before a hosting adapter may promote tr
 - production credentials, databases, Redis, wallets, provider accounts, and DNS isolated from staging;
 - rollback target pinned to the previous healthy manifest.
 
-Use `pnpm staging:doctor`, `pnpm staging:prove`, `pnpm synthetic:smoke`, `pnpm load:smoke`, `pnpm db:backup`, and the [backup/restore runbook](backup-and-restore.md). Commands never print secret values. Remote load requires an explicit bounded-load acknowledgement.
+Use `pnpm staging:doctor`, `pnpm staging:prove`, `pnpm synthetic:smoke`, `pnpm load:smoke`, `pnpm db:backup`, `pnpm db:restore:prove`, `pnpm storage:restore:prove`, and the [backup/restore runbook](backup-and-restore.md). Both staging commands exit `2` while required configuration/evidence is absent and `staging:prove` continues through independent proofs so one failed provider does not hide the rest of the matrix. Commands never print secret values. Remote load requires an explicit bounded-load acknowledgement. The exact configuration, evidence receipts, validation, and rollback sequence is in [staging convergence](staging-convergence.md).
 
 ## Artifact contract
 

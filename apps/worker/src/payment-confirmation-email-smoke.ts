@@ -10,9 +10,9 @@ if (
   !config.TRANSACTIONAL_EMAIL_SMOKE_TO
 ) {
   console.log(
-    "SKIPPED transactional email smoke: configure TRANSACTIONAL_EMAIL_PROVIDER=resend, RESEND_API_KEY, TRANSACTIONAL_EMAIL_FROM, and TRANSACTIONAL_EMAIL_SMOKE_TO."
+    "CODE_COMPLETE_PROVIDER_BLOCKED transactional email smoke: configure TRANSACTIONAL_EMAIL_PROVIDER=resend, RESEND_API_KEY, TRANSACTIONAL_EMAIL_FROM, and TRANSACTIONAL_EMAIL_SMOKE_TO."
   );
-  process.exit(0);
+  process.exit(2);
 }
 
 const provider = createResendPaymentConfirmationEmailProvider({

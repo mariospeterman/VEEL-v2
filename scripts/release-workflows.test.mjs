@@ -25,6 +25,8 @@ describe("immutable release workflows", () => {
     expect(source).not.toContain("docker/build-push-action");
     expect(source).toContain("PROMOTE_EXACT_STAGING_ARTIFACT");
     expect(source).toContain("STAGING_EVIDENCE_MANIFEST_DIGEST");
+    expect(source).toContain("STAGING_IDENTITY_WALLET_PROOF_ID");
+    expect(source).toContain("STAGING_DEVICE_QA_PROOF_ID");
   });
 
   it("loads the downloaded staging manifest from its absolute runner path", async () => {
@@ -32,5 +34,14 @@ describe("immutable release workflows", () => {
 
     expect(source).toContain("require(process.env.RELEASE_MANIFEST_PATH)");
     expect(source).not.toContain('require("./"+process.env.RELEASE_MANIFEST_PATH)');
+  });
+
+  it("keeps staging red until configuration and a hosting adapter are real", async () => {
+    const source = await workflow("deploy-staging.yml");
+
+    expect(source).toContain("run: pnpm staging:doctor");
+    expect(source).not.toContain("STAGING_REQUIRE_COMPLETE");
+    expect(source).toContain("CODE_COMPLETE_PROVIDER_BLOCKED hosting adapter/OIDC");
+    expect(source).toContain("exit 2");
   });
 });
