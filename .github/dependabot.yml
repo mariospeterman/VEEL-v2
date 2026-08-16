@@ -5,6 +5,11 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # Rolldown publishes native bindings as a version-coupled runtime set.
+      # Upgrade these exact fallback pins only with the matching Rolldown runtime.
+      - dependency-name: "@rolldown/binding-darwin-arm64"
+      - dependency-name: "@rolldown/binding-darwin-x64"
   - package-ecosystem: github-actions
     directory: /
     schedule:

@@ -37,12 +37,12 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `fba30a2` (Launch 11 plus convergence fixes, PRs #52–#54) |
-| Active slice | Launch 11B — strict staging convergence truth and complete evidence orchestration |
-| Branch | `codex/launch-11-staging-truth` |
-| Pull request | #55 |
-| State | `CODE_COMPLETE_PROVIDER_BLOCKED` |
-| Slice blockers | No code blocker. Shared staging credentials, provider dashboards/domains, hosting/OIDC, alert destinations, production DNS, counsel-approved legal text, and production approval remain human gates. Their absence now produces an explicit non-zero staging result instead of a green convergence claim. |
+| Merged baseline | `main` at `f693314` (Launch 11, staging-truth hardening, dependency graph hardening, and individually reviewed supported upgrades through PR #40) |
+| Active slice | Production dependency alignment — reject unsupported partial Rolldown native-binding upgrades |
+| Branch | `codex/rolldown-binding-alignment` |
+| Pull request | Pending |
+| State | `ACTIVE` |
+| Slice blockers | No code blocker. Official Rolldown packages version-couple the JavaScript runtime and every native binding; standalone Darwin binding upgrades are intentionally rejected. |
 | Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
 
 Local repository, browser, and Supabase/Postgres proof is green; staging now fails
@@ -143,7 +143,7 @@ Public product copy and API metadata use WeVid and Support. Technical package sc
 
 - Monorepo, pnpm workspace, CI/security workflow, docs checks, lint/typecheck/test/smoke scripts, GStack gates, and gitleaks local gate.
 - Toolchain versioning is explicit through `.node-version`, `.nvmrc`, `packageManager`, and `engines`: Node.js `22.16.0`, pnpm `10.0.0`, Corepack activation, `pnpm bootstrap`, `pnpm run doctor`, and `pnpm check`. The canonical CI proof job is `pinned-toolchain-proof`.
-- The production dependency graph no longer includes the unused `@solana/wallet-adapter-wallets` umbrella package or pnpm-auto-installed React Native/Metro peers. Next.js is pinned to `16.3.0`, Playwright is pinned to `1.60.0`, required Solana codec/Stripe peers are explicit exact service dependencies, patched `axios`/`ws` resolutions are enforced, and UUID 8–10 consumers resolve to patched `uuid@11.1.1`. `pnpm deps:check` guards that policy. The current `pnpm audit --prod` reports one high advisory: unpatched `bigint-buffer` through official Solana SPL tooling; no critical, moderate, low, or informational advisory is reported. Exact reachability, mitigations, artifact evidence, ownership, review date, and production gate are recorded in [Production dependency security status](dependency-security-status.md).
+- The production dependency graph no longer includes the unused `@solana/wallet-adapter-wallets` umbrella package or pnpm-auto-installed React Native/Metro peers. Next.js is pinned to `16.3.0`, Playwright is pinned to `1.60.0`, required Solana codec/Stripe peers are explicit exact service dependencies, patched `axios`/`ws` resolutions are enforced, and UUID 8–10 consumers resolve to patched `uuid@11.1.1`. Supported queued upgrades were reapplied individually after official review: `pnpm/action-setup@v6` in PR #36, ESLint 10 in PR #37, `@fastify/rate-limit` 11 in PR #38, `fastify-raw-body` 6 in PR #39, and `globals` 17 in PR #40. PR #41 was rejected because it changed only one Rolldown native binding while the runtime and every other binding remained 1.0.3. `pnpm deps:check` now guards both the vulnerable-resolution policy and exact Rolldown runtime/native-binding alignment. The current `pnpm audit --prod` reports one high advisory: unpatched `bigint-buffer` through official Solana SPL tooling; no critical, moderate, low, or informational advisory is reported. Exact reachability, mitigations, artifact evidence, ownership, review date, and production gate are recorded in [Production dependency security status](dependency-security-status.md).
 - Privy `3.37.0` declares `@farcaster/mini-app-solana` as an optional peer and dynamically imports it only after its own Farcaster-environment detection. WeVid has no Farcaster login, query, referrer, or mini-app configuration and does not install that peer; normal Privy email/social/passkey plus Solana wallet creation/signing does not execute the branch. The current Next build still reports the unresolved optional import from Privy's lazy wallet runtime. Privy `3.37.1` retains the same optional peer, so that supported patch does not remove the warning. Owner: identity-provider dependency review. Review date: 2026-09-15. Removal condition: upgrade when Privy publishes a compatible release that makes the optional import bundler-clean, or install and stage-prove the peer only if Farcaster becomes an approved product surface.
 - OpenAPI, route map, and Fastify route registration are checked for route drift. The canonical follow endpoints are present only with their migration, repository, abuse/idempotency controls, feed impact, and real-Postgres/browser proof; no contract-only current-viewer alias is restored because the session endpoint remains that boundary.
 - Fastify API bootstrap with route registration, dependency construction, shared app-level Postgres client construction, close-hook lifecycle, env validation, raw-body support for signed webhooks, global rate limit, OpenAPI plugin, and Supabase boundary plugin.
@@ -208,7 +208,7 @@ The controlling branch evidence is recorded in `production-branch-inventory.md`.
 - [x] Inventory every remote branch and reject stale lockfile merges.
 - [x] Implement and verify profile logout hardening, including official provider teardown, server cookie expiry, and mobile redirect proof.
 - [x] Correct application sessions for multi-device use: new logins coexist, rotation and current logout revoke only one session, explicit recent-auth logout-all is audited, and account-security revoke-all is idempotent.
-- [ ] Reapply supported dependency upgrades individually after official release review.
+- [x] Reapply supported dependency upgrades individually after official release review; PRs #36–#40 are merged and the unsupported partial Rolldown native-binding PR #41 is rejected in favor of an enforced coordinated-upgrade policy.
 - [x] Select Privy as the embedded-wallet launch candidate, remove Turnkey from the browser runtime and dependency graph, keep external Solana Wallet Adapter support, and document Turnkey only as an unbundled fallback ADR candidate.
 - [ ] Make every protected mutation durably idempotent for the lifetime of one logical operation, starting with content draft creation.
 - [x] Correct referral split mathematics so referral commission reduces platform net only and never creator share.
