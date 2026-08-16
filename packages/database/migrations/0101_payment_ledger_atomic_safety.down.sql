@@ -1,0 +1,2 @@
+alter table payment_ledger_entries
+  drop constraint if exists payment_ledger_entries_javascript_safe_amount_check;

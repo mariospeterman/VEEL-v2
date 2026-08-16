@@ -858,7 +858,7 @@ create table payment_ledger_entries (
   account_kind text not null,
   account_key text not null,
   account_user_id uuid references users(id),
-  amount_minor bigint not null,
+  amount_minor bigint not null check (amount_minor between 0 and 9007199254740991),
   currency text not null,
   direction text not null,
   state text not null default 'posted',

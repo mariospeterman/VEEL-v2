@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import bs58 from "bs58";
 import { Keypair, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { calculateSettlementSplit, PaymentAmountError } from "../src/modules/payment/payment-amounts";
 import {
   buildCreatorSplitTransaction,
+  SolanaPaymentConfigurationError,
   verifySolanaTransfer
 } from "../src/modules/payment/solana-payment";
 import type { PaymentSettlementInput, StoredPaymentIntent } from "../src/modules/payment/types";
@@ -101,6 +102,26 @@ describe("payment amount calculation", () => {
     expect(() =>
       calculateSettlementSplit({ totalAmountAtomic: 100, platformFeeBps: 1_000, referralShareOfPlatformFeeBps: 10_001 })
     ).toThrow(PaymentAmountError);
+  });
+
+  it("keeps the maximum supported atomic total exact and rejects the first unsafe integer", () => {
+    expect(calculateSettlementSplit({
+      totalAmountAtomic: Number.MAX_SAFE_INTEGER,
+      platformFeeBps: 1_000
+    })).toEqual({
+      totalAmountAtomic: 9_007_199_254_740_991,
+      creatorSideProceedsAtomic: 8_106_479_329_266_892,
+      creatorAmountAtomic: 8_106_479_329_266_892,
+      enterpriseManagementAmountAtomic: 0,
+      platformFeeGrossAtomic: 900_719_925_474_099,
+      platformFeeAmountAtomic: 900_719_925_474_099,
+      referralAmountAtomic: 0
+    });
+
+    expect(() => calculateSettlementSplit({
+      totalAmountAtomic: Number.MAX_SAFE_INTEGER + 1,
+      platformFeeBps: 1_000
+    })).toThrow(PaymentAmountError);
   });
 });
 
@@ -232,6 +253,25 @@ describe("Solana creator split settlement verification", () => {
       memo("veel:intent-1")
     ], { input })).resolves.toEqual({ confirmed: true, blockTime });
   });
+
+  it("rejects unsafe or internally inconsistent expected amounts before querying Solana", async () => {
+    const getParsedTransaction = vi.fn();
+    const connection = { getParsedTransaction } as never;
+
+    await expect(verifySolanaTransfer(connection, settlementInput({
+      totalAmountMinor: Number.MAX_SAFE_INTEGER + 1
+    }))).resolves.toEqual({
+      confirmed: false,
+      failureCode: "invalid_expected_amounts"
+    });
+    await expect(verifySolanaTransfer(connection, settlementInput({
+      platformFeeAmountMinor: 999_999
+    }))).resolves.toEqual({
+      confirmed: false,
+      failureCode: "invalid_expected_amounts"
+    });
+    expect(getParsedTransaction).not.toHaveBeenCalled();
+  });
 });
 
 describe("Solana Pay transaction construction", () => {
@@ -262,6 +302,32 @@ describe("Solana Pay transaction construction", () => {
     expect(tokenInstructions.every((instruction) =>
       instruction.keys.some((key) => key.pubkey.toBase58() === referenceAddress)
     )).toBe(true);
+  });
+
+  it("refuses to compose transactions from unsafe or inconsistent stored amounts", async () => {
+    const connection = {
+      async getLatestBlockhash() {
+        return {
+          blockhash: Keypair.generate().publicKey.toBase58(),
+          lastValidBlockHeight: 1
+        };
+      }
+    };
+    const unsafeIntent = storedUsdcIntent();
+    unsafeIntent.totalAmountMinor = Number.MAX_SAFE_INTEGER + 1;
+    const inconsistentIntent = storedUsdcIntent();
+    inconsistentIntent.platformFeeAmountMinor -= 1;
+
+    await expect(buildCreatorSplitTransaction({
+      connection,
+      intent: unsafeIntent,
+      buyerWallet
+    })).rejects.toBeInstanceOf(SolanaPaymentConfigurationError);
+    await expect(buildCreatorSplitTransaction({
+      connection,
+      intent: inconsistentIntent,
+      buyerWallet
+    })).rejects.toBeInstanceOf(SolanaPaymentConfigurationError);
   });
 });
 

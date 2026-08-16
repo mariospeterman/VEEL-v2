@@ -17,6 +17,14 @@ export interface PaymentSplit {
   referralAmountAtomic: number;
 }
 
+export interface SettlementAmountVector {
+  totalAmountMinor: number;
+  creatorAmountMinor: number;
+  enterpriseManagementAmountMinor: number;
+  platformFeeAmountMinor: number;
+  referralAmountMinor: number;
+}
+
 export class PaymentAmountError extends Error {
   constructor(readonly code: string) {
     super(code);
@@ -62,10 +70,32 @@ export function calculateSettlementSplit(input: PaymentSplitInput): PaymentSplit
   };
 }
 
+export function hasSafeSettlementAmounts(input: SettlementAmountVector): boolean {
+  if (
+    !isSafeAtomicAmount(input.totalAmountMinor, false) ||
+    !isSafeAtomicAmount(input.creatorAmountMinor, false) ||
+    !isSafeAtomicAmount(input.enterpriseManagementAmountMinor, true) ||
+    !isSafeAtomicAmount(input.platformFeeAmountMinor, true) ||
+    !isSafeAtomicAmount(input.referralAmountMinor, true)
+  ) {
+    return false;
+  }
+
+  return BigInt(input.totalAmountMinor) ===
+    BigInt(input.creatorAmountMinor) +
+      BigInt(input.enterpriseManagementAmountMinor) +
+      BigInt(input.platformFeeAmountMinor) +
+      BigInt(input.referralAmountMinor);
+}
+
 function assertSafeAtomicAmount(value: number, code: string): void {
-  if (!Number.isSafeInteger(value) || value <= 0) {
+  if (!isSafeAtomicAmount(value, false)) {
     throw new PaymentAmountError(code);
   }
+}
+
+function isSafeAtomicAmount(value: number, allowZero: boolean): boolean {
+  return Number.isSafeInteger(value) && (allowZero ? value >= 0 : value > 0);
 }
 
 function assertSafeBasisPoints(value: number): void {
