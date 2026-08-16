@@ -31,13 +31,13 @@ export async function registerApiHealthRoutes(
   app: FastifyInstance,
   dependencies: Pick<ApiDependencies, "postgresClient">
 ): Promise<void> {
-  app.get("/healthz", async () =>
+  app.get("/healthz", { config: { rateLimit: false } }, async () =>
     baseHealth("ok", {
       api: { status: "ok" }
     })
   );
 
-  app.get("/readyz", async (_request, reply) => {
+  app.get("/readyz", { config: { rateLimit: false } }, async (_request, reply) => {
     if (!dependencies.postgresClient) {
       const response = baseHealth("degraded", {
         api: { status: "ok" },

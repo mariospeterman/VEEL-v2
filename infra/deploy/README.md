@@ -1,53 +1,56 @@
-# Veel Deploy Skeleton
+# WeVid release operations
 
-Status: staging skeleton, not production-active until environment secrets and provider staging smoke are configured.
+Status: code-complete release boundary; provider deployment blocked until a hosting target and OIDC trust are approved.
 
-## Services
+## Promotion model
 
-- `web`: Next.js PWA, CDN/Node runtime.
-- `api`: Fastify API, backend truth for authz, money, access, admin, safety, providers, and compliance state.
-- `worker`: TypeScript worker for retries, subscription collection ticks, notification delivery, and provider-event replay.
-- `database`: Supabase Postgres/Auth/Realtime. Migrations run through the database workflow or Supabase CLI/MCP, never from browser code.
+```text
+short-lived PR branch -> preview checks -> protected main -> signed OCI artifacts
+  -> exact digest staging convergence -> explicit approval -> exact digest production promotion
+```
 
-## Required Runtime Settings
+`main` is the only permanent branch. Production never rebuilds. The `release-artifacts` workflow runs only after green `ci` on `main`, builds non-root `web`, `api`, and `worker` OCI targets, publishes each to GHCR, produces GitHub attestations, and uploads one manifest containing the source SHA, OpenAPI digest, migration head, and all three image digests.
 
-Public web settings:
+The web image reads public configuration from the no-store `/runtime-config.js` endpoint at process runtime. Public environment values therefore are not a reason to create environment-specific images. Server secrets are injected only by the selected environment secret store.
 
-- `NEXT_PUBLIC_APP_URL`
-- `NEXT_PUBLIC_API_BASE_URL`
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+## Current external gate
 
-Server-only settings:
+No hosting provider has been selected or authorized. The staging workflow verifies the release manifest and attestations, reports each missing provider group as `CODE_COMPLETE_PROVIDER_BLOCKED`, and refuses to pretend it deployed. When the account owner selects the provider, add one repository-owned adapter against its current official API/OIDC documentation, obtain review, and only then set `STAGING_DEPLOY_ENABLED=true`.
 
-- `API_URL`
-- `WEB_URL`
-- `DATABASE_URL`
-- `API_RATE_LIMIT_STORE_DRIVER=redis`
-- `API_RATE_LIMIT_REDIS_URL` from the deployment secret store; the production entrypoint has no generic external-store injection path
-- `SUPABASE_URL`
-- `SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY` during legacy compatibility
-- `PAYMENT_PLATFORM_TREASURY_WALLET`
-- provider keys and webhook secrets listed in `.env.example`
+Production requires all of the following before a hosting adapter may promote traffic:
 
-Deploy gate settings:
+- exact staging-proven manifest digest;
+- GitHub production environment approval;
+- provider staging proof, public callback/domain proof, and redacted evidence;
+- migration and non-production backup/restore proof;
+- configured OTLP collector, dashboards, alerts, and on-call destinations;
+- final counsel/product approval and version identifiers for Terms and Privacy;
+- production credentials, databases, Redis, wallets, provider accounts, and DNS isolated from staging;
+- rollback target pinned to the previous healthy manifest.
 
-- `DEPLOY_ENABLED=true` only after a real staging or production target exists.
-- `API_HEALTH_URL=https://.../healthz`
-- `API_READY_URL=https://.../readyz`
+Use `pnpm staging:doctor`, `pnpm staging:prove`, `pnpm synthetic:smoke`, `pnpm load:smoke`, `pnpm db:backup`, and the [backup/restore runbook](backup-and-restore.md). Commands never print secret values. Remote load requires an explicit bounded-load acknowledgement.
 
-## Pipeline Shape
+## Artifact contract
 
-1. Build packages with `pnpm -r --if-present build`.
-2. Run `pnpm database:check` before migrations or release promotion.
-3. Run provider-mock smoke in CI and provider-staging smoke before production promotion.
-4. Run `pnpm deploy:check`.
-5. Deploy immutable artifacts using the hosting platform's OIDC integration.
-6. Verify `/healthz` and `/readyz`.
-7. Keep rollback instructions attached to every release.
+Generate locally only for testing:
 
-## Guardrails
+```text
+RELEASE_SOURCE_SHA=<40-char-sha>
+RELEASE_{WEB,API,WORKER}_IMAGE=<repository>
+RELEASE_{WEB,API,WORKER}_DIGEST=sha256:<64-hex>
+pnpm release:manifest
+pnpm release:verify
+```
 
-- Do not put provider secrets, service-role keys, signed media URLs, stream keys, raw PII, or webhook payload dumps in workflow logs.
-- Do not activate production deploys without artifact digest pinning, backup/snapshot confirmation, readiness checks, smoke tests, and rollback instructions.
-- Do not run payment settlement, entitlement grants, admin mutations, or compliance reporting in frontend or edge-only code.
+The checked manifest fingerprint covers every field. Any source, contract, migration, repository, or image-digest change creates a different manifest and must repeat staging convergence.
+
+## Runtime boundaries
+
+- Web: port 3000; no server secret; public config delivered at runtime.
+- API: port 4000; `/healthz` proves process liveness and `/readyz` proves required dependency readiness.
+- Worker: private process; graceful stop waits for the active bounded tick.
+- Database/Auth/Realtime: separate Supabase project per environment.
+- Rate limiting: Redis is mandatory in production.
+- Telemetry: API and worker preload `@veel/observability/register`; `OTEL_REQUIRED=true` makes a missing OTLP endpoint fatal.
+
+Provider keys, cookies, authorization headers, database URLs, wallet material, private signing keys, raw PII/provider payloads, stream keys, and signed media URLs must never be placed in images, manifests, logs, workflow output, or frontend config.

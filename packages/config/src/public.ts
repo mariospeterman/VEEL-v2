@@ -30,4 +30,4 @@ export const publicWebEnvSchema = z.object({
 
 export type PublicWebEnv = z.infer<typeof publicWebEnvSchema>;
 
-export const parsePublicWebEnv = (env: NodeJS.ProcessEnv): PublicWebEnv => publicWebEnvSchema.parse(env);
+export const parsePublicWebEnv = (env: unknown): PublicWebEnv => publicWebEnvSchema.parse(env);

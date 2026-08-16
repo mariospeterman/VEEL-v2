@@ -183,7 +183,9 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   await expect(page.getByText("ended after access")).toBeVisible();
   await expect(page.getByRole("button", { name: "Open review" })).toBeVisible();
 
-  const protectedRequests = requests.filter((request) => request.path.startsWith("/v1/"));
+  const protectedRequests = requests.filter((request) =>
+    request.path.startsWith("/v1/") && request.path !== "/v1/telemetry/web-vitals"
+  );
   expect(protectedRequests.every((request) => request.authorization === `Bearer ${e2eToken}`)).toBe(true);
   expect(requests.some((request) => request.method === "POST" && request.path === "/v1/content" && request.idempotencyKey)).toBe(true);
   expect(requests.some((request) => request.method === "POST" && request.path === `/v1/content/${contentId}/unlock-intents` && request.idempotencyKey)).toBe(true);

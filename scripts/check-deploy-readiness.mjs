@@ -3,6 +3,9 @@ import { access } from "node:fs/promises";
 
 const requiredSkeletonFiles = [
   "infra/deploy/README.md",
+  "infra/deploy/backup-and-restore.md",
+  "infra/deploy/incident-response.md",
+  "infra/deploy/legal-launch-gate.md",
   "infra/deploy/rollback-checklist.md",
   "infra/observability/README.md"
 ];
@@ -46,6 +49,25 @@ function assertRequiredEnv(names) {
 }
 
 function assertProductionProviderSafety() {
+  assertRequiredEnv([
+    "RELEASE_MANIFEST_PATH",
+    "EXPECTED_MANIFEST_DIGEST",
+    "STAGING_EVIDENCE_MANIFEST_DIGEST",
+    "BACKUP_RESTORE_PROOF_ID",
+    "OTEL_EXPORTER_OTLP_ENDPOINT",
+    "LEGAL_TERMS_VERSION",
+    "LEGAL_PRIVACY_VERSION",
+    "LEGAL_CONTACT_EMAIL"
+  ]);
+
+  if (process.env.STAGING_EVIDENCE_MANIFEST_DIGEST !== process.env.EXPECTED_MANIFEST_DIGEST) {
+    throw new Error("Production readiness is blocked: staging evidence must match the exact approved manifest digest.");
+  }
+
+  if (process.env.LEGAL_DOCUMENTS_APPROVED !== "true") {
+    throw new Error("Production readiness is blocked: final legal documents require recorded counsel/product approval.");
+  }
+
   if (process.env.AGE_VERIFICATION_ALLOW_MOCK_PROVIDER === "true") {
     throw new Error("Production readiness is blocked: AGE_VERIFICATION_ALLOW_MOCK_PROVIDER must not be true.");
   }

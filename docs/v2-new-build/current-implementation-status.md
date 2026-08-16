@@ -37,12 +37,12 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `0627737` (Launch 09, PR #50) |
-| Active slice | Launch 10 — Frontend system, accessibility, cross-browser, and PWA completion |
-| Branch | `codex/launch-10-frontend-system` |
-| Pull request | #51 |
-| State | `CODE_COMPLETE_PROVIDER_BLOCKED` |
-| Slice blockers | Linux CI WebKit must pass before merge. Real wallet extensions, the embedded-wallet provider on approved target domains/devices, push delivery, installed iOS PWA, manual screen-reader/zoom, and staging Web Vitals remain pre-production evidence gates; all stay fail-closed or outside production enablement until proven. |
+| Merged baseline | `main` at `16ae8b9` (Launch 10, PR #51) |
+| Active slice | Launch 11 — Immutable release operations, observability, recovery, and legal gates |
+| Branch | `codex/launch-11-release-operations` |
+| Pull request | #52 |
+| State | `ACTIVE` |
+| Slice blockers | A hosting target/OIDC trust, shared staging credentials, provider dashboard configuration, alert destinations, production DNS, final legal text, and production approval require account-owner or counsel action. The slice must make artifacts, promotion verification, telemetry, staging proof, recovery, and runbooks code-complete without claiming those external approvals. |
 | Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
 
 Current human/provider gates do not block this process slice: shared staging credentials,
@@ -71,6 +71,20 @@ Firefox intentionally skips the Chromium-only service-worker-control assertion. 
 run WebKit on the local macOS 12 host, so desktop/mobile WebKit remains a required Linux CI and real-device
 staging gate rather than fabricated local evidence.
 
+Launch 11 local acceptance now includes runtime-neutral public web configuration, self-hosted fonts,
+non-root web/API/worker OCI targets, exact-source release manifests and attestations, build-once staging
+and production promotion workflows, API/worker OpenTelemetry bootstrap, privacy-safe Web Vitals intake,
+synthetic and bounded-load probes, and recovery/legal/incident runbooks. The production-mode wallet-first
+entry was verified manually at desktop and 390px mobile widths. Playwright passed 77 of 78 applicable
+desktop Chromium, desktop Firefox, and mobile Chromium checks; the remaining Firefox service-worker case
+is intentionally Chromium-only. A real local Supabase/Postgres integration run passed four journeys; a
+logical backup restored 147 public tables into a disposable Supabase-compatible target with critical and
+non-empty row-count parity. Synthetic readiness passed, and a 100-request/10-concurrency liveness probe
+completed with zero failures and 60.6ms p95 after infrastructure probes were isolated from user rate-limit
+budgets. Hosting/OIDC, shared staging credentials, immutable staging OCI evidence, real provider dashboards,
+OTLP destinations and alert routing, object backup, counsel approval, and explicit production approval remain
+pre-production gates.
+
 ## Launch Baseline And Architecture Lock
 
 - Audited merged base: `origin/main` at `9081bd0f4fb8433e1f63422fd294ba8601c851b2` after squash-merged Launch 01 PR #42.
@@ -94,7 +108,7 @@ staging gate rather than fabricated local evidence.
 | Media and live | Bunny/Livepeer boundaries and quarantine/release authorities exist. | Automated moderation is not launch-approved; adult live is disabled; provider staging evidence is absent. |
 | Recurring subscriptions | Official recurring-delegation transaction construction and verification, first-payment activation, exact-split worker collection, renewal/grace/revocation handling, cancellation, creator membership offers, consumer Join UX, admin readiness, and staging proof tooling are implemented locally. | Sales remain disabled until the official on-chain program, collector signer, supported mint, devnet authorization/collection signatures, and provider dashboard evidence are configured and proven. |
 | Frontend | The public entry presents direct external-wallet connection plus a quiet embedded-wallet option, provider SDKs load at narrow interaction boundaries, the unified app shell and product workspaces are responsive, automated WCAG 2.2 A/AA blocking findings are clear on representative routes, and the privacy-safe install/offline contract is implemented. | Linux CI WebKit plus real target-device wallet/provider, push, installed-iOS, manual screen-reader/zoom, and staging Web Vitals evidence remain required. |
-| Delivery and operations | Build, migration, security, preview, staging, and production preflight workflows exist. | No workflow deploys an artifact. Hosting, immutable promotion, telemetry, alerts, backup/restore, and rollback evidence belong to Slice 11. |
+| Delivery and operations | Runtime-neutral non-root OCI targets, post-green-main attestations, exact-source manifests, build-once exact-artifact promotion workflows, OTLP bootstrap, synthetic/load tools, and database logical-recovery proof are implemented locally. | Hosting/OIDC remains unselected; shared staging credentials, provider dashboards/webhooks, immutable staging artifact evidence, OTLP destinations/alerts, Storage object backup, legal approval, and explicit production approval remain required. |
 
 ## Unsafe Capability Flags
 
@@ -122,7 +136,7 @@ Public product copy and API metadata use WeVid and Support. Technical package sc
 
 - Monorepo, pnpm workspace, CI/security workflow, docs checks, lint/typecheck/test/smoke scripts, GStack gates, and gitleaks local gate.
 - Toolchain versioning is explicit through `.node-version`, `.nvmrc`, `packageManager`, and `engines`: Node.js `22.16.0`, pnpm `10.0.0`, Corepack activation, `pnpm bootstrap`, `pnpm run doctor`, and `pnpm check`. The canonical CI proof job is `pinned-toolchain-proof`.
-- The production dependency graph no longer includes the unused `@solana/wallet-adapter-wallets` umbrella package, which removed unrelated hardware-wallet and WalletConnect adapters. Next.js is pinned to `16.3.0`, Playwright is pinned to the latest macOS 12-compatible release (`1.60.0`), patched same-major `axios`/`ws` resolutions are enforced, and the compatible Solana Web3/Jayson path now resolves patched `uuid@11.1.1`. The current `pnpm audit --prod` still reports three high and two moderate vulnerable instances across four transitive advisories: unpatched `bigint-buffer` through Solana SPL tooling, unpatched `image-size` through Solana Mobile Wallet Adapter's React Native Metro tooling, and legacy `uuid` through Privy's bundled EVM/MetaMask connector graph. No critical advisory is reported. Exact chains, reachability, mitigations, owners, review dates, and production gates are recorded in [Production dependency security status](dependency-security-status.md); findings are not dismissed merely because a path appears unreachable.
+- The production dependency graph no longer includes the unused `@solana/wallet-adapter-wallets` umbrella package, which removed unrelated hardware-wallet and WalletConnect adapters. Next.js is pinned to `16.3.0`, Playwright is pinned to the latest macOS 12-compatible release (`1.60.0`), patched same-major `axios`/`ws` resolutions are enforced, and the compatible Solana Web3/Jayson path now resolves patched `uuid@11.1.1`. The current `pnpm audit --prod` still reports three high and two moderate vulnerable instances across four transitive advisories: unpatched `bigint-buffer` through Solana SPL tooling, unpatched `image-size` through Privy's WalletConnect/React Native Metro dependency graph, and legacy `uuid` through Privy's bundled EVM/MetaMask connector graph. No critical advisory is reported. Exact chains, reachability, mitigations, artifact evidence, owners, review dates, and production gates are recorded in [Production dependency security status](dependency-security-status.md); findings are not dismissed merely because a path appears unreachable.
 - Privy `3.37.0` declares `@farcaster/mini-app-solana` as an optional peer and dynamically imports it only after its own Farcaster-environment detection. WeVid has no Farcaster login, query, referrer, or mini-app configuration and does not install that peer; normal Privy email/social/passkey plus Solana wallet creation/signing does not execute the branch. The current Next build still reports the unresolved optional import from Privy's lazy wallet runtime. Privy `3.37.1` retains the same optional peer, so that supported patch does not remove the warning. Owner: identity-provider dependency review. Review date: 2026-09-15. Removal condition: upgrade when Privy publishes a compatible release that makes the optional import bundler-clean, or install and stage-prove the peer only if Farcaster becomes an approved product surface.
 - OpenAPI, route map, and Fastify route registration are checked for route drift. The canonical follow endpoints are present only with their migration, repository, abuse/idempotency controls, feed impact, and real-Postgres/browser proof; no contract-only current-viewer alias is restored because the session endpoint remains that boundary.
 - Fastify API bootstrap with route registration, dependency construction, shared app-level Postgres client construction, close-hook lifecycle, env validation, raw-body support for signed webhooks, global rate limit, OpenAPI plugin, and Supabase boundary plugin.
@@ -164,7 +178,7 @@ Public product copy and API metadata use WeVid and Support. Technical package sc
 - Launch 03A adds a preview-first SFW-only Create journey, required people/rights declaration, one-action draft-and-upload handoff, paginated owner publication/review workspace, uploader-safe request-changes/rejection reasons, request-bound replay-safe appeals, transactional appeal closure/restoration, and an explicit public-profile `publish_state = 'published'` guard. Representation-only edits to existing adult content re-check adult-publisher capability across every editable state. Code and real local Postgres proof are complete; Bunny staging and launch-approved classifier/hash evidence remain the provider gate.
 - Launch 10 has converged the public entry, app shell, representative product workspaces, accessibility baseline, cross-browser smoke matrix, and PWA/offline contract. Final provider-backed visual journeys, manual assistive-technology/zoom checks, target-device iOS install/push behavior, and performance evidence belong to pre-production staging convergence.
 - Admin dashboard is substantial; organization KYB/member, support policy/case, moderation/report, refund/dispute, data-request, and feature-flag mutations now share the admin mutation route-policy/idempotency/rate-limit guard, but final role matrix coverage and removal of any remaining compatibility aliases after migrations and clients are updated still remain.
-- Delivery has executable build/migration gates, health/readiness probes, rollback documentation, and release preflight workflows. These workflows do not deploy. Production remains blocked until Slice 11 adds a real hosting target, immutable artifact promotion, database backup/restore proof, provider staging smoke, alert routing, environment-scoped credentials, and rollback evidence.
+- Launch 11 now has runtime-neutral public web configuration, a secret-excluding multi-target non-root OCI build, post-green-main GHCR publication and GitHub attestations, an immutable source/contract/migration/image manifest, exact-manifest staging and manual production promotion gates, shared API/worker OTLP bootstrap, privacy-minimized Web Vitals ingestion, synthetic and bounded-load checks, logical backup plus loopback-only restore-proof tooling, expanded redaction, and incident/rollback/legal runbooks. The workflows intentionally refuse to claim deployment until a hosting target and official OIDC adapter are selected. Shared staging credentials, provider dashboards/webhooks/domains, real provider journeys, collector/dashboard/alert destinations, Storage-object backup proof, final counsel-approved legal documents, production DNS/secrets, and explicit production approval remain `CODE_COMPLETE_PROVIDER_BLOCKED` external gates.
 - Local macOS Vitest/Vite execution is covered by optional `rolldown` Darwin native bindings and `pnpm run doctor`, which resolves the pinned Node.js/Corepack toolchain even when the interactive shell points at an older Node. Tests must still run locally and in the pinned Linux CI proof before provider or frontend slices are considered validated.
 
 ## P0 Before Broad Expansion

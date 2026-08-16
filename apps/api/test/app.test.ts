@@ -271,7 +271,7 @@ describe("buildApi", () => {
     const app = await buildApi({ rateLimitStore: FailingRateLimitStore });
     await app.ready();
 
-    const response = await app.inject({ method: "GET", url: "/healthz" });
+    const response = await app.inject({ method: "GET", url: "/v1/session" });
     expect(response.statusCode).toBe(500);
 
     await app.close();

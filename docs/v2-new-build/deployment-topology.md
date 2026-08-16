@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: server topology, cost, environments, scaling
-Last updated: 2026-06-13
+Last updated: 2026-08-16
 Source of truth: yes
 
 Owns:
@@ -182,16 +182,22 @@ flowchart LR
   PR["Pull request"] --> Checks["Typecheck, lint, tests, contract checks"]
   Checks --> Preview["Preview deploy"]
   Preview --> QA["Browser QA + provider mocks"]
-  QA --> Staging["Staging deploy"]
+  QA --> Artifact["Attested OCI digest + manifest"]
+  Artifact --> Staging["Staging deploy"]
   Staging --> Smoke["Provider smoke + webhook smoke"]
   Smoke --> Prod["Production deploy"]
   Prod --> Monitor["Canary monitoring + rollback"]
 ```
 
-## Executable Skeleton
+## Executable Release Boundary
 
-The repository now includes an executable deployment skeleton:
+The repository now includes an executable release boundary:
 
+- one multi-target `Dockerfile` creates non-root web, API, and worker images without `.env` files;
+- green `main` CI triggers GHCR publication, GitHub artifact attestations, and one manifest pinning the source, contract digest, migration head, and all image digests;
+- public web values load from the no-store `/runtime-config.js` process-runtime route, so staging and production use the same web digest;
+- staging downloads and verifies the release artifact and attestations instead of rebuilding;
+- production is manual, GitHub-environment protected, requires the exact staging manifest fingerprint, and never rebuilds;
 - `infra/deploy/README.md` defines launch services, required runtime settings, deploy gate variables, and hard guardrails.
 - `infra/deploy/rollback-checklist.md` defines rollback triggers and steps without creating competing money, access, compliance, or accounting truth.
 - `infra/observability/README.md` defines required launch signals, redaction rules, dashboards, and alert defaults.
@@ -201,7 +207,7 @@ The repository now includes an executable deployment skeleton:
 - When production MCP is enabled, `pnpm deploy:check` requires OAuth mode, OAuth enforcement, static dev tokens disabled, bounded token TTLs, and an HTTPS non-localhost `MCP_PUBLIC_BASE_URL`.
 - Remote MCP staging proof is tracked in `mcp-staging-proof.md` and must cover OAuth metadata, PKCE authorization, scoped `/mcp` tool calls, forbidden-tool denial, revocation, and audit-row evidence.
 
-Staging and production workflows remain gates until a real hosting platform is configured through GitHub environment variables. They must not become traffic-shipping workflows until artifact digest pinning, database backup confirmation, provider staging smoke, health checks, and rollback instructions are all present.
+Staging and production workflows remain fail-closed at the hosting-provider step until a target and official OIDC adapter are selected. This records `CODE_COMPLETE_PROVIDER_BLOCKED`; it never claims a deployment. They must not ship traffic until provider credentials, database backup/restore evidence, real provider staging smoke, health/synthetic/load checks, alert routing, legal approval, and rollback evidence are present.
 
 ## Data And Backup Requirements
 

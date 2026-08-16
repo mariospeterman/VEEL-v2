@@ -38,6 +38,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/telemetry/web-vitals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a privacy-minimized browser performance metric */
+        post: operations["recordWebVital"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/session": {
         parameters: {
             query?: never;
@@ -3259,6 +3276,16 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        RecordWebVitalRequest: {
+            /** @enum {string} */
+            name: "CLS" | "FCP" | "INP" | "LCP" | "TTFB";
+            value: number;
+            /** @enum {string} */
+            rating: "good" | "needs-improvement" | "poor";
+            /** @enum {string} */
+            navigationType: "navigate" | "reload" | "back-forward" | "back-forward-cache" | "prerender" | "restore";
+            id: string;
+        };
         HealthStatus: {
             service: string;
             /** @enum {string} */
@@ -7321,6 +7348,11 @@ export interface components {
         VerificationProvider: "sumsub" | "didit" | "persona" | "veriff";
     };
     requestBodies: {
+        RecordWebVital: {
+            content: {
+                "application/json": components["schemas"]["RecordWebVitalRequest"];
+            };
+        };
         CreateAgeSession: {
             content: {
                 "application/json": components["schemas"]["CreateAgeSessionRequest"];
@@ -7706,6 +7738,26 @@ export interface operations {
         responses: {
             200: components["responses"]["HealthStatus"];
             503: components["responses"]["HealthStatus"];
+        };
+    };
+    recordWebVital: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["RecordWebVital"];
+        responses: {
+            /** @description Metric accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationFailed"];
+            429: components["responses"]["RateLimited"];
         };
     };
     getSession: {

@@ -24,6 +24,21 @@ describe("API health probes", () => {
     }
   });
 
+  it("keeps infrastructure probes outside user request rate-limit budgets", async () => {
+    const app = await buildApi();
+
+    try {
+      const responses = await Promise.all(
+        Array.from({ length: 110 }, () => app.inject({ method: "GET", url: "/healthz" }))
+      );
+
+      expect(responses.every((response) => response.statusCode === 200)).toBe(true);
+      expect(responses.every((response) => response.headers["x-ratelimit-limit"] === undefined)).toBe(true);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("fails readiness when the database is not configured", async () => {
     const app = await buildApi();
 

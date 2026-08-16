@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: queues, search, analytics, observability, notifications, feature flags, compliance research constraints
-Last updated: 2026-06-13
+Last updated: 2026-08-16
 Source of truth: yes for v2 infrastructure defaults
 
 Owns:
@@ -65,8 +65,9 @@ Current executable state:
 - The canonical CI proof job is `pinned-toolchain-proof`; it reads `.node-version`, installs `pnpm@10.0.0` through `pnpm/action-setup@v4`, prints both tool versions, installs with `pnpm install --frozen-lockfile`, then runs docs, migrations, deploy readiness, lint, typecheck, and tests.
 - Local macOS hosts install optional Darwin `rolldown` native bindings for Vitest/Vite and use `pnpm run doctor` to resolve the pinned Node.js/Corepack toolchain even when the interactive shell points at an older Node. Do not bypass tests; local proof and the pinned Linux CI proof are both required before launch-scope changes are considered validated.
 - `preview` installs dependencies, builds deployable apps, and verifies the deploy skeleton.
-- `deploy-staging` and `deploy-production` install dependencies, build deployable apps, run database migration checks, and run `pnpm deploy:check`.
-- `deploy-production` sets `DEPLOY_ENV=production`, so `pnpm deploy:check` fails fast when required provider, Supabase, Solana, media, notification, and webhook environment values are missing.
+- `release-artifacts` runs only after green `main` CI, publishes non-root web/API/worker images to GHCR, emits GitHub attestations, and uploads one immutable release manifest.
+- `deploy-staging` downloads and verifies that manifest plus all three attestations. It creates no new build, and remains `CODE_COMPLETE_PROVIDER_BLOCKED` until the selected hosting provider has a repository-owned, officially documented OIDC adapter.
+- `deploy-production` is manual and GitHub-environment protected. It requires an exact manifest fingerprint already proven in staging, explicit operator acknowledgement, production safety/legal/recovery evidence, and the same hosting adapter; it never rebuilds.
 - External MCP is disabled by default. If `MCP_ENABLED=true` in production, deploy readiness requires an HTTPS, non-localhost `MCP_PUBLIC_BASE_URL`, `MCP_AUTH_MODE=oauth`, `MCP_REQUIRE_OAUTH=true`, `MCP_ALLOW_STATIC_TOKENS_DEV=false`, and bounded MCP OAuth authorization-code/access-token TTL values.
 - `DEPLOY_ENABLED=true` must be set only in a GitHub environment after real hosting targets exist.
 - `API_HEALTH_URL` and `API_READY_URL` are required when deploy checks are active and must point at `/healthz` and `/readyz`.
@@ -82,7 +83,7 @@ Required branch protection for `main`:
 - production deploy through GitHub environment approval
 - OIDC for cloud deploy credentials; no long-lived deploy secrets
 
-No production deploy workflow may become active until it has artifact digest pinning, migration backup/snapshot step, health checks, smoke tests, and rollback instructions.
+No production deploy workflow may become active until it has artifact digest pinning and attestation verification, matching staging evidence, migration backup/snapshot and restore proof, health/synthetic/load checks, alert routing, final legal approval, and rollback instructions.
 
 ## External MCP Connector Deployment
 

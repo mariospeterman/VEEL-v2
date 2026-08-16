@@ -25,6 +25,8 @@ function loadRepoRootEnv(root: string) {
 }
 
 const nextConfig: NextConfig = {
+  output: "standalone",
+  outputFileTracingRoot: repoRoot,
   allowedDevOrigins: allowedDevOrigins(),
   devIndicators: false,
   reactStrictMode: true,
