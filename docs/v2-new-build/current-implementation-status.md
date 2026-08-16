@@ -40,7 +40,7 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Merged baseline | `main` at `c7717a5` (Launch 08, PR #49) |
 | Active slice | Launch 09 — Enterprise managed creators |
 | Branch | `codex/launch-09-enterprise-managed-creators` |
-| Pull request | Pending |
+| Pull request | #50 |
 | State | `ACTIVE` |
 | Slice blockers | Enterprise onboarding must remain fail-closed until organization authority, bilateral creator consent, KYB/entitlement readiness, exact management allocation, revocation, audit, and browser/real-Postgres proof converge on one backend-owned path. Real KYB/provider and Enterprise contract evidence remain pre-production gates. |
 | Next unfinished slice | Launch 10 — Frontend system, accessibility, cross-browser, and PWA completion |
