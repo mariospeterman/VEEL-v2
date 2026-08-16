@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import {
   updateAdminOrganizationKyb,
+  updateAdminLiveRoomSuspension,
   updateAdminContentModeration,
   updateAdminOrganizationMember,
   updateAdminDataRequest,
@@ -12,6 +13,7 @@ import {
   updateAdminSupportCase,
   updateAdminSupportPolicy,
   type AdminDataRequestActionRequest,
+  type AdminLiveRoomSuspensionRequest,
   type AdminModerationActionRequest,
   type AdminFeatureFlagPatchRequest,
   type AdminOrganizationKybActionRequest,
@@ -21,6 +23,15 @@ import {
   type AdminSupportPolicyActionRequest,
   type ApiResult
 } from "@/api-client";
+
+export async function updateLiveRoomSuspensionAction(formData: FormData): Promise<void> {
+  const roomId = stringField(formData, "roomId");
+  const body: AdminLiveRoomSuspensionRequest = {
+    suspended: enumField(formData, "suspended", ["true", "false"]) === "true",
+    reason: stringField(formData, "reason")
+  };
+  actionResult(await updateAdminLiveRoomSuspension(roomId, body, randomUUID()));
+}
 
 export async function updateContentModerationAction(formData: FormData): Promise<void> {
   const body: AdminModerationActionRequest = {

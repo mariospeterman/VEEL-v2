@@ -11,3 +11,17 @@ export class LiveRoomIdempotencyConflictError extends Error {
     this.name = "LiveRoomIdempotencyConflictError";
   }
 }
+
+export class LiveControlIdempotencyConflictError extends Error {
+  constructor() {
+    super("LIVE_CONTROL_IDEMPOTENCY_CONFLICT");
+    this.name = "LiveControlIdempotencyConflictError";
+  }
+}
+
+export class LiveChatIdempotencyConflictError extends Error {
+  constructor() {
+    super("LIVE_CHAT_IDEMPOTENCY_CONFLICT");
+    this.name = "LiveChatIdempotencyConflictError";
+  }
+}

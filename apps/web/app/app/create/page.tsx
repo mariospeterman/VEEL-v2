@@ -3,6 +3,7 @@ import { requireAppAccess } from "@/supabase/route-guard";
 import { AppShell } from "../../app-shell";
 import { PageHeader } from "../../ui";
 import { CreateWorkspace } from "../../create/create-workspace";
+import { LiveCreateWorkspace } from "../../create/live-create-workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -15,12 +16,17 @@ export default async function CreatePage() {
   return (
     <AppShell>
       <section className="mx-auto grid w-full max-w-3xl content-start gap-5">
-          <PageHeader eyebrow="Create" title="New post">
-            Preview, upload, and follow review from one place.
+          <PageHeader eyebrow="Create" title="Share something">
+            Publish a video or prepare a safe-for-work live room.
           </PageHeader>
 
+          <LiveCreateWorkspace enabled={canUpload} />
+
           {canUpload ? (
-            <CreateWorkspace storageScope={session?.user?.id ?? null} verification={verificationData} />
+            <section className="grid gap-3">
+              <h2 className="text-base font-semibold">Upload a video</h2>
+              <CreateWorkspace storageScope={session?.user?.id ?? null} verification={verificationData} />
+            </section>
           ) : (
             <section className="rounded border border-(--line) bg-(--panel) p-5">
               <h2 className="font-semibold">Finish age access to post</h2>

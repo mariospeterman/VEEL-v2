@@ -3,7 +3,9 @@ import postgres from "postgres";
 export interface QueuedMediaModerationJob {
   jobId: string;
   caseId: string;
-  mediaAssetId: string;
+  targetType: "media_asset" | "live_room";
+  mediaAssetId: string | null;
+  liveRoomId: string | null;
   provider: "bunny" | "livepeer";
   providerAssetId: string;
   stage: string;
@@ -13,7 +15,7 @@ export interface QueuedMediaModerationJob {
 }
 
 export type MediaModerationOutcome =
-  | { state: "clear"; provider: "bunny_shield" | "internal"; payloadHash: string }
+  | { state: "clear"; provider: "bunny_shield" | "livepeer" | "internal"; payloadHash: string }
   | { state: "review_required"; reasonCode: string }
   | { state: "failed"; failureCode: string };
 
@@ -133,33 +135,43 @@ export function createPostgresMediaModerationRepository(
             attempt_count = mmj.attempt_count + 1,
             updated_at = now()
           from (
-            select id
+            select id, media_asset_id, live_room_id
             from media_moderation_jobs
             where (
                 (state in ('queued', 'retry') and next_attempt_at <= ${input.now})
                 or (state = 'processing' and (lease_expires_at is null or lease_expires_at <= ${input.now}))
               )
               and attempt_count < max_attempts
-              and exists (
-                select 1
-                from media_assets ready_asset
-                where ready_asset.id = media_moderation_jobs.media_asset_id
-                  and ready_asset.provider_playable is true
-                  and ready_asset.ready_at is not null
+              and (
+                exists (
+                  select 1
+                  from media_assets ready_asset
+                  where ready_asset.id = media_moderation_jobs.media_asset_id
+                    and ready_asset.provider_playable is true
+                    and ready_asset.ready_at is not null
+                )
+                or exists (
+                  select 1
+                  from live_rooms ready_room
+                  where ready_room.id = media_moderation_jobs.live_room_id
+                    and ready_room.provider_stream_id is not null
+                    and ready_room.state in ('waiting', 'live')
+                )
               )
             order by next_attempt_at asc, created_at asc
             limit ${input.limit}
             for update skip locked
-          ) due,
-          media_assets ma
+          ) due
+          left join media_assets ma on ma.id = due.media_asset_id
+          left join live_rooms lr on lr.id = due.live_room_id
           where mmj.id = due.id
-            and ma.id = mmj.media_asset_id
           returning
             mmj.id as job_id,
             mmj.media_safety_case_id as case_id,
             mmj.media_asset_id,
-            ma.provider,
-            ma.provider_asset_id,
+            mmj.live_room_id,
+            case when mmj.live_room_id is not null then 'livepeer' else ma.provider end as provider,
+            coalesce(lr.provider_stream_id, ma.provider_asset_id) as provider_asset_id,
             mmj.stage,
             mmj.attempt_count,
             mmj.max_attempts,
@@ -170,6 +182,8 @@ export function createPostgresMediaModerationRepository(
           jobId: row.job_id,
           caseId: row.case_id,
           mediaAssetId: row.media_asset_id,
+          liveRoomId: row.live_room_id,
+          targetType: row.live_room_id ? "live_room" : "media_asset",
           provider: row.provider,
           providerAssetId: row.provider_asset_id,
           stage: row.stage,
@@ -236,7 +250,7 @@ export function createPostgresMediaModerationRepository(
             values (
               ${input.job.caseId},
               ${input.outcome.provider},
-              'known_hash',
+              ${input.job.targetType === "live_room" ? "live_signal" : "known_hash"},
               'clear',
               ${input.outcome.payloadHash},
               ${input.now}
@@ -266,7 +280,8 @@ export function createPostgresMediaModerationRepository(
 interface QueuedMediaModerationJobRow {
   job_id: string;
   case_id: string;
-  media_asset_id: string;
+  media_asset_id: string | null;
+  live_room_id: string | null;
   provider: "bunny" | "livepeer";
   provider_asset_id: string;
   stage: string;

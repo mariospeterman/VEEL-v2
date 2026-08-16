@@ -12,19 +12,29 @@ export function createLiveStatusRepositoryMethods(
   return {
     async updateRoomStatus(input) {
       await sql.begin(async (transaction) => {
-        await transaction`
+        const updatedRooms = await transaction<{ id: string }[]>`
           update live_rooms
           set
             provider_stream_id = ${input.status.providerStreamId},
             provider_playback_id = ${input.status.providerPlaybackId},
             provider_state = ${input.status.providerState},
             state = ${input.status.state},
-            playback_url = ${input.status.playbackUrl},
+            playback_url = case when ${input.status.state} = 'live' then ${input.status.playbackUrl} else null end,
             starts_at = case when ${input.status.state} = 'live' then coalesce(starts_at, now()) else starts_at end,
             ended_at = case when ${input.status.state} in ('ended', 'replay_ready') then coalesce(ended_at, now()) else ended_at end,
             updated_at = now()
           where id = ${input.roomId}
+            and state <> 'suspended'
+            and (
+              state in ('scheduled', 'waiting')
+              or (state = 'live' and ${input.status.state} in ('live', 'ended', 'replay_ready'))
+              or (state = 'ended' and ${input.status.state} in ('ended', 'replay_ready'))
+              or (state = 'replay_ready' and ${input.status.state} = 'replay_ready')
+            )
+          returning id
         `;
+
+        if (updatedRooms.length === 0) return;
 
         if (input.status.state === "ended" || input.status.state === "replay_ready") {
           await closeLiveEventAccessWindow(transaction, input.roomId);
@@ -73,64 +83,72 @@ export function createLiveStatusRepositoryMethods(
       });
     },
     async recordLiveProviderWebhook(input) {
-      const insertedReceipts = await sql<{ id: string }[]>`
-        insert into provider_webhook_receipts (
-          id,
-          provider,
-          webhook_type,
-          signature_hash,
-          idempotency_key
-        )
-        values (
-          ${randomUUID()},
-          'livepeer',
-          'media-status',
-          ${input.signatureHash ?? null},
-          ${input.providerEventId}
-        )
-        on conflict (provider, webhook_type, idempotency_key) do nothing
-        returning id
-      `;
+      return sql.begin(async (transaction) => {
+        await transaction`
+          insert into provider_webhook_receipts (
+            id, provider, webhook_type, signature_hash, idempotency_key
+          )
+          values (
+            ${randomUUID()}, 'livepeer', 'media-status', ${input.signatureHash ?? null},
+            ${input.providerEventId}
+          )
+          on conflict (provider, webhook_type, idempotency_key) do nothing
+        `;
 
-      if (insertedReceipts.length === 0) {
-        return false;
-      }
+        const events = await transaction<{ processed_at: Date | null }[]>`
+          insert into provider_events (
+            id, provider, provider_event_id, event_type, normalized_state, replay_payload
+          )
+          values (
+            ${randomUUID()}, 'livepeer', ${input.providerEventId}, ${input.eventType},
+            ${input.normalizedState}, ${transaction.json(toJsonObject(input.replayPayload ?? {}))}
+          )
+          on conflict (provider, provider_event_id) do update
+          set provider_event_id = excluded.provider_event_id
+          returning processed_at
+        `;
 
-      await sql`
-        insert into provider_events (
-          id,
-          provider,
-          provider_event_id,
-          event_type,
-          normalized_state,
-          replay_payload
-        )
-        values (
-          ${randomUUID()},
-          'livepeer',
-          ${input.providerEventId},
-          ${input.eventType},
-          ${input.normalizedState},
-          ${sql.json(toJsonObject(input.replayPayload ?? {}))}
-        )
-        on conflict (provider, provider_event_id) do nothing
-      `;
-
-      return true;
+        return events[0]?.processed_at === null;
+      });
     },
     async updateRoomFromWebhook(input) {
       const rows = await sql.begin(async (transaction) => {
+        const currentRows = await transaction<{ id: string; state: string }[]>`
+          select id, state
+          from live_rooms
+          where provider_stream_id = ${input.providerStreamId}
+          limit 1
+          for update
+        `;
+        const current = currentRows[0];
+
+        if (!current) {
+          return [] as { id: string }[];
+        }
+
+        if (!isAllowedWebhookTransition(current.state, input.state)) {
+          await transaction`
+            update provider_events
+            set normalized_state = 'ignored_stale', processed_at = now()
+            where provider = 'livepeer' and provider_event_id = ${input.providerEventId}
+          `;
+          return [{ id: current.id }];
+        }
+
         const updated = await transaction<{ id: string }[]>`
           update live_rooms
           set
-            provider_playback_id = coalesce(${input.providerPlaybackId}, provider_playback_id),
+            provider_playback_id = case
+              when ${input.state} in ('waiting', 'live') then coalesce(${input.providerPlaybackId}, provider_playback_id)
+              else provider_playback_id
+            end,
             provider_state = ${input.providerState},
             state = ${input.state},
-            playback_url = coalesce(${input.playbackUrl}, playback_url),
+            playback_url = case when ${input.state} = 'live' then ${input.playbackUrl} else null end,
             starts_at = case when ${input.state} = 'live' then coalesce(starts_at, now()) else starts_at end,
             ended_at = case when ${input.state} in ('ended', 'replay_ready') then coalesce(ended_at, now()) else ended_at end,
             updated_at = now()
-          where provider_stream_id = ${input.providerStreamId}
+          where id = ${current.id}
           returning id
         `;
         const roomId = updated[0]?.id;
@@ -197,4 +215,13 @@ async function closeLiveEventAccessWindow(
 
 function toJsonObject(value: Record<string, unknown>): JsonObject {
   return JSON.parse(JSON.stringify(value)) as JsonObject;
+}
+
+function isAllowedWebhookTransition(current: string, next: string): boolean {
+  if (current === "suspended") return false;
+  if (current === "scheduled" || current === "waiting") return true;
+  if (current === "live") return next === "live" || next === "ended" || next === "replay_ready";
+  if (current === "ended") return next === "ended" || next === "replay_ready";
+  if (current === "replay_ready") return next === "replay_ready";
+  return false;
 }

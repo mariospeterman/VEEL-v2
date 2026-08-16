@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { mutationRateLimit } from "../../shared/rate-limits.js";
 import {
   PaymentIdempotencyConflictError,
   PaymentRecipientNotReadyError,
@@ -27,7 +28,7 @@ export async function registerLivePassRoutes(
   app: FastifyInstance,
   options: RegisterLiveRoutesOptions
 ): Promise<void> {
-  app.post("/v1/live/rooms/:roomId/event-access-intents", async (request, reply) => {
+  app.post("/v1/live/rooms/:roomId/event-access-intents", mutationRateLimit("paymentMutation", "createLiveEventAccessIntent"), async (request, reply) => {
     const access = await verifyLiveReadyAccess(request, options);
 
     if (!access.ok) {
@@ -62,6 +63,14 @@ export async function registerLivePassRoutes(
 
       if (room.accessMode !== "paid_event" || !room.eventAccess) {
         return reply.code(400).send(validationResponse("Live room is not a paid event"));
+      }
+
+      if (!["scheduled", "waiting", "live"].includes(room.state) || room.safetyState === "suspended" || room.safetyState === "rejected") {
+        return reply.code(409).send(conflictResponse("Live event access is not currently on sale"));
+      }
+
+      if (!Number.isSafeInteger(room.eventAccess.amountMinor)) {
+        return reply.code(409).send(conflictResponse("Live event price is invalid"));
       }
 
       if (room.accessState === "allowed") {
@@ -101,12 +110,7 @@ export async function registerLivePassRoutes(
         currency: "SOL"
       });
 
-      return reply.code(201).send({
-        ...toPaymentIntentResponse(intent),
-        targetId: intent.targetId,
-        referenceAddress: intent.referenceAddress,
-        expiresAt: intent.expiresAt.toISOString()
-      });
+      return reply.code(201).send(toPaymentIntentResponse(intent));
     } catch (error) {
       if (error instanceof PaymentIdempotencyConflictError) {
         return reply.code(409).send(conflictResponse("Idempotency key was already used"));

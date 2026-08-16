@@ -74,6 +74,7 @@ function ProviderPlaybackResource({
   if (playback.provider === "livepeer") {
     return (
       <LivepeerOfficialPlayer
+        jwt={playback.jwt}
         onPlayingChange={usage.setPlaying}
         posterUrl={posterUrl}
         resourceType={playback.resourceType}
@@ -140,12 +141,14 @@ export function BunnyEmbedPlayer({
 }
 
 export function LivepeerOfficialPlayer({
+  jwt,
   onPlayingChange,
   posterUrl,
   resourceType,
   src,
   title
 }: {
+  jwt?: string | null | undefined;
   onPlayingChange: (playing: boolean) => void;
   posterUrl?: string | null | undefined;
   resourceType: Playback["resourceType"];
@@ -155,7 +158,7 @@ export function LivepeerOfficialPlayer({
   const source = toLivepeerSrc(src, resourceType);
 
   return (
-    <Player.Root src={source} aspectRatio={null}>
+    <Player.Root src={source} aspectRatio={null} jwt={jwt ?? null}>
       <Player.Container className="absolute inset-0 h-full w-full overflow-hidden bg-black">
         <Player.Video
           className="h-full w-full object-contain"
@@ -169,20 +172,32 @@ export function LivepeerOfficialPlayer({
           poster={posterUrl ?? null}
           title={title}
         />
+        <Player.Controls className="absolute inset-x-0 bottom-0 flex items-center gap-2 bg-gradient-to-t from-black/80 to-transparent p-3 pt-10 text-white">
+          <Player.PlayPauseTrigger aria-label="Play or pause" className="min-h-10 min-w-14 rounded bg-black/60 px-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2">
+            <Player.PlayingIndicator matcher={false}>Play</Player.PlayingIndicator>
+            <Player.PlayingIndicator matcher>Pause</Player.PlayingIndicator>
+          </Player.PlayPauseTrigger>
+          <Player.MuteTrigger aria-label="Mute or unmute" className="min-h-10 rounded bg-black/60 px-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2">
+            Sound
+          </Player.MuteTrigger>
+          <Player.LiveIndicator className="min-h-10 rounded bg-red-600 px-3 text-xs font-semibold uppercase">
+            Live
+          </Player.LiveIndicator>
+          <span className="flex-1" />
+          <Player.FullscreenTrigger aria-label="Enter or leave fullscreen" className="min-h-10 rounded bg-black/60 px-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2">
+            Fullscreen
+          </Player.FullscreenTrigger>
+        </Player.Controls>
         <Player.LoadingIndicator className="provider-placeholder data-[visible=false]:hidden">
           <div>
-            <p className="text-sm font-semibold">Loading Livepeer playback</p>
-            <p className="mt-2 text-xs leading-5 text-zinc-200">
-              Playback is rendered through the official Livepeer React player.
-            </p>
+            <p className="text-sm font-semibold">Loading video</p>
+            <p className="mt-2 text-xs leading-5 text-zinc-200">This can take a moment when a live is starting.</p>
           </div>
         </Player.LoadingIndicator>
         <Player.ErrorIndicator matcher="all" className="provider-placeholder data-[visible=false]:hidden">
           <div>
-            <p className="text-sm font-semibold">Livepeer playback unavailable</p>
-            <p className="mt-2 text-xs leading-5 text-zinc-200">
-              The backend playback projection is present, but the provider player could not render it.
-            </p>
+            <p className="text-sm font-semibold">Video unavailable</p>
+            <p className="mt-2 text-xs leading-5 text-zinc-200">Refresh the page or try again in a moment.</p>
           </div>
         </Player.ErrorIndicator>
       </Player.Container>
@@ -202,7 +217,7 @@ function ProviderPlaceholder({
       <div>
         <p className="text-sm font-semibold">{playbackStateLabel(state)}</p>
         <p className="mt-2 text-xs leading-5 text-zinc-200">
-          {message ?? "Playback is rendered only from backend-issued access projection."}
+          {message ?? "Refresh the page or try again in a moment."}
         </p>
       </div>
     </div>

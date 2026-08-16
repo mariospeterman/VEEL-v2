@@ -88,7 +88,7 @@ Current provider gate:
 | Age fallback | Veriff | candidate | Global age assurance, risk-based checks, webhook verification, privacy/security review. |
 | Documentary fallback | Persona | candidate | Procurement, privacy/security, data minimization, explicit legal basis for documentary fallback. |
 | VOD | Bunny Stream/CDN/TUS | candidate | TUS upload, signed/tokenized playback, webhook idempotency, provider outage state. |
-| Live/replay | Livepeer JWT | candidate | Stream creation, JWT playback, replay handoff, no viewer stream-key exposure. |
+| Live/replay | Livepeer JWT | candidate; `CODE_COMPLETE_PROVIDER_BLOCKED` in Slice 07 | OBS ingest, one-response owner secret reveal, exact JWT subject/expiry, moderation source multistream, signed webhook timestamp/replay protection, suspend/terminate, separately quarantined replay, and no viewer secret exposure are code-complete. Staging must prove real ingest/playback, webhook delivery, moderation-target behavior, measured suspension/recovery, replay handoff/release, provider account acceptance, and rollback before `staging-approved`. |
 | Payment evidence | Helius | candidate | Devnet/staging webhook, scoped watched addresses/references, signature/replay validation, confirmed payment fixture. |
 | Onramp/funding | Embedded-wallet funding UI | candidate | User-controlled wallet funding, provider KYC handled by provider, no entitlement on funding completion. |
 | Subscriptions/allowances | Solana Subscription Delegation Program | candidate | Devnet/staging authority setup, revoke, collection, wallet UX, token support, unsafe-extension rejection, event/reconciliation fixtures, direct recipient settlement, cancellation, no custody, no merchant checkout. |
@@ -129,6 +129,8 @@ Before implementation, verify the latest official docs for each provider/API. Th
 | Bunny edge/API protection | `https://docs.bunny.net/shield/overview` |
 | Livepeer JWT access | `https://docs.livepeer.org/developers/guides/access-control-jwt` |
 | Livepeer React Player | `https://docs.livepeer.org/sdks/react/migration/3.x/Player` |
+| Livepeer create/update/terminate stream | `https://docs.livepeer.org/api-reference/stream/create`, `https://docs.livepeer.org/api-reference/stream/update`, `https://docs.livepeer.org/api-reference/stream/terminate` |
+| Livepeer webhooks and OBS | `https://docs.livepeer.org/developers/guides/setup-and-listen-to-webhooks`, `https://docs.livepeer.org/developers/guides/stream-via-obs` |
 | Privy user authentication | `https://docs.privy.io/authentication/user-authentication/privy-auth` |
 | Privy Solana setup | `https://docs.privy.io/recipes/solana/getting-started-with-privy-and-solana` |
 | Privy external-wallet connectors | `https://docs.privy.io/wallets/connectors/setup/configuring-external-connector-wallets` |

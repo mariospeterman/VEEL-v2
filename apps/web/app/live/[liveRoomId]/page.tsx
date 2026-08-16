@@ -1,8 +1,9 @@
 import { appShellNavItems } from "@veel/ui";
-import { getLiveRoom, type LiveRoom } from "@/api-client";
+import { getLiveRoom, getLiveRoomMessages, type LiveChatPage, type LiveRoom } from "@/api-client";
 import { ProviderPlayback } from "../../provider-playback";
 import { ErrorState } from "../../ui";
 import { LiveAccessPanel as LiveAccessOfferPanel } from "./live-access-panel";
+import { LiveInteractionPanel } from "./live-interaction-panel";
 
 export default async function LiveRoomPage({
   params
@@ -11,6 +12,9 @@ export default async function LiveRoomPage({
 }) {
   const { liveRoomId } = await params;
   const roomResult = await getLiveRoom(liveRoomId);
+  const messagesResult = roomResult.ok
+    ? await getLiveRoomMessages(liveRoomId)
+    : { ok: false as const, status: 404, message: "Live room unavailable" };
 
   return (
     <main className="media-shell">
@@ -35,7 +39,7 @@ export default async function LiveRoomPage({
         {roomResult.ok ? (
           <>
             <LiveStage room={roomResult.data} />
-            <LiveAccessPanel room={roomResult.data} />
+            <LiveAccessPanel initialMessages={messagesResult.ok ? messagesResult.data : { items: [] }} room={roomResult.data} />
           </>
         ) : (
           <section className="lg:col-span-2">
@@ -54,13 +58,10 @@ export default async function LiveRoomPage({
 function LiveStage({ room }: { room: LiveRoom }) {
   return (
     <section className="media-pane relative overflow-hidden rounded border border-(--line) bg-[#0f1217]">
-      <ProviderPlayback playback={room.playback} title="WeVid Livepeer room playback" />
+      <ProviderPlayback playback={room.playback} title={`${room.title} live playback`} />
       <div className="absolute left-4 top-4 flex items-center gap-2">
         <span className="rounded bg-[#fee2e2] px-2 py-1 text-xs font-semibold uppercase text-[#991b1b]">
           {room.state}
-        </span>
-        <span className="rounded bg-white/10 px-2 py-1 text-xs font-medium text-white">
-          Livepeer
         </span>
       </div>
       <div className="absolute inset-x-0 bottom-0 p-5">
@@ -75,13 +76,13 @@ function LiveStage({ room }: { room: LiveRoom }) {
   );
 }
 
-function LiveAccessPanel({ room }: { room: LiveRoom }) {
+function LiveAccessPanel({ initialMessages, room }: { initialMessages: LiveChatPage; room: LiveRoom }) {
   return (
     <aside className="side-pane grid content-start gap-4">
       <section className="rounded border border-(--line) bg-(--panel) p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">{room.creator.displayName}</p>
+            <p className="truncate text-sm font-semibold">{room.creator.displayName || `@${room.creator.handle}`}</p>
             <p className="text-sm text-(--muted)">@{room.creator.handle}</p>
           </div>
           <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-medium uppercase text-(--accent-strong)">
@@ -91,23 +92,16 @@ function LiveAccessPanel({ room }: { room: LiveRoom }) {
 
         <div className="mt-5 grid gap-3 border-t border-(--line) pt-4">
           <Fact label="Playback" value={room.playback?.state ?? "not_ready"} />
-          <Fact label="Provider" value={room.playback?.provider ?? "none"} />
           <Fact label="Access" value={room.accessMode} />
-          <Fact label="Preview" value={`${room.previewSecondsRemaining ?? 0}s remaining`} />
+          {room.accessMode === "paid_event" ? <Fact label="Preview" value={`${room.previewSecondsRemaining ?? 0}s remaining`} /> : null}
           <Fact label="Chat" value={room.chat.accessState} />
+          <Fact label="Safety" value={room.safetyState} />
         </div>
       </section>
 
       <LiveAccessOfferPanel room={room} />
 
-      <section className="rounded border border-(--line) bg-(--panel) p-4">
-        <h2 className="text-sm font-semibold">Live chat</h2>
-        <div className="mt-4 rounded border border-(--line) bg-(--background) p-3 text-sm text-(--muted)">
-          {room.chat.accessState === "members_only"
-            ? "Chat is reserved for active profile members."
-            : "Chat access follows the host's live policy and backend access state."}
-        </div>
-      </section>
+      <LiveInteractionPanel initialMessages={initialMessages} room={room} />
     </aside>
   );
 }

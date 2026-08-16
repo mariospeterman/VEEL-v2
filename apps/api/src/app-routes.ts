@@ -217,7 +217,9 @@ export async function registerApiRoutes(
   });
   await registerAdminRoutes(app, {
     authVerifier,
-    adminRepository
+    adminRepository,
+    liveRepository,
+    liveProvider
   });
   await registerAiRoutes(app, {
     authVerifier,

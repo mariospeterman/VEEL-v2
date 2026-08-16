@@ -37,13 +37,13 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `890e0ad` (Launch 05, PR #46) |
-| Active slice | Launch 06 — One-time monetisation and Event Access completion |
-| Branch | `codex/launch-06-one-time-monetisation` |
-| Pull request | #47 |
-| State | `CODE_COMPLETE_PROVIDER_BLOCKED` |
-| Slice blockers | Code can complete locally; real staging Solana devnet wallets/RPC settlement proof, policy-approved KYC evidence, and exact provider dashboard configuration remain pre-production gates |
-| Next unfinished slice | Launch 07 — SFW live host, viewer, chat, and operational controls |
+| Merged baseline | `main` at `01b1f83` (Launch 06, PR #47) |
+| Active slice | Launch 07 — SFW live host, viewer, chat, and operational controls |
+| Branch | `codex/launch-07-sfw-live` |
+| Pull request | #48 |
+| State | `ACTIVE` |
+| Slice blockers | Code can complete locally; real Livepeer staging credentials, signed webhook/JWT/ingest evidence, and approved target-domain browser broadcast proof remain pre-production gates |
+| Next unfinished slice | Launch 08 — Recurring platform subscriptions and creator memberships |
 
 Current human/provider gates do not block this process slice: shared staging credentials,
 provider dashboard/webhook/domain configuration, migration `0091` shared-project proof,
@@ -122,7 +122,7 @@ Public product copy and API metadata use WeVid and Support. Technical package sc
 - Activity payment projections and `/app/activity` now expose backend-derived receipt/confirmation/withdrawal-review state and a real refund/access-issue review request form for exceptions. This is review-state only: no automatic refund, custody, balance, payout queue, or access revocation is executed from the user surface.
 - Admin refund/dispute resolution now supports idempotent evidence-only remediation records for creator refund attestations, replacement access, access revocation, technical remediation, and no-refund denials. The evidence table is RLS-protected, audited through the admin mutation, tied to the payment intent, and constrained to `evidence_only_no_platform_custody_no_payout_queue`.
 - Canonical Support with historical `tip` read/settlement compatibility, referral attribution/commission projection, correctly formatted asset amounts, activity/payment/wallet transaction projections, and an idempotent Enable Earnings mutation that validates a user-owned chain-specific recipient wallet, exact Creator Earnings Terms, policy-driven KYC/tax/age/profile readiness, product selection, safe replay, and audit without balances or withdrawal language.
-- Live room/chat projections with public, profile-member, and paid-event modes, DB-first Livepeer room reservation before provider creation, Event Access Pass projections, Mutuals projections, messages/paid-message projections, notifications/push/service-worker boundaries, organization/KYB/admin support policy surfaces, and admin provider/payment/compliance projections.
+- SFW live rooms now include public/profile-member/paid-event modes, DB-first reservation plus a single atomic provider-creation claim, exact SFW attestation, canonical continuous-monitoring jobs, moderation multistream configuration, masked and recent-auth one-response OBS reveal, separate short-lived player JWT, idempotent atomic chat, creator end, action-specific staff suspend/resume, and separately quarantined replay content. The create page, private host workspace, viewer player/chat/Support/Share/Report surface, and admin safety control consume those backend authorities. Adult live remains disabled and real Livepeer staging proof remains a pre-production gate.
 - Auto-renewing subscription architecture is modeled through backend-owned delegated authorization, renewal worker tick, collection/grace/revocation states, and fail-closed provider boundaries; `/subscriptions` exposes backend intent creation, setup-reference display, authorization evidence submission, and cancellation controls without making the browser a subscription/access source of truth. Production recurring subscriptions remain disabled unless `official_solana_subscription_program` is configured with program/RPC/SPL mint/collector/merchant values and on-chain verification enabled.
 - Remote MCP exposes OAuth protected-resource metadata, authorization-server metadata, authorization-code plus PKCE endpoints, revocation, consent approval, resource-bound bearer tokens, scoped tool allowlists, redacted audit rows, and staging proof scripts: `pnpm mcp:seed`, `pnpm mcp:oauth:pkce`, and `pnpm mcp:smoke`. The canonical runbook is `mcp-staging-proof.md`.
 - Frontend smoke coverage covers desktop/mobile app shell, onboarding, age, content, create, discover, messages, activity, wallet, creator dashboard, subscriptions, Studio/org, settings, admin, live, Event Access, Mutuals, and assistant projections. Authenticated happy-path smoke covers `landing onboarding -> profile -> wallet -> age -> home -> create -> unlock` against a local mock API; launch authentication now uses the opaque application cookie, with bearer transport reserved for explicit test harnesses and recovery exchange.
@@ -137,7 +137,7 @@ Public product copy and API metadata use WeVid and Support. Technical package sc
 - Landing login and onboarding stay locked to their GSAP story frame while provider runtimes initialize or wallet UI takes focus, with desktop and mobile smoke coverage preventing outer-story scroll drift.
 - Age session creation has real backend HTTP adapters for Yoti, Persona, Veriff, and Sumsub behind the provider waterfall, with unconfigured providers failing closed. Didit V3 owns separate contextual creator-verification purposes, including signed and replay-safe webhook ingestion and documentary/liveness/face-match evidence; ordinary onboarding requests only over-18 access and contains no adult-publisher intent. Launch readiness still requires configured provider sandbox credentials, public callback/webhook proof, provider-contract and retention approval, and admin evidence review.
 - Embedded wallet provider remains a boundary until a launch-approved noncustodial provider is configured and tested.
-- Payment settlement is native SOL devnet first with server-composed creator split transactions for one-time creator monetization and a supported one-time USDC path. Recurring subscriptions are token-based only and fail closed without official Solana subscription/delegation verification; native SOL recurring subscriptions, real transactional email domain/API-key configuration and staging deliverability smoke for withdrawal-waiver confirmations, and provider replay side-effect handlers still need launch-scope completion.
+- Payment settlement is native SOL devnet first with server-composed creator split transactions for one-time creator monetization and a supported one-time USDC path. Recurring subscriptions are token-based only and fail closed without official Solana subscription/delegation verification; native SOL recurring subscriptions, real transactional email domain/API-key configuration and staging deliverability smoke for withdrawal-waiver confirmations, and provider replay side-effect handlers still need launch-scope completion. Live provider event receipt/application is transactionally retryable on redelivery and retains normalized replay facts for operator recovery.
 - Launch 04 follow/unfollow, projected counts, feed/profile viewer state, durable command/impression receipts, and deterministic Home/Bits ranking are merged. Follow stays social-only; blocks suppress/deactivate edges; purchases and money never affect people/feed ranking. Protected CI, isolated Postgres, review, and desktop/mobile browser proof passed on PR #45.
 - Subscription renewals are architected as auto-renewing backend/worker collections, but production collection requires official provider/program configuration, authority/subscription/delegation verification, launch-approved token plans, collector signing support, and staging evidence.
 - Remote MCP production connector compatibility still requires public HTTPS staging deployment, exact redirect URI allowlists for each real client, MCP Inspector proof, Claude Code proof, Claude custom connector proof, OpenAI-compatible proof, revocation proof, and audit-row confirmation against the deployed database.
@@ -196,8 +196,8 @@ The controlling branch evidence is recorded in `production-branch-inventory.md`.
 - [ ] Remove every inert production affordance or wire it to the canonical API owner.
 - [x] Persist normal-message idempotency keys, replay the original message for unchanged retries, reject key reuse with changed input, and make inbox rows select canonical conversation URLs.
 - [x] Replace legacy timed live-pass product behavior with three clear access modes: public, profile members, and paid event.
-- [ ] Support one primary live access call to action, optional members-only chat on public live, inherited replay access, and safe public Bit/highlight generation.
-- [ ] Integrate live moderation signals, temporary pause/end controls, human review, evidence, reasons, and appeal paths.
+- [x] Support one primary live access call to action, optional members-only chat on public live, inherited replay access, and quarantine replay content before any release. Safe public Bit/highlight generation remains a later slice.
+- [x] Integrate SFW live monitoring jobs, creator end, staff suspend/resume, human-review state, evidence, and reasons. Real moderation-provider and suspension-latency evidence remains a pre-production staging gate; adult-live appeals stay out of scope while adult live is disabled.
 
 ### P3 Moderation, Providers, And Operations
 

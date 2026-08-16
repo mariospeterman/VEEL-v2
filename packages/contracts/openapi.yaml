@@ -1083,6 +1083,17 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/live/rooms/mine:
+    get:
+      operationId: listMyLiveRooms
+      tags: [Live]
+      summary: List creator-owned live rooms without host credentials
+      responses:
+        "200": { $ref: "#/components/responses/LiveRoomPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/live/rooms/{roomId}:
     get:
@@ -1109,6 +1120,42 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/live/rooms/{roomId}/host-connection/reveal:
+    post:
+      operationId: revealLiveHostConnection
+      tags: [Live]
+      summary: Reveal creator-owned OBS credentials after recent authentication and explicit acknowledgement
+      parameters:
+        - $ref: "#/components/parameters/RoomId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/RevealLiveHostConnection"
+      responses:
+        "200": { $ref: "#/components/responses/RevealedHostConnection" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/live/rooms/{roomId}/end:
+    post:
+      operationId: endLiveRoom
+      tags: [Live]
+      summary: End the current creator-owned live session
+      parameters:
+        - $ref: "#/components/parameters/RoomId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "202": { $ref: "#/components/responses/Accepted" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/live/rooms/{roomId}/sync:
     post:
@@ -1152,6 +1199,8 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
     post:
       operationId: createLiveRoomMessage
@@ -2296,6 +2345,25 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/AdminLiveRoomPage" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/live/rooms/{roomId}/suspension:
+    post:
+      operationId: updateAdminLiveRoomSuspension
+      tags: [Admin]
+      summary: Suspend or resume a live room through canonical staff and provider controls
+      parameters:
+        - $ref: "#/components/parameters/RoomId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/AdminLiveRoomSuspension"
+      responses:
+        "202": { $ref: "#/components/responses/Accepted" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/admin/media/assets:
     get:
       operationId: listAdminMediaAssets
@@ -2527,7 +2595,8 @@ paths:
       security: []
       parameters:
         - $ref: "#/components/parameters/MediaProvider"
-        - $ref: "#/components/parameters/WebhookSignature"
+        - $ref: "#/components/parameters/LivepeerSignature"
+        - $ref: "#/components/parameters/BunnySignature"
       requestBody:
         $ref: "#/components/requestBodies/WebhookPayload"
       responses:
@@ -2580,6 +2649,18 @@ components:
       required: true
       schema: { type: string }
       description: Provider-specific signature or shared-secret header normalized by the adapter.
+    LivepeerSignature:
+      name: Livepeer-Signature
+      in: header
+      required: false
+      schema: { type: string }
+      description: Required for Livepeer callbacks; contains the provider timestamp and one or more v1 HMAC signatures.
+    BunnySignature:
+      name: Bunny-Webhook-Signature
+      in: header
+      required: false
+      schema: { type: string }
+      description: Required for Bunny callbacks. Provider-specific verification remains authoritative in the backend adapter.
     Cursor:
       name: cursor
       in: query
@@ -2668,6 +2749,7 @@ components:
     RegisterNotificationDevice: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RegisterNotificationDeviceRequest" } } } }
     CreateUpload: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateUploadRequest" } } } }
     CreateLiveRoom: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateLiveRoomRequest" } } } }
+    RevealLiveHostConnection: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RevealLiveHostConnectionRequest" } } } }
     CreateLiveChatMessage: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateLiveChatMessageRequest" } } } }
     CreateComment: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateCommentRequest" } } } }
     CreateShare: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateShareRequest" } } } }
@@ -2721,6 +2803,7 @@ components:
     AdminOrganizationKybAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOrganizationKybActionRequest" } } } }
     AdminOrganizationMemberAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOrganizationMemberActionRequest" } } } }
     AdminFeatureFlagPatch: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminFeatureFlagPatchRequest" } } } }
+    AdminLiveRoomSuspension: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminLiveRoomSuspensionRequest" } } } }
     WebhookPayload: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
     AgeWebhookPayload:
       required: true
@@ -2781,6 +2864,7 @@ components:
     LiveRoom: { description: Live room, content: { application/json: { schema: { $ref: "#/components/schemas/LiveRoom" } } } }
     LiveRoomPage: { description: Live rooms, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/LiveRoom" } }, nextCursor: { type: string, nullable: true } } } } } }
     HostConnection: { description: Masked host connection, content: { application/json: { schema: { $ref: "#/components/schemas/HostConnection" } } } }
+    RevealedHostConnection: { description: One-response creator-only OBS credentials, content: { application/json: { schema: { $ref: "#/components/schemas/RevealedHostConnection" } } } }
     LiveChatPage: { description: Live chat messages, content: { application/json: { schema: { $ref: "#/components/schemas/LiveChatPage" } } } }
     LiveChatMessage: { description: Live chat message, content: { application/json: { schema: { $ref: "#/components/schemas/LiveChatMessage" } } } }
     EngagementState: { description: Engagement state, content: { application/json: { schema: { $ref: "#/components/schemas/EngagementState" } } } }
@@ -3599,8 +3683,9 @@ components:
         url: { type: string, format: uri, nullable: true }
         provider: { type: string, enum: [bunny, livepeer, none] }
         resourceType: { type: string, enum: [embed, hls, direct], nullable: true }
+        jwt: { type: string, nullable: true, writeOnly: true }
         expiresAt: { type: string, format: date-time, nullable: true }
-        blockReason: { type: string, enum: [entitlement_required, allowance_exhausted, provider_unavailable], nullable: true }
+        blockReason: { type: string, enum: [entitlement_required, allowance_exhausted, provider_unavailable, replay_under_review, room_suspended, stream_ended], nullable: true }
         usage: { $ref: "#/components/schemas/PlaybackUsageContext" }
     PlaybackUsageContext:
       type: object
@@ -3754,9 +3839,10 @@ components:
         expiresAt: { type: string, format: date-time }
     CreateLiveRoomRequest:
       type: object
-      required: [title]
+      required: [title, sfwAttestation]
       properties:
         title: { type: string, minLength: 1, maxLength: 120 }
+        sfwAttestation: { type: string, enum: [this_live_stream_is_sfw] }
         accessMode: { type: string, enum: [public, profile_members, paid_event], default: public }
         previewSeconds: { type: integer, minimum: 0, maximum: 300, default: 60 }
         eventPriceMinor: { type: integer, minimum: 1 }
@@ -3765,12 +3851,13 @@ components:
         replayWindowHours: { type: integer, minimum: 0, maximum: 720, default: 48 }
     LiveRoom:
       type: object
-      required: [id, title, creator, state, accessMode, accessState, previewSecondsRemaining, eventAccess, chat]
+      required: [id, title, creator, state, safetyState, accessMode, accessState, previewSecondsRemaining, eventAccess, chat]
       properties:
         id: { type: string, format: uuid }
         title: { type: string }
         creator: { $ref: "#/components/schemas/User" }
-        state: { type: string, enum: [scheduled, waiting, live, ended, replay_ready] }
+        state: { type: string, enum: [scheduled, waiting, live, suspended, ended, replay_ready] }
+        safetyState: { type: string, enum: [quarantined, monitoring, approved, suspended, rejected] }
         accessMode: { type: string, enum: [public, profile_members, paid_event] }
         accessState: { type: string, enum: [allowed, membership_required, event_access_required] }
         playback: { $ref: "#/components/schemas/PlaybackResource" }
@@ -3796,6 +3883,19 @@ components:
         maskedIngestUrl: { type: string }
         streamKeyHint: { type: string }
         provider: { type: string, enum: [livepeer] }
+    RevealLiveHostConnectionRequest:
+      type: object
+      required: [acknowledgement]
+      properties:
+        acknowledgement: { type: string, enum: [i_understand_stream_keys_are_secrets] }
+    RevealedHostConnection:
+      type: object
+      required: [provider, ingestUrl, streamKey, securityNotice]
+      properties:
+        provider: { type: string, enum: [livepeer] }
+        ingestUrl: { type: string }
+        streamKey: { type: string }
+        securityNotice: { type: string, enum: [never_share_or_store_this_stream_key] }
     LiveChatState:
       type: object
       required: [enabled, accessState]
@@ -5097,7 +5197,7 @@ components:
         providerStreamId: { type: string, nullable: true }
         providerPlaybackId: { type: string, nullable: true }
         providerState: { type: string }
-        state: { type: string, enum: [scheduled, waiting, live, ended, replay_ready] }
+        state: { type: string, enum: [scheduled, waiting, live, suspended, ended, replay_ready] }
         accessMode: { type: string, enum: [public, profile_members, paid_event] }
         eventPriceMinor: { type: integer, nullable: true }
         currency: { $ref: "#/components/schemas/Currency" }
@@ -5110,6 +5210,12 @@ components:
         endedAt: { type: string, format: date-time, nullable: true }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time, nullable: true }
+    AdminLiveRoomSuspensionRequest:
+      type: object
+      required: [suspended, reason]
+      properties:
+        suspended: { type: boolean }
+        reason: { type: string, minLength: 1, maxLength: 1000 }
     AdminMediaAsset:
       type: object
       required: [id, contentItemId, provider, providerAssetId, providerState, providerPlayable, hasPlaybackUrl, createdAt]

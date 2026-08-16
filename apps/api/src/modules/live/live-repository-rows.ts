@@ -21,6 +21,11 @@ export interface LiveRoomRow {
   members_included_in_paid_event: boolean;
   replay_window_hours: number;
   replay_content_item_id: string | null;
+  live_safety_state: string | null;
+  live_provider_release_allowed: boolean | null;
+  replay_release_allowed: boolean;
+  replay_playback_url: string | null;
+  replay_provider_playback_id: string | null;
   request_hash?: string;
   has_active_pass: boolean;
   has_active_membership: boolean;
@@ -36,4 +41,5 @@ export interface LiveChatMessageRow {
   author_handle: string;
   author_display_name: string;
   author_avatar_url: string | null;
+  request_hash?: string | null;
 }

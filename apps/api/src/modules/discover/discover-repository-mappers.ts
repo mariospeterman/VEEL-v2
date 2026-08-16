@@ -95,6 +95,7 @@ export function toLiveRoom(row: LiveRoomRow): LiveRoom {
       avatar_url: row.avatar_url
     }),
     state: row.state,
+    safetyState: row.state === "suspended" ? "suspended" : row.state === "live" ? "monitoring" : "approved",
     accessMode: row.access_rule,
     accessState,
     playback: row.playback_url && accessAllowed

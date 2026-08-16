@@ -87,7 +87,7 @@ describe("buildWorkerRuntime", () => {
         },
         {
           name: "provider-event-replays",
-          cadence: "operator_requested",
+          cadence: "every_minute",
           sourceIndex: "provider_event_replay_requests_state_created_idx"
         },
         {
@@ -117,6 +117,9 @@ describe("runScheduledWorkerTick", () => {
           calls.push("email");
           throw new Error("provider unavailable");
         },
+        async providerEventReplays() {
+          calls.push("provider-replays");
+        },
         async subscriptionCollections() {
           calls.push("subscriptions");
         }
@@ -129,11 +132,12 @@ describe("runScheduledWorkerTick", () => {
       }
     });
 
-    expect(calls.sort()).toEqual(["email", "moderation", "notifications", "subscriptions"]);
+    expect(calls.sort()).toEqual(["email", "moderation", "notifications", "provider-replays", "subscriptions"]);
     expect(result).toEqual({
       mediaModeration: "completed",
       notificationDeliveries: "completed",
       paymentConfirmationEmails: "failed",
+      providerEventReplays: "completed",
       subscriptionCollections: "completed"
     });
     expect(errors).toEqual([

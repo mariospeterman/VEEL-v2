@@ -11,6 +11,7 @@ export function createLiveRoomRepositoryMethods(
 ): Pick<
   LiveRepository,
   | "attachProviderRoom"
+  | "claimProviderCreation"
   | "createRoom"
   | "findRoom"
   | "findOwnedRoom"
@@ -83,9 +84,68 @@ export function createLiveRoomRepositoryMethods(
           union all
           select * from existing_room
           limit 1
+        ),
+        inserted_safety as (
+          insert into media_safety_cases (
+            live_room_id,
+            declared_rating,
+            state,
+            decision_source,
+            reason_code,
+            policy_version,
+            provider_release_allowed,
+            evidence_summary,
+            decided_at
+          )
+          select
+            sr.id,
+            'none',
+            'approved',
+            'automated',
+            'creator_sfw_attestation',
+            'sfw-live-v1',
+            true,
+            ${sql.json({ attestation: "this_live_stream_is_sfw" })},
+            now()
+          from selected_room sr
+          where not exists (
+            select 1
+            from media_safety_cases existing
+            where existing.live_room_id = sr.id
+              and existing.state <> 'superseded'
+          )
+          returning id, live_room_id
+        ),
+        target_safety as (
+          select id, live_room_id from inserted_safety
+          union all
+          select existing.id, existing.live_room_id
+          from media_safety_cases existing
+          join selected_room sr on sr.id = existing.live_room_id
+          where existing.state <> 'superseded'
+          limit 1
+        ),
+        inserted_job as (
+          insert into media_moderation_jobs (
+            media_safety_case_id,
+            live_room_id,
+            stage,
+            state,
+            idempotency_key
+          )
+          select
+            ts.id,
+            ts.live_room_id,
+            'live_monitoring',
+            'queued',
+            'media-safety:live:' || ts.live_room_id::text || ':monitor-v1'
+          from target_safety ts
+          on conflict (idempotency_key) do nothing
+          returning id
         )
         ${liveRoomSelectSql(sql)}
         join selected_room sr on sr.id = lr.id
+        cross join (select count(*) from inserted_job) job_effect
       `;
       const row = rows[0];
 
@@ -157,9 +217,68 @@ export function createLiveRoomRepositoryMethods(
           union all
           select * from existing_room
           limit 1
+        ),
+        inserted_safety as (
+          insert into media_safety_cases (
+            live_room_id,
+            declared_rating,
+            state,
+            decision_source,
+            reason_code,
+            policy_version,
+            provider_release_allowed,
+            evidence_summary,
+            decided_at
+          )
+          select
+            sr.id,
+            'none',
+            'approved',
+            'automated',
+            'creator_sfw_attestation',
+            'sfw-live-v1',
+            true,
+            ${sql.json({ attestation: "this_live_stream_is_sfw" })},
+            now()
+          from selected_room sr
+          where not exists (
+            select 1
+            from media_safety_cases existing
+            where existing.live_room_id = sr.id
+              and existing.state <> 'superseded'
+          )
+          returning id, live_room_id
+        ),
+        target_safety as (
+          select id, live_room_id from inserted_safety
+          union all
+          select existing.id, existing.live_room_id
+          from media_safety_cases existing
+          join selected_room sr on sr.id = existing.live_room_id
+          where existing.state <> 'superseded'
+          limit 1
+        ),
+        inserted_job as (
+          insert into media_moderation_jobs (
+            media_safety_case_id,
+            live_room_id,
+            stage,
+            state,
+            idempotency_key
+          )
+          select
+            ts.id,
+            ts.live_room_id,
+            'live_monitoring',
+            'queued',
+            'media-safety:live:' || ts.live_room_id::text || ':monitor-v1'
+          from target_safety ts
+          on conflict (idempotency_key) do nothing
+          returning id
         )
         ${liveRoomSelectSql(sql)}
         join selected_room sr on sr.id = lr.id
+        cross join (select count(*) from inserted_job) job_effect
       `;
       const row = rows[0];
 
@@ -172,6 +291,29 @@ export function createLiveRoomRepositoryMethods(
       }
 
       return toLiveRoom(row);
+    },
+    async claimProviderCreation(input) {
+      const rows = await sql<{ id: string }[]>`
+        with target_user as (
+          select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
+        )
+        update live_rooms
+        set
+          provider_creation_claim_id = ${input.claimId},
+          provider_creation_claim_expires_at = now() + interval '10 minutes',
+          provider_creation_attempt_count = provider_creation_attempt_count + 1,
+          updated_at = now()
+        where id = ${input.roomId}
+          and creator_user_id = (select id from target_user)
+          and provider_stream_id is null
+          and state in ('scheduled', 'waiting')
+          and (
+            provider_creation_claim_id is null
+            or provider_creation_claim_expires_at <= now()
+          )
+        returning id
+      `;
+      return Boolean(rows[0]);
     },
     async attachProviderRoom(input) {
       const rows = await sql<LiveRoomRow[]>`
@@ -190,10 +332,13 @@ export function createLiveRoomRepositoryMethods(
             host_ingest_url = ${input.providerRoom.hostIngestUrl},
             host_stream_key = ${input.providerRoom.hostStreamKey},
             playback_url = ${input.providerRoom.playbackUrl},
+            provider_creation_claim_id = null,
+            provider_creation_claim_expires_at = null,
             updated_at = now()
           where lr.id = ${input.roomId}
             and lr.creator_user_id = (select id from target_user)
             and lr.provider_stream_id is null
+            and lr.provider_creation_claim_id = ${input.claimId}
           returning *
         )
         ${liveRoomSelectSql(sql)}
@@ -225,7 +370,7 @@ export function createLiveRoomRepositoryMethods(
           where supabase_user_id = ${input.supabaseUserId}
           limit 1
         )
-        ${liveRoomSelectSql(sql)}
+        ${liveRoomSelectSql(sql, { includeHostSecrets: true })}
         where lr.id = ${input.roomId}
           and lr.creator_user_id = (select id from target_user)
         limit 1

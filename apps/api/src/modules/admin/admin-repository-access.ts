@@ -26,7 +26,7 @@ export function createAccessRepository(
           where u.supabase_user_id = ${supabaseUserId}
             and u.state = 'active'
             and sm.state = 'active'
-            and sm.role in ('owner', 'admin', 'finance', 'ops', 'support', 'creator_success', 'readonly_auditor')
+            and sm.role in ('owner', 'admin', 'trust_safety', 'finance', 'ops', 'support', 'creator_success', 'event_ops', 'ai_ops', 'readonly_auditor')
         ) as allowed
       `;
 
