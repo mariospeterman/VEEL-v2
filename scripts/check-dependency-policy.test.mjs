@@ -3,12 +3,25 @@ import { validateDependencyPolicy } from "./check-dependency-policy.mjs";
 
 const validInput = {
   npmrc: "inject-workspace-packages=true\nauto-install-peers=false\n",
-  lockfile: "lockfileVersion: '9.0'\n  uuid@11.1.1:\n  uuid@14.0.1:\n",
+  lockfile: [
+    "lockfileVersion: '9.0'",
+    "  '@rolldown/binding-darwin-arm64@1.0.3':",
+    "  '@rolldown/binding-darwin-x64@1.0.3':",
+    "  '@rolldown/binding-linux-x64-gnu@1.0.3':",
+    "  rolldown@1.0.3:",
+    "  uuid@11.1.1:",
+    "  uuid@14.0.1:",
+    ""
+  ].join("\n"),
   rootPackage: {
     pnpm: {
       overrides: {
         "uuid@>=8.0.0 <11.1.1": "11.1.1"
       }
+    },
+    optionalDependencies: {
+      "@rolldown/binding-darwin-arm64": "1.0.3",
+      "@rolldown/binding-darwin-x64": "1.0.3"
     }
   },
   apiPackage: { dependencies: { fastestsmallesttextencoderdecoder: "1.0.22" } },
@@ -55,5 +68,45 @@ describe("dependency policy", () => {
       ...validInput,
       uiPackage: { devDependencies: {} }
     })).toContain("ui must declare development peer react@^19.2.0 in devDependencies");
+  });
+
+  it("rejects a root Darwin binding that diverges from the Rolldown runtime", () => {
+    expect(validateDependencyPolicy({
+      ...validInput,
+      rootPackage: {
+        ...validInput.rootPackage,
+        optionalDependencies: {
+          ...validInput.rootPackage.optionalDependencies,
+          "@rolldown/binding-darwin-arm64": "1.2.4"
+        }
+      }
+    })).toContain("@rolldown/binding-darwin-arm64 must stay version-aligned with rolldown@1.0.3");
+  });
+
+  it("rejects a mismatched Darwin binding resolution in the lockfile", () => {
+    expect(validateDependencyPolicy({
+      ...validInput,
+      lockfile: validInput.lockfile.replace(
+        "@rolldown/binding-darwin-arm64@1.0.3",
+        "@rolldown/binding-darwin-arm64@1.2.4"
+      )
+    })).toContain("@rolldown/binding-darwin-arm64@1.2.4 must not diverge from rolldown@1.0.3");
+  });
+
+  it("rejects a mismatched Linux binding resolution in the lockfile", () => {
+    expect(validateDependencyPolicy({
+      ...validInput,
+      lockfile: validInput.lockfile.replace(
+        "@rolldown/binding-linux-x64-gnu@1.0.3",
+        "@rolldown/binding-linux-x64-gnu@1.2.4"
+      )
+    })).toContain("@rolldown/binding-linux-x64-gnu@1.2.4 must not diverge from rolldown@1.0.3");
+  });
+
+  it("rejects a lockfile without the matching Rolldown runtime", () => {
+    expect(validateDependencyPolicy({
+      ...validInput,
+      lockfile: validInput.lockfile.replace("  rolldown@1.0.3:\n", "")
+    })).toContain("pnpm-lock.yaml must contain rolldown@1.0.3");
   });
 });

@@ -19,6 +19,12 @@ const expectedUiDevelopmentPeers = {
   react: "^19.2.0"
 };
 
+const expectedRolldownRuntimeVersion = "1.0.3";
+const expectedRolldownDarwinBindings = [
+  "@rolldown/binding-darwin-arm64",
+  "@rolldown/binding-darwin-x64"
+];
+
 export function validateDependencyPolicy({ npmrc, lockfile, rootPackage, apiPackage, webPackage, workerPackage, uiPackage }) {
   const errors = [];
 
@@ -43,6 +49,25 @@ export function validateDependencyPolicy({ npmrc, lockfile, rootPackage, apiPack
 
   if (rootPackage?.pnpm?.overrides?.["uuid@>=8.0.0 <11.1.1"] !== "11.1.1") {
     errors.push("pnpm must override vulnerable uuid 8-10 releases to 11.1.1");
+  }
+
+  for (const binding of expectedRolldownDarwinBindings) {
+    if (rootPackage?.optionalDependencies?.[binding] !== expectedRolldownRuntimeVersion) {
+      errors.push(`${binding} must stay version-aligned with rolldown@${expectedRolldownRuntimeVersion}`);
+    }
+  }
+
+  if (!new RegExp(`^ {2}rolldown@${escapeRegExp(expectedRolldownRuntimeVersion)}:`, "mu").test(lockfile)) {
+    errors.push(`pnpm-lock.yaml must contain rolldown@${expectedRolldownRuntimeVersion}`);
+  }
+
+  const rolldownBindingEntries = lockfile.matchAll(
+    /^ {2}'?(@rolldown\/binding-[^@':\s]+)@([^':\s]+)'?:/gmu
+  );
+  for (const [, binding, version] of rolldownBindingEntries) {
+    if (version !== expectedRolldownRuntimeVersion) {
+      errors.push(`${binding}@${version} must not diverge from rolldown@${expectedRolldownRuntimeVersion}`);
+    }
   }
 
   const forbiddenLockEntries = [
@@ -81,6 +106,10 @@ async function main() {
 
 async function readJson(path) {
   return JSON.parse(await readFile(path, "utf8"));
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
