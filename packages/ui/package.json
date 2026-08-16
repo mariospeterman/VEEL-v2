@@ -13,6 +13,7 @@
     "react": "^19.0.0"
   },
   "devDependencies": {
-    "@types/react": "^19.2.7"
+    "@types/react": "^19.2.7",
+    "react": "^19.2.0"
   }
 }
