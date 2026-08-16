@@ -37,13 +37,13 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `c7717a5` (Launch 08, PR #49) |
-| Active slice | Launch 09 — Enterprise managed creators |
-| Branch | `codex/launch-09-enterprise-managed-creators` |
-| Pull request | #50 |
-| State | `CODE_COMPLETE_PROVIDER_BLOCKED` |
-| Slice blockers | Enterprise onboarding must remain fail-closed until organization authority, bilateral creator consent, KYB/entitlement readiness, exact management allocation, revocation, audit, and browser/real-Postgres proof converge on one backend-owned path. Real KYB/provider and Enterprise contract evidence remain pre-production gates. |
-| Next unfinished slice | Launch 10 — Frontend system, accessibility, cross-browser, and PWA completion |
+| Merged baseline | `main` at `0627737` (Launch 09, PR #50) |
+| Active slice | Launch 10 — Frontend system, accessibility, cross-browser, and PWA completion |
+| Branch | `codex/launch-10-frontend-system` |
+| Pull request | Pending |
+| State | `ACTIVE` |
+| Slice blockers | The broad frontend must converge on one shared visual/component system, WCAG-oriented keyboard and screen-reader behavior, responsive and cross-browser journeys, resilient loading/error/empty states, and a valid installable PWA without duplicating backend business truth or exposing provider internals. |
+| Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
 
 Current human/provider gates do not block this process slice: shared staging credentials,
 provider dashboard/webhook/domain configuration, migration `0091` shared-project proof,
