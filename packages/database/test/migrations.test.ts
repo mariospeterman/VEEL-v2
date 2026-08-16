@@ -1043,4 +1043,14 @@ describe("database migrations", () => {
     expect(sql).toContain("payment ledger contains atomic values outside the JavaScript safe-integer range");
     expect(downSql).toContain("drop constraint if exists payment_ledger_entries_javascript_safe_amount_check");
   });
+
+  it("promotes checkout-consent receipts to logical-operation lifetime", () => {
+    const sql = readMigration("0102_checkout_consent_idempotency_lifetime.sql");
+    const downSql = readMigration("0102_checkout_consent_idempotency_lifetime.down.sql");
+
+    expect(sql).toContain("where scope = 'payment_checkout_consent'");
+    expect(sql).toContain("expires_at = 'infinity'::timestamptz");
+    expect(downSql).toContain("expires_at = created_at + interval '24 hours'");
+    expect(downSql).toContain("and expires_at = 'infinity'::timestamptz");
+  });
 });

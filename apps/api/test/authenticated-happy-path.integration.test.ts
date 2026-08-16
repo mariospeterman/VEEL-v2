@@ -196,10 +196,11 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     try {
       await app.ready();
       const acceptImmediateCheckout = async (paymentIntentId: string, suffix: string) => {
+        const idempotencyKey = `checkout-consent-${suffix}-${runId}`;
         const response = await app.inject({
           method: "POST",
           url: `/v1/payments/intents/${paymentIntentId}/consent`,
-          headers: authenticatedHeaders(`checkout-consent-${suffix}-${runId}`),
+          headers: authenticatedHeaders(idempotencyKey),
           payload: {
             termsVersion: "veel-terms-v1",
             withdrawalWaiverVersion: "instant-digital-access-v1",
@@ -207,6 +208,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           }
         });
         expect(response.statusCode, response.body).toBe(200);
+        return { idempotencyKey, response };
       };
       await cleanupRun(sql, {
         buyerHandle,
@@ -1746,7 +1748,41 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         `
       ).rejects.toThrow(/explicit_checkout_consent_required/);
 
-      await acceptImmediateCheckout(unlock.paymentIntent.id, "content-unlock");
+      const contentUnlockConsent = await acceptImmediateCheckout(
+        unlock.paymentIntent.id,
+        "content-unlock"
+      );
+      const consentReceiptRows = await sql<{ expires_at: string }[]>`
+        select expires_at::text as expires_at
+        from idempotency_keys
+        where key = ${contentUnlockConsent.idempotencyKey}
+      `;
+      expect(consentReceiptRows).toEqual([{ expires_at: "infinity" }]);
+
+      const checkoutConsentReplay = await app.inject({
+        method: "POST",
+        url: `/v1/payments/intents/${unlock.paymentIntent.id}/consent`,
+        headers: authenticatedHeaders(contentUnlockConsent.idempotencyKey),
+        payload: {
+          termsVersion: "veel-terms-v1",
+          withdrawalWaiverVersion: "instant-digital-access-v1",
+          immediateAccessAcknowledged: true
+        }
+      });
+      expect(checkoutConsentReplay.statusCode, checkoutConsentReplay.body).toBe(200);
+      expect(checkoutConsentReplay.json()).toMatchObject({ id: unlock.paymentIntent.id });
+
+      const changedCheckoutConsentReplay = await app.inject({
+        method: "POST",
+        url: `/v1/payments/intents/${unlock.paymentIntent.id}/consent`,
+        headers: authenticatedHeaders(contentUnlockConsent.idempotencyKey),
+        payload: {
+          termsVersion: "veel-terms-v2",
+          withdrawalWaiverVersion: "instant-digital-access-v1",
+          immediateAccessAcknowledged: true
+        }
+      });
+      expect(changedCheckoutConsentReplay.statusCode, changedCheckoutConsentReplay.body).toBe(409);
 
       const crossActorConsentReplay = await app.inject({
         method: "POST",
