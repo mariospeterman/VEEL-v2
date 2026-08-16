@@ -36,6 +36,7 @@ import {
 } from "./provider-event-replay.js";
 import {
   createPostgresSubscriptionCollectionRepository,
+  createSolanaSubscriptionCollectionProvider,
   createUnconfiguredSubscriptionCollectionProvider,
   processDueSubscriptionCollections,
   type ProcessSubscriptionCollectionsResult,
@@ -165,7 +166,24 @@ export async function runSubscriptionCollectionTick(input: {
   const config = parseServerEnv(process.env);
   const repository =
     input.repository ?? createPostgresSubscriptionCollectionRepository(config.DATABASE_URL);
-  const provider = input.provider ?? createUnconfiguredSubscriptionCollectionProvider();
+  const provider = input.provider ?? (
+    config.SUBSCRIPTIONS_ENABLED &&
+    config.SUBSCRIPTIONS_PROVIDER === "official_solana_subscription_program" &&
+    config.SUBSCRIPTIONS_SOLANA_RPC_URL &&
+    config.SUBSCRIPTIONS_COLLECTOR_WALLET &&
+    config.SUBSCRIPTIONS_COLLECTOR_PRIVATE_KEY
+      ? createSolanaSubscriptionCollectionProvider({
+          rpcUrl: config.SUBSCRIPTIONS_SOLANA_RPC_URL,
+          collectorPrivateKey: config.SUBSCRIPTIONS_COLLECTOR_PRIVATE_KEY,
+          collectorWallet: config.SUBSCRIPTIONS_COLLECTOR_WALLET,
+          platformWallet:
+            config.PAYMENT_PLATFORM_FEE_WALLET ??
+            config.PAYMENT_PLATFORM_TREASURY_WALLET ??
+            config.SUBSCRIPTIONS_MERCHANT_WALLET ??
+            null
+        })
+      : createUnconfiguredSubscriptionCollectionProvider()
+  );
 
   try {
     return await processDueSubscriptionCollections({

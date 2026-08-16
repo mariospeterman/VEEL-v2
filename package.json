@@ -26,6 +26,7 @@
     "mcp:oauth:pkce": "node --env-file=.env scripts/smoke-mcp-oauth-pkce.mjs",
     "mcp:smoke": "node --env-file=.env scripts/smoke-mcp-remote.mjs",
     "proof:bunny-sfw": "node --experimental-strip-types --env-file=.env apps/web/scripts/prove-bunny-sfw.mjs",
+    "proof:subscriptions": "node --env-file=.env apps/worker/scripts/prove-solana-subscriptions.mjs",
     "lint": "eslint .",
     "smoke": "node scripts/run-local-tool.mjs playwright test",
     "typecheck": "pnpm -r typecheck",

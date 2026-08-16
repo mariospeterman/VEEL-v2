@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import type { SubscriptionPlan, SubscriptionRepository } from "./types.js";
 import { SubscriptionRepositoryConfigurationError } from "./subscription-errors.js";
@@ -19,10 +18,17 @@ export async function findAuthorizationVerificationContext(
       setup_reference: string;
       collector_address: string | null;
       subscriber_wallet: string | null;
+      authority_address: string | null;
+      delegation_address: string | null;
+      subscriber_token_account: string | null;
       token_mint: string | null;
       token_program: "spl_token" | "token_2022" | null;
       amount_minor: string | number;
+      amount_atomic: string | number;
       period_days: number;
+      period_seconds: number;
+      delegation_nonce: string | number;
+      delegation_expires_at: Date | null;
       provider: string;
       plan_id: string;
       plan_pda: string | null;
@@ -36,10 +42,17 @@ export async function findAuthorizationVerificationContext(
       sai.setup_reference,
       s.collector_address,
       s.subscriber_wallet,
+      sai.authority_address,
+      sai.delegation_address,
+      sai.subscriber_token_account,
       sp.token_mint,
       sp.token_program,
       sp.amount_minor,
+      sp.amount_atomic,
       sp.period_days,
+      sp.period_seconds,
+      s.delegation_nonce,
+      sai.delegation_expires_at,
       coalesce(s.provider, sp.provider, 'official_solana_subscription_program') as provider,
       sp.id as plan_id,
       coalesce(s.plan_pda, sp.plan_pda) as plan_pda,
@@ -64,10 +77,17 @@ export async function findAuthorizationVerificationContext(
         delegationProgramId: input.delegationProgramId,
         collectorAddress: row.collector_address,
         subscriberWallet: row.subscriber_wallet,
+        authorityAddress: row.authority_address,
+        delegationAddress: row.delegation_address,
+        subscriberTokenAccount: row.subscriber_token_account,
         tokenMint: row.token_mint,
         tokenProgram: row.token_program,
         amountMinor: Number(row.amount_minor),
+        amountAtomic: Number(row.amount_atomic),
         periodDays: row.period_days,
+        periodSeconds: row.period_seconds,
+        delegationNonce: Number(row.delegation_nonce),
+        delegationExpiresAt: row.delegation_expires_at,
         provider: row.provider,
         planId: row.plan_id,
         planPda: row.plan_pda,
@@ -76,6 +96,34 @@ export async function findAuthorizationVerificationContext(
         expiresAt: row.expires_at
       }
     : null;
+}
+
+export async function recordAuthorizationTransactionFacts(
+  sql: postgres.Sql,
+  input: Parameters<SubscriptionRepository["recordAuthorizationTransactionFacts"]>[0]
+) {
+  const rows = await sql<{ id: string }[]>`
+    update subscription_authorization_intents sai
+    set
+      authority_address = ${input.authorityAddress},
+      delegation_address = ${input.delegationAddress},
+      subscriber_token_account = ${input.subscriberTokenAccount},
+      subscription_authority_pda = ${input.authorityAddress},
+      subscription_pda = ${input.delegationAddress},
+      delegation_expires_at = ${input.delegationExpiresAt}
+    from subscriptions s
+    join users u on u.id = s.subscriber_user_id
+    where sai.id = ${input.authorizationIntentId}
+      and sai.subscription_id = s.id
+      and u.supabase_user_id = ${input.supabaseUserId}
+      and sai.state in ('created', 'submitted')
+      and sai.expires_at > now()
+    returning sai.id
+  `;
+
+  if (!rows[0]) {
+    throw new SubscriptionRepositoryConfigurationError();
+  }
 }
 
 export async function submitAuthorization(
@@ -194,56 +242,23 @@ async function activateSubscriptionAfterVerification(
   await transaction`
     update subscriptions s
     set
-      state = case when ${input.verification.verified} then 'active' else state end,
-      authority_address = ${input.body.authorityAddress},
-      delegation_address = ${input.body.delegationAddress},
-      subscriber_token_account = ${input.body.subscriberTokenAccount},
-      user_token_account = ${input.body.subscriberTokenAccount},
-      subscription_authority_pda = ${input.body.authorityAddress},
-      subscription_pda = coalesce(s.subscription_pda, ${input.verification.facts?.subscriptionPda ?? null}::text),
+      authority_address = ${input.verification.facts?.authorityAddress ?? null},
+      delegation_address = ${input.verification.facts?.delegationAddress ?? null},
+      subscriber_token_account = ${input.verification.facts?.subscriberTokenAccount ?? null},
+      user_token_account = ${input.verification.facts?.subscriberTokenAccount ?? null},
+      subscription_authority_pda = ${input.verification.facts?.authorityAddress ?? null},
+      subscription_pda = coalesce(s.subscription_pda, ${input.verification.facts?.delegationAddress ?? null}::text),
       plan_pda = coalesce(s.plan_pda, ${input.verification.facts?.planPda ?? null}::text),
       setup_signature = ${input.body.signature},
       verified_signature = case when ${input.verification.verified} then ${input.body.signature} else s.verified_signature end,
       verified_at = case when ${input.verification.verified} then now() else s.verified_at end,
       failure_reason = case when ${input.verification.verified} then null else ${input.verification.failureCode ?? null}::text end,
-      current_period_starts_at = case when ${input.verification.verified} then coalesce(s.current_period_starts_at, now()) else s.current_period_starts_at end,
-      current_period_ends_at = case when ${input.verification.verified} then coalesce(s.current_period_ends_at, now() + (${row.plan_period_days} || ' days')::interval) else s.current_period_ends_at end,
-      next_collection_at = case when ${input.verification.verified} then coalesce(s.next_collection_at, now() + (${row.plan_period_days} || ' days')::interval) else s.next_collection_at end,
+      delegation_expires_at = case when ${input.verification.verified} then ${input.verification.facts?.delegationExpiresAt ?? null}::timestamptz else s.delegation_expires_at end,
+      state = case when ${input.verification.verified} then 'renewal_pending' else s.state end,
+      current_period_starts_at = case when ${input.verification.verified} then null else s.current_period_starts_at end,
+      current_period_ends_at = case when ${input.verification.verified} then null else s.current_period_ends_at end,
+      next_collection_at = case when ${input.verification.verified} then now() else s.next_collection_at end,
       updated_at = now()
     where s.id = ${row.id}
   `;
-
-  if (input.verification.verified) {
-    await transaction`
-      insert into subscription_collections (
-        id,
-        subscription_id,
-        period_starts_at,
-        period_ends_at,
-        amount_minor,
-        amount_atomic,
-        creator_amount_atomic,
-        platform_fee_amount_atomic,
-        allocation_amount_atomic,
-        currency,
-        state,
-        due_at
-      )
-      values (
-        ${randomUUID()},
-        ${row.id},
-        now(),
-        now() + (${row.plan_period_days} || ' days')::interval,
-        ${Number(row.plan_amount_minor)},
-        ${Number(row.plan_amount_atomic)},
-        ${Number(row.plan_creator_amount_atomic)},
-        ${Number(row.plan_platform_fee_amount_atomic)},
-        ${Number(row.plan_allocation_amount_atomic)},
-        ${row.plan_currency},
-        'confirmed',
-        now()
-      )
-      on conflict (subscription_id, period_starts_at) do nothing
-    `;
-  }
 }

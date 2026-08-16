@@ -81,6 +81,8 @@ export async function createAuthorizationIntent(
       sp.id,
       sp.scope,
       sp.label,
+      sp.description,
+      sp.benefits,
       sp.amount_minor,
       sp.amount_atomic,
       sp.currency,

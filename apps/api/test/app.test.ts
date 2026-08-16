@@ -2571,7 +2571,8 @@ describe("buildApi", () => {
               support: true,
               contentUnlocks: true,
               eventAccessAndLive: true,
-              paidMessages: false
+              paidMessages: false,
+              memberships: true
             }
           }
         });
@@ -2590,7 +2591,8 @@ describe("buildApi", () => {
               support: true,
               contentUnlocks: true,
               eventAccessAndLive: true,
-              paidMessages: false
+              paidMessages: false,
+              memberships: true
             }
           },
           steps: []
@@ -2619,7 +2621,8 @@ describe("buildApi", () => {
           support: true,
           contentUnlocks: true,
           eventAccessAndLive: true,
-          paidMessages: false
+          paidMessages: false,
+          memberships: true
         }
       }
     });
@@ -2644,7 +2647,8 @@ describe("buildApi", () => {
           support: true,
           contentUnlocks: true,
           eventAccessAndLive: true,
-          paidMessages: false
+          paidMessages: false,
+          memberships: true
         }
       }
     });
@@ -10520,8 +10524,8 @@ describe("buildApi", () => {
 
           return subscriptionFixture({
             state: "authorization_pending",
-            authorityAddress: input.body.authorityAddress,
-            delegationAddress: input.body.delegationAddress
+            authorityAddress: null,
+            delegationAddress: null
           });
         }
       }),
@@ -11119,6 +11123,8 @@ function subscriptionPlanFixture(overrides: Partial<SubscriptionPlan> = {}): Sub
     id: overrides.id ?? "platform_plus_monthly",
     scope: overrides.scope ?? "platform",
     label: overrides.label ?? "Veel Plus",
+    description: overrides.description ?? null,
+    benefits: overrides.benefits ?? [],
     amountMinor: overrides.amountMinor ?? 15000000,
     currency: overrides.currency ?? "USDC",
     periodDays: overrides.periodDays ?? 30,
@@ -11211,6 +11217,15 @@ function fakeSubscriptionRepository(
     async listSubscriptions(input): Promise<SubscriptionPage> {
       return overrides.onListSubscriptions?.(input) ?? { items: [subscriptionFixture()] };
     },
+    async getCreatorOffer() {
+      return null;
+    },
+    async upsertCreatorOffer() {
+      return subscriptionPlanFixture({ scope: "creator" });
+    },
+    async disableCreatorOffer() {
+      return true;
+    },
     async createAuthorizationIntent(input) {
       return overrides.onCreateAuthorizationIntent?.(input) ?? subscriptionAuthorizationIntentFixture();
     },
@@ -11221,10 +11236,17 @@ function fakeSubscriptionRepository(
         delegationProgramId: input.delegationProgramId,
         collectorAddress: null,
         subscriberWallet: "11111111111111111111111111111111",
+        authorityAddress: "11111111111111111111111111111111",
+        delegationAddress: "11111111111111111111111111111111",
+        subscriberTokenAccount: "11111111111111111111111111111111",
         tokenMint: "USDC_MINT_CONFIG_REQUIRED",
         tokenProgram: "spl_token",
         amountMinor: 15000000,
+        amountAtomic: 15000000,
         periodDays: 30,
+        periodSeconds: 2592000,
+        delegationNonce: 0,
+        delegationExpiresAt: new Date("2027-07-05T00:15:00.000Z"),
         provider: "official_solana_subscription_program",
         planId: "platform_plus_monthly",
         planPda: null,
@@ -11233,6 +11255,7 @@ function fakeSubscriptionRepository(
         expiresAt: new Date("2026-07-05T00:15:00.000Z")
       };
     },
+    async recordAuthorizationTransactionFacts() {},
     async submitAuthorization(input) {
       return overrides.onSubmitAuthorization?.(input) ?? subscriptionFixture();
     },
@@ -11790,7 +11813,9 @@ const fakeAdminRepository: AdminRepository = {
       openReports: 0,
       paymentCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 },
       unlockCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 },
-      providerEventCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 }
+      providerEventCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 },
+      subscriptionCounts: { total: 0, pending: 0, submitted: 0, confirmed: 0, failed: 0 },
+      subscriptionProviderReadiness: "staging_required"
     };
   },
   async getNotificationHealth() {
@@ -13008,7 +13033,8 @@ const fakeProfileRepository: ProfileRepository = {
         contentUnlocksEnabled: true,
         livePassesEnabled: true,
         paidMessagesEnabled: true,
-        subscriptionsEnabled: false
+        subscriptionsEnabled: false,
+        membershipOffer: null
       },
       recentContent: []
     };
@@ -13071,7 +13097,8 @@ const fakeProfileRepository: ProfileRepository = {
           support: false,
           contentUnlocks: false,
           eventAccessAndLive: false,
-          paidMessages: false
+          paidMessages: false,
+          memberships: false
         }
       },
       steps: [

@@ -11,6 +11,7 @@ import type {
   SubscriptionAuthorizationVerifier,
   SubscriptionRepository
 } from "./types.js";
+import type { SubscriptionAuthorizationTransactionBuilder } from "./subscription-authorization-transaction.js";
 
 export interface RegisterSubscriptionRoutesOptions {
   authVerifier: ApplicationSessionVerifier;
@@ -19,6 +20,7 @@ export interface RegisterSubscriptionRoutesOptions {
   walletRepository: WalletRepository;
   subscriptionRepository: SubscriptionRepository;
   subscriptionAuthorizationVerifier: SubscriptionAuthorizationVerifier;
+  subscriptionAuthorizationTransactionBuilder: SubscriptionAuthorizationTransactionBuilder;
 }
 
 export type SubscriptionReadyAccessResult =
@@ -102,10 +104,8 @@ export function validateSubmitSubscriptionAuthorization(
     return "Request body is required";
   }
 
-  for (const field of ["signature", "authorityAddress", "delegationAddress", "subscriberTokenAccount"] as const) {
-    if (typeof body[field] !== "string" || body[field].length === 0) {
-      return `${field} is required`;
-    }
+  if (typeof body.signature !== "string" || body.signature.length === 0) {
+    return "signature is required";
   }
 
   return null;

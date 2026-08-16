@@ -65,6 +65,7 @@ import type {
   PerformerConsentRequest,
   SessionState,
   SubscriptionPage,
+  SubscriptionPlan,
   SubscriptionPlanPage,
   VerificationStatus,
   WalletList,
@@ -133,6 +134,10 @@ export async function getSubscriptionPlans(): Promise<ApiResult<SubscriptionPlan
 
 export async function getSubscriptions(): Promise<ApiResult<SubscriptionPage>> {
   return getJson<SubscriptionPage>("/v1/subscriptions");
+}
+
+export async function getMyCreatorMembershipOffer(): Promise<ApiResult<SubscriptionPlan>> {
+  return getJson<SubscriptionPlan>("/v1/subscriptions/creator-offer");
 }
 
 export async function getPlatformAccess(): Promise<ApiResult<PlatformAccess>> {

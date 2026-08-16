@@ -59,6 +59,7 @@ export async function registerApiRoutes(
     organizationRepository,
     subscriptionRepository,
     subscriptionAuthorizationVerifier,
+    subscriptionAuthorizationTransactionBuilder,
     activityRepository,
     adminRepository,
     aiRepository,
@@ -207,7 +208,8 @@ export async function registerApiRoutes(
     ageRepository,
     walletRepository,
     subscriptionRepository,
-    subscriptionAuthorizationVerifier
+    subscriptionAuthorizationVerifier,
+    subscriptionAuthorizationTransactionBuilder
   });
   await registerActivityRoutes(app, {
     authVerifier,

@@ -68,6 +68,10 @@ import {
   type WalletAuthRepository
 } from "./modules/auth/wallet-auth-repository.js";
 import { createPostgresSubscriptionRepository } from "./modules/subscription/subscription-repository.js";
+import {
+  createSubscriptionAuthorizationTransaction,
+  type SubscriptionAuthorizationTransactionBuilder
+} from "./modules/subscription/subscription-authorization-transaction.js";
 import { createSolanaSubscriptionAuthorizationVerifier } from "./modules/subscription/subscription-verifier.js";
 import type {
   SubscriptionAuthorizationVerifier,
@@ -110,6 +114,7 @@ export interface BuildApiOptions {
   organizationRepository?: OrganizationRepository;
   subscriptionRepository?: SubscriptionRepository;
   subscriptionAuthorizationVerifier?: SubscriptionAuthorizationVerifier;
+  subscriptionAuthorizationTransactionBuilder?: SubscriptionAuthorizationTransactionBuilder;
   walletRepository?: WalletRepository;
   walletAuthRepository?: WalletAuthRepository;
   onrampProvider?: WalletOnrampProviderAdapter;
@@ -151,6 +156,7 @@ export interface ApiDependencies {
   organizationRepository: OrganizationRepository;
   subscriptionRepository: SubscriptionRepository;
   subscriptionAuthorizationVerifier: SubscriptionAuthorizationVerifier;
+  subscriptionAuthorizationTransactionBuilder: SubscriptionAuthorizationTransactionBuilder;
   walletRepository: WalletRepository;
   walletAuthRepository: WalletAuthRepository;
   onrampProvider: WalletOnrampProviderAdapter;
@@ -231,6 +237,8 @@ export function createApiDependencies(
       options.subscriptionRepository ?? createPostgresSubscriptionRepository(postgresClient),
     subscriptionAuthorizationVerifier:
       options.subscriptionAuthorizationVerifier ?? createSolanaSubscriptionAuthorizationVerifier(app.config),
+    subscriptionAuthorizationTransactionBuilder:
+      options.subscriptionAuthorizationTransactionBuilder ?? createSubscriptionAuthorizationTransaction,
     walletRepository:
       options.walletRepository ?? createPostgresWalletRepository(postgresClient),
     onrampProvider: options.onrampProvider ?? createWalletOnrampProvider(app.config),

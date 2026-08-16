@@ -1,5 +1,23 @@
 import { randomUUID } from "node:crypto";
+import { address, createNoopSigner, type Instruction as KitInstruction } from "@solana/kit";
+import { getTransferRecurringOverlayInstructionAsync } from "@solana/subscriptions";
+import {
+  TOKEN_PROGRAM_ADDRESS,
+  findAssociatedTokenPda,
+  getCreateAssociatedTokenIdempotentInstructionAsync
+} from "@solana-program/token";
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  Transaction,
+  TransactionInstruction,
+  sendAndConfirmTransaction
+} from "@solana/web3.js";
+import bs58 from "bs58";
 import postgres from "postgres";
+
+const token2022ProgramAddress = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 
 export type SubscriptionCollectionOutcome =
   | {
@@ -28,9 +46,13 @@ export interface DueSubscriptionCollection {
   providerIdempotencyKey: string;
   subscriptionId: string;
   subscriberUserId: string;
+  subscriberWallet: string;
   planId: string;
   amountMinor: bigint;
   amountAtomic: bigint;
+  creatorAmountAtomic: bigint;
+  platformAmountAtomic: bigint;
+  allocationAmountAtomic: bigint;
   currency: "SOL" | "USDC";
   periodStartsAt: Date;
   periodEndsAt: Date;
@@ -43,6 +65,7 @@ export interface DueSubscriptionCollection {
   provider: string;
   programId: string;
   periodSeconds: number;
+  creatorReceiverWallet: string | null;
 }
 
 export interface SubscriptionCollectionRepository {
@@ -165,6 +188,200 @@ export function createUnconfiguredSubscriptionCollectionProvider(): Subscription
   };
 }
 
+export function createSolanaSubscriptionCollectionProvider(input: {
+  rpcUrl: string;
+  collectorPrivateKey: string;
+  collectorWallet: string;
+  platformWallet: string | null;
+}): SubscriptionCollectionProvider {
+  const connection = new Connection(input.rpcUrl, "finalized");
+  const collector = Keypair.fromSecretKey(bs58.decode(input.collectorPrivateKey));
+  if (collector.publicKey.toBase58() !== input.collectorWallet) {
+    throw new Error("subscription_collector_key_mismatch");
+  }
+
+  return {
+    async reconcile(collection) {
+      try {
+        const signatures = await connection.getSignaturesForAddress(
+          new PublicKey(collection.delegationAddress),
+          { limit: 25 },
+          "finalized"
+        );
+        for (const candidate of signatures) {
+          if (candidate.err) continue;
+          const transaction = await connection.getTransaction(candidate.signature, {
+            commitment: "finalized",
+            maxSupportedTransactionVersion: 0
+          });
+          if (transaction && hasCollectionEvidence(transaction, collection)) {
+            return { state: "confirmed", collectionSignature: candidate.signature };
+          }
+        }
+        return { state: "not_found" };
+      } catch {
+        return {
+          state: "unknown",
+          failureCode: "subscription_collection_reconciliation_unavailable",
+          retryAt: new Date(Date.now() + 5 * 60 * 1000)
+        };
+      }
+    },
+
+    async collect(collection) {
+      try {
+        const delegationInfo = await connection.getAccountInfo(
+          new PublicKey(collection.delegationAddress),
+          "finalized"
+        );
+        if (!delegationInfo) {
+          return { state: "revoked", failureCode: "subscription_delegation_revoked" };
+        }
+        if (
+          collection.creatorAmountAtomic +
+            collection.platformAmountAtomic +
+            collection.allocationAmountAtomic !==
+          collection.amountAtomic
+        ) {
+          return retry("subscription_split_mismatch");
+        }
+        if (collection.allocationAmountAtomic > 0n) {
+          return retry("subscription_allocation_destination_unavailable");
+        }
+
+        const tokenProgram = collection.tokenProgram === "token_2022"
+          ? token2022ProgramAddress
+          : TOKEN_PROGRAM_ADDRESS;
+        const mint = address(collection.tokenMint);
+        const transaction = new Transaction();
+        transaction.feePayer = collector.publicKey;
+        transaction.recentBlockhash = (await connection.getLatestBlockhash("finalized")).blockhash;
+
+        if (collection.creatorAmountAtomic > 0n) {
+          if (!collection.creatorReceiverWallet) return retry("creator_receiver_wallet_missing");
+          await addRecurringTransfer({
+            transaction,
+            collection,
+            collector,
+            receiverWallet: collection.creatorReceiverWallet,
+            amount: collection.creatorAmountAtomic,
+            mint,
+            tokenProgram
+          });
+        }
+        if (collection.platformAmountAtomic > 0n) {
+          if (!input.platformWallet) return retry("platform_receiver_wallet_missing");
+          await addRecurringTransfer({
+            transaction,
+            collection,
+            collector,
+            receiverWallet: input.platformWallet,
+            amount: collection.platformAmountAtomic,
+            mint,
+            tokenProgram
+          });
+        }
+
+        transaction.add(new TransactionInstruction({
+          keys: [{ pubkey: new PublicKey(collection.delegationAddress), isSigner: false, isWritable: false }],
+          programId: new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"),
+          data: Buffer.from(`wevid:subscription-collection:${collection.collectionId}`, "utf8")
+        }));
+        const signature = await sendAndConfirmTransaction(connection, transaction, [collector], {
+          commitment: "finalized",
+          preflightCommitment: "confirmed"
+        });
+        return { state: "confirmed", collectionSignature: signature };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "subscription_collection_failed";
+        if (/closed|not found|invalid account data|expired/i.test(message)) {
+          return { state: "revoked", failureCode: "subscription_delegation_unavailable" };
+        }
+        return retry("subscription_collection_rpc_failed");
+      }
+    }
+  };
+}
+
+async function addRecurringTransfer(input: {
+  transaction: Transaction;
+  collection: DueSubscriptionCollection;
+  collector: Keypair;
+  receiverWallet: string;
+  amount: bigint;
+  mint: ReturnType<typeof address>;
+  tokenProgram: ReturnType<typeof address>;
+}) {
+  const receiver = address(input.receiverWallet);
+  const [receiverAta] = await findAssociatedTokenPda({
+    owner: receiver,
+    mint: input.mint,
+    tokenProgram: input.tokenProgram
+  });
+  input.transaction.add(
+    toLegacyInstruction(await getCreateAssociatedTokenIdempotentInstructionAsync({
+      payer: createNoopSigner(address(input.collector.publicKey.toBase58())),
+      ata: receiverAta,
+      owner: receiver,
+      mint: input.mint,
+      tokenProgram: input.tokenProgram
+    })),
+    toLegacyInstruction(await getTransferRecurringOverlayInstructionAsync({
+      amount: input.amount,
+      delegatee: createNoopSigner(address(input.collector.publicKey.toBase58())),
+      delegationPda: address(input.collection.delegationAddress),
+      delegator: address(input.collection.subscriberWallet),
+      delegatorAta: address(input.collection.subscriberTokenAccount),
+      receiverAta,
+      tokenMint: address(input.collection.tokenMint),
+      tokenProgram: input.tokenProgram,
+      programAddress: address(input.collection.programId)
+    }))
+  );
+}
+
+function toLegacyInstruction(instruction: KitInstruction): TransactionInstruction {
+  return new TransactionInstruction({
+    programId: new PublicKey(instruction.programAddress),
+    keys: (instruction.accounts ?? []).map((account) => {
+      const role = Number(account.role);
+      return {
+        pubkey: new PublicKey(account.address),
+        isSigner: role === 2 || role === 3,
+        isWritable: role === 1 || role === 3
+      };
+    }),
+    data: Buffer.from(instruction.data ?? new Uint8Array())
+  });
+}
+
+function hasCollectionEvidence(
+  transaction: Awaited<ReturnType<Connection["getTransaction"]>>,
+  collection: DueSubscriptionCollection
+) {
+  if (!transaction || transaction.meta?.err) return false;
+  const keys = transaction.transaction.message.getAccountKeys().staticAccountKeys;
+  const expectedMemo = `wevid:subscription-collection:${collection.collectionId}`;
+  const hasProgram = transaction.transaction.message.compiledInstructions.some(
+    (instruction) => keys[instruction.programIdIndex]?.toBase58() === collection.programId
+  );
+  const hasMemo = transaction.transaction.message.compiledInstructions.some((instruction) => {
+    if (keys[instruction.programIdIndex]?.toBase58() !== "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr") {
+      return false;
+    }
+    return Buffer.from(instruction.data).toString("utf8") === expectedMemo;
+  });
+  return hasProgram && hasMemo && keys[0]?.toBase58() === collection.collectorAddress;
+}
+
+function retry(failureCode: string): SubscriptionCollectionOutcome {
+  return {
+    state: "failed",
+    failureCode,
+    retryAt: new Date(Date.now() + 5 * 60 * 1000)
+  };
+}
+
 export function createPostgresSubscriptionCollectionRepository(
   databaseUrl?: string
 ): SubscriptionCollectionRepository {
@@ -264,8 +481,12 @@ export function createPostgresSubscriptionCollectionRepository(
           select
             s.id as subscription_id,
             s.subscriber_user_id,
+            s.subscriber_wallet,
             s.plan_id,
             sp.amount_minor,
+            sp.creator_amount_atomic,
+            sp.platform_fee_amount_atomic,
+            sp.allocation_amount_atomic,
             sp.currency,
             sp.period_days,
             coalesce(s.amount_atomic, sp.amount_atomic, sp.amount_minor) as amount_atomic,
@@ -279,7 +500,8 @@ export function createPostgresSubscriptionCollectionRepository(
             sp.token_mint,
             sp.token_program,
             coalesce(s.provider, sp.provider) as provider,
-            coalesce(s.program_id, sp.program_id) as program_id
+            coalesce(s.program_id, sp.program_id) as program_id,
+            s.merchant_wallet as creator_receiver_wallet
           from subscriptions s
           join subscription_plans sp on sp.id = s.plan_id
           where s.state in ('active', 'renewal_pending', 'grace_period')
@@ -292,6 +514,7 @@ export function createPostgresSubscriptionCollectionRepository(
             and sp.currency <> 'SOL'
             and s.next_collection_at <= ${input.now}
             and s.authority_address is not null
+            and s.subscriber_wallet is not null
             and s.delegation_address is not null
             and s.subscriber_token_account is not null
             and s.collector_address is not null
@@ -317,6 +540,10 @@ export function createPostgresSubscriptionCollectionRepository(
               period_ends_at,
               amount_minor,
               amount_atomic,
+              creator_amount_atomic,
+              platform_fee_amount_atomic,
+              allocation_amount_atomic,
+              creator_receiver_wallet,
               currency,
               state,
               collector_wallet,
@@ -331,6 +558,10 @@ export function createPostgresSubscriptionCollectionRepository(
               ${row.period_ends_at},
               ${row.amount_minor},
               ${row.amount_atomic},
+              ${row.creator_amount_atomic},
+              ${row.platform_fee_amount_atomic},
+              ${row.allocation_amount_atomic},
+              ${row.creator_receiver_wallet},
               ${row.currency},
               'due',
               ${row.collector_address},
@@ -401,9 +632,13 @@ export function createPostgresSubscriptionCollectionRepository(
             providerIdempotencyKey: collection.idempotency_key ?? idempotencyKey,
             subscriptionId: row.subscription_id,
             subscriberUserId: row.subscriber_user_id,
+            subscriberWallet: row.subscriber_wallet,
             planId: row.plan_id,
             amountMinor: BigInt(row.amount_minor),
             amountAtomic: BigInt(row.amount_atomic),
+            creatorAmountAtomic: BigInt(row.creator_amount_atomic),
+            platformAmountAtomic: BigInt(row.platform_fee_amount_atomic),
+            allocationAmountAtomic: BigInt(row.allocation_amount_atomic),
             currency: row.currency,
             periodStartsAt: row.period_starts_at,
             periodEndsAt: row.period_ends_at,
@@ -415,7 +650,8 @@ export function createPostgresSubscriptionCollectionRepository(
             tokenProgram: row.token_program,
             provider: row.provider,
             programId: row.program_id,
-            periodSeconds: Number(row.period_seconds)
+            periodSeconds: Number(row.period_seconds),
+            creatorReceiverWallet: row.creator_receiver_wallet
           });
         }
 
@@ -548,9 +784,13 @@ export function createPostgresSubscriptionCollectionRepository(
 interface DueSubscriptionRow {
   subscription_id: string;
   subscriber_user_id: string;
+  subscriber_wallet: string;
   plan_id: string;
   amount_minor: string | number;
   amount_atomic: string | number;
+  creator_amount_atomic: string | number;
+  platform_fee_amount_atomic: string | number;
+  allocation_amount_atomic: string | number;
   currency: "SOL" | "USDC";
   period_days: number;
   period_seconds: string | number;
@@ -564,6 +804,7 @@ interface DueSubscriptionRow {
   token_program: "spl_token" | "token_2022";
   provider: string;
   program_id: string;
+  creator_receiver_wallet: string | null;
 }
 
 interface CollectionLeaseRow {

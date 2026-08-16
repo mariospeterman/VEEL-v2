@@ -128,7 +128,23 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         subscriptionVerificationInputs.push(input);
 
         return {
-          verified: true
+          verified: true,
+          facts: {
+            subscriberWallet: input.subscriberWallet ?? "",
+            authorityAddress: input.authorityAddress,
+            delegationAddress: input.delegationAddress,
+            subscriberTokenAccount: input.subscriberTokenAccount,
+            tokenMint: input.tokenMint ?? "",
+            subscriptionPda: input.subscriptionPda,
+            delegationExpiresAt: input.delegationExpiresAt.toISOString(),
+            planPda: input.planPda,
+            programId: input.delegationProgramId,
+            merchantWallet: input.merchantWallet,
+            collectorWallet: input.collectorAddress,
+            amountMinor: input.amountMinor,
+            periodDays: input.periodDays,
+            verifiedAt: new Date().toISOString()
+          }
         };
       }
     };
@@ -145,6 +161,16 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       ageProviderWaterfall,
       settlementVerifier,
       subscriptionAuthorizationVerifier,
+      subscriptionAuthorizationTransactionBuilder: async ({ context }) => {
+        expect(context.setupReference).toBeTruthy();
+        return {
+          transaction: Buffer.from(`subscription-authorization:${context.setupReference}`).toString("base64"),
+          authorityAddress: subscriptionAuthorityAddress,
+          delegationAddress: subscriptionDelegationAddress,
+          subscriberTokenAccount: subscriptionTokenAccount,
+          delegationExpiresAt: new Date(Date.now() + 366 * 24 * 60 * 60 * 1000).toISOString()
+        };
+      },
       liveRepository,
       liveProvider: {
         async setRoomSuspended() {},
@@ -386,7 +412,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           support: true,
           contentUnlocks: true,
           eventAccessAndLive: true,
-          paidMessages: true
+          paidMessages: true,
+          memberships: true
         }
       };
       const creatorOnboardingRequest = {
@@ -2898,15 +2925,26 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         };
       }>();
 
+      const subscriptionTransactionResponse = await app.inject({
+        method: "GET",
+        url: `/v1/subscriptions/authorizations/${subscriptionIntent.id}/transaction`,
+        headers: authenticatedHeaders(`subscription-transaction-${runId}`)
+      });
+
+      expect(subscriptionTransactionResponse.statusCode, subscriptionTransactionResponse.body).toBe(200);
+      expect(subscriptionTransactionResponse.json()).toMatchObject({
+        transaction: expect.any(String),
+        authorityAddress: subscriptionAuthorityAddress,
+        delegationAddress: subscriptionDelegationAddress,
+        subscriberTokenAccount: subscriptionTokenAccount
+      });
+
       const subscriptionAuthorizationResponse = await app.inject({
         method: "POST",
         url: `/v1/subscriptions/authorizations/${subscriptionIntent.id}/submissions`,
         headers: authenticatedHeaders(`subscription-authorization-${runId}`),
         payload: {
-          signature: validSubscriptionAuthorizationSignature,
-          authorityAddress: subscriptionAuthorityAddress,
-          delegationAddress: subscriptionDelegationAddress,
-          subscriberTokenAccount: subscriptionTokenAccount
+          signature: validSubscriptionAuthorizationSignature
         }
       });
 
@@ -2915,7 +2953,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         id: subscriptionIntent.subscription.id,
         scope: "platform",
         planId: seededSubscriptionPlanId,
-        state: "active",
+        state: "renewal_pending",
         renewalMode: "delegated_solana_subscription",
         authorityAddress: subscriptionAuthorityAddress,
         delegationAddress: subscriptionDelegationAddress
@@ -2934,6 +2972,36 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           periodDays: 30
         })
       ]);
+
+      const initialCollectionRepository = createPostgresSubscriptionCollectionRepository(databaseUrl);
+      try {
+        const initialCollectionResult = await processDueSubscriptionCollections({
+          repository: initialCollectionRepository,
+          now: new Date(),
+          limit: 5,
+          provider: {
+            async reconcile() {
+              return { state: "not_found" };
+            },
+            async collect(input) {
+              expect(input.subscriptionId).toBe(subscriptionIntent.subscription.id);
+              return {
+                state: "confirmed",
+                collectionSignature: deterministicBase58Signature(170)
+              };
+            }
+          }
+        });
+        expect(initialCollectionResult).toEqual({
+          expired: 0,
+          leased: 1,
+          confirmed: 1,
+          failed: 0,
+          revoked: 0
+        });
+      } finally {
+        await initialCollectionRepository.close?.();
+      }
 
       const subscriptionsResponse = await app.inject({
         method: "GET",
@@ -3099,8 +3167,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
 
       expect(subscriptionCollectionRows[0]).toEqual({
         confirmed_collection_count: "1",
-        submitted_event_count: "1",
-        confirmed_event_count: "1",
+        submitted_event_count: "2",
+        confirmed_event_count: "2",
         active_subscription_count: "1"
       });
 

@@ -4,6 +4,8 @@ export interface PlanRow {
   id: string;
   scope: SubscriptionPlan["scope"];
   label: string;
+  description: string | null;
+  benefits: string[];
   amount_minor: string | number;
   amount_atomic: string | number | null;
   currency: SubscriptionPlan["currency"];
@@ -36,6 +38,7 @@ export interface SubscriptionRow {
   authority_address: string | null;
   delegation_address: string | null;
   subscriber_wallet: string | null;
+  subscriber_token_account?: string | null;
   provider: string | null;
   program_id: string | null;
   token_mint: string | null;

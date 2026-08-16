@@ -3,6 +3,7 @@ import type { SubscriptionRepository } from "./types.js";
 import { createSubscriptionAuthorizationRepositoryMethods } from "./subscription-authorization-repository.js";
 import { createSubscriptionCancellationRepositoryMethods } from "./subscription-cancellation-repository.js";
 import { createPlatformAccessRepositoryMethods } from "./platform-access-repository.js";
+import { createCreatorMembershipOfferRepositoryMethods } from "./creator-membership-offer-repository.js";
 import { SubscriptionRepositoryConfigurationError } from "./subscription-errors.js";
 import {
   toSubscription,
@@ -28,6 +29,15 @@ export function createPostgresSubscriptionRepository(database?: string | Postgre
       async listSubscriptions() {
         throw new SubscriptionRepositoryConfigurationError();
       },
+      async getCreatorOffer() {
+        throw new SubscriptionRepositoryConfigurationError();
+      },
+      async upsertCreatorOffer() {
+        throw new SubscriptionRepositoryConfigurationError();
+      },
+      async disableCreatorOffer() {
+        throw new SubscriptionRepositoryConfigurationError();
+      },
       async getPlatformAccess() {
         throw new SubscriptionRepositoryConfigurationError();
       },
@@ -46,6 +56,9 @@ export function createPostgresSubscriptionRepository(database?: string | Postgre
       async findAuthorizationVerificationContext() {
         throw new SubscriptionRepositoryConfigurationError();
       },
+      async recordAuthorizationTransactionFacts() {
+        throw new SubscriptionRepositoryConfigurationError();
+      },
       async submitAuthorization() {
         throw new SubscriptionRepositoryConfigurationError();
       },
@@ -59,12 +72,15 @@ export function createPostgresSubscriptionRepository(database?: string | Postgre
 
   return {
     ...createPlatformAccessRepositoryMethods(sql),
+    ...createCreatorMembershipOfferRepositoryMethods(sql),
     async listPlans() {
       const rows = await sql<PlanRow[]>`
         select
           sp.id,
           sp.scope,
           sp.label,
+          sp.description,
+          sp.benefits,
           sp.amount_minor,
           sp.amount_atomic,
           sp.currency,
@@ -109,6 +125,7 @@ export function createPostgresSubscriptionRepository(database?: string | Postgre
           s.authority_address,
           s.delegation_address,
           s.subscriber_wallet,
+          s.subscriber_token_account,
           s.provider,
           s.program_id,
           s.token_mint,

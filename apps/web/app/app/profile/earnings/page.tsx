@@ -1,17 +1,19 @@
-import { getMyCreatorDashboard, getMyCreatorOnboarding, getWallets } from "@/api-client";
+import { getMyCreatorDashboard, getMyCreatorMembershipOffer, getMyCreatorOnboarding, getWallets } from "@/api-client";
 import { requireAppAccess } from "@/supabase/route-guard";
 import { AppShell } from "../../../app-shell";
 import { Card, ErrorState, Fact, PageHeader, StatusPill } from "../../../ui";
 import { EarningsSetupForm } from "./earnings-setup-form";
+import { MembershipOfferForm } from "./membership-offer-form";
 
 export const dynamic = "force-dynamic";
 
 export default async function EarningsSetupPage() {
   await requireAppAccess("/app/profile/earnings");
-  const [dashboard, onboarding, wallets] = await Promise.all([
+  const [dashboard, onboarding, wallets, membershipOffer] = await Promise.all([
     getMyCreatorDashboard(),
     getMyCreatorOnboarding(),
-    getWallets()
+    getWallets(),
+    getMyCreatorMembershipOffer()
   ]);
 
   return (
@@ -76,6 +78,10 @@ export default async function EarningsSetupPage() {
           />
         ) : !wallets.ok ? (
           <ErrorState result={wallets} title="Linked wallets unavailable" context="Earnings wallet" />
+        ) : null}
+
+        {onboarding.ok && onboarding.data.configuration.products.memberships ? (
+          <MembershipOfferForm initialOffer={membershipOffer.ok ? membershipOffer.data : null} />
         ) : null}
 
         <Card className="p-4">

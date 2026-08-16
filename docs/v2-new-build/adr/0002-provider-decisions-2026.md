@@ -91,7 +91,7 @@ Current provider gate:
 | Live/replay | Livepeer JWT | candidate; `CODE_COMPLETE_PROVIDER_BLOCKED` in Slice 07 | OBS ingest, one-response owner secret reveal, exact JWT subject/expiry, moderation source multistream, signed webhook timestamp/replay protection, suspend/terminate, separately quarantined replay, and no viewer secret exposure are code-complete. Staging must prove real ingest/playback, webhook delivery, moderation-target behavior, measured suspension/recovery, replay handoff/release, provider account acceptance, and rollback before `staging-approved`. |
 | Payment evidence | Helius | candidate | Devnet/staging webhook, scoped watched addresses/references, signature/replay validation, confirmed payment fixture. |
 | Onramp/funding | Embedded-wallet funding UI | candidate | User-controlled wallet funding, provider KYC handled by provider, no entitlement on funding completion. |
-| Subscriptions/allowances | Solana Subscription Delegation Program | candidate | Devnet/staging authority setup, revoke, collection, wallet UX, token support, unsafe-extension rejection, event/reconciliation fixtures, direct recipient settlement, cancellation, no custody, no merchant checkout. |
+| Subscriptions/allowances | Canonical Solana Subscription Delegation Program recurring delegation, `@solana/subscriptions` `0.5.0` + `@solana/kit` `7.1.0` exact-pinned | candidate, `CODE_COMPLETE_PROVIDER_BLOCKED` | Code owns server-derived one-click setup, finalized on-chain account/transaction verification, exact direct creator/platform `transferRecurring` collection, reconciliation, first-payment activation, cancellation, creator offers, ops, and fail-closed provider config. Devnet/staging must still prove real embedded/external wallet setup, first collection, renewal, revoke, insufficient funds/grace/recovery, responsive UX, collector rotation, and rollback through `pnpm proof:subscriptions` before staging approval. |
 | Commerce interoperability | `@solana-commerce/solana-pay` `0.1.1` | candidate; `CODE_COMPLETE_PROVIDER_BLOCKED` in Slice 06 | Exact pin, narrow codec, known-defect compatibility tests, unsafe-link rejection, API build/import proof, and exact multi-recipient backend verifier are code-complete. Staging must prove real devnet external/embedded-wallet deep link and QR behavior, mobile return behavior, package/account acceptance, security review, and rollback before `staging-approved`. |
 
 No provider can be treated as launch-approved until its staging smoke, security review, account/terms review, and fallback/rollback notes are documented.
@@ -233,10 +233,12 @@ Use one recurring authorization/collection architecture for:
 
 Recommended path:
 
-1. Build delegated subscription authorization, recurring collection state, cancellation, revoke tracking, and worker scheduling as the subscription foundation.
-2. Evaluate Solana Subscriptions/Allowances through the official Subscription Delegation Program in staging.
-3. Keep manual Solana Pay renewal as recovery fallback only; it must not become the normal subscription product path.
-4. Do not use merchant checkout, card billing, custodial subscription balances, or provider-operated product subscriptions.
+1. Use the official recurring-delegation primitive, not the on-chain merchant-plan primitive, so WeVid can preserve its backend-owned product/access policy and exact direct creator/platform split without a custom contract or escrow.
+2. Exact-pin `@solana/subscriptions` `0.5.0` and `@solana/kit` `7.1.0`; the canonical program ID is `De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44`. The audit baseline and post-audit release diff were reviewed on 2026-08-16; staging evidence remains mandatory.
+3. A verified delegation is authorization only. The worker submits the first exact-split collection immediately, and only its finalized confirmation activates access.
+4. Evaluate the completed adapter through the official program on devnet/staging with the repository proof command before changing provider state.
+5. Keep manual Solana Pay renewal as recovery fallback only; it must not become the normal subscription product path.
+6. Do not use merchant checkout, card billing, custodial subscription balances, or provider-operated product subscriptions.
 
 Platform plan tiers:
 

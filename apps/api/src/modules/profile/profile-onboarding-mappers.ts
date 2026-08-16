@@ -99,7 +99,8 @@ export function toCreatorOnboarding(row: CreatorOnboardingRow): CreatorOnboardin
         support: row.support_enabled,
         contentUnlocks: row.content_unlocks_enabled,
         eventAccessAndLive: row.live_passes_enabled,
-        paidMessages: row.paid_messages_enabled
+        paidMessages: row.paid_messages_enabled,
+        memberships: row.subscriptions_enabled
       }
     },
     steps

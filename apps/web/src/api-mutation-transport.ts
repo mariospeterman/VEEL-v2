@@ -30,7 +30,7 @@ export async function authenticatedGet<T>(path: string): Promise<T> {
 
 export async function authenticatedMutation<T>(
   path: string,
-  method: "DELETE" | "PATCH" | "POST",
+  method: "DELETE" | "PATCH" | "POST" | "PUT",
   body: unknown,
   idempotencyKey?: string
 ): Promise<T> {
@@ -45,7 +45,7 @@ export async function authenticatedMutation<T>(
 
 export async function authenticatedEmptyMutation(
   path: string,
-  method: "DELETE" | "PATCH" | "POST",
+  method: "DELETE" | "PATCH" | "POST" | "PUT",
   body: unknown,
   idempotencyKey?: string
 ): Promise<void> {
@@ -109,7 +109,7 @@ export async function publicCapabilityMutation<T>(url: string, body: unknown): P
 
 async function sendAuthenticatedMutation(
   path: string,
-  method: "DELETE" | "PATCH" | "POST",
+  method: "DELETE" | "PATCH" | "POST" | "PUT",
   body: unknown,
   idempotencyKey?: string
 ): Promise<Response> {

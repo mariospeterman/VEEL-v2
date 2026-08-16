@@ -1,188 +1,100 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
+import { Transaction } from "@solana/web3.js";
+import { useState } from "react";
 import type { SubscriptionPlan } from "@/api-client";
 import {
   ApiMutationError,
   createSubscriptionIntent,
+  getSubscriptionAuthorizationTransaction,
   submitSubscriptionAuthorization,
-  type Subscription,
-  type SubscriptionAuthorizationIntent
+  type Subscription
 } from "@/api-mutations";
 
-interface SubscriptionAuthorizationPanelProps {
-  plan: SubscriptionPlan;
-}
-
-export function SubscriptionAuthorizationPanel({ plan }: SubscriptionAuthorizationPanelProps) {
-  const [intent, setIntent] = useState<SubscriptionAuthorizationIntent | null>(null);
+export function SubscriptionAuthorizationPanel({ plan }: { plan: SubscriptionPlan }) {
+  const { connection } = useConnection();
+  const { publicKey, sendTransaction } = useWallet();
+  const { setVisible } = useWalletModal();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [signature, setSignature] = useState("");
-  const [authorityAddress, setAuthorityAddress] = useState("");
-  const [delegationAddress, setDelegationAddress] = useState("");
-  const [subscriberTokenAccount, setSubscriberTokenAccount] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState<"intent" | "submission" | null>(null);
-  const disabled =
-    plan.providerState !== "launch_approved" ||
-    !plan.tokenMint ||
-    plan.tokenMint === "SOL" ||
-    plan.currency === "SOL";
+  const [pending, setPending] = useState(false);
+  const available =
+    plan.providerState === "launch_approved" &&
+    Boolean(plan.tokenMint && plan.tokenMint !== "SOL" && plan.currency !== "SOL");
 
-  async function onCreateIntent() {
-    setPending("intent");
+  async function authorize() {
+    if (!publicKey) {
+      setVisible(true);
+      return;
+    }
+    setPending(true);
     setError(null);
-
     try {
-      const nextIntent = await createSubscriptionIntent({
+      const intent = await createSubscriptionIntent({
         planId: plan.id,
         ...(plan.creator?.id ? { creatorUserId: plan.creator.id } : {})
       });
-      setIntent(nextIntent);
-      setSubscription(nextIntent.subscription);
+      if (
+        intent.subscription.subscriberWallet &&
+        intent.subscription.subscriberWallet !== publicKey.toBase58()
+      ) {
+        throw new ApiMutationError("Use the wallet linked as your primary WeVid wallet.", 409);
+      }
+      const unsigned = await getSubscriptionAuthorizationTransaction(intent.id);
+      const transaction = Transaction.from(decodeBase64(unsigned.transaction));
+      const signature = await sendTransaction(transaction, connection);
+      setSubscription(await submitSubscriptionAuthorization(intent.id, { signature }));
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
-      setPending(null);
+      setPending(false);
     }
   }
 
-  async function onSubmitAuthorization(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!intent) return;
-
-    setPending("submission");
-    setError(null);
-
-    try {
-      const nextSubscription = await submitSubscriptionAuthorization(intent.id, {
-        authorityAddress,
-        delegationAddress,
-        signature,
-        subscriberTokenAccount
-      });
-      setSubscription(nextSubscription);
-    } catch (caught) {
-      setError(errorMessage(caught));
-    } finally {
-      setPending(null);
-    }
-  }
+  const label = !publicKey
+    ? "Connect wallet"
+    : plan.scope === "creator" && plan.creator
+      ? `Join @${plan.creator.handle}`
+      : "Choose plan";
 
   return (
     <div className="mt-4 grid gap-3 border-t border-(--line) pt-4">
       <button
         className="rounded bg-(--foreground) px-3 py-2 text-sm font-semibold text-(--background) disabled:cursor-not-allowed disabled:opacity-50"
-        disabled={disabled || pending !== null}
-        onClick={onCreateIntent}
+        disabled={!available || pending}
+        onClick={() => void authorize()}
         type="button"
       >
-        {pending === "intent" ? "Creating authorization" : "Start auto-renew setup"}
+        {pending ? "Waiting for wallet" : label}
       </button>
-
       <p className="text-sm leading-6 text-(--muted)">
-        This creates a backend-owned subscription setup intent only for launch-approved token plans.
-        Access changes only after backend verification and future collection evidence.
+        Approve once in your wallet. WeVid activates access only after the first verified payment;
+        future payments stay limited to this price and billing period.
       </p>
-
-      {disabled ? (
+      {!available ? (
         <p className="text-sm font-medium text-(--muted)">
-          Subscription setup is unavailable until the official token provider, mint, program, and
-          on-chain verification are configured.
+          This plan is not available yet.
         </p>
       ) : null}
-
-      {intent ? (
-        <div className="grid gap-3 rounded border border-(--line) bg-(--background) p-3 text-sm">
-          <Fact label="Authorization intent" value={intent.id} />
-          <Fact label="Setup reference" value={intent.setupReference} />
-          <Fact label="Provider readiness" value={intent.providerReadiness.delegatedSubscriptions} />
-          <Fact label="Expires" value={intent.expiresAt ?? "pending provider setup"} />
-          {intent.transactionRequestUrl ? (
-            <a
-              className="rounded border border-(--line) px-3 py-2 text-center font-semibold"
-              href={intent.transactionRequestUrl}
-              rel="noreferrer"
-              target="_blank"
-            >
-              Open wallet setup request
-            </a>
-          ) : (
-            <p className="text-(--muted)">
-              Wallet setup request is not available until the delegated subscription provider is
-              configured and staging-approved.
-            </p>
-          )}
-        </div>
-      ) : null}
-
-      {intent ? (
-        <form className="grid gap-2" onSubmit={onSubmitAuthorization}>
-          <TextInput label="Setup signature" onChange={setSignature} value={signature} />
-          <TextInput label="Authority address" onChange={setAuthorityAddress} value={authorityAddress} />
-          <TextInput label="Delegation address" onChange={setDelegationAddress} value={delegationAddress} />
-          <TextInput
-            label="Subscriber token account"
-            onChange={setSubscriberTokenAccount}
-            value={subscriberTokenAccount}
-          />
-          <button
-            className="rounded border border-(--line) px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={pending !== null}
-            type="submit"
-          >
-            {pending === "submission" ? "Submitting evidence" : "Submit authorization evidence"}
-          </button>
-        </form>
-      ) : null}
-
       {subscription ? (
-        <div className="rounded border border-(--line) bg-(--background) p-3 text-sm">
-          <Fact label="Subscription state" value={subscription.state} />
-          <Fact label="Renewal mode" value={subscription.renewalMode} />
-        </div>
+        <p aria-live="polite" className="text-sm font-medium">
+          {subscription.state === "renewal_pending"
+            ? "Authorization confirmed. Verifying the first payment now."
+            : `Membership state: ${subscription.state.replaceAll("_", " ")}`}
+        </p>
       ) : null}
-
       {error ? <p className="text-sm font-medium text-red-400">{error}</p> : null}
     </div>
   );
 }
 
-function TextInput({
-  label,
-  onChange,
-  value
-}: {
-  label: string;
-  onChange: (value: string) => void;
-  value: string;
-}) {
-  return (
-    <label className="grid gap-1 text-sm">
-      <span className="text-(--muted)">{label}</span>
-      <input
-        className="rounded border border-(--line) bg-(--background) px-3 py-2 text-(--foreground)"
-        onChange={(event) => onChange(event.currentTarget.value)}
-        value={value}
-      />
-    </label>
-  );
-}
-
-function Fact({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-xs uppercase text-(--muted)">{label}</p>
-      <p className="mt-1 break-words font-medium">{value}</p>
-    </div>
-  );
+function decodeBase64(value: string) {
+  const binary = window.atob(value);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
 function errorMessage(caught: unknown) {
-  if (caught instanceof ApiMutationError) {
-    return caught.message;
-  }
-
-  return "Subscription action failed.";
+  return caught instanceof ApiMutationError ? caught.message : "Wallet authorization failed.";
 }

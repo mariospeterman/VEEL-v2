@@ -66,6 +66,7 @@ export const serverEnvSchema = z.object({
   SUBSCRIPTIONS_SUPPORTED_MINTS: optionalStringSchema,
   SUBSCRIPTIONS_DEFAULT_MINT: optionalStringSchema,
   SUBSCRIPTIONS_COLLECTOR_WALLET: optionalStringSchema,
+  SUBSCRIPTIONS_COLLECTOR_PRIVATE_KEY: optionalStringSchema,
   SUBSCRIPTIONS_MERCHANT_WALLET: optionalStringSchema,
   SUBSCRIPTIONS_REQUIRE_ONCHAIN_VERIFICATION: z.coerce.boolean().default(true),
   HELIUS_API_KEY: optionalStringSchema,
