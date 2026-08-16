@@ -238,19 +238,34 @@ function CreatorSetup({ onboarding }: { onboarding: CreatorOnboarding }) {
       </a>
 
       <div className="mt-4 grid gap-2">
-        {onboarding.steps.map((step) => (
-          <a
-            className="flex min-h-12 items-center justify-between gap-3 rounded border border-(--line) bg-(--background) px-3 py-2 text-sm"
-            href={step.actionHref ?? "#"}
-            key={step.key}
-          >
-            <span>
-              <span className="block font-medium">{step.label}</span>
-              <span className="text-xs text-(--muted)">{step.required ? "required" : "optional"}</span>
-            </span>
-            <StatusPill>{step.state}</StatusPill>
-          </a>
-        ))}
+        {onboarding.steps.map((step) => {
+          const content = (
+            <>
+              <span>
+                <span className="block font-medium">{step.label}</span>
+                <span className="text-xs text-(--muted)">{step.required ? "required" : "optional"}</span>
+              </span>
+              <StatusPill>{step.state}</StatusPill>
+            </>
+          );
+
+          return step.actionHref ? (
+            <a
+              className="flex min-h-12 items-center justify-between gap-3 rounded border border-(--line) bg-(--background) px-3 py-2 text-sm"
+              href={step.actionHref}
+              key={step.key}
+            >
+              {content}
+            </a>
+          ) : (
+            <div
+              className="flex min-h-12 items-center justify-between gap-3 rounded border border-(--line) bg-(--background) px-3 py-2 text-sm"
+              key={step.key}
+            >
+              {content}
+            </div>
+          );
+        })}
       </div>
     </Card>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { Expand, ExternalLink, KeyRound, Languages, LogIn, MoreVertical, X } from "lucide-react";
+import { Expand, ExternalLink, KeyRound, LogIn, MoreVertical, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { WebAuthState } from "@/supabase/auth-state";
@@ -260,9 +260,6 @@ export function LandingExperience() {
               >
                 <LogIn aria-hidden="true" size={18} />
               </button>
-              <button aria-label="Language" className="landing-icon-button" type="button">
-                <Languages aria-hidden="true" size={18} />
-              </button>
             </div>
             <button
               aria-expanded={mobileMenuOpen}
@@ -296,9 +293,6 @@ export function LandingExperience() {
                 type="button"
               >
                 <LogIn aria-hidden="true" size={15} />
-              </button>
-              <button aria-label="Language" type="button">
-                <Languages aria-hidden="true" size={15} />
               </button>
             </div>
             <div className="landing-mobile-nav-group" aria-label="Path navigation">

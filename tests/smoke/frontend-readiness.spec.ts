@@ -31,6 +31,7 @@ test("entry presents a direct wallet action without provider implementation copy
   await expect(connect).toBeVisible();
   await expect(connect).toBeEnabled({ timeout: 30_000 });
   await expect(page.getByText(/powered by|google, email|passkey|solana wallet adapter/i)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Language" })).toHaveCount(0);
 
   await connect.click();
   await expect(page.getByRole("dialog", { name: /wallet.*solana|need a wallet/i })).toBeVisible();

@@ -6,10 +6,11 @@
   "scripts": {
     "dev": "node --env-file-if-exists=.env scripts/run-development.mjs",
     "bootstrap": "corepack enable && corepack prepare pnpm@10.0.0 --activate && pnpm install --frozen-lockfile",
-    "check": "pnpm docs:check && pnpm deps:check && pnpm db:migrations:check && pnpm deploy:check && pnpm lint && pnpm typecheck && pnpm test",
+    "check": "pnpm docs:check && pnpm deps:check && pnpm frontend:affordances && pnpm db:migrations:check && pnpm deploy:check && pnpm lint && pnpm typecheck && pnpm test",
     "doctor": "bash scripts/toolchain-doctor.sh",
     "docs:check": "node scripts/check-docs.mjs",
     "deps:check": "node scripts/check-dependency-policy.mjs",
+    "frontend:affordances": "node scripts/check-frontend-affordances.mjs",
     "scaffold:check": "pnpm docs:check",
     "build": "pnpm -r --if-present build",
     "deploy:check": "node scripts/check-deploy-readiness.mjs",

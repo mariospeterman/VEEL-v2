@@ -25,6 +25,8 @@ export type {
   FollowState,
   HideFeedCreatorRequest,
   RecordFeedImpressionRequest,
+  MutualsInterestRequest,
+  MutualsInterestResult,
   ModerationIntake,
   ShareResult,
   CreateAccessPassIntentRequest,
@@ -117,6 +119,8 @@ import type {
   FollowState,
   HideFeedCreatorRequest,
   RecordFeedImpressionRequest,
+  MutualsInterestRequest,
+  MutualsInterestResult,
   ModerationIntake,
   ShareResult,
   CreateAccessPassIntentRequest,
@@ -733,6 +737,18 @@ export async function createRefundDisputeRequest(
   body: CreateRefundDisputeRequest
 ): Promise<RefundDisputeRequest> {
   return authenticatedMutation<RefundDisputeRequest>("/v1/refunds/requests", "POST", body);
+}
+
+export async function createMutualsInterest(
+  body: MutualsInterestRequest,
+  idempotencyKey?: string
+): Promise<MutualsInterestResult> {
+  return authenticatedMutation<MutualsInterestResult>(
+    "/v1/mutuals/interests",
+    "POST",
+    body,
+    idempotencyKey
+  );
 }
 
 export async function approveMcpConsentRequest(requestId: string): Promise<McpOAuthRedirect> {

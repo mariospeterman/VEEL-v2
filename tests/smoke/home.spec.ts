@@ -12,6 +12,8 @@ const unavailableConversationId = "00000000-0000-4000-8000-000000000083";
 const organizationId = "00000000-0000-4000-8000-000000000140";
 const managedRelationshipId = "00000000-0000-4000-8000-000000000143";
 let apiServer: Server;
+let mutualsInterestAttempts = 0;
+const mutualsInterestKeys: string[] = [];
 
 test.beforeAll(async () => {
   apiServer = createServer(async (request, response) => {
@@ -383,6 +385,42 @@ test("runs content engagement actions responsively through canonical API routes"
   await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
 });
 
+test("records explicit Mutuals choices through the canonical API", async ({ context, page }) => {
+  mutualsInterestAttempts = 0;
+  mutualsInterestKeys.length = 0;
+  await addE2eCookie(context);
+  await page.goto("/mutuals/feed", { waitUntil: "domcontentloaded", timeout: 45_000 });
+  await waitForClientReady(page);
+
+  await expect(page.getByRole("heading", { name: "Explicit Mutuals feed" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Studio sunrise session" })).toBeVisible();
+
+  const firstMutationResponse = page.waitForResponse((response) =>
+    response.request().method() === "POST" && response.url().endsWith("/v1/mutuals/interests")
+  );
+  await page.getByRole("button", { name: "Interested" }).click();
+  expect((await firstMutationResponse).status()).toBe(503);
+  await expect(page.getByRole("alert")).toBeVisible();
+
+  const mutationRequest = page.waitForRequest((request) =>
+    request.method() === "POST" && request.url().endsWith("/v1/mutuals/interests")
+  );
+  await page.getByRole("button", { name: "Interested" }).click();
+  const request = await mutationRequest;
+
+  expect(request.headers()["idempotency-key"]).toBeTruthy();
+  expect(mutualsInterestKeys).toHaveLength(2);
+  expect(mutualsInterestKeys[1]).toBe(mutualsInterestKeys[0]);
+  expect(request.postDataJSON()).toEqual({
+    action: "yes",
+    contentId: "00000000-0000-4000-8000-000000000040",
+    targetUserId: user().id
+  });
+  await expect(page.getByText("Interest saved. Nothing is shared unless it becomes mutual.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Interested" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Not interested" })).toBeDisabled();
+});
+
 test("keeps compatibility aliases intentional", async ({ request }) => {
   const mediaResponse = await request.get("/app/media/00000000-0000-4000-8000-000000000040", { maxRedirects: 0 });
   expect(mediaResponse.headers().location ?? "").toMatch(/\/content\/00000000-0000-4000-8000-000000000040$/);
@@ -450,6 +488,44 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
       surface: url.searchParams.get("surface") ?? "home",
       rankingVersion: "deterministic_v1",
       generatedAt: "2026-08-15T12:00:00.000Z"
+    });
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/v1/mutuals/feed") {
+    sendJson(response, 200, {
+      items: [{
+        contentId: "00000000-0000-4000-8000-000000000040",
+        creatorUserId: user().id,
+        handle: user().handle,
+        displayName: user().displayName,
+        avatarUrl: user().avatarUrl,
+        title: "Studio sunrise session",
+        mediaKind: "video",
+        posterUrl: null,
+        createdAt: "2026-08-15T12:00:00.000Z"
+      }],
+      nextCursor: null
+    });
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/v1/mutuals/interests") {
+    if (!hasIdempotencyKey(request)) {
+      sendJson(response, 400, { message: "Idempotency-Key header is required" });
+      return;
+    }
+    mutualsInterestAttempts += 1;
+    mutualsInterestKeys.push(String(request.headers["idempotency-key"]));
+    await readJsonBody(request);
+    if (mutualsInterestAttempts === 1) {
+      sendJson(response, 503, { message: "Transient Mutuals projection failure" });
+      return;
+    }
+    sendJson(response, 200, {
+      interestId: "00000000-0000-4000-8000-0000000000f1",
+      mutualCreated: false,
+      mutualId: null
     });
     return;
   }
