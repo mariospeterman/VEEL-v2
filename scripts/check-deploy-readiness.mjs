@@ -73,7 +73,10 @@ function assertProductionProviderSafety() {
       expectedEvidenceReceiptKeys(process.env)
     );
   } catch (error) {
-    throw new Error(`Production readiness is blocked: ${error instanceof Error ? error.message : "invalid_staging_evidence_bundle"}.`);
+    throw new Error(
+      `Production readiness is blocked: ${error instanceof Error ? error.message : "invalid_staging_evidence_bundle"}.`,
+      { cause: error }
+    );
   }
 
   if (process.env.LEGAL_DOCUMENTS_APPROVED !== "true") {
