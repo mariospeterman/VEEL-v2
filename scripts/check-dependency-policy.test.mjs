@@ -40,17 +40,20 @@ describe("dependency policy", () => {
     );
   });
 
-  it("rejects a missing explicit Solana codec peer", () => {
+  it("rejects a missing production Solana codec peer", () => {
     expect(validateDependencyPolicy({
       ...validInput,
-      workerPackage: { dependencies: {} }
-    })).toContain("worker must declare peer support fastestsmallesttextencoderdecoder@1.0.22");
+      workerPackage: {
+        dependencies: {},
+        devDependencies: { fastestsmallesttextencoderdecoder: "1.0.22" }
+      }
+    })).toContain("worker must declare runtime peer fastestsmallesttextencoderdecoder@1.0.22 in dependencies");
   });
 
   it("rejects a missing UI React development peer", () => {
     expect(validateDependencyPolicy({
       ...validInput,
       uiPackage: { devDependencies: {} }
-    })).toContain("ui must declare peer support react@^19.2.0");
+    })).toContain("ui must declare development peer react@^19.2.0 in devDependencies");
   });
 });

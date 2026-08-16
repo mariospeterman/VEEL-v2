@@ -2,7 +2,7 @@
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
-const expectedRuntimePeers = {
+const expectedServiceRuntimePeers = {
   api: {
     fastestsmallesttextencoderdecoder: "1.0.22"
   },
@@ -12,10 +12,11 @@ const expectedRuntimePeers = {
   },
   worker: {
     fastestsmallesttextencoderdecoder: "1.0.22"
-  },
-  ui: {
-    react: "^19.2.0"
   }
+};
+
+const expectedUiDevelopmentPeers = {
+  react: "^19.2.0"
 };
 
 export function validateDependencyPolicy({ npmrc, lockfile, rootPackage, apiPackage, webPackage, workerPackage, uiPackage }) {
@@ -25,14 +26,18 @@ export function validateDependencyPolicy({ npmrc, lockfile, rootPackage, apiPack
     errors.push(".npmrc must disable automatic peer installation");
   }
 
-  const manifests = { api: apiPackage, web: webPackage, worker: workerPackage, ui: uiPackage };
-  for (const [workspace, peers] of Object.entries(expectedRuntimePeers)) {
+  const serviceManifests = { api: apiPackage, web: webPackage, worker: workerPackage };
+  for (const [workspace, peers] of Object.entries(expectedServiceRuntimePeers)) {
     for (const [name, version] of Object.entries(peers)) {
-      const manifest = manifests[workspace];
-      const declaredVersion = manifest?.dependencies?.[name] ?? manifest?.devDependencies?.[name];
-      if (declaredVersion !== version) {
-        errors.push(`${workspace} must declare peer support ${name}@${version}`);
+      if (serviceManifests[workspace]?.dependencies?.[name] !== version) {
+        errors.push(`${workspace} must declare runtime peer ${name}@${version} in dependencies`);
       }
+    }
+  }
+
+  for (const [name, version] of Object.entries(expectedUiDevelopmentPeers)) {
+    if (uiPackage?.devDependencies?.[name] !== version) {
+      errors.push(`ui must declare development peer ${name}@${version} in devDependencies`);
     }
   }
 
