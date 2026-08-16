@@ -40,7 +40,7 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Merged baseline | `main` at `f693314` (Launch 11, staging-truth hardening, dependency graph hardening, and individually reviewed supported upgrades through PR #40) |
 | Active slice | Production dependency alignment — reject unsupported partial Rolldown native-binding upgrades |
 | Branch | `codex/rolldown-binding-alignment` |
-| Pull request | Pending |
+| Pull request | #57 |
 | State | `ACTIVE` |
 | Slice blockers | No code blocker. Official Rolldown packages version-couple the JavaScript runtime and every native binding; standalone Darwin binding upgrades are intentionally rejected. |
 | Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
