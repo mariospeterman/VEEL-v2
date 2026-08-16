@@ -40,7 +40,7 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Merged baseline | `main` at `2cc1712` (Launch 07, PR #48) |
 | Active slice | Launch 08 — Recurring platform subscriptions and creator memberships |
 | Branch | `codex/launch-08-recurring-memberships` |
-| Pull request | Pending draft PR |
+| Pull request | #49 |
 | State | `ACTIVE` |
 | Slice blockers | Code can complete locally; real Solana devnet program/RPC/mint proof, a launch-approved collector signer, funded test wallets, and target-wallet authorization/revocation evidence remain pre-production gates. Recurring sales stay fail-closed until that evidence exists. |
 | Next unfinished slice | Launch 09 — Enterprise managed creators |
