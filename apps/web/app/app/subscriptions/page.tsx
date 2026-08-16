@@ -50,7 +50,7 @@ export default async function SubscriptionsPage() {
           </section>
 
           <section className="grid gap-3">
-            <h2 className="text-base font-semibold tracking-normal">Memberships to discover</h2>
+            <h2 className="text-base font-semibold tracking-normal">Creator memberships</h2>
             {plans.ok ? (
               creatorPlans.length > 0 ? (
                 creatorPlans.map((plan) => <PlanRow plan={plan} key={plan.id} />)
