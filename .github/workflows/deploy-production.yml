@@ -33,7 +33,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_RUN_ID: ${{ inputs.release_run_id }}
-        run: gh run download "$RELEASE_RUN_ID" --pattern 'release-manifest-*' --dir "$RUNNER_TEMP/release-download"
+        run: gh run download "$RELEASE_RUN_ID" --repo "$GITHUB_REPOSITORY" --pattern 'release-manifest-*' --dir "$RUNNER_TEMP/release-download"
       - name: Resolve exact approved source
         shell: bash
         env:

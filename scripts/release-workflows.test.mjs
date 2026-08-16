@@ -10,6 +10,7 @@ describe("immutable release workflows", () => {
       const source = await workflow(name);
 
       expect(source).toContain("ref: ${{ env.RELEASE_SOURCE_SHA }}");
+      expect(source).toContain('gh run download "$RELEASE_RUN_ID" --repo "$GITHUB_REPOSITORY"');
       expect(source).toContain('RELEASE_VERIFY_SOURCE: "true"');
       expect(source).toContain("RELEASE_EXPECTED_SHA: ${{ env.RELEASE_SOURCE_SHA }}");
       expect(source.indexOf("Resolve immutable source") >= 0 || source.indexOf("Resolve exact approved source") >= 0).toBe(true);
