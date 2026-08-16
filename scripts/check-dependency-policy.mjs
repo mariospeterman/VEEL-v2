@@ -61,10 +61,10 @@ export function validateDependencyPolicy({ npmrc, lockfile, rootPackage, apiPack
     errors.push(`pnpm-lock.yaml must contain rolldown@${expectedRolldownRuntimeVersion}`);
   }
 
-  const rolldownDarwinBindingEntries = lockfile.matchAll(
-    /^ {2}'?(@rolldown\/binding-darwin-(?:arm64|x64))@([^':\s]+)'?:/gmu
+  const rolldownBindingEntries = lockfile.matchAll(
+    /^ {2}'?(@rolldown\/binding-[^@':\s]+)@([^':\s]+)'?:/gmu
   );
-  for (const [, binding, version] of rolldownDarwinBindingEntries) {
+  for (const [, binding, version] of rolldownBindingEntries) {
     if (version !== expectedRolldownRuntimeVersion) {
       errors.push(`${binding}@${version} must not diverge from rolldown@${expectedRolldownRuntimeVersion}`);
     }

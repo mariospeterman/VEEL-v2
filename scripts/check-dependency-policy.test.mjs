@@ -7,6 +7,7 @@ const validInput = {
     "lockfileVersion: '9.0'",
     "  '@rolldown/binding-darwin-arm64@1.0.3':",
     "  '@rolldown/binding-darwin-x64@1.0.3':",
+    "  '@rolldown/binding-linux-x64-gnu@1.0.3':",
     "  rolldown@1.0.3:",
     "  uuid@11.1.1:",
     "  uuid@14.0.1:",
@@ -90,6 +91,16 @@ describe("dependency policy", () => {
         "@rolldown/binding-darwin-arm64@1.2.4"
       )
     })).toContain("@rolldown/binding-darwin-arm64@1.2.4 must not diverge from rolldown@1.0.3");
+  });
+
+  it("rejects a mismatched Linux binding resolution in the lockfile", () => {
+    expect(validateDependencyPolicy({
+      ...validInput,
+      lockfile: validInput.lockfile.replace(
+        "@rolldown/binding-linux-x64-gnu@1.0.3",
+        "@rolldown/binding-linux-x64-gnu@1.2.4"
+      )
+    })).toContain("@rolldown/binding-linux-x64-gnu@1.2.4 must not diverge from rolldown@1.0.3");
   });
 
   it("rejects a lockfile without the matching Rolldown runtime", () => {
