@@ -40,7 +40,7 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Merged baseline | `main` at `0627737` (Launch 09, PR #50) |
 | Active slice | Launch 10 — Frontend system, accessibility, cross-browser, and PWA completion |
 | Branch | `codex/launch-10-frontend-system` |
-| Pull request | Pending |
+| Pull request | #51 |
 | State | `ACTIVE` |
 | Slice blockers | The broad frontend must converge on one shared visual/component system, WCAG-oriented keyboard and screen-reader behavior, responsive and cross-browser journeys, resilient loading/error/empty states, and a valid installable PWA without duplicating backend business truth or exposing provider internals. |
 | Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
