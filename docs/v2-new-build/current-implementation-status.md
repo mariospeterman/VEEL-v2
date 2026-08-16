@@ -37,13 +37,13 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `0627737` (Launch 09, PR #50) |
-| Active slice | Launch 10 — Frontend system, accessibility, cross-browser, and PWA completion |
-| Branch | `codex/launch-10-frontend-system` |
-| Pull request | #51 |
-| State | `CODE_COMPLETE_PROVIDER_BLOCKED` |
-| Slice blockers | Linux CI WebKit must pass before merge. Real wallet extensions, the embedded-wallet provider on approved target domains/devices, push delivery, installed iOS PWA, manual screen-reader/zoom, and staging Web Vitals remain pre-production evidence gates; all stay fail-closed or outside production enablement until proven. |
-| Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
+| Merged baseline | `main` at `16ae8b9` (Launch 10, PR #51) |
+| Active slice | Launch 11 — Immutable release operations, observability, recovery, and legal gates |
+| Branch | `codex/launch-11-release-operations` |
+| Pull request | pending |
+| State | `ACTIVE` |
+| Slice blockers | A hosting target/OIDC trust, shared staging credentials, provider dashboard configuration, alert destinations, production DNS, final legal text, and production approval require account-owner or counsel action. The slice must make artifacts, promotion verification, telemetry, staging proof, recovery, and runbooks code-complete without claiming those external approvals. |
+| Next unfinished slice | Pre-production staging convergence and release-candidate proof; post-core physical commerce, expanded Mutuals, adult media/live, and full AI/MCP stay separately gated |
 
 Current human/provider gates do not block this process slice: shared staging credentials,
 provider dashboard/webhook/domain configuration, migration `0091` shared-project proof,
