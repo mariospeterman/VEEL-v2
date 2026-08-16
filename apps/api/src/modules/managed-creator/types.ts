@@ -21,10 +21,39 @@ export interface ManagedCreatorRelationshipResource {
   organizationKybReady: boolean;
   enterpriseEntitlementReady: boolean;
   settlementWalletReady: boolean;
+  viewerRole: "creator" | "organization_member";
+  organizationRole: "owner" | "admin" | "member" | "viewer" | null;
+  availableActions: Array<
+    | "accept_relationship"
+    | "decline_relationship"
+    | "propose_agreement"
+    | "accept_agreement"
+    | "reject_agreement"
+    | "terminate_relationship"
+  >;
+}
+
+export interface ManagedCreatorReportingResource {
+  relationshipId: string;
+  organizationId: string;
+  creatorUserId: string;
+  totals: Array<{
+    currency: "SOL" | "USDC";
+    confirmedPaymentCount: number;
+    creatorSideProceedsMinor: number;
+    creatorNetMinor: number;
+    enterpriseManagementMinor: number;
+  }>;
+  generatedAt: string;
+  financeBoundary: "confirmed_allocations_only_no_balance_no_withdrawal_no_payout_queue";
 }
 
 export interface ManagedCreatorRepository {
   listMine(input: { supabaseUserId: string }): Promise<ManagedCreatorRelationshipResource[]>;
+  getReporting(input: {
+    supabaseUserId: string;
+    relationshipId: string;
+  }): Promise<ManagedCreatorReportingResource | null>;
   invite(input: {
     supabaseUserId: string;
     organizationId: string;
@@ -34,11 +63,14 @@ export interface ManagedCreatorRepository {
     termsHash: string;
     settlementWalletId?: string | null;
     idempotencyKey: string;
+    requestHash: string;
   }): Promise<ManagedCreatorRelationshipResource | null>;
   respond(input: {
     supabaseUserId: string;
     relationshipId: string;
     decision: "accept" | "decline";
+    idempotencyKey: string;
+    requestHash: string;
   }): Promise<ManagedCreatorRelationshipResource | null>;
   proposeAgreement(input: {
     supabaseUserId: string;
@@ -47,17 +79,22 @@ export interface ManagedCreatorRepository {
     enterpriseManagementShareBps: number;
     termsHash: string;
     idempotencyKey: string;
+    requestHash: string;
   }): Promise<ManagedCreatorRelationshipResource | null>;
   respondToAgreement(input: {
     supabaseUserId: string;
     relationshipId: string;
     agreementId: string;
     decision: "accept" | "reject";
+    idempotencyKey: string;
+    requestHash: string;
   }): Promise<ManagedCreatorRelationshipResource | null>;
   terminate(input: {
     supabaseUserId: string;
     relationshipId: string;
     reason: string;
+    idempotencyKey: string;
+    requestHash: string;
   }): Promise<ManagedCreatorRelationshipResource | null>;
   close?(): Promise<void>;
 }

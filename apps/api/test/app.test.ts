@@ -7984,6 +7984,61 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("provisions an Enterprise organization with explicit owner consent pending", async () => {
+    const calls: Array<Parameters<AdminRepository["provisionOrganization"]>[0]> = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: {
+        ...fakeAdminRepository,
+        async provisionOrganization(input) {
+          calls.push(input);
+          return {
+            id: "00000000-0000-4000-8000-000000000149",
+            name: input.body.name,
+            state: "pending_kyb",
+            plan: "enterprise",
+            kybState: "not_started",
+            createdAt: "2026-08-16T10:00:00.000Z"
+          };
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/admin/organizations",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "organization-provision-001"
+      },
+      payload: {
+        name: "  Creator House  ",
+        ownerHandle: "Creator_Owner",
+        reason: "Approved Enterprise onboarding"
+      }
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      name: "Creator House",
+      state: "pending_kyb",
+      kybState: "not_started"
+    });
+    expect(calls[0]).toMatchObject({
+      body: {
+        name: "Creator House",
+        ownerHandle: "creator_owner",
+        reason: "Approved Enterprise onboarding"
+      },
+      idempotencyKey: "organization-provision-001"
+    });
+    expect(calls[0]?.requestHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(response.body).not.toMatch(/email|balance|withdraw|payout|escrow|privateKey|serviceRole/i);
+
+    await app.close();
+  });
+
   it("rejects organization KYB updates without idempotency", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -11785,6 +11840,9 @@ const unimplementedComplianceAdminMethods = {
   },
   async listOrganizations() {
     throw new Error("not implemented");
+  },
+  async provisionOrganization() {
+    throw new Error("not implemented");
   }
 } satisfies Pick<
   AdminRepository,
@@ -11798,6 +11856,7 @@ const unimplementedComplianceAdminMethods = {
   | "listPartnerCampaigns"
   | "listTierWaivers"
   | "listOrganizations"
+  | "provisionOrganization"
 >;
 
 const fakeAdminRepository: AdminRepository = {
@@ -11815,7 +11874,10 @@ const fakeAdminRepository: AdminRepository = {
       unlockCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 },
       providerEventCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 },
       subscriptionCounts: { total: 0, pending: 0, submitted: 0, confirmed: 0, failed: 0 },
-      subscriptionProviderReadiness: "staging_required"
+      subscriptionProviderReadiness: "staging_required",
+      organizationCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 },
+      managedCreatorCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 },
+      enterpriseAllocationCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 }
     };
   },
   async getNotificationHealth() {
@@ -12533,6 +12595,16 @@ const fakeAdminRepository: AdminRepository = {
       nextCursor: null
     };
   },
+  async provisionOrganization(input) {
+    return {
+      id: "00000000-0000-4000-8000-000000000149",
+      name: input.body.name,
+      state: "pending_kyb",
+      plan: "enterprise",
+      kybState: "not_started",
+      createdAt: "2026-08-16T10:00:00.000Z"
+    };
+  },
   async updateOrganizationKyb(input) {
     return {
       id: input.organizationId,
@@ -12874,7 +12946,11 @@ function fakeOrganizationRepository(
         items: [organizationDashboardFixture()],
         nextCursor: null
       };
-    }
+    },
+    async listMembers() { return []; },
+    async inviteMember() { return null; },
+    async respondToMembership() { return null; },
+    async updateMember() { return null; }
   };
 }
 
@@ -12923,6 +12999,9 @@ function verificationRepositoryStub(
   };
 
   return {
+    async authorizeOrganizationVerification() {
+      return true;
+    },
     async createPendingSession() {
       return "11111111-1111-4111-8111-111111111111";
     },

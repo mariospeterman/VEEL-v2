@@ -150,13 +150,33 @@ export async function registerVerificationRoutes(
     }
 
     try {
+      const organizationId = typeof body?.organizationId === "string" ? body.organizationId : null;
+      if (purpose === "org_kyb") {
+        if (!organizationId) {
+          return reply.code(400).send({
+            code: "validation_failed",
+            message: "organizationId is required for business verification"
+          });
+        }
+        const authorized = await options.verificationRepository.authorizeOrganizationVerification({
+          supabaseUserId: verifiedSession.supabaseUserId,
+          organizationId,
+          access: "manage"
+        });
+        if (!authorized) {
+          return reply.code(403).send({
+            code: "forbidden",
+            message: "Organization verification requires an active owner or admin membership"
+          });
+        }
+      }
       const termsAcceptedAt = purpose === "adult_publisher_eligibility" ? new Date() : null;
       const policyVersion = purpose === "adult_publisher_eligibility" ? adultPublisherPolicyVersion : null;
       const providerSession = await options.verificationProviderWaterfall.createSession({
         supabaseUserId: verifiedSession.supabaseUserId,
         purpose,
         providerPreference,
-        organizationId: typeof body?.organizationId === "string" ? body.organizationId : null,
+        organizationId,
         idempotencyKey,
         callbackUrl: verificationCallbackUrl(app.config.WEB_URL, purpose),
         webhookBaseUrl: `${app.config.API_URL}/v1/webhooks/verification`,
@@ -166,7 +186,7 @@ export async function registerVerificationRoutes(
       const sessionId = await options.verificationRepository.createPendingSession({
         supabaseUserId: verifiedSession.supabaseUserId,
         purpose: purpose as "adult_publisher_eligibility" | "creator_kyc" | "org_kyb",
-        organizationId: typeof body?.organizationId === "string" ? body.organizationId : null,
+        organizationId,
         providerSession,
         policyVersion,
         termsAcceptedAt
@@ -216,7 +236,7 @@ export async function registerVerificationRoutes(
       if (error instanceof Error && error.message === "ORGANIZATION_ACCESS_REQUIRED") {
         return reply.code(403).send({
           code: "forbidden",
-          message: "Organization verification requires active membership"
+          message: "Organization verification requires an active owner or admin membership"
         });
       }
 
@@ -248,6 +268,12 @@ export async function registerVerificationRoutes(
 
       return reply.code(200).send(status);
     } catch (error) {
+      if (error instanceof Error && error.message === "ORGANIZATION_ACCESS_REQUIRED") {
+        return reply.code(403).send({
+          code: "forbidden",
+          message: "Organization verification status requires active membership"
+        });
+      }
       if (error instanceof VerificationRepositoryConfigurationError) {
         request.log.warn({ error }, "Verification status is not configured");
         return reply.code(503).send({

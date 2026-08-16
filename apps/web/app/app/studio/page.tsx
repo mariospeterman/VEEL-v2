@@ -1,18 +1,42 @@
 import {
+  getManagedCreatorRelationships,
+  getManagedCreatorReporting,
   getOrganizationDashboards,
+  getOrganizationMembers,
+  getWallets,
   type ApiResult,
   type OrganizationDashboardPage
 } from "@/api-client";
 import { requireAppAccess } from "@/supabase/route-guard";
 import { AppShell } from "../../app-shell";
 import { Card, EmptyState, ErrorState, Fact, PageHeader, StatusPill } from "../../ui";
+import { EnterpriseManagementPanel } from "./enterprise-management-panel";
 
 export const dynamic = "force-dynamic";
 
 export default async function StudioPage() {
   await requireAppAccess("/app/studio");
 
-  const dashboards = await getOrganizationDashboards();
+  const [dashboards, relationships, wallets] = await Promise.all([
+    getOrganizationDashboards(),
+    getManagedCreatorRelationships(),
+    getWallets()
+  ]);
+  const dashboardItems = dashboards.ok ? dashboards.data.items : [];
+  const relationshipItems = relationships.ok ? relationships.data.items : [];
+  const [memberEntries, reportingEntries] = await Promise.all([
+    Promise.all(dashboardItems.map(async (dashboard) => {
+      const organizationId = dashboard.organization.organizationId;
+      const result = dashboard.organization.membershipState === "active"
+        ? await getOrganizationMembers(organizationId)
+        : null;
+      return [organizationId, result?.ok ? result.data.items : []] as const;
+    })),
+    Promise.all(relationshipItems.map(async (relationship) => {
+      const result = await getManagedCreatorReporting(relationship.id);
+      return [relationship.id, result.ok ? result.data : null] as const;
+    }))
+  ]);
 
   return (
     <AppShell>
@@ -24,6 +48,17 @@ export default async function StudioPage() {
         </PageHeader>
 
         <DashboardList dashboards={dashboards} />
+        {relationships.ok ? (
+          <EnterpriseManagementPanel
+            dashboards={dashboardItems}
+            members={Object.fromEntries(memberEntries)}
+            relationships={relationshipItems}
+            reporting={Object.fromEntries(reportingEntries)}
+            wallets={wallets.ok ? wallets.data.items : []}
+          />
+        ) : (
+          <ErrorState result={relationships} title="Managed creators unavailable" context="Enterprise relationships" />
+        )}
       </section>
     </AppShell>
   );

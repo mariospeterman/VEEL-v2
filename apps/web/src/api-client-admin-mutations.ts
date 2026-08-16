@@ -1,4 +1,4 @@
-import { patchJson, postEmpty } from "./api-client-transport";
+import { patchJson, postEmpty, postJson } from "./api-client-transport";
 import type {
   AdminContentItem,
   AdminLiveRoomSuspensionRequest,
@@ -9,6 +9,7 @@ import type {
   AdminFeatureFlagPatchRequest,
   AdminOrganization,
   AdminOrganizationKybActionRequest,
+  AdminOrganizationProvisionRequest,
   AdminOrganizationMember,
   AdminOrganizationMemberActionRequest,
   AdminRefundDispute,
@@ -19,6 +20,13 @@ import type {
   AdminSupportPolicyActionRequest,
   ApiResult
 } from "./api-client-types";
+
+export async function provisionAdminOrganization(
+  body: AdminOrganizationProvisionRequest,
+  idempotencyKey: string
+): Promise<ApiResult<AdminOrganization>> {
+  return postJson<AdminOrganization>("/v1/admin/organizations", body, idempotencyKey);
+}
 
 export async function updateAdminLiveRoomSuspension(
   roomId: string,

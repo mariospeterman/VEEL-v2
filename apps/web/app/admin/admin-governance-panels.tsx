@@ -11,8 +11,12 @@ import type {
 } from "@/api-client";
 import {
   EmptyState,
-  UnavailableState
+  UnavailableState,
+  AdminReasonInput,
+  AdminSubmit,
+  AdminTextInput
 } from "./admin-ui";
+import { provisionOrganizationAction } from "./actions";
 import {
   OrganizationMemberRow,
   OrganizationRow,
@@ -38,12 +42,20 @@ export function OrganizationPanel({
     return <UnavailableState result={organizationMembers} />;
   }
 
-  if (organizations.data.items.length === 0 && organizationMembers.data.items.length === 0) {
-    return <EmptyState label="No organizations or members" />;
-  }
-
   return (
     <div className="grid gap-2">
+      <form action={provisionOrganizationAction} className="grid gap-2 rounded border border-(--line) bg-(--background) p-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
+        <AdminTextInput name="name" placeholder="Organization name" />
+        <AdminTextInput name="ownerHandle" placeholder="Existing WeVid handle" />
+        <AdminReasonInput placeholder="Approved onboarding reason" />
+        <AdminSubmit label="Invite owner" />
+        <p className="text-xs text-(--muted) sm:col-span-4">
+          Creates a pending-KYB organization and sends the existing account an owner invitation. Enterprise access is granted separately.
+        </p>
+      </form>
+      {organizations.data.items.length === 0 && organizationMembers.data.items.length === 0 ? (
+        <EmptyState label="No organizations or members" />
+      ) : null}
       {organizations.data.items.map((organization) => (
         <OrganizationRow key={organization.id} organization={organization} />
       ))}

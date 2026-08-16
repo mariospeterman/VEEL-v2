@@ -2,8 +2,13 @@ import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { ApplicationSessionVerifier } from "../session/types.js";
-import { ManagedCreatorRepositoryConfigurationError } from "./managed-creator-repository.js";
+import {
+  ManagedCreatorIdempotencyConflictError,
+  ManagedCreatorRepositoryConfigurationError,
+  ManagedCreatorStateConflictError
+} from "./managed-creator-repository.js";
 import type { ManagedCreatorPermission, ManagedCreatorRepository } from "./types.js";
+import { mutationRateLimit } from "../../shared/rate-limits.js";
 
 const permissionValues = new Set<ManagedCreatorPermission>([
   "profile_readiness_view", "monetisation_settings_manage", "content_manage", "analytics_view", "revenue_allocation"
@@ -20,7 +25,22 @@ export async function registerManagedCreatorRoutes(app: FastifyInstance, options
     } catch (error) { return handleError(request, reply, error); }
   });
 
-  app.post("/v1/organizations/:organizationId/managed-creators", async (request, reply) => {
+  app.get("/v1/managed-creator-relationships/:relationshipId/reporting", async (request, reply) => {
+    const session = await verifyRequestSession(request, options.authVerifier);
+    if (!session) return reply.code(401).send(unauthorizedResponse("Authentication is required"));
+    const { relationshipId } = request.params as { relationshipId: string };
+    try {
+      const reporting = await options.managedCreatorRepository.getReporting({
+        supabaseUserId: session.supabaseUserId,
+        relationshipId
+      });
+      return reporting
+        ? reply.send(reporting)
+        : reply.code(404).send({ code: "not_found", message: "Enterprise reporting is unavailable" });
+    } catch (error) { return handleError(request, reply, error); }
+  });
+
+  app.post("/v1/organizations/:organizationId/managed-creators", mutationRateLimit("accessMutation", "inviteManagedCreator"), async (request, reply) => {
     const session = await verifyRequestSession(request, options.authVerifier);
     if (!session) return reply.code(401).send(unauthorizedResponse("Authentication is required"));
     const key = request.headers["idempotency-key"];
@@ -32,19 +52,29 @@ export async function registerManagedCreatorRoutes(app: FastifyInstance, options
       return reply.code(400).send({ code: "validation_failed", message: "Creator, permissions, share, and idempotency key are required" });
     }
     const { organizationId } = request.params as { organizationId: string };
-    const normalized = { permissions: [...new Set(permissions as ManagedCreatorPermission[])].sort(), share: Number(body.enterpriseManagementShareBps) };
+    const normalized = {
+      creatorHandle: body.creatorHandle.trim().toLowerCase(),
+      permissions: [...new Set(permissions as ManagedCreatorPermission[])].sort(),
+      enterpriseManagementShareBps: Number(body.enterpriseManagementShareBps),
+      settlementWalletId: typeof body.settlementWalletId === "string" ? body.settlementWalletId : null
+    };
     try {
       const item = await options.managedCreatorRepository.invite({
-        supabaseUserId: session.supabaseUserId, organizationId, creatorHandle: body.creatorHandle.trim(),
-        permissions: normalized.permissions, enterpriseManagementShareBps: normalized.share,
-        settlementWalletId: typeof body.settlementWalletId === "string" ? body.settlementWalletId : null,
-        termsHash: createHash("sha256").update(JSON.stringify(normalized)).digest("hex"), idempotencyKey: key
+        supabaseUserId: session.supabaseUserId, organizationId, creatorHandle: normalized.creatorHandle,
+        permissions: normalized.permissions, enterpriseManagementShareBps: normalized.enterpriseManagementShareBps,
+        settlementWalletId: normalized.settlementWalletId,
+        termsHash: requestHash({
+          permissions: normalized.permissions,
+          enterpriseManagementShareBps: normalized.enterpriseManagementShareBps
+        }),
+        idempotencyKey: key,
+        requestHash: requestHash(normalized)
       });
       return item ? reply.code(201).send(item) : reply.code(403).send({ code: "forbidden", message: "Organization role or creator is not eligible" });
     } catch (error) { return handleError(request, reply, error); }
   });
 
-  app.post("/v1/managed-creator-relationships/:relationshipId/responses", async (request, reply) => {
+  app.post("/v1/managed-creator-relationships/:relationshipId/responses", mutationRateLimit("accessMutation", "respondToManagedCreatorRelationship"), async (request, reply) => {
     const session = await verifyRequestSession(request, options.authVerifier);
     if (!session) return reply.code(401).send(unauthorizedResponse("Authentication is required"));
     const decision = (request.body as { decision?: unknown } | undefined)?.decision;
@@ -54,12 +84,18 @@ export async function registerManagedCreatorRoutes(app: FastifyInstance, options
     }
     const { relationshipId } = request.params as { relationshipId: string };
     try {
-      const item = await options.managedCreatorRepository.respond({ supabaseUserId: session.supabaseUserId, relationshipId, decision });
+      const item = await options.managedCreatorRepository.respond({
+        supabaseUserId: session.supabaseUserId,
+        relationshipId,
+        decision,
+        idempotencyKey: key,
+        requestHash: requestHash({ decision })
+      });
       return item ? reply.send(item) : reply.code(409).send({ code: "conflict", message: "Relationship is no longer actionable" });
     } catch (error) { return handleError(request, reply, error); }
   });
 
-  app.post("/v1/managed-creator-relationships/:relationshipId/agreements", async (request, reply) => {
+  app.post("/v1/managed-creator-relationships/:relationshipId/agreements", mutationRateLimit("accessMutation", "proposeManagedCreatorAgreement"), async (request, reply) => {
     const session = await verifyRequestSession(request, options.authVerifier);
     if (!session) return reply.code(401).send(unauthorizedResponse("Authentication is required"));
     const key = request.headers["idempotency-key"];
@@ -73,8 +109,9 @@ export async function registerManagedCreatorRoutes(app: FastifyInstance, options
         supabaseUserId: session.supabaseUserId,
         relationshipId,
         ...terms,
-        termsHash: createHash("sha256").update(JSON.stringify(terms)).digest("hex"),
-        idempotencyKey: key
+        termsHash: requestHash(terms),
+        idempotencyKey: key,
+        requestHash: requestHash(terms)
       });
       return item
         ? reply.code(201).send(item)
@@ -82,7 +119,7 @@ export async function registerManagedCreatorRoutes(app: FastifyInstance, options
     } catch (error) { return handleError(request, reply, error); }
   });
 
-  app.post("/v1/managed-creator-relationships/:relationshipId/agreements/:agreementId/responses", async (request, reply) => {
+  app.post("/v1/managed-creator-relationships/:relationshipId/agreements/:agreementId/responses", mutationRateLimit("accessMutation", "respondToManagedCreatorAgreement"), async (request, reply) => {
     const session = await verifyRequestSession(request, options.authVerifier);
     if (!session) return reply.code(401).send(unauthorizedResponse("Authentication is required"));
     const decision = (request.body as { decision?: unknown } | undefined)?.decision;
@@ -92,7 +129,12 @@ export async function registerManagedCreatorRoutes(app: FastifyInstance, options
     const { relationshipId, agreementId } = request.params as { relationshipId: string; agreementId: string };
     try {
       const item = await options.managedCreatorRepository.respondToAgreement({
-        supabaseUserId: session.supabaseUserId, relationshipId, agreementId, decision
+        supabaseUserId: session.supabaseUserId,
+        relationshipId,
+        agreementId,
+        decision,
+        idempotencyKey: request.headers["idempotency-key"] as string,
+        requestHash: requestHash({ agreementId, decision })
       });
       return item
         ? reply.send(item)
@@ -100,7 +142,7 @@ export async function registerManagedCreatorRoutes(app: FastifyInstance, options
     } catch (error) { return handleError(request, reply, error); }
   });
 
-  app.post("/v1/managed-creator-relationships/:relationshipId/termination", async (request, reply) => {
+  app.post("/v1/managed-creator-relationships/:relationshipId/termination", mutationRateLimit("accessMutation", "terminateManagedCreatorRelationship"), async (request, reply) => {
     const session = await verifyRequestSession(request, options.authVerifier);
     if (!session) return reply.code(401).send(unauthorizedResponse("Authentication is required"));
     const reason = (request.body as { reason?: unknown } | undefined)?.reason;
@@ -110,7 +152,11 @@ export async function registerManagedCreatorRoutes(app: FastifyInstance, options
     const { relationshipId } = request.params as { relationshipId: string };
     try {
       const item = await options.managedCreatorRepository.terminate({
-        supabaseUserId: session.supabaseUserId, relationshipId, reason: reason.trim()
+        supabaseUserId: session.supabaseUserId,
+        relationshipId,
+        reason: reason.trim(),
+        idempotencyKey: request.headers["idempotency-key"] as string,
+        requestHash: requestHash({ reason: reason.trim() })
       });
       return item
         ? reply.send(item)
@@ -139,10 +185,20 @@ function validIdempotencyKey(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= 128;
 }
 
+function requestHash(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
 function handleError(request: { log: { warn(value: unknown, message: string): void } }, reply: { code(status: number): { send(body: unknown): unknown } }, error: unknown) {
   if (error instanceof ManagedCreatorRepositoryConfigurationError) {
     request.log.warn({ error }, "Managed creator repository unavailable");
     return reply.code(503).send({ code: "service_unavailable", message: "Enterprise relationships are temporarily unavailable" });
+  }
+  if (error instanceof ManagedCreatorIdempotencyConflictError) {
+    return reply.code(409).send({ code: "idempotency_conflict", message: "Idempotency key was already used for a different request" });
+  }
+  if (error instanceof ManagedCreatorStateConflictError) {
+    return reply.code(409).send({ code: "conflict", message: error.message });
   }
   throw error;
 }

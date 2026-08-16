@@ -49,6 +49,7 @@ export function createUnconfiguredAdminRepository(): AdminRepository {
     listPartnerCampaigns: fail,
     listTierWaivers: fail,
     listOrganizations: fail,
+    provisionOrganization: fail,
     updateOrganizationKyb: fail,
     listOrganizationMembers: fail,
     updateOrganizationMember: fail,

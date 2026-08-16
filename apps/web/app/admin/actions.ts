@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import {
   updateAdminOrganizationKyb,
+  provisionAdminOrganization,
   updateAdminLiveRoomSuspension,
   updateAdminContentModeration,
   updateAdminOrganizationMember,
@@ -17,12 +18,22 @@ import {
   type AdminModerationActionRequest,
   type AdminFeatureFlagPatchRequest,
   type AdminOrganizationKybActionRequest,
+  type AdminOrganizationProvisionRequest,
   type AdminOrganizationMemberActionRequest,
   type AdminRefundDisputeActionRequest,
   type AdminSupportCaseActionRequest,
   type AdminSupportPolicyActionRequest,
   type ApiResult
 } from "@/api-client";
+
+export async function provisionOrganizationAction(formData: FormData): Promise<void> {
+  const body: AdminOrganizationProvisionRequest = {
+    name: stringField(formData, "name"),
+    ownerHandle: stringField(formData, "ownerHandle"),
+    reason: stringField(formData, "reason")
+  };
+  actionResult(await provisionAdminOrganization(body, randomUUID()));
+}
 
 export async function updateLiveRoomSuspensionAction(formData: FormData): Promise<void> {
   const roomId = stringField(formData, "roomId");

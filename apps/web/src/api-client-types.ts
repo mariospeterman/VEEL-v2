@@ -50,6 +50,9 @@ export type MutualsFeedPage = components["schemas"]["MutualsFeedPage"];
 export type MutualsMatchPage = components["schemas"]["MutualsPage"];
 export type AiCapabilities = components["schemas"]["AiCapabilities"];
 export type OrganizationDashboardPage = components["schemas"]["OrganizationDashboardPage"];
+export type OrganizationMember = components["schemas"]["OrganizationMember"];
+export type ManagedCreatorRelationship = components["schemas"]["ManagedCreatorRelationship"];
+export type ManagedCreatorReporting = components["schemas"]["ManagedCreatorReporting"];
 export type VerificationStatus = {
   capabilities: Record<string, boolean>;
   missingRequirements: string[];
@@ -107,6 +110,7 @@ export type AdminOrganization = components["schemas"]["AdminOrganization"];
 export type AdminOrganizationMember = components["schemas"]["AdminOrganizationMember"];
 export type AdminFeatureFlag = components["schemas"]["AdminFeatureFlag"];
 export type AdminOrganizationKybActionRequest = components["schemas"]["AdminOrganizationKybActionRequest"];
+export type AdminOrganizationProvisionRequest = components["schemas"]["AdminOrganizationProvisionRequest"];
 export type AdminOrganizationMemberActionRequest = components["schemas"]["AdminOrganizationMemberActionRequest"];
 export type AdminSupportPolicyActionRequest = components["schemas"]["AdminSupportPolicyActionRequest"];
 export type PerformerConsentRequest = components["schemas"]["PerformerConsentRequest"];
