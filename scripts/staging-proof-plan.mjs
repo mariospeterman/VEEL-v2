@@ -1,4 +1,9 @@
 import { readFile } from "node:fs/promises";
+import {
+  assertReleaseEvidenceBundle,
+  expectedEvidenceReceiptKeys,
+  parseEvidenceBundle
+} from "./release-evidence.mjs";
 
 export const stagingConfigurationGroups = [
   ["core", ["WEB_URL", "API_URL", "DATABASE_URL", "SUPABASE_URL", "SUPABASE_PROJECT_REF", "SUPABASE_PUBLISHABLE_KEY"]],
@@ -9,6 +14,7 @@ export const stagingConfigurationGroups = [
   ["verification", ["AGE_VERIFICATION_DRIVER", "AGE_VERIFICATION_ALLOW_MOCK_PROVIDER"]],
   ["notifications", ["NOTIFICATION_DEVICE_ENCRYPTION_KEY", "WEB_PUSH_VAPID_PUBLIC_KEY", "WEB_PUSH_VAPID_PRIVATE_KEY", "REALTIME_JWT_PRIVATE_JWK", "REALTIME_JWT_KEY_ID", "REALTIME_JWT_ISSUER", "TRANSACTIONAL_EMAIL_PROVIDER", "RESEND_API_KEY", "TRANSACTIONAL_EMAIL_FROM", "TRANSACTIONAL_EMAIL_SMOKE_TO"]],
   ["operations", ["API_RATE_LIMIT_STORE_DRIVER", "API_RATE_LIMIT_REDIS_URL", "OTEL_REQUIRED", "OTEL_EXPORTER_OTLP_ENDPOINT", "RELEASE_MANIFEST_PATH"]],
+  ["features", ["SUBSCRIPTIONS_ENABLED", "ENTERPRISE_ENABLED"]],
   ["legal", ["LEGAL_DOCUMENTS_APPROVED", "LEGAL_TERMS_VERSION", "LEGAL_PRIVACY_VERSION", "LEGAL_CONTACT_EMAIL"]]
 ];
 
@@ -42,6 +48,7 @@ export const stagingProofPlan = [
   },
   {
     name: "subscriptions",
+    enabledWhen: (env) => env.SUBSCRIPTIONS_ENABLED === "true",
     command: ["pnpm", "proof:subscriptions"],
     required: [
       "DATABASE_URL",
@@ -56,6 +63,7 @@ export const stagingProofPlan = [
   },
   {
     name: "enterprise",
+    enabledWhen: (env) => env.ENTERPRISE_ENABLED === "true",
     command: ["pnpm", "proof:enterprise"],
     required: [
       "API_URL",
@@ -91,6 +99,11 @@ export function inspectStagingConfiguration(env = process.env) {
       .filter(([group]) => group === name)
       .filter(([, key, expected]) => env[key]?.trim() && env[key]?.trim() !== expected)
       .map(([, key, expected]) => `${key}=${expected}`);
+    if (name === "features") {
+      for (const key of names) {
+        if (env[key]?.trim() && !["true", "false"].includes(env[key].trim())) invalid.push(`${key}=true|false`);
+      }
+    }
     return {
       name,
       status: missing.length === 0 && invalid.length === 0 ? "READY" : "CODE_COMPLETE_PROVIDER_BLOCKED",
@@ -103,11 +116,17 @@ export function inspectStagingConfiguration(env = process.env) {
 export async function executeStagingProofPlan({
   env = process.env,
   runCommand,
-  readManifest = readReleaseManifest
+  readManifest = readReleaseManifest,
+  readEvidenceBundle = parseEvidenceBundle
 }) {
   const outcomes = [];
 
   for (const proof of stagingProofPlan) {
+    if (proof.enabledWhen && !proof.enabledWhen(env)) {
+      outcomes.push({ name: proof.name, status: "skipped", reason: "feature_disabled" });
+      continue;
+    }
+
     const missing = proof.required.filter((key) => !env[key]?.trim());
     if (missing.length > 0) {
       outcomes.push({ name: proof.name, status: "blocked", missing });
@@ -116,13 +135,9 @@ export async function executeStagingProofPlan({
 
     if (proof.evidence) {
       try {
-        assertOpaqueEvidenceId(env[proof.required[0]], proof.required[0]);
-        if (proof.name === "release-bound-evidence") {
-          const manifest = await readManifest(env.RELEASE_MANIFEST_PATH);
-          if (manifest.manifestDigest !== env.STAGING_EVIDENCE_MANIFEST_DIGEST) {
-            throw new Error("evidence_manifest_digest_mismatch");
-          }
-        }
+        const manifest = await readManifest(env.RELEASE_MANIFEST_PATH);
+        const bundle = await readEvidenceBundle(env.STAGING_EVIDENCE_BUNDLE_JSON);
+        assertReleaseEvidenceBundle(bundle, manifest.manifestDigest, expectedEvidenceReceiptKeys(env));
         outcomes.push({ name: proof.name, status: "evidence_registered" });
       } catch (error) {
         outcomes.push({ name: proof.name, status: "failed", reason: safeReason(error) });
@@ -143,28 +158,24 @@ export async function executeStagingProofPlan({
 
 function evidenceProofs() {
   return [
-    ["release-bound-evidence", "STAGING_EVIDENCE_MANIFEST_DIGEST"],
-    ["identity-wallet", "STAGING_IDENTITY_WALLET_PROOF_ID"],
-    ["verification", "STAGING_VERIFICATION_PROOF_ID"],
-    ["payments", "STAGING_PAYMENT_PROOF_ID"],
-    ["livepeer", "STAGING_LIVEPEER_PROOF_ID"],
-    ["realtime-push", "STAGING_REALTIME_PUSH_PROOF_ID"],
-    ["moderation", "STAGING_MODERATION_PROOF_ID"],
-    ["database-backup-evidence", "BACKUP_RESTORE_PROOF_ID"],
-    ["storage-backup-evidence", "STAGING_STORAGE_BACKUP_PROOF_ID"],
-    ["observability-alerting", "STAGING_OBSERVABILITY_PROOF_ID"],
-    ["target-device-accessibility", "STAGING_DEVICE_QA_PROOF_ID"]
-  ].map(([name, key]) => ({ name, evidence: true, required: [key] }));
+    { name: "release-bound-evidence" },
+    { name: "identity-wallet" },
+    { name: "verification" },
+    { name: "payments" },
+    { name: "livepeer" },
+    { name: "realtime-push" },
+    { name: "moderation" },
+    { name: "database-backup-evidence" },
+    { name: "storage-backup-evidence" },
+    { name: "observability-alerting" },
+    { name: "target-device-accessibility" },
+    { name: "subscriptions-evidence", enabledWhen: (env) => env.SUBSCRIPTIONS_ENABLED === "true" },
+    { name: "enterprise-evidence", enabledWhen: (env) => env.ENTERPRISE_ENABLED === "true" }
+  ].map((proof) => ({ ...proof, evidence: true, required: ["STAGING_EVIDENCE_BUNDLE_JSON"] }));
 }
 
 async function readReleaseManifest(path) {
   return JSON.parse(await readFile(path, "utf8"));
-}
-
-function assertOpaqueEvidenceId(value, key) {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._:/-]{5,200}$/.test(value)) {
-    throw new Error(`${key.toLowerCase()}_must_be_an_opaque_redacted_reference`);
-  }
 }
 
 function safeReason(error) {

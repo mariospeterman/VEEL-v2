@@ -18,6 +18,8 @@ for (const outcome of outcomes) {
     console.error(`PROOF_FAILED ${outcome.name} reason=${outcome.reason}`);
   } else if (outcome.status === "evidence_registered") {
     console.log(`EVIDENCE_REGISTERED ${outcome.name}`);
+  } else if (outcome.status === "skipped") {
+    console.log(`PROOF_SKIPPED ${outcome.name} reason=${outcome.reason}`);
   } else {
     console.log(`PROOF_PASSED ${outcome.name}`);
   }

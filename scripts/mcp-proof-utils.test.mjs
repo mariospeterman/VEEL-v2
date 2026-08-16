@@ -133,13 +133,16 @@ describe("MCP proof helpers", () => {
   });
 
   it("blocks production when staging evidence receipts are missing or unsafe", () => {
-    const missing = runDeployCheck({ STAGING_PAYMENT_PROOF_ID: "" });
+    const baseBundle = JSON.parse(productionDeployEnv().STAGING_EVIDENCE_BUNDLE_JSON);
+    delete baseBundle.receipts.STAGING_PAYMENT_PROOF_ID;
+    const missing = runDeployCheck({ STAGING_EVIDENCE_BUNDLE_JSON: JSON.stringify(baseBundle) });
     expect(missing.status).not.toBe(0);
-    expect(missing.stderr).toContain("STAGING_PAYMENT_PROOF_ID");
+    expect(missing.stderr).toContain("staging_payment_proof_id");
 
-    const unsafe = runDeployCheck({ STAGING_PAYMENT_PROOF_ID: "https://proof.example/?token=secret" });
+    baseBundle.receipts.STAGING_PAYMENT_PROOF_ID = "https://proof.example/?token=secret";
+    const unsafe = runDeployCheck({ STAGING_EVIDENCE_BUNDLE_JSON: JSON.stringify(baseBundle) });
     expect(unsafe.status).not.toBe(0);
-    expect(unsafe.stderr).toContain("opaque redacted evidence reference");
+    expect(unsafe.stderr).toContain("opaque_redacted_reference");
     expect(unsafe.stderr).not.toContain("token=secret");
   });
 });
@@ -189,17 +192,24 @@ function productionDeployEnv() {
     MEDIA_MODERATION_MODE: "launch_approved",
     RELEASE_MANIFEST_PATH: "release-manifest-test.json",
     EXPECTED_MANIFEST_DIGEST: `sha256:${"a".repeat(64)}`,
-    STAGING_EVIDENCE_MANIFEST_DIGEST: `sha256:${"a".repeat(64)}`,
-    BACKUP_RESTORE_PROOF_ID: "restore-proof-test",
-    STAGING_IDENTITY_WALLET_PROOF_ID: "identity-wallet-proof",
-    STAGING_VERIFICATION_PROOF_ID: "verification-proof",
-    STAGING_PAYMENT_PROOF_ID: "payment-proof",
-    STAGING_LIVEPEER_PROOF_ID: "livepeer-proof",
-    STAGING_REALTIME_PUSH_PROOF_ID: "realtime-push-proof",
-    STAGING_MODERATION_PROOF_ID: "moderation-proof",
-    STAGING_STORAGE_BACKUP_PROOF_ID: "storage-backup-proof",
-    STAGING_OBSERVABILITY_PROOF_ID: "observability-proof",
-    STAGING_DEVICE_QA_PROOF_ID: "device-qa-proof",
+    STAGING_EVIDENCE_BUNDLE_JSON: JSON.stringify({
+      schemaVersion: 1,
+      manifestDigest: `sha256:${"a".repeat(64)}`,
+      receipts: {
+        BACKUP_RESTORE_PROOF_ID: "restore-proof-test",
+        STAGING_IDENTITY_WALLET_PROOF_ID: "identity-wallet-proof",
+        STAGING_VERIFICATION_PROOF_ID: "verification-proof",
+        STAGING_PAYMENT_PROOF_ID: "payment-proof",
+        STAGING_LIVEPEER_PROOF_ID: "livepeer-proof",
+        STAGING_REALTIME_PUSH_PROOF_ID: "realtime-push-proof",
+        STAGING_MODERATION_PROOF_ID: "moderation-proof",
+        STAGING_STORAGE_BACKUP_PROOF_ID: "storage-backup-proof",
+        STAGING_OBSERVABILITY_PROOF_ID: "observability-proof",
+        STAGING_DEVICE_QA_PROOF_ID: "device-qa-proof"
+      }
+    }),
+    SUBSCRIPTIONS_ENABLED: "false",
+    ENTERPRISE_ENABLED: "false",
     OTEL_EXPORTER_OTLP_ENDPOINT: "https://telemetry.example.test",
     LEGAL_DOCUMENTS_APPROVED: "true",
     LEGAL_TERMS_VERSION: "terms-test",

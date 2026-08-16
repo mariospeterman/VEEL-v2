@@ -22,6 +22,9 @@ describe("strict staging convergence gates", () => {
     expect(unsafe.find((result) => result.name === "legal")?.invalid).toContain("LEGAL_DOCUMENTS_APPROVED=true");
     expect(unsafe.find((result) => result.name === "live")?.invalid).toContain("MEDIA_MODERATION_MODE=launch_approved");
     expect(unsafe.find((result) => result.name === "operations")?.invalid).toContain("API_RATE_LIMIT_STORE_DRIVER=redis");
+
+    env.ENTERPRISE_ENABLED = "maybe";
+    expect(inspectStagingConfiguration(env).find((result) => result.name === "features")?.invalid).toContain("ENTERPRISE_ENABLED=true|false");
   });
 
   it("runs independent configured proofs after one provider command fails", async () => {
@@ -35,18 +38,58 @@ describe("strict staging convergence gates", () => {
     const outcomes = await executeStagingProofPlan({
       env,
       runCommand,
-      readManifest: async () => ({ manifestDigest: env.STAGING_EVIDENCE_MANIFEST_DIGEST })
+      readManifest: async () => ({ manifestDigest: `sha256:${"a".repeat(64)}` })
     });
 
     expect(outcomes.find((outcome) => outcome.name === "bunny-sfw")?.status).toBe("failed");
-    expect(outcomes.find((outcome) => outcome.name === "subscriptions")?.status).toBe("passed");
+    expect(outcomes.find((outcome) => outcome.name === "subscriptions")?.status).toBe("skipped");
+    expect(outcomes.find((outcome) => outcome.name === "enterprise")?.status).toBe("skipped");
     expect(outcomes.find((outcome) => outcome.name === "target-device-accessibility")?.status).toBe("evidence_registered");
-    expect(calls.some((call) => call.includes("proof:enterprise"))).toBe(true);
+    expect(calls.some((call) => call.includes("proof:enterprise"))).toBe(false);
     expect(outcomes.find((outcome) => outcome.name === "bunny-sfw")?.reason).not.toContain("secret-value-not-logged");
+  });
+
+  it("requires optional proof commands and release-bound receipts only when their features are enabled", async () => {
+    const env = completeProofEnv();
+    env.SUBSCRIPTIONS_ENABLED = "true";
+    env.ENTERPRISE_ENABLED = "true";
+    env.SUBSCRIPTIONS_SOLANA_RPC_URL = "https://rpc.example.test";
+    env.SUBSCRIPTIONS_SOLANA_PROGRAM_ID = "program";
+    env.SUBSCRIPTIONS_DEFAULT_MINT = "mint";
+    env.SUBSCRIPTIONS_COLLECTOR_WALLET = "wallet";
+    env.SUBSCRIPTIONS_COLLECTOR_PRIVATE_KEY = "private";
+    env.SUBSCRIPTIONS_STAGING_AUTHORIZATION_SIGNATURE = "authorization";
+    env.SUBSCRIPTIONS_STAGING_COLLECTION_SIGNATURE = "collection";
+    env.ENTERPRISE_STAGING_SESSION_COOKIE = "cookie";
+    env.ENTERPRISE_STAGING_ORGANIZATION_ID = "organization";
+    env.ENTERPRISE_STAGING_RELATIONSHIP_ID = "relationship";
+    env.ENTERPRISE_STAGING_KYB_EVIDENCE_ID = "kyb";
+    env.ENTERPRISE_STAGING_CONTRACT_EVIDENCE_ID = "contract";
+    const bundle = JSON.parse(env.STAGING_EVIDENCE_BUNDLE_JSON);
+    bundle.receipts.STAGING_SUBSCRIPTIONS_PROOF_ID = "subscription-proof";
+    bundle.receipts.STAGING_ENTERPRISE_PROOF_ID = "enterprise-proof";
+    env.STAGING_EVIDENCE_BUNDLE_JSON = JSON.stringify(bundle);
+
+    const calls = [];
+    const outcomes = await executeStagingProofPlan({
+      env,
+      runCommand: async (command, args) => calls.push([command, ...args].join(" ")),
+      readManifest: async () => ({ manifestDigest: bundle.manifestDigest })
+    });
+
+    expect(outcomes.find((outcome) => outcome.name === "subscriptions")?.status).toBe("passed");
+    expect(outcomes.find((outcome) => outcome.name === "enterprise")?.status).toBe("passed");
+    expect(outcomes.find((outcome) => outcome.name === "subscriptions-evidence")?.status).toBe("evidence_registered");
+    expect(outcomes.find((outcome) => outcome.name === "enterprise-evidence")?.status).toBe("evidence_registered");
+    expect(calls.some((call) => call.includes("proof:subscriptions"))).toBe(true);
+    expect(calls.some((call) => call.includes("proof:enterprise"))).toBe(true);
   });
 
   it("rejects evidence that is not bound to the exact release manifest", async () => {
     const env = completeProofEnv();
+    const bundle = JSON.parse(env.STAGING_EVIDENCE_BUNDLE_JSON);
+    bundle.manifestDigest = `sha256:${"a".repeat(64)}`;
+    env.STAGING_EVIDENCE_BUNDLE_JSON = JSON.stringify(bundle);
     const outcomes = await executeStagingProofPlan({
       env,
       runCommand: async () => {},
@@ -86,6 +129,8 @@ function completeDoctorEnv() {
     TRANSACTIONAL_EMAIL_PROVIDER: "resend",
     API_RATE_LIMIT_STORE_DRIVER: "redis",
     OTEL_REQUIRED: "true",
+    SUBSCRIPTIONS_ENABLED: "false",
+    ENTERPRISE_ENABLED: "false",
     LEGAL_DOCUMENTS_APPROVED: "true"
   };
 }
@@ -94,7 +139,24 @@ function completeProofEnv() {
   const env = Object.fromEntries(
     stagingProofPlan.flatMap((proof) => proof.required.map((key) => [key, `proof-${key.toLowerCase()}`]))
   );
-  env.STAGING_EVIDENCE_MANIFEST_DIGEST = `sha256:${"a".repeat(64)}`;
+  env.SUBSCRIPTIONS_ENABLED = "false";
+  env.ENTERPRISE_ENABLED = "false";
+  env.STAGING_EVIDENCE_BUNDLE_JSON = JSON.stringify({
+    schemaVersion: 1,
+    manifestDigest: `sha256:${"a".repeat(64)}`,
+    receipts: Object.fromEntries([
+      "BACKUP_RESTORE_PROOF_ID",
+      "STAGING_IDENTITY_WALLET_PROOF_ID",
+      "STAGING_VERIFICATION_PROOF_ID",
+      "STAGING_PAYMENT_PROOF_ID",
+      "STAGING_LIVEPEER_PROOF_ID",
+      "STAGING_REALTIME_PUSH_PROOF_ID",
+      "STAGING_MODERATION_PROOF_ID",
+      "STAGING_STORAGE_BACKUP_PROOF_ID",
+      "STAGING_OBSERVABILITY_PROOF_ID",
+      "STAGING_DEVICE_QA_PROOF_ID"
+    ].map((key) => [key, `proof-${key.toLowerCase()}`]))
+  });
   return env;
 }
 

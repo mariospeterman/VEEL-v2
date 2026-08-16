@@ -24,9 +24,8 @@ describe("immutable release workflows", () => {
     expect(source).not.toContain("docker build");
     expect(source).not.toContain("docker/build-push-action");
     expect(source).toContain("PROMOTE_EXACT_STAGING_ARTIFACT");
-    expect(source).toContain("STAGING_EVIDENCE_MANIFEST_DIGEST");
-    expect(source).toContain("STAGING_IDENTITY_WALLET_PROOF_ID");
-    expect(source).toContain("STAGING_DEVICE_QA_PROOF_ID");
+    expect(source).toContain("STAGING_EVIDENCE_BUNDLE_JSON");
+    expect(source).not.toContain("STAGING_EVIDENCE_MANIFEST_DIGEST");
   });
 
   it("loads the downloaded staging manifest from its absolute runner path", async () => {

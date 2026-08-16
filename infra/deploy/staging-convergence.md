@@ -20,6 +20,7 @@ Required safety values include:
 - `TRANSACTIONAL_EMAIL_PROVIDER=resend` with a verified staging sender and test recipient;
 - `API_RATE_LIMIT_STORE_DRIVER=redis`;
 - `OTEL_REQUIRED=true`;
+- `SUBSCRIPTIONS_ENABLED=true|false` and `ENTERPRISE_ENABLED=true|false`, set explicitly for the release use cases;
 - `LEGAL_DOCUMENTS_APPROVED=true` only after counsel/product approval and version assignment.
 
 ## 2. Pre-deploy validation
@@ -42,7 +43,7 @@ After the exact images are deployed and migrations are applied through the appro
 pnpm staging:prove
 ```
 
-The command independently executes release-manifest, synthetic web/API, Bunny SFW TUS/playability, Solana subscription, Enterprise, transactional-email, database restore, and Storage object restore proofs. It also requires opaque, redacted evidence receipts for journeys that need provider dashboards, target devices, or operator observation:
+The command independently executes release-manifest, synthetic web/API, Bunny SFW TUS/playability, transactional-email, database restore, and Storage object restore proofs. Solana subscription and Enterprise proofs run only when `SUBSCRIPTIONS_ENABLED=true` or `ENTERPRISE_ENABLED=true`; disabled products are reported as `PROOF_SKIPPED` and cannot block a core release. It also requires opaque, redacted evidence receipts for journeys that need provider dashboards, target devices, or operator observation:
 
 - `STAGING_IDENTITY_WALLET_PROOF_ID`: external and embedded wallet login, link, session, logout, recovery, and collision denial;
 - `STAGING_VERIFICATION_PROOF_ID`: age plus purpose-separated creator KYC and organization KYB callbacks/replay denial;
@@ -54,8 +55,22 @@ The command independently executes release-manifest, synthetic web/API, Bunny SF
 - `STAGING_STORAGE_BACKUP_PROOF_ID`: Supabase Storage object backup and restore proof with object-count/hash parity;
 - `STAGING_OBSERVABILITY_PROOF_ID`: OTLP traces/metrics/logs, dashboards, alert delivery, and redaction checks;
 - `STAGING_DEVICE_QA_PROOF_ID`: real wallet/provider, installed iOS PWA, keyboard, screen reader, 200% zoom, responsive, WebKit, and performance evidence.
+- `STAGING_SUBSCRIPTIONS_PROOF_ID`: authorization, collection, renewal/access, and failure proof when subscriptions are enabled;
+- `STAGING_ENTERPRISE_PROOF_ID`: KYB, bilateral agreement, managed-creator authorization, allocation, and reporting proof when Enterprise is enabled.
 
-Each identifier is an opaque run, ticket, or artifact reference with no query string or secret. `STAGING_EVIDENCE_MANIFEST_DIGEST` must equal the exact `manifestDigest` in `RELEASE_MANIFEST_PATH`; a mismatch fails the proof. Exit `2` means evidence is absent. Exit `1` means a configured proof failed. Only exit `0` is a complete staging proof for that release.
+Store these identifiers together in the protected `STAGING_EVIDENCE_BUNDLE_JSON` Environment secret. The release-bound record has this shape:
+
+```json
+{
+  "schemaVersion": 1,
+  "manifestDigest": "sha256:<64 lowercase hex characters>",
+  "receipts": {
+    "STAGING_IDENTITY_WALLET_PROOF_ID": "opaque-redacted-reference"
+  }
+}
+```
+
+The real bundle contains every baseline receipt listed above and the subscription/Enterprise receipt only when that product is enabled. Each identifier is an opaque run, ticket, or artifact reference with no query string or secret. The bundle's `manifestDigest` must equal the exact `manifestDigest` in `RELEASE_MANIFEST_PATH`; staging and production validate every required receipt inside that same record, so receipts from an older release cannot be paired with a new digest. Exit `2` means required configuration or the bundle is absent. Exit `1` means a configured proof or bundle validation failed. Only exit `0` is a complete staging proof for that release.
 
 ## 4. Rollback and cleanup
 

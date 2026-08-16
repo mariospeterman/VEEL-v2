@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 import { access } from "node:fs/promises";
+import {
+  assertReleaseEvidenceBundle,
+  expectedEvidenceReceiptKeys,
+  parseEvidenceBundle
+} from "./release-evidence.mjs";
 
 const requiredSkeletonFiles = [
   "infra/deploy/README.md",
@@ -53,42 +58,23 @@ function assertProductionProviderSafety() {
   assertRequiredEnv([
     "RELEASE_MANIFEST_PATH",
     "EXPECTED_MANIFEST_DIGEST",
-    "STAGING_EVIDENCE_MANIFEST_DIGEST",
-    "BACKUP_RESTORE_PROOF_ID",
-    "STAGING_IDENTITY_WALLET_PROOF_ID",
-    "STAGING_VERIFICATION_PROOF_ID",
-    "STAGING_PAYMENT_PROOF_ID",
-    "STAGING_LIVEPEER_PROOF_ID",
-    "STAGING_REALTIME_PUSH_PROOF_ID",
-    "STAGING_MODERATION_PROOF_ID",
-    "STAGING_STORAGE_BACKUP_PROOF_ID",
-    "STAGING_OBSERVABILITY_PROOF_ID",
-    "STAGING_DEVICE_QA_PROOF_ID",
+    "STAGING_EVIDENCE_BUNDLE_JSON",
+    "SUBSCRIPTIONS_ENABLED",
+    "ENTERPRISE_ENABLED",
     "OTEL_EXPORTER_OTLP_ENDPOINT",
     "LEGAL_TERMS_VERSION",
     "LEGAL_PRIVACY_VERSION",
     "LEGAL_CONTACT_EMAIL"
   ]);
 
-  if (process.env.STAGING_EVIDENCE_MANIFEST_DIGEST !== process.env.EXPECTED_MANIFEST_DIGEST) {
-    throw new Error("Production readiness is blocked: staging evidence must match the exact approved manifest digest.");
-  }
-
-  for (const key of [
-    "BACKUP_RESTORE_PROOF_ID",
-    "STAGING_IDENTITY_WALLET_PROOF_ID",
-    "STAGING_VERIFICATION_PROOF_ID",
-    "STAGING_PAYMENT_PROOF_ID",
-    "STAGING_LIVEPEER_PROOF_ID",
-    "STAGING_REALTIME_PUSH_PROOF_ID",
-    "STAGING_MODERATION_PROOF_ID",
-    "STAGING_STORAGE_BACKUP_PROOF_ID",
-    "STAGING_OBSERVABILITY_PROOF_ID",
-    "STAGING_DEVICE_QA_PROOF_ID"
-  ]) {
-    if (!/^[A-Za-z0-9][A-Za-z0-9._:/-]{5,200}$/.test(process.env[key])) {
-      throw new Error(`Production readiness is blocked: ${key} must be an opaque redacted evidence reference.`);
-    }
+  try {
+    assertReleaseEvidenceBundle(
+      parseEvidenceBundle(process.env.STAGING_EVIDENCE_BUNDLE_JSON),
+      process.env.EXPECTED_MANIFEST_DIGEST,
+      expectedEvidenceReceiptKeys(process.env)
+    );
+  } catch (error) {
+    throw new Error(`Production readiness is blocked: ${error instanceof Error ? error.message : "invalid_staging_evidence_bundle"}.`);
   }
 
   if (process.env.LEGAL_DOCUMENTS_APPROVED !== "true") {
