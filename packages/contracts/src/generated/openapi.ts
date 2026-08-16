@@ -1540,7 +1540,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Record explicit checkout terms and immediate-access acknowledgement */
+        /**
+         * Record explicit checkout terms and immediate-access acknowledgement
+         * @description Exact retries remain accepted for the lifetime of the logical checkout-consent operation and return the current canonical payment-intent state; reusing the key with changed consent evidence returns conflict.
+         */
         post: operations["acceptPaymentIntentTerms"];
         delete?: never;
         options?: never;

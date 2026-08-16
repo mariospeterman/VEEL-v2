@@ -515,7 +515,7 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
             ${input.requestHash},
             200,
             ${transaction.json({ paymentIntentId: intent.id })},
-            now() + interval '24 hours'
+            'infinity'::timestamptz
           )
         `;
 
