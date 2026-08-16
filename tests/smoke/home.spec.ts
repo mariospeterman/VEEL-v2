@@ -404,11 +404,13 @@ test("records explicit Mutuals choices through the canonical API", async ({ cont
   await expect(page.getByRole("button", { name: "Interested", exact: true })).toBeEnabled();
   await expect(page.getByRole("button", { name: "Not interested", exact: true })).toBeDisabled();
 
-  const mutationRequest = page.waitForRequest((request) =>
-    request.method() === "POST" && request.url().endsWith("/v1/mutuals/interests")
+  const secondMutationResponse = page.waitForResponse((response) =>
+    response.request().method() === "POST" && response.url().endsWith("/v1/mutuals/interests")
   );
   await page.getByRole("button", { name: "Interested", exact: true }).click();
-  const request = await mutationRequest;
+  const response = await secondMutationResponse;
+  expect(response.status()).toBe(200);
+  const request = response.request();
 
   expect(request.headers()["idempotency-key"]).toBeTruthy();
   expect(mutualsInterestKeys).toHaveLength(2);
