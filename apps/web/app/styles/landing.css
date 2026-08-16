@@ -590,14 +590,14 @@
 
   .landing-wallet-runtime {
     display: grid;
-    width: min(720px, 100%);
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: min(440px, 100%);
+    grid-template-columns: minmax(0, 1fr);
     align-items: start;
     gap: 8px;
   }
 
   .landing-wallet-runtime[data-embedded="false"] {
-    width: min(720px, 100%);
+    width: min(440px, 100%);
   }
 
   .landing-wallet-connect-row,
@@ -772,6 +772,22 @@
     background: var(--landing-glass-bg);
     color: #fff;
     padding: 0 12px;
+  }
+
+  .landing-wallet-runtime .auth-provider-button {
+    min-height: 48px;
+  }
+
+  .landing-wallet-runtime .auth-provider-button-secondary {
+    border-color: rgba(248, 250, 252, 0.1);
+    background: rgba(3, 4, 6, 0.14);
+    color: rgba(248, 250, 252, 0.78);
+  }
+
+  .landing-wallet-retry {
+    display: grid;
+    justify-items: start;
+    gap: 8px;
   }
 
   .landing-provider-disabled,

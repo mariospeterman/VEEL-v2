@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import type { BrowserContext } from "@playwright/test";
 
@@ -57,18 +58,13 @@ test("renders inline login and onboarding entry surfaces", async ({ page }) => {
   await page.goto("/?mode=login", { waitUntil: "domcontentloaded", timeout: 20_000 });
 
   await expect(page.getByRole("heading", { name: "Log in." })).toBeVisible();
-  await expect(
-    page
-      .getByRole("button", { name: "Continue" })
-      .or(page.getByRole("button", { name: "Connect wallet" }))
-      .first()
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Connect wallet" })).toBeVisible();
   await expect(page.getByText("Privy", { exact: true })).toHaveCount(0);
 
   await page.goto("/?mode=onboarding", { waitUntil: "domcontentloaded", timeout: 20_000 });
 
   await expect(page.getByRole("heading", { name: "Create your account." })).toBeVisible();
-  await expect(page.getByText("Choose how to continue. Your wallet stays under your control.")).toBeVisible();
+  await expect(page.getByText(/powered by|google, email|passkey|solana wallet adapter/i)).toHaveCount(0);
 
   await page.getByRole("button", { name: /Connect wallet/ }).click();
   await expect(page.getByRole("dialog", { name: /wallet.*Solana|need a wallet/i })).toBeVisible();
@@ -122,10 +118,63 @@ test("enforces canonical app route ownership redirects", async ({ request }) => 
 test("renders the canonical protected app home shell through /app", async ({ context, page }) => {
   await addE2eCookie(context);
   await page.goto("/app/home", { waitUntil: "domcontentloaded", timeout: 45_000 });
+  await waitForClientReady(page);
 
   await expect(page.getByRole("link", { name: "WeVid app home" }).first()).toBeVisible();
   await expect(page.getByRole("heading", { name: /Your feed|Enter WeVid/ }).first()).toBeVisible();
   await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
+});
+
+test("exposes one keyboard-addressable main target without blocking accessibility violations", async ({ context, page }) => {
+  await addE2eCookie(context);
+  await page.goto("/app/home", { waitUntil: "domcontentloaded", timeout: 45_000 });
+
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("link", { name: "Skip to main content" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#main-content")).toBeFocused();
+  await expect(page.getByRole("main")).toHaveCount(1);
+
+  const results = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+    .analyze();
+  expect(results.violations.filter((violation) => violation.impact === "serious" || violation.impact === "critical")).toEqual([]);
+});
+
+test("keeps representative authenticated workspaces free of blocking accessibility violations", async ({ context, page }) => {
+  test.setTimeout(120_000);
+  await addE2eCookie(context);
+  const paths = [
+    "/app/home",
+    "/app/bits",
+    "/app/create",
+    "/app/messages",
+    "/app/activity",
+    "/app/wallet",
+    "/app/profile",
+    "/app/settings",
+    "/app/studio",
+    "/app/subscriptions"
+  ];
+  const blocking: Array<{ path: string; id: string; targets: unknown[] }> = [];
+
+  for (const path of paths) {
+    await page.goto(path, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    const results = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+      .analyze();
+
+    for (const violation of results.violations) {
+      if (violation.impact !== "serious" && violation.impact !== "critical") continue;
+      blocking.push({
+        path,
+        id: violation.id,
+        targets: violation.nodes.map((node) => node.target)
+      });
+    }
+  }
+
+  expect(blocking).toEqual([]);
 });
 
 test("renders the provider-first Enterprise workspace without custody or payout controls", async ({ context, page }) => {
@@ -163,6 +212,7 @@ test("retries Realtime token acquisition after a transient API failure", async (
 test("follows from the real Home feed and renders the immersive Bits surface", async ({ context, page }) => {
   await addE2eCookie(context);
   await page.goto("/app/home", { waitUntil: "domcontentloaded", timeout: 45_000 });
+  await waitForClientReady(page);
 
   await expect(page.getByRole("article", { name: "Post by Aria Moon" }).first()).toBeVisible();
   await expect(page.locator(".home-feed")).toHaveAttribute("data-scroll-persistence", "ready");
@@ -186,6 +236,7 @@ test("follows from the real Home feed and renders the immersive Bits surface", a
   await expect(page.getByRole("article", { name: "Post by Aria Moon" }).first()).toBeVisible();
 
   await page.goto("/app/bits", { waitUntil: "domcontentloaded", timeout: 45_000 });
+  await waitForClientReady(page);
   await expect(page.getByRole("heading", { name: "Swipe. Watch. Keep your place." })).toBeVisible();
   await expect(page.getByRole("article", { name: "Post by Aria Moon" }).first()).toBeVisible();
   await page.getByRole("tab", { name: "For you" }).focus();
@@ -201,6 +252,7 @@ test("follows from the real Home feed and renders the immersive Bits surface", a
 test("requires confirmation before logging out every device", async ({ context, page }) => {
   await addE2eCookie(context);
   await page.goto("/app/settings#security", { waitUntil: "domcontentloaded", timeout: 45_000 });
+  await waitForClientReady(page);
 
   await page.getByRole("button", { name: "Log out all devices" }).click();
   await expect(page.getByRole("button", { name: "Confirm log out all devices" })).toBeVisible();
@@ -274,6 +326,7 @@ test("does not clear unread state when conversation messages fail to load", asyn
 test("renders the account notification inbox and marks activity read", async ({ context, page }) => {
   await addE2eCookie(context);
   await page.goto("/app/notifications", { waitUntil: "domcontentloaded", timeout: 45_000 });
+  await waitForClientReady(page);
 
   await expect(page.getByRole("heading", { name: "Notifications" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Message request received" })).toBeVisible();
@@ -352,6 +405,10 @@ test("serves the browser push service worker with internal click handling", asyn
   expect(source).toContain('self.addEventListener("notificationclick"');
   expect(source).toContain("safeInternalPath");
 });
+
+async function waitForClientReady(page: import("@playwright/test").Page) {
+  await page.waitForFunction(() => document.documentElement.dataset.clientReady === "true");
+}
 
 async function handleApiRequest(request: IncomingMessage, response: ServerResponse) {
   const method = request.method ?? "GET";

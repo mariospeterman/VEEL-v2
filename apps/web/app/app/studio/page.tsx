@@ -84,7 +84,7 @@ function DashboardList({ dashboards }: { dashboards: ApiResult<OrganizationDashb
         <Card className="p-4" key={dashboard.organization.id}>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-medium text-(--accent)">{dashboard.organization.plan}</p>
+              <p className="text-sm font-medium text-(--accent-text)">{dashboard.organization.plan}</p>
               <h2 className="mt-1 text-xl font-semibold tracking-normal">{dashboard.organization.name}</h2>
               <p className="mt-1 text-sm text-(--muted)">
                 {dashboard.organization.role} / {dashboard.organization.membershipState}

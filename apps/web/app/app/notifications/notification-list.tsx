@@ -15,10 +15,20 @@ export function NotificationList({ initialItems }: { initialItems: Notification[
   async function markRead(notificationId: string) {
     setPendingId(notificationId);
     setError(null);
+    setItems((current) => current.map((item) => item.id === notificationId ? {
+      ...item,
+      state: "read",
+      readAt: new Date().toISOString()
+    } : item));
     try {
       const updated = await markNotificationRead(notificationId);
       setItems((current) => current.map((item) => item.id === updated.id ? updated : item));
     } catch (reason) {
+      setItems((current) => current.map((item) => item.id === notificationId ? {
+        ...item,
+        state: "unread",
+        readAt: null
+      } : item));
       setError(safeMutationMessage(reason, "Notification"));
     } finally {
       setPendingId(null);
@@ -49,7 +59,7 @@ export function NotificationList({ initialItems }: { initialItems: Notification[
                 </button>
               ) : null}
             </div>
-            {actionUrl ? <Link className="mt-3 inline-flex text-sm font-medium text-(--accent)" href={actionUrl as Route}>Open</Link> : null}
+            {actionUrl ? <Link className="mt-3 inline-flex text-sm font-medium text-(--accent-text)" href={actionUrl as Route}>Open</Link> : null}
           </article>
         );
       })}

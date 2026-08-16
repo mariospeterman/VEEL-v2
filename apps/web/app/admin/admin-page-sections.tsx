@@ -29,7 +29,7 @@ export function AdminPageHeader({ summary }: Pick<AdminPageData, "summary">) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div>
-        <p className="text-sm font-medium text-(--accent)">Admin ops</p>
+        <p className="text-sm font-medium text-(--accent-text)">Admin ops</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-normal">Payments and unlocks</h1>
       </div>
       <SummaryMetrics summary={summary} />

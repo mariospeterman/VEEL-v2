@@ -1,7 +1,20 @@
 import type { Metadata, Viewport } from "next";
-import { WalletRuntimeProviders } from "@/wallet/wallet-runtime-providers";
+import { Manrope, Space_Grotesk } from "next/font/google";
 import "@solana/wallet-adapter-react-ui/styles.css";
+import { PwaRuntime } from "./pwa-runtime";
 import "./globals.css";
+
+const manrope = Manrope({
+  display: "swap",
+  subsets: ["latin"],
+  variable: "--font-manrope"
+});
+
+const spaceGrotesk = Space_Grotesk({
+  display: "swap",
+  subsets: ["latin"],
+  variable: "--font-space-grotesk"
+});
 
 export const metadata: Metadata = {
   title: "WeVid - Frame Your Way",
@@ -38,12 +51,13 @@ const themeScript = `
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html className={`${manrope.variable} ${spaceGrotesk.variable}`} lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body suppressHydrationWarning>
-        <WalletRuntimeProviders>{children}</WalletRuntimeProviders>
+        {children}
+        <PwaRuntime />
       </body>
     </html>
   );

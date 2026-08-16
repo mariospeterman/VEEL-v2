@@ -17,7 +17,7 @@ export default async function MutualsFeedPageRoute() {
       <section className="mx-auto grid w-full max-w-6xl gap-5 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <section className="grid content-start gap-5">
           <div>
-            <p className="text-sm font-medium text-(--accent)">Mutuals</p>
+            <p className="text-sm font-medium text-(--accent-text)">Mutuals</p>
             <h1 className="mt-1 text-2xl font-semibold tracking-normal">Explicit Mutuals feed</h1>
           </div>
 

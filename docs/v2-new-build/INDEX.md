@@ -92,6 +92,7 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 23. [UI kit lock](frontend/ui-kit-lock.md)
 24. [Copy system](frontend/copy-system.md)
 25. [Motion system](frontend/motion-system.md)
+- [Frontend release readiness](frontend-release-readiness.md)
 
 ## Backend, Data, Auth, And Realtime
 

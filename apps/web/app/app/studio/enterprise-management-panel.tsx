@@ -61,7 +61,7 @@ export function EnterpriseManagementPanel({
   return (
     <section aria-labelledby="enterprise-management" className="grid gap-4">
       <div>
-        <p className="text-xs font-medium uppercase tracking-[0.16em] text-(--accent)">Enterprise workspace</p>
+        <p className="text-xs font-medium uppercase tracking-[0.16em] text-(--accent-text)">Enterprise workspace</p>
         <h2 className="mt-1 text-xl font-semibold tracking-normal" id="enterprise-management">Teams and managed creators</h2>
         <p className="mt-1 max-w-3xl text-sm leading-6 text-(--muted)">
           Invitations, permissions and management shares require explicit acceptance. Confirmed allocation
@@ -232,8 +232,8 @@ function MemberUpdateForm({ busy, member, onRun }: {
     const state = String(data.get("state")) as "active" | "suspended" | "removed";
     void onRun(`member-update-${member.id}`, () => updateOrganizationMember(member.organizationId, member.id, { role, state }), "Team role updated.");
   }}>
-    <select className="rounded border border-(--line) bg-(--background) px-2 py-1" defaultValue={member.role} name="role"><option value="admin">Admin</option><option value="member">Member</option><option value="viewer">Viewer</option></select>
-    <select className="rounded border border-(--line) bg-(--background) px-2 py-1" defaultValue={member.state === "invited" ? "active" : member.state} name="state"><option value="active">Active</option><option value="suspended">Suspended</option><option value="removed">Removed</option></select>
+    <select aria-label="Team member role" className="rounded border border-(--line) bg-(--background) px-2 py-1" defaultValue={member.role} name="role"><option value="admin">Admin</option><option value="member">Member</option><option value="viewer">Viewer</option></select>
+    <select aria-label="Team member state" className="rounded border border-(--line) bg-(--background) px-2 py-1" defaultValue={member.state === "invited" ? "active" : member.state} name="state"><option value="active">Active</option><option value="suspended">Suspended</option><option value="removed">Removed</option></select>
     <button className="rounded border border-(--line) px-2 py-1 font-medium disabled:opacity-50" disabled={busy !== null}>Update</button>
   </form>;
 }
@@ -287,7 +287,7 @@ function RelationshipCard({ busy, onRun, relationship, reporting }: {
 }
 
 function AgreementForm({ busy, onRun, relationship }: { busy: string | null; onRun: (key: string, action: () => Promise<unknown>, success: string) => Promise<void>; relationship: ManagedCreatorRelationship }) {
-  return <form className="mt-4 grid gap-2 rounded border border-(--line) p-3" onSubmit={(event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const data = new FormData(event.currentTarget); const permissions = data.getAll("permissions").map(String) as ManagedCreatorRelationship["permissions"]; void onRun(`agreement-propose-${relationship.id}`, () => proposeManagedCreatorAgreement(relationship.id, { permissions, enterpriseManagementShareBps: Math.round(Number(data.get("sharePercent")) * 100) }), "New terms sent for creator acceptance."); }}><p className="text-sm font-semibold">Propose changed terms</p><input className="rounded border border-(--line) bg-(--background) px-3 py-2 text-sm" defaultValue={relationship.enterpriseManagementShareBps / 100} max="99.99" min="0" name="sharePercent" step="0.01" type="number" />{permissionOptions.map(([value, label]) => <label className="flex items-center gap-2 text-sm" key={value}><input defaultChecked={relationship.permissions.includes(value)} name="permissions" type="checkbox" value={value} />{label}</label>)}<button className="rounded border border-(--line) px-3 py-2 text-sm font-medium disabled:opacity-50" disabled={busy !== null}>Send changed terms</button></form>;
+  return <form className="mt-4 grid gap-2 rounded border border-(--line) p-3" onSubmit={(event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const data = new FormData(event.currentTarget); const permissions = data.getAll("permissions").map(String) as ManagedCreatorRelationship["permissions"]; void onRun(`agreement-propose-${relationship.id}`, () => proposeManagedCreatorAgreement(relationship.id, { permissions, enterpriseManagementShareBps: Math.round(Number(data.get("sharePercent")) * 100) }), "New terms sent for creator acceptance."); }}><p className="text-sm font-semibold">Propose changed terms</p><label className="grid gap-1 text-sm"><span>Management share (%)</span><input className="rounded border border-(--line) bg-(--background) px-3 py-2 text-sm" defaultValue={relationship.enterpriseManagementShareBps / 100} max="99.99" min="0" name="sharePercent" step="0.01" type="number" /></label>{permissionOptions.map(([value, label]) => <label className="flex items-center gap-2 text-sm" key={value}><input defaultChecked={relationship.permissions.includes(value)} name="permissions" type="checkbox" value={value} />{label}</label>)}<button className="rounded border border-(--line) px-3 py-2 text-sm font-medium disabled:opacity-50" disabled={busy !== null}>Send changed terms</button></form>;
 }
 
 function TerminationForm({ busy, onRun, relationship }: { busy: string | null; onRun: (key: string, action: () => Promise<unknown>, success: string) => Promise<void>; relationship: ManagedCreatorRelationship }) {

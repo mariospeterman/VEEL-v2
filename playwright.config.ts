@@ -10,10 +10,10 @@ export default defineConfig({
   workers: 1,
   reporter: [["list"]],
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000",
     trace: "on-first-retry"
   },
-  webServer: {
+  webServer: process.env.PLAYWRIGHT_SKIP_WEB_SERVER === "true" ? undefined : {
     command:
       "pnpm --filter @veel/config build && node scripts/run-local-tool.mjs web-build && node scripts/run-local-tool.mjs web-preview",
     env: {
@@ -34,10 +34,32 @@ export default defineConfig({
       }
     },
     {
+      name: "desktop-firefox",
+      use: {
+        ...devices["Desktop Firefox"],
+        viewport: { width: 1440, height: 1000 }
+      }
+    },
+    {
       name: "mobile-chromium",
       use: {
         ...devices["Pixel 7"]
       }
-    }
+    },
+    ...(process.platform === "darwin" ? [] : [
+      {
+        name: "desktop-webkit",
+        use: {
+          ...devices["Desktop Safari"],
+          viewport: { width: 1440, height: 1000 }
+        }
+      },
+      {
+        name: "mobile-webkit",
+        use: {
+          ...devices["iPhone 13"]
+        }
+      }
+    ])
   ]
 });

@@ -13,8 +13,8 @@ import { safeMutationMessage } from "@/api-errors";
 import { createMutationIdempotencyKey } from "@/api-mutation-transport";
 import { formatAssetAmount } from "@/format-asset-amount";
 
-const PaymentWalletBridge = dynamic(
-  () => import("./payment-wallet-bridge").then((module) => module.PaymentWalletBridge),
+const PaymentWalletRuntime = dynamic(
+  () => import("./payment-wallet-runtime").then((module) => module.PaymentWalletRuntime),
   { ssr: false }
 );
 
@@ -208,7 +208,7 @@ export function PaymentHandoffPanel({
 
       {transaction && state === "wallet" ? (
         <div className="grid justify-items-center gap-3 rounded border border-(--line) p-3">
-          <PaymentWalletBridge
+          <PaymentWalletRuntime
             intentId={intent?.id ?? ""}
             onError={walletFailed}
             onSubmitted={directWalletSubmitted}

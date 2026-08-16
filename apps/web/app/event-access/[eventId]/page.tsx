@@ -39,7 +39,7 @@ function EventBody({ event }: { event: Event }) {
   return (
     <section className="grid content-start gap-5">
       <div>
-        <p className="text-sm font-medium text-(--accent)">Event Access</p>
+        <p className="text-sm font-medium text-(--accent-text)">Event Access</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-normal">{event.title}</h1>
         <p className="mt-2 text-sm text-(--muted)">
           {event.description ?? "Backend-owned Event Access pass inventory."}
