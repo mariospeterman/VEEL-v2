@@ -37,12 +37,12 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `06ed185` (Launch 11, staging-truth hardening, dependency graph hardening, reviewed supported upgrades, and Rolldown runtime/binding alignment through PR #57) |
-| Active slice | Launch 11C — durable content draft idempotency for the logical operation lifetime |
-| Branch | `codex/content-draft-idempotency-lifetime` |
-| Pull request | #63 |
+| Merged baseline | `main` at `06a2ea1` (Launch 11, staging-truth hardening, dependency graph hardening, reviewed supported upgrades, Rolldown runtime/binding alignment, and durable content-create idempotency through PR #63) |
+| Active slice | Launch 11D — lossless atomic payment values through settlement and ledger boundaries |
+| Branch | `codex/payment-atomic-safety` |
+| Pull request | Pending |
 | State | `ACTIVE` |
-| Slice blockers | No code blocker. Existing and new content-create receipts must remain replay-safe without a 24-hour expiry window. |
+| Slice blockers | No code blocker. Transaction composition, settlement verification, and the canonical ledger must reject values the number-based public contract cannot represent exactly. |
 | Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
 
 Local repository, browser, and Supabase/Postgres proof is green; staging now fails
@@ -109,7 +109,7 @@ pre-production gates.
 
 | Area | Verified state | Launch blocker |
 | --- | --- | --- |
-| Architecture and data authority | Substantial and implemented through migration `0100`; server authority, RLS, idempotency, and provider adapters are present. | Shared staging migration and identity/session/provider proof still require isolated Supabase staging evidence. |
+| Architecture and data authority | Substantial and implemented through migration `0101`; server authority, RLS, idempotency, and provider adapters are present. | Shared staging migration and identity/session/provider proof still require isolated Supabase staging evidence. |
 | Auth, wallet, age, and profile | Canonical opaque application sessions, explicit recovery exchange, read-only session GET, three-step onboarding, minimal handle profile, provisional privacy, age activation, multi-device session scope, and fail-closed provider boundaries are merged. | Privy and age-provider real staging evidence and distributed Redis environment proof remain absent. |
 | One-time payments and access | Backend-owned SOL and supported one-time USDC intent, settlement, receipt, and entitlement paths exist. | Mainnet/provider evidence, operational reconciliation, and full consumer journey proof remain required. |
 | Media and live | Bunny/Livepeer boundaries and quarantine/release authorities exist. | Automated moderation is not launch-approved; adult live is disabled; provider staging evidence is absent. |
@@ -149,7 +149,8 @@ Public product copy and API metadata use WeVid and Support. Technical package sc
 - Fastify API bootstrap with route registration, dependency construction, shared app-level Postgres client construction, close-hook lifecycle, env validation, raw-body support for signed webhooks, global rate limit, OpenAPI plugin, and Supabase boundary plugin.
 - Shared backend helpers now cover the app-level Postgres client, explicit transaction boundary, common Idempotency-Key parsing/validation, stable idempotency request hashing, route-specific mutation rate-limit presets, and the first admin mutation route-policy guard for migrated route utilities.
 - Content draft creation now keeps its actor/action/request-hash receipt for the lifetime of the logical operation. Migration `0100` upgrades existing `content.create` receipts to PostgreSQL `infinity`; exact retries return the original draft, changed-input key reuse returns `409`, and draft quota is consumed only once.
-- Root Supabase CLI project is initialized with committed `supabase/config.toml`, repo-local Supabase CLI pinned to `2.113.0`, and `supabase/migrations` linked to the canonical `packages/database/migrations` SQL files. Local/CI startup runs through the repository wrapper, which constructs an ephemeral workdir containing forward migrations only; canonical `*.down.sql` rollback files are never presented to the Supabase migration runner. Repository history now includes migrations through `0100`; `0100` was applied against the isolated local Postgres stack and its expired-receipt promotion, rollback, reapply, and cleanup behavior were exercised directly. The shared-project migration history and pending staging applications remain release blockers and must use approved migration procedures. Generic application `DATABASE_URL` is never used by remote migration commands.
+- One-time payment atomic values now stay lossless at every number-based boundary. The public contract and intent schema cap values at `Number.MAX_SAFE_INTEGER`; split calculation uses `bigint`; transaction construction rejects unsafe or inconsistent expected splits; verification fails closed before provider I/O; and migration `0101` independently constrains canonical settlement-ledger entries.
+- Root Supabase CLI project is initialized with committed `supabase/config.toml`, repo-local Supabase CLI pinned to `2.113.0`, and `supabase/migrations` linked to the canonical `packages/database/migrations` SQL files. Local/CI startup runs through the repository wrapper, which constructs an ephemeral workdir containing forward migrations only; canonical `*.down.sql` rollback files are never presented to the Supabase migration runner. Repository history now includes migrations through `0101`; migrations `0100` and `0101` were applied against the isolated local Postgres stack with rollback/reapply proof. `0100` also passed expired-receipt promotion and cleanup proof; `0101` accepted the exact safe maximum and rejected the first unsafe integer. The shared-project migration history and pending staging applications remain release blockers and must use approved migration procedures. Generic application `DATABASE_URL` is never used by remote migration commands.
 - Opaque application-session verification boundary, explicit Supabase recovery verification/exchange, web recovery confirmation route, minimal profile mutation UI, external wallet challenge handoff UI, configured-session redirects, backend app-access redirects for protected app-shell pages, and backend session/profile readiness projections. Ordinary API transports send only the HttpOnly application cookie; browser Supabase credentials are confined to recovery exchange. Service-role and secret keys stay server-side.
 - Age provider waterfall boundary, `/age` provider-session start UI, and normalized webhook/test paths, with unavailable providers failing closed when not configured. Local/test-only mock age and creator verification adapters exist behind explicit mock guards for end-to-end development; production provider paths still require real provider credentials, webhook secrets, callback allowlists, and provider dashboard configuration.
 - External wallet challenge/link/revoke/status flow with backend signature verification and replay/expiry checks; landing onboarding and `/app/wallet` can now coordinate Solana wallet-adapter challenge signing while keeping wallet truth server-side. The landing wallet chooser filters to intentionally supported Solana wallet surfaces and the Privy embedded-wallet button remains disabled unless its runtime env is configured; onramp provider boundary fails closed unless configured.
@@ -214,7 +215,7 @@ The controlling branch evidence is recorded in `production-branch-inventory.md`.
 - [x] Make content draft creation durably idempotent for the lifetime of its logical operation, including existing receipt promotion and real-Postgres replay/conflict proof.
 - [ ] Extend logical-operation-lifetime idempotency audits to every remaining protected mutation, retaining bounded expiry only where the operation itself is intentionally time-bounded.
 - [x] Correct referral split mathematics so referral commission reduces platform net only and never creator share.
-- [ ] Use atomic integer-safe values across intent creation, transaction composition, settlement verification, ledger, and contracts.
+- [x] Use atomic integer-safe values across intent creation, transaction composition, settlement verification, ledger, and contracts.
 - [ ] Add product-specific price floors, backend-owned fee policy, quote freshness, and audited overrides without browser-owned recipients or rates.
 - [ ] Add one-time USDC split settlement through the canonical payment intent system while retaining native SOL support.
 - [x] Add an executable worker scheduler plus tokenized lease expiry/reclamation, bounded jittered backoff, attempt ceilings, dead-letter state, queue-age/admin visibility, and audited idempotent dead-letter recovery. Subscription retries reconcile provider state before any repeat collection call.

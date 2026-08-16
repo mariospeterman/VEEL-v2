@@ -1033,4 +1033,14 @@ describe("database migrations", () => {
     expect(downSql).toContain("expires_at = created_at + interval '24 hours'");
     expect(downSql).toContain("and expires_at = 'infinity'::timestamptz");
   });
+
+  it("keeps canonical payment ledger values inside the JavaScript safe-integer range", () => {
+    const sql = readMigration("0101_payment_ledger_atomic_safety.sql");
+    const downSql = readMigration("0101_payment_ledger_atomic_safety.down.sql");
+
+    expect(sql).toContain("payment_ledger_entries_javascript_safe_amount_check");
+    expect(sql).toContain("amount_minor between 0 and 9007199254740991");
+    expect(sql).toContain("payment ledger contains atomic values outside the JavaScript safe-integer range");
+    expect(downSql).toContain("drop constraint if exists payment_ledger_entries_javascript_safe_amount_check");
+  });
 });

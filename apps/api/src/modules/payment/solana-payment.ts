@@ -17,6 +17,7 @@ import {
 } from "@solana/spl-token";
 import { createHash, randomBytes } from "node:crypto";
 import bs58 from "bs58";
+import { hasSafeSettlementAmounts } from "./payment-amounts.js";
 import type {
   PaymentSettlementInput,
   PaymentSettlementResult,
@@ -48,7 +49,10 @@ export async function buildCreatorSplitTransaction(input: {
   intent: StoredPaymentIntent;
   buyerWallet: string;
 }): Promise<string> {
-  if (input.intent.settlementKind !== "creator_split") {
+  if (
+    input.intent.settlementKind !== "creator_split" ||
+    !hasSafeSettlementAmounts(input.intent)
+  ) {
     throw new SolanaPaymentConfigurationError();
   }
 
@@ -93,6 +97,13 @@ export async function verifySolanaTransfer(
   input: PaymentSettlementInput,
   commitment: Extract<Commitment, "confirmed" | "finalized"> = "finalized"
 ): Promise<PaymentSettlementResult> {
+  if (!hasSafeSettlementAmounts(input)) {
+    return {
+      confirmed: false,
+      failureCode: "invalid_expected_amounts"
+    };
+  }
+
   if (!isValidSignature(input.signature)) {
     return {
       confirmed: false,

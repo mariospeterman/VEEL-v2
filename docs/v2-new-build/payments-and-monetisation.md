@@ -177,7 +177,7 @@ Mode-specific validation:
 
 Do not hardcode SOL-only architecture.
 
-Atomic amounts are constrained to JavaScript's safe-integer range until the public contract migrates to decimal strings. Split calculations use `bigint`; the database rejects values that the current numeric API could round. Human-facing surfaces format SOL and USDC using their configured decimals and never display raw atomic values as whole assets.
+Atomic amounts are constrained to JavaScript's safe-integer range until the public contract migrates to decimal strings. Split calculations use `bigint`; intent and canonical settlement-ledger constraints reject values that the current numeric API could round. Transaction construction rejects unsafe or internally inconsistent expected splits, and settlement verification returns a failed result before any provider query when those invariants do not hold. Human-facing surfaces format SOL and USDC using their configured decimals and never display raw atomic values as whole assets.
 
 The default USDC Support minimum is `500000` atomic units at six decimals, exactly 0.50 USDC. The SOL minimum is an operator-configured lamport threshold because a fixed fiat minimum cannot be represented safely without an approved price-oracle policy; production must set it through `PAYMENT_MIN_SUPPORT_SOL_LAMPORTS` or choose USDC as the default asset.
 
