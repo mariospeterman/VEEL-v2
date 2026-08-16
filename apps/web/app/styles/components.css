@@ -2,12 +2,15 @@
   .offline-page {
     display: grid;
     width: min(560px, calc(100% - 32px));
-    min-height: 100dvh;
-    align-content: center;
+    height: 100dvh;
+    min-height: 0;
+    align-content: safe center;
     justify-items: start;
     gap: 14px;
     margin: 0 auto;
-    padding: 48px 0;
+    padding: clamp(24px, 8vh, 48px) 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
   }
 
   .offline-page img {

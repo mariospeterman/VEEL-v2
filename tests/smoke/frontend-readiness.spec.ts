@@ -36,6 +36,19 @@ test("entry presents a direct wallet action without provider implementation copy
   await expect(page.getByRole("dialog", { name: /wallet.*solana|need a wallet/i })).toBeVisible();
 });
 
+test("offline recovery actions remain reachable on a short viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 240 });
+  await page.goto("/offline", { waitUntil: "domcontentloaded" });
+
+  const offlinePage = page.locator(".offline-page");
+  await expect(offlinePage).toHaveCSS("overflow-y", "auto");
+  expect(await offlinePage.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+
+  const recoveryLink = page.getByRole("link", { name: "Go to WeVid" });
+  await recoveryLink.scrollIntoViewIfNeeded();
+  await expect(recoveryLink).toBeInViewport();
+});
+
 test("manifest, install icons, and service worker meet the public PWA contract", async ({ request }) => {
   const manifestResponse = await request.get("/manifest.webmanifest");
   expect(manifestResponse.ok()).toBe(true);

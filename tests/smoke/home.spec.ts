@@ -5,6 +5,7 @@ import type { BrowserContext } from "@playwright/test";
 
 const rawBackendCopy = /HTTP (401|403|404|429|500|503)|Missing or invalid bearer token|API is unavailable/;
 const e2eToken = "veel-e2e-token";
+const e2eOrigin = new URL(process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000").origin;
 const firstConversationId = "00000000-0000-4000-8000-000000000081";
 const secondConversationId = "00000000-0000-4000-8000-000000000082";
 const unavailableConversationId = "00000000-0000-4000-8000-000000000083";
@@ -37,7 +38,7 @@ async function addE2eCookie(context: BrowserContext) {
     {
       name: "veel_e2e_access_token",
       value: e2eToken,
-      url: "http://127.0.0.1:3000",
+      url: e2eOrigin,
       httpOnly: false,
       sameSite: "Lax"
     }
@@ -517,7 +518,7 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
     sendJson(response, 201, {
       id: "00000000-0000-4000-8000-0000000000c2",
       mode: "copy_link",
-      url: "http://127.0.0.1:3000/share/content/00000000-0000-4000-8000-000000000040"
+      url: `${e2eOrigin}/share/content/00000000-0000-4000-8000-000000000040`
     });
     return;
   }
@@ -716,7 +717,7 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
 }
 
 function setCorsHeaders(response: ServerResponse) {
-  response.setHeader("Access-Control-Allow-Origin", "http://127.0.0.1:3000");
+  response.setHeader("Access-Control-Allow-Origin", e2eOrigin);
   response.setHeader("Access-Control-Allow-Credentials", "true");
   response.setHeader("Access-Control-Allow-Headers", "authorization,content-type,idempotency-key,accept");
   response.setHeader("Access-Control-Allow-Methods", "DELETE,GET,POST,PATCH,OPTIONS");
