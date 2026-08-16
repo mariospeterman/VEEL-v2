@@ -22,6 +22,17 @@ export function createProfileCreatorRepositoryMethods(
           coalesce(cms.live_passes_enabled, true) as live_passes_enabled,
           coalesce(cms.paid_messages_enabled, true) as paid_messages_enabled,
           coalesce(cms.subscriptions_enabled, false) as subscriptions_enabled,
+          membership.id as membership_plan_id,
+          membership.label as membership_label,
+          membership.description as membership_description,
+          membership.benefits as membership_benefits,
+          membership.amount_minor as membership_amount_minor,
+          membership.amount_atomic as membership_amount_atomic,
+          membership.provider_state as membership_provider_state,
+          membership.token_mint as membership_token_mint,
+          membership.token_program as membership_token_program,
+          membership.program_id as membership_program_id,
+          membership.merchant_wallet as membership_merchant_wallet,
           coalesce(social.follower_count, 0) as follower_count,
           coalesce(social.following_count, 0) as following_count,
           (
@@ -54,6 +65,13 @@ export function createProfileCreatorRepositoryMethods(
         from profiles p
         join users u on u.id = p.user_id
         left join creator_monetisation_settings cms on cms.user_id = u.id
+        left join lateral (
+          select sp.*
+          from subscription_plans sp
+          where sp.creator_user_id = u.id and sp.scope = 'creator'
+          order by sp.updated_at desc
+          limit 1
+        ) membership on true
         left join user_social_counts social on social.user_id = u.id
         where lower(p.handle) = lower(${handle})
           and p.visibility = 'public'

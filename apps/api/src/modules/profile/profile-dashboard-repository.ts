@@ -370,6 +370,7 @@ export function createProfileDashboardRepositoryMethods(
               content_unlocks_enabled = ${input.request.products.contentUnlocks},
               live_passes_enabled = ${input.request.products.eventAccessAndLive},
               paid_messages_enabled = ${input.request.products.paidMessages},
+              subscriptions_enabled = ${input.request.products.memberships},
               kyc_state = ${kycState},
               earning_state = ${earningState},
               updated_at = now()

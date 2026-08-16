@@ -119,6 +119,7 @@ function assertProductionSubscriptionSafety() {
     "SUBSCRIPTIONS_SUPPORTED_MINTS",
     "SUBSCRIPTIONS_DEFAULT_MINT",
     "SUBSCRIPTIONS_COLLECTOR_WALLET",
+    "SUBSCRIPTIONS_COLLECTOR_PRIVATE_KEY",
     "SUBSCRIPTIONS_MERCHANT_WALLET"
   ];
   assertRequiredEnv(required);
@@ -134,6 +135,15 @@ function assertProductionSubscriptionSafety() {
   if (process.env.SUBSCRIPTIONS_DEFAULT_MINT === "SOL" || supportedMints.includes("SOL")) {
     throw new Error("Production readiness is blocked: native SOL recurring subscriptions are not implemented.");
   }
+
+  if (process.env.SUBSCRIPTIONS_SOLANA_PROGRAM_ID !== "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44") {
+    throw new Error("Production readiness is blocked: subscriptions must use the canonical official program ID.");
+  }
+
+  assertRequiredEnv([
+    "SUBSCRIPTIONS_STAGING_AUTHORIZATION_SIGNATURE",
+    "SUBSCRIPTIONS_STAGING_COLLECTION_SIGNATURE"
+  ]);
 }
 
 function assertProductionMcpSafety() {

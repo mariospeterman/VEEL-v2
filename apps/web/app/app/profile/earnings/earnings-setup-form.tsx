@@ -16,7 +16,8 @@ const productOptions: Array<[keyof ProductSelection, string, string]> = [
   ["support", "Support", "Let viewers send a one-time contribution."],
   ["contentUnlocks", "Content unlocks", "Sell access to an individual post."],
   ["eventAccessAndLive", "Event Access + paid live", "Sell time-bound access without selling social priority."],
-  ["paidMessages", "Paid messages", "Sell one message while keeping delivery backend-verified."]
+  ["paidMessages", "Paid messages", "Sell one message while keeping delivery backend-verified."],
+  ["memberships", "Memberships", "Offer one recurring plan from your profile."]
 ];
 
 export function EarningsSetupForm({

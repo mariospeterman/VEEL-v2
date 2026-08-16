@@ -1651,6 +1651,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/subscriptions/creator-offer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Current creator's single native membership offer */
+        get: operations["getMyCreatorMembershipOffer"];
+        /** Create or replace the current creator's single native membership offer */
+        put: operations["upsertMyCreatorMembershipOffer"];
+        post?: never;
+        /** Disable the current creator's membership offer and prevent new joins */
+        delete: operations["disableMyCreatorMembershipOffer"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/platform-access": {
         parameters: {
             query?: never;
@@ -1747,6 +1766,23 @@ export interface paths {
         put?: never;
         /** Submit a signed delegated subscription authorization for backend verification */
         post: operations["submitSubscriptionAuthorization"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/subscriptions/authorizations/{authorizationIntentId}/transaction": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Build the unsigned recurring-delegation setup transaction for the current wallet */
+        get: operations["getSubscriptionAuthorizationTransaction"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3416,6 +3452,7 @@ export interface components {
             livePassesEnabled: boolean;
             paidMessagesEnabled: boolean;
             subscriptionsEnabled: boolean;
+            membershipOffer: components["schemas"]["SubscriptionPlan"] | null;
         };
         CreatorMonetisationDashboard: {
             creator: components["schemas"]["User"];
@@ -3483,6 +3520,7 @@ export interface components {
             contentUnlocks: boolean;
             eventAccessAndLive: boolean;
             paidMessages: boolean;
+            memberships: boolean;
         };
         CreatorEarningsSummary: {
             currency: components["schemas"]["Currency"];
@@ -4454,6 +4492,8 @@ export interface components {
             scope: "platform" | "creator";
             creator?: components["schemas"]["User"];
             label: string;
+            description: string | null;
+            benefits: string[];
             amountMinor: number;
             currency: components["schemas"]["Currency"];
             periodDays: number;
@@ -4471,6 +4511,12 @@ export interface components {
             merchantWallet?: string | null;
             amountAtomic?: number;
             periodSeconds?: number;
+        };
+        UpsertCreatorMembershipOfferRequest: {
+            label: string;
+            amountMinor: number;
+            description: string | null;
+            benefits: string[];
         };
         CreateSubscriptionIntentRequest: {
             planId: string;
@@ -4528,9 +4574,15 @@ export interface components {
         };
         SubmitSubscriptionAuthorizationRequest: {
             signature: string;
+        };
+        SubscriptionAuthorizationTransaction: {
+            /** @description Base64-encoded unsigned legacy Solana transaction */
+            transaction: string;
             authorityAddress: string;
             delegationAddress: string;
             subscriberTokenAccount: string;
+            /** Format: date-time */
+            delegationExpiresAt: string;
         };
         CreateEventRequest: components["schemas"]["EventDraft"];
         UpdateEventRequest: components["schemas"]["EventPatch"];
@@ -5013,6 +5065,9 @@ export interface components {
             paymentCounts: components["schemas"]["AdminStateCounts"];
             unlockCounts: components["schemas"]["AdminStateCounts"];
             providerEventCounts: components["schemas"]["AdminStateCounts"];
+            subscriptionCounts: components["schemas"]["AdminStateCounts"];
+            /** @enum {string} */
+            subscriptionProviderReadiness: "not_configured" | "staging_required" | "launch_approved";
         };
         AdminWorkerQueueHealth: {
             /** @enum {string} */
@@ -6313,6 +6368,15 @@ export interface components {
                 "application/json": components["schemas"]["SubscriptionPlanPage"];
             };
         };
+        /** @description Subscription plan */
+        SubscriptionPlan: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["SubscriptionPlan"];
+            };
+        };
         /** @description Current platform tier and catalog */
         PlatformAccess: {
             headers: {
@@ -6356,6 +6420,15 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["SubscriptionAuthorizationIntent"];
+            };
+        };
+        /** @description Unsigned recurring-delegation setup transaction */
+        SubscriptionAuthorizationTransaction: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["SubscriptionAuthorizationTransaction"];
             };
         };
         /** @description Event */
@@ -7316,6 +7389,11 @@ export interface components {
         SubmitSubscriptionAuthorization: {
             content: {
                 "application/json": components["schemas"]["SubmitSubscriptionAuthorizationRequest"];
+            };
+        };
+        UpsertCreatorMembershipOffer: {
+            content: {
+                "application/json": components["schemas"]["UpsertCreatorMembershipOfferRequest"];
             };
         };
         CreateEvent: {
@@ -9590,6 +9668,67 @@ export interface operations {
             200: components["responses"]["SubscriptionPlanPage"];
         };
     };
+    getMyCreatorMembershipOffer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["SubscriptionPlan"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    upsertMyCreatorMembershipOffer: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["UpsertCreatorMembershipOffer"];
+        responses: {
+            200: components["responses"]["SubscriptionPlan"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    disableMyCreatorMembershipOffer: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Membership offer disabled */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     getPlatformAccess: {
         parameters: {
             query?: never;
@@ -9699,6 +9838,25 @@ export interface operations {
         requestBody: components["requestBodies"]["SubmitSubscriptionAuthorization"];
         responses: {
             202: components["responses"]["Subscription"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getSubscriptionAuthorizationTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                authorizationIntentId: components["parameters"]["SubscriptionAuthorizationIntentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["SubscriptionAuthorizationTransaction"];
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];

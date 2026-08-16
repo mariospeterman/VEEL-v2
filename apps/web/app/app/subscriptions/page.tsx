@@ -37,7 +37,7 @@ export default async function SubscriptionsPage() {
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <section className="grid content-start gap-5">
           <PageHeader eyebrow="Plans" title="Your WeVid access">
-            Choose platform tools separately from memberships you join with individual profiles.
+            Choose a WeVid plan or manage memberships you joined from creator profiles.
           </PageHeader>
 
           <section className="grid gap-3">
@@ -56,7 +56,7 @@ export default async function SubscriptionsPage() {
                 creatorPlans.map((plan) => <PlanRow plan={plan} key={plan.id} />)
               ) : (
                 <EmptyState title="No creator memberships available">
-                  Membership offers appear when profiles enable a launch-ready recurring plan.
+                  Membership offers will appear here and on creator profiles when available.
                 </EmptyState>
               )
             ) : (
@@ -102,10 +102,10 @@ export default async function SubscriptionsPage() {
           </Card>
 
           <Card className="p-4">
-            <p className="text-sm font-medium">Recovery path</p>
+            <p className="text-sm font-medium">Payment protection</p>
             <p className="mt-3 text-sm leading-6 text-(--muted)">
-              Manual Solana Pay renewal is reserved for failed delegated setup or collection. It is
-              not the normal product path and does not replace backend settlement verification.
+              Your wallet limits every automatic payment to the displayed price and billing period.
+              Access starts only after payment is confirmed.
             </p>
           </Card>
         </aside>
@@ -117,10 +117,9 @@ export default async function SubscriptionsPage() {
 function SubscriptionSummary({ subscription }: { subscription: Subscription }) {
   return (
     <div className="mt-4 grid gap-3 text-sm">
-      <Fact label="State" value={subscription.state} />
-      <Fact label="Renewal" value={subscription.renewalMode} />
+      <Fact label="Status" value={friendlyState(subscription.state)} />
+      <Fact label="Renewal" value="Automatic" />
       <Fact label="Next collection" value={subscription.nextCollectionAt ?? "pending authorization"} />
-      <Fact label="Authority" value={subscription.authorityAddress ?? "not verified"} />
       <SubscriptionCancelPanel subscription={subscription} />
     </div>
   );
@@ -136,7 +135,9 @@ function PlanRow({ plan }: { plan: SubscriptionPlan }) {
             {formatAssetAmount(plan.amountMinor, plan.currency)} every {plan.periodDays} days
           </p>
         </div>
-        <StatusPill tone={plan.providerState === "launch_approved" ? "good" : "warn"}>{plan.providerState}</StatusPill>
+        <StatusPill tone={plan.providerState === "launch_approved" ? "good" : "warn"}>
+          {plan.providerState === "launch_approved" ? "Available" : "Coming soon"}
+        </StatusPill>
       </div>
       <SubscriptionAuthorizationPanel plan={plan} />
     </Card>
@@ -194,4 +195,12 @@ function formatUsage(access: PlatformAccess) {
   const used = formatHours(access.usage.publicMediaSeconds);
   const allowance = access.currentTier.publicMediaAllowanceSeconds;
   return allowance === null ? `${used} hours` : `${used} of ${formatHours(allowance)} hours`;
+}
+
+function friendlyState(state: Subscription["state"]) {
+  if (state === "active") return "Active";
+  if (state === "authorization_pending") return "Waiting for wallet";
+  if (state === "renewal_pending") return "Confirming payment";
+  if (state === "grace_period") return "Payment needs attention";
+  return state.charAt(0).toUpperCase() + state.slice(1).replaceAll("_", " ");
 }

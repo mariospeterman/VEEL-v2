@@ -33,7 +33,7 @@ export function createAccessRepository(
       return Boolean(rows[0]?.allowed);
     },
     async getOpsSummary() {
-      const [paymentRows, unlockRows, providerRows, reportRows, workerQueueRows] = await Promise.all([
+      const [paymentRows, unlockRows, providerRows, subscriptionRows, subscriptionProviderRows, reportRows, workerQueueRows] = await Promise.all([
         sql<CountRow[]>`
           select
             count(*) as total,
@@ -60,6 +60,20 @@ export function createAccessRepository(
             count(*) filter (where normalized_state in ('processed', 'replayed', 'ignored')) as confirmed,
             count(*) filter (where normalized_state = 'failed') as failed
           from provider_events
+        `,
+        sql<CountRow[]>`
+          select
+            count(*) as total,
+            count(*) filter (where state in ('authorization_pending', 'renewal_pending', 'grace_period')) as pending,
+            count(*) filter (where state = 'renewal_pending') as submitted,
+            count(*) filter (where state = 'active') as confirmed,
+            count(*) filter (where state in ('cancelled', 'suspended', 'expired', 'revoked')) as failed
+          from subscriptions
+        `,
+        sql<{ launch_approved: boolean; staging_required: boolean }[]>`
+          select
+            exists (select 1 from subscription_plans where provider_state = 'launch_approved' and state = 'active') as launch_approved,
+            exists (select 1 from subscription_plans where provider_state = 'staging_required') as staging_required
         `,
         sql<{ open_reports: string | number }[]>`
           select 0 as open_reports
@@ -115,6 +129,7 @@ export function createAccessRepository(
       ]);
 
       const providerCounts = toCounts(providerRows[0]);
+      const subscriptionProvider = subscriptionProviderRows[0];
       const workerQueues = workerQueueRows.map(toWorkerQueueHealth);
       const queueHealth = workerQueues.some((queue) => queue.failedCount > 0 || queue.deadLetterCount > 0)
         ? "degraded"
@@ -127,7 +142,13 @@ export function createAccessRepository(
         openReports: Number(reportRows[0]?.open_reports ?? 0),
         paymentCounts: toCounts(paymentRows[0]),
         unlockCounts: toCounts(unlockRows[0]),
-        providerEventCounts: providerCounts
+        providerEventCounts: providerCounts,
+        subscriptionCounts: toCounts(subscriptionRows[0]),
+        subscriptionProviderReadiness: subscriptionProvider?.launch_approved
+          ? "launch_approved"
+          : subscriptionProvider?.staging_required
+            ? "staging_required"
+            : "not_configured"
       };
     },
     async getNotificationHealth() {

@@ -77,7 +77,7 @@ Use managed provider infrastructure where it clearly removes custom code:
 - Helius for confirmed payment/access evidence
 - third-party age/KYC providers for verification
 
-Recurring subscriptions are a separate token-based Solana provider boundary. Production may leave `SUBSCRIPTIONS_ENABLED=false`; if enabled, deploy readiness requires `SUBSCRIPTIONS_PROVIDER=official_solana_subscription_program`, program id, RPC URL, supported/default SPL or Token-2022 mint, collector wallet, merchant wallet, and `SUBSCRIPTIONS_REQUIRE_ONCHAIN_VERIFICATION=true`. `mock_subscription_provider_dev_only` and native SOL recurring subscriptions are not production deployable.
+Recurring subscriptions are a separate token-based Solana provider boundary. Production may leave `SUBSCRIPTIONS_ENABLED=false`; if enabled, deploy readiness requires `SUBSCRIPTIONS_PROVIDER=official_solana_subscription_program`, the canonical program id, RPC URL, supported/default SPL or Token-2022 mint, collector public wallet plus server-only secret-manager private key, platform merchant/fee wallet, finalized staging setup and collection proof signatures, and `SUBSCRIPTIONS_REQUIRE_ONCHAIN_VERIFICATION=true`. The same collector key is never present in web/API deployments. `mock_subscription_provider_dev_only`, native SOL recurring subscriptions, and unproven rebuilt production artifacts are not deployable.
 
 Use optional edge/serverless functions only for:
 

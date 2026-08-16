@@ -17,6 +17,8 @@ export function toSubscriptionPlan(row: PlanRow): SubscriptionPlan {
         }
       : {}),
     label: row.label,
+    description: row.description,
+    benefits: row.benefits,
     amountMinor: Number(row.amount_minor),
     currency: row.currency,
     periodDays: row.period_days,
@@ -60,7 +62,7 @@ export function toSubscription(row: SubscriptionRow): Subscription {
     authorityAddress: row.authority_address,
     delegationAddress: row.delegation_address,
     subscriberWallet: row.subscriber_wallet,
-    subscriberTokenAccount: null,
+    subscriberTokenAccount: row.subscriber_token_account ?? null,
     tokenMint: row.token_mint,
     provider: row.provider,
     programId: row.program_id,

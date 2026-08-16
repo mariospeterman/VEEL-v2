@@ -110,6 +110,7 @@ export function SummaryMetrics({ summary }: { summary: ApiResult<AdminOpsSummary
       <Metric label="Provider" value={summary.data.providerHealth} />
       <Metric label="Queue" value={summary.data.queueHealth} />
       <Metric label="Payments" value={summary.data.paymentCounts.total.toString()} />
+      <Metric label="Memberships" value={summary.data.subscriptionCounts.total.toString()} />
       <Metric label="Unlocks" value={summary.data.unlockCounts.total.toString()} />
     </div>
   );

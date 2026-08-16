@@ -4,6 +4,7 @@ import { ErrorState } from "../../ui";
 import { CreatorSupportPanel } from "./creator-support-panel";
 import { ProfileFollowPanel } from "./profile-follow-panel";
 import { ProfileMessageButton } from "./profile-message-button";
+import { SubscriptionAuthorizationPanel } from "../../subscriptions/subscription-authorization-panel";
 
 export default async function PublicCreatorProfilePage({
   params
@@ -76,6 +77,17 @@ function ProfileView({ followState, profile }: { followState: FollowState | null
         {followState ? <ProfileFollowPanel initialState={followState} /> : null}
         {followState ? <ProfileMessageButton userId={profile.user.id} /> : null}
         <CreatorSupportPanel profile={profile} />
+        {profile.monetisation.membershipOffer ? (
+          <div className="rounded border border-(--line) bg-(--panel) p-4">
+            <p className="text-sm font-semibold">{profile.monetisation.membershipOffer.label}</p>
+            {profile.monetisation.membershipOffer.description ? (
+              <p className="mt-1 text-sm leading-6 text-(--muted)">
+                {profile.monetisation.membershipOffer.description}
+              </p>
+            ) : null}
+            <SubscriptionAuthorizationPanel plan={profile.monetisation.membershipOffer} />
+          </div>
+        ) : null}
       </aside>
 
       <section className="grid content-start gap-4">

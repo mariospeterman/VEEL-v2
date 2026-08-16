@@ -33,7 +33,31 @@ export function toCreatorProfile(
       contentUnlocksEnabled: row.content_unlocks_enabled,
       livePassesEnabled: row.live_passes_enabled,
       paidMessagesEnabled: row.paid_messages_enabled,
-      subscriptionsEnabled: row.subscriptions_enabled
+      subscriptionsEnabled: row.subscriptions_enabled,
+      membershipOffer:
+        row.membership_plan_id && row.membership_label && row.membership_provider_state
+          ? {
+              id: row.membership_plan_id,
+              scope: "creator",
+              creator: toUserResource(row),
+              label: row.membership_label,
+              description: row.membership_description,
+              benefits: row.membership_benefits ?? [],
+              amountMinor: Number(row.membership_amount_minor ?? 0),
+              currency: "USDC",
+              periodDays: 30,
+              billingMode: "delegated_solana_subscription",
+              providerState: row.membership_provider_state,
+              provider: "official_solana_subscription_program",
+              tokenMint: row.membership_token_mint,
+              tokenProgram: row.membership_token_program,
+              programId: row.membership_program_id,
+              planPda: null,
+              merchantWallet: row.membership_merchant_wallet,
+              amountAtomic: Number(row.membership_amount_atomic ?? 0),
+              periodSeconds: 2_592_000
+            }
+          : null
     },
     recentContent: recentContent.map(toContentItem)
   };

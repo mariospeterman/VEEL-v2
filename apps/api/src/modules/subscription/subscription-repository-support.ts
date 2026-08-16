@@ -39,6 +39,7 @@ export async function findSubscriptionById(
       s.authority_address,
       s.delegation_address,
       s.subscriber_wallet,
+      s.subscriber_token_account,
       s.provider,
       s.program_id,
       s.token_mint,

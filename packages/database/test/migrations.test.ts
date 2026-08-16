@@ -9,6 +9,18 @@ const migrationsDir = join(packageRoot, "migrations");
 const readMigration = (fileName: string) => readFileSync(join(migrationsDir, fileName), "utf8");
 
 describe("database migrations", () => {
+  it("locks recurring memberships to exact noncustodial authority and replay-safe actions", () => {
+    const sql = readMigration("0098_recurring_membership_authority.sql");
+
+    expect(sql).toContain("delegation_nonce bigint");
+    expect(sql).toContain("delegation_expires_at timestamptz");
+    expect(sql).toContain("creator_amount_atomic + platform_fee_amount_atomic + allocation_amount_atomic = amount_atomic");
+    expect(sql).toContain("create table subscription_action_receipts");
+    expect(sql).toContain("alter table subscription_action_receipts enable row level security");
+    expect(sql).toContain("revoke all on table subscription_action_receipts from anon, authenticated");
+    expect(sql).not.toMatch(/balance|withdrawal|escrow|private_key|seed_phrase|raw_payload/i);
+  });
+
   it("keeps every up migration paired with a rollback", () => {
     const files = readdirSync(migrationsDir).filter((file) => file.endsWith(".sql"));
     const upFiles = files.filter((file) => !file.endsWith(".down.sql"));

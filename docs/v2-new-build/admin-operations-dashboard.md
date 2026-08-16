@@ -24,7 +24,7 @@ This document defines the admin and operations surface required to run Veel as a
 
 Current implementation state:
 
-- `GET /v1/admin/ops/summary` returns role-gated payment, unlock, provider event, report, provider health, and per-worker queue health. Queue projections include pending, processing, failed, dead-letter, and oldest-pending state for subscription collections, notification delivery, payment confirmation email, and provider-event replay.
+- `GET /v1/admin/ops/summary` returns role-gated payment, unlock, provider event, subscription lifecycle counts, recurring-provider readiness, report, provider health, and per-worker queue health. Queue projections include pending, processing, failed, dead-letter, and oldest-pending state for subscription collections, notification delivery, payment confirmation email, and provider-event replay.
 - `POST /v1/admin/worker-queues/{queueName}/jobs/{jobId}/retry` is the only API recovery boundary for exhausted worker jobs. It accepts only `dead_letter` jobs, requires a reason and `Idempotency-Key`, restores the queue-specific initial state, clears stale lease/failure state, records `worker_queue_recovery_requests`, and writes an audit event. It never marks provider work successful and never bypasses subscription reconciliation or access/payment authority.
 - `GET /v1/admin/payments/intents` returns sanitized payment intent reconciliation rows with server-owned product, amount, state, reference address, submitted/confirmed signatures, settlement attempt count, and linked entitlement ID.
 - `GET /v1/admin/unlocks` returns sanitized entitlement rows for content unlock and access investigation.

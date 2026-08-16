@@ -11,7 +11,13 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@solana-program/token": "0.15.0",
+    "@solana/kit": "7.1.0",
+    "@solana/subscriptions": "0.5.0",
+    "@solana/sysvars": "7.1.0",
+    "@solana/web3.js": "1.98.4",
     "@veel/config": "workspace:*",
+    "bs58": "6.0.0",
     "postgres": "^3.4.9",
     "web-push": "^3.6.7"
   },

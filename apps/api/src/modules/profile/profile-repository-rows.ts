@@ -21,6 +21,17 @@ export interface CreatorProfileRow extends ProfileRow {
   live_passes_enabled: boolean;
   paid_messages_enabled: boolean;
   subscriptions_enabled: boolean;
+  membership_plan_id: string | null;
+  membership_label: string | null;
+  membership_description: string | null;
+  membership_benefits: string[] | null;
+  membership_amount_minor: string | number | null;
+  membership_amount_atomic: string | number | null;
+  membership_provider_state: "staging_required" | "launch_approved" | "disabled" | null;
+  membership_token_mint: string | null;
+  membership_token_program: "spl_token" | "token_2022" | null;
+  membership_program_id: string | null;
+  membership_merchant_wallet: string | null;
 }
 
 export interface CreatorContentRow {

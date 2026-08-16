@@ -1584,6 +1584,44 @@ paths:
       summary: Platform and creator subscription plans
       responses:
         "200": { $ref: "#/components/responses/SubscriptionPlanPage" }
+  /v1/subscriptions/creator-offer:
+    get:
+      operationId: getMyCreatorMembershipOffer
+      tags: [Subscriptions]
+      summary: Current creator's single native membership offer
+      responses:
+        "200": { $ref: "#/components/responses/SubscriptionPlan" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    put:
+      operationId: upsertMyCreatorMembershipOffer
+      tags: [Subscriptions]
+      summary: Create or replace the current creator's single native membership offer
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/UpsertCreatorMembershipOffer"
+      responses:
+        "200": { $ref: "#/components/responses/SubscriptionPlan" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      operationId: disableMyCreatorMembershipOffer
+      tags: [Subscriptions]
+      summary: Disable the current creator's membership offer and prevent new joins
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "204": { description: Membership offer disabled }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/platform-access:
     get:
       operationId: getPlatformAccess
@@ -1670,6 +1708,20 @@ paths:
         $ref: "#/components/requestBodies/SubmitSubscriptionAuthorization"
       responses:
         "202": { $ref: "#/components/responses/Subscription" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/subscriptions/authorizations/{authorizationIntentId}/transaction:
+    get:
+      operationId: getSubscriptionAuthorizationTransaction
+      tags: [Subscriptions]
+      summary: Build the unsigned recurring-delegation setup transaction for the current wallet
+      parameters:
+        - $ref: "#/components/parameters/SubscriptionAuthorizationIntentId"
+      responses:
+        "200": { $ref: "#/components/responses/SubscriptionAuthorizationTransaction" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -2768,6 +2820,7 @@ components:
     CreateRefundDisputeRequest: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateRefundDisputeRequest" } } } }
     CreateSubscriptionIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateSubscriptionIntentRequest" } } } }
     SubmitSubscriptionAuthorization: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SubmitSubscriptionAuthorizationRequest" } } } }
+    UpsertCreatorMembershipOffer: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpsertCreatorMembershipOfferRequest" } } } }
     CreateEvent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateEventRequest" } } } }
     UpdateEvent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateEventRequest" } } } }
     CreateAccessPassIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateAccessPassIntentRequest" } } } }
@@ -2889,11 +2942,13 @@ components:
     RefundDisputeRequest: { description: Refund or dispute request, content: { application/json: { schema: { $ref: "#/components/schemas/RefundDisputeRequest" } } } }
     RefundDisputeRequestPage: { description: Refund or dispute requests, content: { application/json: { schema: { $ref: "#/components/schemas/RefundDisputeRequestPage" } } } }
     SubscriptionPlanPage: { description: Subscription plans, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionPlanPage" } } } }
+    SubscriptionPlan: { description: Subscription plan, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionPlan" } } } }
     PlatformAccess: { description: Current platform tier and catalog, content: { application/json: { schema: { $ref: "#/components/schemas/PlatformAccess" } } } }
     PlatformPlaybackSession: { description: Public-media playback accounting session, content: { application/json: { schema: { $ref: "#/components/schemas/PlatformPlaybackSession" } } } }
     SubscriptionPage: { description: Subscriptions, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionPage" } } } }
     Subscription: { description: Subscription, content: { application/json: { schema: { $ref: "#/components/schemas/Subscription" } } } }
     SubscriptionAuthorizationIntent: { description: Subscription authorization intent, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionAuthorizationIntent" } } } }
+    SubscriptionAuthorizationTransaction: { description: Unsigned recurring-delegation setup transaction, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionAuthorizationTransaction" } } } }
     Event: { description: Event, content: { application/json: { schema: { $ref: "#/components/schemas/Event" } } } }
     EventPage: { description: Events, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Event" } }, nextCursor: { type: string, nullable: true } } } } } }
     AccessPassIntent: { description: Event Access Pass intent, content: { application/json: { schema: { $ref: "#/components/schemas/AccessPassIntent" } } } }
@@ -3239,13 +3294,17 @@ components:
         followingCount: { type: integer }
     PublicCreatorMonetisation:
       type: object
-      required: [supportEnabled, contentUnlocksEnabled, livePassesEnabled, paidMessagesEnabled, subscriptionsEnabled]
+      required: [supportEnabled, contentUnlocksEnabled, livePassesEnabled, paidMessagesEnabled, subscriptionsEnabled, membershipOffer]
       properties:
         supportEnabled: { type: boolean }
         contentUnlocksEnabled: { type: boolean }
         livePassesEnabled: { type: boolean }
         paidMessagesEnabled: { type: boolean }
         subscriptionsEnabled: { type: boolean }
+        membershipOffer:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/SubscriptionPlan"
     CreatorMonetisationDashboard:
       type: object
       required: [creator, readiness, earnings, products, recentActivity]
@@ -3310,12 +3369,13 @@ components:
     CreatorProductSelection:
       type: object
       additionalProperties: false
-      required: [support, contentUnlocks, eventAccessAndLive, paidMessages]
+      required: [support, contentUnlocks, eventAccessAndLive, paidMessages, memberships]
       properties:
         support: { type: boolean }
         contentUnlocks: { type: boolean }
         eventAccessAndLive: { type: boolean }
         paidMessages: { type: boolean }
+        memberships: { type: boolean }
     CreatorEarningsSummary:
       type: object
       required: [currency, creatorEarningsMinor, platformFeesMinor, referralCommissionsMinor, confirmedPaymentCount]
@@ -4353,12 +4413,14 @@ components:
         items: { type: array, items: { $ref: "#/components/schemas/Subscription" } }
     SubscriptionPlan:
       type: object
-      required: [id, scope, label, amountMinor, currency, periodDays, billingMode, providerState, provider]
+      required: [id, scope, label, description, benefits, amountMinor, currency, periodDays, billingMode, providerState, provider]
       properties:
         id: { type: string }
         scope: { type: string, enum: [platform, creator] }
         creator: { $ref: "#/components/schemas/User" }
         label: { type: string }
+        description: { type: string, nullable: true }
+        benefits: { type: array, maxItems: 8, items: { type: string } }
         amountMinor: { type: integer }
         currency: { $ref: "#/components/schemas/Currency" }
         periodDays: { type: integer }
@@ -4372,6 +4434,18 @@ components:
         merchantWallet: { type: string, nullable: true }
         amountAtomic: { type: integer }
         periodSeconds: { type: integer }
+    UpsertCreatorMembershipOfferRequest:
+      type: object
+      additionalProperties: false
+      required: [label, amountMinor, description, benefits]
+      properties:
+        label: { type: string, minLength: 2, maxLength: 80 }
+        amountMinor: { type: integer, minimum: 100, maximum: 100000 }
+        description: { type: string, maxLength: 500, nullable: true }
+        benefits:
+          type: array
+          maxItems: 8
+          items: { type: string, minLength: 1, maxLength: 120 }
     CreateSubscriptionIntentRequest:
       type: object
       required: [planId]
@@ -4420,12 +4494,20 @@ components:
             delegatedSubscriptions: { type: string, enum: [candidate, staging_required, launch_approved] }
     SubmitSubscriptionAuthorizationRequest:
       type: object
-      required: [signature, authorityAddress, delegationAddress, subscriberTokenAccount]
+      additionalProperties: false
+      required: [signature]
       properties:
         signature: { type: string }
+    SubscriptionAuthorizationTransaction:
+      type: object
+      additionalProperties: false
+      required: [transaction, authorityAddress, delegationAddress, subscriberTokenAccount, delegationExpiresAt]
+      properties:
+        transaction: { type: string, description: Base64-encoded unsigned legacy Solana transaction }
         authorityAddress: { type: string }
         delegationAddress: { type: string }
         subscriberTokenAccount: { type: string }
+        delegationExpiresAt: { type: string, format: date-time }
     CreateEventRequest: { $ref: "#/components/schemas/EventDraft" }
     UpdateEventRequest: { $ref: "#/components/schemas/EventPatch" }
     Event:
@@ -4979,7 +5061,7 @@ components:
           items: { $ref: "#/components/schemas/OrganizationNotice" }
     AdminOpsSummary:
       type: object
-      required: [providerHealth, queueHealth, workerQueues, openReports, paymentCounts, unlockCounts, providerEventCounts]
+      required: [providerHealth, queueHealth, workerQueues, openReports, paymentCounts, unlockCounts, providerEventCounts, subscriptionCounts, subscriptionProviderReadiness]
       properties:
         providerHealth: { type: string, enum: [ok, degraded, down] }
         queueHealth: { type: string, enum: [ok, degraded, down] }
@@ -4990,6 +5072,8 @@ components:
         paymentCounts: { $ref: "#/components/schemas/AdminStateCounts" }
         unlockCounts: { $ref: "#/components/schemas/AdminStateCounts" }
         providerEventCounts: { $ref: "#/components/schemas/AdminStateCounts" }
+        subscriptionCounts: { $ref: "#/components/schemas/AdminStateCounts" }
+        subscriptionProviderReadiness: { type: string, enum: [not_configured, staging_required, launch_approved] }
     AdminWorkerQueueHealth:
       type: object
       required: [name, pendingCount, processingCount, failedCount, deadLetterCount, oldestPendingAt]

@@ -82,9 +82,13 @@ export type CreateSubscriptionIntentRequest =
   components["schemas"]["CreateSubscriptionIntentRequest"];
 export type SubscriptionAuthorizationIntent =
   components["schemas"]["SubscriptionAuthorizationIntent"];
+export type SubscriptionAuthorizationTransaction =
+  components["schemas"]["SubscriptionAuthorizationTransaction"];
 export type SubmitSubscriptionAuthorizationRequest =
   components["schemas"]["SubmitSubscriptionAuthorizationRequest"];
 export type Subscription = components["schemas"]["Subscription"];
+export type UpsertCreatorMembershipOfferRequest =
+  components["schemas"]["UpsertCreatorMembershipOfferRequest"];
 export type CreateRefundDisputeRequest = components["schemas"]["CreateRefundDisputeRequest"];
 export type RefundDisputeRequest = components["schemas"]["RefundDisputeRequest"];
 export type McpOAuthRedirect = { redirectUri: string };

@@ -85,7 +85,7 @@ function configuredEnv() {
 
 function validInput(overrides = {}) {
   return {
-    signature: "subscription-signature",
+    signature: "1".repeat(64),
     setupReference: "00000000-0000-4000-8000-000000000072",
     authorityAddress: wallet,
     delegationAddress: wallet,
@@ -96,7 +96,10 @@ function validInput(overrides = {}) {
     tokenMint: mint,
     tokenProgram: "spl_token" as const,
     amountMinor: 15_000_000,
+    amountAtomic: 15_000_000,
     periodDays: 30,
+    periodSeconds: 2_592_000,
+    delegationExpiresAt: new Date("2027-12-01T00:00:00.000Z"),
     provider: "official_solana_subscription_program",
     planId: "platform_plus_monthly",
     planPda: wallet,

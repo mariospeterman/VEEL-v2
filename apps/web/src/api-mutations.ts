@@ -66,12 +66,14 @@ export type {
   SubmitSubscriptionAuthorizationRequest,
   Subscription,
   SubscriptionAuthorizationIntent,
+  SubscriptionAuthorizationTransaction,
   TransactionRequest,
   TransactionRequestPostResponse,
   AcceptPaymentIntentTermsRequest,
   UpdateContentRequest,
   UpdateProfileRequest,
   UpdateCreatorOnboardingRequest,
+  UpsertCreatorMembershipOfferRequest,
   UploadProfileAvatarRequest,
   UploadSession,
   VerificationSession,
@@ -147,12 +149,14 @@ import type {
   SubmitSubscriptionAuthorizationRequest,
   Subscription,
   SubscriptionAuthorizationIntent,
+  SubscriptionAuthorizationTransaction,
   TransactionRequest,
   TransactionRequestPostResponse,
   AcceptPaymentIntentTermsRequest,
   UpdateContentRequest,
   UpdateProfileRequest,
   UpdateCreatorOnboardingRequest,
+  UpsertCreatorMembershipOfferRequest,
   UploadProfileAvatarRequest,
   UploadSession,
   VerificationSession,
@@ -677,12 +681,34 @@ export async function submitSubscriptionAuthorization(
   );
 }
 
+export async function getSubscriptionAuthorizationTransaction(
+  authorizationIntentId: string
+): Promise<SubscriptionAuthorizationTransaction> {
+  return authenticatedGet<SubscriptionAuthorizationTransaction>(
+    `/v1/subscriptions/authorizations/${encodeURIComponent(authorizationIntentId)}/transaction`
+  );
+}
+
 export async function cancelSubscription(subscriptionId: string): Promise<Subscription> {
   return authenticatedMutation<Subscription>(
     `/v1/subscriptions/${encodeURIComponent(subscriptionId)}/cancel`,
     "PATCH",
     {}
   );
+}
+
+export async function upsertCreatorMembershipOffer(
+  body: UpsertCreatorMembershipOfferRequest
+): Promise<import("./api-client-types").SubscriptionPlan> {
+  return authenticatedMutation<import("./api-client-types").SubscriptionPlan>(
+    "/v1/subscriptions/creator-offer",
+    "PUT",
+    body
+  );
+}
+
+export async function disableCreatorMembershipOffer(): Promise<void> {
+  return authenticatedEmptyMutation("/v1/subscriptions/creator-offer", "DELETE", {});
 }
 
 export async function createRefundDisputeRequest(
