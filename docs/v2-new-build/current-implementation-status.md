@@ -40,7 +40,7 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Merged baseline | `main` at `fbebe76` (Launch 11, staging-truth hardening, dependency graph hardening, durable content-create idempotency, and atomic payment safety through PR #64) |
 | Active slice | Launch 11E — logical-operation-lifetime idempotency convergence |
 | Branch | `codex/checkout-consent-idempotency-lifetime` |
-| Pull request | Pending |
+| Pull request | #65 |
 | State | `ACTIVE` |
 | Slice blockers | No code blocker. Durable checkout-consent evidence must retain exact replay/conflict behavior beyond the payment-intent window. |
 | Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
