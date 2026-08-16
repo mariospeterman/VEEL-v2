@@ -8,14 +8,14 @@ export const baseEvidenceReceiptKeys = [
   "STAGING_MODERATION_PROOF_ID",
   "STAGING_STORAGE_BACKUP_PROOF_ID",
   "STAGING_OBSERVABILITY_PROOF_ID",
-  "STAGING_DEVICE_QA_PROOF_ID"
+  "STAGING_DEVICE_QA_PROOF_ID",
+  "STAGING_ENTERPRISE_PROOF_ID"
 ];
 
 export function expectedEvidenceReceiptKeys(env = process.env) {
   return [
     ...baseEvidenceReceiptKeys,
-    ...(env.SUBSCRIPTIONS_ENABLED === "true" ? ["STAGING_SUBSCRIPTIONS_PROOF_ID"] : []),
-    ...(env.ENTERPRISE_ENABLED === "true" ? ["STAGING_ENTERPRISE_PROOF_ID"] : [])
+    ...(env.SUBSCRIPTIONS_ENABLED === "true" ? ["STAGING_SUBSCRIPTIONS_PROOF_ID"] : [])
   ];
 }
 

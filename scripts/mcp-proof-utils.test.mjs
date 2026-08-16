@@ -205,11 +205,11 @@ function productionDeployEnv() {
         STAGING_MODERATION_PROOF_ID: "moderation-proof",
         STAGING_STORAGE_BACKUP_PROOF_ID: "storage-backup-proof",
         STAGING_OBSERVABILITY_PROOF_ID: "observability-proof",
-        STAGING_DEVICE_QA_PROOF_ID: "device-qa-proof"
+        STAGING_DEVICE_QA_PROOF_ID: "device-qa-proof",
+        STAGING_ENTERPRISE_PROOF_ID: "enterprise-proof"
       }
     }),
     SUBSCRIPTIONS_ENABLED: "false",
-    ENTERPRISE_ENABLED: "false",
     OTEL_EXPORTER_OTLP_ENDPOINT: "https://telemetry.example.test",
     LEGAL_DOCUMENTS_APPROVED: "true",
     LEGAL_TERMS_VERSION: "terms-test",

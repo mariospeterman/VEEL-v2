@@ -14,7 +14,7 @@ export const stagingConfigurationGroups = [
   ["verification", ["AGE_VERIFICATION_DRIVER", "AGE_VERIFICATION_ALLOW_MOCK_PROVIDER"]],
   ["notifications", ["NOTIFICATION_DEVICE_ENCRYPTION_KEY", "WEB_PUSH_VAPID_PUBLIC_KEY", "WEB_PUSH_VAPID_PRIVATE_KEY", "REALTIME_JWT_PRIVATE_JWK", "REALTIME_JWT_KEY_ID", "REALTIME_JWT_ISSUER", "TRANSACTIONAL_EMAIL_PROVIDER", "RESEND_API_KEY", "TRANSACTIONAL_EMAIL_FROM", "TRANSACTIONAL_EMAIL_SMOKE_TO"]],
   ["operations", ["API_RATE_LIMIT_STORE_DRIVER", "API_RATE_LIMIT_REDIS_URL", "OTEL_REQUIRED", "OTEL_EXPORTER_OTLP_ENDPOINT", "RELEASE_MANIFEST_PATH"]],
-  ["features", ["SUBSCRIPTIONS_ENABLED", "ENTERPRISE_ENABLED"]],
+  ["features", ["SUBSCRIPTIONS_ENABLED"]],
   ["legal", ["LEGAL_DOCUMENTS_APPROVED", "LEGAL_TERMS_VERSION", "LEGAL_PRIVACY_VERSION", "LEGAL_CONTACT_EMAIL"]]
 ];
 
@@ -63,7 +63,6 @@ export const stagingProofPlan = [
   },
   {
     name: "enterprise",
-    enabledWhen: (env) => env.ENTERPRISE_ENABLED === "true",
     command: ["pnpm", "proof:enterprise"],
     required: [
       "API_URL",
@@ -170,7 +169,7 @@ function evidenceProofs() {
     { name: "observability-alerting" },
     { name: "target-device-accessibility" },
     { name: "subscriptions-evidence", enabledWhen: (env) => env.SUBSCRIPTIONS_ENABLED === "true" },
-    { name: "enterprise-evidence", enabledWhen: (env) => env.ENTERPRISE_ENABLED === "true" }
+    { name: "enterprise-evidence" }
   ].map((proof) => ({ ...proof, evidence: true, required: ["STAGING_EVIDENCE_BUNDLE_JSON"] }));
 }
 

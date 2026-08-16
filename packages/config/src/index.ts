@@ -10,8 +10,13 @@ const optionalCookieDomainSchema = z.preprocess(
   emptyToUndefined,
   z.string().regex(/^(?:\.)?[A-Za-z0-9.-]+$/).optional()
 );
-const optionalBooleanSchema = (defaultValue: boolean) =>
-  z.preprocess(emptyToUndefined, z.coerce.boolean().default(defaultValue));
+const booleanSchema = (defaultValue: boolean) =>
+  z.preprocess((value) => {
+    if (value === "" || value === undefined) return undefined;
+    if (value === true || value === "true") return true;
+    if (value === false || value === "false") return false;
+    return value;
+  }, z.boolean().default(defaultValue));
 
 export const nodeEnvSchema = z.enum(["development", "test", "production"]).default("development");
 
@@ -54,7 +59,7 @@ export const serverEnvSchema = z.object({
     .default("De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44"),
   SOLANA_SUBSCRIPTION_USDC_MINT: optionalStringSchema,
   SOLANA_SUBSCRIPTION_COLLECTOR_WALLET: optionalStringSchema,
-  SUBSCRIPTIONS_ENABLED: z.coerce.boolean().default(false),
+  SUBSCRIPTIONS_ENABLED: booleanSchema(false),
   SUBSCRIPTIONS_PROVIDER: z
     .enum(["disabled", "official_solana_subscription_program", "mock_subscription_provider_dev_only"])
     .default("disabled"),
@@ -68,7 +73,7 @@ export const serverEnvSchema = z.object({
   SUBSCRIPTIONS_COLLECTOR_WALLET: optionalStringSchema,
   SUBSCRIPTIONS_COLLECTOR_PRIVATE_KEY: optionalStringSchema,
   SUBSCRIPTIONS_MERCHANT_WALLET: optionalStringSchema,
-  SUBSCRIPTIONS_REQUIRE_ONCHAIN_VERIFICATION: z.coerce.boolean().default(true),
+  SUBSCRIPTIONS_REQUIRE_ONCHAIN_VERIFICATION: booleanSchema(true),
   HELIUS_API_KEY: optionalStringSchema,
   HELIUS_WEBHOOK_SECRET: optionalStringSchema,
   HELIUS_CLUSTER: z.enum(["devnet", "mainnet-beta"]).default("devnet"),
@@ -108,15 +113,15 @@ export const serverEnvSchema = z.object({
   LIVEPEER_BROWSER_BROADCAST_REDIRECT_BASE_URL: optionalUrlSchema,
   LIVEPEER_WEBHOOK_ID: optionalStringSchema,
   LIVEPEER_MODERATION_MULTISTREAM_TARGET_ID: optionalStringSchema,
-  LIVEPEER_ADULT_LIVE_ENABLED: z.coerce.boolean().default(false),
+  LIVEPEER_ADULT_LIVE_ENABLED: booleanSchema(false),
   MEDIA_MODERATION_MODE: z
     .enum(["disabled_fail_closed", "shadow", "enforced", "launch_approved"])
     .default("disabled_fail_closed"),
   AGE_VERIFICATION_DRIVER: z
     .preprocess(emptyToUndefined, z.enum(["didit", "yoti_digital_id", "yoti", "sumsub", "veriff", "persona"]).optional()),
-  AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: z.coerce.boolean().default(false),
-  AGE_VERIFICATION_PROVIDER_SELECTION_ENABLED: z.coerce.boolean().default(true),
-  AGE_VERIFICATION_PREFER_REUSABLE_CREDENTIALS: z.coerce.boolean().default(true),
+  AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: booleanSchema(false),
+  AGE_VERIFICATION_PROVIDER_SELECTION_ENABLED: booleanSchema(true),
+  AGE_VERIFICATION_PREFER_REUSABLE_CREDENTIALS: booleanSchema(true),
   AGE_VERIFICATION_REUSABLE_PROVIDERS: z.string().default("yoti_digital_id"),
   AGE_VERIFICATION_FALLBACK_PROVIDERS: z.string().default("didit_adaptive_age,persona_document"),
   AGE_VERIFICATION_FALLBACK_ORDER: z.string().default("reusable_credential,age_estimation,free_document,portable_credential,database_non_doc,document"),
@@ -161,12 +166,12 @@ export const serverEnvSchema = z.object({
   TRANSACTIONAL_EMAIL_SMOKE_TO: optionalEmailSchema,
   WORKER_TICK_INTERVAL_MS: z.coerce.number().int().min(1_000).max(3_600_000).default(60_000),
   WORKER_BATCH_LIMIT: z.coerce.number().int().min(1).max(250).default(25),
-  MCP_ENABLED: z.coerce.boolean().default(false),
+  MCP_ENABLED: booleanSchema(false),
   MCP_PUBLIC_BASE_URL: optionalUrlSchema,
   MCP_AUTH_MODE: z.enum(["oauth", "scoped_token"]).default("oauth"),
   MCP_ALLOWED_CLIENTS: z.string().default(""),
-  MCP_REQUIRE_OAUTH: z.coerce.boolean().default(true),
-  MCP_ALLOW_STATIC_TOKENS_DEV: z.coerce.boolean().default(false),
+  MCP_REQUIRE_OAUTH: booleanSchema(true),
+  MCP_ALLOW_STATIC_TOKENS_DEV: booleanSchema(false),
   MCP_TOOL_CALL_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).max(300).default(30),
   MCP_CONNECTION_TOKEN_TTL_SECONDS: z.coerce.number().int().min(300).max(31_536_000).default(86_400),
   MCP_OAUTH_AUTH_CODE_TTL_SECONDS: z.coerce.number().int().min(60).max(900).default(600),
@@ -178,7 +183,7 @@ export const serverEnvSchema = z.object({
   MCP_OAUTH_CLIENT_ID: optionalStringSchema,
   MCP_OAUTH_REDIRECT_URIS: optionalStringSchema,
   MCP_OAUTH_ALLOWED_SCOPES: optionalStringSchema,
-  MCP_OAUTH_PUBLIC_CLIENT: optionalBooleanSchema(true),
+  MCP_OAUTH_PUBLIC_CLIENT: booleanSchema(true),
   MCP_OAUTH_CLIENT_SECRET: optionalStringSchema,
   MCP_TEST_ACCESS_TOKEN: optionalStringSchema,
   MCP_TEST_EXPECTED_TOOL: optionalStringSchema,
