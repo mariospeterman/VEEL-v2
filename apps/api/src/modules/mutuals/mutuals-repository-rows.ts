@@ -24,6 +24,7 @@ export interface MutualsFeedRow {
 
 export interface MutualsInterestResultRow {
   swipe_id: string;
+  swipe_action: "yes" | "not_interested";
   swipe_idempotency_key: string;
   request_hash: string;
   match_id: string | null;

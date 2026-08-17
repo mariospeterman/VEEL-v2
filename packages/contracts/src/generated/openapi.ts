@@ -4833,6 +4833,8 @@ export interface components {
         MutualsInterestResult: {
             /** Format: uuid */
             interestId: string;
+            /** @enum {string} */
+            action: "yes" | "not_interested";
             mutualCreated: boolean;
             /** Format: uuid */
             mutualId?: string | null;

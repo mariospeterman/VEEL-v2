@@ -57,6 +57,7 @@ export function toInterestResult(row: MutualsInterestResultRow): MutualsInterest
 
   return {
     interestId: row.swipe_id,
+    action: row.swipe_action,
     mutualCreated: Boolean(row.match_id),
     mutualId: row.match_id,
     ...(match ? { mutual: match } : {})

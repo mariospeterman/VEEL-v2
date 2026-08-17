@@ -132,6 +132,7 @@ export function createMutualsInterestRepositoryMethods(
         )
         select
           ss.id as swipe_id,
+          ss.action as swipe_action,
           ss.idempotency_key as swipe_idempotency_key,
           ss.request_hash,
           im.id as match_id,

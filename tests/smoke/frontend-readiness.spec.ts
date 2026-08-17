@@ -31,6 +31,7 @@ test("entry presents a direct wallet action without provider implementation copy
   await expect(connect).toBeVisible();
   await expect(connect).toBeEnabled({ timeout: 30_000 });
   await expect(page.getByText(/powered by|google, email|passkey|solana wallet adapter/i)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Language" })).toHaveCount(0);
 
   await connect.click();
   await expect(page.getByRole("dialog", { name: /wallet.*solana|need a wallet/i })).toBeVisible();
@@ -47,6 +48,7 @@ test("offline recovery actions remain reachable on a short viewport", async ({ p
   const recoveryLink = page.getByRole("link", { name: "Go to WeVid" });
   await recoveryLink.scrollIntoViewIfNeeded();
   await expect(recoveryLink).toBeInViewport();
+  await expect(page.getByRole("link", { name: "Try again" })).toHaveAttribute("href", "/offline?retry=current");
 });
 
 test("manifest, install icons, and service worker meet the public PWA contract", async ({ request }) => {
@@ -93,13 +95,21 @@ test("installed Chromium serves the privacy-safe offline document", async ({ bro
   await page.waitForFunction(() => navigator.serviceWorker.controller?.scriptURL.endsWith("/veel-sw.js") === true);
   await context.setOffline(true);
 
+  const retryPath = `/offline-proof-${Date.now()}?mode=onboarding&step=profile`;
   try {
-    await page.goto(`/offline-proof-${Date.now()}`, { waitUntil: "domcontentloaded" });
+    await page.goto(retryPath, { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "WeVid is offline" })).toBeVisible();
     await expect(page.getByText(/private content and account actions are never stored/i)).toBeVisible();
+    await expect(page.getByRole("link", { name: "Try again" })).toHaveAttribute("href", retryPath);
   } finally {
     await context.setOffline(false);
   }
+
+  await page.getByRole("link", { name: "Try again" }).click();
+  await expect.poll(() => {
+    const currentUrl = new URL(page.url());
+    return currentUrl.pathname + currentUrl.search;
+  }).toBe(retryPath);
 });
 
 function pngDimensions(bytes: Buffer) {

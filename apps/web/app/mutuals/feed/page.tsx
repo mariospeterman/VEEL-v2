@@ -1,7 +1,8 @@
 import { appShellNavItems } from "@veel/ui";
-import { getMutualsFeed, type MutualsFeedPage } from "@/api-client";
+import { getMutualsFeed } from "@/api-client";
 import { ErrorState } from "../../ui";
 import { requireAppAccess } from "@/supabase/route-guard";
+import { MutualsFeed } from "./mutuals-feed";
 
 export const dynamic = "force-dynamic";
 
@@ -45,45 +46,6 @@ export default async function MutualsFeedPageRoute() {
         </aside>
       </section>
     </main>
-  );
-}
-
-function MutualsFeed({ feed }: { feed: MutualsFeedPage }) {
-  if (feed.items.length === 0) {
-    return (
-      <section className="rounded border border-(--line) bg-(--panel) p-5">
-        <h2 className="text-base font-semibold tracking-normal">No Mutuals media yet</h2>
-        <p className="mt-2 text-sm leading-6 text-(--muted)">
-          Eligible media appears here only when both safety and Mutuals visibility rules pass.
-        </p>
-      </section>
-    );
-  }
-
-  return (
-    <>
-      {feed.items.map((item) => (
-        <article className="overflow-hidden rounded border border-(--line) bg-(--panel)" key={item.contentId}>
-          {item.posterUrl ? (
-            <img alt="" className="aspect-[16/10] w-full object-cover" src={item.posterUrl} />
-          ) : null}
-          <div className="grid gap-4 p-4">
-            <div>
-              <p className="text-sm text-(--muted)">@{item.handle}</p>
-              <h2 className="mt-1 text-lg font-semibold tracking-normal">{item.title}</h2>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button className="rounded border border-(--line) px-3 py-2 text-sm font-medium" type="button">
-                Not interested
-              </button>
-              <button className="rounded bg-(--accent) px-3 py-2 text-sm font-medium text-white" type="button">
-                Interested
-              </button>
-            </div>
-          </div>
-        </article>
-      ))}
-    </>
   );
 }
 

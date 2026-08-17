@@ -384,6 +384,52 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         displayName: "Integration Buyer"
       });
 
+      await sql`
+        insert into mutual_profiles (user_id, enabled, consent_version, visible_on_media)
+        values (${seededCreatorUserId}, true, 'mutuals-consent-2026-06-04', true)
+      `;
+      const activateMutualsResponse = await app.inject({
+        method: "POST",
+        url: "/v1/mutuals/activate",
+        headers: authenticatedHeaders(`mutuals-activate-${runId}`),
+        payload: { consentVersion: "mutuals-consent-2026-06-04" }
+      });
+      expect(activateMutualsResponse.statusCode, activateMutualsResponse.body).toBe(200);
+
+      const concurrentMutualsRequests = [
+        { action: "yes", key: `mutuals-yes-${runId}` },
+        { action: "not_interested", key: `mutuals-not-interested-${runId}` }
+      ] as const;
+      const concurrentMutualsResponses = await Promise.all(
+        concurrentMutualsRequests.map(({ action, key }) => app.inject({
+          method: "POST",
+          url: "/v1/mutuals/interests",
+          headers: authenticatedHeaders(key),
+          payload: {
+            action,
+            contentId: seededContentId,
+            targetUserId: seededCreatorUserId
+          }
+        }))
+      );
+      for (const response of concurrentMutualsResponses) {
+        expect(response.statusCode, response.body).toBe(200);
+      }
+      const persistedMutualsActions = concurrentMutualsResponses.map((response) =>
+        response.json<{ action: "yes" | "not_interested" }>().action
+      );
+      expect(new Set(persistedMutualsActions).size).toBe(1);
+      expect(["yes", "not_interested"]).toContain(persistedMutualsActions[0]);
+      const mutualsInterestRows = await sql<{ action: "yes" | "not_interested" }[]>`
+        select mi.action
+        from mutual_interests mi
+        join users actor on actor.id = mi.actor_user_id
+        where actor.supabase_user_id = ${buyerSupabaseUserId}
+          and mi.target_user_id = ${seededCreatorUserId}
+          and mi.content_item_id = ${seededContentId}
+      `;
+      expect(mutualsInterestRows).toEqual([{ action: persistedMutualsActions[0] }]);
+
       // Blank legacy display metadata must never override canonical handle readiness.
       await sql`
         update profiles
@@ -4744,6 +4790,19 @@ async function cleanupRun(
       where supabase_user_id in (${input.buyerSupabaseUserId}, ${input.creatorSupabaseUserId})
     `;
     const userIds = userRows.map((row) => row.id);
+    const organizationRows = userIds.length
+      ? await tx<{ id: string }[]>`
+          select distinct o.id
+          from organizations o
+          left join organization_memberships om on om.organization_id = o.id
+          where o.id = ${input.seededOrganizationId}
+             or om.user_id in ${tx(userIds)}
+             or om.invited_by_user_id in ${tx(userIds)}
+        `
+      : await tx<{ id: string }[]>`
+          select id from organizations where id = ${input.seededOrganizationId}
+        `;
+    const organizationIds = organizationRows.map((row) => row.id);
     const ageRows = userIds.length
       ? await tx<{ id: string }[]>`
           select id
@@ -4893,54 +4952,70 @@ async function cleanupRun(
         where follower_user_id in ${tx(userIds)}
            or followed_user_id in ${tx(userIds)}
       `;
+      await tx`
+        delete from mutuals
+        where user_a_id in ${tx(userIds)}
+           or user_b_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from mutual_interests
+        where actor_user_id in ${tx(userIds)}
+           or target_user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from mutual_profiles
+        where user_id in ${tx(userIds)}
+      `;
     }
-    await tx`
-      delete from managed_creator_allocation_records
-      where relationship_id in (
-        select id from managed_creator_relationships where organization_id = ${input.seededOrganizationId}
-      )
-    `;
-    await tx`
-      delete from managed_creator_agreements
-      where relationship_id in (
-        select id from managed_creator_relationships where organization_id = ${input.seededOrganizationId}
-      )
-    `;
-    await tx`
-      delete from enterprise_action_receipts
-      where organization_id = ${input.seededOrganizationId}
-        or relationship_id in (
-          select id from managed_creator_relationships where organization_id = ${input.seededOrganizationId}
+    if (organizationIds.length > 0) {
+      await tx`
+        delete from managed_creator_allocation_records
+        where relationship_id in (
+          select id from managed_creator_relationships where organization_id in ${tx(organizationIds)}
         )
-        or membership_id in (
-          select id from organization_memberships where organization_id = ${input.seededOrganizationId}
+      `;
+      await tx`
+        delete from managed_creator_agreements
+        where relationship_id in (
+          select id from managed_creator_relationships where organization_id in ${tx(organizationIds)}
         )
-    `;
-    await tx`
-      delete from managed_creator_relationships
-      where organization_id = ${input.seededOrganizationId}
-    `;
-    await tx`
-      delete from organization_settlement_wallets
-      where organization_id = ${input.seededOrganizationId}
-    `;
-    await tx`
-      delete from verification_records
-      where subject_type = 'organization' and subject_id = ${input.seededOrganizationId}
-    `;
-    await tx`
-      delete from tier_waivers
-      where subject_type = 'organization'
-        and subject_id = ${input.seededOrganizationId}
-    `;
-    await tx`
-      delete from organization_memberships
-      where organization_id = ${input.seededOrganizationId}
-    `;
-    await tx`
-      delete from organizations
-      where id = ${input.seededOrganizationId}
-    `;
+      `;
+      await tx`
+        delete from enterprise_action_receipts
+        where organization_id in ${tx(organizationIds)}
+          or relationship_id in (
+            select id from managed_creator_relationships where organization_id in ${tx(organizationIds)}
+          )
+          or membership_id in (
+            select id from organization_memberships where organization_id in ${tx(organizationIds)}
+          )
+      `;
+      await tx`
+        delete from managed_creator_relationships
+        where organization_id in ${tx(organizationIds)}
+      `;
+      await tx`
+        delete from organization_settlement_wallets
+        where organization_id in ${tx(organizationIds)}
+      `;
+      await tx`
+        delete from verification_records
+        where subject_type = 'organization' and subject_id in ${tx(organizationIds)}
+      `;
+      await tx`
+        delete from tier_waivers
+        where subject_type = 'organization'
+          and subject_id in ${tx(organizationIds)}
+      `;
+      await tx`
+        delete from organization_memberships
+        where organization_id in ${tx(organizationIds)}
+      `;
+      await tx`
+        delete from organizations
+        where id in ${tx(organizationIds)}
+      `;
+    }
 
     if (userIds.length > 0) {
       if (subscriptionIds.length > 0) {

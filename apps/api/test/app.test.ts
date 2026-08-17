@@ -6529,6 +6529,7 @@ describe("buildApi", () => {
         });
         return {
           interestId: "00000000-0000-4000-8000-0000000000d1",
+          action: "yes",
           mutualCreated: true,
           mutualId: match.id,
           mutual: match
@@ -6583,6 +6584,7 @@ describe("buildApi", () => {
 
     expect(swipeResponse.statusCode).toBe(200);
     expect(swipeResponse.json()).toMatchObject({
+      action: "yes",
       mutualCreated: true,
       mutualId: match.id,
       mutual: { conversationId: match.conversationId }

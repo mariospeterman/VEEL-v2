@@ -69,6 +69,11 @@ Money can never buy access to people, visibility, matches, recommendations, or p
 - `/mutuals/feed` and `/mutuals` use typed API-backed projections through the
   canonical API routes `GET /v1/mutuals/feed` and `GET /v1/mutuals`; they fail
   closed when the API is unavailable instead of rendering fixture Mutuals data.
+- The visible Interested and Not interested controls submit to
+  `POST /v1/mutuals/interests`, retain one idempotency key across a lost-response
+  retry, and render the canonical persisted action plus only the backend-owned
+  Mutual result. A saved interest never
+  implies contact, a reply, or a Mutual until the backend says both users opted in.
 - Dating-named frontend routes and historical aliases such as
   `/mutuals/mutuals` are removed from launch-facing navigation and route
   ownership.

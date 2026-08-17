@@ -4809,9 +4809,10 @@ components:
         action: { type: string, enum: [yes, not_interested] }
     MutualsInterestResult:
       type: object
-      required: [mutualCreated, interestId]
+      required: [action, mutualCreated, interestId]
       properties:
         interestId: { type: string, format: uuid }
+        action: { type: string, enum: [yes, not_interested] }
         mutualCreated: { type: boolean }
         mutualId: { type: string, format: uuid, nullable: true }
         mutual: { $ref: "#/components/schemas/Mutual" }

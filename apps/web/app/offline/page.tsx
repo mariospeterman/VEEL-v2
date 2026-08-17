@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { OfflineRetryButton } from "./offline-retry-button";
 
 export const dynamic = "force-static";
 
@@ -12,7 +13,7 @@ export default function OfflinePage() {
         Private content and account actions are never stored for offline use. Reconnect, then try the page again.
       </p>
       <div className="offline-actions">
-        <a className="primary-button" href="">Try again</a>
+        <OfflineRetryButton />
         <Link className="secondary-button" href="/">Go to WeVid</Link>
       </div>
     </main>
