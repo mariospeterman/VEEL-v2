@@ -1454,10 +1454,51 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         idempotencyKey: `sfw-appeal-premature-approve-${runId}`
       })).rejects.toThrow("Required automated safety checks are incomplete");
 
+      const alternateMediaAssetId = randomUUID();
+      await sql`
+        insert into media_assets (
+          id, content_item_id, provider, provider_asset_id, provider_state,
+          provider_playable, ready_at, provider_checked_at
+        )
+        values (
+          ${alternateMediaAssetId}, ${sfwContentId}, 'bunny', ${`sfw-alternate-${runId}`}, 'ready',
+          true, now(), now()
+        )
+      `;
+      await sql`
+        insert into provider_media_scan_events (
+          media_safety_case_id, media_asset_id, provider, provider_event_id,
+          scan_type, normalized_signal, payload_hash, model_or_ruleset_version, observed_at
+        )
+        select
+          safety.id, evidence.media_asset_id, evidence.provider, evidence.provider_event_id,
+          evidence.scan_type, 'clear', ${"9".repeat(64)}, evidence.ruleset, now()
+        from media_safety_cases safety
+        cross join (values
+          (${sfwMediaAssetId}::uuid, 'bunny_stream', ${`split-container-${runId}`}, 'container_integrity', 'bunny-stream-playability-v1'),
+          (${sfwMediaAssetId}::uuid, 'bunny_shield', ${`split-malware-${runId}`}, 'malware', 'shield-antivirus-v1'),
+          (${alternateMediaAssetId}::uuid, 'bunny_shield', ${`split-known-hash-${runId}`}, 'known_hash', 'shield-known-hash-v1'),
+          (${alternateMediaAssetId}::uuid, 'internal', ${`split-classification-${runId}`}, 'content_classification', 'fixture-classifier-v1')
+        ) as evidence(media_asset_id, provider, provider_event_id, scan_type, ruleset)
+        where safety.content_item_id = ${sfwContentId}
+          and safety.state <> 'superseded'
+      `;
+
+      await expect(moderationRepository.updateContentModeration({
+        supabaseUserId: creatorSupabaseUserId,
+        contentId: sfwContentId,
+        body: {
+          action: "approve",
+          reason: "Evidence split across two uploads must never authorize release."
+        },
+        idempotencyKey: `sfw-appeal-split-evidence-${runId}`
+      })).rejects.toThrow("Required automated safety checks are incomplete");
+
       const evidenceHash = "a".repeat(64);
       await sql`
         insert into provider_media_scan_events (
           media_safety_case_id,
+          media_asset_id,
           provider,
           provider_event_id,
           scan_type,
@@ -1468,6 +1509,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         )
         select
           safety.id,
+          ${sfwMediaAssetId},
           evidence.provider,
           evidence.provider_event_id,
           evidence.scan_type,
@@ -1489,6 +1531,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       await sql`
         insert into provider_media_scan_events (
           media_safety_case_id,
+          media_asset_id,
           provider,
           provider_event_id,
           scan_type,
@@ -1499,6 +1542,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         )
         select
           safety.id,
+          ${sfwMediaAssetId},
           'bunny_shield',
           ${`malware-suspected-${runId}`},
           'malware',
@@ -1524,6 +1568,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       await sql`
         insert into provider_media_scan_events (
           media_safety_case_id,
+          media_asset_id,
           provider,
           provider_event_id,
           scan_type,
@@ -1534,6 +1579,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         )
         select
           safety.id,
+          ${sfwMediaAssetId},
           'bunny_shield',
           ${`malware-cleared-${runId}`},
           'malware',
@@ -1649,7 +1695,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
                     providerEventId: `worker-classification-${runId}`,
                     scanType: "content_classification" as const,
                     normalizedSignal: "clear" as const,
-                    payloadHash: adverseEvidenceHash,
+                    payloadHash: "not-a-sha256",
                     modelOrRulesetVersion: "fixture-classifier-v1"
                   }
                 ]
@@ -1659,8 +1705,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           now: new Date(Date.now() + 3_000)
         })).resolves.toEqual({
           leased: 1,
-          completed: 1,
-          reviewRequired: 0,
+          completed: 0,
+          reviewRequired: 1,
           failed: 0
         });
       } finally {
@@ -1673,6 +1719,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         moderation_state: string;
         publish_state: string;
         report_count: string;
+        invalid_signal_count: string;
       }[]>`
         select
           safety.state as case_state,
@@ -1685,6 +1732,12 @@ describeIntegration("authenticated API happy path against Postgres", () => {
             where report.media_safety_case_id = safety.id
               and report.state = 'review_required'
           ) as report_count
+          ,(
+            select count(*)::text
+            from provider_media_scan_events scan
+            where scan.provider = 'internal'
+              and scan.provider_event_id = ${`worker-classification-${runId}`}
+          ) as invalid_signal_count
         from content_items content
         join media_safety_cases safety
           on safety.content_item_id = content.id
@@ -1694,10 +1747,11 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       `;
       expect(adverseEvidenceRows).toEqual({
         case_state: "held_for_reporting",
-        job_state: "completed",
+        job_state: "review_required",
         moderation_state: "pending",
         publish_state: "blocked",
-        report_count: "1"
+        report_count: "1",
+        invalid_signal_count: "0"
       });
 
       const playbackSessionResponse = await app.inject({
@@ -4819,9 +4873,20 @@ async function approveSeededContent(
   const safetyCase = safetyCases[0];
   if (!safetyCase) throw new Error("Integration safety-case fixture was not created");
 
+  const mediaAssets = await sql<{ id: string }[]>`
+    select id
+    from media_assets
+    where content_item_id = ${input.contentId}
+    order by created_at desc, id desc
+    limit 1
+  `;
+  const releaseMediaAsset = mediaAssets[0];
+  if (!releaseMediaAsset) throw new Error("Integration media-asset fixture was not created");
+
   await sql`
     insert into provider_media_scan_events (
       media_safety_case_id,
+      media_asset_id,
       provider,
       provider_event_id,
       scan_type,
@@ -4832,30 +4897,35 @@ async function approveSeededContent(
     )
     values
       (
-        ${safetyCase.id}, 'bunny_stream', ${`fixture:container:${input.contentId}`},
+        ${safetyCase.id}, ${releaseMediaAsset.id}, 'bunny_stream', ${`fixture:container:${input.contentId}`},
         'container_integrity', 'clear', encode(extensions.digest(${`${input.contentId}:container`}, 'sha256'), 'hex'),
         'bunny-stream-playability-v1', now()
       ),
       (
-        ${safetyCase.id}, 'bunny_shield', ${`fixture:malware:${input.contentId}`},
+        ${safetyCase.id}, ${releaseMediaAsset.id}, 'bunny_shield', ${`fixture:malware:${input.contentId}`},
         'malware', 'clear', encode(extensions.digest(${`${input.contentId}:malware`}, 'sha256'), 'hex'),
         'fixture-shield-antivirus-v1', now()
       ),
       (
-        ${safetyCase.id}, 'bunny_shield', ${`fixture:known-hash:${input.contentId}`},
+        ${safetyCase.id}, ${releaseMediaAsset.id}, 'bunny_shield', ${`fixture:known-hash:${input.contentId}`},
         'known_hash', 'clear', encode(extensions.digest(${`${input.contentId}:known-hash`}, 'sha256'), 'hex'),
         'fixture-shield-known-hash-v1', now()
       ),
       (
-        ${safetyCase.id}, 'internal', ${`fixture:classification:${input.contentId}`},
+        ${safetyCase.id}, ${releaseMediaAsset.id}, 'internal', ${`fixture:classification:${input.contentId}`},
         'content_classification', 'clear', encode(extensions.digest(${`${input.contentId}:classification`}, 'sha256'), 'hex'),
         'fixture-classifier-v1', now()
       ),
       (
-        ${safetyCase.id}, 'internal', ${`fixture:manual-review:${input.contentId}`},
+        ${safetyCase.id}, ${releaseMediaAsset.id}, 'internal', ${`fixture:manual-review:${input.contentId}`},
         'manual_review', 'clear', encode(extensions.digest(${`${input.contentId}:manual-review`}, 'sha256'), 'hex'),
         'media-safety-v2', now()
       )
+  `;
+  await sql`
+    update content_items
+    set release_media_asset_id = ${releaseMediaAsset.id}, updated_at = now()
+    where id = ${input.contentId}
   `;
   await sql`
     update content_items
@@ -5869,6 +5939,15 @@ async function cleanupRun(
       `;
       await tx`
         delete from content_hashtags
+        where content_item_id in ${tx(contentIds)}
+      `;
+      await tx`
+        update content_items
+        set release_media_asset_id = null
+        where id in ${tx(contentIds)}
+      `;
+      await tx`
+        delete from media_safety_cases
         where content_item_id in ${tx(contentIds)}
       `;
       await tx`

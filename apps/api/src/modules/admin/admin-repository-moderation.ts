@@ -90,10 +90,11 @@ export function createModerationRepository(
         const decidingAppeal = safetyCase.state === "appealed";
 
         if (approving) {
-          const evidenceRows = await transaction<{ ready: boolean }[]>`
-            select private.content_safety_automated_evidence_ready(${input.contentId}) as ready
+          const evidenceRows = await transaction<{ media_asset_id: string | null }[]>`
+            select private.content_safety_automated_candidate_asset(${input.contentId}) as media_asset_id
           `;
-          if (evidenceRows[0]?.ready !== true) {
+          const releaseMediaAssetId = evidenceRows[0]?.media_asset_id;
+          if (!releaseMediaAssetId) {
             throw new AdminRepositoryStateConflictError(
               "Required automated safety checks are incomplete"
             );
@@ -103,6 +104,7 @@ export function createModerationRepository(
           await transaction`
             insert into provider_media_scan_events (
               media_safety_case_id,
+              media_asset_id,
               provider,
               provider_event_id,
               scan_type,
@@ -113,6 +115,7 @@ export function createModerationRepository(
             )
             values (
               ${safetyCase.id},
+              ${releaseMediaAssetId},
               'internal',
               ${reviewEventId},
               'manual_review',
@@ -126,6 +129,12 @@ export function createModerationRepository(
               'media-safety-v2',
               now()
             )
+          `;
+
+          await transaction`
+            update content_items
+            set release_media_asset_id = ${releaseMediaAssetId}, updated_at = now()
+            where id = ${input.contentId}
           `;
         }
 

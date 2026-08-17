@@ -57,8 +57,9 @@ The active media release-evidence slice closes the remaining gap between normali
 and release authority. Direct Bunny Stream TUS stays unproven for Shield coverage, so production
 approval must require complete normalized malware, known-hash, container-integrity, classification,
 and human-review evidence rather than treating provider playability or a staff click as scan proof.
-Migration `0106` enforces that predicate in Postgres, admin approval records the human evidence in
-the same transaction, worker outcomes persist only normalized provider signals, and known-hash
+Migration `0106` enforces that predicate per selected media asset in Postgres, admin approval binds
+the human evidence and public playback projection to that exact asset in the same transaction,
+worker outcomes preserve each valid adverse signal even if a companion is malformed, and known-hash
 matches immediately remove published media from public access and open a reporting-review workflow
 without automatic user sanctions. Staging additionally
 requires live Shield configuration proof and a release-bound direct-TUS coverage/fixture receipt.

@@ -25,7 +25,7 @@ The release predicate requires:
 3. an active creator declaration;
 4. valid adult-publisher identity plus scoped performer consent for adult/explicit media.
 
-Provider “clear” signals are normalized into `provider_media_scan_events` and still route to a staff release decision. Migration `0106` makes that evidence enforceable: the latest attributable container-integrity, malware, known-hash, and content-classification signals must all be clear before staff can approve, and the approval itself records a normalized manual-review signal. A later adverse required signal immediately removes already-published content from public access; a known-hash match also opens an idempotent reporting-review workflow. Automated systems do not issue irreversible user sanctions.
+Provider “clear” signals are normalized into `provider_media_scan_events` and still route to a staff release decision. Migration `0106` makes that evidence enforceable: the latest attributable container-integrity, malware, known-hash, and content-classification signals must all be clear for the same playable media asset before staff can approve. Approval selects that exact asset as the canonical release projection and records a normalized manual-review signal bound to it; public reads never substitute another upload. A later adverse required signal for the selected release immediately removes already-published content from public access, while valid adverse evidence remains effective even when a companion provider signal is malformed. A known-hash match also opens an idempotent reporting-review workflow. Automated systems do not issue irreversible user sanctions.
 
 ## Upload Decision
 
@@ -95,4 +95,4 @@ No candidate row can be treated as production protection.
 
 ## Rollback
 
-Migration `0106_media_release_evidence.down.sql` restores the earlier release predicate but deliberately retains additive container-integrity events and their scan type so rollback cannot erase audit evidence. Content held by `0106` remains held. Migration `0088_media_safety_and_consent.down.sql` removes the wider domain only as part of a coordinated full-domain rollback. No rollback fabricates prior approvals; production rollback must keep affected content unpublished until a replacement safety authority is explicitly approved.
+Migration `0106_media_release_evidence.down.sql` restores the earlier release predicate but deliberately retains additive container-integrity events, their media-asset bindings, the selected-release pointer, and the scan type so rollback cannot erase audit evidence. Content held by `0106` remains held. Migration `0088_media_safety_and_consent.down.sql` removes the wider domain only as part of a coordinated full-domain rollback. No rollback fabricates prior approvals; production rollback must keep affected content unpublished until a replacement safety authority is explicitly approved.

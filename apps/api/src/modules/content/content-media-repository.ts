@@ -207,6 +207,7 @@ export function createContentMediaRepositoryMethods(
           await transaction`
             insert into provider_media_scan_events (
               media_safety_case_id,
+              media_asset_id,
               provider,
               provider_event_id,
               scan_type,
@@ -217,6 +218,7 @@ export function createContentMediaRepositoryMethods(
             )
             select
               safety.id,
+              asset.id,
               'bunny_stream',
               ${observationEventId},
               'container_integrity',
@@ -344,6 +346,7 @@ export function createContentMediaRepositoryMethods(
           await transaction`
             insert into provider_media_scan_events (
               media_safety_case_id,
+              media_asset_id,
               provider,
               provider_event_id,
               scan_type,
@@ -354,6 +357,7 @@ export function createContentMediaRepositoryMethods(
             )
             select
               safety.id,
+              asset.id,
               'bunny_stream',
               ${input.providerEventId},
               'container_integrity',

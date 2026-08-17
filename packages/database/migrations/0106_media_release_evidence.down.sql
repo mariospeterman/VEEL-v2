@@ -3,6 +3,8 @@
 
 drop trigger if exists provider_media_scan_events_adverse_hold on provider_media_scan_events;
 drop function if exists private.hold_content_on_adverse_media_evidence();
+drop trigger if exists provider_media_scan_events_asset_scope on provider_media_scan_events;
+drop function if exists private.enforce_media_evidence_asset_scope();
 
 create or replace function private.content_safety_release_ready(p_content_item_id uuid)
 returns boolean
@@ -33,9 +35,12 @@ $$;
 
 drop function if exists private.content_safety_release_evidence_ready(uuid);
 drop function if exists private.content_safety_automated_evidence_ready(uuid);
+drop function if exists private.content_safety_automated_candidate_asset(uuid);
+drop function if exists private.content_safety_automated_asset_evidence_ready(uuid, uuid);
 
--- Preserve container-integrity evidence and the additive scan type on rollback.
--- Audit evidence must not be deleted merely to restore the earlier release policy.
+-- Preserve container-integrity evidence, asset bindings, and the selected release
+-- pointer on rollback. Audit evidence must not be deleted merely to restore the
+-- earlier release policy.
 
 comment on function private.content_safety_release_ready(uuid) is
   'Returns whether canonical moderation and performer evidence allow content release.';

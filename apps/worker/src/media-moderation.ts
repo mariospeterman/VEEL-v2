@@ -256,14 +256,12 @@ export function createPostgresMediaModerationRepository(
         `;
         if (!jobRows[0]) return;
 
-        if (
-          input.outcome.state === "evidence"
-          && evidenceOutcome?.reasonCode !== "required_release_evidence_invalid"
-        ) {
-          for (const signal of input.outcome.signals) {
+        if (input.outcome.state === "evidence") {
+          for (const signal of validMediaModerationSignals(input.outcome.signals)) {
             await transaction`
               insert into provider_media_scan_events (
                 media_safety_case_id,
+                media_asset_id,
                 provider,
                 provider_event_id,
                 scan_type,
@@ -277,6 +275,7 @@ export function createPostgresMediaModerationRepository(
               )
               values (
                 ${input.job.caseId},
+                ${input.job.mediaAssetId},
                 ${signal.provider},
                 ${signal.providerEventId},
                 ${signal.scanType},
@@ -361,37 +360,19 @@ export function summarizeEvidence(signals: MediaModerationSignal[]): {
   matchedKnownHash: MediaModerationSignal | null;
   reasonCode: string;
 } {
-  const requiredProviders = new Map<MediaModerationSignal["scanType"], MediaModerationSignal["provider"]>([
-    ["container_integrity", "bunny_stream"],
-    ["malware", "bunny_shield"],
-    ["known_hash", "bunny_shield"],
-    ["content_classification", "internal"]
-  ]);
+  const validSignals = validMediaModerationSignals(signals);
   const observedRequiredTypes = new Set<MediaModerationSignal["scanType"]>();
-  const invalid = signals.some((signal) => {
-    const requiredProvider = requiredProviders.get(signal.scanType);
-    if (!requiredProvider) return signal.scanType !== "live_signal";
-    if (observedRequiredTypes.has(signal.scanType)) return true;
+  let duplicateRequiredSignal = false;
+  for (const signal of validSignals) {
+    if (!requiredEvidenceProviders.has(signal.scanType)) continue;
+    if (observedRequiredTypes.has(signal.scanType)) duplicateRequiredSignal = true;
     observedRequiredTypes.add(signal.scanType);
-    return signal.provider !== requiredProvider
-      || !signal.providerEventId.trim()
-      || !/^[a-f0-9]{64}$/.test(signal.payloadHash)
-      || (signal.scanType === "content_classification" && !signal.modelOrRulesetVersion?.trim())
-      || (signal.confidence !== undefined && (signal.confidence < 0 || signal.confidence > 1));
-  });
-  const evidenceComplete = !invalid
-    && [...requiredProviders.keys()].every((scanType) => observedRequiredTypes.has(scanType));
-
-  if (invalid) {
-    return {
-      caseState: "review_required",
-      evidenceComplete: false,
-      matchedKnownHash: null,
-      reasonCode: "required_release_evidence_invalid"
-    };
   }
+  const invalid = validSignals.length !== signals.length || duplicateRequiredSignal;
+  const evidenceComplete = !invalid
+    && [...requiredEvidenceProviders.keys()].every((scanType) => observedRequiredTypes.has(scanType));
 
-  const matchedKnownHash = signals.find(
+  const matchedKnownHash = validSignals.find(
     (signal) => signal.scanType === "known_hash" && signal.normalizedSignal === "matched"
   ) ?? null;
   if (matchedKnownHash) {
@@ -403,7 +384,16 @@ export function summarizeEvidence(signals: MediaModerationSignal[]): {
     };
   }
 
-  if (signals.some((signal) => signal.normalizedSignal !== "clear")) {
+  if (invalid) {
+    return {
+      caseState: "review_required",
+      evidenceComplete: false,
+      matchedKnownHash: null,
+      reasonCode: "required_release_evidence_invalid"
+    };
+  }
+
+  if (validSignals.some((signal) => signal.normalizedSignal !== "clear")) {
     return {
       caseState: "review_required",
       evidenceComplete,
@@ -420,4 +410,30 @@ export function summarizeEvidence(signals: MediaModerationSignal[]): {
       ? "automated_checks_clear_manual_release_required"
       : "required_release_evidence_incomplete"
   };
+}
+
+const requiredEvidenceProviders = new Map<
+  MediaModerationSignal["scanType"],
+  MediaModerationSignal["provider"]
+>([
+  ["container_integrity", "bunny_stream"],
+  ["malware", "bunny_shield"],
+  ["known_hash", "bunny_shield"],
+  ["content_classification", "internal"]
+]);
+
+export function validMediaModerationSignals(
+  signals: MediaModerationSignal[]
+): MediaModerationSignal[] {
+  return signals.filter((signal) => {
+    const expectedProvider = requiredEvidenceProviders.get(signal.scanType);
+    const providerValid = expectedProvider
+      ? signal.provider === expectedProvider
+      : signal.scanType === "live_signal" && signal.provider === "livepeer";
+    return providerValid
+      && Boolean(signal.providerEventId.trim())
+      && /^[a-f0-9]{64}$/.test(signal.payloadHash)
+      && (signal.scanType !== "content_classification" || Boolean(signal.modelOrRulesetVersion?.trim()))
+      && (signal.confidence === undefined || (signal.confidence >= 0 && signal.confidence <= 1));
+  });
 }

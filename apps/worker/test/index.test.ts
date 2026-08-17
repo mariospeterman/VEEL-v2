@@ -248,6 +248,24 @@ describe("runMediaModerationTick", () => {
     });
   });
 
+  it("preserves a valid known-hash match when a companion signal is malformed", () => {
+    const signals = clearMediaSignals();
+    const matched = {
+      ...signals[2]!,
+      normalizedSignal: "matched" as const,
+      providerIncidentReference: "opaque-incident-2"
+    };
+    signals[2] = matched;
+    signals[3] = { ...signals[3]!, payloadHash: "not-a-sha256" };
+
+    expect(summarizeEvidence(signals)).toEqual({
+      caseState: "held_for_reporting",
+      evidenceComplete: false,
+      matchedKnownHash: matched,
+      reasonCode: "known_hash_match_requires_reporting_review"
+    });
+  });
+
   it("rejects incomplete or malformed normalized evidence", () => {
     const incomplete = clearMediaSignals().slice(0, 3);
     expect(summarizeEvidence(incomplete)).toMatchObject({
