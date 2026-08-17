@@ -85,6 +85,7 @@ describe("canonical provider event replay handlers", () => {
 
     expect(dependencies.paymentEvidenceRepository.findIntentByReference).toHaveBeenCalledWith({
       referenceAddresses: ["reference-address"],
+      confirmedSignature: "solana-signature",
       includeConfirmed: true
     });
     expect(dependencies.settlementVerifier.verifyTransfer).toHaveBeenCalledWith(

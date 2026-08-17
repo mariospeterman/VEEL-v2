@@ -90,10 +90,16 @@ export function createPostgresPaymentEvidenceRepository(
         where pi.reference_address in ${sql(input.referenceAddresses)}
           and (
             pi.state in ('pending', 'transaction_requested', 'submitted')
-            or (${input.includeConfirmed ?? false} and pi.state = 'confirmed')
+            or (
+              ${input.includeConfirmed ?? false}
+              and pi.state = 'confirmed'
+              and pi.submitted_signature = ${input.confirmedSignature ?? null}
+            )
           )
           and (not pi.withdrawal_waiver_required or pi.withdrawal_waiver_accepted_at is not null)
-        order by pi.created_at asc
+        order by
+          case when pi.state = 'confirmed' then 1 else 0 end asc,
+          pi.created_at asc
         limit 1
       `;
       const row = rows[0];
