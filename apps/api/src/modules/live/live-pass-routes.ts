@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { mutationRateLimit } from "../../shared/rate-limits.js";
 import {
   PaymentIdempotencyConflictError,
+  PaymentAmountBelowPolicyError,
   PaymentRecipientNotReadyError,
   PaymentRepositoryConfigurationError
 } from "../payment/payment-repository.js";
@@ -11,6 +12,7 @@ import {
   SolanaPaymentConfigurationError
 } from "../payment/solana-payment.js";
 import { toPaymentIntentResponse } from "../payment/payment-route-shared.js";
+import { defaultPaymentCommercialPolicy } from "../payment/payment-commercial-policy.js";
 import { LiveRepositoryConfigurationError } from "./live-repository.js";
 import {
   conflictResponse,
@@ -23,7 +25,6 @@ import {
   verifyLiveReadyAccess
 } from "./live-route-shared.js";
 
-const paymentIntentTtlMs = 15 * 60 * 1000;
 export async function registerLivePassRoutes(
   app: FastifyInstance,
   options: RegisterLiveRoutesOptions
@@ -82,6 +83,7 @@ export async function registerLivePassRoutes(
         targetId: room.id,
         amountMinor: room.eventAccess.amountMinor
       };
+      const commercialPolicy = defaultPaymentCommercialPolicy(app.config, "live_pass", "SOL");
       const intent = await options.paymentRepository.createOrReuseIntent({
         supabaseUserId: access.supabaseUserId,
         idempotencyKey,
@@ -93,12 +95,10 @@ export async function registerLivePassRoutes(
         solanaCluster: app.config.SOLANA_CLUSTER,
         treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET ?? platformFeeWallet,
         platformFeeWallet,
-        platformFeeBps: app.config.PAYMENT_PLATFORM_FEE_BPS,
-        referralShareOfPlatformFeeBps: app.config.PAYMENT_REFERRAL_SHARE_OF_PLATFORM_FEE_BPS,
+        ...commercialPolicy,
         settlementKind: "creator_split",
         creatorUserId: room.creator.id,
         referenceAddress: createSolanaReferenceAddress(),
-        expiresAt: new Date(Date.now() + paymentIntentTtlMs),
         referralToken: null
       });
 
@@ -118,6 +118,13 @@ export async function registerLivePassRoutes(
 
       if (error instanceof PaymentRecipientNotReadyError) {
         return reply.code(409).send(conflictResponse("This creator cannot receive payments yet"));
+      }
+
+
+      if (error instanceof PaymentAmountBelowPolicyError) {
+        return reply.code(409).send(conflictResponse(
+          `Live event price is below the current minimum of ${error.minimumAmountMinor} atomic units`
+        ));
       }
 
       if (

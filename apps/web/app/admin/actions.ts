@@ -10,6 +10,7 @@ import {
   updateAdminOrganizationMember,
   updateAdminDataRequest,
   updateAdminFeatureFlag,
+  updateAdminPaymentCommercialPolicy,
   updateAdminRefundDispute,
   updateAdminSupportCase,
   updateAdminSupportPolicy,
@@ -17,6 +18,7 @@ import {
   type AdminLiveRoomSuspensionRequest,
   type AdminModerationActionRequest,
   type AdminFeatureFlagPatchRequest,
+  type AdminPaymentCommercialPolicyPatchRequest,
   type AdminOrganizationKybActionRequest,
   type AdminOrganizationProvisionRequest,
   type AdminOrganizationMemberActionRequest,
@@ -143,6 +145,26 @@ export async function updateFeatureFlagAction(formData: FormData): Promise<void>
   actionResult(result);
 }
 
+export async function updatePaymentCommercialPolicyAction(formData: FormData): Promise<void> {
+  const productType = enumField(formData, "productType", [
+    "support",
+    "content_unlock",
+    "paid_message",
+    "live_pass",
+    "event_access_pass"
+  ]);
+  const currency = enumField(formData, "currency", ["SOL", "USDC"]);
+  const body: AdminPaymentCommercialPolicyPatchRequest = {
+    minimumAmountMinor: integerField(formData, "minimumAmountMinor", 1, Number.MAX_SAFE_INTEGER),
+    platformFeeBps: integerField(formData, "platformFeeBps", 0, 9_999),
+    referralShareOfPlatformFeeBps: integerField(formData, "referralShareOfPlatformFeeBps", 0, 10_000),
+    quoteTtlSeconds: integerField(formData, "quoteTtlSeconds", 60, 1_800),
+    state: enumField(formData, "state", ["active", "inactive"]),
+    reason: stringField(formData, "reason")
+  };
+  actionResult(await updateAdminPaymentCommercialPolicy(productType, currency, body, randomUUID()));
+}
+
 function actionResult<T>(result: ApiResult<T>): void {
   if (!result.ok) {
     throw new Error(`Admin action failed with HTTP ${result.status}: ${result.message}`);
@@ -167,6 +189,14 @@ function enumField<const T extends readonly string[]>(formData: FormData, key: s
   }
 
   return value;
+}
+
+function integerField(formData: FormData, key: string, minimum: number, maximum: number): number {
+  const parsed = Number(stringField(formData, key));
+  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) {
+    throw new Error(`${key} must be an integer between ${minimum} and ${maximum}`);
+  }
+  return parsed;
 }
 
 function jsonObjectField(formData: FormData, key: string): Record<string, unknown> {

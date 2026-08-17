@@ -131,6 +131,8 @@ Admin/env owns guardrails:
 
 Environment variables provide safe launch defaults. Admin configuration can override env defaults and every override is audited. The frontend never calculates final splits or final payable price.
 
+Implemented one-time payment policy stores one constrained override per product and asset. The effective policy is resolved inside the same PostgreSQL transaction that creates the intent and its exact floor, fee rates, source, revision, quote time, and expiry are snapshotted onto that intent. Admin changes affect only future quotes; they never rewrite an existing intent or settled payment. Exact admin retries return the original revision and changed-input key reuse conflicts.
+
 Examples:
 
 - Admin sets minimum paid message price to `0.01 SOL` or USDC equivalent.

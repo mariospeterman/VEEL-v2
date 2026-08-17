@@ -2631,6 +2631,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/payments/commercial-policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List audited backend payment policy overrides */
+        get: operations["listAdminPaymentCommercialPolicies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/payments/commercial-policies/{productType}/{currency}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Create or update an audited backend payment policy override */
+        patch: operations["updateAdminPaymentCommercialPolicy"];
+        trace?: never;
+    };
     "/v1/admin/unlocks": {
         parameters: {
             query?: never;
@@ -4357,6 +4391,19 @@ export interface components {
             /** @enum {string} */
             refundValueBasis: "original_crypto_amount" | "fiat_value_at_purchase" | "manual_resolution";
         };
+        /** @description Immutable backend-owned commercial policy snapshot for this short-lived quote. */
+        PaymentIntentQuote: {
+            minimumAmountMinor: number;
+            platformFeeBps: number;
+            referralShareOfPlatformFeeBps: number;
+            /** Format: date-time */
+            quotedAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** @enum {string} */
+            policySource: "environment_default" | "admin_override" | "legacy_environment_default";
+            policyRevision: number;
+        };
         PaymentIntent: {
             /** Format: uuid */
             id: string;
@@ -4373,6 +4420,7 @@ export interface components {
             platformFeeGrossMinor: number;
             platformFeeAmountMinor: number;
             referralAmountMinor: number;
+            quote: components["schemas"]["PaymentIntentQuote"];
             refundPolicy: components["schemas"]["PaymentIntentRefundPolicy"];
         };
         SubmitPaymentSignatureRequest: {
@@ -5325,6 +5373,23 @@ export interface components {
             /** Format: date-time */
             confirmedAt?: string | null;
         };
+        AdminPaymentCommercialPolicy: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            productType: "support" | "content_unlock" | "paid_message" | "live_pass" | "event_access_pass";
+            currency: components["schemas"]["Currency"];
+            minimumAmountMinor: number;
+            platformFeeBps: number;
+            referralShareOfPlatformFeeBps: number;
+            quoteTtlSeconds: number;
+            /** @enum {string} */
+            state: "active" | "inactive";
+            revision: number;
+            reason: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
         AdminUnlock: {
             /** Format: uuid */
             id: string;
@@ -5863,6 +5928,15 @@ export interface components {
             };
             /** @enum {string} */
             state: "active" | "paused" | "archived";
+            reason: string;
+        };
+        AdminPaymentCommercialPolicyPatchRequest: {
+            minimumAmountMinor: number;
+            platformFeeBps: number;
+            referralShareOfPlatformFeeBps: number;
+            quoteTtlSeconds: number;
+            /** @enum {string} */
+            state: "active" | "inactive";
             reason: string;
         };
         AuditEvent: {
@@ -6947,6 +7021,26 @@ export interface components {
                 };
             };
         };
+        /** @description Audited backend payment policy override */
+        AdminPaymentCommercialPolicy: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["AdminPaymentCommercialPolicy"];
+            };
+        };
+        /** @description Audited backend payment policy overrides */
+        AdminPaymentCommercialPolicyPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    items: components["schemas"]["AdminPaymentCommercialPolicy"][];
+                };
+            };
+        };
         /** @description Admin unlocks */
         AdminUnlockPage: {
             headers: {
@@ -7696,6 +7790,11 @@ export interface components {
         AdminFeatureFlagPatch: {
             content: {
                 "application/json": components["schemas"]["AdminFeatureFlagPatchRequest"];
+            };
+        };
+        AdminPaymentCommercialPolicyPatch: {
+            content: {
+                "application/json": components["schemas"]["AdminPaymentCommercialPolicyPatchRequest"];
             };
         };
         AdminLiveRoomSuspension: {
@@ -10960,6 +11059,39 @@ export interface operations {
         responses: {
             200: components["responses"]["AdminPaymentIntentPage"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    listAdminPaymentCommercialPolicies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminPaymentCommercialPolicyPage"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    updateAdminPaymentCommercialPolicy: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                productType: "support" | "content_unlock" | "paid_message" | "live_pass" | "event_access_pass";
+                currency: components["schemas"]["Currency"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["AdminPaymentCommercialPolicyPatch"];
+        responses: {
+            200: components["responses"]["AdminPaymentCommercialPolicy"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
         };
     };
     listAdminUnlocks: {

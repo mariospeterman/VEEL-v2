@@ -3,6 +3,7 @@ import { Connection } from "@solana/web3.js";
 import { createHash } from "node:crypto";
 import {
   PaymentConsentConflictError,
+  PaymentAmountBelowPolicyError,
   PaymentIdempotencyConflictError,
   PaymentRecipientNotReadyError,
   PaymentRepositoryConfigurationError
@@ -30,7 +31,6 @@ import type { RegisterPaymentRoutesOptions } from "./payment-route-shared.js";
 import {
   hashPaymentIntentRequest,
   notFoundResponse,
-  paymentIntentTtlMs,
   requiredIdempotencyKey,
   toPaymentIntentResponse,
   validateCreatePaymentIntentRequest,
@@ -38,6 +38,7 @@ import {
   verifyPaymentReadyAccess
 } from "./payment-route-shared.js";
 import { mutationRateLimit } from "../../shared/rate-limits.js";
+import { defaultPaymentCommercialPolicy } from "./payment-commercial-policy.js";
 
 export async function registerPaymentIntentRoutes(
   app: FastifyInstance,
@@ -60,11 +61,8 @@ export async function registerPaymentIntentRoutes(
 
     const body = request.body as Partial<CreatePaymentIntentRequest> | undefined;
     const currency = body?.currency ?? app.config.PAYMENT_DEFAULT_ASSET;
-    const minimumAmountMinor =
-      currency === "USDC"
-        ? app.config.PAYMENT_MIN_SUPPORT_USDC_ATOMIC
-        : app.config.PAYMENT_MIN_SUPPORT_SOL_LAMPORTS;
-    const validationError = validateCreatePaymentIntentRequest(body, { minimumAmountMinor });
+    const commercialPolicy = defaultPaymentCommercialPolicy(app.config, "support", currency);
+    const validationError = validateCreatePaymentIntentRequest(body);
 
     if (validationError) {
       return reply.code(400).send(validationResponse(validationError));
@@ -90,7 +88,9 @@ export async function registerPaymentIntentRoutes(
       assertSolanaAddress(platformFeeWallet);
       if (app.config.PAYMENT_USDC_MINT) {
         assertSolanaAddress(app.config.PAYMENT_USDC_MINT);
-      }      const intentBody = body as CreatePaymentIntentRequest & { amountMinor: number };
+      }
+
+      const intentBody = body as CreatePaymentIntentRequest & { amountMinor: number };
       const intent = await options.paymentRepository.createOrReuseIntent({
         supabaseUserId: access.supabaseUserId,
         idempotencyKey,
@@ -104,11 +104,9 @@ export async function registerPaymentIntentRoutes(
         solanaCluster: app.config.SOLANA_CLUSTER,
         treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET ?? platformFeeWallet,
         platformFeeWallet,
-        platformFeeBps: app.config.PAYMENT_PLATFORM_FEE_BPS,
-        referralShareOfPlatformFeeBps: app.config.PAYMENT_REFERRAL_SHARE_OF_PLATFORM_FEE_BPS,
+        ...commercialPolicy,
         settlementKind: "creator_split",
         referenceAddress: createSolanaReferenceAddress(),
-        expiresAt: new Date(Date.now() + paymentIntentTtlMs),
         referralToken: intentBody.referralToken ?? null
       });
 
@@ -126,6 +124,12 @@ export async function registerPaymentIntentRoutes(
           code: "conflict",
           message: "This creator cannot receive payments yet"
         });
+      }
+
+      if (error instanceof PaymentAmountBelowPolicyError) {
+        return reply.code(400).send(validationResponse(
+          `Support amount must be at least ${error.minimumAmountMinor} atomic units`
+        ));
       }
 
       if (

@@ -38,7 +38,9 @@ import {
   createPostgresPaymentRepository
 } from "./modules/payment/payment-repository.js";
 import { createSolanaRpcSettlementVerifier } from "./modules/payment/solana-payment.js";
+import { createPostgresPaymentCommercialPolicyRepository } from "./modules/payment/payment-commercial-policy-repository.js";
 import type {
+  PaymentCommercialPolicyRepository,
   PaymentEvidenceRepository,
   PaymentRepository,
   PaymentSettlementVerifier
@@ -103,6 +105,7 @@ export interface BuildApiOptions {
   messageRepository?: MessageRepository;
   managedCreatorRepository?: ManagedCreatorRepository;
   paymentRepository?: PaymentRepository;
+  paymentCommercialPolicyRepository?: PaymentCommercialPolicyRepository;
   paymentEvidenceRepository?: PaymentEvidenceRepository;
   performerRepository?: PerformerRepository;
   activityRepository?: ActivityRepository;
@@ -146,6 +149,7 @@ export interface ApiDependencies {
   messageRepository: MessageRepository;
   managedCreatorRepository: ManagedCreatorRepository;
   paymentRepository: PaymentRepository;
+  paymentCommercialPolicyRepository: PaymentCommercialPolicyRepository;
   paymentEvidenceRepository: PaymentEvidenceRepository;
   performerRepository: PerformerRepository;
   activityRepository: ActivityRepository;
@@ -210,6 +214,9 @@ export function createApiDependencies(
       options.managedCreatorRepository ?? createPostgresManagedCreatorRepository(postgresClient),
     paymentRepository:
       options.paymentRepository ?? createPostgresPaymentRepository(postgresClient),
+    paymentCommercialPolicyRepository:
+      options.paymentCommercialPolicyRepository ??
+      createPostgresPaymentCommercialPolicyRepository(postgresClient),
     paymentEvidenceRepository:
       options.paymentEvidenceRepository ??
       createPostgresPaymentEvidenceRepository(postgresClient),

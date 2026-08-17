@@ -200,6 +200,35 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   await expect.poll(() => page.evaluate(() => document.cookie.includes("veel_e2e_access_token="))).toBe(false);
 });
 
+test("shows and updates audited payment commercial policy overrides", async ({ page }) => {
+  await page.goto("/admin", { waitUntil: "domcontentloaded" });
+
+  await expect(page.getByRole("heading", { name: "Payments and unlocks" })).toBeVisible();
+  await expect(page.getByText("Overrides apply only to new quotes.")).toBeVisible();
+  await expect(page.getByText("support · SOL")).toBeVisible();
+  await expect(page.getByText("Revision 3")).toBeVisible();
+
+  const policyForm = page.getByRole("button", { name: "Save policy" }).locator("..");
+  await policyForm.getByLabel("Minimum atomic amount").fill("2000000");
+  await policyForm.getByLabel("Audit reason").fill("Raise the support floor after finance review");
+  await policyForm.getByRole("button", { name: "Save policy" }).click();
+
+  await expect.poll(() => requests.some((request) =>
+    request.method === "PATCH" &&
+    request.path === "/v1/admin/payments/commercial-policies/support/SOL" &&
+    Boolean(request.idempotencyKey)
+  )).toBe(true);
+
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.getByText("support · SOL")).toBeVisible();
+  const layout = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth
+  }));
+  expect(layout.scrollWidth).toBe(layout.clientWidth);
+});
+
 async function gotoUntilVisible(page: Page, path: string, readyLocator: () => Locator) {
   let lastError: unknown = null;
 
@@ -251,6 +280,21 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
 
   if (method === "GET" && url.pathname === "/v1/session") {
     sendJson(response, 200, sessionState());
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/v1/admin/payments/commercial-policies") {
+    sendJson(response, 200, { items: [paymentCommercialPolicy()], nextCursor: null });
+    return;
+  }
+
+  if (method === "PATCH" && url.pathname === "/v1/admin/payments/commercial-policies/support/SOL") {
+    sendJson(response, 200, {
+      ...paymentCommercialPolicy(),
+      ...body,
+      revision: 4,
+      updatedAt: "2026-08-16T14:05:00.000Z"
+    });
     return;
   }
 
@@ -745,5 +789,22 @@ function paymentIntent() {
       durableConfirmationRequired: true,
       refundValueBasis: "original_crypto_amount"
     }
+  };
+}
+
+function paymentCommercialPolicy() {
+  return {
+    id: "00000000-0000-4000-8000-000000000052",
+    productType: "support",
+    currency: "SOL",
+    minimumAmountMinor: 1_000_000,
+    platformFeeBps: 1_000,
+    referralShareOfPlatformFeeBps: 2_000,
+    quoteTtlSeconds: 900,
+    state: "active",
+    revision: 3,
+    reason: "Initial finance-approved launch policy",
+    updatedBySupabaseUserId: "00000000-0000-4000-8000-000000000001",
+    updatedAt: "2026-08-16T14:00:00.000Z"
   };
 }

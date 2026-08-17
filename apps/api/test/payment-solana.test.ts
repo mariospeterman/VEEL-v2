@@ -413,6 +413,12 @@ function storedUsdcIntent(): StoredPaymentIntent {
     referenceAddress,
     solanaCluster: "mainnet-beta",
     expiresAt: new Date("2026-01-01T00:15:00.000Z"),
+    quotedAt: new Date("2026-01-01T00:00:00.000Z"),
+    minimumAmountMinor: 500_000,
+    platformFeeBps: 1_000,
+    referralShareOfPlatformFeeBps: 2_000,
+    commercialPolicySource: "environment_default",
+    commercialPolicyRevision: 0,
     requestHash: "request-hash",
     withdrawalWaiverRequired: false,
     withdrawalWaiverAcceptedAt: null,
@@ -427,6 +433,15 @@ function storedUsdcIntent(): StoredPaymentIntent {
       termsVersion: "2026-01",
       durableConfirmationRequired: true,
       refundValueBasis: "original_crypto_amount"
+    },
+    quote: {
+      minimumAmountMinor: 500_000,
+      platformFeeBps: 1_000,
+      referralShareOfPlatformFeeBps: 2_000,
+      quotedAt: "2026-01-01T00:00:00.000Z",
+      expiresAt: "2026-01-01T00:15:00.000Z",
+      policySource: "environment_default",
+      policyRevision: 0
     }
   };
 }

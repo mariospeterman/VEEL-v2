@@ -789,8 +789,32 @@ create table payment_intents (
   currency text not null,
   solana_reference text unique not null,
   state payment_state not null default 'pending',
+  commercial_policy_source text not null,
+  commercial_policy_override_id uuid,
+  commercial_policy_revision integer not null default 0,
+  minimum_amount_minor bigint not null,
+  platform_fee_bps integer not null,
+  referral_share_of_platform_fee_bps integer not null,
+  quoted_at timestamptz not null,
   expires_at timestamptz not null,
   created_at timestamptz not null default now()
+);
+
+create table payment_commercial_policy_overrides (
+  id uuid primary key,
+  product_type payment_product_type not null,
+  currency text not null,
+  minimum_amount_minor bigint not null,
+  platform_fee_bps integer not null,
+  referral_share_of_platform_fee_bps integer not null,
+  quote_ttl_seconds integer not null,
+  state text not null,
+  revision integer not null,
+  reason text not null,
+  updated_by_user_id uuid not null references users(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (product_type, currency)
 );
 
 create index payment_intents_created_at_idx

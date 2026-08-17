@@ -7,6 +7,8 @@ import type {
   AdminDataRequestActionRequest,
   AdminFeatureFlag,
   AdminFeatureFlagPatchRequest,
+  AdminPaymentCommercialPolicy,
+  AdminPaymentCommercialPolicyPatchRequest,
   AdminOrganization,
   AdminOrganizationKybActionRequest,
   AdminOrganizationProvisionRequest,
@@ -132,6 +134,19 @@ export async function updateAdminFeatureFlag(
 ): Promise<ApiResult<AdminFeatureFlag>> {
   return patchJson<AdminFeatureFlag>(
     `/v1/admin/feature-flags/${encodeURIComponent(featureFlagKey)}`,
+    body,
+    idempotencyKey
+  );
+}
+
+export async function updateAdminPaymentCommercialPolicy(
+  productType: AdminPaymentCommercialPolicy["productType"],
+  currency: AdminPaymentCommercialPolicy["currency"],
+  body: AdminPaymentCommercialPolicyPatchRequest,
+  idempotencyKey: string
+): Promise<ApiResult<AdminPaymentCommercialPolicy>> {
+  return patchJson<AdminPaymentCommercialPolicy>(
+    `/v1/admin/payments/commercial-policies/${encodeURIComponent(productType)}/${encodeURIComponent(currency)}`,
     body,
     idempotencyKey
   );

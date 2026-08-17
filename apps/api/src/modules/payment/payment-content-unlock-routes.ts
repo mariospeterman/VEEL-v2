@@ -3,12 +3,14 @@ import { ContentRepositoryConfigurationError } from "../content/content-reposito
 import type { ContentUnlockIntent } from "../content/types.js";
 import {
   PaymentIdempotencyConflictError,
+  PaymentAmountBelowPolicyError,
   PaymentRecipientNotReadyError,
   PaymentRepositoryConfigurationError
 } from "./payment-repository.js";
 import { assertSolanaAddress, createSolanaReferenceAddress, SolanaPaymentConfigurationError } from "./solana-payment.js";
 import type { RegisterPaymentRoutesOptions } from "./payment-route-shared.js";
-import { hashPaymentIntentRequest, notFoundResponse, paymentIntentTtlMs, toPaymentIntentResponse, validationResponse, verifyPaymentReadyAccess } from "./payment-route-shared.js";
+import { hashPaymentIntentRequest, notFoundResponse, toPaymentIntentResponse, validationResponse, verifyPaymentReadyAccess } from "./payment-route-shared.js";
+import { defaultPaymentCommercialPolicy } from "./payment-commercial-policy.js";
 
 export async function registerContentUnlockPaymentRoutes(
   app: FastifyInstance,
@@ -66,6 +68,11 @@ export async function registerContentUnlockPaymentRoutes(
         targetId: offer.contentId,
         amountMinor: offer.priceMinor
       };
+      const commercialPolicy = defaultPaymentCommercialPolicy(
+        app.config,
+        "content_unlock",
+        offer.currency
+      );
       const intent = await options.paymentRepository.createOrReuseIntent({
         supabaseUserId: access.supabaseUserId,
         idempotencyKey,
@@ -77,11 +84,9 @@ export async function registerContentUnlockPaymentRoutes(
         solanaCluster: app.config.SOLANA_CLUSTER,
         treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET ?? platformFeeWallet,
         platformFeeWallet,
-        platformFeeBps: app.config.PAYMENT_PLATFORM_FEE_BPS,
-        referralShareOfPlatformFeeBps: app.config.PAYMENT_REFERRAL_SHARE_OF_PLATFORM_FEE_BPS,
+        ...commercialPolicy,
         settlementKind: "creator_split",
         referenceAddress: createSolanaReferenceAddress(),
-        expiresAt: new Date(Date.now() + paymentIntentTtlMs),
         referralToken: null
       });
 
@@ -102,6 +107,14 @@ export async function registerContentUnlockPaymentRoutes(
         return reply.code(409).send({
           code: "conflict",
           message: "This creator cannot receive payments yet"
+        });
+      }
+
+
+      if (error instanceof PaymentAmountBelowPolicyError) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: `Content price is below the current minimum of ${error.minimumAmountMinor} atomic units`
         });
       }
 

@@ -49,6 +49,7 @@ export async function registerApiRoutes(
     eventRepository,
     engagementRepository,
     paymentRepository,
+    paymentCommercialPolicyRepository,
     paymentEvidenceRepository,
     performerRepository,
     settlementVerifier,
@@ -223,7 +224,8 @@ export async function registerApiRoutes(
     authVerifier,
     adminRepository,
     liveRepository,
-    liveProvider
+    liveProvider,
+    paymentCommercialPolicyRepository
   });
   await registerAiRoutes(app, {
     authVerifier,

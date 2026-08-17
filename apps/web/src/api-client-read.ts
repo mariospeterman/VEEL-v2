@@ -21,6 +21,7 @@ import type {
   AdminPage,
   AdminPartnerCampaign,
   AdminPaymentIntent,
+  AdminPaymentCommercialPolicy,
   AdminProviderEvent,
   AdminReceipt,
   AdminReferralProgram,
@@ -270,6 +271,10 @@ export async function getAdminReports(): Promise<ApiResult<AdminPage<AdminReport
 
 export async function getAdminPaymentIntents(): Promise<ApiResult<AdminPage<AdminPaymentIntent>>> {
   return getJson<AdminPage<AdminPaymentIntent>>("/v1/admin/payments/intents");
+}
+
+export async function getAdminPaymentCommercialPolicies(): Promise<ApiResult<AdminPage<AdminPaymentCommercialPolicy>>> {
+  return getJson<AdminPage<AdminPaymentCommercialPolicy>>("/v1/admin/payments/commercial-policies");
 }
 
 export async function getAdminUnlocks(): Promise<ApiResult<AdminPage<AdminUnlock>>> {

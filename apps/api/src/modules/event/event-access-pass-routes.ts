@@ -1,9 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   PaymentIdempotencyConflictError,
+  PaymentAmountBelowPolicyError,
   PaymentRecipientNotReadyError,
   PaymentRepositoryConfigurationError
 } from "../payment/payment-repository.js";
+import { defaultPaymentCommercialPolicy } from "../payment/payment-commercial-policy.js";
 import {
   assertSolanaAddress,
   createSolanaReferenceAddress,
@@ -30,7 +32,6 @@ import {
   verifyEventAccess
 } from "./event-route-shared.js";
 
-const paymentIntentTtlMs = 15 * 60 * 1000;
 
 type AccessPassIntentBody = Partial<CreateAccessPassIntentRequest>;
 type AccessPassRequestBody = Partial<CreateAccessPassRequestRequest>;
@@ -122,6 +123,11 @@ export async function registerEventAccessPassRoutes(
         accessPassTypeId,
         amountMinor: offer.accessPassType.priceMinor
       };
+      const commercialPolicy = defaultPaymentCommercialPolicy(
+        app.config,
+        "event_access_pass",
+        "SOL"
+      );
       const intent = await options.paymentRepository.createOrReuseIntent({
         supabaseUserId: access.supabaseUserId,
         idempotencyKey,
@@ -133,11 +139,9 @@ export async function registerEventAccessPassRoutes(
         solanaCluster: app.config.SOLANA_CLUSTER,
         treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET ?? platformFeeWallet,
         platformFeeWallet,
-        platformFeeBps: app.config.PAYMENT_PLATFORM_FEE_BPS,
-        referralShareOfPlatformFeeBps: app.config.PAYMENT_REFERRAL_SHARE_OF_PLATFORM_FEE_BPS,
+        ...commercialPolicy,
         settlementKind: "creator_split",
         referenceAddress: createSolanaReferenceAddress(),
-        expiresAt: new Date(Date.now() + paymentIntentTtlMs),
         referralToken: null
       });
 
@@ -161,6 +165,13 @@ export async function registerEventAccessPassRoutes(
     } catch (error) {
       if (error instanceof PaymentIdempotencyConflictError) {
         return reply.code(409).send(conflictResponse("Idempotency key was already used"));
+      }
+
+
+      if (error instanceof PaymentAmountBelowPolicyError) {
+        return reply.code(409).send(conflictResponse(
+          `Access Pass price is below the current minimum of ${error.minimumAmountMinor} atomic units`
+        ));
       }
 
       if (error instanceof PaymentRecipientNotReadyError) {

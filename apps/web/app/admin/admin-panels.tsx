@@ -25,6 +25,7 @@ export {
 export {
   ModerationPanel,
   EventAccessPanel,
+  PaymentCommercialPolicyPanel,
   SummaryMetrics
 } from "./admin-core-panels";
 export {

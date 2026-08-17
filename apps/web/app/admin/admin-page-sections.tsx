@@ -15,6 +15,7 @@ import {
   PageState,
   Panel,
   PaymentRow,
+  PaymentCommercialPolicyPanel,
   ProviderEventsPanel,
   ReferralGovernancePanel,
   RefundDisputeRow,
@@ -51,6 +52,7 @@ export function AdminPrimaryColumn({
   organizations,
   partnerCampaigns,
   payments,
+  paymentCommercialPolicies,
   referralPrograms,
   refundDisputes,
   reports,
@@ -72,6 +74,10 @@ export function AdminPrimaryColumn({
             </div>
           )}
         </PageState>
+      </Panel>
+
+      <Panel title="Commercial policy overrides">
+        <PaymentCommercialPolicyPanel policies={paymentCommercialPolicies} />
       </Panel>
 
       <Panel title="Unlocks">
