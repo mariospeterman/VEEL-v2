@@ -132,6 +132,7 @@ export interface UpdateLiveRoomFromWebhookInput {
   providerState: string;
   state: "waiting" | "live" | "suspended" | "ended" | "replay_ready";
   playbackUrl: string | null;
+  preventStateRegression?: boolean;
 }
 
 export interface CreateLiveChatMessageInput {

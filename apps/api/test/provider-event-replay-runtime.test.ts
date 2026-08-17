@@ -26,7 +26,8 @@ describe("canonical provider event replay handlers", () => {
       providerEventId: "bunny-delivery-1",
       providerAssetId: "asset-1",
       providerState: "ready",
-      providerPlayable: true
+      providerPlayable: true,
+      preventStateRegression: true
     });
   });
 
@@ -71,7 +72,8 @@ describe("canonical provider event replay handlers", () => {
       providerPlaybackId: "playback-1",
       providerState: "recording_ready",
       state: "replay_ready",
-      playbackUrl: "https://playback.example/replay.m3u8"
+      playbackUrl: "https://playback.example/replay.m3u8",
+      preventStateRegression: true
     });
   });
 
@@ -99,6 +101,7 @@ describe("canonical provider event replay handlers", () => {
       settlement: { confirmed: true, blockTime: new Date("2026-06-06T00:00:00.000Z") }
     });
     expect(dependencies.paymentEvidenceRepository.updateSolanaProviderEvent).toHaveBeenCalledWith({
+      provider: "helius",
       providerEventId: "helius-delivery-1",
       normalizedState: "processed"
     });
@@ -113,6 +116,7 @@ describe("canonical provider event replay handlers", () => {
     expect(dependencies.settlementVerifier.verifyTransfer).not.toHaveBeenCalled();
     expect(dependencies.paymentRepository.recordSubmission).not.toHaveBeenCalled();
     expect(dependencies.paymentEvidenceRepository.updateSolanaProviderEvent).toHaveBeenCalledWith({
+      provider: "helius",
       providerEventId: "helius-delivery-1",
       normalizedState: "processed"
     });
@@ -128,8 +132,25 @@ describe("canonical provider event replay handlers", () => {
     expect(dependencies.settlementVerifier.verifyTransfer).not.toHaveBeenCalled();
     expect(dependencies.paymentRepository.recordSubmission).not.toHaveBeenCalled();
     expect(dependencies.paymentEvidenceRepository.updateSolanaProviderEvent).toHaveBeenCalledWith({
+      provider: "helius",
       providerEventId: "helius-delivery-1",
       normalizedState: "ignored"
+    });
+  });
+
+  it("preserves the Solana indexer alias when updating replay evidence", async () => {
+    const dependencies = replayDependencies({ intentState: "confirmed" });
+    const handlers = createCanonicalProviderReplayHandlers(dependencies);
+
+    await expect(handlers.helius({
+      ...heliusEvent(),
+      provider: "solana_indexer"
+    })).resolves.toEqual({ state: "replayed" });
+
+    expect(dependencies.paymentEvidenceRepository.updateSolanaProviderEvent).toHaveBeenCalledWith({
+      provider: "solana_indexer",
+      providerEventId: "helius-delivery-1",
+      normalizedState: "processed"
     });
   });
 
@@ -143,6 +164,7 @@ describe("canonical provider event replay handlers", () => {
     });
 
     expect(dependencies.paymentEvidenceRepository.updateSolanaProviderEvent).toHaveBeenCalledWith({
+      provider: "helius",
       providerEventId: "helius-delivery-1",
       normalizedState: "failed"
     });
@@ -187,6 +209,7 @@ function replayDependencies(input: {
 
 function heliusEvent() {
   return {
+    provider: "helius" as const,
     providerEventId: "helius-delivery-1",
     replayPayload: {
       kind: "solana_payment" as const,

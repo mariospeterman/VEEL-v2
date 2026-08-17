@@ -107,12 +107,13 @@ export function createPostgresPaymentEvidenceRepository(
     },
 
     async updateSolanaProviderEvent(input) {
+      const provider = input.provider ?? "helius";
       await sql`
         update provider_events
         set
           normalized_state = ${input.normalizedState},
           processed_at = now()
-        where provider = 'helius'
+        where provider = ${provider}
           and provider_event_id = ${input.providerEventId}
       `;
 
@@ -121,7 +122,7 @@ export function createPostgresPaymentEvidenceRepository(
         set
           state = ${input.normalizedState},
           processed_at = now()
-        where provider = 'helius'
+        where provider = ${provider}
           and webhook_type = 'solana-indexer'
           and idempotency_key = ${input.providerEventId}
       `;

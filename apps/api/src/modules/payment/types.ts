@@ -157,6 +157,7 @@ export interface RecordSolanaProviderEventInput {
 }
 
 export interface UpdateSolanaProviderEventInput {
+  provider?: "helius" | "solana_indexer";
   providerEventId: string;
   normalizedState: "processed" | "ignored" | "failed";
 }

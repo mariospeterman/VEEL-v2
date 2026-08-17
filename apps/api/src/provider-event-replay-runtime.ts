@@ -20,6 +20,7 @@ export type ProviderReplayOutcome =
   | { state: "failed"; failureCode: string };
 
 export interface HeliusProviderReplayEvent {
+  provider: "helius" | "solana_indexer";
   providerEventId: string;
   replayPayload: {
     kind: "solana_payment";
@@ -74,7 +75,8 @@ export function createCanonicalProviderReplayHandlers(
         providerEventId: input.providerEventId,
         providerAssetId: input.replayPayload.providerAssetId,
         providerState: input.replayPayload.providerState,
-        providerPlayable: input.replayPayload.providerPlayable
+        providerPlayable: input.replayPayload.providerPlayable,
+        preventStateRegression: true
       });
 
       return applied
@@ -92,7 +94,8 @@ export function createCanonicalProviderReplayHandlers(
         providerPlaybackId: input.replayPayload.providerPlaybackId,
         providerState: input.replayPayload.providerState,
         state: input.replayPayload.roomState,
-        playbackUrl: input.replayPayload.playbackUrl
+        playbackUrl: input.replayPayload.playbackUrl,
+        preventStateRegression: true
       });
 
       return applied
@@ -111,6 +114,7 @@ export function createCanonicalProviderReplayHandlers(
 
       if (!match) {
         await dependencies.paymentEvidenceRepository.updateSolanaProviderEvent({
+          provider: input.provider,
           providerEventId: input.providerEventId,
           normalizedState: "ignored"
         });
@@ -119,6 +123,7 @@ export function createCanonicalProviderReplayHandlers(
 
       if (match.intent.state === "confirmed") {
         await dependencies.paymentEvidenceRepository.updateSolanaProviderEvent({
+          provider: input.provider,
           providerEventId: input.providerEventId,
           normalizedState: "processed"
         });
@@ -154,6 +159,7 @@ export function createCanonicalProviderReplayHandlers(
         settlement
       });
       await dependencies.paymentEvidenceRepository.updateSolanaProviderEvent({
+        provider: input.provider,
         providerEventId: input.providerEventId,
         normalizedState: settlement.confirmed ? "processed" : "failed"
       });

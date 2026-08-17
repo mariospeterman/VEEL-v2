@@ -126,7 +126,10 @@ export function createLiveStatusRepositoryMethods(
           return [] as { id: string }[];
         }
 
-        if (!isAllowedWebhookTransition(current.state, input.state)) {
+        if (
+          !isAllowedWebhookTransition(current.state, input.state) ||
+          (input.preventStateRegression && current.state === input.state)
+        ) {
           await transaction`
             update provider_events
             set normalized_state = 'ignored_stale', processed_at = now()

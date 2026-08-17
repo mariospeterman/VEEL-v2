@@ -183,6 +183,7 @@ export interface UpdateMediaAssetFromWebhookInput {
   providerAssetId: string;
   providerState: string;
   providerPlayable: boolean;
+  preventStateRegression?: boolean;
 }
 
 export interface MediaUploadProviderSession {

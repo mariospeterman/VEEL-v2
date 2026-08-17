@@ -221,6 +221,34 @@ export function createContentMediaRepositoryMethods(
     },
     async updateMediaAssetFromWebhook(input) {
       const rows = await withPostgresTransaction(sql, async (transaction) => {
+        const currentRows = await transaction<{ id: string; provider_playable: boolean }[]>`
+          select id, provider_playable
+          from media_assets
+          where provider = ${input.provider}
+            and provider_asset_id = ${input.providerAssetId}
+          limit 1
+          for update
+        `;
+        const current = currentRows[0];
+
+        if (!current) {
+          return [] as { id: string }[];
+        }
+
+        if (
+          input.preventStateRegression &&
+          current.provider_playable &&
+          !input.providerPlayable
+        ) {
+          await transaction`
+            update provider_events
+            set normalized_state = 'ignored_stale', processed_at = now()
+            where provider = ${input.provider}
+              and provider_event_id = ${input.providerEventId}
+          `;
+          return [{ id: current.id }];
+        }
+
         const updated = await transaction<{ id: string }[]>`
           update media_assets
           set
@@ -228,8 +256,7 @@ export function createContentMediaRepositoryMethods(
             provider_playable = ${input.providerPlayable},
             ready_at = case when ${input.providerPlayable} then coalesce(ready_at, now()) else ready_at end,
             provider_checked_at = now()
-          where provider = ${input.provider}
-            and provider_asset_id = ${input.providerAssetId}
+          where id = ${current.id}
           returning id
         `;
 

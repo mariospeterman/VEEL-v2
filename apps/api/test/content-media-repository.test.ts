@@ -35,13 +35,33 @@ describe("content media repository", () => {
     expect(queries.join("\n")).toContain("state = case when");
     expect(queries.join("\n")).not.toContain("moderation_state");
   });
+
+  it("ignores a replay that would regress an already-playable asset", async () => {
+    const { sql, queries } = createFakeSql({ providerPlayable: true });
+    const repository = createContentMediaRepositoryMethods(sql);
+
+    await expect(repository.updateMediaAssetFromWebhook?.({
+      provider: "bunny",
+      providerEventId: "bunny-stale-processing-event",
+      providerAssetId: "bunny-video-guid",
+      providerState: "processing",
+      providerPlayable: false,
+      preventStateRegression: true
+    })).resolves.toBe(true);
+
+    expect(queries.join("\n")).toContain("normalized_state = 'ignored_stale'");
+    expect(queries.join("\n")).not.toContain("update media_assets\n          set");
+  });
 });
 
-function createFakeSql(): { sql: PostgresSql; queries: string[] } {
+function createFakeSql(input: { providerPlayable?: boolean } = {}): { sql: PostgresSql; queries: string[] } {
   const queries: string[] = [];
   const transaction = vi.fn((strings: TemplateStringsArray) => {
     const query = strings.join("?");
     queries.push(query);
+    if (query.includes("select id, provider_playable")) {
+      return Promise.resolve([{ id: "media-asset", provider_playable: input.providerPlayable ?? false }]);
+    }
     return Promise.resolve(query.includes("returning id") ? [{ id: "media-asset" }] : []);
   }) as unknown as PostgresTransaction;
   const sql = {
