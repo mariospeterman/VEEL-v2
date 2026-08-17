@@ -40,7 +40,7 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Merged baseline | `main` at `f2d255d` (green baseline through PR #69) |
 | Active slice | Launch 10A — provider-first entry convergence and local runtime recovery |
 | Branch | `codex/provider-first-entry-convergence` |
-| Pull request | Not opened |
+| Pull request | #70 |
 | State | `LOCAL_GREEN` |
 | Slice blockers | No code blocker. Real external and embedded wallet target-device evidence remains a pre-production staging proof; production paths stay fail-closed without provider credentials. |
 | Next unfinished slice | Launch 10 — Frontend system, accessibility, cross-browser, and PWA completion |
