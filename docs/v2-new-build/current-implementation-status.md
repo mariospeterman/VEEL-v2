@@ -37,13 +37,13 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `231ba53` (green baseline through PR #71) |
-| Active slice | Launch 02B — canonical account-access and earnings identity completion |
-| Branch | `codex/launch-02-canonical-access` |
-| Pull request | #72 |
-| State | `LOCAL_GREEN` |
-| Slice blockers | No code blocker. Real recovery, wallet, age, and KYC provider acceptance remains a pre-production staging proof. |
-| Next unfinished slice | Launch 02 — Three-step onboarding, canonical session, optional recovery, and earnings readiness |
+| Merged baseline | `main` at `4860133` (green baseline through PR #72) |
+| Active slice | Pre-production staging convergence and release-candidate proof |
+| Branch | `codex/staging-convergence-status` |
+| Pull request | #73 |
+| State | `CODE_COMPLETE_PROVIDER_BLOCKED` |
+| Slice blockers | Shared staging URLs/database/Supabase, Privy, Solana/Helius, Bunny, Livepeer, verification, notification, Redis/OTel, feature, legal, hosting/OIDC, and provider-dashboard configuration are absent. Explicit production approval is also required. |
+| Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
 
 The merged entry slice server-resolves login/onboarding state, presents one immediate primary
 `Connect wallet` action, preserves the first click while the wallet runtime loads, keeps the
@@ -64,7 +64,7 @@ matches immediately remove published media from public access and open a reporti
 without automatic user sanctions. Staging additionally
 requires live Shield configuration proof and a release-bound direct-TUS coverage/fixture receipt.
 
-The active Launch 02B slice removes the last legacy identity lookup from the entry, app-access,
+The merged Launch 02B slice removes the last legacy identity lookup from the entry, app-access,
 age, wallet, profile, and Enable Earnings journey. Those paths must accept the canonical
 `users.id` resolved by the opaque application session and remain functional when the transitional
 `users.supabase_user_id` value is null. Migration `0107` prevents that compatibility column from
@@ -74,12 +74,20 @@ migrated in later bounded slices. Supabase recovery subjects remain exclusively 
 integration, desktop/mobile Chromium, desktop Firefox, accessibility, PWA, and visible-browser
 entry proofs are green. Real provider acceptance remains a pre-production gate.
 
-Current human/provider gates do not block this process slice: shared staging credentials,
-provider dashboard/webhook/domain configuration, migration `0091` shared-project proof,
-production hosting/DNS approval, mainnet wallet approval, and unsettled legal/compliance
-decisions remain release gates. Provider-dependent product work may reach
-`CODE_COMPLETE_PROVIDER_BLOCKED` and merge only while the production path remains explicit
-and fail-closed.
+The green `main` merge at `4860133` passed protected CI, isolated Postgres integration, database
+migration checks, security analysis, build, and full browser smoke. Release-artifact run
+`32043723824` then built and attested the web, API, and worker images and emitted the immutable
+manifest for that exact source. Staging-convergence run `32044089602` verified the manifest and
+attestations, then failed closed before deployment because the shared staging/provider/legal
+configuration groups listed above are absent. No staging migration, webhook change, or production
+promotion was attempted.
+
+These human/provider gates now block the active pre-production convergence slice: shared staging
+credentials, provider dashboard/webhook/domain configuration, migration `0091` shared-project
+proof, production hosting/DNS approval, mainnet wallet approval, and unsettled legal/compliance
+decisions. Independent product slices were allowed to reach `CODE_COMPLETE_PROVIDER_BLOCKED`
+while their production paths remained explicit and fail-closed; the core platform is now at the
+dedicated convergence gate and cannot advance to a release candidate without this evidence.
 
 Launch 09 local acceptance now includes migration `0099`, audited/idempotent organization
 provisioning, explicit owner/team/creator consent, normalized organization-KYB authorization,
