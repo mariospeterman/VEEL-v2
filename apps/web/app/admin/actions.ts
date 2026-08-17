@@ -11,6 +11,7 @@ import {
   updateAdminDataRequest,
   updateAdminFeatureFlag,
   updateAdminPaymentCommercialPolicy,
+  retryAdminProviderEventReplay,
   updateAdminRefundDispute,
   updateAdminSupportCase,
   updateAdminSupportPolicy,
@@ -163,6 +164,14 @@ export async function updatePaymentCommercialPolicyAction(formData: FormData): P
     reason: stringField(formData, "reason")
   };
   actionResult(await updateAdminPaymentCommercialPolicy(productType, currency, body, randomUUID()));
+}
+
+export async function retryProviderEventReplayAction(formData: FormData): Promise<void> {
+  actionResult(await retryAdminProviderEventReplay(
+    stringField(formData, "replayRequestId"),
+    stringField(formData, "reason"),
+    randomUUID()
+  ));
 }
 
 function actionResult<T>(result: ApiResult<T>): void {

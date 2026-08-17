@@ -118,7 +118,9 @@ export interface ProviderEventRow {
   normalized_state: AdminProviderEvent["state"];
   received_at: Date;
   processed_at: Date | null;
+  latest_replay_request_id: string | null;
   latest_replay_state: AdminProviderEvent["latestReplayState"];
+  latest_replay_failure_code: string | null;
   latest_replay_requested_at: Date | null;
   latest_replay_processed_at: Date | null;
 }
@@ -252,7 +254,9 @@ export function toProviderEvent(row: ProviderEventRow): AdminProviderEvent {
     state: row.normalized_state,
     receivedAt: row.received_at.toISOString(),
     processedAt: row.processed_at?.toISOString() ?? null,
+    latestReplayRequestId: row.latest_replay_request_id ?? null,
     latestReplayState: row.latest_replay_state ?? null,
+    latestReplayFailureCode: row.latest_replay_failure_code ?? null,
     latestReplayRequestedAt: row.latest_replay_requested_at?.toISOString() ?? null,
     latestReplayProcessedAt: row.latest_replay_processed_at?.toISOString() ?? null
   };

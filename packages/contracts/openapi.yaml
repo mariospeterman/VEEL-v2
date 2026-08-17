@@ -5477,10 +5477,12 @@ components:
         id: { type: string, format: uuid }
         provider: { type: string }
         eventType: { type: string }
-        state: { type: string, enum: [received, processed, failed, replayed, ignored] }
+        state: { type: string }
         receivedAt: { type: string, format: date-time }
         processedAt: { type: string, format: date-time, nullable: true }
-        latestReplayState: { type: string, enum: [queued, processing, replayed, failed, cancelled], nullable: true }
+        latestReplayRequestId: { type: string, format: uuid, nullable: true }
+        latestReplayState: { type: string, enum: [queued, processing, replayed, failed, dead_letter, cancelled], nullable: true }
+        latestReplayFailureCode: { type: string, nullable: true }
         latestReplayRequestedAt: { type: string, format: date-time, nullable: true }
         latestReplayProcessedAt: { type: string, format: date-time, nullable: true }
     AdminSupportCase:

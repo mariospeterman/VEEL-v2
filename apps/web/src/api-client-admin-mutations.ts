@@ -151,3 +151,15 @@ export async function updateAdminPaymentCommercialPolicy(
     idempotencyKey
   );
 }
+
+export async function retryAdminProviderEventReplay(
+  replayRequestId: string,
+  reason: string,
+  idempotencyKey: string
+): Promise<ApiResult<null>> {
+  return postEmpty(
+    `/v1/admin/worker-queues/provider_event_replays/jobs/${encodeURIComponent(replayRequestId)}/retry`,
+    { reason },
+    idempotencyKey
+  );
+}

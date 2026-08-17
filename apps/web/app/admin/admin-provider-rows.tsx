@@ -12,7 +12,7 @@ import {
   formatDate,
   timestampLabel
 } from "./admin-ui";
-import { updateLiveRoomSuspensionAction } from "./actions";
+import { retryProviderEventReplayAction, updateLiveRoomSuspensionAction } from "./actions";
 
 export function ProviderEventRow({ event }: { event: AdminProviderEvent }) {
   return (
@@ -30,8 +30,19 @@ export function ProviderEventRow({ event }: { event: AdminProviderEvent }) {
         <Fact label="Received" value={formatDate(event.receivedAt)} />
         <Fact label="Processed" value={formatDate(event.processedAt ?? null)} />
         <Fact label="Replay" value={event.latestReplayState ?? "none"} />
+        <Fact label="Replay failure" value={event.latestReplayFailureCode ?? "none"} />
         <Fact label="Replay processed" value={formatDate(event.latestReplayProcessedAt ?? null)} />
       </div>
+      {event.latestReplayState === "dead_letter" && event.latestReplayRequestId ? (
+        <form action={retryProviderEventReplayAction} className="mt-3 grid gap-2 border-t border-(--line) pt-3 sm:grid-cols-[1fr_auto]">
+          <input name="replayRequestId" type="hidden" value={event.latestReplayRequestId} />
+          <label className="grid gap-1 text-xs text-(--muted)">
+            <span>Recovery reason</span>
+            <input className="min-h-10 rounded border border-(--line) bg-(--panel) px-3 text-(--foreground)" maxLength={1000} name="reason" required />
+          </label>
+          <button className="min-h-10 self-end rounded border border-(--line) px-3 font-semibold" type="submit">Retry replay</button>
+        </form>
+      ) : null}
     </article>
   );
 }

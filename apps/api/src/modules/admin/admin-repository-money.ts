@@ -77,12 +77,14 @@ export function createMoneyRepository(
           pe.normalized_state,
           pe.received_at,
           pe.processed_at,
+          replay.id as latest_replay_request_id,
           replay.state as latest_replay_state,
+          replay.failure_code as latest_replay_failure_code,
           replay.created_at as latest_replay_requested_at,
           replay.processed_at as latest_replay_processed_at
         from provider_events pe
         left join lateral (
-          select state, created_at, processed_at
+          select id, state, failure_code, created_at, processed_at
           from provider_event_replay_requests perr
           where perr.provider_event_id = pe.id
           order by perr.created_at desc

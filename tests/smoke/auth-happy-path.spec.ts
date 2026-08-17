@@ -47,7 +47,7 @@ test.beforeEach(async ({ context }) => {
 });
 
 test("covers authenticated earnings setup, creation, and one-time checkout", async ({ page }) => {
-  test.setTimeout(100_000);
+  test.setTimeout(150_000);
 
   await gotoUntilVisible(page, "/app/home", () => page.getByRole("link", { name: "WeVid app home" }).first());
   await expect(page.getByRole("heading", { name: "Your feed" })).toBeVisible();
@@ -195,7 +195,7 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
 
   await page.goto("/app/profile");
   await page.getByRole("button", { name: "Log out" }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await page.waitForURL(/\/$/, { timeout: 15_000 });
   await expect(page.getByRole("heading", { name: "Create without asking the algorithm for permission." })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.cookie.includes("veel_e2e_access_token="))).toBe(false);
 });

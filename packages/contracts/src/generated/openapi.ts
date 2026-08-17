@@ -5414,14 +5414,16 @@ export interface components {
             id: string;
             provider: string;
             eventType: string;
-            /** @enum {string} */
-            state: "received" | "processed" | "failed" | "replayed" | "ignored";
+            state: string;
             /** Format: date-time */
             receivedAt: string;
             /** Format: date-time */
             processedAt?: string | null;
+            /** Format: uuid */
+            latestReplayRequestId?: string | null;
             /** @enum {string|null} */
-            latestReplayState?: "queued" | "processing" | "replayed" | "failed" | "cancelled" | null;
+            latestReplayState?: "queued" | "processing" | "replayed" | "failed" | "dead_letter" | "cancelled" | null;
+            latestReplayFailureCode?: string | null;
             /** Format: date-time */
             latestReplayRequestedAt?: string | null;
             /** Format: date-time */

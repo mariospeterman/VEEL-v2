@@ -148,6 +148,8 @@ Workers process:
 - delayed entitlement expiry
 - stale upload cleanup
 
+Provider-event recovery leases only sanitized normalized replay payloads from Postgres. Bunny and Livepeer reapply those payloads through the same canonical repositories used by live webhook handling; Helius/Solana re-runs exact backend settlement verification and the existing transactional payment-submission authority. The queue keeps the internal provider-event row ID separate from the external provider delivery ID, uses token-guarded leases, bounded backoff and an attempt ceiling, and preserves the provider's normalized outcome instead of replacing it with a generic replay label. Exhausted work is visible as `dead_letter` with a redacted failure code and replay-request ID in admin operations; audited recovery requeues that exact job only after an operator supplies a reason.
+
 Use `pg-boss` as the launch default to keep infrastructure smaller and queue state close to Postgres. Move selected queues to BullMQ/Redis only after measured queue lag, throughput, or rate-limit requirements justify Redis.
 
 ## Provider Adapter Pattern

@@ -1,4 +1,5 @@
 import { parseServerEnv } from "@veel/config";
+import { createCanonicalProviderReplayRuntime } from "@veel/api/provider-event-replay-runtime";
 import { pathToFileURL } from "node:url";
 import {
   createFailClosedMediaModerationAdapter,
@@ -28,6 +29,7 @@ import {
 } from "./payment-confirmation-email.js";
 import {
   createPostgresProviderEventReplayRepository,
+  createProviderSpecificReplayAdapter,
   createUnconfiguredProviderEventReplayAdapter,
   processProviderEventReplays,
   type ProcessProviderEventReplaysResult,
@@ -207,7 +209,14 @@ export async function runProviderEventReplayTick(input: {
 } = {}): Promise<ProcessProviderEventReplaysResult> {
   const config = parseServerEnv(process.env);
   const repository = input.repository ?? createPostgresProviderEventReplayRepository(config.DATABASE_URL);
-  const adapter = input.adapter ?? createUnconfiguredProviderEventReplayAdapter();
+  const replayRuntime = !input.adapter && config.DATABASE_URL
+    ? createCanonicalProviderReplayRuntime(config)
+    : null;
+  const adapter = input.adapter ?? (
+    replayRuntime
+      ? createProviderSpecificReplayAdapter(replayRuntime.handlers)
+      : createUnconfiguredProviderEventReplayAdapter()
+  );
 
   try {
     return await processProviderEventReplays({
@@ -220,6 +229,7 @@ export async function runProviderEventReplayTick(input: {
     if (!input.repository) {
       await repository.close?.();
     }
+    await replayRuntime?.close();
   }
 }
 

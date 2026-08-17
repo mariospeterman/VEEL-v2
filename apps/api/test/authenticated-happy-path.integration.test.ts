@@ -11,6 +11,7 @@ import type {
   PaymentSettlementVerifier
 } from "../src/modules/payment/types";
 import { createPostgresLiveRepository } from "../src/modules/live/live-repository";
+import { createCanonicalProviderReplayRuntime } from "../src/provider-event-replay-runtime";
 import type {
   ApplicationSessionVerifier,
   VerifiedApplicationSession
@@ -26,6 +27,7 @@ import type { SubscriptionAuthorizationVerifier } from "../src/modules/subscript
 import { createPostgresClient, type PostgresSql } from "../src/shared/postgres";
 import {
   createPostgresProviderEventReplayRepository,
+  createProviderSpecificReplayAdapter,
   processProviderEventReplays
 } from "../../worker/src/provider-event-replay";
 import {
@@ -3627,32 +3629,22 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       await seedProviderReplayRequest(sql, {
         providerEventId: seededProviderEventId,
         replayRequestId: seededProviderReplayRequestId,
+        providerAssetId: `integration-free-${seededFreeContentId}`,
         runId
       });
 
       const replayRepository = createPostgresProviderEventReplayRepository(databaseUrl);
+      const replayRuntime = createCanonicalProviderReplayRuntime({
+        DATABASE_URL: databaseUrl,
+        SOLANA_RPC_URL: "https://api.devnet.solana.com",
+        PAYMENT_SOLANA_FINALITY: "finalized"
+      });
       try {
         const replayResult = await processProviderEventReplays({
           repository: replayRepository,
           now: new Date(),
           limit: 5,
-          adapter: {
-            async replay(input) {
-              expect(input).toEqual({
-                replayRequestId: seededProviderReplayRequestId,
-                leaseToken: expect.any(String),
-                attemptCount: 1,
-                providerEventId: seededProviderEventId,
-                provider: "solana_indexer",
-                eventType: "payment.confirmed",
-                replayPayload: {}
-              });
-
-              return {
-                state: "replayed"
-              };
-            }
-          }
+          adapter: createProviderSpecificReplayAdapter(replayRuntime.handlers)
         });
 
         expect(replayResult).toEqual({
@@ -3662,11 +3654,13 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         });
       } finally {
         await replayRepository.close?.();
+        await replayRuntime.close();
       }
 
       const replayRows = await sql<{
         replay_request_count: string;
         provider_event_count: string;
+        media_asset_count: string;
       }[]>`
         select
           (
@@ -3682,14 +3676,24 @@ describeIntegration("authenticated API happy path against Postgres", () => {
             select count(*)
             from provider_events pe
             where pe.id = ${seededProviderEventId}
-              and pe.normalized_state = 'replayed'
+              and pe.provider_event_id = ${`integration-provider-event-${runId}`}
+              and pe.normalized_state = 'replay_ready'
               and pe.processed_at is not null
-          ) as provider_event_count
+          ) as provider_event_count,
+          (
+            select count(*)
+            from media_assets ma
+            where ma.id = ${seededFreeMediaAssetId}
+              and ma.provider_state = 'replay_ready'
+              and ma.provider_playable = true
+              and ma.provider_checked_at is not null
+          ) as media_asset_count
       `;
 
       expect(replayRows[0]).toEqual({
         replay_request_count: "1",
-        provider_event_count: "1"
+        provider_event_count: "1",
+        media_asset_count: "1"
       });
 
       const preBlockUnfollowResponse = await app.inject({
@@ -4852,6 +4856,7 @@ async function seedProviderReplayRequest(
   input: {
     providerEventId: string;
     replayRequestId: string;
+    providerAssetId: string;
     runId: string;
   }
 ): Promise<void> {
@@ -4861,14 +4866,21 @@ async function seedProviderReplayRequest(
       provider,
       provider_event_id,
       event_type,
-      normalized_state
+      normalized_state,
+      replay_payload
     )
     values (
       ${input.providerEventId},
-      'solana_indexer',
+      'bunny',
       ${`integration-provider-event-${input.runId}`},
-      'payment.confirmed',
-      'failed'
+      'video.ready',
+      'failed',
+      ${sql.json({
+        kind: "media_asset",
+        providerAssetId: input.providerAssetId,
+        providerState: "replay_ready",
+        providerPlayable: true
+      })}
     )
   `;
   await sql`

@@ -8362,7 +8362,9 @@ describe("buildApi", () => {
       provider: "solana_rpc",
       eventType: "payment.settlement",
       state: "processed",
-      latestReplayState: "queued",
+      latestReplayRequestId: "00000000-0000-4000-8000-0000000000a1",
+      latestReplayState: "dead_letter",
+      latestReplayFailureCode: "provider_event_replay_settlement_not_found",
       latestReplayProcessedAt: null
     });
     expect(JSON.stringify(providerEvents.json())).not.toMatch(/raw|payload|secret|streamKey/i);
@@ -12103,7 +12105,9 @@ const fakeAdminRepository: AdminRepository = {
           state: "processed",
           receivedAt: "2026-06-04T20:01:00.000Z",
           processedAt: "2026-06-04T20:01:01.000Z",
-          latestReplayState: "queued",
+          latestReplayRequestId: "00000000-0000-4000-8000-0000000000a1",
+          latestReplayState: "dead_letter",
+          latestReplayFailureCode: "provider_event_replay_settlement_not_found",
           latestReplayRequestedAt: "2026-06-04T20:02:00.000Z",
           latestReplayProcessedAt: null
         }

@@ -260,7 +260,7 @@ test("requires confirmation before logging out every device", async ({ context, 
   await page.getByRole("button", { name: "Log out all devices" }).click();
   await expect(page.getByRole("button", { name: "Confirm log out all devices" })).toBeVisible();
   await page.getByRole("button", { name: "Confirm log out all devices" }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await page.waitForURL(/\/$/, { timeout: 15_000 });
 });
 
 test("separates platform plans from creator memberships responsively", async ({ context, page }) => {

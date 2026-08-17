@@ -8,6 +8,7 @@ export interface QueuedProviderEventReplay {
   replayRequestId: string;
   leaseToken: string;
   attemptCount: number;
+  providerEventRecordId: string;
   providerEventId: string;
   provider: string;
   eventType: string;
@@ -23,7 +24,7 @@ export interface ProviderEventReplayRepository {
   }): Promise<QueuedProviderEventReplay[]>;
   recordReplayOutcome(input: {
     replayRequestId: string;
-    providerEventId: string;
+    providerEventRecordId: string;
     leaseToken: string;
     now: Date;
     maxAttempts: number;
@@ -110,7 +111,7 @@ export async function processProviderEventReplays(input: {
     }));
     await input.repository.recordReplayOutcome({
       replayRequestId: request.replayRequestId,
-      providerEventId: request.providerEventId,
+      providerEventRecordId: request.providerEventRecordId,
       leaseToken: request.leaseToken,
       now,
       maxAttempts,
@@ -125,10 +126,7 @@ export async function processProviderEventReplays(input: {
 }
 
 function providerReplayFailureCode(error: unknown): string {
-  if (error instanceof Error && error.message) {
-    return `provider_event_replay_exception:${error.message.slice(0, 80)}`;
-  }
-
+  void error;
   return "provider_event_replay_exception";
 }
 
@@ -174,7 +172,7 @@ export function createProviderSpecificReplayAdapter(
 
       return {
         state: "failed",
-        failureCode: `provider_event_replay_provider_unsupported:${input.provider}`
+        failureCode: "provider_event_replay_provider_unsupported"
       };
     }
   };
@@ -245,6 +243,7 @@ export function createPostgresProviderEventReplayRepository(
             perr.lease_token,
             perr.attempt_count,
             pe.id as provider_event_id,
+            pe.provider_event_id as provider_delivery_id,
             pe.provider,
             pe.event_type,
             pe.replay_payload
@@ -254,7 +253,8 @@ export function createPostgresProviderEventReplayRepository(
           replayRequestId: row.replay_request_id,
           leaseToken: row.lease_token,
           attemptCount: row.attempt_count,
-          providerEventId: row.provider_event_id,
+          providerEventRecordId: row.provider_event_id,
+          providerEventId: row.provider_delivery_id,
           provider: row.provider,
           eventType: row.event_type,
           replayPayload: row.replay_payload
@@ -283,9 +283,8 @@ export function createPostgresProviderEventReplayRepository(
           await transaction`
             update provider_events
             set
-              normalized_state = 'replayed',
               processed_at = coalesce(processed_at, now())
-            where id = ${input.providerEventId}
+            where id = ${input.providerEventRecordId}
           `;
         });
         return;
@@ -321,22 +320,25 @@ interface QueuedProviderEventReplayRow {
   lease_token: string;
   attempt_count: number;
   provider_event_id: string;
+  provider_delivery_id: string;
   provider: string;
   event_type: string;
   replay_payload: unknown;
 }
 
 function missingReplayPayload(input: QueuedProviderEventReplay): ProviderEventReplayOutcome {
+  void input;
   return {
     state: "failed",
-    failureCode: `provider_event_replay_payload_missing:${input.provider}`
+    failureCode: "provider_event_replay_payload_missing"
   };
 }
 
 function missingReplayHandler(input: QueuedProviderEventReplay): ProviderEventReplayOutcome {
+  void input;
   return {
     state: "failed",
-    failureCode: `provider_event_replay_handler_not_configured:${input.provider}`
+    failureCode: "provider_event_replay_handler_not_configured"
   };
 }
 

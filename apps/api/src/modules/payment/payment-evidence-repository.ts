@@ -88,7 +88,10 @@ export function createPostgresPaymentEvidenceRepository(
         from payment_intents pi
         join users u on u.id = pi.user_id
         where pi.reference_address in ${sql(input.referenceAddresses)}
-          and pi.state in ('pending', 'transaction_requested', 'submitted')
+          and (
+            pi.state in ('pending', 'transaction_requested', 'submitted')
+            or (${input.includeConfirmed ?? false} and pi.state = 'confirmed')
+          )
           and (not pi.withdrawal_waiver_required or pi.withdrawal_waiver_accepted_at is not null)
         order by pi.created_at asc
         limit 1
