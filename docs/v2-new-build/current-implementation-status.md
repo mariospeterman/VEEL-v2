@@ -43,7 +43,7 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Pull request | #69 |
 | State | `LOCAL_GREEN` |
 | Slice blockers | No code blocker. Real provider redelivery remains a pre-production staging proof; production paths stay fail-closed without provider credentials. |
-| Next unfinished slice | Launch 10 follow-up — provider-first entry hydration and consumer-language convergence |
+| Next unfinished slice | Launch 10 — Frontend system, accessibility, cross-browser, and PWA completion |
 
 Provider replay unit, route, type, lint, docs, and real-Postgres proof is green on the
 current head. Pull-request clean-runner and review evidence is still required before merge;
