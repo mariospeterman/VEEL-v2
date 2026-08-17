@@ -27,6 +27,7 @@ export function createLiveStatusRepositoryMethods(
             updated_at = now()
           where id = ${input.roomId}
             and state <> 'suspended'
+            and (provider_checked_at is null or provider_checked_at <= ${input.providerObservedAt})
             and not exists (
               select 1
               from provider_events newer

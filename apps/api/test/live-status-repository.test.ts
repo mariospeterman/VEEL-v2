@@ -145,6 +145,7 @@ describe("live status repository", () => {
     });
 
     expect(queries.join("\n")).toContain("provider_checked_at = ?");
+    expect(queries.join("\n")).toContain("provider_checked_at <= ?");
     expect(queries.join("\n")).toContain("newer.received_at > ?");
     expect(values).toContain(providerObservedAt);
   });

@@ -162,6 +162,7 @@ export function createContentMediaRepositoryMethods(
             ready_at = case when ${input.providerPlayable} then coalesce(ready_at, now()) else ready_at end,
             provider_checked_at = ${input.providerObservedAt}
           where id = ${input.mediaAssetId}
+            and (provider_checked_at is null or provider_checked_at <= ${input.providerObservedAt})
             and not exists (
               select 1
               from provider_events newer
