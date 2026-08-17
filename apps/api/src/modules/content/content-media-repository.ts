@@ -264,7 +264,7 @@ export function createContentMediaRepositoryMethods(
           return [{ id: current.id }];
         }
 
-        if (input.preventStateRegression && replayDecision === "stale") {
+        if (replayDecision === "stale") {
           await transaction`
             update provider_events
             set normalized_state = 'ignored_stale', processed_at = now()

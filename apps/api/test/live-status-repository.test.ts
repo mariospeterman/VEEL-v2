@@ -134,8 +134,7 @@ describe("live status repository", () => {
       providerPlaybackId: "playback-1",
       providerState: "ended",
       state: "ended",
-      playbackUrl: null,
-      preventStateRegression: true
+      playbackUrl: null
     })).resolves.toBe(true);
 
     expect(queries.join("\n")).toContain("current_event.received_at >=");
@@ -167,6 +166,7 @@ describe("live status repository", () => {
       providerObservedAt,
       roomId: "live-room",
       status: {
+        providerObservedAt,
         playbackUrl: "https://playback.example/live.m3u8",
         providerPlaybackId: "playback-1",
         providerState: "active",

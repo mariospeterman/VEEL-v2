@@ -9884,6 +9884,7 @@ describe("buildApi", () => {
   it("syncs Livepeer status into the backend live room projection", async () => {
     const syncedStatuses: LiveProviderRoomStatus[] = [];
     const providerObservationTimes: Date[] = [];
+    const providerObservedAt = new Date("2026-08-17T08:05:00.000Z");
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       sessionRepository: appReadySessionRepository,
@@ -9910,6 +9911,7 @@ describe("buildApi", () => {
         },
         async getRoomStatus(input) {
           return {
+            providerObservedAt,
             providerStreamId: input.providerStreamId,
             providerPlaybackId: input.providerPlaybackId,
             providerState: "active",
@@ -9934,9 +9936,10 @@ describe("buildApi", () => {
     });
 
     expect(response.statusCode).toBe(202);
-    expect(providerObservationTimes).toEqual([expect.any(Date)]);
+    expect(providerObservationTimes).toEqual([providerObservedAt]);
     expect(syncedStatuses).toEqual([
       {
+        providerObservedAt,
         providerStreamId: "livepeer-stream-13",
         providerPlaybackId: "livepeer-playback-13",
         providerState: "active",

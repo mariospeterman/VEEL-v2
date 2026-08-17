@@ -68,8 +68,7 @@ describe("content media repository", () => {
       providerEventId: "bunny-stale-processing-event",
       providerAssetId: "bunny-video-guid",
       providerState: "processing",
-      providerPlayable: false,
-      preventStateRegression: true
+      providerPlayable: false
     })).resolves.toBe(true);
 
     expect(queries.join("\n")).toContain("normalized_state = 'ignored_stale'");

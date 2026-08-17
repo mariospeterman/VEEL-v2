@@ -153,7 +153,7 @@ export function createLiveStatusRepositoryMethods(
         }
 
         if (
-          (input.preventStateRegression && replayDecision === "stale") ||
+          replayDecision === "stale" ||
           !isAllowedWebhookTransition(current.state, input.state)
         ) {
           await transaction`

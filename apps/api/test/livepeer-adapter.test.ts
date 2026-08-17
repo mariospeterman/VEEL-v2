@@ -62,6 +62,39 @@ describe("Livepeer provider adapter", () => {
     } satisfies Partial<LiveProviderRequestError>);
   });
 
+  it("timestamps the stream observation before the secondary playback lookup", async () => {
+    vi.useFakeTimers();
+    const streamObservedAt = new Date("2026-08-17T08:05:00.000Z");
+    const playbackResolvedAt = new Date("2026-08-17T08:06:00.000Z");
+    vi.setSystemTime(streamObservedAt);
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/stream/stream-1")) {
+        return new Response(JSON.stringify({
+          id: "stream-1",
+          playbackId: "playback-1",
+          isActive: true
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+
+      vi.setSystemTime(playbackResolvedAt);
+      return new Response(JSON.stringify({
+        type: "live",
+        meta: { source: [{ type: "html5/application/vnd.apple.mpegurl", url: "https://playback.example/live.m3u8" }] }
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    const adapter = createLivepeerProviderAdapter(livepeerEnv(), fetchMock as typeof fetch);
+
+    const status = await adapter.getRoomStatus({
+      providerStreamId: "stream-1",
+      providerPlaybackId: "playback-1"
+    });
+
+    expect(status.providerObservedAt).toEqual(streamObservedAt);
+    expect(status.playbackUrl).toBe("https://playback.example/live.m3u8");
+    vi.useRealTimers();
+  });
+
   it("signs playback access with Livepeer's official JWT helper", async () => {
     const keyPair = generateKeyPairSync("ec", { namedCurve: "P-256" });
     const privateKey = Buffer.from(

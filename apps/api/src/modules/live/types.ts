@@ -20,6 +20,7 @@ export interface CreatedLiveProviderRoom {
 }
 
 export interface LiveProviderRoomStatus {
+  providerObservedAt: Date;
   providerStreamId: string;
   providerPlaybackId: string | null;
   providerState: string;
