@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import type { AdminRepository } from "./types.js";
 import { AdminRepositoryStateConflictError } from "./admin-repository-errors.js";
@@ -87,6 +88,56 @@ export function createModerationRepository(
         const approving = input.body.action === "approve" || input.body.action === "reinstate";
         const requestingChanges = input.body.action === "request_changes";
         const decidingAppeal = safetyCase.state === "appealed";
+
+        if (approving) {
+          const evidenceRows = await transaction<{ media_asset_id: string | null }[]>`
+            select private.content_safety_automated_candidate_asset(${input.contentId}) as media_asset_id
+          `;
+          const releaseMediaAssetId = evidenceRows[0]?.media_asset_id;
+          if (!releaseMediaAssetId) {
+            throw new AdminRepositoryStateConflictError(
+              "Required automated safety checks are incomplete"
+            );
+          }
+
+          const reviewEventId = `staff-review:${input.contentId}:${randomUUID()}`;
+          await transaction`
+            insert into provider_media_scan_events (
+              media_safety_case_id,
+              media_asset_id,
+              provider,
+              provider_event_id,
+              scan_type,
+              normalized_signal,
+              payload_hash,
+              model_or_ruleset_version,
+              observed_at
+            )
+            values (
+              ${safetyCase.id},
+              ${releaseMediaAssetId},
+              'internal',
+              ${reviewEventId},
+              'manual_review',
+              'clear',
+              ${moderationReviewHash({
+                action: input.body.action,
+                actorUserId: actor.id,
+                contentId: input.contentId,
+                reason: input.body.reason
+              })},
+              'media-safety-v2',
+              now()
+            )
+          `;
+
+          await transaction`
+            update content_items
+            set release_media_asset_id = ${releaseMediaAssetId}, updated_at = now()
+            where id = ${input.contentId}
+          `;
+        }
+
         await transaction`
           update media_safety_cases
           set
@@ -128,8 +179,8 @@ export function createModerationRepository(
                   and ${moderation.state} = 'ready'
                 then 'published'
                 when ${input.body.action} = 'approve'
-                  and ${decidingAppeal}
                   and ci.publish_state = 'blocked'
+                  and (${decidingAppeal} or ci.published_at is not null)
                   and ${moderation.state} = 'ready'
                 then 'published'
                 when ${input.body.action} in ('block', 'delete') then 'blocked'
@@ -141,7 +192,11 @@ export function createModerationRepository(
                 when ${approving}
                   and (
                     ci.publish_state = 'submitted_for_review'
-                    or (${input.body.action} = 'approve' and ${decidingAppeal} and ci.publish_state = 'blocked')
+                    or (
+                      ${input.body.action} = 'approve'
+                      and ci.publish_state = 'blocked'
+                      and (${decidingAppeal} or ci.published_at is not null)
+                    )
                   )
                   and ${moderation.state} = 'ready'
                 then coalesce(ci.published_at, now())
@@ -307,6 +362,15 @@ export function createModerationRepository(
       return rows[0] ? toAdminReport(rows[0]) : null;
     },
   };
+}
+
+function moderationReviewHash(input: {
+  action: string;
+  actorUserId: string;
+  contentId: string;
+  reason: string;
+}): string {
+  return createHash("sha256").update(JSON.stringify(input)).digest("hex");
 }
 
 function assertModerationTransition(

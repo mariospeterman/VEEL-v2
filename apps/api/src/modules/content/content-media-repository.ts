@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import { withPostgresTransaction } from "../../shared/postgres.js";
 import {
@@ -169,6 +169,13 @@ export function createContentMediaRepositoryMethods(
         : null;
     },
     async updateMediaAssetPlayback(input) {
+      const observationEventId = `bunny-observation:${input.mediaAssetId}:${input.providerObservationCutoff.toISOString()}`;
+      const observationHash = normalizedMediaEvidenceHash({
+        mediaAssetId: input.mediaAssetId,
+        providerPlayable: input.providerPlayable,
+        providerState: input.providerState,
+        observedAt: input.providerObservationCutoff.toISOString()
+      });
       await withPostgresTransaction(sql, async (transaction) => {
         const updatedAssets = await transaction<{ id: string }[]>`
           update media_assets
@@ -195,6 +202,38 @@ export function createContentMediaRepositoryMethods(
         `;
 
         if (updatedAssets.length === 0) return;
+
+        if (input.providerPlayable) {
+          await transaction`
+            insert into provider_media_scan_events (
+              media_safety_case_id,
+              media_asset_id,
+              provider,
+              provider_event_id,
+              scan_type,
+              normalized_signal,
+              payload_hash,
+              model_or_ruleset_version,
+              observed_at
+            )
+            select
+              safety.id,
+              asset.id,
+              'bunny_stream',
+              ${observationEventId},
+              'container_integrity',
+              'clear',
+              ${observationHash},
+              'bunny-stream-playability-v1',
+              ${input.providerObservationCutoff}
+            from media_assets asset
+            join media_safety_cases safety
+              on safety.content_item_id = asset.content_item_id
+              and safety.state <> 'superseded'
+            where asset.id = ${input.mediaAssetId}
+            on conflict (provider, provider_event_id) do nothing
+          `;
+        }
 
         await transaction`
           update content_items ci
@@ -303,6 +342,44 @@ export function createContentMediaRepositoryMethods(
           returning id
         `;
 
+        if (input.providerPlayable) {
+          await transaction`
+            insert into provider_media_scan_events (
+              media_safety_case_id,
+              media_asset_id,
+              provider,
+              provider_event_id,
+              scan_type,
+              normalized_signal,
+              payload_hash,
+              model_or_ruleset_version,
+              observed_at
+            )
+            select
+              safety.id,
+              asset.id,
+              'bunny_stream',
+              ${input.providerEventId},
+              'container_integrity',
+              'clear',
+              ${normalizedMediaEvidenceHash({
+                provider: input.provider,
+                providerAssetId: input.providerAssetId,
+                providerEventId: input.providerEventId,
+                providerPlayable: input.providerPlayable,
+                providerState: input.providerState
+              })},
+              'bunny-stream-playability-v1',
+              now()
+            from media_assets asset
+            join media_safety_cases safety
+              on safety.content_item_id = asset.content_item_id
+              and safety.state <> 'superseded'
+            where asset.id = ${current.id}
+            on conflict (provider, provider_event_id) do nothing
+          `;
+        }
+
         await transaction`
           update content_items ci
           set
@@ -333,4 +410,8 @@ export function createContentMediaRepositoryMethods(
 
 function toJsonObject(value: Record<string, unknown>): JsonObject {
   return JSON.parse(JSON.stringify(value)) as JsonObject;
+}
+
+function normalizedMediaEvidenceHash(value: Record<string, unknown>): string {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }

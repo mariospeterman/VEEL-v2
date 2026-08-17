@@ -14,8 +14,19 @@ export interface QueuedMediaModerationJob {
   leaseToken: string;
 }
 
+export interface MediaModerationSignal {
+  provider: "bunny_shield" | "bunny_stream" | "livepeer" | "internal";
+  providerEventId: string;
+  scanType: "container_integrity" | "malware" | "known_hash" | "content_classification" | "live_signal";
+  normalizedSignal: "clear" | "suspected" | "matched" | "inconclusive" | "provider_error";
+  payloadHash: string;
+  modelOrRulesetVersion?: string;
+  confidence?: number;
+  providerIncidentReference?: string;
+}
+
 export type MediaModerationOutcome =
-  | { state: "clear"; provider: "bunny_shield" | "livepeer" | "internal"; payloadHash: string }
+  | { state: "evidence"; signals: MediaModerationSignal[] }
   | { state: "review_required"; reasonCode: string }
   | { state: "failed"; failureCode: string };
 
@@ -73,7 +84,15 @@ export async function processMediaModerationJobs(input: {
     );
     await input.repository.recordOutcome({ job, outcome, now });
 
-    if (outcome.state === "clear") result.completed += 1;
+    const evidenceComplete = outcome.state === "evidence"
+      ? summarizeEvidence(outcome.signals, job.targetType).evidenceComplete
+      : false;
+    if (outcome.state === "evidence" && evidenceComplete) {
+      result.completed += 1;
+    }
+    if (outcome.state === "evidence" && !evidenceComplete) {
+      result.reviewRequired += 1;
+    }
     if (outcome.state === "review_required") result.reviewRequired += 1;
     if (outcome.state === "failed") result.failed += 1;
   }
@@ -215,16 +234,21 @@ export function createPostgresMediaModerationRepository(
         return;
       }
 
-      const reasonCode =
-        input.outcome.state === "clear"
-          ? "provider_scan_clear_manual_release_required"
-          : input.outcome.reasonCode;
+      const evidenceOutcome = input.outcome.state === "evidence"
+        ? summarizeEvidence(input.outcome.signals, input.job.targetType)
+        : null;
+      const validSignals = input.outcome.state === "evidence"
+        ? validMediaModerationSignals(input.outcome.signals)
+        : [];
+      const reasonCode = input.outcome.state === "evidence"
+        ? evidenceOutcome!.reasonCode
+        : input.outcome.reasonCode;
 
       await sql.begin(async (transaction) => {
         const jobRows = await transaction<{ media_safety_case_id: string }[]>`
           update media_moderation_jobs
           set
-            state = ${input.outcome.state === "clear" ? "completed" : "review_required"},
+            state = ${input.outcome.state === "evidence" && evidenceOutcome!.evidenceComplete ? "completed" : "review_required"},
             last_failure_code = null,
             lease_token = null,
             leased_at = null,
@@ -237,36 +261,129 @@ export function createPostgresMediaModerationRepository(
         `;
         if (!jobRows[0]) return;
 
-        if (input.outcome.state === "clear") {
+        if (input.outcome.state === "evidence") {
+          if (!evidenceOutcome!.evidenceComplete && input.job.mediaAssetId) {
+            await transaction`
+              update provider_media_scan_events
+              set release_eligible = false
+              where media_safety_case_id = ${input.job.caseId}
+                and media_asset_id = ${input.job.mediaAssetId}
+                and scan_type in (
+                  'container_integrity',
+                  'malware',
+                  'known_hash',
+                  'content_classification'
+                )
+                and release_eligible is true
+            `;
+          }
+
+          const signalsToPersist = evidenceOutcome!.evidenceComplete
+            ? validSignals
+            : validSignals.filter((signal) => signal.normalizedSignal !== "clear");
+          for (const signal of signalsToPersist) {
+            await transaction`
+              insert into provider_media_scan_events (
+                media_safety_case_id,
+                media_asset_id,
+                provider,
+                provider_event_id,
+                scan_type,
+                normalized_signal,
+                payload_hash,
+                model_or_ruleset_version,
+                confidence,
+                provider_incident_reference,
+                reporting_state,
+                release_eligible,
+                observed_at
+              )
+              values (
+                ${input.job.caseId},
+                ${input.job.mediaAssetId},
+                ${signal.provider},
+                ${signal.providerEventId},
+                ${signal.scanType},
+                ${signal.normalizedSignal},
+                ${signal.payloadHash},
+                ${signal.modelOrRulesetVersion ?? null},
+                ${signal.confidence ?? null},
+                ${signal.providerIncidentReference ?? null},
+                ${signal.scanType === "known_hash" && signal.normalizedSignal === "matched" ? "platform_review_required" : "not_required"},
+                ${evidenceOutcome!.evidenceComplete},
+                ${input.now}
+              )
+              on conflict (provider, provider_event_id) do nothing
+            `;
+          }
+
+          if (evidenceOutcome?.matchedKnownHash) {
+            await transaction`
+              insert into regulatory_report_workflows (
+                media_safety_case_id,
+                provider,
+                provider_incident_reference,
+                state
+              )
+              values (
+                ${input.job.caseId},
+                'bunny_shield',
+                ${evidenceOutcome.matchedKnownHash.providerIncidentReference ?? evidenceOutcome.matchedKnownHash.providerEventId},
+                'review_required'
+              )
+              on conflict (media_safety_case_id, provider, provider_incident_reference) do nothing
+            `;
+          }
+        }
+
+        if (
+          input.outcome.state === "evidence"
+          && !evidenceOutcome!.evidenceComplete
+          && input.job.mediaAssetId
+        ) {
           await transaction`
-            insert into provider_media_scan_events (
-              media_safety_case_id,
-              provider,
-              scan_type,
-              normalized_signal,
-              payload_hash,
-              observed_at
-            )
-            values (
-              ${input.job.caseId},
-              ${input.outcome.provider},
-              ${input.job.targetType === "live_room" ? "live_signal" : "known_hash"},
-              'clear',
-              ${input.outcome.payloadHash},
-              ${input.now}
-            )
+            update content_items content
+            set
+              state = 'blocked',
+              moderation_state = 'pending',
+              publish_state = 'blocked',
+              updated_at = now()
+            from media_safety_cases safety
+            where safety.id = ${input.job.caseId}
+              and safety.content_item_id = content.id
+              and (
+                content.release_media_asset_id is null
+                or content.release_media_asset_id = ${input.job.mediaAssetId}
+              )
           `;
         }
 
         await transaction`
           update media_safety_cases
           set
-            state = 'review_required',
+            state = case
+              when state = 'appealed'
+                and ${evidenceOutcome?.caseState ?? "review_required"} = 'review_required'
+              then 'appealed'
+              else ${evidenceOutcome?.caseState ?? "review_required"}
+            end,
             reason_code = ${reasonCode},
             provider_release_allowed = false,
             updated_at = now()
           where id = ${input.job.caseId}
             and state not in ('rejected', 'held_for_reporting', 'superseded')
+            and (
+              ${input.job.mediaAssetId}::uuid is null
+              or exists (
+                select 1
+                from content_items content
+                where content.id = media_safety_cases.content_item_id
+                  and (
+                    content.release_media_asset_id is null
+                    or content.release_media_asset_id = ${input.job.mediaAssetId}
+                  )
+              )
+            )
         `;
       });
     },
@@ -295,4 +412,132 @@ function moderationFailureCode(error: unknown): string {
     return `media_moderation_exception:${error.message.slice(0, 80)}`;
   }
   return "media_moderation_exception";
+}
+
+export function summarizeEvidence(
+  signals: MediaModerationSignal[],
+  targetType: QueuedMediaModerationJob["targetType"] = "media_asset"
+): {
+  caseState: "review_required" | "held_for_reporting";
+  evidenceComplete: boolean;
+  matchedKnownHash: MediaModerationSignal | null;
+  reasonCode: string;
+} {
+  if (targetType === "live_room") return summarizeLiveEvidence(signals);
+
+  const validSignals = validMediaModerationSignals(signals);
+  const observedRequiredTypes = new Set<MediaModerationSignal["scanType"]>();
+  let duplicateRequiredSignal = false;
+  for (const signal of validSignals) {
+    if (!requiredEvidenceProviders.has(signal.scanType)) continue;
+    if (observedRequiredTypes.has(signal.scanType)) duplicateRequiredSignal = true;
+    observedRequiredTypes.add(signal.scanType);
+  }
+  const invalid = validSignals.length !== signals.length || duplicateRequiredSignal;
+  const evidenceComplete = !invalid
+    && [...requiredEvidenceProviders.keys()].every((scanType) => observedRequiredTypes.has(scanType));
+
+  const matchedKnownHash = validSignals.find(
+    (signal) => signal.scanType === "known_hash" && signal.normalizedSignal === "matched"
+  ) ?? null;
+  if (matchedKnownHash) {
+    return {
+      caseState: "held_for_reporting",
+      evidenceComplete,
+      matchedKnownHash,
+      reasonCode: "known_hash_match_requires_reporting_review"
+    };
+  }
+
+  if (invalid) {
+    return {
+      caseState: "review_required",
+      evidenceComplete: false,
+      matchedKnownHash: null,
+      reasonCode: "required_release_evidence_invalid"
+    };
+  }
+
+  if (validSignals.some((signal) => signal.normalizedSignal !== "clear")) {
+    return {
+      caseState: "review_required",
+      evidenceComplete,
+      matchedKnownHash: null,
+      reasonCode: "automated_signal_requires_human_review"
+    };
+  }
+
+  return {
+    caseState: "review_required",
+    evidenceComplete,
+    matchedKnownHash: null,
+    reasonCode: evidenceComplete
+      ? "automated_checks_clear_manual_release_required"
+      : "required_release_evidence_incomplete"
+  };
+}
+
+function summarizeLiveEvidence(signals: MediaModerationSignal[]): {
+  caseState: "review_required" | "held_for_reporting";
+  evidenceComplete: boolean;
+  matchedKnownHash: MediaModerationSignal | null;
+  reasonCode: string;
+} {
+  const validSignals = validMediaModerationSignals(signals);
+  const validLiveSignals = validSignals.filter((signal) => signal.scanType === "live_signal");
+  const invalid = validLiveSignals.length !== signals.length;
+  const evidenceComplete = !invalid && validLiveSignals.length > 0;
+
+  if (invalid) {
+    return {
+      caseState: "review_required",
+      evidenceComplete: false,
+      matchedKnownHash: null,
+      reasonCode: "required_release_evidence_invalid"
+    };
+  }
+
+  if (!evidenceComplete) {
+    return {
+      caseState: "review_required",
+      evidenceComplete: false,
+      matchedKnownHash: null,
+      reasonCode: "required_release_evidence_incomplete"
+    };
+  }
+
+  return {
+    caseState: "review_required",
+    evidenceComplete: true,
+    matchedKnownHash: null,
+    reasonCode: validLiveSignals.some((signal) => signal.normalizedSignal !== "clear")
+      ? "automated_signal_requires_human_review"
+      : "automated_checks_clear_manual_release_required"
+  };
+}
+
+const requiredEvidenceProviders = new Map<
+  MediaModerationSignal["scanType"],
+  MediaModerationSignal["provider"]
+>([
+  ["container_integrity", "bunny_stream"],
+  ["malware", "bunny_shield"],
+  ["known_hash", "bunny_shield"],
+  ["content_classification", "internal"]
+]);
+
+export function validMediaModerationSignals(
+  signals: MediaModerationSignal[]
+): MediaModerationSignal[] {
+  return signals.filter((signal) => {
+    const expectedProvider = requiredEvidenceProviders.get(signal.scanType);
+    const providerValid = expectedProvider
+      ? signal.provider === expectedProvider
+      : signal.scanType === "live_signal" && signal.provider === "livepeer";
+    return providerValid
+      && Boolean(signal.providerEventId.trim())
+      && /^[a-f0-9]{64}$/.test(signal.payloadHash)
+      && (signal.scanType !== "content_classification" || Boolean(signal.modelOrRulesetVersion?.trim()))
+      && (signal.confidence === undefined || (signal.confidence >= 0 && signal.confidence <= 1));
+  });
 }
