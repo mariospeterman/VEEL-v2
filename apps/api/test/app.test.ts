@@ -4840,6 +4840,7 @@ describe("buildApi", () => {
   it("syncs Bunny playback status into the backend media projection", async () => {
     const playbackUpdates: Array<{
       mediaAssetId: string;
+      providerObservedAt: Date;
       providerState: string;
       providerPlayable: boolean;
       playbackUrl?: string | null;
@@ -4927,6 +4928,7 @@ describe("buildApi", () => {
     expect(playbackUpdates).toEqual([
       {
         mediaAssetId: "00000000-0000-4000-8000-000000000070",
+        providerObservedAt: expect.any(Date),
         providerState: "ready",
         providerPlayable: true,
         playbackUrl: "https://vz.example.test/video/playlist.m3u8",
@@ -9881,6 +9883,7 @@ describe("buildApi", () => {
 
   it("syncs Livepeer status into the backend live room projection", async () => {
     const syncedStatuses: LiveProviderRoomStatus[] = [];
+    const providerObservationTimes: Date[] = [];
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       sessionRepository: appReadySessionRepository,
@@ -9895,6 +9898,7 @@ describe("buildApi", () => {
           });
         },
         async onUpdateRoomStatus(input) {
+          providerObservationTimes.push(input.providerObservedAt);
           syncedStatuses.push(input.status);
         }
       }),
@@ -9930,6 +9934,7 @@ describe("buildApi", () => {
     });
 
     expect(response.statusCode).toBe(202);
+    expect(providerObservationTimes).toEqual([expect.any(Date)]);
     expect(syncedStatuses).toEqual([
       {
         providerStreamId: "livepeer-stream-13",

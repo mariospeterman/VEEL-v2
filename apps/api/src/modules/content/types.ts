@@ -161,6 +161,7 @@ export interface CreateMediaAssetInput {
 
 export interface UpdateMediaAssetPlaybackInput {
   mediaAssetId: string;
+  providerObservedAt: Date;
   providerState: string;
   providerPlayable: boolean;
   playbackUrl?: string | null;

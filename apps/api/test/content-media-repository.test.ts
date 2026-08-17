@@ -4,11 +4,13 @@ import { createContentMediaRepositoryMethods } from "../src/modules/content/cont
 
 describe("content media repository", () => {
   it("does not approve moderation from provider playback sync", async () => {
-    const { sql, queries } = createFakeSql();
+    const { sql, queries, values } = createFakeSql();
     const repository = createContentMediaRepositoryMethods(sql);
+    const providerObservedAt = new Date("2026-08-17T08:05:00.000Z");
 
     await repository.updateMediaAssetPlayback?.({
       mediaAssetId: "00000000-0000-4000-8000-000000000070",
+      providerObservedAt,
       providerState: "ready",
       providerPlayable: true,
       playbackUrl: "https://vz.example.test/video/playlist.m3u8",
@@ -17,6 +19,8 @@ describe("content media repository", () => {
     });
 
     expect(queries.join("\n")).toContain("state = case when");
+    expect(queries.join("\n")).toContain("provider_checked_at = ?");
+    expect(values).toContain(providerObservedAt);
     expect(queries.join("\n")).not.toContain("moderation_state");
   });
 
@@ -97,11 +101,13 @@ describe("content media repository", () => {
 function createFakeSql(input: {
   isLatestProviderEvent?: boolean;
   providerCheckedAt?: Date | null;
-} = {}): { sql: PostgresSql; queries: string[] } {
+} = {}): { sql: PostgresSql; queries: string[]; values: unknown[] } {
   const queries: string[] = [];
-  const transaction = vi.fn((strings: TemplateStringsArray) => {
+  const values: unknown[] = [];
+  const transaction = vi.fn((strings: TemplateStringsArray, ...queryValues: unknown[]) => {
     const query = strings.join("?");
     queries.push(query);
+    values.push(...queryValues);
     if (query.includes("select id")) {
       return Promise.resolve([{
         id: "media-asset",
@@ -120,5 +126,5 @@ function createFakeSql(input: {
     begin: vi.fn(async (work: (tx: PostgresTransaction) => Promise<unknown>) => work(transaction))
   } as unknown as PostgresSql;
 
-  return { sql, queries };
+  return { sql, queries, values };
 }

@@ -114,6 +114,7 @@ export interface CreateLivePassPurchaseRequestInput {
 
 export interface UpdateLiveRoomStatusInput {
   roomId: string;
+  providerObservedAt: Date;
   status: LiveProviderRoomStatus;
 }
 

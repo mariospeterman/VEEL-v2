@@ -373,8 +373,9 @@ export async function registerLiveRoomRoutes(
         providerStreamId: room.providerStreamId,
         providerPlaybackId: room.providerPlaybackId
       });
+      const providerObservedAt = new Date();
 
-      await options.liveRepository.updateRoomStatus({ roomId: room.id, status });
+      await options.liveRepository.updateRoomStatus({ providerObservedAt, roomId: room.id, status });
 
       return reply.code(202).send();
     } catch (error) {

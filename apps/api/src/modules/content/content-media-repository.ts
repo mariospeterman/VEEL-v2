@@ -160,7 +160,7 @@ export function createContentMediaRepositoryMethods(
             poster_url = coalesce(${input.posterUrl ?? null}, poster_url),
             duration_ms = coalesce(${input.durationMs ?? null}, duration_ms),
             ready_at = case when ${input.providerPlayable} then coalesce(ready_at, now()) else ready_at end,
-            provider_checked_at = now()
+            provider_checked_at = ${input.providerObservedAt}
           where id = ${input.mediaAssetId}
         `;
         await transaction`

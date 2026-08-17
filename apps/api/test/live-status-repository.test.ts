@@ -113,9 +113,12 @@ describe("live status repository", () => {
 
   it("records direct Livepeer sync observation time", async () => {
     const queries: string[] = [];
-    const transaction = vi.fn((strings: TemplateStringsArray) => {
+    const values: unknown[] = [];
+    const providerObservedAt = new Date("2026-08-17T08:05:00.000Z");
+    const transaction = vi.fn((strings: TemplateStringsArray, ...queryValues: unknown[]) => {
       const query = strings.join("?");
       queries.push(query);
+      values.push(...queryValues);
       if (query.includes("update live_rooms")) {
         return Promise.resolve([{ id: "live-room" }]);
       }
@@ -127,6 +130,7 @@ describe("live status repository", () => {
     const repository = createLiveStatusRepositoryMethods(sql);
 
     await repository.updateRoomStatus({
+      providerObservedAt,
       roomId: "live-room",
       status: {
         playbackUrl: "https://playback.example/live.m3u8",
@@ -140,6 +144,7 @@ describe("live status repository", () => {
       }
     });
 
-    expect(queries.join("\n")).toContain("provider_checked_at = now()");
+    expect(queries.join("\n")).toContain("provider_checked_at = ?");
+    expect(values).toContain(providerObservedAt);
   });
 });

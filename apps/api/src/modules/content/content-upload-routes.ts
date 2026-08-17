@@ -205,9 +205,11 @@ export async function registerContentUploadRoutes(
       const playbackData = await options.mediaUploadProvider.getPlaybackData({
         providerAssetId: mediaAsset.providerAssetId
       });
+      const providerObservedAt = new Date();
 
       await options.contentRepository.updateMediaAssetPlayback({
         mediaAssetId: mediaAsset.id,
+        providerObservedAt,
         ...playbackData
       });
 

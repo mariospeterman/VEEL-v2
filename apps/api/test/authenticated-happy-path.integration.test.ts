@@ -3294,6 +3294,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       );
 
       await liveRepository.updateRoomStatus({
+        providerObservedAt: new Date(),
         roomId: seededLiveRoomId,
         status: {
           providerStreamId: `livepeer-stream-${shortRunId}`,

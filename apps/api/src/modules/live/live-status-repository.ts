@@ -23,7 +23,7 @@ export function createLiveStatusRepositoryMethods(
             playback_url = case when ${input.status.state} = 'live' then ${input.status.playbackUrl} else null end,
             starts_at = case when ${input.status.state} = 'live' then coalesce(starts_at, now()) else starts_at end,
             ended_at = case when ${input.status.state} in ('ended', 'replay_ready') then coalesce(ended_at, now()) else ended_at end,
-            provider_checked_at = now(),
+            provider_checked_at = ${input.providerObservedAt},
             updated_at = now()
           where id = ${input.roomId}
             and state <> 'suspended'
