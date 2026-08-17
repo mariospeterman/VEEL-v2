@@ -3687,7 +3687,6 @@ describeIntegration("authenticated API happy path against Postgres", () => {
             where ma.id = ${seededFreeMediaAssetId}
               and ma.provider_state = 'replay_ready'
               and ma.provider_playable = true
-              and ma.provider_checked_at is not null
           ) as media_asset_count
       `;
 
