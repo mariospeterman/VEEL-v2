@@ -40,7 +40,7 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Merged baseline | `main` at `231ba53` (green baseline through PR #71) |
 | Active slice | Launch 02B — canonical account-access and earnings identity completion |
 | Branch | `codex/launch-02-canonical-access` |
-| Pull request | Pending |
+| Pull request | #72 |
 | State | `LOCAL_GREEN` |
 | Slice blockers | No code blocker. Real recovery, wallet, age, and KYC provider acceptance remains a pre-production staging proof. |
 | Next unfinished slice | Launch 02 — Three-step onboarding, canonical session, optional recovery, and earnings readiness |
