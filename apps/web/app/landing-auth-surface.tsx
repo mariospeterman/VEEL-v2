@@ -13,6 +13,7 @@ import type { WebAuthState } from "@/supabase/auth-state";
 import { ProviderLogo } from "@/brand/provider-logo";
 
 type LandingWalletRuntimeProps = {
+  autoStart?: boolean;
   authState: WebAuthState;
   onLinked?: ((address: string) => void) | undefined;
 };
@@ -21,17 +22,17 @@ const onboardingSteps = [
   {
     eyebrow: "1 / 3",
     title: "Wallet",
-    copy: "Connect a wallet you control. You can create one here if needed."
+    copy: "Connect the wallet you use with WeVid."
   },
   {
     eyebrow: "2 / 3",
     title: "Profile details",
-    copy: "Choose your unique handle. A display name and photo are optional."
+    copy: "Choose a handle. A name and photo are optional."
   },
   {
     eyebrow: "3 / 3",
     title: "Age verification",
-    copy: "Verify 18+ access with a reusable provider when possible."
+    copy: "Confirm 18+ access."
   }
 ] as const;
 
@@ -128,6 +129,7 @@ function LandingWalletList({ authState, onLinked }: { authState: WebAuthState; o
   const [runtime, setRuntime] = useState<ComponentType<LandingWalletRuntimeProps> | null>(null);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [runtimeAttempt, setRuntimeAttempt] = useState(0);
+  const [autoStart, setAutoStart] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -147,18 +149,26 @@ function LandingWalletList({ authState, onLinked }: { authState: WebAuthState; o
 
   if (runtime) {
     const Runtime = runtime;
-    return <Runtime authState={authState} onLinked={onLinked} />;
+    return <Runtime authState={authState} autoStart={autoStart} onLinked={onLinked} />;
   }
 
   return (
     <div className="landing-wallet-runtime" aria-label="Sign-in options">
       {!runtimeError ? (
         <>
-          <button aria-describedby="wallet-runtime-status" className="auth-provider-button" disabled type="button">
+          <button
+            aria-describedby="wallet-runtime-status"
+            className="auth-provider-button"
+            disabled={autoStart}
+            onClick={() => setAutoStart(true)}
+            type="button"
+          >
             <ProviderLogo label="Connect wallet" name="wallet" />
-            <span><strong>Connect wallet</strong></span>
+            <span><strong>{autoStart ? "Opening wallet" : "Connect wallet"}</strong></span>
           </button>
-          <p className="sr-only" id="wallet-runtime-status" role="status">Preparing wallet connection</p>
+          <p className="sr-only" id="wallet-runtime-status" role="status">
+            {autoStart ? "Opening wallet connection" : "Wallet connection ready"}
+          </p>
         </>
       ) : null}
       {runtimeError ? (
