@@ -67,6 +67,7 @@ describe("content media repository", () => {
     })).resolves.toBe(true);
 
     expect(queries.join("\n")).toContain("newer.delivery_sequence > current_event.delivery_sequence");
+    expect(queries.join("\n")).toContain("newer.normalized_state is distinct from 'ignored_stale'");
     expect(queries.join("\n")).toContain("normalized_state = 'ignored_stale'");
     expect(queries.join("\n")).not.toContain("update media_assets\n          set");
   });

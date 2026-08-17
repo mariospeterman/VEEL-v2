@@ -26,6 +26,7 @@ export async function providerEventReplayDecision(
               from provider_events newer
               where newer.provider = current_event.provider
                 and newer.delivery_sequence > current_event.delivery_sequence
+                and newer.normalized_state is distinct from 'ignored_stale'
                 and newer.replay_payload ->> 'kind' = 'media_asset'
                 and newer.replay_payload ->> 'providerAssetId' = ${input.subject.providerAssetId}
             )
@@ -45,6 +46,7 @@ export async function providerEventReplayDecision(
               from provider_events newer
               where newer.provider = current_event.provider
                 and newer.delivery_sequence > current_event.delivery_sequence
+                and newer.normalized_state is distinct from 'ignored_stale'
                 and newer.replay_payload ->> 'kind' = 'livepeer_stream'
                 and newer.replay_payload ->> 'providerStreamId' = ${input.subject.providerStreamId}
             )
