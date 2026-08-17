@@ -228,6 +228,7 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
         <>
           <div className="auth-provider-button-grid auth-provider-button-grid-wallets" aria-label="Wallet login providers">
             <button
+              aria-label={connected && publicKey ? "Continue with connected wallet" : "Connect wallet"}
               className="auth-provider-button"
               disabled={state === "linking" || connecting}
               onClick={startWalletFlow}

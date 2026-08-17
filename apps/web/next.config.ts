@@ -31,9 +31,25 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   reactStrictMode: true,
   turbopack: {
-    root: repoRoot
+    root: repoRoot,
+    ignoreIssue: [
+      {
+        path: "**/node_modules/@privy-io/react-auth/**",
+        title: "Module not found",
+        description: /@farcaster\/mini-app-solana/
+      }
+    ]
   },
   typedRoutes: true,
+  webpack(config, { webpack }) {
+    config.plugins.push(
+      new webpack.IgnorePlugin({
+        contextRegExp: /@privy-io[\\/]react-auth/,
+        resourceRegExp: /^@farcaster[\\/]mini-app-solana$/
+      })
+    );
+    return config;
+  },
   async headers() {
     return [
       {

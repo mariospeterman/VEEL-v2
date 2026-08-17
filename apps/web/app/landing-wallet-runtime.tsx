@@ -3,9 +3,9 @@
 import { embeddedWalletProviderConfig } from "@/providers/onboarding-provider-config";
 import { readPublicWebEnv } from "@/public-env";
 import type { WebAuthState } from "@/supabase/auth-state";
-import { EmbeddedWalletLoginButton } from "@/wallet/embedded-wallet-login";
+import { EmbeddedWalletLauncher } from "@/wallet/embedded-wallet-launcher";
 import { WalletLinkPanel } from "@/wallet/wallet-link-panel";
-import { WalletRuntimeProviders } from "@/wallet/wallet-runtime-providers";
+import { WalletRuntimeBaseProviders } from "@/wallet/wallet-runtime-base-providers";
 
 export function LandingWalletRuntime({
   authState,
@@ -17,15 +17,15 @@ export function LandingWalletRuntime({
   const embeddedWallets = embeddedWalletProviderConfig(readPublicWebEnv());
 
   return (
-    <WalletRuntimeProviders>
+    <WalletRuntimeBaseProviders>
       <div className="landing-wallet-runtime" aria-label="Wallet sign in" data-embedded={embeddedWallets.enabled ? "true" : "false"}>
         <div className="landing-wallet-connect-row">
           <WalletLinkPanel authState={authState} compact loginSimple onLinked={onLinked} reloadOnSession={!onLinked} />
         </div>
         {embeddedWallets.provider.configured ? (
-          <EmbeddedWalletLoginButton label="Create secure WeVid wallet" onLinked={onLinked} secondary />
+          <EmbeddedWalletLauncher label="Create secure WeVid wallet" onLinked={onLinked} secondary />
         ) : null}
       </div>
-    </WalletRuntimeProviders>
+    </WalletRuntimeBaseProviders>
   );
 }
