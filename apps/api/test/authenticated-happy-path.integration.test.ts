@@ -620,6 +620,27 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         Date.parse(supportIntent.quote.expiresAt) - Date.parse(supportIntent.quote.quotedAt)
       ).toBe(120_000);
 
+      const secondCommercialPolicyResponse = await app.inject({
+        ...commercialPolicyRequest,
+        headers: authenticatedHeaders(`commercial-policy-second-${runId}`),
+        payload: {
+          ...commercialPolicyPayload,
+          minimumAmountMinor: 2_100_000,
+          platformFeeBps: 1_300,
+          reason: "Second integration revision for exact replay proof"
+        }
+      });
+      expect(secondCommercialPolicyResponse.statusCode, secondCommercialPolicyResponse.body).toBe(200);
+      expect(secondCommercialPolicyResponse.json()).toMatchObject({
+        minimumAmountMinor: 2_100_000,
+        platformFeeBps: 1_300,
+        revision: 2
+      });
+
+      const originalReplayAfterSecondRevision = await app.inject(commercialPolicyRequest);
+      expect(originalReplayAfterSecondRevision.statusCode, originalReplayAfterSecondRevision.body).toBe(200);
+      expect(originalReplayAfterSecondRevision.json()).toEqual(commercialPolicyResponse.json());
+
       const commercialPolicyEvidence = await sql<{
         audit_count: string;
         receipt_count: string;
@@ -640,8 +661,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
             where idempotency_key = ${`commercial-policy-support-${runId}`} limit 1) as intent_revision
       `;
       expect(commercialPolicyEvidence).toEqual([{
-        audit_count: "1",
-        receipt_count: "1",
+        audit_count: "2",
+        receipt_count: "2",
         receipt_expires_at: "infinity",
         intent_source: "admin_override",
         intent_revision: 1

@@ -1,5 +1,4 @@
 import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
-import type postgres from "postgres";
 import type {
   AdminPaymentCommercialPolicy,
   PaymentCommercialPolicyRepository
@@ -94,7 +93,7 @@ export function createPostgresPaymentCommercialPolicyRepository(
 
         const receiptRows = await transaction<{
           request_hash: string;
-          response_body: { policyId?: string } | null;
+          response_body: { policy?: AdminPaymentCommercialPolicy } | null;
         }[]>`
           select request_hash, response_body
           from idempotency_keys
@@ -106,10 +105,8 @@ export function createPostgresPaymentCommercialPolicyRepository(
           throw new PaymentCommercialPolicyIdempotencyConflictError();
         }
 
-        if (receipt.response_body?.policyId) {
-          const replayRows = await selectPolicyById(transaction, receipt.response_body.policyId);
-          if (!replayRows[0]) throw new PaymentCommercialPolicyRepositoryConfigurationError();
-          return toPaymentCommercialPolicy(replayRows[0]);
+        if (receipt.response_body?.policy) {
+          return receipt.response_body.policy;
         }
 
         const previousRows = await transaction<PaymentCommercialPolicyRow[]>`
@@ -152,6 +149,7 @@ export function createPostgresPaymentCommercialPolicyRepository(
         `;
         const updated = updatedRows[0];
         if (!updated) throw new PaymentCommercialPolicyRepositoryConfigurationError();
+        const policy = toPaymentCommercialPolicy(updated);
 
         await transaction`
           insert into audit_events (
@@ -176,32 +174,17 @@ export function createPostgresPaymentCommercialPolicyRepository(
         await transaction`
           update idempotency_keys
           set response_status = 200,
-              response_body = ${transaction.json({ policyId: updated.id })}::jsonb
+              response_body = ${transaction.json({ policy })}::jsonb
           where key = ${storedKey}
         `;
 
-        return toPaymentCommercialPolicy(updated);
+        return policy;
       });
     },
     async close() {
       if (ownsClient) await sql.end({ timeout: 5 });
     }
   };
-}
-
-function selectPolicyById(
-  sql: postgres.TransactionSql,
-  policyId: string
-) {
-  return sql<PaymentCommercialPolicyRow[]>`
-    select
-      id, product_type, currency, minimum_amount_minor, platform_fee_bps,
-      referral_share_of_platform_fee_bps, quote_ttl_seconds, state,
-      revision, reason, updated_at
-    from payment_commercial_policy_overrides
-    where id = ${policyId}
-    limit 1
-  `;
 }
 
 function toPaymentCommercialPolicy(row: PaymentCommercialPolicyRow): AdminPaymentCommercialPolicy {
