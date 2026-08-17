@@ -23,6 +23,7 @@ export function createLiveStatusRepositoryMethods(
             playback_url = case when ${input.status.state} = 'live' then ${input.status.playbackUrl} else null end,
             starts_at = case when ${input.status.state} = 'live' then coalesce(starts_at, now()) else starts_at end,
             ended_at = case when ${input.status.state} in ('ended', 'replay_ready') then coalesce(ended_at, now()) else ended_at end,
+            provider_checked_at = now(),
             updated_at = now()
           where id = ${input.roomId}
             and state <> 'suspended'
@@ -114,8 +115,8 @@ export function createLiveStatusRepositoryMethods(
     },
     async updateRoomFromWebhook(input) {
       const rows = await sql.begin(async (transaction) => {
-        const currentRows = await transaction<{ id: string; state: string }[]>`
-          select id, state
+        const currentRows = await transaction<{ id: string; provider_checked_at: Date | null; state: string }[]>`
+          select id, provider_checked_at, state
           from live_rooms
           where provider_stream_id = ${input.providerStreamId}
           limit 1
@@ -132,7 +133,8 @@ export function createLiveStatusRepositoryMethods(
           {
             provider: "livepeer",
             providerEventId: input.providerEventId,
-            subject: { kind: "livepeer_stream", providerStreamId: input.providerStreamId }
+            subject: { kind: "livepeer_stream", providerStreamId: input.providerStreamId },
+            subjectObservedAt: current.provider_checked_at
           }
         );
 
@@ -161,6 +163,7 @@ export function createLiveStatusRepositoryMethods(
             playback_url = case when ${input.state} = 'live' then ${input.playbackUrl} else null end,
             starts_at = case when ${input.state} = 'live' then coalesce(starts_at, now()) else starts_at end,
             ended_at = case when ${input.state} in ('ended', 'replay_ready') then coalesce(ended_at, now()) else ended_at end,
+            provider_checked_at = now(),
             updated_at = now()
           where id = ${current.id}
           returning id
