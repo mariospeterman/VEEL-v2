@@ -79,6 +79,10 @@ export interface RecordPaymentSubmissionInput {
   paymentIntentId: string;
   signature: string;
   settlement: PaymentSettlementResult;
+  writeGuard?: {
+    state: "pending" | "transaction_requested" | "submitted";
+    submittedSignature: string | null;
+  };
 }
 
 export interface StoredPaymentIntent extends PaymentIntent {

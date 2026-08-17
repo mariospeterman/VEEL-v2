@@ -4,6 +4,7 @@ import type {
   PaymentSettlementVerifier,
   StoredPaymentIntent
 } from "../src/modules/payment/types";
+import { PaymentSubmissionWriteConflictError } from "../src/modules/payment/payment-submission";
 import { createCanonicalProviderReplayHandlers } from "../src/provider-event-replay-runtime";
 
 describe("canonical provider event replay handlers", () => {
@@ -118,7 +119,11 @@ describe("canonical provider event replay handlers", () => {
       supabaseUserId: "supabase-user-1",
       paymentIntentId: "payment-intent-1",
       signature: "solana-signature",
-      settlement: { confirmed: true, blockTime: new Date("2026-06-06T00:00:00.000Z") }
+      settlement: { confirmed: true, blockTime: new Date("2026-06-06T00:00:00.000Z") },
+      writeGuard: {
+        state: "pending",
+        submittedSignature: null
+      }
     });
     expect(dependencies.paymentEvidenceRepository.updateSolanaProviderEvent).toHaveBeenCalledWith({
       provider: "helius",
@@ -139,6 +144,50 @@ describe("canonical provider event replay handlers", () => {
       provider: "helius",
       providerEventId: "helius-delivery-1",
       normalizedState: "processed"
+    });
+  });
+
+  it("binds a submitted replay to the exact signature matched during lookup", async () => {
+    const dependencies = replayDependencies({ intentState: "submitted" });
+    const handlers = createCanonicalProviderReplayHandlers(dependencies);
+
+    await expect(handlers.helius(heliusEvent())).resolves.toEqual({ state: "replayed" });
+
+    expect(dependencies.paymentRepository.recordSubmission).toHaveBeenCalledWith(
+      expect.objectContaining({
+        writeGuard: {
+          state: "submitted",
+          submittedSignature: "solana-signature"
+        }
+      })
+    );
+  });
+
+  it("does not overwrite a different submission recorded after replay lookup", async () => {
+    const dependencies = replayDependencies();
+    vi.mocked(dependencies.paymentEvidenceRepository.findIntentByReference)
+      .mockResolvedValueOnce({
+        supabaseUserId: "supabase-user-1",
+        intent: storedPaymentIntent("pending")
+      })
+      .mockResolvedValueOnce(null);
+    vi.mocked(dependencies.paymentRepository.recordSubmission).mockRejectedValue(
+      new PaymentSubmissionWriteConflictError()
+    );
+    const handlers = createCanonicalProviderReplayHandlers(dependencies);
+
+    await expect(handlers.helius(heliusEvent())).resolves.toEqual({ state: "replayed" });
+
+    expect(dependencies.paymentRepository.recordSubmission).toHaveBeenCalledWith(
+      expect.objectContaining({
+        signature: "solana-signature",
+        writeGuard: { state: "pending", submittedSignature: null }
+      })
+    );
+    expect(dependencies.paymentEvidenceRepository.updateSolanaProviderEvent).toHaveBeenCalledWith({
+      provider: "helius",
+      providerEventId: "helius-delivery-1",
+      normalizedState: "ignored"
     });
   });
 

@@ -139,6 +139,8 @@ Money, access, safety, age/KYC, wallet, Event Access, Mutuals, messages, and adm
 
 For Bunny recovery, the worker reads the current provider playback projection and persists its usable playback URL, poster, duration, and state through the direct-sync authority before reporting success. A replayed `ready` flag without usable playback data is not successful recovery.
 
+Solana payment replay binds its settlement write to the exact intent state and submitted signature observed during lookup. If concurrent evidence changes that boundary, replay never overwrites it: an unrelated signature is ignored, while still-relevant changed state is retried through a fresh lookup.
+
 Workers process:
 
 - Helius/Solana webhook reconciliation

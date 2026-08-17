@@ -12,11 +12,14 @@ import {
   createPostgresPaymentEvidenceRepository,
   createPostgresPaymentRepository
 } from "./modules/payment/payment-repository.js";
+import { PaymentSubmissionWriteConflictError } from "./modules/payment/payment-submission.js";
 import { createSolanaRpcSettlementVerifier, paymentMemo } from "./modules/payment/solana-payment.js";
 import type {
   PaymentEvidenceRepository,
   PaymentRepository,
-  PaymentSettlementVerifier
+  RecordPaymentSubmissionInput,
+  PaymentSettlementVerifier,
+  StoredPaymentIntent
 } from "./modules/payment/types.js";
 import { createPostgresClient } from "./shared/postgres.js";
 
@@ -187,13 +190,57 @@ export function createCanonicalProviderReplayHandlers(
         tokenDecimals: match.intent.tokenDecimals ?? null,
         expiresAt: match.intent.expiresAt
       });
+      const writeGuard = paymentReplayWriteGuard(
+        match.intent.state,
+        input.replayPayload.signature
+      );
 
-      await dependencies.paymentRepository.recordSubmission({
-        supabaseUserId: match.supabaseUserId,
-        paymentIntentId: match.intent.id,
-        signature: input.replayPayload.signature,
-        settlement
-      });
+      if (!writeGuard) {
+        await dependencies.paymentEvidenceRepository.updateSolanaProviderEvent({
+          provider: input.provider,
+          providerEventId: input.providerEventId,
+          normalizedState: "ignored"
+        });
+        return { state: "replayed" };
+      }
+
+      try {
+        await dependencies.paymentRepository.recordSubmission({
+          supabaseUserId: match.supabaseUserId,
+          paymentIntentId: match.intent.id,
+          signature: input.replayPayload.signature,
+          settlement,
+          writeGuard
+        });
+      } catch (error) {
+        if (!(error instanceof PaymentSubmissionWriteConflictError)) throw error;
+
+        const refreshedMatch = await dependencies.paymentEvidenceRepository.findIntentByReference({
+          referenceAddresses: input.replayPayload.referenceAddresses,
+          includeConfirmed: true,
+          submissionSignature: input.replayPayload.signature
+        });
+        if (!refreshedMatch) {
+          await dependencies.paymentEvidenceRepository.updateSolanaProviderEvent({
+            provider: input.provider,
+            providerEventId: input.providerEventId,
+            normalizedState: "ignored"
+          });
+          return { state: "replayed" };
+        }
+        if (refreshedMatch.intent.state === "confirmed") {
+          await dependencies.paymentEvidenceRepository.updateSolanaProviderEvent({
+            provider: input.provider,
+            providerEventId: input.providerEventId,
+            normalizedState: "processed"
+          });
+          return { state: "replayed" };
+        }
+        return {
+          state: "failed",
+          failureCode: "provider_event_replay_submission_changed"
+        };
+      }
       await dependencies.paymentEvidenceRepository.updateSolanaProviderEvent({
         provider: input.provider,
         providerEventId: input.providerEventId,
@@ -208,6 +255,19 @@ export function createCanonicalProviderReplayHandlers(
           };
     }
   };
+}
+
+function paymentReplayWriteGuard(
+  state: StoredPaymentIntent["state"],
+  signature: string
+): RecordPaymentSubmissionInput["writeGuard"] | null {
+  if (state === "pending" || state === "transaction_requested") {
+    return { state, submittedSignature: null };
+  }
+  if (state === "submitted") {
+    return { state, submittedSignature: signature };
+  }
+  return null;
 }
 
 export function createCanonicalProviderReplayRuntime(config: Pick<
