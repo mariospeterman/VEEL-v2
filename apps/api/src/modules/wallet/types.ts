@@ -12,12 +12,17 @@ export type CreateOnrampSessionRequest = components["schemas"]["CreateOnrampSess
 export type OnrampSessionResource = components["schemas"]["OnrampSession"];
 
 export interface WalletRepository {
+  listWalletsByUserId?(userId: string): Promise<WalletResource[]>;
+  hasWalletByUserId?(userId: string): Promise<boolean>;
+  /** @deprecated Legacy provider-subject lookups for unmigrated route modules. */
   listWalletsBySupabaseUserId(supabaseUserId: string): Promise<WalletResource[]>;
   hasWalletBySupabaseUserId(supabaseUserId: string): Promise<boolean>;
   createLinkChallenge(input: CreateWalletChallengeInput): Promise<WalletLinkChallenge>;
   consumeVerifiedExternalWalletLink(input: ConsumeVerifiedExternalWalletLinkInput): Promise<SecuredWalletMutationResult>;
   findLinkChallenge(input: FindWalletLinkChallengeInput): Promise<StoredWalletLinkChallenge | null>;
-  findWalletForSupabaseUser(input: FindWalletForSupabaseUserInput): Promise<WalletResource | null>;
+  findWalletForUser?(input: FindWalletForUserInput): Promise<WalletResource | null>;
+  /** @deprecated Legacy provider-subject lookup for unmigrated test/runtime composition. */
+  findWalletForSupabaseUser?(input: FindWalletForSupabaseUserInput): Promise<WalletResource | null>;
   setPrimaryWallet(input: SetPrimaryWalletInput): Promise<SecuredWalletMutationResult>;
   findOnrampSessionByIdempotencyKey(
     input: FindOnrampSessionByIdempotencyKeyInput
@@ -27,7 +32,7 @@ export interface WalletRepository {
 }
 
 export interface CreateWalletChallengeInput {
-  supabaseUserId: string;
+  userId: string;
   chain: WalletChain;
   provider: ExternalWalletProvider;
   address: string;
@@ -49,13 +54,18 @@ export interface StoredWalletLinkChallenge {
 
 export interface FindWalletLinkChallengeInput {
   challengeId: string;
-  supabaseUserId: string;
+  userId: string;
 }
 
 export interface ConsumeVerifiedExternalWalletLinkInput {
   challengeId: string;
-  supabaseUserId: string;
+  userId: string;
   sessionToken: string;
+}
+
+export interface FindWalletForUserInput {
+  walletId: string;
+  userId: string;
 }
 
 export interface FindWalletForSupabaseUserInput {
@@ -65,7 +75,7 @@ export interface FindWalletForSupabaseUserInput {
 
 export interface SetPrimaryWalletInput {
   walletId: string;
-  supabaseUserId: string;
+  userId: string;
   sessionToken: string;
 }
 
@@ -78,12 +88,12 @@ export interface SecuredWalletMutationResult {
 }
 
 export interface FindOnrampSessionByIdempotencyKeyInput {
-  supabaseUserId: string;
+  userId: string;
   idempotencyKey: string;
 }
 
 export interface RecordOnrampSessionInput {
-  supabaseUserId: string;
+  userId: string;
   walletId: string;
   idempotencyKey: string;
   provider: string;
@@ -97,7 +107,7 @@ export interface RecordOnrampSessionInput {
 }
 
 export interface CreateWalletOnrampSessionInput {
-  supabaseUserId: string;
+  userId: string;
   wallet: WalletResource;
   idempotencyKey: string;
   returnUrl: string | null;
@@ -117,7 +127,7 @@ export interface WalletOnrampProviderAdapter {
 }
 
 export interface EmbeddedWalletProvisionRequest {
-  supabaseUserId: string;
+  userId: string;
   chain: Extract<WalletChain, "solana_devnet" | "solana_mainnet">;
 }
 
@@ -133,4 +143,44 @@ export interface EmbeddedWalletProviderAdapter {
   provisionWallet(
     request: EmbeddedWalletProvisionRequest
   ): Promise<EmbeddedWalletProvisionResult>;
+}
+
+export function listWalletsForUser(
+  repository: WalletRepository,
+  userId: string
+): Promise<WalletResource[]> {
+  if (repository.listWalletsByUserId) {
+    return repository.listWalletsByUserId(userId);
+  }
+
+  return repository.listWalletsBySupabaseUserId(userId);
+}
+
+export function hasWalletForUser(
+  repository: WalletRepository,
+  userId: string
+): Promise<boolean> {
+  if (repository.hasWalletByUserId) {
+    return repository.hasWalletByUserId(userId);
+  }
+
+  return repository.hasWalletBySupabaseUserId(userId);
+}
+
+export function findWalletForUser(
+  repository: WalletRepository,
+  input: FindWalletForUserInput
+): Promise<WalletResource | null> {
+  if (repository.findWalletForUser) {
+    return repository.findWalletForUser(input);
+  }
+
+  if (repository.findWalletForSupabaseUser) {
+    return repository.findWalletForSupabaseUser({
+      walletId: input.walletId,
+      supabaseUserId: input.userId
+    });
+  }
+
+  return Promise.resolve(null);
 }

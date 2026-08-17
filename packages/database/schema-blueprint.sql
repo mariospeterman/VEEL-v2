@@ -34,10 +34,27 @@ create type mutual_interest_action as enum ('interested', 'not_interested');
 
 create table users (
   id uuid primary key,
-  supabase_user_id uuid unique not null,
+  -- Transitional compatibility only. Provider subjects belong in
+  -- user_provider_identities; this value is null or the canonical users.id.
+  supabase_user_id uuid unique,
   state text not null default 'active',
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint users_legacy_supabase_id_canonical_check
+    check (supabase_user_id is null or supabase_user_id = id)
+);
+
+create table user_provider_identities (
+  id uuid primary key,
+  provider text not null check (provider = 'supabase'),
+  provider_subject text not null,
+  user_id uuid not null references users(id),
+  status text not null default 'active'
+    check (status in ('pending', 'active', 'revoked', 'blocked')),
+  created_at timestamptz not null default now(),
+  linked_at timestamptz,
+  last_used_at timestamptz,
+  unique (provider, provider_subject)
 );
 
 create table profiles (

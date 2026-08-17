@@ -22,12 +22,12 @@ export function createProfileDashboardRepositoryMethods(
   "getMyCreatorDashboard" | "getMyCreatorOnboarding" | "updateMyCreatorOnboarding"
 > {
   return {
-    async getMyCreatorDashboard(supabaseUserId) {
+    async getMyCreatorDashboard(userId) {
       const dashboardRows = await sql<DashboardRow[]>`
         with target_user as (
           select u.id
           from users u
-          where u.supabase_user_id = ${supabaseUserId}
+          where u.id = ${userId}
           limit 1
         ),
         ensured_settings as (
@@ -142,12 +142,12 @@ export function createProfileDashboardRepositoryMethods(
 
       return toCreatorDashboard(dashboard, earningsRows[0], productRows, recentPaymentRows);
     },
-    async getMyCreatorOnboarding(supabaseUserId) {
+    async getMyCreatorOnboarding(userId) {
       const rows = await sql<CreatorOnboardingRow[]>`
         with target_user as (
           select u.id
           from users u
-          where u.supabase_user_id = ${supabaseUserId}
+          where u.id = ${userId}
           limit 1
         ),
         ensured_settings as (
@@ -220,7 +220,7 @@ export function createProfileDashboardRepositoryMethods(
         const identityRows = await transaction<{ id: string; state: string }[]>`
           select id, state
           from users
-          where supabase_user_id = ${input.supabaseUserId}
+          where id = ${input.userId}
           for update
         `;
         const identity = identityRows[0];

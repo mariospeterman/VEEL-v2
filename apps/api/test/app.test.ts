@@ -1025,7 +1025,7 @@ describe("buildApi", () => {
     });
     expect(createdPendingVerifications).toEqual([
       {
-        supabaseUserId: "00000000-0000-4000-8000-000000000001",
+        userId: "00000000-0000-4000-8000-000000000001",
         provider: "yoti",
         providerReference: "age-session-provider-ref-1",
         jurisdiction: "US",
@@ -2560,7 +2560,7 @@ describe("buildApi", () => {
       ...fakeProfileRepository,
       async updateMyCreatorOnboarding(input) {
         expect(input).toMatchObject({
-          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          userId: "00000000-0000-4000-8000-000000000001",
           idempotencyKey: "earnings-setup-1",
           expectedWalletChain: "solana_devnet",
           request: {
@@ -2693,7 +2693,7 @@ describe("buildApi", () => {
       ...walletRepositoryWithWallet,
       async setPrimaryWallet(input) {
         expect(input).toEqual({
-          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          userId: "00000000-0000-4000-8000-000000000001",
           walletId: "00000000-0000-4000-8000-000000000020",
           sessionToken: "valid-token"
         });
@@ -2756,7 +2756,7 @@ describe("buildApi", () => {
       },
       async recordOnrampSession(input) {
         expect(input).toMatchObject({
-          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          userId: "00000000-0000-4000-8000-000000000001",
           walletId: "00000000-0000-4000-8000-000000000020",
           idempotencyKey: "onramp",
           provider: "coinbase",

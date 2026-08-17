@@ -37,13 +37,13 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `469793f` (green baseline through PR #70) |
-| Active slice | Launch 03B — enforceable media release evidence |
-| Branch | `codex/media-release-evidence` |
-| Pull request | #71 |
+| Merged baseline | `main` at `231ba53` (green baseline through PR #71) |
+| Active slice | Launch 02B — canonical account-access and earnings identity completion |
+| Branch | `codex/launch-02-canonical-access` |
+| Pull request | #72 |
 | State | `LOCAL_GREEN` |
-| Slice blockers | No code blocker. Written direct-Stream-TUS scan coverage plus real malware/hash/classification provider evidence remains a pre-production staging proof. |
-| Next unfinished slice | Launch 10 — Frontend system, accessibility, cross-browser, and PWA completion |
+| Slice blockers | No code blocker. Real recovery, wallet, age, and KYC provider acceptance remains a pre-production staging proof. |
+| Next unfinished slice | Launch 02 — Three-step onboarding, canonical session, optional recovery, and earnings readiness |
 
 The merged entry slice server-resolves login/onboarding state, presents one immediate primary
 `Connect wallet` action, preserves the first click while the wallet runtime loads, keeps the
@@ -53,7 +53,7 @@ fresh canonical migration application, API/web health, server-rendered response 
 production-preview Chromium entry/accessibility/PWA journeys are green. Pull-request clean-runner
 and protected main CI are green; real wallet/provider evidence remains a pre-production staging gate.
 
-The active media release-evidence slice closes the remaining gap between normalized scan storage
+The merged media release-evidence slice closes the remaining gap between normalized scan storage
 and release authority. Direct Bunny Stream TUS stays unproven for Shield coverage, so production
 approval must require complete normalized malware, known-hash, container-integrity, classification,
 and human-review evidence rather than treating provider playability or a staff click as scan proof.
@@ -63,6 +63,16 @@ worker outcomes preserve each valid adverse signal even if a companion is malfor
 matches immediately remove published media from public access and open a reporting-review workflow
 without automatic user sanctions. Staging additionally
 requires live Shield configuration proof and a release-bound direct-TUS coverage/fixture receipt.
+
+The active Launch 02B slice removes the last legacy identity lookup from the entry, app-access,
+age, wallet, profile, and Enable Earnings journey. Those paths must accept the canonical
+`users.id` resolved by the opaque application session and remain functional when the transitional
+`users.supabase_user_id` value is null. Migration `0107` prevents that compatibility column from
+ever containing a provider subject or a different user identifier while unrelated repositories are
+migrated in later bounded slices. Supabase recovery subjects remain exclusively owned by
+`user_provider_identities`. The full workspace check, fresh-chain migration plus real-Postgres API
+integration, desktop/mobile Chromium, desktop Firefox, accessibility, PWA, and visible-browser
+entry proofs are green. Real provider acceptance remains a pre-production gate.
 
 Current human/provider gates do not block this process slice: shared staging credentials,
 provider dashboard/webhook/domain configuration, migration `0091` shared-project proof,

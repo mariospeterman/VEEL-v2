@@ -19,7 +19,7 @@ export interface UpsertMyProfileInput {
 }
 
 export interface UpdateMyCreatorOnboardingInput {
-  supabaseUserId: string;
+  userId: string;
   idempotencyKey: string;
   requestHash: string;
   expectedWalletChain: "solana_devnet" | "solana_mainnet";
@@ -34,9 +34,9 @@ export interface ProfileRepository {
   isHandleAvailable(handle: string): Promise<boolean>;
   findCreatorProfileByHandle(handle: string): Promise<CreatorProfileResource | null>;
   getMyCreatorDashboard(
-    supabaseUserId: string
+    userId: string
   ): Promise<CreatorMonetisationDashboardResource | null>;
-  getMyCreatorOnboarding(supabaseUserId: string): Promise<CreatorOnboardingResource | null>;
+  getMyCreatorOnboarding(userId: string): Promise<CreatorOnboardingResource | null>;
   updateMyCreatorOnboarding?(
     input: UpdateMyCreatorOnboardingInput
   ): Promise<CreatorOnboardingResource | null>;
