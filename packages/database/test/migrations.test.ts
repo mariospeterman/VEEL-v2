@@ -58,6 +58,8 @@ describe("database migrations", () => {
     expect(downSql).toContain("drop function if exists private.content_safety_automated_evidence_ready");
     expect(downSql).toContain("drop function if exists private.content_safety_automated_asset_evidence_ready");
     expect(downSql).toContain("drop trigger if exists provider_media_scan_events_adverse_hold");
+    expect(downSql).toContain("release_requires_review_after_policy_rollback");
+    expect(downSql).toContain("publish_state = 'blocked'");
   });
 
   it("creates the foundation tables before money, media, dating, events, or admin slices", () => {

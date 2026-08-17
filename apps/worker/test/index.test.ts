@@ -231,6 +231,56 @@ describe("runMediaModerationTick", () => {
     });
   });
 
+  it("treats a valid Livepeer signal as complete live evidence", async () => {
+    const job: QueuedMediaModerationJob = {
+      jobId: "moderation-job-live-evidence",
+      caseId: "safety-case-live-evidence",
+      mediaAssetId: null,
+      liveRoomId: "live-room-evidence",
+      targetType: "live_room",
+      provider: "livepeer",
+      providerAssetId: "livepeer-stream-evidence",
+      stage: "provider_scan_reconciliation",
+      attemptCount: 1,
+      maxAttempts: 5,
+      leaseToken: "00000000-0000-4000-8000-000000000098"
+    };
+    const signals: MediaModerationSignal[] = [{
+      provider: "livepeer",
+      providerEventId: "live-signal-1",
+      scanType: "live_signal",
+      normalizedSignal: "clear",
+      payloadHash: "b".repeat(64),
+      modelOrRulesetVersion: "livepeer-signal-v1"
+    }];
+    const outcomes: MediaModerationOutcome[] = [];
+    const repository: MediaModerationRepository = {
+      async leaseJobs() {
+        return [job];
+      },
+      async recordOutcome(input) {
+        outcomes.push(input.outcome);
+      }
+    };
+
+    await expect(runMediaModerationTick({
+      repository,
+      adapter: { async evaluate() { return { state: "evidence", signals }; } }
+    })).resolves.toEqual({
+      leased: 1,
+      completed: 1,
+      reviewRequired: 0,
+      failed: 0
+    });
+    expect(outcomes).toEqual([{ state: "evidence", signals }]);
+    expect(summarizeEvidence(signals, "live_room")).toEqual({
+      caseState: "review_required",
+      evidenceComplete: true,
+      matchedKnownHash: null,
+      reasonCode: "automated_checks_clear_manual_release_required"
+    });
+  });
+
   it("holds a known-hash match for reporting review without automatic sanctions", () => {
     const signals = clearMediaSignals();
     const matched = {

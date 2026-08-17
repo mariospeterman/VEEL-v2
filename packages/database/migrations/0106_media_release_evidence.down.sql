@@ -6,6 +6,32 @@ drop function if exists private.hold_content_on_adverse_media_evidence();
 drop trigger if exists provider_media_scan_events_asset_scope on provider_media_scan_events;
 drop function if exists private.enforce_media_evidence_asset_scope();
 
+-- The previous application version does not select release_media_asset_id. Hold
+-- every release approved under this migration before restoring the old predicate,
+-- otherwise rollback could expose a different, unchecked asset for the content.
+update content_items
+set
+  state = 'blocked',
+  moderation_state = 'pending',
+  publish_state = 'blocked',
+  updated_at = now()
+where release_media_asset_id is not null
+  and publish_state = 'published';
+
+update media_safety_cases safety
+set
+  state = 'review_required',
+  decision_source = null,
+  reason_code = 'release_requires_review_after_policy_rollback',
+  provider_release_allowed = false,
+  reviewed_by_user_id = null,
+  decided_at = null,
+  updated_at = now()
+from content_items content
+where content.id = safety.content_item_id
+  and content.release_media_asset_id is not null
+  and safety.state = 'approved';
+
 create or replace function private.content_safety_release_ready(p_content_item_id uuid)
 returns boolean
 language sql

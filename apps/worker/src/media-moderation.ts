@@ -85,7 +85,7 @@ export async function processMediaModerationJobs(input: {
     await input.repository.recordOutcome({ job, outcome, now });
 
     const evidenceComplete = outcome.state === "evidence"
-      ? summarizeEvidence(outcome.signals).evidenceComplete
+      ? summarizeEvidence(outcome.signals, job.targetType).evidenceComplete
       : false;
     if (outcome.state === "evidence" && evidenceComplete) {
       result.completed += 1;
@@ -234,7 +234,9 @@ export function createPostgresMediaModerationRepository(
         return;
       }
 
-      const evidenceOutcome = input.outcome.state === "evidence" ? summarizeEvidence(input.outcome.signals) : null;
+      const evidenceOutcome = input.outcome.state === "evidence"
+        ? summarizeEvidence(input.outcome.signals, input.job.targetType)
+        : null;
       const validSignals = input.outcome.state === "evidence"
         ? validMediaModerationSignals(input.outcome.signals)
         : [];
@@ -400,12 +402,17 @@ function moderationFailureCode(error: unknown): string {
   return "media_moderation_exception";
 }
 
-export function summarizeEvidence(signals: MediaModerationSignal[]): {
+export function summarizeEvidence(
+  signals: MediaModerationSignal[],
+  targetType: QueuedMediaModerationJob["targetType"] = "media_asset"
+): {
   caseState: "review_required" | "held_for_reporting";
   evidenceComplete: boolean;
   matchedKnownHash: MediaModerationSignal | null;
   reasonCode: string;
 } {
+  if (targetType === "live_room") return summarizeLiveEvidence(signals);
+
   const validSignals = validMediaModerationSignals(signals);
   const observedRequiredTypes = new Set<MediaModerationSignal["scanType"]>();
   let duplicateRequiredSignal = false;
@@ -455,6 +462,45 @@ export function summarizeEvidence(signals: MediaModerationSignal[]): {
     reasonCode: evidenceComplete
       ? "automated_checks_clear_manual_release_required"
       : "required_release_evidence_incomplete"
+  };
+}
+
+function summarizeLiveEvidence(signals: MediaModerationSignal[]): {
+  caseState: "review_required" | "held_for_reporting";
+  evidenceComplete: boolean;
+  matchedKnownHash: MediaModerationSignal | null;
+  reasonCode: string;
+} {
+  const validSignals = validMediaModerationSignals(signals);
+  const validLiveSignals = validSignals.filter((signal) => signal.scanType === "live_signal");
+  const invalid = validLiveSignals.length !== signals.length;
+  const evidenceComplete = !invalid && validLiveSignals.length > 0;
+
+  if (invalid) {
+    return {
+      caseState: "review_required",
+      evidenceComplete: false,
+      matchedKnownHash: null,
+      reasonCode: "required_release_evidence_invalid"
+    };
+  }
+
+  if (!evidenceComplete) {
+    return {
+      caseState: "review_required",
+      evidenceComplete: false,
+      matchedKnownHash: null,
+      reasonCode: "required_release_evidence_incomplete"
+    };
+  }
+
+  return {
+    caseState: "review_required",
+    evidenceComplete: true,
+    matchedKnownHash: null,
+    reasonCode: validLiveSignals.some((signal) => signal.normalizedSignal !== "clear")
+      ? "automated_signal_requires_human_review"
+      : "automated_checks_clear_manual_release_required"
   };
 }
 
