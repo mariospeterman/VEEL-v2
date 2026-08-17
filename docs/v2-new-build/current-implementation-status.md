@@ -40,7 +40,7 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Merged baseline | `main` at `4860133` (green baseline through PR #72) |
 | Active slice | Pre-production staging convergence and release-candidate proof |
 | Branch | `codex/staging-convergence-status` |
-| Pull request | Pending |
+| Pull request | #73 |
 | State | `CODE_COMPLETE_PROVIDER_BLOCKED` |
 | Slice blockers | Shared staging URLs/database/Supabase, Privy, Solana/Helius, Bunny, Livepeer, verification, notification, Redis/OTel, feature, legal, hosting/OIDC, and provider-dashboard configuration are absent. Explicit production approval is also required. |
 | Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
