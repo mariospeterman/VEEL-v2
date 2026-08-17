@@ -1635,6 +1635,144 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         reviewed_at: expect.any(Date)
       });
 
+      const invalidRescanJobId = randomUUID();
+      await sql`
+        insert into media_moderation_jobs (
+          id,
+          media_safety_case_id,
+          media_asset_id,
+          stage,
+          idempotency_key
+        )
+        select
+          ${invalidRescanJobId},
+          safety.id,
+          ${sfwMediaAssetId},
+          'provider_scan_reconciliation',
+          ${`sfw-invalid-rescan-${runId}`}
+        from media_safety_cases safety
+        where safety.content_item_id = ${sfwContentId}
+          and safety.state <> 'superseded'
+      `;
+
+      const invalidRescanRepository = createPostgresMediaModerationRepository(databaseUrl);
+      try {
+        const clearSignals = [
+          {
+            provider: "bunny_stream" as const,
+            providerEventId: `invalid-rescan-container-${runId}`,
+            scanType: "container_integrity" as const,
+            normalizedSignal: "clear" as const,
+            payloadHash: "c".repeat(64),
+            modelOrRulesetVersion: "bunny-stream-playability-v1"
+          },
+          {
+            provider: "bunny_shield" as const,
+            providerEventId: `invalid-rescan-malware-${runId}`,
+            scanType: "malware" as const,
+            normalizedSignal: "clear" as const,
+            payloadHash: "c".repeat(64),
+            modelOrRulesetVersion: "shield-antivirus-v1"
+          },
+          {
+            provider: "bunny_shield" as const,
+            providerEventId: `invalid-rescan-known-hash-${runId}`,
+            scanType: "known_hash" as const,
+            normalizedSignal: "clear" as const,
+            payloadHash: "c".repeat(64),
+            modelOrRulesetVersion: "shield-known-hash-v1"
+          },
+          {
+            provider: "internal" as const,
+            providerEventId: `invalid-rescan-classification-${runId}`,
+            scanType: "content_classification" as const,
+            normalizedSignal: "clear" as const,
+            payloadHash: "c".repeat(64),
+            modelOrRulesetVersion: "fixture-classifier-v1"
+          }
+        ];
+        await expect(processMediaModerationJobs({
+          repository: invalidRescanRepository,
+          adapter: {
+            async evaluate() {
+              return {
+                state: "evidence" as const,
+                signals: [
+                  ...clearSignals,
+                  {
+                    ...clearSignals[1]!,
+                    providerEventId: `invalid-rescan-malformed-${runId}`,
+                    payloadHash: "not-a-sha256"
+                  }
+                ]
+              };
+            }
+          },
+          now: new Date(Date.now() + 2_000)
+        })).resolves.toEqual({
+          leased: 1,
+          completed: 0,
+          reviewRequired: 1,
+          failed: 0
+        });
+      } finally {
+        await invalidRescanRepository.close?.();
+      }
+
+      const [invalidRescanRows] = await sql<{
+        job_state: string;
+        moderation_state: string;
+        publish_state: string;
+        persisted_new_clear_count: string;
+        release_eligible_automated_count: string;
+      }[]>`
+        select
+          job.state as job_state,
+          content.moderation_state,
+          content.publish_state,
+          (
+            select count(*)::text
+            from provider_media_scan_events scan
+            where scan.provider_event_id like ${`invalid-rescan-%-${runId}`}
+          ) as persisted_new_clear_count,
+          (
+            select count(*)::text
+            from provider_media_scan_events scan
+            where scan.media_safety_case_id = safety.id
+              and scan.media_asset_id = ${sfwMediaAssetId}
+              and scan.scan_type in (
+                'container_integrity',
+                'malware',
+                'known_hash',
+                'content_classification'
+              )
+              and scan.release_eligible is true
+          ) as release_eligible_automated_count
+        from content_items content
+        join media_safety_cases safety
+          on safety.content_item_id = content.id
+          and safety.state <> 'superseded'
+        join media_moderation_jobs job on job.id = ${invalidRescanJobId}
+        where content.id = ${sfwContentId}
+      `;
+      expect(invalidRescanRows).toEqual({
+        job_state: "review_required",
+        moderation_state: "pending",
+        publish_state: "blocked",
+        persisted_new_clear_count: "0",
+        release_eligible_automated_count: "0"
+      });
+
+      await expect(moderationRepository.updateContentModeration({
+        supabaseUserId: creatorSupabaseUserId,
+        contentId: sfwContentId,
+        body: {
+          action: "approve",
+          reason: "An invalid rescan must invalidate stale release evidence."
+        },
+        idempotencyKey: `sfw-invalid-rescan-approve-${runId}`
+      })).rejects.toThrow("Required automated safety checks are incomplete");
+
       const moderationJobId = randomUUID();
       await sql`
         insert into media_moderation_jobs (

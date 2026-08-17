@@ -39,6 +39,7 @@ describe("database migrations", () => {
     expect(sql).toContain("content_safety_automated_asset_evidence_ready");
     expect(sql).toContain("content_safety_automated_candidate_asset");
     expect(sql).toContain("release_media_asset_id");
+    expect(sql).toContain("release_eligible");
     expect(sql).toContain("scan.media_asset_id = p_media_asset_id");
     expect(sql).toContain("provider_media_scan_events_asset_scope");
     expect(sql).toContain("provider_media_scan_event_asset_scope_invalid");

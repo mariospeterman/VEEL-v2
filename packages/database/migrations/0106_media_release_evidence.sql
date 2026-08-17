@@ -18,6 +18,9 @@ alter table provider_media_scan_events
 alter table provider_media_scan_events
   add column if not exists media_asset_id uuid;
 
+alter table provider_media_scan_events
+  add column if not exists release_eligible boolean not null default true;
+
 alter table content_items
   add column if not exists release_media_asset_id uuid;
 
@@ -65,6 +68,7 @@ as $$
     from provider_media_scan_events scan
     join active_case safety on safety.id = scan.media_safety_case_id
     where scan.media_asset_id = p_media_asset_id
+      and scan.release_eligible is true
       and scan.scan_type in (
         'container_integrity',
         'malware',
@@ -356,7 +360,7 @@ revoke all on function private.hold_content_on_adverse_media_evidence() from pub
 comment on function private.content_safety_automated_evidence_ready(uuid) is
   'Requires one playable media asset to have a complete, attributable, and clear automated evidence set.';
 comment on function private.content_safety_automated_asset_evidence_ready(uuid, uuid) is
-  'Requires the latest container, malware, known-hash, and classification evidence for one media asset to be complete, attributable, and clear.';
+  'Requires the latest release-eligible container, malware, known-hash, and classification evidence for one media asset to be complete, attributable, and clear.';
 comment on function private.content_safety_automated_candidate_asset(uuid) is
   'Returns the latest playable media asset whose own automated evidence set is complete and clear.';
 comment on function private.content_safety_release_evidence_ready(uuid) is

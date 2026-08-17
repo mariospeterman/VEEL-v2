@@ -235,6 +235,9 @@ export function createPostgresMediaModerationRepository(
       }
 
       const evidenceOutcome = input.outcome.state === "evidence" ? summarizeEvidence(input.outcome.signals) : null;
+      const validSignals = input.outcome.state === "evidence"
+        ? validMediaModerationSignals(input.outcome.signals)
+        : [];
       const reasonCode = input.outcome.state === "evidence"
         ? evidenceOutcome!.reasonCode
         : input.outcome.reasonCode;
@@ -257,7 +260,26 @@ export function createPostgresMediaModerationRepository(
         if (!jobRows[0]) return;
 
         if (input.outcome.state === "evidence") {
-          for (const signal of validMediaModerationSignals(input.outcome.signals)) {
+          if (!evidenceOutcome!.evidenceComplete && input.job.mediaAssetId) {
+            await transaction`
+              update provider_media_scan_events
+              set release_eligible = false
+              where media_safety_case_id = ${input.job.caseId}
+                and media_asset_id = ${input.job.mediaAssetId}
+                and scan_type in (
+                  'container_integrity',
+                  'malware',
+                  'known_hash',
+                  'content_classification'
+                )
+                and release_eligible is true
+            `;
+          }
+
+          const signalsToPersist = evidenceOutcome!.evidenceComplete
+            ? validSignals
+            : validSignals.filter((signal) => signal.normalizedSignal !== "clear");
+          for (const signal of signalsToPersist) {
             await transaction`
               insert into provider_media_scan_events (
                 media_safety_case_id,
@@ -271,6 +293,7 @@ export function createPostgresMediaModerationRepository(
                 confidence,
                 provider_incident_reference,
                 reporting_state,
+                release_eligible,
                 observed_at
               )
               values (
@@ -285,6 +308,7 @@ export function createPostgresMediaModerationRepository(
                 ${signal.confidence ?? null},
                 ${signal.providerIncidentReference ?? null},
                 ${signal.scanType === "known_hash" && signal.normalizedSignal === "matched" ? "platform_review_required" : "not_required"},
+                ${evidenceOutcome!.evidenceComplete},
                 ${input.now}
               )
               on conflict (provider, provider_event_id) do nothing
@@ -308,6 +332,28 @@ export function createPostgresMediaModerationRepository(
               on conflict (media_safety_case_id, provider, provider_incident_reference) do nothing
             `;
           }
+        }
+
+        if (
+          input.outcome.state === "evidence"
+          && !evidenceOutcome!.evidenceComplete
+          && input.job.mediaAssetId
+        ) {
+          await transaction`
+            update content_items content
+            set
+              state = 'blocked',
+              moderation_state = 'pending',
+              publish_state = 'blocked',
+              updated_at = now()
+            from media_safety_cases safety
+            where safety.id = ${input.job.caseId}
+              and safety.content_item_id = content.id
+              and (
+                content.release_media_asset_id is null
+                or content.release_media_asset_id = ${input.job.mediaAssetId}
+              )
+          `;
         }
 
         await transaction`
