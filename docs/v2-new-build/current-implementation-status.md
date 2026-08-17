@@ -40,8 +40,8 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Merged baseline | `main` at `469793f` (green baseline through PR #70) |
 | Active slice | Launch 03B — enforceable media release evidence |
 | Branch | `codex/media-release-evidence` |
-| Pull request | Not opened |
-| State | `ACTIVE` |
+| Pull request | #71 |
+| State | `LOCAL_GREEN` |
 | Slice blockers | No code blocker. Written direct-Stream-TUS scan coverage plus real malware/hash/classification provider evidence remains a pre-production staging proof. |
 | Next unfinished slice | Launch 10 — Frontend system, accessibility, cross-browser, and PWA completion |
 
