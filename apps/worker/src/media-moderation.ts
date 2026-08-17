@@ -372,6 +372,18 @@ export function createPostgresMediaModerationRepository(
             updated_at = now()
           where id = ${input.job.caseId}
             and state not in ('rejected', 'held_for_reporting', 'superseded')
+            and (
+              ${input.job.mediaAssetId}::uuid is null
+              or exists (
+                select 1
+                from content_items content
+                where content.id = media_safety_cases.content_item_id
+                  and (
+                    content.release_media_asset_id is null
+                    or content.release_media_asset_id = ${input.job.mediaAssetId}
+                  )
+              )
+            )
         `;
       });
     },

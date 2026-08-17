@@ -1635,6 +1635,77 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         reviewed_at: expect.any(Date)
       });
 
+      const nonSelectedAssetJobId = randomUUID();
+      await sql`
+        insert into media_moderation_jobs (
+          id,
+          media_safety_case_id,
+          media_asset_id,
+          stage,
+          idempotency_key
+        )
+        select
+          ${nonSelectedAssetJobId},
+          safety.id,
+          ${alternateMediaAssetId},
+          'provider_scan_reconciliation',
+          ${`sfw-non-selected-rescan-${runId}`}
+        from media_safety_cases safety
+        where safety.content_item_id = ${sfwContentId}
+          and safety.state <> 'superseded'
+      `;
+
+      const nonSelectedAssetRepository = createPostgresMediaModerationRepository(databaseUrl);
+      try {
+        await expect(processMediaModerationJobs({
+          repository: nonSelectedAssetRepository,
+          adapter: {
+            async evaluate() {
+              return {
+                state: "review_required" as const,
+                reasonCode: "delayed_non_selected_asset_review"
+              };
+            }
+          },
+          now: new Date(Date.now() + 1_000)
+        })).resolves.toEqual({
+          leased: 1,
+          completed: 0,
+          reviewRequired: 1,
+          failed: 0
+        });
+      } finally {
+        await nonSelectedAssetRepository.close?.();
+      }
+
+      const [nonSelectedAssetRows] = await sql<{
+        case_state: string;
+        job_state: string;
+        moderation_state: string;
+        provider_release_allowed: boolean;
+        publish_state: string;
+      }[]>`
+        select
+          safety.state as case_state,
+          safety.provider_release_allowed,
+          content.moderation_state,
+          content.publish_state,
+          job.state as job_state
+        from content_items content
+        join media_safety_cases safety
+          on safety.content_item_id = content.id
+          and safety.state <> 'superseded'
+        join media_moderation_jobs job on job.id = ${nonSelectedAssetJobId}
+        where content.id = ${sfwContentId}
+      `;
+      expect(nonSelectedAssetRows).toEqual({
+        case_state: "approved",
+        job_state: "review_required",
+        moderation_state: "approved",
+        provider_release_allowed: true,
+        publish_state: "published"
+      });
+
       const invalidRescanJobId = randomUUID();
       await sql`
         insert into media_moderation_jobs (
