@@ -42,6 +42,23 @@ describe("content media repository", () => {
     expect(queries.join("\n")).not.toContain("moderation_state");
   });
 
+  it("does not reapply a normal webhook already completed by recovery", async () => {
+    const { sql, queries } = createFakeSql({
+      processedAt: new Date("2026-08-17T09:00:00.000Z")
+    });
+    const repository = createContentMediaRepositoryMethods(sql);
+
+    await expect(repository.updateMediaAssetFromWebhook?.({
+      provider: "bunny",
+      providerEventId: "bunny-completed-by-recovery",
+      providerAssetId: "bunny-video-guid",
+      providerState: "ready",
+      providerPlayable: true
+    })).resolves.toBe(true);
+
+    expect(queries.join("\n")).not.toContain("update media_assets\n          set");
+  });
+
   it("ignores an older non-playable replay after a newer asset delivery", async () => {
     const { sql, queries } = createFakeSql({ isLatestProviderEvent: false });
     const repository = createContentMediaRepositoryMethods(sql);
@@ -102,6 +119,7 @@ describe("content media repository", () => {
 
 function createFakeSql(input: {
   isLatestProviderEvent?: boolean;
+  processedAt?: Date | null;
   providerCheckedAt?: Date | null;
 } = {}): { sql: PostgresSql; queries: string[]; values: unknown[] } {
   const queries: string[] = [];
@@ -122,7 +140,7 @@ function createFakeSql(input: {
     if (query.includes("as is_latest")) {
       return Promise.resolve([{
         is_latest: input.isLatestProviderEvent ?? true,
-        processed_at: null
+        processed_at: input.processedAt ?? null
       }]);
     }
     return Promise.resolve(query.includes("returning id") ? [{ id: "media-asset" }] : []);

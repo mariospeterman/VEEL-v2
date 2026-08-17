@@ -250,7 +250,7 @@ export function createContentMediaRepositoryMethods(
           return [] as { id: string }[];
         }
 
-        const replayDecision = !input.preventStateRegression ? "apply" : await providerEventReplayDecision(
+        const replayDecision = await providerEventReplayDecision(
           transaction,
           {
             provider: input.provider,
@@ -264,7 +264,7 @@ export function createContentMediaRepositoryMethods(
           return [{ id: current.id }];
         }
 
-        if (replayDecision === "stale") {
+        if (input.preventStateRegression && replayDecision === "stale") {
           await transaction`
             update provider_events
             set normalized_state = 'ignored_stale', processed_at = now()

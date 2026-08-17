@@ -138,7 +138,7 @@ export function createLiveStatusRepositoryMethods(
           return [] as { id: string }[];
         }
 
-        const replayDecision = !input.preventStateRegression ? "apply" : await providerEventReplayDecision(
+        const replayDecision = await providerEventReplayDecision(
           transaction,
           {
             provider: "livepeer",
@@ -152,7 +152,10 @@ export function createLiveStatusRepositoryMethods(
           return [{ id: current.id }];
         }
 
-        if (replayDecision === "stale" || !isAllowedWebhookTransition(current.state, input.state)) {
+        if (
+          (input.preventStateRegression && replayDecision === "stale") ||
+          !isAllowedWebhookTransition(current.state, input.state)
+        ) {
           await transaction`
             update provider_events
             set normalized_state = 'ignored_stale', processed_at = now()

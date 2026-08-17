@@ -73,6 +73,40 @@ describe("live status repository", () => {
     expect(queries.join("\n")).not.toContain("live_replay_handoff_ready");
   });
 
+  it("does not repeat a replay-ready handoff when the normal webhook resumes after recovery", async () => {
+    const queries: string[] = [];
+    const transaction = vi.fn((strings: TemplateStringsArray) => {
+      const query = strings.join("?");
+      queries.push(query);
+      if (query.includes("select id, provider_checked_at, state")) {
+        return Promise.resolve([{ id: "live-room", provider_checked_at: null, state: "replay_ready" }]);
+      }
+      if (query.includes("as is_latest")) {
+        return Promise.resolve([{
+          is_latest: true,
+          processed_at: new Date("2026-08-17T09:00:00.000Z")
+        }]);
+      }
+      return Promise.resolve([]);
+    }) as unknown as PostgresTransaction;
+    const sql = {
+      begin: vi.fn(async (work: (tx: PostgresTransaction) => Promise<unknown>) => work(transaction))
+    } as unknown as PostgresSql;
+    const repository = createLiveStatusRepositoryMethods(sql);
+
+    await expect(repository.updateRoomFromWebhook?.({
+      providerEventId: "recovery-finished-before-webhook",
+      providerStreamId: "stream-1",
+      providerPlaybackId: "current-playback",
+      providerState: "recording_ready",
+      state: "replay_ready",
+      playbackUrl: "https://playback.example/current.m3u8"
+    })).resolves.toBe(true);
+
+    expect(queries.join("\n")).not.toContain("update live_rooms\n          set");
+    expect(queries.join("\n")).not.toContain("live_replay_handoff_ready");
+  });
+
   it("ignores replay evidence older than a direct Livepeer sync", async () => {
     const queries: string[] = [];
     const providerCheckedAt = new Date("2026-08-17T08:00:00.000Z");
