@@ -420,9 +420,11 @@ test("records explicit Mutuals choices through the canonical API", async ({ cont
     contentId: "00000000-0000-4000-8000-000000000040",
     targetUserId: user().id
   });
-  await expect(page.getByText("Interest saved. Nothing is shared unless it becomes mutual.")).toBeVisible();
+  await expect(page.getByText("Hidden from your Mutuals choices.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Interested", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Not interested", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Interested", exact: true })).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByRole("button", { name: "Not interested", exact: true })).toHaveAttribute("aria-pressed", "true");
 });
 
 test("keeps compatibility aliases intentional", async ({ request }) => {
@@ -528,6 +530,7 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
     }
     sendJson(response, 200, {
       interestId: "00000000-0000-4000-8000-0000000000f1",
+      action: "not_interested",
       mutualCreated: false,
       mutualId: null
     });

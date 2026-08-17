@@ -20,7 +20,7 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => caches.match(OFFLINE_URL)));
+    event.respondWith(fetch(request).catch(() => offlineDocumentFor(request)));
     return;
   }
 
@@ -80,6 +80,32 @@ function safeJson(data) {
   }
 }
 
+async function offlineDocumentFor(request) {
+  const cached = await caches.match(OFFLINE_URL);
+  if (!cached) return Response.error();
+
+  const headers = new Headers(cached.headers);
+  headers.delete("content-length");
+  headers.delete("content-encoding");
+  const document = await cached.text();
+  const requestUrl = new URL(request.url);
+  const retryUrl = escapeHtmlAttribute(requestUrl.pathname + requestUrl.search);
+
+  return new Response(
+    document.replace(`href="${OFFLINE_RETRY_PLACEHOLDER}"`, `href="${retryUrl}"`),
+    { headers, status: cached.status, statusText: cached.statusText }
+  );
+}
+
+function escapeHtmlAttribute(value) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
 function safeInternalPath(value) {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
     return "/app/notifications";
@@ -90,6 +116,7 @@ function safeInternalPath(value) {
 
 const SHELL_CACHE = "wevid-shell-v1";
 const OFFLINE_URL = "/offline";
+const OFFLINE_RETRY_PLACEHOLDER = "/offline?retry=current";
 const PRECACHE_URLS = [
   OFFLINE_URL,
   "/manifest.webmanifest",

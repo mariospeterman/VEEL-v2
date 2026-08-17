@@ -48,9 +48,7 @@ test("offline recovery actions remain reachable on a short viewport", async ({ p
   const recoveryLink = page.getByRole("link", { name: "Go to WeVid" });
   await recoveryLink.scrollIntoViewIfNeeded();
   await expect(recoveryLink).toBeInViewport();
-  const retryForm = page.getByRole("button", { name: "Try again" }).locator("xpath=ancestor::form");
-  await expect(retryForm).toHaveAttribute("method", "get");
-  await expect(retryForm).not.toHaveAttribute("action", /.+/);
+  await expect(page.getByRole("link", { name: "Try again" })).toHaveAttribute("href", "/offline?retry=current");
 });
 
 test("manifest, install icons, and service worker meet the public PWA contract", async ({ request }) => {
@@ -97,13 +95,18 @@ test("installed Chromium serves the privacy-safe offline document", async ({ bro
   await page.waitForFunction(() => navigator.serviceWorker.controller?.scriptURL.endsWith("/veel-sw.js") === true);
   await context.setOffline(true);
 
+  const retryPath = `/offline-proof-${Date.now()}?mode=onboarding&step=profile`;
   try {
-    await page.goto(`/offline-proof-${Date.now()}`, { waitUntil: "domcontentloaded" });
+    await page.goto(retryPath, { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "WeVid is offline" })).toBeVisible();
     await expect(page.getByText(/private content and account actions are never stored/i)).toBeVisible();
+    await expect(page.getByRole("link", { name: "Try again" })).toHaveAttribute("href", retryPath);
   } finally {
     await context.setOffline(false);
   }
+
+  await page.getByRole("link", { name: "Try again" }).click();
+  await expect(page).toHaveURL(new RegExp(`${retryPath.replace(/[?&]/g, "\\$&")}$`));
 });
 
 function pngDimensions(bytes: Buffer) {

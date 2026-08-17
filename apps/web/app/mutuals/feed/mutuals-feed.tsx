@@ -63,7 +63,7 @@ export function MutualsFeed({ feed }: { feed: MutualsFeedPage }) {
       pendingItems.current.delete(item.contentId);
       setItemStates((states) => ({
         ...states,
-        [item.contentId]: { action, error: null, pending: null, result }
+        [item.contentId]: { action: result.action, error: null, pending: null, result }
       }));
     } catch (error) {
       pendingItems.current.delete(item.contentId);
