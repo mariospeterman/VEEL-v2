@@ -1,32 +1,33 @@
 "use client";
 
 import { Expand, ExternalLink, KeyRound, LogIn, MoreVertical, X } from "lucide-react";
-import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { WebAuthState } from "@/supabase/auth-state";
+import { LandingAuthSurface } from "./landing-auth-surface";
 import { landingFrames, storyNavFrames } from "./landing-content";
+import type { LandingEntryState } from "./landing-entry";
 import { legalDocLabels, legalDocSlugs, legalDocs, type LegalDocSlug } from "./legal-docs";
 
-const LandingAuthSurface = dynamic(
-  () => import("./landing-auth-surface").then((module) => module.LandingAuthSurface),
-  {
-    loading: () => <div aria-busy="true" aria-label="Loading access setup" className="landing-auth-inline" role="status" />,
-    ssr: false
-  }
-);
-
-export function LandingExperience() {
+export function LandingExperience({
+  initialAuthError,
+  initialMode,
+  initialOnboardingStep
+}: LandingEntryState) {
+  const initialAuthIndex = initialMode
+    ? landingFrames.findIndex((frame) => "auth" in frame && frame.auth === initialMode)
+    : -1;
+  const initialProgress = initialAuthIndex >= 0
+    ? initialAuthIndex / Math.max(1, landingFrames.length - 1)
+    : 0;
   const shellRef = useRef<HTMLElement | null>(null);
   const copyRef = useRef<HTMLElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const authFrameLockRef = useRef<number | null>(null);
+  const authFrameLockRef = useRef<number | null>(initialAuthIndex >= 0 ? initialAuthIndex : null);
   const [legalDoc, setLegalDoc] = useState<LegalDocSlug | null>(null);
   const [legalExpanded, setLegalExpanded] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [initialOnboardingStep, setInitialOnboardingStep] = useState(0);
-  const [authCallbackError, setAuthCallbackError] = useState<string | null>(null);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [progress, setProgress] = useState(0);
+  const [activeIndex, setActiveIndex] = useState(initialAuthIndex >= 0 ? initialAuthIndex : 0);
+  const [progress, setProgress] = useState(initialProgress);
   const activeFrame = landingFrames[activeIndex] ?? landingFrames[0];
   const activeAuth = "auth" in activeFrame ? activeFrame.auth : undefined;
   const publicAuthState = useMemo<WebAuthState>(
@@ -47,26 +48,7 @@ export function LandingExperience() {
   useEffect(() => {
     document.documentElement.dataset.theme = "dark";
 
-    const params = new URLSearchParams(window.location.search);
-    const mode = params.get("mode");
-    const step = params.get("step");
-    const error = params.get("error");
-    if (error === "auth_confirm_failed") {
-      setAuthCallbackError("Login could not be completed. Check the provider redirect allowlist and try again.");
-    } else if (error === "recovery_link_failed") {
-      setAuthCallbackError("Supabase auth worked, but it could not be linked to this wallet account. Start the API and try again.");
-    } else if (error === "recovery_needs_wallet") {
-      setAuthCallbackError("Supabase auth found no linked WeVid wallet profile. Connect your wallet to continue.");
-    }
-    if (step === "wallet") setInitialOnboardingStep(0);
-    if (step === "profile") setInitialOnboardingStep(1);
-    if (step === "age") setInitialOnboardingStep(2);
-    const targetIndex =
-      mode === "login"
-        ? landingFrames.findIndex((frame) => frame.id === "login")
-        : mode === "onboarding" || step
-          ? landingFrames.findIndex((frame) => frame.id === "onboarding")
-          : -1;
+    const targetIndex = initialAuthIndex;
 
     if (targetIndex >= 0) {
       authFrameLockRef.current = targetIndex;
@@ -85,7 +67,7 @@ export function LandingExperience() {
     window.requestAnimationFrame(() => {
       shellRef.current?.scrollTo({ top: 0 });
     });
-  }, []);
+  }, [initialAuthIndex]);
 
   useEffect(() => {
     const shell = shellRef.current;
@@ -339,8 +321,8 @@ export function LandingExperience() {
             <p className="landing-eyebrow" data-story-part>{activeFrame.kicker}</p>
             <h1 data-story-part id={`${activeFrame.id}-title`}>{activeFrame.title}</h1>
             <p className="landing-copy" data-story-part>{activeFrame.copy}</p>
-            {authCallbackError && activeAuth ? (
-              <p className="landing-auth-error" data-story-part>{authCallbackError}</p>
+            {initialAuthError && activeAuth ? (
+              <p className="landing-auth-error" data-story-part>{initialAuthError}</p>
             ) : null}
             {!activeAuth ? (
               <div className="landing-cta-row" data-story-part>

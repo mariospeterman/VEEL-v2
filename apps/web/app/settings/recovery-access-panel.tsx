@@ -44,7 +44,7 @@ export function RecoveryAccessPanel() {
           {pending === "link" ? "Preparing recovery" : "Add recovery access"}
         </button>
       ) : (
-        <SupabaseAuthPanel mode="profile" next="/app/settings#security" />
+        <SupabaseAuthPanel next="/app/settings#security" />
       )}
       <button className="secondary-button" disabled={pending !== null} onClick={() => void unlink()} type="button">
         {pending === "unlink" ? "Removing recovery" : "Remove recovery access"}

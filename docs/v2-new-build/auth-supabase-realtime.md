@@ -276,8 +276,11 @@ Do not connect AI tooling directly to production data. Use a development project
 
 ```text
 Public teaser / landing / referral capture
-  -> identity: email, social, passkey, or external wallet
-  -> wallet path: embedded wallet created/loaded or native wallet linked
+  -> primary action: connect an external Solana wallet
+  -> quiet secondary action: create/load a secure embedded wallet
+     -> email, social, or passkey stays inside the configured provider surface
+  -> backend wallet challenge creates the canonical application session
+  -> minimal profile
   -> age verification
   -> protected 18+ app shell
 ```
@@ -286,6 +289,8 @@ Rules:
 
 - No protected app entry without age verification.
 - No protected app entry without a wallet path.
+- Landing login and onboarding render the external `Connect wallet` action immediately. They never render Supabase login or separate email/social/passkey buttons.
+- Supabase Auth is optional recovery in Settings only. It is not an entry, signup, or onboarding authority.
 - No hard viewer/creator/studio fork during default onboarding. Creator and Studio/Enterprise shortcut intent is contextual and optional.
 - No double age verification per media item after the app-level age gate, unless a future jurisdiction/product rule explicitly requires it.
 - KYC/KYB remains separate from age verification and is only required for creator, earning, business, tax/compliance, and risk workflows by default.

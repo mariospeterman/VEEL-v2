@@ -37,17 +37,22 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `7ba3370` (green baseline through PR #68) |
-| Active slice | Launch 11F — canonical provider-event side-effect recovery |
-| Branch | `codex/provider-event-replay-recovery` |
-| Pull request | #69 |
+| Merged baseline | `main` at `f2d255d` (green baseline through PR #69) |
+| Active slice | Launch 10A — provider-first entry convergence and local runtime recovery |
+| Branch | `codex/provider-first-entry-convergence` |
+| Pull request | #70 |
 | State | `LOCAL_GREEN` |
-| Slice blockers | No code blocker. Real provider redelivery remains a pre-production staging proof; production paths stay fail-closed without provider credentials. |
+| Slice blockers | No code blocker. Real external and embedded wallet target-device evidence remains a pre-production staging proof; production paths stay fail-closed without provider credentials. |
 | Next unfinished slice | Launch 10 — Frontend system, accessibility, cross-browser, and PWA completion |
 
-Provider replay unit, route, type, lint, docs, and real-Postgres proof is green on the
-current head. Pull-request clean-runner and review evidence is still required before merge;
-staging remains fail-closed until real provider redelivery evidence exists.
+The entry slice now server-resolves login/onboarding state, presents one immediate primary
+`Connect wallet` action, preserves the first click while the wallet runtime loads, keeps the
+configured embedded-wallet provider as a quiet secondary action, and confines Supabase email
+or social identity to Settings recovery. Full web typecheck, focused unit/lint/docs/build checks,
+fresh canonical migration application, API/web health, server-rendered response checks, and nine
+production-preview Chromium entry/accessibility/PWA journeys are green. Pull-request clean-runner
+and review evidence is still required before merge; real wallet/provider evidence remains a
+pre-production staging gate.
 
 Current human/provider gates do not block this process slice: shared staging credentials,
 provider dashboard/webhook/domain configuration, migration `0091` shared-project proof,
@@ -66,8 +71,8 @@ proof; the real-Postgres journey and desktop/mobile production-preview browser p
 Real KYB callbacks, approved commercial evidence, and Solana devnet allocation settlement remain
 `CODE_COMPLETE_PROVIDER_BLOCKED` pre-production gates.
 
-Launch 10 local acceptance now includes a direct two-choice wallet entry with provider implementation
-copy removed, wallet/payment SDKs deferred to their interaction boundaries, a single keyboard-addressable
+Launch 10 local acceptance now includes an immediate primary external-wallet entry, a quiet configured
+secure-wallet secondary action with provider implementation copy removed, wallet/payment SDKs deferred to their interaction boundaries, a single keyboard-addressable
 main region, corrected light/dark contrast and form labels, reduced-motion behavior, a privacy-safe
 network-first offline fallback, install-grade manifest/icons, and representative authenticated Axe scans.
 The Node 22 production-preview matrix passed 49 desktop/mobile Chromium tests and 24 Firefox tests;
