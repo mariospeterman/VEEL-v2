@@ -3700,7 +3700,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
             select count(*)
             from media_assets ma
             where ma.id = ${seededFreeMediaAssetId}
-              and ma.provider_state = 'replay_ready'
+              and ma.provider_state = 'ready'
               and ma.provider_playable = true
           ) as media_asset_count,
           (
