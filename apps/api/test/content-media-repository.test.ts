@@ -20,6 +20,7 @@ describe("content media repository", () => {
 
     expect(queries.join("\n")).toContain("state = case when");
     expect(queries.join("\n")).toContain("provider_checked_at = ?");
+    expect(queries.join("\n")).toContain("newer.received_at > ?");
     expect(values).toContain(providerObservedAt);
     expect(queries.join("\n")).not.toContain("moderation_state");
   });
@@ -113,6 +114,9 @@ function createFakeSql(input: {
         id: "media-asset",
         provider_checked_at: input.providerCheckedAt ?? null
       }]);
+    }
+    if (query.includes("update media_assets")) {
+      return Promise.resolve([{ id: "media-asset" }]);
     }
     if (query.includes("as is_latest")) {
       return Promise.resolve([{

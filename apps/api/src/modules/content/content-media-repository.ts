@@ -151,7 +151,7 @@ export function createContentMediaRepositoryMethods(
     },
     async updateMediaAssetPlayback(input) {
       await withPostgresTransaction(sql, async (transaction) => {
-        await transaction`
+        const updatedAssets = await transaction<{ id: string }[]>`
           update media_assets
           set
             provider_state = ${input.providerState},
@@ -162,7 +162,20 @@ export function createContentMediaRepositoryMethods(
             ready_at = case when ${input.providerPlayable} then coalesce(ready_at, now()) else ready_at end,
             provider_checked_at = ${input.providerObservedAt}
           where id = ${input.mediaAssetId}
+            and not exists (
+              select 1
+              from provider_events newer
+              where newer.provider = 'bunny'
+                and newer.received_at > ${input.providerObservedAt}
+                and newer.normalized_state is distinct from 'ignored_stale'
+                and newer.replay_payload ->> 'kind' = 'media_asset'
+                and newer.replay_payload ->> 'providerAssetId' = media_assets.provider_asset_id
+            )
+          returning id
         `;
+
+        if (updatedAssets.length === 0) return;
+
         await transaction`
           update content_items ci
           set
@@ -265,8 +278,7 @@ export function createContentMediaRepositoryMethods(
           set
             provider_state = ${input.providerState},
             provider_playable = ${input.providerPlayable},
-            ready_at = case when ${input.providerPlayable} then coalesce(ready_at, now()) else ready_at end,
-            provider_checked_at = now()
+            ready_at = case when ${input.providerPlayable} then coalesce(ready_at, now()) else ready_at end
           where id = ${current.id}
           returning id
         `;

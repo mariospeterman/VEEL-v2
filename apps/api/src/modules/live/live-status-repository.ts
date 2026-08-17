@@ -27,6 +27,15 @@ export function createLiveStatusRepositoryMethods(
             updated_at = now()
           where id = ${input.roomId}
             and state <> 'suspended'
+            and not exists (
+              select 1
+              from provider_events newer
+              where newer.provider = 'livepeer'
+                and newer.received_at > ${input.providerObservedAt}
+                and newer.normalized_state is distinct from 'ignored_stale'
+                and newer.replay_payload ->> 'kind' = 'livepeer_stream'
+                and newer.replay_payload ->> 'providerStreamId' = live_rooms.provider_stream_id
+            )
             and (
               state in ('scheduled', 'waiting')
               or (state = 'live' and ${input.status.state} in ('live', 'ended', 'replay_ready'))
@@ -163,7 +172,6 @@ export function createLiveStatusRepositoryMethods(
             playback_url = case when ${input.state} = 'live' then ${input.playbackUrl} else null end,
             starts_at = case when ${input.state} = 'live' then coalesce(starts_at, now()) else starts_at end,
             ended_at = case when ${input.state} in ('ended', 'replay_ready') then coalesce(ended_at, now()) else ended_at end,
-            provider_checked_at = now(),
             updated_at = now()
           where id = ${current.id}
           returning id

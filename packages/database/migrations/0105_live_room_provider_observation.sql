@@ -13,4 +13,4 @@ set provider_checked_at = updated_at
 where provider_stream_id is not null;
 
 comment on column live_rooms.provider_checked_at is
-  'Time of the latest Livepeer status observation applied to this room.';
+  'Time the latest direct Livepeer status read completed for this room.';
