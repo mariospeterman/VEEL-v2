@@ -100,7 +100,7 @@ export function createPostgresPaymentEvidenceRepository(
           )
           and (not pi.withdrawal_waiver_required or pi.withdrawal_waiver_accepted_at is not null)
         order by
-          case when pi.state = 'confirmed' then 1 else 0 end asc,
+          case when pi.state in ('submitted', 'confirmed') then 0 else 1 end asc,
           pi.created_at asc
         limit 1
       `;

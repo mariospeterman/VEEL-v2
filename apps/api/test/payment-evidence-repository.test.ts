@@ -3,7 +3,7 @@ import { createPostgresPaymentEvidenceRepository } from "../src/modules/payment/
 import type { PostgresSql } from "../src/shared/postgres";
 
 describe("payment evidence repository", () => {
-  it("prefers unsettled intents and binds submitted or confirmed matches to the replayed signature", async () => {
+  it("prioritizes signature-bound intents and binds submitted or confirmed matches to the replayed signature", async () => {
     const queries: Array<{ text: string; values: unknown[] }> = [];
     const sql = vi.fn((stringsOrValues: TemplateStringsArray | unknown[], ...values: unknown[]) => {
       if (!Object.prototype.hasOwnProperty.call(stringsOrValues, "raw")) {
@@ -25,7 +25,7 @@ describe("payment evidence repository", () => {
     expect(queries).toHaveLength(1);
     expect(queries[0]?.text).toContain("pi.submitted_signature = ?");
     expect(queries[0]?.text).toContain("pi.state = 'submitted'");
-    expect(queries[0]?.text).toContain("case when pi.state = 'confirmed' then 1 else 0 end asc");
+    expect(queries[0]?.text).toContain("case when pi.state in ('submitted', 'confirmed') then 0 else 1 end asc");
     expect(queries[0]?.values).toEqual(expect.arrayContaining([true, "replayed-signature"]));
   });
 
