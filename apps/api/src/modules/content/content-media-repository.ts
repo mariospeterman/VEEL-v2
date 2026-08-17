@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import { withPostgresTransaction } from "../../shared/postgres.js";
+import { isLatestProviderEventForSubject } from "../../shared/provider-event-order.js";
 import type { ContentItem, ContentRepository } from "./types.js";
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
@@ -221,8 +222,8 @@ export function createContentMediaRepositoryMethods(
     },
     async updateMediaAssetFromWebhook(input) {
       const rows = await withPostgresTransaction(sql, async (transaction) => {
-        const currentRows = await transaction<{ id: string; provider_playable: boolean }[]>`
-          select id, provider_playable
+        const currentRows = await transaction<{ id: string }[]>`
+          select id
           from media_assets
           where provider = ${input.provider}
             and provider_asset_id = ${input.providerAssetId}
@@ -235,11 +236,16 @@ export function createContentMediaRepositoryMethods(
           return [] as { id: string }[];
         }
 
-        if (
-          input.preventStateRegression &&
-          current.provider_playable &&
-          !input.providerPlayable
-        ) {
+        const isLatestReplay = !input.preventStateRegression || await isLatestProviderEventForSubject(
+          transaction,
+          {
+            provider: input.provider,
+            providerEventId: input.providerEventId,
+            subject: { kind: "media_asset", providerAssetId: input.providerAssetId }
+          }
+        );
+
+        if (!isLatestReplay) {
           await transaction`
             update provider_events
             set normalized_state = 'ignored_stale', processed_at = now()

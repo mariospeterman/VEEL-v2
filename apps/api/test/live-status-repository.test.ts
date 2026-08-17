@@ -3,13 +3,16 @@ import { createLiveStatusRepositoryMethods } from "../src/modules/live/live-stat
 import type { PostgresSql, PostgresTransaction } from "../src/shared/postgres";
 
 describe("live status repository", () => {
-  it("ignores a same-state replay-ready delivery instead of replacing the current replay", async () => {
+  it("ignores an older replay-ready delivery instead of replacing the current replay", async () => {
     const queries: string[] = [];
     const transaction = vi.fn((strings: TemplateStringsArray) => {
       const query = strings.join("?");
       queries.push(query);
       if (query.includes("select id, state")) {
         return Promise.resolve([{ id: "live-room", state: "replay_ready" }]);
+      }
+      if (query.includes("as is_latest")) {
+        return Promise.resolve([{ is_latest: false }]);
       }
       return Promise.resolve([]);
     }) as unknown as PostgresTransaction;
@@ -29,6 +32,7 @@ describe("live status repository", () => {
     })).resolves.toBe(true);
 
     expect(queries.join("\n")).toContain("normalized_state = 'ignored_stale'");
+    expect(queries.join("\n")).toContain("newer.delivery_sequence > current_event.delivery_sequence");
     expect(queries.join("\n")).not.toContain("update live_rooms\n          set");
   });
 });

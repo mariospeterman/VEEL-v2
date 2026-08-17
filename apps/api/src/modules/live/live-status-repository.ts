@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
+import { isLatestProviderEventForSubject } from "../../shared/provider-event-order.js";
 import { ensureLiveReplayContent } from "./live-replay-repository.js";
 import type { LiveRepository } from "./types.js";
 
@@ -126,10 +127,16 @@ export function createLiveStatusRepositoryMethods(
           return [] as { id: string }[];
         }
 
-        if (
-          !isAllowedWebhookTransition(current.state, input.state) ||
-          (input.preventStateRegression && current.state === input.state)
-        ) {
+        const isLatestReplay = !input.preventStateRegression || await isLatestProviderEventForSubject(
+          transaction,
+          {
+            provider: "livepeer",
+            providerEventId: input.providerEventId,
+            subject: { kind: "livepeer_stream", providerStreamId: input.providerStreamId }
+          }
+        );
+
+        if (!isLatestReplay || !isAllowedWebhookTransition(current.state, input.state)) {
           await transaction`
             update provider_events
             set normalized_state = 'ignored_stale', processed_at = now()
