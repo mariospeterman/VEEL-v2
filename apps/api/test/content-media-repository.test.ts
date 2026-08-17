@@ -70,15 +70,42 @@ describe("content media repository", () => {
     expect(queries.join("\n")).toContain("normalized_state = 'ignored_stale'");
     expect(queries.join("\n")).not.toContain("update media_assets\n          set");
   });
+
+  it("ignores a recorded webhook replay after a newer direct provider observation", async () => {
+    const { sql, queries } = createFakeSql({
+      isLatestProviderEvent: false,
+      providerCheckedAt: new Date("2026-08-17T07:45:00.000Z")
+    });
+    const repository = createContentMediaRepositoryMethods(sql);
+
+    await expect(repository.updateMediaAssetFromWebhook?.({
+      provider: "bunny",
+      providerEventId: "bunny-recorded-before-direct-sync",
+      providerAssetId: "bunny-video-guid",
+      providerState: "processing",
+      providerPlayable: false,
+      preventStateRegression: true
+    })).resolves.toBe(true);
+
+    expect(queries.join("\n")).toContain("current_event.received_at >=");
+    expect(queries.join("\n")).toContain("normalized_state = 'ignored_stale'");
+    expect(queries.join("\n")).not.toContain("update media_assets\n          set");
+  });
 });
 
-function createFakeSql(input: { isLatestProviderEvent?: boolean } = {}): { sql: PostgresSql; queries: string[] } {
+function createFakeSql(input: {
+  isLatestProviderEvent?: boolean;
+  providerCheckedAt?: Date | null;
+} = {}): { sql: PostgresSql; queries: string[] } {
   const queries: string[] = [];
   const transaction = vi.fn((strings: TemplateStringsArray) => {
     const query = strings.join("?");
     queries.push(query);
     if (query.includes("select id")) {
-      return Promise.resolve([{ id: "media-asset" }]);
+      return Promise.resolve([{
+        id: "media-asset",
+        provider_checked_at: input.providerCheckedAt ?? null
+      }]);
     }
     if (query.includes("as is_latest")) {
       return Promise.resolve([{ is_latest: input.isLatestProviderEvent ?? true }]);

@@ -222,8 +222,8 @@ export function createContentMediaRepositoryMethods(
     },
     async updateMediaAssetFromWebhook(input) {
       const rows = await withPostgresTransaction(sql, async (transaction) => {
-        const currentRows = await transaction<{ id: string }[]>`
-          select id
+        const currentRows = await transaction<{ id: string; provider_checked_at: Date | null }[]>`
+          select id, provider_checked_at
           from media_assets
           where provider = ${input.provider}
             and provider_asset_id = ${input.providerAssetId}
@@ -241,7 +241,8 @@ export function createContentMediaRepositoryMethods(
           {
             provider: input.provider,
             providerEventId: input.providerEventId,
-            subject: { kind: "media_asset", providerAssetId: input.providerAssetId }
+            subject: { kind: "media_asset", providerAssetId: input.providerAssetId },
+            subjectObservedAt: current.provider_checked_at
           }
         );
 

@@ -10,6 +10,7 @@ export async function isLatestProviderEventForSubject(
     provider: "bunny" | "livepeer";
     providerEventId: string;
     subject: ProviderEventSubject;
+    subjectObservedAt?: Date | null;
   }
 ): Promise<boolean> {
   const rows = input.subject.kind === "media_asset"
@@ -25,6 +26,10 @@ export async function isLatestProviderEventForSubject(
         from provider_events current_event
         where current_event.provider = ${input.provider}
           and current_event.provider_event_id = ${input.providerEventId}
+          and (
+            ${!input.subjectObservedAt}
+            or current_event.received_at >= ${input.subjectObservedAt ?? new Date(0)}
+          )
         limit 1
       `
     : await transaction<{ is_latest: boolean }[]>`
@@ -39,6 +44,10 @@ export async function isLatestProviderEventForSubject(
         from provider_events current_event
         where current_event.provider = ${input.provider}
           and current_event.provider_event_id = ${input.providerEventId}
+          and (
+            ${!input.subjectObservedAt}
+            or current_event.received_at >= ${input.subjectObservedAt ?? new Date(0)}
+          )
         limit 1
       `;
 
