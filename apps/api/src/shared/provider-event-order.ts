@@ -19,41 +19,39 @@ export async function providerEventReplayDecision(
     ? await transaction<{ is_latest: boolean; processed_at: Date | null }[]>`
         select
           current_event.processed_at,
-          not exists (
-          select 1
-          from provider_events newer
-          where newer.provider = current_event.provider
-            and newer.delivery_sequence > current_event.delivery_sequence
-            and newer.replay_payload ->> 'kind' = 'media_asset'
-            and newer.replay_payload ->> 'providerAssetId' = ${input.subject.providerAssetId}
+          (
+            (${!input.subjectObservedAt} or current_event.received_at >= ${input.subjectObservedAt ?? new Date(0)})
+            and not exists (
+              select 1
+              from provider_events newer
+              where newer.provider = current_event.provider
+                and newer.delivery_sequence > current_event.delivery_sequence
+                and newer.replay_payload ->> 'kind' = 'media_asset'
+                and newer.replay_payload ->> 'providerAssetId' = ${input.subject.providerAssetId}
+            )
           ) as is_latest
         from provider_events current_event
         where current_event.provider = ${input.provider}
           and current_event.provider_event_id = ${input.providerEventId}
-          and (
-            ${!input.subjectObservedAt}
-            or current_event.received_at >= ${input.subjectObservedAt ?? new Date(0)}
-          )
         limit 1
       `
     : await transaction<{ is_latest: boolean; processed_at: Date | null }[]>`
         select
           current_event.processed_at,
-          not exists (
-          select 1
-          from provider_events newer
-          where newer.provider = current_event.provider
-            and newer.delivery_sequence > current_event.delivery_sequence
-            and newer.replay_payload ->> 'kind' = 'livepeer_stream'
-            and newer.replay_payload ->> 'providerStreamId' = ${input.subject.providerStreamId}
+          (
+            (${!input.subjectObservedAt} or current_event.received_at >= ${input.subjectObservedAt ?? new Date(0)})
+            and not exists (
+              select 1
+              from provider_events newer
+              where newer.provider = current_event.provider
+                and newer.delivery_sequence > current_event.delivery_sequence
+                and newer.replay_payload ->> 'kind' = 'livepeer_stream'
+                and newer.replay_payload ->> 'providerStreamId' = ${input.subject.providerStreamId}
+            )
           ) as is_latest
         from provider_events current_event
         where current_event.provider = ${input.provider}
           and current_event.provider_event_id = ${input.providerEventId}
-          and (
-            ${!input.subjectObservedAt}
-            or current_event.received_at >= ${input.subjectObservedAt ?? new Date(0)}
-          )
         limit 1
       `;
 
