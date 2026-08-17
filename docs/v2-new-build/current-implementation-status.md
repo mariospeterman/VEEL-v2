@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: implementation status, known gaps, and next hardening priorities
-Last updated: 2026-08-16
+Last updated: 2026-08-17
 Source of truth: yes
 
 Owns:
@@ -37,16 +37,17 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `fbebe76` (Launch 11, staging-truth hardening, dependency graph hardening, durable content-create idempotency, and atomic payment safety through PR #64) |
-| Active slice | Launch 11E — logical-operation-lifetime idempotency convergence |
-| Branch | `codex/checkout-consent-idempotency-lifetime` |
-| Pull request | #65 |
-| State | `ACTIVE` |
-| Slice blockers | No code blocker. Durable checkout-consent evidence must retain exact replay/conflict behavior beyond the payment-intent window. |
-| Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
+| Merged baseline | `main` at `7ba3370` (green baseline through PR #68) |
+| Active slice | Launch 11F — canonical provider-event side-effect recovery |
+| Branch | `codex/provider-event-replay-recovery` |
+| Pull request | #69 |
+| State | `LOCAL_GREEN` |
+| Slice blockers | No code blocker. Real provider redelivery remains a pre-production staging proof; production paths stay fail-closed without provider credentials. |
+| Next unfinished slice | Launch 10 follow-up — provider-first entry hydration and consumer-language convergence |
 
-Local repository, browser, and Supabase/Postgres proof is green; staging now fails
-closed until its real evidence exists.
+Provider replay unit, route, type, lint, docs, and real-Postgres proof is green on the
+current head. Pull-request clean-runner and review evidence is still required before merge;
+staging remains fail-closed until real provider redelivery evidence exists.
 
 Current human/provider gates do not block this process slice: shared staging credentials,
 provider dashboard/webhook/domain configuration, migration `0091` shared-project proof,
