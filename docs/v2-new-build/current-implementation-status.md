@@ -37,22 +37,31 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `f2d255d` (green baseline through PR #69) |
-| Active slice | Launch 10A — provider-first entry convergence and local runtime recovery |
-| Branch | `codex/provider-first-entry-convergence` |
-| Pull request | #70 |
-| State | `LOCAL_GREEN` |
-| Slice blockers | No code blocker. Real external and embedded wallet target-device evidence remains a pre-production staging proof; production paths stay fail-closed without provider credentials. |
+| Merged baseline | `main` at `469793f` (green baseline through PR #70) |
+| Active slice | Launch 03B — enforceable media release evidence |
+| Branch | `codex/media-release-evidence` |
+| Pull request | Not opened |
+| State | `ACTIVE` |
+| Slice blockers | No code blocker. Written direct-Stream-TUS scan coverage plus real malware/hash/classification provider evidence remains a pre-production staging proof. |
 | Next unfinished slice | Launch 10 — Frontend system, accessibility, cross-browser, and PWA completion |
 
-The entry slice now server-resolves login/onboarding state, presents one immediate primary
+The merged entry slice server-resolves login/onboarding state, presents one immediate primary
 `Connect wallet` action, preserves the first click while the wallet runtime loads, keeps the
 configured embedded-wallet provider as a quiet secondary action, and confines Supabase email
 or social identity to Settings recovery. Full web typecheck, focused unit/lint/docs/build checks,
 fresh canonical migration application, API/web health, server-rendered response checks, and nine
 production-preview Chromium entry/accessibility/PWA journeys are green. Pull-request clean-runner
-and review evidence is still required before merge; real wallet/provider evidence remains a
-pre-production staging gate.
+and protected main CI are green; real wallet/provider evidence remains a pre-production staging gate.
+
+The active media release-evidence slice closes the remaining gap between normalized scan storage
+and release authority. Direct Bunny Stream TUS stays unproven for Shield coverage, so production
+approval must require complete normalized malware, known-hash, container-integrity, classification,
+and human-review evidence rather than treating provider playability or a staff click as scan proof.
+Migration `0106` enforces that predicate in Postgres, admin approval records the human evidence in
+the same transaction, worker outcomes persist only normalized provider signals, and known-hash
+matches immediately remove published media from public access and open a reporting-review workflow
+without automatic user sanctions. Staging additionally
+requires live Shield configuration proof and a release-bound direct-TUS coverage/fixture receipt.
 
 Current human/provider gates do not block this process slice: shared staging credentials,
 provider dashboard/webhook/domain configuration, migration `0091` shared-project proof,

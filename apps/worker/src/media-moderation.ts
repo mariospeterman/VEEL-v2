@@ -14,8 +14,19 @@ export interface QueuedMediaModerationJob {
   leaseToken: string;
 }
 
+export interface MediaModerationSignal {
+  provider: "bunny_shield" | "bunny_stream" | "livepeer" | "internal";
+  providerEventId: string;
+  scanType: "container_integrity" | "malware" | "known_hash" | "content_classification" | "live_signal";
+  normalizedSignal: "clear" | "suspected" | "matched" | "inconclusive" | "provider_error";
+  payloadHash: string;
+  modelOrRulesetVersion?: string;
+  confidence?: number;
+  providerIncidentReference?: string;
+}
+
 export type MediaModerationOutcome =
-  | { state: "clear"; provider: "bunny_shield" | "livepeer" | "internal"; payloadHash: string }
+  | { state: "evidence"; signals: MediaModerationSignal[] }
   | { state: "review_required"; reasonCode: string }
   | { state: "failed"; failureCode: string };
 
@@ -73,7 +84,15 @@ export async function processMediaModerationJobs(input: {
     );
     await input.repository.recordOutcome({ job, outcome, now });
 
-    if (outcome.state === "clear") result.completed += 1;
+    const evidenceComplete = outcome.state === "evidence"
+      ? summarizeEvidence(outcome.signals).evidenceComplete
+      : false;
+    if (outcome.state === "evidence" && evidenceComplete) {
+      result.completed += 1;
+    }
+    if (outcome.state === "evidence" && !evidenceComplete) {
+      result.reviewRequired += 1;
+    }
     if (outcome.state === "review_required") result.reviewRequired += 1;
     if (outcome.state === "failed") result.failed += 1;
   }
@@ -215,16 +234,16 @@ export function createPostgresMediaModerationRepository(
         return;
       }
 
-      const reasonCode =
-        input.outcome.state === "clear"
-          ? "provider_scan_clear_manual_release_required"
-          : input.outcome.reasonCode;
+      const evidenceOutcome = input.outcome.state === "evidence" ? summarizeEvidence(input.outcome.signals) : null;
+      const reasonCode = input.outcome.state === "evidence"
+        ? evidenceOutcome!.reasonCode
+        : input.outcome.reasonCode;
 
       await sql.begin(async (transaction) => {
         const jobRows = await transaction<{ media_safety_case_id: string }[]>`
           update media_moderation_jobs
           set
-            state = ${input.outcome.state === "clear" ? "completed" : "review_required"},
+            state = ${input.outcome.state === "evidence" && evidenceOutcome!.evidenceComplete ? "completed" : "review_required"},
             last_failure_code = null,
             lease_token = null,
             leased_at = null,
@@ -237,31 +256,70 @@ export function createPostgresMediaModerationRepository(
         `;
         if (!jobRows[0]) return;
 
-        if (input.outcome.state === "clear") {
-          await transaction`
-            insert into provider_media_scan_events (
-              media_safety_case_id,
-              provider,
-              scan_type,
-              normalized_signal,
-              payload_hash,
-              observed_at
-            )
-            values (
-              ${input.job.caseId},
-              ${input.outcome.provider},
-              ${input.job.targetType === "live_room" ? "live_signal" : "known_hash"},
-              'clear',
-              ${input.outcome.payloadHash},
-              ${input.now}
-            )
-          `;
+        if (
+          input.outcome.state === "evidence"
+          && evidenceOutcome?.reasonCode !== "required_release_evidence_invalid"
+        ) {
+          for (const signal of input.outcome.signals) {
+            await transaction`
+              insert into provider_media_scan_events (
+                media_safety_case_id,
+                provider,
+                provider_event_id,
+                scan_type,
+                normalized_signal,
+                payload_hash,
+                model_or_ruleset_version,
+                confidence,
+                provider_incident_reference,
+                reporting_state,
+                observed_at
+              )
+              values (
+                ${input.job.caseId},
+                ${signal.provider},
+                ${signal.providerEventId},
+                ${signal.scanType},
+                ${signal.normalizedSignal},
+                ${signal.payloadHash},
+                ${signal.modelOrRulesetVersion ?? null},
+                ${signal.confidence ?? null},
+                ${signal.providerIncidentReference ?? null},
+                ${signal.scanType === "known_hash" && signal.normalizedSignal === "matched" ? "platform_review_required" : "not_required"},
+                ${input.now}
+              )
+              on conflict (provider, provider_event_id) do nothing
+            `;
+          }
+
+          if (evidenceOutcome?.matchedKnownHash) {
+            await transaction`
+              insert into regulatory_report_workflows (
+                media_safety_case_id,
+                provider,
+                provider_incident_reference,
+                state
+              )
+              values (
+                ${input.job.caseId},
+                'bunny_shield',
+                ${evidenceOutcome.matchedKnownHash.providerIncidentReference ?? evidenceOutcome.matchedKnownHash.providerEventId},
+                'review_required'
+              )
+              on conflict (media_safety_case_id, provider, provider_incident_reference) do nothing
+            `;
+          }
         }
 
         await transaction`
           update media_safety_cases
           set
-            state = 'review_required',
+            state = case
+              when state = 'appealed'
+                and ${evidenceOutcome?.caseState ?? "review_required"} = 'review_required'
+              then 'appealed'
+              else ${evidenceOutcome?.caseState ?? "review_required"}
+            end,
             reason_code = ${reasonCode},
             provider_release_allowed = false,
             updated_at = now()
@@ -295,4 +353,71 @@ function moderationFailureCode(error: unknown): string {
     return `media_moderation_exception:${error.message.slice(0, 80)}`;
   }
   return "media_moderation_exception";
+}
+
+export function summarizeEvidence(signals: MediaModerationSignal[]): {
+  caseState: "review_required" | "held_for_reporting";
+  evidenceComplete: boolean;
+  matchedKnownHash: MediaModerationSignal | null;
+  reasonCode: string;
+} {
+  const requiredProviders = new Map<MediaModerationSignal["scanType"], MediaModerationSignal["provider"]>([
+    ["container_integrity", "bunny_stream"],
+    ["malware", "bunny_shield"],
+    ["known_hash", "bunny_shield"],
+    ["content_classification", "internal"]
+  ]);
+  const observedRequiredTypes = new Set<MediaModerationSignal["scanType"]>();
+  const invalid = signals.some((signal) => {
+    const requiredProvider = requiredProviders.get(signal.scanType);
+    if (!requiredProvider) return signal.scanType !== "live_signal";
+    if (observedRequiredTypes.has(signal.scanType)) return true;
+    observedRequiredTypes.add(signal.scanType);
+    return signal.provider !== requiredProvider
+      || !signal.providerEventId.trim()
+      || !/^[a-f0-9]{64}$/.test(signal.payloadHash)
+      || (signal.scanType === "content_classification" && !signal.modelOrRulesetVersion?.trim())
+      || (signal.confidence !== undefined && (signal.confidence < 0 || signal.confidence > 1));
+  });
+  const evidenceComplete = !invalid
+    && [...requiredProviders.keys()].every((scanType) => observedRequiredTypes.has(scanType));
+
+  if (invalid) {
+    return {
+      caseState: "review_required",
+      evidenceComplete: false,
+      matchedKnownHash: null,
+      reasonCode: "required_release_evidence_invalid"
+    };
+  }
+
+  const matchedKnownHash = signals.find(
+    (signal) => signal.scanType === "known_hash" && signal.normalizedSignal === "matched"
+  ) ?? null;
+  if (matchedKnownHash) {
+    return {
+      caseState: "held_for_reporting",
+      evidenceComplete,
+      matchedKnownHash,
+      reasonCode: "known_hash_match_requires_reporting_review"
+    };
+  }
+
+  if (signals.some((signal) => signal.normalizedSignal !== "clear")) {
+    return {
+      caseState: "review_required",
+      evidenceComplete,
+      matchedKnownHash: null,
+      reasonCode: "automated_signal_requires_human_review"
+    };
+  }
+
+  return {
+    caseState: "review_required",
+    evidenceComplete,
+    matchedKnownHash: null,
+    reasonCode: evidenceComplete
+      ? "automated_checks_clear_manual_release_required"
+      : "required_release_evidence_incomplete"
+  };
 }
