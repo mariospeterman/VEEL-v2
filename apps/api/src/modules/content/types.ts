@@ -32,6 +32,7 @@ export interface ContentRepository {
   getContentCreationAbusePolicy?(): Promise<ContentCreationAbusePolicy | null>;
   findContentDetail(input: FindContentDetailInput): Promise<ContentItem | null>;
   findContentUnlockOffer(input: FindContentUnlockOfferInput): Promise<ContentUnlockOffer | null>;
+  findMediaAssetByProviderAsset?(input: FindMediaAssetByProviderAssetInput): Promise<{ id: string } | null>;
   findOwnedMediaAssetForSync?(input: FindOwnedMediaAssetForSyncInput): Promise<OwnedMediaAssetForSync | null>;
   findOwnedContentForUpload(input: FindOwnedContentForUploadInput): Promise<OwnedContentForUpload | null>;
   findOwnedContentForUpdate?(input: FindOwnedContentForUploadInput): Promise<OwnedContentForUpload | null>;
@@ -128,6 +129,11 @@ export interface FindContentUnlockOfferInput {
 export interface FindOwnedMediaAssetForSyncInput {
   supabaseUserId: string;
   mediaAssetId: string;
+}
+
+export interface FindMediaAssetByProviderAssetInput {
+  provider: "bunny";
+  providerAssetId: string;
 }
 
 export interface OwnedMediaAssetForSync {

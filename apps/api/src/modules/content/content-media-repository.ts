@@ -7,15 +7,16 @@ import type { ContentItem, ContentRepository } from "./types.js";
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 type JsonObject = { [key: string]: JsonValue };
 
-type ContentMediaRepositoryMethods = Pick<
+type ContentMediaRepositoryMethods = Required<Pick<
   ContentRepository,
   | "createMediaAsset"
+  | "findMediaAssetByProviderAsset"
   | "findOwnedContentForUpload"
   | "findOwnedMediaAssetForSync"
   | "recordMediaProviderWebhook"
   | "updateMediaAssetFromWebhook"
   | "updateMediaAssetPlayback"
->;
+>>;
 
 export function createContentMediaRepositoryMethods(
   sql: postgres.Sql
@@ -89,6 +90,17 @@ export function createContentMediaRepositoryMethods(
       });
 
       return rows[0] ? { id: rows[0].id } : undefined;
+    },
+    async findMediaAssetByProviderAsset(input) {
+      const rows = await sql<{ id: string }[]>`
+        select id
+        from media_assets
+        where provider = ${input.provider}
+          and provider_asset_id = ${input.providerAssetId}
+        limit 1
+      `;
+
+      return rows[0] ?? null;
     },
     async findOwnedContentForUpload(input) {
       const rows = await sql<{

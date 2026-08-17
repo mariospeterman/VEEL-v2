@@ -1,6 +1,11 @@
 import type { ServerEnv } from "@veel/config";
 import { createPostgresContentRepository } from "./modules/content/content-repository.js";
-import type { ContentRepository } from "./modules/content/types.js";
+import { createBunnyStreamUploadAdapter } from "./modules/content/media-upload-adapter.js";
+import type {
+  ContentRepository,
+  GetMediaPlaybackProviderDataInput,
+  MediaPlaybackProviderData
+} from "./modules/content/types.js";
 import { createPostgresLiveRepository } from "./modules/live/live-repository.js";
 import type { LiveRepository } from "./modules/live/types.js";
 import {
@@ -58,7 +63,13 @@ export interface CanonicalProviderReplayHandlers {
 }
 
 interface ProviderReplayDependencies {
-  contentRepository: Pick<ContentRepository, "updateMediaAssetFromWebhook">;
+  contentRepository: Required<Pick<
+    ContentRepository,
+    "findMediaAssetByProviderAsset" | "updateMediaAssetFromWebhook" | "updateMediaAssetPlayback"
+  >>;
+  mediaPlaybackProvider: {
+    getPlaybackData(input: GetMediaPlaybackProviderDataInput): Promise<MediaPlaybackProviderData>;
+  };
   liveRepository: Pick<LiveRepository, "updateRoomFromWebhook">;
   paymentEvidenceRepository: PaymentEvidenceRepository;
   paymentRepository: Pick<PaymentRepository, "recordSubmission">;
@@ -70,7 +81,23 @@ export function createCanonicalProviderReplayHandlers(
 ): CanonicalProviderReplayHandlers {
   return {
     async bunny(input) {
-      const applied = await dependencies.contentRepository.updateMediaAssetFromWebhook?.({
+      const mediaAsset = await dependencies.contentRepository.findMediaAssetByProviderAsset({
+        provider: "bunny",
+        providerAssetId: input.replayPayload.providerAssetId
+      });
+
+      if (!mediaAsset) {
+        return {
+          state: "failed",
+          failureCode: "provider_event_replay_media_asset_not_found"
+        };
+      }
+
+      const playbackData = await dependencies.mediaPlaybackProvider.getPlaybackData({
+        providerAssetId: input.replayPayload.providerAssetId
+      });
+      const providerObservedAt = new Date();
+      const applied = await dependencies.contentRepository.updateMediaAssetFromWebhook({
         provider: "bunny",
         providerEventId: input.providerEventId,
         providerAssetId: input.replayPayload.providerAssetId,
@@ -78,6 +105,14 @@ export function createCanonicalProviderReplayHandlers(
         providerPlayable: input.replayPayload.providerPlayable,
         preventStateRegression: true
       });
+
+      if (applied) {
+        await dependencies.contentRepository.updateMediaAssetPlayback({
+          mediaAssetId: mediaAsset.id,
+          providerObservedAt,
+          ...playbackData
+        });
+      }
 
       return applied
         ? { state: "replayed" }
@@ -178,7 +213,15 @@ export function createCanonicalProviderReplayHandlers(
 export function createCanonicalProviderReplayRuntime(config: Pick<
   ServerEnv,
   "DATABASE_URL" | "SOLANA_RPC_URL" | "PAYMENT_SOLANA_FINALITY"
->): {
+> & Partial<Pick<
+  ServerEnv,
+  | "BUNNY_STREAM_API_KEY"
+  | "BUNNY_STREAM_EMBED_TOKEN_KEY"
+  | "BUNNY_STREAM_LIBRARY_ID"
+  | "BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS"
+>>, overrides: {
+  mediaPlaybackProvider?: ProviderReplayDependencies["mediaPlaybackProvider"];
+} = {}): {
   handlers: CanonicalProviderReplayHandlers;
   close(): Promise<void>;
 } {
@@ -187,6 +230,7 @@ export function createCanonicalProviderReplayRuntime(config: Pick<
   }
 
   const sql = createPostgresClient(config.DATABASE_URL);
+  const bunnyProvider = createBunnyStreamUploadAdapter(config);
   const handlers = createCanonicalProviderReplayHandlers({
     contentRepository: createPostgresContentRepository(sql),
     liveRepository: createPostgresLiveRepository(sql),
@@ -195,7 +239,15 @@ export function createCanonicalProviderReplayRuntime(config: Pick<
     settlementVerifier: createSolanaRpcSettlementVerifier(
       config.SOLANA_RPC_URL,
       config.PAYMENT_SOLANA_FINALITY
-    )
+    ),
+    mediaPlaybackProvider: overrides.mediaPlaybackProvider ?? {
+      async getPlaybackData(input) {
+        if (!bunnyProvider.getPlaybackData) {
+          throw new Error("BUNNY_PLAYBACK_RECONCILIATION_NOT_CONFIGURED");
+        }
+        return bunnyProvider.getPlaybackData(input);
+      }
+    }
   });
 
   return {

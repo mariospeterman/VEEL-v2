@@ -29,11 +29,28 @@ describe("canonical provider event replay handlers", () => {
       providerPlayable: true,
       preventStateRegression: true
     });
+    expect(dependencies.mediaPlaybackProvider.getPlaybackData).toHaveBeenCalledWith({
+      providerAssetId: "asset-1"
+    });
+    expect(dependencies.contentRepository.updateMediaAssetPlayback).toHaveBeenCalledWith({
+      mediaAssetId: "media-asset-1",
+      providerObservedAt: expect.any(Date),
+      providerState: "ready",
+      providerPlayable: true,
+      playbackUrl: "https://playback.example/asset-1.m3u8",
+      posterUrl: "https://playback.example/asset-1.jpg",
+      durationMs: 90000
+    });
+    expect(
+      vi.mocked(dependencies.contentRepository.updateMediaAssetFromWebhook).mock.invocationCallOrder[0]
+    ).toBeLessThan(
+      vi.mocked(dependencies.contentRepository.updateMediaAssetPlayback).mock.invocationCallOrder[0]!
+    );
   });
 
   it("keeps a missing media target retryable instead of claiming recovery", async () => {
     const dependencies = replayDependencies();
-    vi.mocked(dependencies.contentRepository.updateMediaAssetFromWebhook).mockResolvedValue(false);
+    vi.mocked(dependencies.contentRepository.findMediaAssetByProviderAsset).mockResolvedValue(null);
     const handlers = createCanonicalProviderReplayHandlers(dependencies);
 
     await expect(handlers.bunny({
@@ -48,6 +65,8 @@ describe("canonical provider event replay handlers", () => {
       state: "failed",
       failureCode: "provider_event_replay_media_asset_not_found"
     });
+    expect(dependencies.mediaPlaybackProvider.getPlaybackData).not.toHaveBeenCalled();
+    expect(dependencies.contentRepository.updateMediaAssetFromWebhook).not.toHaveBeenCalled();
   });
 
   it("reapplies Livepeer room and replay transitions through the canonical live repository", async () => {
@@ -195,7 +214,18 @@ function replayDependencies(input: {
 
   return {
     contentRepository: {
+      findMediaAssetByProviderAsset: vi.fn().mockResolvedValue({ id: "media-asset-1" }),
+      updateMediaAssetPlayback: vi.fn().mockResolvedValue(undefined),
       updateMediaAssetFromWebhook: vi.fn().mockResolvedValue(true)
+    },
+    mediaPlaybackProvider: {
+      getPlaybackData: vi.fn().mockResolvedValue({
+        providerState: "ready",
+        providerPlayable: true,
+        playbackUrl: "https://playback.example/asset-1.m3u8",
+        posterUrl: "https://playback.example/asset-1.jpg",
+        durationMs: 90000
+      })
     },
     liveRepository: {
       updateRoomFromWebhook: vi.fn().mockResolvedValue(true)

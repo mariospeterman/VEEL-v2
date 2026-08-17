@@ -137,6 +137,8 @@ Money, access, safety, age/KYC, wallet, Event Access, Mutuals, messages, and adm
 
 ## Worker Model
 
+For Bunny recovery, the worker reads the current provider playback projection and persists its usable playback URL, poster, duration, and state through the direct-sync authority before reporting success. A replayed `ready` flag without usable playback data is not successful recovery.
+
 Workers process:
 
 - Helius/Solana webhook reconciliation

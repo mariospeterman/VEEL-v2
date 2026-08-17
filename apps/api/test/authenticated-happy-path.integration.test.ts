@@ -3641,6 +3641,18 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         DATABASE_URL: databaseUrl,
         SOLANA_RPC_URL: "https://api.devnet.solana.com",
         PAYMENT_SOLANA_FINALITY: "finalized"
+      }, {
+        mediaPlaybackProvider: {
+          async getPlaybackData() {
+            return {
+              providerState: "ready",
+              providerPlayable: true,
+              playbackUrl: `https://playback.example/${seededFreeContentId}.m3u8`,
+              posterUrl: null,
+              durationMs: 90000
+            };
+          }
+        }
       });
       try {
         const replayResult = await processProviderEventReplays({
@@ -3664,6 +3676,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         replay_request_count: string;
         provider_event_count: string;
         media_asset_count: string;
+        playback_url: string | null;
       }[]>`
         select
           (
@@ -3689,13 +3702,19 @@ describeIntegration("authenticated API happy path against Postgres", () => {
             where ma.id = ${seededFreeMediaAssetId}
               and ma.provider_state = 'replay_ready'
               and ma.provider_playable = true
-          ) as media_asset_count
+          ) as media_asset_count,
+          (
+            select playback_url
+            from media_assets ma
+            where ma.id = ${seededFreeMediaAssetId}
+          ) as playback_url
       `;
 
       expect(replayRows[0]).toEqual({
         replay_request_count: "1",
         provider_event_count: "1",
-        media_asset_count: "1"
+        media_asset_count: "1",
+        playback_url: `https://playback.example/${seededFreeContentId}.m3u8`
       });
 
       const preBlockUnfollowResponse = await app.inject({
@@ -4862,6 +4881,16 @@ async function seedProviderReplayRequest(
     runId: string;
   }
 ): Promise<void> {
+  await sql`
+    update media_assets
+    set
+      provider_state = 'processing',
+      provider_playable = false,
+      playback_url = null,
+      provider_checked_at = null
+    where provider = 'bunny'
+      and provider_asset_id = ${input.providerAssetId}
+  `;
   await sql`
     insert into provider_events (
       id,
