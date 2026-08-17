@@ -8957,6 +8957,7 @@ describe("buildApi", () => {
       },
       async findIntentByReference(input) {
         expect(input.referenceAddresses).toContain(storedPaymentIntent.referenceAddress);
+        expect(input.submissionSignature).toBe(validSolanaSignature);
 
         return {
           supabaseUserId: "00000000-0000-4000-8000-000000000001",

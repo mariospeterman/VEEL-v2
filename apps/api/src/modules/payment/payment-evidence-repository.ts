@@ -89,11 +89,13 @@ export function createPostgresPaymentEvidenceRepository(
         join users u on u.id = pi.user_id
         where pi.reference_address in ${sql(input.referenceAddresses)}
           and (
-            pi.state in ('pending', 'transaction_requested', 'submitted')
+            pi.state in ('pending', 'transaction_requested')
             or (
-              ${input.includeConfirmed ?? false}
-              and pi.state = 'confirmed'
-              and pi.submitted_signature = ${input.confirmedSignature ?? null}
+              pi.submitted_signature = ${input.submissionSignature ?? null}
+              and (
+                pi.state = 'submitted'
+                or (${input.includeConfirmed ?? false} and pi.state = 'confirmed')
+              )
             )
           )
           and (not pi.withdrawal_waiver_required or pi.withdrawal_waiver_accepted_at is not null)

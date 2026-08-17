@@ -43,7 +43,8 @@ export async function registerSolanaIndexerWebhookRoute(
         }
 
         const match = await options.paymentEvidenceRepository.findIntentByReference({
-          referenceAddresses: event.referenceAddresses
+          referenceAddresses: event.referenceAddresses,
+          submissionSignature: event.signature
         });
 
         if (!match) {

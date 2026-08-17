@@ -166,8 +166,8 @@ export interface PaymentEvidenceRepository {
   recordSolanaProviderEvent(input: RecordSolanaProviderEventInput): Promise<boolean>;
   findIntentByReference(input: {
     referenceAddresses: string[];
-    confirmedSignature?: string;
     includeConfirmed?: boolean;
+    submissionSignature?: string;
   }): Promise<ProviderPaymentIntentMatch | null>;
   updateSolanaProviderEvent(input: UpdateSolanaProviderEventInput): Promise<void>;
   close?(): Promise<void>;

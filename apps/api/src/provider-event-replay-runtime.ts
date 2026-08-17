@@ -109,8 +109,8 @@ export function createCanonicalProviderReplayHandlers(
     async helius(input) {
       const match = await dependencies.paymentEvidenceRepository.findIntentByReference({
         referenceAddresses: input.replayPayload.referenceAddresses,
-        confirmedSignature: input.replayPayload.signature,
-        includeConfirmed: true
+        includeConfirmed: true,
+        submissionSignature: input.replayPayload.signature
       });
 
       if (!match) {
