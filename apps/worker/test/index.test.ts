@@ -603,7 +603,7 @@ describe("runProviderEventReplayTick", () => {
     ]);
     expect(repository.outcomes[0]).toMatchObject({
       replayRequestId: "replay-request-1",
-      providerEventId: "00000000-0000-4000-8000-000000000050",
+      providerEventRecordId: "00000000-0000-4000-8000-000000000050",
       outcome: { state: "replayed" }
     });
   });
@@ -662,7 +662,7 @@ describe("runProviderEventReplayTick", () => {
       replayRequestId: "replay-request-1",
       outcome: {
         state: "failed",
-        failureCode: "provider_event_replay_exception:temporary provider outage"
+        failureCode: "provider_event_replay_exception"
       }
     });
     expect(repository.outcomes[1]).toMatchObject({
@@ -692,7 +692,7 @@ describe("runProviderEventReplayTick", () => {
 
     await expect(adapter.replay(providerEventReplayFixture())).resolves.toEqual({
       state: "failed",
-      failureCode: "provider_event_replay_handler_not_configured:helius"
+      failureCode: "provider_event_replay_handler_not_configured"
     });
   });
 
@@ -705,7 +705,7 @@ describe("runProviderEventReplayTick", () => {
 
     await expect(adapter.replay(providerEventReplayFixture({ replayPayload: {} }))).resolves.toEqual({
       state: "failed",
-      failureCode: "provider_event_replay_payload_missing:helius"
+      failureCode: "provider_event_replay_payload_missing"
     });
   });
 
@@ -716,7 +716,7 @@ describe("runProviderEventReplayTick", () => {
       adapter.replay(providerEventReplayFixture({ provider: "unknown_provider" }))
     ).resolves.toEqual({
       state: "failed",
-      failureCode: "provider_event_replay_provider_unsupported:unknown_provider"
+      failureCode: "provider_event_replay_provider_unsupported"
     });
   });
 });
@@ -937,7 +937,9 @@ function providerEventReplayFixture(
     replayRequestId: overrides.replayRequestId ?? "replay-request-1",
     leaseToken: overrides.leaseToken ?? "replay-lease-1",
     attemptCount: overrides.attemptCount ?? 1,
-    providerEventId: overrides.providerEventId ?? "00000000-0000-4000-8000-000000000050",
+    providerEventRecordId:
+      overrides.providerEventRecordId ?? "00000000-0000-4000-8000-000000000050",
+    providerEventId: overrides.providerEventId ?? "provider-delivery-1",
     provider: overrides.provider ?? "helius",
     eventType: overrides.eventType ?? "payment.confirmed",
     replayPayload: overrides.replayPayload ?? {
@@ -968,13 +970,13 @@ function fakeProviderEventReplayRepository(input: {
 }): ProviderEventReplayRepository & {
   outcomes: Array<{
     replayRequestId: string;
-    providerEventId: string;
+    providerEventRecordId: string;
     outcome: ProviderEventReplayOutcome;
   }>;
 } {
   const outcomes: Array<{
     replayRequestId: string;
-    providerEventId: string;
+    providerEventRecordId: string;
     outcome: ProviderEventReplayOutcome;
   }> = [];
 

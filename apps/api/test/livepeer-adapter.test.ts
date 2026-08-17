@@ -62,6 +62,39 @@ describe("Livepeer provider adapter", () => {
     } satisfies Partial<LiveProviderRequestError>);
   });
 
+  it("reconciles stream state with the secondary playback projection", async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      return url.endsWith("/stream/stream-1")
+        ? new Response(JSON.stringify({
+            id: "stream-1",
+            playbackId: "playback-1",
+            isActive: true
+          }), { status: 200, headers: { "content-type": "application/json" } })
+        : new Response(JSON.stringify({
+            type: "live",
+            meta: {
+              source: [{
+                type: "html5/application/vnd.apple.mpegurl",
+                url: "https://playback.example/live.m3u8"
+              }]
+            }
+          }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    const adapter = createLivepeerProviderAdapter(livepeerEnv(), fetchMock as typeof fetch);
+
+    await expect(adapter.getRoomStatus({
+      providerStreamId: "stream-1",
+      providerPlaybackId: "playback-1"
+    })).resolves.toEqual({
+      providerStreamId: "stream-1",
+      providerPlaybackId: "playback-1",
+      providerState: "active",
+      state: "live",
+      playbackUrl: "https://playback.example/live.m3u8"
+    });
+  });
+
   it("signs playback access with Livepeer's official JWT helper", async () => {
     const keyPair = generateKeyPairSync("ec", { namedCurve: "P-256" });
     const privateKey = Buffer.from(

@@ -137,6 +137,10 @@ Money, access, safety, age/KYC, wallet, Event Access, Mutuals, messages, and adm
 
 ## Worker Model
 
+For Bunny recovery, the worker reads the current provider playback projection and persists its usable playback URL, poster, duration, and state through the direct-sync authority before reporting success. A replayed `ready` flag without usable playback data is not successful recovery.
+
+Solana payment replay binds its settlement write to the exact intent state and submitted signature observed during lookup. If concurrent evidence changes that boundary, replay never overwrites it: an unrelated signature is ignored, while still-relevant changed state is retried through a fresh lookup.
+
 Workers process:
 
 - Helius/Solana webhook reconciliation
@@ -147,6 +151,12 @@ Workers process:
 - notification fanout
 - delayed entitlement expiry
 - stale upload cleanup
+
+Provider-event recovery leases only sanitized normalized replay payloads from Postgres. Every normalized delivery receives a database-owned monotonic sequence. Bunny and Livepeer reapply those payloads through the same canonical repositories used by live webhook handling only when the replayed delivery is still the newest non-rejected event for that asset or stream; a delivery already classified `ignored_stale` is not authoritative evidence that can suppress another recovery item.
+
+Direct Bunny and Livepeer reads use a Postgres `clock_timestamp()` cutoff captured immediately before the provider request. Both the cutoff and webhook `received_at` therefore share one database clock domain, and the conservative pre-read cutoff makes any provider delivery received during or after the read outrank that direct projection. The cutoff advances monotonically: webhook application does not replace it with a later commit time, an older concurrent sync cannot move it or provider state backward, and a direct sync refuses to write when a non-rejected provider delivery for the same subject arrived after its cutoff. Existing live rooms receive a conservative migration backfill from their latest applied room mutation, so pre-migration sync state cannot be overwritten by older recovery evidence.
+
+Older deliveries are marked ignored instead of moving media state in either direction, closing a current live access window, or replacing the current live replay; deliveries whose side effects already committed return success without repeating handoff or audit effects, whether the retry comes from recovery or an original webhook request resuming after recovery. Helius/Solana preserves the originating provider alias, accepts submitted or confirmed matches only for the exact stored submission signature, prioritizes those signature-bound matches over unrelated pending references, re-runs exact backend settlement verification for unconfirmed work, and uses the existing transactional payment-submission authority. The queue keeps the internal provider-event row ID separate from the external provider delivery ID, uses token-guarded leases, bounded backoff and an attempt ceiling, and preserves the provider's normalized outcome instead of replacing it with a generic replay label. Exhausted work is visible as `dead_letter` with a redacted failure code and replay-request ID in admin operations; audited recovery requeues that exact job only after an operator supplies a reason.
 
 Use `pg-boss` as the launch default to keep infrastructure smaller and queue state close to Postgres. Move selected queues to BullMQ/Redis only after measured queue lag, throughput, or rate-limit requirements justify Redis.
 

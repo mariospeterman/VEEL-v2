@@ -174,6 +174,7 @@ export async function registerContentUploadRoutes(
     try {
       if (
         !options.contentRepository.findOwnedMediaAssetForSync ||
+        !options.contentRepository.captureProviderObservationCutoff ||
         !options.contentRepository.updateMediaAssetPlayback ||
         !options.mediaUploadProvider.getPlaybackData
       ) {
@@ -202,12 +203,15 @@ export async function registerContentUploadRoutes(
         });
       }
 
+      const providerObservationCutoff =
+        await options.contentRepository.captureProviderObservationCutoff();
       const playbackData = await options.mediaUploadProvider.getPlaybackData({
         providerAssetId: mediaAsset.providerAssetId
       });
 
       await options.contentRepository.updateMediaAssetPlayback({
         mediaAssetId: mediaAsset.id,
+        providerObservationCutoff,
         ...playbackData
       });
 

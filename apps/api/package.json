@@ -5,8 +5,16 @@
   "type": "module",
   "files": [
     "dist",
-    "package.json"
+    "package.json",
+    "src"
   ],
+  "exports": {
+    "./provider-event-replay-runtime": {
+      "types": "./src/provider-event-replay-runtime.ts",
+      "development": "./src/provider-event-replay-runtime.ts",
+      "default": "./dist/provider-event-replay-runtime.js"
+    }
+  },
   "scripts": {
     "dev": "node --env-file=../../.env --import @veel/observability/register --watch --import tsx src/server.ts",
     "start": "node --import @veel/observability/register --env-file-if-exists=../../.env dist/server.js",

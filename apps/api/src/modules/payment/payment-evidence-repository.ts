@@ -88,9 +88,20 @@ export function createPostgresPaymentEvidenceRepository(
         from payment_intents pi
         join users u on u.id = pi.user_id
         where pi.reference_address in ${sql(input.referenceAddresses)}
-          and pi.state in ('pending', 'transaction_requested', 'submitted')
+          and (
+            pi.state in ('pending', 'transaction_requested')
+            or (
+              pi.submitted_signature = ${input.submissionSignature ?? null}
+              and (
+                pi.state = 'submitted'
+                or (${input.includeConfirmed ?? false} and pi.state = 'confirmed')
+              )
+            )
+          )
           and (not pi.withdrawal_waiver_required or pi.withdrawal_waiver_accepted_at is not null)
-        order by pi.created_at asc
+        order by
+          case when pi.state in ('submitted', 'confirmed') then 0 else 1 end asc,
+          pi.created_at asc
         limit 1
       `;
       const row = rows[0];
@@ -104,12 +115,13 @@ export function createPostgresPaymentEvidenceRepository(
     },
 
     async updateSolanaProviderEvent(input) {
+      const provider = input.provider ?? "helius";
       await sql`
         update provider_events
         set
           normalized_state = ${input.normalizedState},
           processed_at = now()
-        where provider = 'helius'
+        where provider = ${provider}
           and provider_event_id = ${input.providerEventId}
       `;
 
@@ -118,7 +130,7 @@ export function createPostgresPaymentEvidenceRepository(
         set
           state = ${input.normalizedState},
           processed_at = now()
-        where provider = 'helius'
+        where provider = ${provider}
           and webhook_type = 'solana-indexer'
           and idempotency_key = ${input.providerEventId}
       `;

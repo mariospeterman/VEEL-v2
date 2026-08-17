@@ -4838,8 +4838,11 @@ describe("buildApi", () => {
   });
 
   it("syncs Bunny playback status into the backend media projection", async () => {
+    const providerObservationCutoff = new Date("2026-08-17T08:05:00.000Z");
+    const observationOrder: string[] = [];
     const playbackUpdates: Array<{
       mediaAssetId: string;
+      providerObservationCutoff: Date;
       providerState: string;
       providerPlayable: boolean;
       playbackUrl?: string | null;
@@ -4847,6 +4850,10 @@ describe("buildApi", () => {
       durationMs?: number | null;
     }> = [];
     const contentRepository: ContentRepository = {
+      async captureProviderObservationCutoff() {
+        observationOrder.push("database-cutoff");
+        return providerObservationCutoff;
+      },
       async createDraft() {
         throw new Error("not implemented");
       },
@@ -4891,6 +4898,7 @@ describe("buildApi", () => {
         throw new Error("not implemented");
       },
       async getPlaybackData(input) {
+        observationOrder.push("provider-read");
         expect(input).toEqual({
           providerAssetId: "bunny-video-guid"
         });
@@ -4927,6 +4935,7 @@ describe("buildApi", () => {
     expect(playbackUpdates).toEqual([
       {
         mediaAssetId: "00000000-0000-4000-8000-000000000070",
+        providerObservationCutoff,
         providerState: "ready",
         providerPlayable: true,
         playbackUrl: "https://vz.example.test/video/playlist.m3u8",
@@ -4934,6 +4943,7 @@ describe("buildApi", () => {
         durationMs: 90000
       }
     ]);
+    expect(observationOrder).toEqual(["database-cutoff", "provider-read"]);
 
     await app.close();
   });
@@ -8362,7 +8372,9 @@ describe("buildApi", () => {
       provider: "solana_rpc",
       eventType: "payment.settlement",
       state: "processed",
-      latestReplayState: "queued",
+      latestReplayRequestId: "00000000-0000-4000-8000-0000000000a1",
+      latestReplayState: "dead_letter",
+      latestReplayFailureCode: "provider_event_replay_settlement_not_found",
       latestReplayProcessedAt: null
     });
     expect(JSON.stringify(providerEvents.json())).not.toMatch(/raw|payload|secret|streamKey/i);
@@ -8955,6 +8967,7 @@ describe("buildApi", () => {
       },
       async findIntentByReference(input) {
         expect(input.referenceAddresses).toContain(storedPaymentIntent.referenceAddress);
+        expect(input.submissionSignature).toBe(validSolanaSignature);
 
         return {
           supabaseUserId: "00000000-0000-4000-8000-000000000001",
@@ -9878,12 +9891,19 @@ describe("buildApi", () => {
 
   it("syncs Livepeer status into the backend live room projection", async () => {
     const syncedStatuses: LiveProviderRoomStatus[] = [];
+    const providerObservationCutoffs: Date[] = [];
+    const providerObservationCutoff = new Date("2026-08-17T08:05:00.000Z");
+    const observationOrder: string[] = [];
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       sessionRepository: appReadySessionRepository,
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
       liveRepository: fakeLiveRepository({
+        async onCaptureProviderObservationCutoff() {
+          observationOrder.push("database-cutoff");
+          return providerObservationCutoff;
+        },
         async onFindOwnedRoom() {
           return liveRoomFixture({
             id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa13",
@@ -9892,6 +9912,7 @@ describe("buildApi", () => {
           });
         },
         async onUpdateRoomStatus(input) {
+          providerObservationCutoffs.push(input.providerObservationCutoff);
           syncedStatuses.push(input.status);
         }
       }),
@@ -9902,6 +9923,7 @@ describe("buildApi", () => {
           throw new Error("not implemented");
         },
         async getRoomStatus(input) {
+          observationOrder.push("provider-read");
           return {
             providerStreamId: input.providerStreamId,
             providerPlaybackId: input.providerPlaybackId,
@@ -9927,6 +9949,8 @@ describe("buildApi", () => {
     });
 
     expect(response.statusCode).toBe(202);
+    expect(providerObservationCutoffs).toEqual([providerObservationCutoff]);
+    expect(observationOrder).toEqual(["database-cutoff", "provider-read"]);
     expect(syncedStatuses).toEqual([
       {
         providerStreamId: "livepeer-stream-13",
@@ -11129,6 +11153,7 @@ function liveRoomFixture(
 
 function fakeLiveRepository(
   overrides: Partial<{
+    onCaptureProviderObservationCutoff: LiveRepository["captureProviderObservationCutoff"];
     onCreateRoom: LiveRepository["createRoom"];
     onReserveRoom: LiveRepository["reserveRoom"];
     onClaimProviderCreation: LiveRepository["claimProviderCreation"];
@@ -11150,6 +11175,9 @@ function fakeLiveRepository(
   }> = {}
 ): LiveRepository {
   return {
+    async captureProviderObservationCutoff() {
+      return overrides.onCaptureProviderObservationCutoff?.() ?? new Date("2026-08-17T08:00:00.000Z");
+    },
     async createRoom(input) {
       return overrides.onCreateRoom?.(input) ?? liveRoomFixture();
     },
@@ -12103,7 +12131,9 @@ const fakeAdminRepository: AdminRepository = {
           state: "processed",
           receivedAt: "2026-06-04T20:01:00.000Z",
           processedAt: "2026-06-04T20:01:01.000Z",
-          latestReplayState: "queued",
+          latestReplayRequestId: "00000000-0000-4000-8000-0000000000a1",
+          latestReplayState: "dead_letter",
+          latestReplayFailureCode: "provider_event_replay_settlement_not_found",
           latestReplayRequestedAt: "2026-06-04T20:02:00.000Z",
           latestReplayProcessedAt: null
         }

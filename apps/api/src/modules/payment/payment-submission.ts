@@ -8,6 +8,13 @@ import { recordPaymentDurableConfirmation } from "./payment-durable-confirmation
 import { recordReferralCommission, recordSupportSettlementLedger } from "./payment-settlement-ledger.js";
 import { insertSettlementAttempt, recordWalletTransaction } from "./payment-settlement-records.js";
 
+export class PaymentSubmissionWriteConflictError extends Error {
+  constructor() {
+    super("PAYMENT_SUBMISSION_WRITE_CONFLICT");
+    this.name = "PaymentSubmissionWriteConflictError";
+  }
+}
+
 export async function recordPaymentSubmission(
   sql: postgres.Sql,
   input: RecordPaymentSubmissionInput
@@ -54,6 +61,13 @@ export async function recordPaymentSubmission(
               and pi.id = ${input.paymentIntentId}
               and pi.state in ('pending', 'transaction_requested', 'submitted')
               and (
+                ${input.writeGuard?.state ?? null}::text is null
+                or (
+                  pi.state = ${input.writeGuard?.state ?? null}
+                  and pi.submitted_signature is not distinct from ${input.writeGuard?.submittedSignature ?? null}
+                )
+              )
+              and (
                 not pi.withdrawal_waiver_required
                 or pi.withdrawal_waiver_accepted_at is not null
               )
@@ -70,6 +84,10 @@ export async function recordPaymentSubmission(
           `;
 
     const updatedIntent = rows[0];
+
+    if (input.writeGuard && !updatedIntent) {
+      throw new PaymentSubmissionWriteConflictError();
+    }
 
     if (updatedIntent) {
       await recordWalletTransaction(transaction, {

@@ -79,6 +79,10 @@ export interface RecordPaymentSubmissionInput {
   paymentIntentId: string;
   signature: string;
   settlement: PaymentSettlementResult;
+  writeGuard?: {
+    state: "pending" | "transaction_requested" | "submitted";
+    submittedSignature: string | null;
+  };
 }
 
 export interface StoredPaymentIntent extends PaymentIntent {
@@ -157,13 +161,18 @@ export interface RecordSolanaProviderEventInput {
 }
 
 export interface UpdateSolanaProviderEventInput {
+  provider?: "helius" | "solana_indexer";
   providerEventId: string;
   normalizedState: "processed" | "ignored" | "failed";
 }
 
 export interface PaymentEvidenceRepository {
   recordSolanaProviderEvent(input: RecordSolanaProviderEventInput): Promise<boolean>;
-  findIntentByReference(input: { referenceAddresses: string[] }): Promise<ProviderPaymentIntentMatch | null>;
+  findIntentByReference(input: {
+    referenceAddresses: string[];
+    includeConfirmed?: boolean;
+    submissionSignature?: string;
+  }): Promise<ProviderPaymentIntentMatch | null>;
   updateSolanaProviderEvent(input: UpdateSolanaProviderEventInput): Promise<void>;
   close?(): Promise<void>;
 }

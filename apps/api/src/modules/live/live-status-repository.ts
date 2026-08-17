@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
+import {
+  captureProviderObservationCutoff,
+  providerEventReplayDecision
+} from "../../shared/provider-event-order.js";
 import { ensureLiveReplayContent } from "./live-replay-repository.js";
 import type { LiveRepository } from "./types.js";
 
@@ -8,8 +12,11 @@ type JsonObject = { [key: string]: JsonValue };
 
 export function createLiveStatusRepositoryMethods(
   sql: postgres.Sql
-): Pick<LiveRepository, "recordLiveProviderWebhook" | "updateRoomFromWebhook" | "updateRoomStatus"> {
+): Pick<LiveRepository, "captureProviderObservationCutoff" | "recordLiveProviderWebhook" | "updateRoomFromWebhook" | "updateRoomStatus"> {
   return {
+    async captureProviderObservationCutoff() {
+      return captureProviderObservationCutoff(sql);
+    },
     async updateRoomStatus(input) {
       await sql.begin(async (transaction) => {
         const updatedRooms = await transaction<{ id: string }[]>`
@@ -22,9 +29,20 @@ export function createLiveStatusRepositoryMethods(
             playback_url = case when ${input.status.state} = 'live' then ${input.status.playbackUrl} else null end,
             starts_at = case when ${input.status.state} = 'live' then coalesce(starts_at, now()) else starts_at end,
             ended_at = case when ${input.status.state} in ('ended', 'replay_ready') then coalesce(ended_at, now()) else ended_at end,
+            provider_checked_at = ${input.providerObservationCutoff},
             updated_at = now()
           where id = ${input.roomId}
             and state <> 'suspended'
+            and (provider_checked_at is null or provider_checked_at <= ${input.providerObservationCutoff})
+            and not exists (
+              select 1
+              from provider_events newer
+              where newer.provider = 'livepeer'
+                and newer.received_at > ${input.providerObservationCutoff}
+                and newer.normalized_state is distinct from 'ignored_stale'
+                and newer.replay_payload ->> 'kind' = 'livepeer_stream'
+                and newer.replay_payload ->> 'providerStreamId' = live_rooms.provider_stream_id
+            )
             and (
               state in ('scheduled', 'waiting')
               or (state = 'live' and ${input.status.state} in ('live', 'ended', 'replay_ready'))
@@ -113,8 +131,8 @@ export function createLiveStatusRepositoryMethods(
     },
     async updateRoomFromWebhook(input) {
       const rows = await sql.begin(async (transaction) => {
-        const currentRows = await transaction<{ id: string; state: string }[]>`
-          select id, state
+        const currentRows = await transaction<{ id: string; provider_checked_at: Date | null; state: string }[]>`
+          select id, provider_checked_at, state
           from live_rooms
           where provider_stream_id = ${input.providerStreamId}
           limit 1
@@ -126,7 +144,24 @@ export function createLiveStatusRepositoryMethods(
           return [] as { id: string }[];
         }
 
-        if (!isAllowedWebhookTransition(current.state, input.state)) {
+        const replayDecision = await providerEventReplayDecision(
+          transaction,
+          {
+            provider: "livepeer",
+            providerEventId: input.providerEventId,
+            subject: { kind: "livepeer_stream", providerStreamId: input.providerStreamId },
+            subjectObservedAt: current.provider_checked_at
+          }
+        );
+
+        if (replayDecision === "already_applied") {
+          return [{ id: current.id }];
+        }
+
+        if (
+          replayDecision === "stale" ||
+          !isAllowedWebhookTransition(current.state, input.state)
+        ) {
           await transaction`
             update provider_events
             set normalized_state = 'ignored_stale', processed_at = now()

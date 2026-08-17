@@ -31,7 +31,11 @@ FROM dependencies AS build
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1 \
     NODE_OPTIONS=--max-old-space-size=2560
+# pnpm 10 injects the API package before source is copied into this stage.
+# Refresh that exact snapshot for worker type resolution and deployment.
+RUN cp -R apps/api/src apps/worker/node_modules/@veel/api/src
 RUN pnpm -r --workspace-concurrency=1 --if-present build
+RUN cp -R apps/api/dist apps/worker/node_modules/@veel/api/dist
 RUN pnpm --filter @veel/api deploy --prod /release/api
 RUN pnpm --filter @veel/worker deploy --prod /release/worker
 RUN node scripts/finalize-deploy-package.mjs /release/api

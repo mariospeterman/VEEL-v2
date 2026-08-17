@@ -42,8 +42,24 @@ interface BunnyVideoPlayDataResponse {
   };
 }
 
+type BunnyStreamProviderConfig = Partial<Pick<
+  ServerEnv,
+  | "BUNNY_STREAM_API_KEY"
+  | "BUNNY_STREAM_EMBED_TOKEN_KEY"
+  | "BUNNY_STREAM_LIBRARY_ID"
+  | "BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS"
+>>;
+
 export function createBunnyStreamUploadAdapter(
   env: ServerEnv,
+  fetchImpl?: typeof fetch
+): MediaUploadProviderAdapter;
+export function createBunnyStreamUploadAdapter(
+  env: BunnyStreamProviderConfig,
+  fetchImpl?: typeof fetch
+): MediaUploadProviderAdapter;
+export function createBunnyStreamUploadAdapter(
+  env: BunnyStreamProviderConfig,
   fetchImpl: typeof fetch = fetch
 ): MediaUploadProviderAdapter {
   return {
@@ -111,7 +127,7 @@ export function createBunnyStreamUploadAdapter(
 
       const expires =
         Math.floor((input.now?.getTime() ?? Date.now()) / 1000) +
-        env.BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS;
+        (env.BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS ?? 900);
       const token = createHash("sha256")
         .update(`${tokenKey}${input.providerAssetId}${expires}`)
         .digest("hex");

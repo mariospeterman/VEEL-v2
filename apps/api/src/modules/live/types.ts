@@ -114,6 +114,7 @@ export interface CreateLivePassPurchaseRequestInput {
 
 export interface UpdateLiveRoomStatusInput {
   roomId: string;
+  providerObservationCutoff: Date;
   status: LiveProviderRoomStatus;
 }
 
@@ -132,6 +133,7 @@ export interface UpdateLiveRoomFromWebhookInput {
   providerState: string;
   state: "waiting" | "live" | "suspended" | "ended" | "replay_ready";
   playbackUrl: string | null;
+  preventStateRegression?: boolean;
 }
 
 export interface CreateLiveChatMessageInput {
@@ -165,6 +167,7 @@ export interface StoredLiveRoom extends LiveRoom {
 }
 
 export interface LiveRepository {
+  captureProviderObservationCutoff(): Promise<Date>;
   createRoom(input: CreateLiveRoomInput): Promise<StoredLiveRoom>;
   reserveRoom(input: ReserveLiveRoomInput): Promise<StoredLiveRoom>;
   claimProviderCreation(input: ClaimLiveProviderRoomInput): Promise<boolean>;

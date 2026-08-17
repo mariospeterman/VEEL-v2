@@ -10,6 +10,14 @@ import { createContentUpdateRepositoryMethods } from "./content-update-repositor
 import { createContentWorkflowRepositoryMethods } from "./content-workflow-repository.js";
 import type { ContentRepository } from "./types.js";
 
+type PostgresContentRepository = ContentRepository & Required<Pick<
+  ContentRepository,
+  | "captureProviderObservationCutoff"
+  | "findMediaAssetByProviderAsset"
+  | "updateMediaAssetFromWebhook"
+  | "updateMediaAssetPlayback"
+>>;
+
 export {
   ContentDraftIdempotencyConflictError,
   ContentDraftQuotaExceededError,
@@ -19,7 +27,9 @@ export {
   ContentRepositoryConfigurationError
 } from "./content-errors.js";
 
-export function createPostgresContentRepository(database?: string | PostgresSql): ContentRepository {
+export function createPostgresContentRepository(
+  database?: string | PostgresSql
+): PostgresContentRepository {
   if (!database) {
     return createUnavailableContentRepository();
   }
@@ -43,8 +53,11 @@ export function createPostgresContentRepository(database?: string | PostgresSql)
   };
 }
 
-function createUnavailableContentRepository(): ContentRepository {
+function createUnavailableContentRepository(): PostgresContentRepository {
   return {
+    async captureProviderObservationCutoff() {
+      throw new ContentRepositoryConfigurationError();
+    },
     async createDraft() {
       throw new ContentRepositoryConfigurationError();
     },
@@ -70,6 +83,9 @@ function createUnavailableContentRepository(): ContentRepository {
       throw new ContentRepositoryConfigurationError();
     },
     async findOwnedContentForUpload() {
+      throw new ContentRepositoryConfigurationError();
+    },
+    async findMediaAssetByProviderAsset() {
       throw new ContentRepositoryConfigurationError();
     },
     async findOwnedContentForUpdate() {

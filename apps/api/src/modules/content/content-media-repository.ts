@@ -1,25 +1,34 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import { withPostgresTransaction } from "../../shared/postgres.js";
+import {
+  captureProviderObservationCutoff,
+  providerEventReplayDecision
+} from "../../shared/provider-event-order.js";
 import type { ContentItem, ContentRepository } from "./types.js";
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 type JsonObject = { [key: string]: JsonValue };
 
-type ContentMediaRepositoryMethods = Pick<
+type ContentMediaRepositoryMethods = Required<Pick<
   ContentRepository,
+  | "captureProviderObservationCutoff"
   | "createMediaAsset"
+  | "findMediaAssetByProviderAsset"
   | "findOwnedContentForUpload"
   | "findOwnedMediaAssetForSync"
   | "recordMediaProviderWebhook"
   | "updateMediaAssetFromWebhook"
   | "updateMediaAssetPlayback"
->;
+>>;
 
 export function createContentMediaRepositoryMethods(
   sql: postgres.Sql
 ): ContentMediaRepositoryMethods {
   return {
+    async captureProviderObservationCutoff() {
+      return captureProviderObservationCutoff(sql);
+    },
     async createMediaAsset(input) {
       const rows = await withPostgresTransaction(sql, async (transaction) => {
         const mediaRows = await transaction<{ id: string }[]>`
@@ -89,6 +98,17 @@ export function createContentMediaRepositoryMethods(
 
       return rows[0] ? { id: rows[0].id } : undefined;
     },
+    async findMediaAssetByProviderAsset(input) {
+      const rows = await sql<{ id: string }[]>`
+        select id
+        from media_assets
+        where provider = ${input.provider}
+          and provider_asset_id = ${input.providerAssetId}
+        limit 1
+      `;
+
+      return rows[0] ?? null;
+    },
     async findOwnedContentForUpload(input) {
       const rows = await sql<{
         id: string;
@@ -150,7 +170,7 @@ export function createContentMediaRepositoryMethods(
     },
     async updateMediaAssetPlayback(input) {
       await withPostgresTransaction(sql, async (transaction) => {
-        await transaction`
+        const updatedAssets = await transaction<{ id: string }[]>`
           update media_assets
           set
             provider_state = ${input.providerState},
@@ -159,9 +179,23 @@ export function createContentMediaRepositoryMethods(
             poster_url = coalesce(${input.posterUrl ?? null}, poster_url),
             duration_ms = coalesce(${input.durationMs ?? null}, duration_ms),
             ready_at = case when ${input.providerPlayable} then coalesce(ready_at, now()) else ready_at end,
-            provider_checked_at = now()
+            provider_checked_at = ${input.providerObservationCutoff}
           where id = ${input.mediaAssetId}
+            and (provider_checked_at is null or provider_checked_at <= ${input.providerObservationCutoff})
+            and not exists (
+              select 1
+              from provider_events newer
+              where newer.provider = 'bunny'
+                and newer.received_at > ${input.providerObservationCutoff}
+                and newer.normalized_state is distinct from 'ignored_stale'
+                and newer.replay_payload ->> 'kind' = 'media_asset'
+                and newer.replay_payload ->> 'providerAssetId' = media_assets.provider_asset_id
+            )
+          returning id
         `;
+
+        if (updatedAssets.length === 0) return;
+
         await transaction`
           update content_items ci
           set
@@ -221,15 +255,51 @@ export function createContentMediaRepositoryMethods(
     },
     async updateMediaAssetFromWebhook(input) {
       const rows = await withPostgresTransaction(sql, async (transaction) => {
+        const currentRows = await transaction<{ id: string; provider_checked_at: Date | null }[]>`
+          select id, provider_checked_at
+          from media_assets
+          where provider = ${input.provider}
+            and provider_asset_id = ${input.providerAssetId}
+          limit 1
+          for update
+        `;
+        const current = currentRows[0];
+
+        if (!current) {
+          return [] as { id: string }[];
+        }
+
+        const replayDecision = await providerEventReplayDecision(
+          transaction,
+          {
+            provider: input.provider,
+            providerEventId: input.providerEventId,
+            subject: { kind: "media_asset", providerAssetId: input.providerAssetId },
+            subjectObservedAt: current.provider_checked_at
+          }
+        );
+
+        if (replayDecision === "already_applied") {
+          return [{ id: current.id }];
+        }
+
+        if (replayDecision === "stale") {
+          await transaction`
+            update provider_events
+            set normalized_state = 'ignored_stale', processed_at = now()
+            where provider = ${input.provider}
+              and provider_event_id = ${input.providerEventId}
+          `;
+          return [{ id: current.id }];
+        }
+
         const updated = await transaction<{ id: string }[]>`
           update media_assets
           set
             provider_state = ${input.providerState},
             provider_playable = ${input.providerPlayable},
-            ready_at = case when ${input.providerPlayable} then coalesce(ready_at, now()) else ready_at end,
-            provider_checked_at = now()
-          where provider = ${input.provider}
-            and provider_asset_id = ${input.providerAssetId}
+            ready_at = case when ${input.providerPlayable} then coalesce(ready_at, now()) else ready_at end
+          where id = ${current.id}
           returning id
         `;
 

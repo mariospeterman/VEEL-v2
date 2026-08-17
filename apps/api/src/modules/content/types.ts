@@ -25,6 +25,7 @@ export interface ListHomeFeedInput {
 }
 
 export interface ContentRepository {
+  captureProviderObservationCutoff?(): Promise<Date>;
   createDraft(input: CreateContentDraftInput): Promise<ContentItem>;
   createMediaAsset(input: CreateMediaAssetInput): Promise<{ id: string } | void>;
   countContentDraftsCreatedSince?(input: CountContentQuotaInput): Promise<number>;
@@ -32,6 +33,7 @@ export interface ContentRepository {
   getContentCreationAbusePolicy?(): Promise<ContentCreationAbusePolicy | null>;
   findContentDetail(input: FindContentDetailInput): Promise<ContentItem | null>;
   findContentUnlockOffer(input: FindContentUnlockOfferInput): Promise<ContentUnlockOffer | null>;
+  findMediaAssetByProviderAsset?(input: FindMediaAssetByProviderAssetInput): Promise<{ id: string } | null>;
   findOwnedMediaAssetForSync?(input: FindOwnedMediaAssetForSyncInput): Promise<OwnedMediaAssetForSync | null>;
   findOwnedContentForUpload(input: FindOwnedContentForUploadInput): Promise<OwnedContentForUpload | null>;
   findOwnedContentForUpdate?(input: FindOwnedContentForUploadInput): Promise<OwnedContentForUpload | null>;
@@ -130,6 +132,11 @@ export interface FindOwnedMediaAssetForSyncInput {
   mediaAssetId: string;
 }
 
+export interface FindMediaAssetByProviderAssetInput {
+  provider: "bunny";
+  providerAssetId: string;
+}
+
 export interface OwnedMediaAssetForSync {
   id: string;
   contentId: string;
@@ -161,6 +168,7 @@ export interface CreateMediaAssetInput {
 
 export interface UpdateMediaAssetPlaybackInput {
   mediaAssetId: string;
+  providerObservationCutoff: Date;
   providerState: string;
   providerPlayable: boolean;
   playbackUrl?: string | null;
@@ -183,6 +191,7 @@ export interface UpdateMediaAssetFromWebhookInput {
   providerAssetId: string;
   providerState: string;
   providerPlayable: boolean;
+  preventStateRegression?: boolean;
 }
 
 export interface MediaUploadProviderSession {
