@@ -106,7 +106,10 @@ test("installed Chromium serves the privacy-safe offline document", async ({ bro
   }
 
   await page.getByRole("link", { name: "Try again" }).click();
-  await expect(page).toHaveURL(new RegExp(`${retryPath.replace(/[?&]/g, "\\$&")}$`));
+  await expect.poll(() => {
+    const currentUrl = new URL(page.url());
+    return currentUrl.pathname + currentUrl.search;
+  }).toBe(retryPath);
 });
 
 function pngDimensions(bytes: Buffer) {
