@@ -2,12 +2,14 @@
 
 import { PrivyProvider, usePrivy, type PrivyClientConfig } from "@privy-io/react-auth";
 import { createSolanaRpc, createSolanaRpcSubscriptions } from "@solana/kit";
+import { embeddedWalletProviderConfig } from "@/providers/onboarding-provider-config";
 import { readPublicWebEnv } from "@/public-env";
 import { useCallback, useMemo } from "react";
 import { useProviderSessionLogoutRegistration } from "./provider-session-logout";
 
 export function EmbeddedWalletProviders({ children }: Readonly<{ children: React.ReactNode }>) {
   const env = readPublicWebEnv();
+  const provider = embeddedWalletProviderConfig(env);
   const solanaChain = env.NEXT_PUBLIC_SOLANA_CHAIN;
   const solanaRpcUrl = env.NEXT_PUBLIC_SOLANA_RPC_URL ?? "https://api.devnet.solana.com";
   const solanaSubscriptionsUrl = env.NEXT_PUBLIC_SOLANA_RPC_SUBSCRIPTIONS_URL ?? toWebSocketRpcUrl(solanaRpcUrl);
@@ -40,7 +42,7 @@ export function EmbeddedWalletProviders({ children }: Readonly<{ children: React
     [solanaChain, solanaRpcUrl, solanaSubscriptionsUrl]
   );
 
-  if (env.NEXT_PUBLIC_PRIVY_APP_ID) {
+  if (provider.provider.configured && env.NEXT_PUBLIC_PRIVY_APP_ID) {
     return (
       <PrivyProvider appId={env.NEXT_PUBLIC_PRIVY_APP_ID} config={privyConfig}>
         <PrivySessionLogoutRegistration />

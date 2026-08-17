@@ -6,7 +6,7 @@ import {
   useSignMessage as usePrivySolanaSignMessage,
   useWallets as usePrivySolanaWallets
 } from "@privy-io/react-auth/solana";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiMutationError } from "@/api-mutations";
 import { safeMutationMessage } from "@/api-errors";
 import { ProviderLogo } from "@/brand/provider-logo";
@@ -15,10 +15,12 @@ import { createBackendWalletSession } from "./backend-wallet-auth";
 export function EmbeddedWalletLoginButton({
   label,
   onLinked,
+  autoStart = false,
   secondary = false
 }: {
   label: string;
   onLinked?: ((address: string) => void) | undefined;
+  autoStart?: boolean;
   secondary?: boolean;
 }) {
   const { authenticated, ready } = usePrivy();
@@ -37,6 +39,7 @@ export function EmbeddedWalletLoginButton({
   const [state, setState] = useState<"idle" | "working" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [walletProvisioned, setWalletProvisioned] = useState(false);
+  const autoStarted = useRef(false);
 
   useEffect(() => {
     if (!flowRequested || !authenticated || !ready || !walletsReady || flowRunning.current) return;
@@ -83,7 +86,7 @@ export function EmbeddedWalletLoginButton({
     })();
   }, [authenticated, createWallet, flowRequested, onLinked, ready, signMessage, walletProvisioned, wallets, walletsReady]);
 
-  function start() {
+  const start = useCallback(() => {
     setState("working");
     setMessage(null);
     setWalletProvisioned(false);
@@ -98,7 +101,13 @@ export function EmbeddedWalletLoginButton({
     if (!authenticated) {
       login();
     }
-  }
+  }, [authenticated, login, ready, walletsReady]);
+
+  useEffect(() => {
+    if (!autoStart || autoStarted.current || !ready || !walletsReady) return;
+    autoStarted.current = true;
+    start();
+  }, [autoStart, ready, start, walletsReady]);
 
   return (
     <EmbeddedButtonFrame
