@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: auth, wallets, onboarding, onramp, conversion
-Last updated: 2026-08-14
+Last updated: 2026-08-17
 Source of truth: yes
 
 Owns:
@@ -307,6 +307,7 @@ Privy is the sole launch runtime, but remains disabled until staging proves the 
 
 Current implementation state:
 
+- Session access, age status/session creation, wallet list/link/primary/onramp mutations, profile access, and Enable Earnings resolve the canonical `users.id` from the opaque application session. Migration `0107` permits the transitional `users.supabase_user_id` value to be null and prevents it from containing a provider subject or a different user identifier; provider recovery identity remains exclusively in `user_provider_identities`.
 - Wallet table and backend wallet-readiness gate exist.
 - `GET /v1/wallets` returns normalized wallet resources for the authenticated user.
 - `PATCH /v1/wallets/{walletId}/primary` safely switches the user's primary wallet and writes an audit event.

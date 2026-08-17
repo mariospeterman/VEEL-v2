@@ -27,12 +27,14 @@ import {
   validateOnrampSessionRequest,
   verifySolanaMessageSignature
 } from "./wallet-route-utils.js";
-import type {
-  CreateOnrampSessionRequest,
-  CreateWalletLinkChallengeRequest,
-  LinkWalletRequest,
-  WalletOnrampProviderAdapter,
-  WalletRepository
+import {
+  type CreateOnrampSessionRequest,
+  type CreateWalletLinkChallengeRequest,
+  findWalletForUser,
+  type LinkWalletRequest,
+  listWalletsForUser,
+  type WalletOnrampProviderAdapter,
+  type WalletRepository
 } from "./types.js";
 import { mutationRateLimit } from "../../shared/rate-limits.js";
 
@@ -57,9 +59,7 @@ export async function registerWalletRoutes(
       return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
     }
     try {
-      const wallets = await options.walletRepository.listWalletsBySupabaseUserId(
-        verifiedSession.supabaseUserId
-      );
+      const wallets = await listWalletsForUser(options.walletRepository, verifiedSession.userId);
 
       return reply.code(200).send({
         items: wallets
@@ -111,7 +111,7 @@ export async function registerWalletRoutes(
 
     try {
       const challenge = await options.walletRepository.createLinkChallenge({
-        supabaseUserId: verifiedSession.supabaseUserId,
+        userId: verifiedSession.userId,
         chain: challengeBody.chain,
         provider: challengeBody.provider,
         address: challengeBody.address,
@@ -154,7 +154,7 @@ export async function registerWalletRoutes(
     try {
       const challenge = await options.walletRepository.findLinkChallenge({
         challengeId: linkBody.proof.challengeId,
-        supabaseUserId: verifiedSession.supabaseUserId
+        userId: verifiedSession.userId
       });
 
       if (!challenge || challenge.consumedAt || challenge.expiresAt <= new Date()) {
@@ -187,7 +187,7 @@ export async function registerWalletRoutes(
       if (!sessionToken) return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
       const result = await options.walletRepository.consumeVerifiedExternalWalletLink({
         challengeId: challenge.id,
-        supabaseUserId: verifiedSession.supabaseUserId,
+        userId: verifiedSession.userId,
         sessionToken
       });
       reply.header("set-cookie", walletSessionCookie(result.session.accessToken, result.session.expiresAt, app.config.WALLET_AUTH_COOKIE_DOMAIN));
@@ -242,7 +242,7 @@ export async function registerWalletRoutes(
       if (!sessionToken) return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
       const result = await options.walletRepository.setPrimaryWallet({
         walletId,
-        supabaseUserId: verifiedSession.supabaseUserId,
+        userId: verifiedSession.userId,
         sessionToken
       });
       reply.header("set-cookie", walletSessionCookie(result.session.accessToken, result.session.expiresAt, app.config.WALLET_AUTH_COOKIE_DOMAIN));
@@ -296,7 +296,7 @@ export async function registerWalletRoutes(
 
     try {
       const existing = await options.walletRepository.findOnrampSessionByIdempotencyKey({
-        supabaseUserId: verifiedSession.supabaseUserId,
+        userId: verifiedSession.userId,
         idempotencyKey
       });
 
@@ -304,8 +304,8 @@ export async function registerWalletRoutes(
         return reply.code(201).send(existing);
       }
 
-      const wallet = await options.walletRepository.findWalletForSupabaseUser({
-        supabaseUserId: verifiedSession.supabaseUserId,
+      const wallet = await findWalletForUser(options.walletRepository, {
+        userId: verifiedSession.userId,
         walletId: onrampBody.walletId
       });
 
@@ -317,7 +317,7 @@ export async function registerWalletRoutes(
       }
 
       const providerSession = await options.onrampProvider.createSession({
-        supabaseUserId: verifiedSession.supabaseUserId,
+        userId: verifiedSession.userId,
         wallet,
         idempotencyKey,
         returnUrl: onrampBody.returnUrl ?? null,
@@ -325,7 +325,7 @@ export async function registerWalletRoutes(
       });
 
       const session = await options.walletRepository.recordOnrampSession({
-        supabaseUserId: verifiedSession.supabaseUserId,
+        userId: verifiedSession.userId,
         walletId: wallet.id,
         idempotencyKey,
         provider: providerSession.provider,

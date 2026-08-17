@@ -10,9 +10,29 @@ export function createWalletCoreRepositoryMethods(
   sql: postgres.Sql
 ): Pick<
   WalletRepository,
-  "listWalletsBySupabaseUserId" | "hasWalletBySupabaseUserId" | "findWalletForSupabaseUser" | "setPrimaryWallet"
+  "listWalletsByUserId" | "hasWalletByUserId" | "listWalletsBySupabaseUserId" |
+  "hasWalletBySupabaseUserId" | "findWalletForUser" | "setPrimaryWallet"
 > {
   return {
+    async listWalletsByUserId(userId) {
+      const rows = await sql<WalletRow[]>`
+        select id, chain, address, provider, is_primary
+        from wallets
+        where user_id = ${userId}
+        order by is_primary desc, created_at asc
+      `;
+
+      return rows.map(toWalletResource);
+    },
+    async hasWalletByUserId(userId) {
+      const rows = await sql<{ exists: boolean }[]>`
+        select exists (
+          select 1 from wallets where user_id = ${userId}
+        ) as exists
+      `;
+
+      return rows[0]?.exists ?? false;
+    },
     async listWalletsBySupabaseUserId(supabaseUserId) {
       const rows = await sql<WalletRow[]>`
         select
@@ -41,7 +61,7 @@ export function createWalletCoreRepositoryMethods(
 
       return rows[0]?.exists ?? false;
     },
-    async findWalletForSupabaseUser(input) {
+    async findWalletForUser(input) {
       const rows = await sql<WalletRow[]>`
         select
           w.id,
@@ -49,9 +69,8 @@ export function createWalletCoreRepositoryMethods(
           w.address,
           w.provider,
           w.is_primary
-        from users u
-        join wallets w on w.user_id = u.id
-        where u.supabase_user_id = ${input.supabaseUserId}
+        from wallets w
+        where w.user_id = ${input.userId}
           and w.id = ${input.walletId}
         limit 1
       `;
@@ -70,9 +89,8 @@ export function createWalletCoreRepositoryMethods(
             w.address,
             w.provider,
             w.is_primary
-          from users u
-          join wallets w on w.user_id = u.id
-          where u.supabase_user_id = ${input.supabaseUserId}
+          from wallets w
+          where w.user_id = ${input.userId}
             and w.id = ${input.walletId}
           limit 1
         `;

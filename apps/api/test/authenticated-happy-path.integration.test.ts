@@ -78,7 +78,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     const shortRunId = runId.replaceAll("-", "").slice(0, 12);
     const buyerHandle = `buyer_${shortRunId}`;
     const creatorHandle = `creator_${shortRunId}`;
-    const seededCreatorUserId = randomUUID();
+    const seededCreatorUserId = creatorSupabaseUserId;
     const seededContentId = randomUUID();
     const seededMediaAssetId = randomUUID();
     const seededAccessRuleId = randomUUID();
@@ -157,7 +157,14 @@ describeIntegration("authenticated API happy path against Postgres", () => {
 
     const liveRepository = createPostgresLiveRepository(sql);
     const app = await buildApi({
-      authVerifier: integrationAuthVerifier,
+      authVerifier: {
+        async verifyToken(token) {
+          return (
+            (await integrationAuthVerifier.verifyToken(token)) ??
+            walletAuthRepository.verifySessionToken(token)
+          );
+        }
+      },
       walletAuthRepository: {
         ...walletAuthRepository,
         async rotateSessionToken(input) {
@@ -325,6 +332,11 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         isPrimary: true
       });
       const linkedWallet = linkResponse.json<{ id: string }>();
+      const linkedSessionCookieHeader = linkResponse.headers["set-cookie"];
+      const linkedSessionCookie = Array.isArray(linkedSessionCookieHeader)
+        ? linkedSessionCookieHeader[0]
+        : linkedSessionCookieHeader;
+      expect(linkedSessionCookie).toBeTruthy();
 
       const ageSessionResponse = await app.inject({
         method: "POST",
@@ -552,6 +564,87 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         receipt_count: "1",
         audit_count: "1"
       });
+
+      await expect(
+        sql`
+          update users
+          set supabase_user_id = ${randomUUID()}
+          where id = ${buyerSupabaseUserId}
+        `
+      ).rejects.toThrow(/users_legacy_supabase_id_canonical_check/);
+
+      // The opaque application session resolves users.id. Entry/access, age,
+      // wallet, profile, and earnings must not depend on the transitional
+      // compatibility column containing a value.
+      await sql`
+        update users
+        set supabase_user_id = null
+        where id = ${buyerSupabaseUserId}
+      `;
+
+      const canonicalIdentityResponses = await Promise.all([
+        app.inject({
+          method: "GET",
+          url: "/v1/session",
+          headers: authenticatedHeaders(`canonical-session-${runId}`)
+        }),
+        app.inject({
+          method: "GET",
+          url: "/v1/age/status",
+          headers: authenticatedHeaders(`canonical-age-${runId}`)
+        }),
+        app.inject({
+          method: "GET",
+          url: "/v1/wallets",
+          headers: authenticatedHeaders(`canonical-wallets-${runId}`)
+        }),
+        app.inject({
+          method: "GET",
+          url: "/v1/profiles/me/creator-onboarding",
+          headers: authenticatedHeaders(`canonical-onboarding-${runId}`)
+        }),
+        app.inject({
+          method: "GET",
+          url: "/v1/profiles/me/creator-dashboard",
+          headers: authenticatedHeaders(`canonical-dashboard-${runId}`)
+        })
+      ]);
+      expect(canonicalIdentityResponses.map((response) => response.statusCode)).toEqual([
+        200, 200, 200, 200, 200
+      ]);
+      expect(canonicalIdentityResponses[0]?.json()).toMatchObject({
+        authenticated: true,
+        user: { id: buyerSupabaseUserId, handle: buyerHandle },
+        appAccessState: { allowed: true }
+      });
+      expect(canonicalIdentityResponses[1]?.json()).toMatchObject({ state: "verified" });
+      expect(canonicalIdentityResponses[2]?.json()).toMatchObject({
+        items: [{ id: linkedWallet.id }]
+      });
+      expect(canonicalIdentityResponses[3]?.json()).toMatchObject({
+        canStartEarning: true,
+        configuration: { recipientWalletId: linkedWallet.id }
+      });
+
+      const canonicalPrimaryWalletResponse = await app.inject({
+        method: "PATCH",
+        url: `/v1/wallets/${linkedWallet.id}/primary`,
+        headers: {
+          cookie: linkedSessionCookie?.split(";", 1)[0] ?? "",
+          "idempotency-key": `canonical-primary-wallet-${runId}`
+        }
+      });
+      expect(canonicalPrimaryWalletResponse.statusCode, canonicalPrimaryWalletResponse.body).toBe(200);
+      expect(canonicalPrimaryWalletResponse.json()).toMatchObject({
+        id: linkedWallet.id,
+        isPrimary: true
+      });
+
+      await sql`
+        update users
+        set supabase_user_id = id
+        where id = ${buyerSupabaseUserId}
+      `;
 
       const commercialPolicyPayload = {
         minimumAmountMinor: 2_000_000,
@@ -4328,7 +4421,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     try {
       await sql`
         insert into users (id, supabase_user_id)
-        values (${userId}, ${providerSubject})
+        values (${userId}, ${userId})
       `;
       await sql`
         insert into user_provider_identities (
@@ -4388,7 +4481,6 @@ describeIntegration("authenticated API happy path against Postgres", () => {
 
     const sql = createPostgresClient(databaseUrl);
     const userId = randomUUID();
-    const supabaseUserId = randomUUID();
     const walletId = randomUUID();
     const sessionId = randomUUID();
     const intentId = randomUUID();
@@ -4399,7 +4491,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     const repository = createPostgresWalletAuthRepository(sql);
 
     try {
-      await sql`insert into users (id, supabase_user_id) values (${userId}, ${supabaseUserId})`;
+      await sql`insert into users (id, supabase_user_id) values (${userId}, ${userId})`;
       await sql`
         insert into wallets (id, user_id, provider, address, chain, is_primary)
         values (${walletId}, ${userId}, 'phantom', ${randomUUID()}, 'solana_devnet', true)
@@ -4867,8 +4959,10 @@ async function seedCanonicalIntegrationUser(
 ): Promise<void> {
   await sql`
     insert into users (id, supabase_user_id)
-    values (${input.userId}, ${input.supabaseUserId})
-    on conflict (supabase_user_id) do update set state = 'active'
+    values (${input.userId}, ${input.userId})
+    on conflict (id) do update set
+      supabase_user_id = excluded.supabase_user_id,
+      state = 'active'
   `;
   await sql`
     insert into user_provider_identities (
@@ -5276,8 +5370,10 @@ async function seedDirectConversation(
 
   await sql`
     insert into users (id, supabase_user_id)
-    values (${input.creatorUserId}, ${input.creatorSupabaseUserId})
-    on conflict (supabase_user_id) do update set state = 'active'
+    values (${input.creatorUserId}, ${input.creatorUserId})
+    on conflict (id) do update set
+      supabase_user_id = excluded.supabase_user_id,
+      state = 'active'
   `;
   await sql`
     insert into conversations (id, type, state)

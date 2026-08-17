@@ -15,6 +15,12 @@ export {
 export function createPostgresWalletRepository(database?: string | PostgresSql): WalletRepository {
   if (!database) {
     return {
+      async listWalletsByUserId() {
+        throw new WalletRepositoryConfigurationError();
+      },
+      async hasWalletByUserId() {
+        throw new WalletRepositoryConfigurationError();
+      },
       async listWalletsBySupabaseUserId() {
         throw new WalletRepositoryConfigurationError();
       },
@@ -30,7 +36,7 @@ export function createPostgresWalletRepository(database?: string | PostgresSql):
       async findLinkChallenge() {
         throw new WalletRepositoryConfigurationError();
       },
-      async findWalletForSupabaseUser() {
+      async findWalletForUser() {
         throw new WalletRepositoryConfigurationError();
       },
       async setPrimaryWallet() {

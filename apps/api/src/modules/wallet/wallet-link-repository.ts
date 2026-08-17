@@ -26,7 +26,7 @@ export function createWalletLinkRepositoryMethods(
         with target_user as (
           select id
           from users
-          where supabase_user_id = ${input.supabaseUserId}
+          where id = ${input.userId}
           limit 1
         )
         insert into wallet_link_challenges (
@@ -72,9 +72,8 @@ export function createWalletLinkRepositoryMethods(
           wlc.expires_at,
           wlc.consumed_at
         from wallet_link_challenges wlc
-        join users u on u.id = wlc.user_id
         where wlc.id = ${input.challengeId}
-          and u.supabase_user_id = ${input.supabaseUserId}
+          and wlc.user_id = ${input.userId}
         limit 1
       `;
 
@@ -89,6 +88,7 @@ export function createWalletLinkRepositoryMethods(
             update wallet_link_challenges
             set consumed_at = now()
           where id = ${input.challengeId}
+            and user_id = ${input.userId}
             and consumed_at is null
             and expires_at > now()
             returning id, user_id, chain, provider, address, message, expires_at, consumed_at

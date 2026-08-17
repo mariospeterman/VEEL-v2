@@ -30,6 +30,21 @@ describe("database migrations", () => {
     }
   });
 
+  it("keeps the legacy Supabase column from becoming a second identity authority", () => {
+    const sql = readMigration("0107_canonical_access_identity.sql");
+    const downSql = readMigration("0107_canonical_access_identity.down.sql");
+
+    expect(sql).toContain("users_legacy_supabase_id_canonical_check");
+    expect(sql).toContain("supabase_user_id is null or supabase_user_id = id");
+    expect(sql).toContain("not valid");
+    expect(sql).toContain("validate constraint users_legacy_supabase_id_canonical_check");
+    expect(sql).toContain("user_provider_identities");
+    expect(sql).toContain("identity.provider_subject = u.supabase_user_id::text");
+    expect(sql).toContain("set supabase_user_id = id");
+    expect(downSql).toContain("drop constraint if exists users_legacy_supabase_id_canonical_check");
+    expect(sql).not.toMatch(/email|raw_payload|private_key|seed_phrase|mnemonic/i);
+  });
+
   it("requires complete normalized evidence before uploaded media release", () => {
     const sql = readMigration("0106_media_release_evidence.sql");
     const downSql = readMigration("0106_media_release_evidence.down.sql");
