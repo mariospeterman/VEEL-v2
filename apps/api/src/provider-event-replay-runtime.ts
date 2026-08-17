@@ -68,7 +68,10 @@ export interface CanonicalProviderReplayHandlers {
 interface ProviderReplayDependencies {
   contentRepository: Required<Pick<
     ContentRepository,
-    "findMediaAssetByProviderAsset" | "updateMediaAssetFromWebhook" | "updateMediaAssetPlayback"
+    | "captureProviderObservationCutoff"
+    | "findMediaAssetByProviderAsset"
+    | "updateMediaAssetFromWebhook"
+    | "updateMediaAssetPlayback"
   >>;
   mediaPlaybackProvider: {
     getPlaybackData(input: GetMediaPlaybackProviderDataInput): Promise<MediaPlaybackProviderData>;
@@ -96,10 +99,11 @@ export function createCanonicalProviderReplayHandlers(
         };
       }
 
+      const providerObservationCutoff =
+        await dependencies.contentRepository.captureProviderObservationCutoff();
       const playbackData = await dependencies.mediaPlaybackProvider.getPlaybackData({
         providerAssetId: input.replayPayload.providerAssetId
       });
-      const providerObservedAt = new Date();
       const applied = await dependencies.contentRepository.updateMediaAssetFromWebhook({
         provider: "bunny",
         providerEventId: input.providerEventId,
@@ -112,7 +116,7 @@ export function createCanonicalProviderReplayHandlers(
       if (applied) {
         await dependencies.contentRepository.updateMediaAssetPlayback({
           mediaAssetId: mediaAsset.id,
-          providerObservedAt,
+          providerObservationCutoff,
           ...playbackData
         });
       }

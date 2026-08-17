@@ -35,7 +35,7 @@ describe("canonical provider event replay handlers", () => {
     });
     expect(dependencies.contentRepository.updateMediaAssetPlayback).toHaveBeenCalledWith({
       mediaAssetId: "media-asset-1",
-      providerObservedAt: expect.any(Date),
+      providerObservationCutoff: new Date("2026-08-17T08:05:00.000Z"),
       providerState: "ready",
       providerPlayable: true,
       playbackUrl: "https://playback.example/asset-1.m3u8",
@@ -263,6 +263,9 @@ function replayDependencies(input: {
 
   return {
     contentRepository: {
+      captureProviderObservationCutoff: vi.fn().mockResolvedValue(
+        new Date("2026-08-17T08:05:00.000Z")
+      ),
       findMediaAssetByProviderAsset: vi.fn().mockResolvedValue({ id: "media-asset-1" }),
       updateMediaAssetPlayback: vi.fn().mockResolvedValue(undefined),
       updateMediaAssetFromWebhook: vi.fn().mockResolvedValue(true)

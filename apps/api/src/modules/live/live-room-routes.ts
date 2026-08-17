@@ -369,13 +369,15 @@ export async function registerLiveRoomRoutes(
         return reply.code(503).send(serviceUnavailableResponse("Live room provider setup is pending"));
       }
 
+      const providerObservationCutoff =
+        await options.liveRepository.captureProviderObservationCutoff();
       const status = await options.liveProvider.getRoomStatus({
         providerStreamId: room.providerStreamId,
         providerPlaybackId: room.providerPlaybackId
       });
 
       await options.liveRepository.updateRoomStatus({
-        providerObservedAt: status.providerObservedAt,
+        providerObservationCutoff,
         roomId: room.id,
         status
       });

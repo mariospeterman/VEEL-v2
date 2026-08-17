@@ -144,10 +144,10 @@ describe("live status repository", () => {
     expect(queries.join("\n")).not.toContain("update live_passes");
   });
 
-  it("records direct Livepeer sync observation time", async () => {
+  it("records the database-owned direct Livepeer observation cutoff", async () => {
     const queries: string[] = [];
     const values: unknown[] = [];
-    const providerObservedAt = new Date("2026-08-17T08:05:00.000Z");
+    const providerObservationCutoff = new Date("2026-08-17T08:05:00.000Z");
     const transaction = vi.fn((strings: TemplateStringsArray, ...queryValues: unknown[]) => {
       const query = strings.join("?");
       queries.push(query);
@@ -163,10 +163,9 @@ describe("live status repository", () => {
     const repository = createLiveStatusRepositoryMethods(sql);
 
     await repository.updateRoomStatus({
-      providerObservedAt,
+      providerObservationCutoff,
       roomId: "live-room",
       status: {
-        providerObservedAt,
         playbackUrl: "https://playback.example/live.m3u8",
         providerPlaybackId: "playback-1",
         providerState: "active",
@@ -181,6 +180,17 @@ describe("live status repository", () => {
     expect(queries.join("\n")).toContain("provider_checked_at = ?");
     expect(queries.join("\n")).toContain("provider_checked_at <= ?");
     expect(queries.join("\n")).toContain("newer.received_at > ?");
-    expect(values).toContain(providerObservedAt);
+    expect(values).toContain(providerObservationCutoff);
+  });
+
+  it("captures provider freshness from the Postgres clock", async () => {
+    const cutoff = new Date("2026-08-17T08:05:00.000Z");
+    const sql = vi.fn((strings: TemplateStringsArray) => {
+      expect(strings.join("?")).toContain("clock_timestamp()");
+      return Promise.resolve([{ cutoff }]);
+    }) as unknown as PostgresSql;
+    const repository = createLiveStatusRepositoryMethods(sql);
+
+    await expect(repository.captureProviderObservationCutoff()).resolves.toEqual(cutoff);
   });
 });

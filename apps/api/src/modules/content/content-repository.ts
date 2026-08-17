@@ -12,7 +12,10 @@ import type { ContentRepository } from "./types.js";
 
 type PostgresContentRepository = ContentRepository & Required<Pick<
   ContentRepository,
-  "findMediaAssetByProviderAsset" | "updateMediaAssetFromWebhook" | "updateMediaAssetPlayback"
+  | "captureProviderObservationCutoff"
+  | "findMediaAssetByProviderAsset"
+  | "updateMediaAssetFromWebhook"
+  | "updateMediaAssetPlayback"
 >>;
 
 export {
@@ -52,6 +55,9 @@ export function createPostgresContentRepository(
 
 function createUnavailableContentRepository(): PostgresContentRepository {
   return {
+    async captureProviderObservationCutoff() {
+      throw new ContentRepositoryConfigurationError();
+    },
     async createDraft() {
       throw new ContentRepositoryConfigurationError();
     },

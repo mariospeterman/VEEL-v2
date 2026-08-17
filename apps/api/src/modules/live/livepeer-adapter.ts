@@ -129,7 +129,6 @@ export function createLivepeerProviderAdapter(
       );
 
       const stream = (await streamResponse.json()) as LivepeerStreamResponse;
-      const providerObservedAt = new Date();
       const providerPlaybackId = stream.playbackId ?? input.providerPlaybackId;
       const playbackUrl = providerPlaybackId
         ? await findPlaybackUrl(env, fetchImpl, apiKey, providerPlaybackId)
@@ -144,7 +143,6 @@ export function createLivepeerProviderAdapter(
             : "waiting";
 
       return {
-        providerObservedAt,
         providerStreamId: stream.id ?? input.providerStreamId,
         providerPlaybackId,
         providerState: stream.suspended ? "suspended" : isActive ? "active" : "idle",

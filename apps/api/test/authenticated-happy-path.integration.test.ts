@@ -3293,12 +3293,12 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         reservationBeforeRows[0]?.reserved_until.toISOString()
       );
 
-      const liveProviderObservedAt = new Date();
+      const liveProviderObservationCutoff =
+        await liveRepository.captureProviderObservationCutoff();
       await liveRepository.updateRoomStatus({
-        providerObservedAt: liveProviderObservedAt,
+        providerObservationCutoff: liveProviderObservationCutoff,
         roomId: seededLiveRoomId,
         status: {
-          providerObservedAt: liveProviderObservedAt,
           providerStreamId: `livepeer-stream-${shortRunId}`,
           providerPlaybackId: `livepeer-playback-${shortRunId}`,
           providerState: "idle",

@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import { withPostgresTransaction } from "../../shared/postgres.js";
-import { providerEventReplayDecision } from "../../shared/provider-event-order.js";
+import {
+  captureProviderObservationCutoff,
+  providerEventReplayDecision
+} from "../../shared/provider-event-order.js";
 import type { ContentItem, ContentRepository } from "./types.js";
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
@@ -9,6 +12,7 @@ type JsonObject = { [key: string]: JsonValue };
 
 type ContentMediaRepositoryMethods = Required<Pick<
   ContentRepository,
+  | "captureProviderObservationCutoff"
   | "createMediaAsset"
   | "findMediaAssetByProviderAsset"
   | "findOwnedContentForUpload"
@@ -22,6 +26,9 @@ export function createContentMediaRepositoryMethods(
   sql: postgres.Sql
 ): ContentMediaRepositoryMethods {
   return {
+    async captureProviderObservationCutoff() {
+      return captureProviderObservationCutoff(sql);
+    },
     async createMediaAsset(input) {
       const rows = await withPostgresTransaction(sql, async (transaction) => {
         const mediaRows = await transaction<{ id: string }[]>`
@@ -172,14 +179,14 @@ export function createContentMediaRepositoryMethods(
             poster_url = coalesce(${input.posterUrl ?? null}, poster_url),
             duration_ms = coalesce(${input.durationMs ?? null}, duration_ms),
             ready_at = case when ${input.providerPlayable} then coalesce(ready_at, now()) else ready_at end,
-            provider_checked_at = ${input.providerObservedAt}
+            provider_checked_at = ${input.providerObservationCutoff}
           where id = ${input.mediaAssetId}
-            and (provider_checked_at is null or provider_checked_at <= ${input.providerObservedAt})
+            and (provider_checked_at is null or provider_checked_at <= ${input.providerObservationCutoff})
             and not exists (
               select 1
               from provider_events newer
               where newer.provider = 'bunny'
-                and newer.received_at > ${input.providerObservedAt}
+                and newer.received_at > ${input.providerObservationCutoff}
                 and newer.normalized_state is distinct from 'ignored_stale'
                 and newer.replay_payload ->> 'kind' = 'media_asset'
                 and newer.replay_payload ->> 'providerAssetId' = media_assets.provider_asset_id

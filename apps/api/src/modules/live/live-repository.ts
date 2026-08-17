@@ -36,6 +36,9 @@ export function createPostgresLiveRepository(database?: string | PostgresSql): L
 
 function createUnavailableLiveRepository(): LiveRepository {
   return {
+    async captureProviderObservationCutoff() {
+      throw new LiveRepositoryConfigurationError();
+    },
     async createRoom() {
       throw new LiveRepositoryConfigurationError();
     },

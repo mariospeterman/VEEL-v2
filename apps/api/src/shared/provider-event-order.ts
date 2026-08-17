@@ -1,10 +1,19 @@
-import type { PostgresTransaction } from "./postgres.js";
+import type { PostgresSql, PostgresTransaction } from "./postgres.js";
 
 type ProviderEventSubject =
   | { kind: "media_asset"; providerAssetId: string }
   | { kind: "livepeer_stream"; providerStreamId: string };
 
 export type ProviderEventReplayDecision = "apply" | "already_applied" | "stale";
+
+export async function captureProviderObservationCutoff(sql: PostgresSql): Promise<Date> {
+  const rows = await sql<{ cutoff: Date }[]>`
+    select clock_timestamp() as cutoff
+  `;
+  const cutoff = rows[0]?.cutoff;
+  if (!cutoff) throw new Error("PROVIDER_OBSERVATION_CUTOFF_UNAVAILABLE");
+  return cutoff;
+}
 
 export async function providerEventReplayDecision(
   transaction: PostgresTransaction,

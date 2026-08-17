@@ -4838,9 +4838,11 @@ describe("buildApi", () => {
   });
 
   it("syncs Bunny playback status into the backend media projection", async () => {
+    const providerObservationCutoff = new Date("2026-08-17T08:05:00.000Z");
+    const observationOrder: string[] = [];
     const playbackUpdates: Array<{
       mediaAssetId: string;
-      providerObservedAt: Date;
+      providerObservationCutoff: Date;
       providerState: string;
       providerPlayable: boolean;
       playbackUrl?: string | null;
@@ -4848,6 +4850,10 @@ describe("buildApi", () => {
       durationMs?: number | null;
     }> = [];
     const contentRepository: ContentRepository = {
+      async captureProviderObservationCutoff() {
+        observationOrder.push("database-cutoff");
+        return providerObservationCutoff;
+      },
       async createDraft() {
         throw new Error("not implemented");
       },
@@ -4892,6 +4898,7 @@ describe("buildApi", () => {
         throw new Error("not implemented");
       },
       async getPlaybackData(input) {
+        observationOrder.push("provider-read");
         expect(input).toEqual({
           providerAssetId: "bunny-video-guid"
         });
@@ -4928,7 +4935,7 @@ describe("buildApi", () => {
     expect(playbackUpdates).toEqual([
       {
         mediaAssetId: "00000000-0000-4000-8000-000000000070",
-        providerObservedAt: expect.any(Date),
+        providerObservationCutoff,
         providerState: "ready",
         providerPlayable: true,
         playbackUrl: "https://vz.example.test/video/playlist.m3u8",
@@ -4936,6 +4943,7 @@ describe("buildApi", () => {
         durationMs: 90000
       }
     ]);
+    expect(observationOrder).toEqual(["database-cutoff", "provider-read"]);
 
     await app.close();
   });
@@ -9883,14 +9891,19 @@ describe("buildApi", () => {
 
   it("syncs Livepeer status into the backend live room projection", async () => {
     const syncedStatuses: LiveProviderRoomStatus[] = [];
-    const providerObservationTimes: Date[] = [];
-    const providerObservedAt = new Date("2026-08-17T08:05:00.000Z");
+    const providerObservationCutoffs: Date[] = [];
+    const providerObservationCutoff = new Date("2026-08-17T08:05:00.000Z");
+    const observationOrder: string[] = [];
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       sessionRepository: appReadySessionRepository,
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
       liveRepository: fakeLiveRepository({
+        async onCaptureProviderObservationCutoff() {
+          observationOrder.push("database-cutoff");
+          return providerObservationCutoff;
+        },
         async onFindOwnedRoom() {
           return liveRoomFixture({
             id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa13",
@@ -9899,7 +9912,7 @@ describe("buildApi", () => {
           });
         },
         async onUpdateRoomStatus(input) {
-          providerObservationTimes.push(input.providerObservedAt);
+          providerObservationCutoffs.push(input.providerObservationCutoff);
           syncedStatuses.push(input.status);
         }
       }),
@@ -9910,8 +9923,8 @@ describe("buildApi", () => {
           throw new Error("not implemented");
         },
         async getRoomStatus(input) {
+          observationOrder.push("provider-read");
           return {
-            providerObservedAt,
             providerStreamId: input.providerStreamId,
             providerPlaybackId: input.providerPlaybackId,
             providerState: "active",
@@ -9936,10 +9949,10 @@ describe("buildApi", () => {
     });
 
     expect(response.statusCode).toBe(202);
-    expect(providerObservationTimes).toEqual([providerObservedAt]);
+    expect(providerObservationCutoffs).toEqual([providerObservationCutoff]);
+    expect(observationOrder).toEqual(["database-cutoff", "provider-read"]);
     expect(syncedStatuses).toEqual([
       {
-        providerObservedAt,
         providerStreamId: "livepeer-stream-13",
         providerPlaybackId: "livepeer-playback-13",
         providerState: "active",
@@ -11140,6 +11153,7 @@ function liveRoomFixture(
 
 function fakeLiveRepository(
   overrides: Partial<{
+    onCaptureProviderObservationCutoff: LiveRepository["captureProviderObservationCutoff"];
     onCreateRoom: LiveRepository["createRoom"];
     onReserveRoom: LiveRepository["reserveRoom"];
     onClaimProviderCreation: LiveRepository["claimProviderCreation"];
@@ -11161,6 +11175,9 @@ function fakeLiveRepository(
   }> = {}
 ): LiveRepository {
   return {
+    async captureProviderObservationCutoff() {
+      return overrides.onCaptureProviderObservationCutoff?.() ?? new Date("2026-08-17T08:00:00.000Z");
+    },
     async createRoom(input) {
       return overrides.onCreateRoom?.(input) ?? liveRoomFixture();
     },

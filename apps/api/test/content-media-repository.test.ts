@@ -6,11 +6,11 @@ describe("content media repository", () => {
   it("does not approve moderation from provider playback sync", async () => {
     const { sql, queries, values } = createFakeSql();
     const repository = createContentMediaRepositoryMethods(sql);
-    const providerObservedAt = new Date("2026-08-17T08:05:00.000Z");
+    const providerObservationCutoff = new Date("2026-08-17T08:05:00.000Z");
 
     await repository.updateMediaAssetPlayback?.({
       mediaAssetId: "00000000-0000-4000-8000-000000000070",
-      providerObservedAt,
+      providerObservationCutoff,
       providerState: "ready",
       providerPlayable: true,
       playbackUrl: "https://vz.example.test/video/playlist.m3u8",
@@ -22,8 +22,19 @@ describe("content media repository", () => {
     expect(queries.join("\n")).toContain("provider_checked_at = ?");
     expect(queries.join("\n")).toContain("provider_checked_at <= ?");
     expect(queries.join("\n")).toContain("newer.received_at > ?");
-    expect(values).toContain(providerObservedAt);
+    expect(values).toContain(providerObservationCutoff);
     expect(queries.join("\n")).not.toContain("moderation_state");
+  });
+
+  it("captures provider freshness from the Postgres clock", async () => {
+    const cutoff = new Date("2026-08-17T08:05:00.000Z");
+    const sql = vi.fn((strings: TemplateStringsArray) => {
+      expect(strings.join("?")).toContain("clock_timestamp()");
+      return Promise.resolve([{ cutoff }]);
+    }) as unknown as PostgresSql;
+    const repository = createContentMediaRepositoryMethods(sql);
+
+    await expect(repository.captureProviderObservationCutoff()).resolves.toEqual(cutoff);
   });
 
   it("does not approve moderation from provider webhooks", async () => {

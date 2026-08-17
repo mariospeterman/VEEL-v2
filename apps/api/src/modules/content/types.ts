@@ -25,6 +25,7 @@ export interface ListHomeFeedInput {
 }
 
 export interface ContentRepository {
+  captureProviderObservationCutoff?(): Promise<Date>;
   createDraft(input: CreateContentDraftInput): Promise<ContentItem>;
   createMediaAsset(input: CreateMediaAssetInput): Promise<{ id: string } | void>;
   countContentDraftsCreatedSince?(input: CountContentQuotaInput): Promise<number>;
@@ -167,7 +168,7 @@ export interface CreateMediaAssetInput {
 
 export interface UpdateMediaAssetPlaybackInput {
   mediaAssetId: string;
-  providerObservedAt: Date;
+  providerObservationCutoff: Date;
   providerState: string;
   providerPlayable: boolean;
   playbackUrl?: string | null;

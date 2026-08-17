@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
-import { providerEventReplayDecision } from "../../shared/provider-event-order.js";
+import {
+  captureProviderObservationCutoff,
+  providerEventReplayDecision
+} from "../../shared/provider-event-order.js";
 import { ensureLiveReplayContent } from "./live-replay-repository.js";
 import type { LiveRepository } from "./types.js";
 
@@ -9,8 +12,11 @@ type JsonObject = { [key: string]: JsonValue };
 
 export function createLiveStatusRepositoryMethods(
   sql: postgres.Sql
-): Pick<LiveRepository, "recordLiveProviderWebhook" | "updateRoomFromWebhook" | "updateRoomStatus"> {
+): Pick<LiveRepository, "captureProviderObservationCutoff" | "recordLiveProviderWebhook" | "updateRoomFromWebhook" | "updateRoomStatus"> {
   return {
+    async captureProviderObservationCutoff() {
+      return captureProviderObservationCutoff(sql);
+    },
     async updateRoomStatus(input) {
       await sql.begin(async (transaction) => {
         const updatedRooms = await transaction<{ id: string }[]>`
@@ -23,16 +29,16 @@ export function createLiveStatusRepositoryMethods(
             playback_url = case when ${input.status.state} = 'live' then ${input.status.playbackUrl} else null end,
             starts_at = case when ${input.status.state} = 'live' then coalesce(starts_at, now()) else starts_at end,
             ended_at = case when ${input.status.state} in ('ended', 'replay_ready') then coalesce(ended_at, now()) else ended_at end,
-            provider_checked_at = ${input.providerObservedAt},
+            provider_checked_at = ${input.providerObservationCutoff},
             updated_at = now()
           where id = ${input.roomId}
             and state <> 'suspended'
-            and (provider_checked_at is null or provider_checked_at <= ${input.providerObservedAt})
+            and (provider_checked_at is null or provider_checked_at <= ${input.providerObservationCutoff})
             and not exists (
               select 1
               from provider_events newer
               where newer.provider = 'livepeer'
-                and newer.received_at > ${input.providerObservedAt}
+                and newer.received_at > ${input.providerObservationCutoff}
                 and newer.normalized_state is distinct from 'ignored_stale'
                 and newer.replay_payload ->> 'kind' = 'livepeer_stream'
                 and newer.replay_payload ->> 'providerStreamId' = live_rooms.provider_stream_id
