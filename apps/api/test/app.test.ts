@@ -5294,6 +5294,15 @@ describe("buildApi", () => {
         PAYMENT_SOLANA_FINALITY: "finalized",
         PAYMENT_MIN_SUPPORT_SOL_LAMPORTS: 1_000_000,
         PAYMENT_MIN_SUPPORT_USDC_ATOMIC: 500_000,
+        PAYMENT_MIN_CONTENT_UNLOCK_SOL_LAMPORTS: 1_000_000,
+        PAYMENT_MIN_CONTENT_UNLOCK_USDC_ATOMIC: 500_000,
+        PAYMENT_MIN_PAID_MESSAGE_SOL_LAMPORTS: 10_000_000,
+        PAYMENT_MIN_PAID_MESSAGE_USDC_ATOMIC: 500_000,
+        PAYMENT_MIN_LIVE_PASS_SOL_LAMPORTS: 10_000_000,
+        PAYMENT_MIN_LIVE_PASS_USDC_ATOMIC: 1_000_000,
+        PAYMENT_MIN_EVENT_ACCESS_PASS_SOL_LAMPORTS: 10_000_000,
+        PAYMENT_MIN_EVENT_ACCESS_PASS_USDC_ATOMIC: 1_000_000,
+        PAYMENT_QUOTE_TTL_SECONDS: 900,
         PAYMENT_PLATFORM_FEE_BPS: 1000,
         PAYMENT_REFERRAL_SHARE_OF_PLATFORM_FEE_BPS: 2000,
         SOLANA_SUBSCRIPTION_DELEGATION_PROGRAM_ID: "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
@@ -5399,6 +5408,15 @@ describe("buildApi", () => {
       PAYMENT_SOLANA_FINALITY: "finalized",
       PAYMENT_MIN_SUPPORT_SOL_LAMPORTS: 1_000_000,
       PAYMENT_MIN_SUPPORT_USDC_ATOMIC: 500_000,
+      PAYMENT_MIN_CONTENT_UNLOCK_SOL_LAMPORTS: 1_000_000,
+      PAYMENT_MIN_CONTENT_UNLOCK_USDC_ATOMIC: 500_000,
+      PAYMENT_MIN_PAID_MESSAGE_SOL_LAMPORTS: 10_000_000,
+      PAYMENT_MIN_PAID_MESSAGE_USDC_ATOMIC: 500_000,
+      PAYMENT_MIN_LIVE_PASS_SOL_LAMPORTS: 10_000_000,
+      PAYMENT_MIN_LIVE_PASS_USDC_ATOMIC: 1_000_000,
+      PAYMENT_MIN_EVENT_ACCESS_PASS_SOL_LAMPORTS: 10_000_000,
+      PAYMENT_MIN_EVENT_ACCESS_PASS_USDC_ATOMIC: 1_000_000,
+      PAYMENT_QUOTE_TTL_SECONDS: 900,
       PAYMENT_PLATFORM_FEE_BPS: 1000,
       PAYMENT_REFERRAL_SHARE_OF_PLATFORM_FEE_BPS: 2000,
       SOLANA_SUBSCRIPTION_DELEGATION_PROGRAM_ID: "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
@@ -5495,7 +5513,11 @@ describe("buildApi", () => {
           productType: input.productType,
           referenceAddress: input.referenceAddress,
           requestHash: input.requestHash,
-          expiresAt: input.expiresAt
+          expiresAt: input.expiresAt,
+          quotedAt: input.quotedAt,
+          minimumAmountMinor: input.minimumAmountMinor,
+          platformFeeBps: input.platformFeeBps,
+          referralShareOfPlatformFeeBps: input.referralShareOfPlatformFeeBps
         };
       },
       async findIntent() {
@@ -5547,6 +5569,15 @@ describe("buildApi", () => {
       platformFeeGrossMinor: storedPaymentIntent.platformFeeGrossMinor,
       platformFeeAmountMinor: storedPaymentIntent.platformFeeAmountMinor,
       referralAmountMinor: storedPaymentIntent.referralAmountMinor,
+      quote: {
+        minimumAmountMinor: 1_000_000,
+        platformFeeBps: 1_000,
+        referralShareOfPlatformFeeBps: 2_000,
+        quotedAt: expect.any(String),
+        expiresAt: expect.any(String),
+        policySource: "environment_default",
+        policyRevision: 0
+      },
       refundPolicy: storedPaymentIntent.refundPolicy
     });
 
@@ -8451,7 +8482,11 @@ describe("buildApi", () => {
           productType: input.productType,
           referenceAddress: input.referenceAddress,
           requestHash: input.requestHash,
-          expiresAt: input.expiresAt
+          expiresAt: input.expiresAt,
+          quotedAt: input.quotedAt,
+          minimumAmountMinor: input.minimumAmountMinor,
+          platformFeeBps: input.platformFeeBps,
+          referralShareOfPlatformFeeBps: input.referralShareOfPlatformFeeBps
         };
       },
       async findIntent() {
@@ -8598,6 +8633,15 @@ describe("buildApi", () => {
         platformFeeGrossMinor: storedPaymentIntent.platformFeeGrossMinor,
         platformFeeAmountMinor: storedPaymentIntent.platformFeeAmountMinor,
         referralAmountMinor: storedPaymentIntent.referralAmountMinor,
+        quote: {
+          minimumAmountMinor: 1_000_000,
+          platformFeeBps: 1_000,
+          referralShareOfPlatformFeeBps: 2_000,
+          quotedAt: expect.any(String),
+          expiresAt: expect.any(String),
+          policySource: "environment_default",
+          policyRevision: 0
+        },
         refundPolicy: storedPaymentIntent.refundPolicy
       }
     });
@@ -10998,6 +11042,21 @@ const storedPaymentIntent: StoredPaymentIntent = {
   referralAmountMinor: 0,
   solanaCluster: "devnet",
   expiresAt: new Date("2099-07-04T23:15:00.000Z"),
+  quotedAt: new Date("2099-07-04T23:00:00.000Z"),
+  minimumAmountMinor: 1_000_000,
+  platformFeeBps: 1_000,
+  referralShareOfPlatformFeeBps: 2_000,
+  commercialPolicySource: "environment_default",
+  commercialPolicyRevision: 0,
+  quote: {
+    minimumAmountMinor: 1_000_000,
+    platformFeeBps: 1_000,
+    referralShareOfPlatformFeeBps: 2_000,
+    quotedAt: "2099-07-04T23:00:00.000Z",
+    expiresAt: "2099-07-04T23:15:00.000Z",
+    policySource: "environment_default",
+    policyRevision: 0
+  },
   requestHash: "request-hash",
   refundPolicy: {
     withdrawalWaiverRequired: true,

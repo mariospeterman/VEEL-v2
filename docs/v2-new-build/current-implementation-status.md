@@ -217,8 +217,8 @@ The controlling branch evidence is recorded in `production-branch-inventory.md`.
 - [x] Extend logical-operation-lifetime idempotency audits to every remaining protected mutation, retaining bounded expiry only where the operation itself is intentionally time-bounded.
 - [x] Correct referral split mathematics so referral commission reduces platform net only and never creator share.
 - [x] Use atomic integer-safe values across intent creation, transaction composition, settlement verification, ledger, and contracts.
-- [ ] Add product-specific price floors, backend-owned fee policy, quote freshness, and audited overrides without browser-owned recipients or rates.
-- [ ] Add one-time USDC split settlement through the canonical payment intent system while retaining native SOL support.
+- [x] Add product-specific SOL/USDC price floors, backend-owned platform/referral fee policy, immutable quote freshness evidence, and lifetime-idempotent audited admin overrides without browser-owned recipients or rates.
+- [x] Add one-time USDC split settlement through the canonical payment intent system while retaining native SOL support.
 - [x] Add an executable worker scheduler plus tokenized lease expiry/reclamation, bounded jittered backoff, attempt ceilings, dead-letter state, queue-age/admin visibility, and audited idempotent dead-letter recovery. Subscription retries reconcile provider state before any repeat collection call.
 - [x] Run the complete bootstrap, doctor, docs, contract-generation drift, database, lint, typecheck, unit, build, and smoke gates for the integration baseline; rerun after each subsequent production slice.
 

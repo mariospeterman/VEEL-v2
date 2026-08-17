@@ -2,6 +2,7 @@ import type {
   AdminContentItem,
   AdminOpsSummary,
   AdminPage,
+  AdminPaymentCommercialPolicy,
   AdminReport,
   AdminUser,
   ApiResult,
@@ -21,6 +22,7 @@ import {
   AccessPassOpsRow,
   UserQueueRow
 } from "./admin-rows";
+import { updatePaymentCommercialPolicyAction } from "./actions";
 
 export function ModerationPanel({
   content,
@@ -90,6 +92,129 @@ export function EventAccessPanel({
         <AccessPassOpsRow accessPass={accessPass} key={accessPass.id} />
       ))}
     </div>
+  );
+}
+
+export function PaymentCommercialPolicyPanel({
+  policies
+}: {
+  policies: ApiResult<AdminPage<AdminPaymentCommercialPolicy>>;
+}) {
+  if (!policies.ok) return <UnavailableState result={policies} />;
+
+  return (
+    <div className="grid gap-3">
+      <p className="text-sm text-(--muted)">
+        Overrides apply only to new quotes. Existing intents keep their stored policy revision and expiry.
+      </p>
+      <details className="rounded border border-(--line) bg-(--background) p-3 text-sm">
+        <summary className="cursor-pointer font-medium">Create an override</summary>
+        <form action={updatePaymentCommercialPolicyAction} className="mt-3 grid gap-2">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <PolicySelect
+              label="Product"
+              name="productType"
+              options={["support", "content_unlock", "paid_message", "live_pass", "event_access_pass"]}
+            />
+            <PolicySelect label="Asset" name="currency" options={["SOL", "USDC"]} />
+            <PolicyNumber label="Minimum atomic amount" min={1} name="minimumAmountMinor" />
+            <PolicyNumber label="Platform fee bps" max={9_999} min={0} name="platformFeeBps" />
+            <PolicyNumber
+              label="Referral share bps"
+              max={10_000}
+              min={0}
+              name="referralShareOfPlatformFeeBps"
+            />
+            <PolicyNumber label="Quote lifetime seconds" max={1_800} min={60} name="quoteTtlSeconds" />
+          </div>
+          <input name="state" type="hidden" value="active" />
+          <label className="grid gap-1">
+            <span className="text-xs text-(--muted)">Audit reason</span>
+            <input
+              className="rounded border border-(--line) bg-(--panel) px-3 py-2"
+              maxLength={500}
+              minLength={3}
+              name="reason"
+              placeholder="Why this override is required"
+              required
+            />
+          </label>
+          <button className="justify-self-start rounded bg-(--foreground) px-3 py-2 font-semibold text-(--background)" type="submit">
+            Create active override
+          </button>
+        </form>
+      </details>
+      {policies.data.items.map((policy) => (
+        <form action={updatePaymentCommercialPolicyAction} className="grid gap-2 rounded border border-(--line) bg-(--background) p-3 text-sm" key={policy.id}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="font-medium">{policy.productType} · {policy.currency}</p>
+            <p className="text-xs text-(--muted)">Revision {policy.revision}</p>
+          </div>
+          <input name="productType" type="hidden" value={policy.productType} />
+          <input name="currency" type="hidden" value={policy.currency} />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <PolicyNumber label="Minimum atomic amount" min={1} name="minimumAmountMinor" value={policy.minimumAmountMinor} />
+            <PolicyNumber label="Platform fee bps" max={9_999} min={0} name="platformFeeBps" value={policy.platformFeeBps} />
+            <PolicyNumber label="Referral share bps" max={10_000} min={0} name="referralShareOfPlatformFeeBps" value={policy.referralShareOfPlatformFeeBps} />
+            <PolicyNumber label="Quote lifetime seconds" max={1_800} min={60} name="quoteTtlSeconds" value={policy.quoteTtlSeconds} />
+          </div>
+          <label className="grid gap-1">
+            <span className="text-xs text-(--muted)">State</span>
+            <select className="rounded border border-(--line) bg-(--panel) px-3 py-2" defaultValue={policy.state} name="state">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </label>
+          <label className="grid gap-1">
+            <span className="text-xs text-(--muted)">Audit reason</span>
+            <input className="rounded border border-(--line) bg-(--panel) px-3 py-2" defaultValue={policy.reason} maxLength={500} minLength={3} name="reason" required />
+          </label>
+          <button className="justify-self-start rounded bg-(--foreground) px-3 py-2 font-semibold text-(--background)" type="submit">Save policy</button>
+        </form>
+      ))}
+      {policies.data.items.length === 0 ? <EmptyState label="No commercial overrides; environment defaults are active" /> : null}
+    </div>
+  );
+}
+
+function PolicyNumber({
+  label,
+  max,
+  min,
+  name,
+  value
+}: {
+  label: string;
+  max?: number;
+  min: number;
+  name: string;
+  value?: number;
+}) {
+  return (
+    <label className="grid gap-1">
+      <span className="text-xs text-(--muted)">{label}</span>
+      <input
+        className="rounded border border-(--line) bg-(--panel) px-3 py-2"
+        defaultValue={value}
+        max={max}
+        min={min}
+        name={name}
+        required
+        step={1}
+        type="number"
+      />
+    </label>
+  );
+}
+
+function PolicySelect({ label, name, options }: { label: string; name: string; options: string[] }) {
+  return (
+    <label className="grid gap-1">
+      <span className="text-xs text-(--muted)">{label}</span>
+      <select className="rounded border border-(--line) bg-(--panel) px-3 py-2" name={name}>
+        {options.map((option) => <option key={option} value={option}>{option}</option>)}
+      </select>
+    </label>
   );
 }
 

@@ -86,6 +86,9 @@ export type AuditEvent = components["schemas"]["AuditEvent"];
 export type AdminContentItem = components["schemas"]["AdminContentItem"];
 export type AdminModerationActionRequest = components["schemas"]["AdminModerationActionRequest"];
 export type AdminPaymentIntent = components["schemas"]["AdminPaymentIntent"];
+export type AdminPaymentCommercialPolicy = components["schemas"]["AdminPaymentCommercialPolicy"];
+export type AdminPaymentCommercialPolicyPatchRequest =
+  components["schemas"]["AdminPaymentCommercialPolicyPatchRequest"];
 export type AdminUnlock = components["schemas"]["AdminUnlock"];
 export type AdminProviderEvent = components["schemas"]["AdminProviderEvent"];
 export type AdminLiveRoom = components["schemas"]["AdminLiveRoom"];

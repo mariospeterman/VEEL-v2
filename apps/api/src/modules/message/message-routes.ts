@@ -2,9 +2,11 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { mutationRateLimit } from "../../shared/rate-limits.js";
 import {
   PaymentIdempotencyConflictError,
+  PaymentAmountBelowPolicyError,
   PaymentRecipientNotReadyError,
   PaymentRepositoryConfigurationError
 } from "../payment/payment-repository.js";
+import { defaultPaymentCommercialPolicy } from "../payment/payment-commercial-policy.js";
 import {
   assertSolanaAddress,
   createSolanaReferenceAddress,
@@ -38,7 +40,6 @@ import type {
   RespondToMessageRequest
 } from "./types.js";
 
-const paymentIntentTtlMs = 15 * 60 * 1000;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function registerMessageRoutes(
@@ -277,6 +278,11 @@ export async function registerMessageRoutes(
         amountMinor: price.amountMinor,
         bodyHash: hashMessageBody(body?.body?.trim() ?? "")
       };
+      const commercialPolicy = defaultPaymentCommercialPolicy(
+        app.config,
+        "paid_message",
+        price.currency
+      );
       const intent = await options.paymentRepository.createOrReuseIntent({
         supabaseUserId: access.supabaseUserId,
         idempotencyKey,
@@ -288,12 +294,10 @@ export async function registerMessageRoutes(
         solanaCluster: app.config.SOLANA_CLUSTER,
         treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET ?? platformFeeWallet,
         platformFeeWallet,
-        platformFeeBps: app.config.PAYMENT_PLATFORM_FEE_BPS,
-        referralShareOfPlatformFeeBps: app.config.PAYMENT_REFERRAL_SHARE_OF_PLATFORM_FEE_BPS,
+        ...commercialPolicy,
         settlementKind: "creator_split",
         creatorUserId: price.recipientUserId,
         referenceAddress: createSolanaReferenceAddress(),
-        expiresAt: new Date(Date.now() + paymentIntentTtlMs),
         referralToken: null
       });
 
@@ -323,6 +327,13 @@ export async function registerMessageRoutes(
 
       if (error instanceof PaymentRecipientNotReadyError) {
         return reply.code(409).send(conflictResponse("This creator cannot receive payments yet"));
+      }
+
+
+      if (error instanceof PaymentAmountBelowPolicyError) {
+        return reply.code(409).send(conflictResponse(
+          `Paid message price is below the current minimum of ${error.minimumAmountMinor} atomic units`
+        ));
       }
 
       if (

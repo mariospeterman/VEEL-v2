@@ -20,6 +20,7 @@ const repositoryKeys = [
   "messageRepository",
   "managedCreatorRepository",
   "paymentRepository",
+  "paymentCommercialPolicyRepository",
   "paymentEvidenceRepository",
   "performerRepository",
   "activityRepository",

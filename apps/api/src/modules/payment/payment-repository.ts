@@ -6,12 +6,14 @@ import {
   isRecipientMonetisationPolicyError,
   PaymentIdempotencyConflictError,
   PaymentConsentConflictError,
+  PaymentAmountBelowPolicyError,
   PaymentRecipientNotReadyError,
   PaymentRepositoryConfigurationError
 } from "./payment-repository-errors.js";
 export {
   PaymentIdempotencyConflictError,
   PaymentConsentConflictError,
+  PaymentAmountBelowPolicyError,
   PaymentRecipientNotReadyError,
   PaymentRepositoryConfigurationError
 } from "./payment-repository-errors.js";
@@ -31,6 +33,15 @@ interface SettlementAuthorityRow {
   enterprise_organization_id: string | null;
   enterprise_wallet: string | null;
   enterprise_management_share_bps: number | null;
+}
+
+interface PaymentCommercialPolicyOverrideRow {
+  id: string;
+  minimum_amount_minor: number;
+  platform_fee_bps: number;
+  referral_share_of_platform_fee_bps: number;
+  quote_ttl_seconds: number;
+  revision: number;
 }
 
 export function createPostgresPaymentRepository(database?: string | PostgresSql): PaymentRepository {
@@ -208,11 +219,38 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
             return [];
           }
 
+          const policyRows = await transaction<PaymentCommercialPolicyOverrideRow[]>`
+            select
+              id,
+              minimum_amount_minor,
+              platform_fee_bps,
+              referral_share_of_platform_fee_bps,
+              quote_ttl_seconds,
+              revision
+            from payment_commercial_policy_overrides
+            where product_type = ${input.productType}
+              and currency = ${input.currency}
+              and state = 'active'
+            limit 1
+          `;
+          const override = policyRows[0];
+          const minimumAmountMinor = Number(override?.minimum_amount_minor ?? input.minimumAmountMinor);
+          const platformFeeBps = override?.platform_fee_bps ?? input.platformFeeBps;
+          const referralShareOfPlatformFeeBps =
+            override?.referral_share_of_platform_fee_bps ?? input.referralShareOfPlatformFeeBps;
+          const expiresAt = override
+            ? new Date(input.quotedAt.getTime() + override.quote_ttl_seconds * 1_000)
+            : input.expiresAt;
+
+          if (input.amountMinor < minimumAmountMinor) {
+            throw new PaymentAmountBelowPolicyError(minimumAmountMinor);
+          }
+
           const split = calculateSettlementSplit({
             totalAmountAtomic: input.amountMinor,
-            platformFeeBps: input.platformFeeBps,
+            platformFeeBps,
             referralShareOfPlatformFeeBps: authority.referral_wallet
-              ? input.referralShareOfPlatformFeeBps
+              ? referralShareOfPlatformFeeBps
               : 0,
             enterpriseShareOfCreatorProceedsBps:
               authority.enterprise_management_share_bps ?? 0
@@ -250,6 +288,13 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
             enterprise_organization_id,
             reference_address,
             referral_token_id,
+            commercial_policy_source,
+            commercial_policy_override_id,
+            commercial_policy_revision,
+            minimum_amount_minor,
+            platform_fee_bps,
+            referral_share_of_platform_fee_bps,
+            quoted_at,
             expires_at
           )
           values (
@@ -282,7 +327,14 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
             ${enterpriseAllocationIsPayable ? authority.enterprise_organization_id : null},
             ${input.referenceAddress},
             ${authority.referral_token_id},
-            ${input.expiresAt}
+            ${override ? "admin_override" : "environment_default"},
+            ${override?.id ?? null},
+            ${override?.revision ?? 0},
+            ${minimumAmountMinor},
+            ${platformFeeBps},
+            ${referralShareOfPlatformFeeBps},
+            ${input.quotedAt},
+            ${expiresAt}
           )
           on conflict (user_id, idempotency_key) do nothing
           returning *
@@ -377,6 +429,12 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
           pi.platform_fee_amount_minor,
           pi.referral_amount_minor,
           pi.solana_cluster,
+          pi.commercial_policy_source,
+          pi.commercial_policy_revision,
+          pi.minimum_amount_minor,
+          pi.platform_fee_bps,
+          pi.referral_share_of_platform_fee_bps,
+          pi.quoted_at,
           pi.expires_at,
           pi.request_hash,
           pi.withdrawal_waiver_required,

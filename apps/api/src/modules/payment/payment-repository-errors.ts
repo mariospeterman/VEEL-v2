@@ -19,6 +19,13 @@ export class PaymentRecipientNotReadyError extends Error {
   }
 }
 
+export class PaymentAmountBelowPolicyError extends Error {
+  constructor(readonly minimumAmountMinor: number) {
+    super(`PAYMENT_AMOUNT_BELOW_POLICY:${minimumAmountMinor}`);
+    this.name = "PaymentAmountBelowPolicyError";
+  }
+}
+
 export class PaymentConsentConflictError extends Error {
   constructor() {
     super("PAYMENT_CONSENT_CONFLICT");

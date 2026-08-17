@@ -10,6 +10,9 @@ export type TransactionRequest = components["schemas"]["TransactionRequest"];
 export type TransactionRequestPostRequest = components["schemas"]["TransactionRequestPostRequest"];
 export type TransactionRequestPostResponse = components["schemas"]["TransactionRequestPostResponse"];
 export type WebhookReceipt = components["schemas"]["WebhookReceipt"];
+export type AdminPaymentCommercialPolicy = components["schemas"]["AdminPaymentCommercialPolicy"];
+export type AdminPaymentCommercialPolicyPatchRequest =
+  components["schemas"]["AdminPaymentCommercialPolicyPatchRequest"];
 
 export interface CreatePaymentIntentInput {
   supabaseUserId: string;
@@ -24,12 +27,14 @@ export interface CreatePaymentIntentInput {
   solanaCluster: "devnet" | "mainnet-beta";
   treasuryWallet: string;
   platformFeeWallet: string;
+  minimumAmountMinor: number;
   platformFeeBps: number;
   referralShareOfPlatformFeeBps: number;
   settlementKind: SettlementKind;
   creatorUserId?: string | null;
   creatorWallet?: string | null;
   referenceAddress: string;
+  quotedAt: Date;
   expiresAt: Date;
   referralToken?: string | null;
 }
@@ -97,6 +102,12 @@ export interface StoredPaymentIntent extends PaymentIntent {
   tokenDecimals?: number | null;
   solanaCluster: "devnet" | "mainnet-beta";
   expiresAt: Date;
+  quotedAt: Date;
+  minimumAmountMinor: number;
+  platformFeeBps: number;
+  referralShareOfPlatformFeeBps: number;
+  commercialPolicySource: "environment_default" | "admin_override" | "legacy_environment_default";
+  commercialPolicyRevision: number;
   requestHash: string;
   withdrawalWaiverRequired: boolean;
   withdrawalWaiverAcceptedAt: Date | null;
@@ -116,6 +127,19 @@ export interface PaymentRepository {
   ): Promise<Pick<TransactionRequest, "transactionRequestUrl" | "expiresAt"> | null>;
   recordCheckoutPayer(input: RecordCheckoutPayerInput): Promise<StoredPaymentIntent | null>;
   recordSubmission(input: RecordPaymentSubmissionInput): Promise<void>;
+  close?(): Promise<void>;
+}
+
+export interface PaymentCommercialPolicyRepository {
+  listOverrides(): Promise<{ items: AdminPaymentCommercialPolicy[] }>;
+  updateOverride(input: {
+    supabaseUserId: string;
+    productType: AdminPaymentCommercialPolicy["productType"];
+    currency: AdminPaymentCommercialPolicy["currency"];
+    body: AdminPaymentCommercialPolicyPatchRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<AdminPaymentCommercialPolicy>;
   close?(): Promise<void>;
 }
 

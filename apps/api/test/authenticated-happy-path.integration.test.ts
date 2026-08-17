@@ -231,6 +231,10 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         supabaseUserId: buyerSupabaseUserId
       });
       await sql`
+        insert into staff_memberships (id, user_id, role, state)
+        values (${randomUUID()}, ${buyerSupabaseUserId}, 'finance', 'active')
+      `;
+      await sql`
         insert into app_sessions (
           id, user_id, wallet_id, token_hash, expires_at, authentication_method, authenticated_at
         )
@@ -542,6 +546,127 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         receipt_count: "1",
         audit_count: "1"
       });
+
+      const commercialPolicyPayload = {
+        minimumAmountMinor: 2_000_000,
+        platformFeeBps: 1_200,
+        referralShareOfPlatformFeeBps: 1_500,
+        quoteTtlSeconds: 120,
+        state: "active" as const,
+        reason: "Integration proof for server-owned one-time payment policy"
+      };
+      const commercialPolicyRequest = {
+        method: "PATCH" as const,
+        url: "/v1/admin/payments/commercial-policies/support/SOL",
+        headers: authenticatedHeaders(`commercial-policy-${runId}`),
+        payload: commercialPolicyPayload
+      };
+      const commercialPolicyResponse = await app.inject(commercialPolicyRequest);
+      expect(commercialPolicyResponse.statusCode, commercialPolicyResponse.body).toBe(200);
+      expect(commercialPolicyResponse.json()).toMatchObject({
+        productType: "support",
+        currency: "SOL",
+        minimumAmountMinor: 2_000_000,
+        platformFeeBps: 1_200,
+        quoteTtlSeconds: 120,
+        state: "active",
+        revision: 1
+      });
+
+      const commercialPolicyReplay = await app.inject(commercialPolicyRequest);
+      expect(commercialPolicyReplay.statusCode, commercialPolicyReplay.body).toBe(200);
+      expect(commercialPolicyReplay.json()).toEqual(commercialPolicyResponse.json());
+      const commercialPolicyConflict = await app.inject({
+        ...commercialPolicyRequest,
+        payload: { ...commercialPolicyPayload, platformFeeBps: 1_300 }
+      });
+      expect(commercialPolicyConflict.statusCode, commercialPolicyConflict.body).toBe(409);
+
+      const supportIntentResponse = await app.inject({
+        method: "POST",
+        url: "/v1/payments/intents",
+        headers: authenticatedHeaders(`commercial-policy-support-${runId}`),
+        payload: {
+          productType: "support",
+          targetId: seededCreatorUserId,
+          amountMinor: 2_500_000,
+          currency: "SOL"
+        }
+      });
+      expect(supportIntentResponse.statusCode, supportIntentResponse.body).toBe(201);
+      const supportIntent = supportIntentResponse.json<{
+        quote: {
+          policySource: string;
+          policyRevision: number;
+          minimumAmountMinor: number;
+          platformFeeBps: number;
+          quotedAt: string;
+          expiresAt: string;
+        };
+        creatorAmountMinor: number;
+        platformFeeAmountMinor: number;
+      }>();
+      expect(supportIntent).toMatchObject({
+        creatorAmountMinor: 2_200_000,
+        platformFeeAmountMinor: 300_000,
+        quote: {
+          policySource: "admin_override",
+          policyRevision: 1,
+          minimumAmountMinor: 2_000_000,
+          platformFeeBps: 1_200
+        }
+      });
+      expect(
+        Date.parse(supportIntent.quote.expiresAt) - Date.parse(supportIntent.quote.quotedAt)
+      ).toBe(120_000);
+
+      const secondCommercialPolicyResponse = await app.inject({
+        ...commercialPolicyRequest,
+        headers: authenticatedHeaders(`commercial-policy-second-${runId}`),
+        payload: {
+          ...commercialPolicyPayload,
+          minimumAmountMinor: 2_100_000,
+          platformFeeBps: 1_300,
+          reason: "Second integration revision for exact replay proof"
+        }
+      });
+      expect(secondCommercialPolicyResponse.statusCode, secondCommercialPolicyResponse.body).toBe(200);
+      expect(secondCommercialPolicyResponse.json()).toMatchObject({
+        minimumAmountMinor: 2_100_000,
+        platformFeeBps: 1_300,
+        revision: 2
+      });
+
+      const originalReplayAfterSecondRevision = await app.inject(commercialPolicyRequest);
+      expect(originalReplayAfterSecondRevision.statusCode, originalReplayAfterSecondRevision.body).toBe(200);
+      expect(originalReplayAfterSecondRevision.json()).toEqual(commercialPolicyResponse.json());
+
+      const commercialPolicyEvidence = await sql<{
+        audit_count: string;
+        receipt_count: string;
+        receipt_expires_at: string;
+        intent_source: string;
+        intent_revision: number;
+      }[]>`
+        select
+          (select count(*) from audit_events where action = 'payment_commercial_policy_updated'
+            and actor_user_id = ${buyerSupabaseUserId}) as audit_count,
+          (select count(*) from idempotency_keys where scope = 'admin.payment_commercial_policy.update'
+            and actor_user_id = ${buyerSupabaseUserId}) as receipt_count,
+          (select expires_at::text from idempotency_keys where scope = 'admin.payment_commercial_policy.update'
+            and actor_user_id = ${buyerSupabaseUserId} limit 1) as receipt_expires_at,
+          (select commercial_policy_source from payment_intents
+            where idempotency_key = ${`commercial-policy-support-${runId}`} limit 1) as intent_source,
+          (select commercial_policy_revision from payment_intents
+            where idempotency_key = ${`commercial-policy-support-${runId}`} limit 1) as intent_revision
+      `;
+      expect(commercialPolicyEvidence).toEqual([{
+        audit_count: "2",
+        receipt_count: "2",
+        receipt_expires_at: "infinity",
+        intent_source: "admin_override",
+        intent_revision: 1
+      }]);
 
       const preferenceRequest = {
         method: "PATCH" as const,
@@ -5519,6 +5644,14 @@ async function cleanupRun(
     `;
 
     if (userIds.length > 0) {
+      await tx`
+        delete from payment_commercial_policy_overrides
+        where updated_by_user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from staff_memberships
+        where user_id in ${tx(userIds)}
+      `;
       await tx`
         delete from support_cases
         where requester_user_id in ${tx(userIds)}

@@ -21,7 +21,6 @@ export interface RegisterPaymentRoutesOptions {
 }
 
 const productTypes = new Set(["support"]);
-export const paymentIntentTtlMs = 15 * 60 * 1000;
 
 type PaymentReadyAccessResult =
   | {
@@ -159,6 +158,13 @@ export function toPaymentIntentResponse(intent: {
   platformFeeGrossMinor?: number;
   platformFeeAmountMinor?: number;
   referralAmountMinor?: number;
+  minimumAmountMinor?: number;
+  platformFeeBps?: number;
+  referralShareOfPlatformFeeBps?: number;
+  quotedAt?: Date;
+  expiresAt?: Date;
+  commercialPolicySource?: "environment_default" | "admin_override" | "legacy_environment_default";
+  commercialPolicyRevision?: number;
 }): PaymentIntent {
   return {
     id: intent.id,
@@ -173,6 +179,15 @@ export function toPaymentIntentResponse(intent: {
     platformFeeGrossMinor: intent.platformFeeGrossMinor ?? intent.platformFeeAmountMinor ?? 0,
     platformFeeAmountMinor: intent.platformFeeAmountMinor ?? 0,
     referralAmountMinor: intent.referralAmountMinor ?? 0,
+    quote: {
+      minimumAmountMinor: intent.minimumAmountMinor ?? 1,
+      platformFeeBps: intent.platformFeeBps ?? 0,
+      referralShareOfPlatformFeeBps: intent.referralShareOfPlatformFeeBps ?? 0,
+      quotedAt: (intent.quotedAt ?? new Date(0)).toISOString(),
+      expiresAt: (intent.expiresAt ?? new Date(0)).toISOString(),
+      policySource: intent.commercialPolicySource ?? "legacy_environment_default",
+      policyRevision: intent.commercialPolicyRevision ?? 0
+    },
     refundPolicy: {
       withdrawalWaiverRequired: intent.withdrawalWaiverRequired ?? true,
       withdrawalWaiverAcceptedAt: intent.withdrawalWaiverAcceptedAt?.toISOString() ?? null,

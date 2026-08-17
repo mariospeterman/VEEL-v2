@@ -26,6 +26,12 @@ export interface PaymentIntentRow {
   token_decimals: number | null;
   solana_cluster: StoredPaymentIntent["solanaCluster"];
   expires_at: Date;
+  quoted_at: Date;
+  minimum_amount_minor: number;
+  platform_fee_bps: number;
+  referral_share_of_platform_fee_bps: number;
+  commercial_policy_source: StoredPaymentIntent["commercialPolicySource"];
+  commercial_policy_revision: number;
   request_hash: string;
   withdrawal_waiver_required: boolean;
   withdrawal_waiver_accepted_at: Date | null;
@@ -52,6 +58,15 @@ export function toStoredPaymentIntent(row: PaymentIntentRow): StoredPaymentInten
     amountMinor: Number(row.amount_minor),
     currency: row.currency,
     state: row.state,
+    quote: {
+      minimumAmountMinor: Number(row.minimum_amount_minor),
+      platformFeeBps: row.platform_fee_bps,
+      referralShareOfPlatformFeeBps: row.referral_share_of_platform_fee_bps,
+      quotedAt: row.quoted_at.toISOString(),
+      expiresAt: row.expires_at.toISOString(),
+      policySource: row.commercial_policy_source,
+      policyRevision: row.commercial_policy_revision
+    },
     refundPolicy,
     referenceAddress: row.reference_address,
     treasuryWallet: row.treasury_wallet,
@@ -72,6 +87,12 @@ export function toStoredPaymentIntent(row: PaymentIntentRow): StoredPaymentInten
     tokenDecimals: row.token_decimals,
     solanaCluster: row.solana_cluster,
     expiresAt: row.expires_at,
+    quotedAt: row.quoted_at,
+    minimumAmountMinor: Number(row.minimum_amount_minor),
+    platformFeeBps: row.platform_fee_bps,
+    referralShareOfPlatformFeeBps: row.referral_share_of_platform_fee_bps,
+    commercialPolicySource: row.commercial_policy_source,
+    commercialPolicyRevision: row.commercial_policy_revision,
     requestHash: row.request_hash,
     withdrawalWaiverRequired: row.withdrawal_waiver_required,
     withdrawalWaiverAcceptedAt: row.withdrawal_waiver_accepted_at,

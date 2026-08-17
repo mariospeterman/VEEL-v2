@@ -9,12 +9,14 @@ import type { ApplicationSessionVerifier } from "../session/types.js";
 import type { LiveProviderAdapter, LiveRepository } from "../live/types.js";
 import { AdminRepositoryConfigurationError } from "./admin-repository.js";
 import type { AdminRepository } from "./types.js";
+import type { PaymentCommercialPolicyRepository } from "../payment/types.js";
 
 export interface RegisterAdminRoutesOptions {
   authVerifier: ApplicationSessionVerifier;
   adminRepository: AdminRepository;
   liveRepository: LiveRepository;
   liveProvider: LiveProviderAdapter;
+  paymentCommercialPolicyRepository?: PaymentCommercialPolicyRepository;
 }
 
 export interface AdminMutationContext<Body> {

@@ -22,6 +22,7 @@ import {
   getAdminOrganizations,
   getAdminPartnerCampaigns,
   getAdminPaymentIntents,
+  getAdminPaymentCommercialPolicies,
   getAdminProviderEvents,
   getAdminReceipts,
   getAdminReferralPrograms,
@@ -41,6 +42,7 @@ export async function getAdminPageData() {
   const [
     summary,
     payments,
+    paymentCommercialPolicies,
     unlocks,
     providerEvents,
     liveRooms,
@@ -76,6 +78,7 @@ export async function getAdminPageData() {
   ] = await Promise.all([
     getAdminOpsSummary(),
     getAdminPaymentIntents(),
+    getAdminPaymentCommercialPolicies(),
     getAdminUnlocks(),
     getAdminProviderEvents(),
     getAdminLiveRooms(),
@@ -133,6 +136,7 @@ export async function getAdminPageData() {
     organizations,
     partnerCampaigns,
     payments,
+    paymentCommercialPolicies,
     providerEvents,
     receipts,
     referralPrograms,

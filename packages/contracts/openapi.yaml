@@ -2367,6 +2367,35 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/AdminPaymentIntentPage" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/payments/commercial-policies:
+    get:
+      operationId: listAdminPaymentCommercialPolicies
+      tags: [Admin]
+      summary: List audited backend payment policy overrides
+      responses:
+        "200": { $ref: "#/components/responses/AdminPaymentCommercialPolicyPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/payments/commercial-policies/{productType}/{currency}:
+    patch:
+      operationId: updateAdminPaymentCommercialPolicy
+      tags: [Admin]
+      summary: Create or update an audited backend payment policy override
+      parameters:
+        - name: productType
+          in: path
+          required: true
+          schema: { type: string, enum: [support, content_unlock, paid_message, live_pass, event_access_pass] }
+        - name: currency
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/Currency" }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/AdminPaymentCommercialPolicyPatch"
+      responses:
+        "200": { $ref: "#/components/responses/AdminPaymentCommercialPolicy" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /v1/admin/unlocks:
     get:
       operationId: listAdminUnlocks
@@ -3003,6 +3032,7 @@ components:
     AdminOrganizationProvision: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOrganizationProvisionRequest" } } } }
     AdminOrganizationMemberAction: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOrganizationMemberActionRequest" } } } }
     AdminFeatureFlagPatch: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminFeatureFlagPatchRequest" } } } }
+    AdminPaymentCommercialPolicyPatch: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminPaymentCommercialPolicyPatchRequest" } } } }
     AdminLiveRoomSuspension: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminLiveRoomSuspensionRequest" } } } }
     WebhookPayload: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
     AgeWebhookPayload:
@@ -3132,6 +3162,8 @@ components:
     AdminReport: { description: Admin report, content: { application/json: { schema: { $ref: "#/components/schemas/AdminReport" } } } }
     AdminReportPage: { description: Admin reports, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminReport" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminPaymentIntentPage: { description: Admin payment intents, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminPaymentIntent" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminPaymentCommercialPolicy: { description: Audited backend payment policy override, content: { application/json: { schema: { $ref: "#/components/schemas/AdminPaymentCommercialPolicy" } } } }
+    AdminPaymentCommercialPolicyPage: { description: Audited backend payment policy overrides, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminPaymentCommercialPolicy" } } } } } } }
     AdminUnlockPage: { description: Admin unlocks, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminUnlock" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminProviderEventPage: { description: Admin provider events, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminProviderEvent" } }, nextCursor: { type: string, nullable: true } } } } } }
     AdminSupportCase: { description: Admin support case, content: { application/json: { schema: { $ref: "#/components/schemas/AdminSupportCase" } } } }
@@ -4321,9 +4353,21 @@ components:
         termsVersion: { type: string }
         durableConfirmationRequired: { type: boolean }
         refundValueBasis: { type: string, enum: [original_crypto_amount, fiat_value_at_purchase, manual_resolution] }
+    PaymentIntentQuote:
+      type: object
+      description: Immutable backend-owned commercial policy snapshot for this short-lived quote.
+      required: [minimumAmountMinor, platformFeeBps, referralShareOfPlatformFeeBps, quotedAt, expiresAt, policySource, policyRevision]
+      properties:
+        minimumAmountMinor: { type: integer, minimum: 1, maximum: 9007199254740991 }
+        platformFeeBps: { type: integer, minimum: 0, maximum: 9999 }
+        referralShareOfPlatformFeeBps: { type: integer, minimum: 0, maximum: 10000 }
+        quotedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        policySource: { type: string, enum: [environment_default, admin_override, legacy_environment_default] }
+        policyRevision: { type: integer, minimum: 0 }
     PaymentIntent:
       type: object
-      required: [id, productType, amountMinor, currency, state, settlementKind, creatorSideProceedsMinor, creatorAmountMinor, enterpriseManagementAmountMinor, platformFeeGrossMinor, platformFeeAmountMinor, referralAmountMinor, refundPolicy]
+      required: [id, productType, amountMinor, currency, state, settlementKind, creatorSideProceedsMinor, creatorAmountMinor, enterpriseManagementAmountMinor, platformFeeGrossMinor, platformFeeAmountMinor, referralAmountMinor, quote, refundPolicy]
       properties:
         id: { type: string, format: uuid }
         productType: { $ref: "#/components/schemas/ProductType" }
@@ -4337,6 +4381,7 @@ components:
         platformFeeGrossMinor: { type: integer, minimum: 0, maximum: 9007199254740991 }
         platformFeeAmountMinor: { type: integer, minimum: 0, maximum: 9007199254740991 }
         referralAmountMinor: { type: integer, minimum: 0, maximum: 9007199254740991 }
+        quote: { $ref: "#/components/schemas/PaymentIntentQuote" }
         refundPolicy: { $ref: "#/components/schemas/PaymentIntentRefundPolicy" }
     SubmitPaymentSignatureRequest:
       type: object
@@ -5397,6 +5442,21 @@ components:
         entitlementId: { type: string, format: uuid, nullable: true }
         createdAt: { type: string, format: date-time }
         confirmedAt: { type: string, format: date-time, nullable: true }
+    AdminPaymentCommercialPolicy:
+      type: object
+      required: [id, productType, currency, minimumAmountMinor, platformFeeBps, referralShareOfPlatformFeeBps, quoteTtlSeconds, state, revision, reason, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        productType: { type: string, enum: [support, content_unlock, paid_message, live_pass, event_access_pass] }
+        currency: { $ref: "#/components/schemas/Currency" }
+        minimumAmountMinor: { type: integer, minimum: 1, maximum: 9007199254740991 }
+        platformFeeBps: { type: integer, minimum: 0, maximum: 9999 }
+        referralShareOfPlatformFeeBps: { type: integer, minimum: 0, maximum: 10000 }
+        quoteTtlSeconds: { type: integer, minimum: 60, maximum: 1800 }
+        state: { type: string, enum: [active, inactive] }
+        revision: { type: integer, minimum: 1 }
+        reason: { type: string }
+        updatedAt: { type: string, format: date-time }
     AdminUnlock:
       type: object
       required: [id, userId, targetType, targetId, productType, state, grantedAt]
@@ -5827,6 +5887,17 @@ components:
           additionalProperties: true
           description: Policy-owned flag data. For boolean rollout gates, backend enforcement requires value.enabled to be true and state to be active.
         state: { type: string, enum: [active, paused, archived] }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+    AdminPaymentCommercialPolicyPatchRequest:
+      type: object
+      additionalProperties: false
+      required: [minimumAmountMinor, platformFeeBps, referralShareOfPlatformFeeBps, quoteTtlSeconds, state, reason]
+      properties:
+        minimumAmountMinor: { type: integer, minimum: 1, maximum: 9007199254740991 }
+        platformFeeBps: { type: integer, minimum: 0, maximum: 9999 }
+        referralShareOfPlatformFeeBps: { type: integer, minimum: 0, maximum: 10000 }
+        quoteTtlSeconds: { type: integer, minimum: 60, maximum: 1800 }
+        state: { type: string, enum: [active, inactive] }
         reason: { type: string, minLength: 3, maxLength: 500 }
     AuditEvent:
       type: object
