@@ -82,12 +82,12 @@ attestations, then failed closed before deployment because the shared staging/pr
 configuration groups listed above are absent. No staging migration, webhook change, or production
 promotion was attempted.
 
-Current human/provider gates do not block this process slice: shared staging credentials,
-provider dashboard/webhook/domain configuration, migration `0091` shared-project proof,
-production hosting/DNS approval, mainnet wallet approval, and unsettled legal/compliance
-decisions remain release gates. Provider-dependent product work may reach
-`CODE_COMPLETE_PROVIDER_BLOCKED` and merge only while the production path remains explicit
-and fail-closed.
+These human/provider gates now block the active pre-production convergence slice: shared staging
+credentials, provider dashboard/webhook/domain configuration, migration `0091` shared-project
+proof, production hosting/DNS approval, mainnet wallet approval, and unsettled legal/compliance
+decisions. Independent product slices were allowed to reach `CODE_COMPLETE_PROVIDER_BLOCKED`
+while their production paths remained explicit and fail-closed; the core platform is now at the
+dedicated convergence gate and cannot advance to a release candidate without this evidence.
 
 Launch 09 local acceptance now includes migration `0099`, audited/idempotent organization
 provisioning, explicit owner/team/creator consent, normalized organization-KYB authorization,
