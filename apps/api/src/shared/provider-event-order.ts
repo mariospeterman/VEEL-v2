@@ -4,7 +4,9 @@ type ProviderEventSubject =
   | { kind: "media_asset"; providerAssetId: string }
   | { kind: "livepeer_stream"; providerStreamId: string };
 
-export async function isLatestProviderEventForSubject(
+export type ProviderEventReplayDecision = "apply" | "already_applied" | "stale";
+
+export async function providerEventReplayDecision(
   transaction: PostgresTransaction,
   input: {
     provider: "bunny" | "livepeer";
@@ -12,17 +14,19 @@ export async function isLatestProviderEventForSubject(
     subject: ProviderEventSubject;
     subjectObservedAt?: Date | null;
   }
-): Promise<boolean> {
+): Promise<ProviderEventReplayDecision> {
   const rows = input.subject.kind === "media_asset"
-    ? await transaction<{ is_latest: boolean }[]>`
-        select not exists (
+    ? await transaction<{ is_latest: boolean; processed_at: Date | null }[]>`
+        select
+          current_event.processed_at,
+          not exists (
           select 1
           from provider_events newer
           where newer.provider = current_event.provider
             and newer.delivery_sequence > current_event.delivery_sequence
             and newer.replay_payload ->> 'kind' = 'media_asset'
             and newer.replay_payload ->> 'providerAssetId' = ${input.subject.providerAssetId}
-        ) as is_latest
+          ) as is_latest
         from provider_events current_event
         where current_event.provider = ${input.provider}
           and current_event.provider_event_id = ${input.providerEventId}
@@ -32,15 +36,17 @@ export async function isLatestProviderEventForSubject(
           )
         limit 1
       `
-    : await transaction<{ is_latest: boolean }[]>`
-        select not exists (
+    : await transaction<{ is_latest: boolean; processed_at: Date | null }[]>`
+        select
+          current_event.processed_at,
+          not exists (
           select 1
           from provider_events newer
           where newer.provider = current_event.provider
             and newer.delivery_sequence > current_event.delivery_sequence
             and newer.replay_payload ->> 'kind' = 'livepeer_stream'
             and newer.replay_payload ->> 'providerStreamId' = ${input.subject.providerStreamId}
-        ) as is_latest
+          ) as is_latest
         from provider_events current_event
         where current_event.provider = ${input.provider}
           and current_event.provider_event_id = ${input.providerEventId}
@@ -51,5 +57,8 @@ export async function isLatestProviderEventForSubject(
         limit 1
       `;
 
-  return rows[0]?.is_latest === true;
+  const event = rows[0];
+  if (!event) return "stale";
+  if (event.processed_at) return "already_applied";
+  return event.is_latest ? "apply" : "stale";
 }

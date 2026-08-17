@@ -108,7 +108,10 @@ function createFakeSql(input: {
       }]);
     }
     if (query.includes("as is_latest")) {
-      return Promise.resolve([{ is_latest: input.isLatestProviderEvent ?? true }]);
+      return Promise.resolve([{
+        is_latest: input.isLatestProviderEvent ?? true,
+        processed_at: null
+      }]);
     }
     return Promise.resolve(query.includes("returning id") ? [{ id: "media-asset" }] : []);
   }) as unknown as PostgresTransaction;

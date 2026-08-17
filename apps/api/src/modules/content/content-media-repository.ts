@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import { withPostgresTransaction } from "../../shared/postgres.js";
-import { isLatestProviderEventForSubject } from "../../shared/provider-event-order.js";
+import { providerEventReplayDecision } from "../../shared/provider-event-order.js";
 import type { ContentItem, ContentRepository } from "./types.js";
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
@@ -236,7 +236,7 @@ export function createContentMediaRepositoryMethods(
           return [] as { id: string }[];
         }
 
-        const isLatestReplay = !input.preventStateRegression || await isLatestProviderEventForSubject(
+        const replayDecision = !input.preventStateRegression ? "apply" : await providerEventReplayDecision(
           transaction,
           {
             provider: input.provider,
@@ -246,7 +246,11 @@ export function createContentMediaRepositoryMethods(
           }
         );
 
-        if (!isLatestReplay) {
+        if (replayDecision === "already_applied") {
+          return [{ id: current.id }];
+        }
+
+        if (replayDecision === "stale") {
           await transaction`
             update provider_events
             set normalized_state = 'ignored_stale', processed_at = now()
