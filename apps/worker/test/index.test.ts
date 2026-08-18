@@ -8,10 +8,12 @@ import {
   runProviderEventReplayTick,
   runSubscriptionCollectionTick
 } from "../src/index";
-import type {
-  MediaModerationOutcome,
-  MediaModerationRepository,
-  QueuedMediaModerationJob
+import {
+  summarizeEvidence,
+  type MediaModerationSignal,
+  type MediaModerationOutcome,
+  type MediaModerationRepository,
+  type QueuedMediaModerationJob
 } from "../src/media-moderation";
 import type {
   DueNotificationDelivery,
@@ -155,6 +157,7 @@ describe("runMediaModerationTick", () => {
       jobId: "moderation-job-1",
       caseId: "safety-case-1",
       mediaAssetId: "media-asset-1",
+      liveRoomId: null,
       provider: "bunny",
       providerAssetId: "bunny-video-1",
       stage: "provider_scan_reconciliation",
@@ -185,7 +188,187 @@ describe("runMediaModerationTick", () => {
       }
     ]);
   });
+
+  it("keeps complete automated evidence behind human release review", async () => {
+    const job: QueuedMediaModerationJob = {
+      jobId: "moderation-job-evidence",
+      caseId: "safety-case-evidence",
+      mediaAssetId: "media-asset-evidence",
+      liveRoomId: null,
+      provider: "bunny",
+      providerAssetId: "bunny-video-evidence",
+      stage: "provider_scan_reconciliation",
+      attemptCount: 1,
+      maxAttempts: 5,
+      leaseToken: "00000000-0000-4000-8000-000000000099"
+    };
+    const signals = clearMediaSignals();
+    const outcomes: MediaModerationOutcome[] = [];
+    const repository: MediaModerationRepository = {
+      async leaseJobs() {
+        return [job];
+      },
+      async recordOutcome(input) {
+        outcomes.push(input.outcome);
+      }
+    };
+
+    await expect(runMediaModerationTick({
+      repository,
+      adapter: { async evaluate() { return { state: "evidence", signals }; } }
+    })).resolves.toEqual({
+      leased: 1,
+      completed: 1,
+      reviewRequired: 0,
+      failed: 0
+    });
+    expect(outcomes).toEqual([{ state: "evidence", signals }]);
+    expect(summarizeEvidence(signals)).toEqual({
+      caseState: "review_required",
+      evidenceComplete: true,
+      matchedKnownHash: null,
+      reasonCode: "automated_checks_clear_manual_release_required"
+    });
+  });
+
+  it("treats a valid Livepeer signal as complete live evidence", async () => {
+    const job: QueuedMediaModerationJob = {
+      jobId: "moderation-job-live-evidence",
+      caseId: "safety-case-live-evidence",
+      mediaAssetId: null,
+      liveRoomId: "live-room-evidence",
+      targetType: "live_room",
+      provider: "livepeer",
+      providerAssetId: "livepeer-stream-evidence",
+      stage: "provider_scan_reconciliation",
+      attemptCount: 1,
+      maxAttempts: 5,
+      leaseToken: "00000000-0000-4000-8000-000000000098"
+    };
+    const signals: MediaModerationSignal[] = [{
+      provider: "livepeer",
+      providerEventId: "live-signal-1",
+      scanType: "live_signal",
+      normalizedSignal: "clear",
+      payloadHash: "b".repeat(64),
+      modelOrRulesetVersion: "livepeer-signal-v1"
+    }];
+    const outcomes: MediaModerationOutcome[] = [];
+    const repository: MediaModerationRepository = {
+      async leaseJobs() {
+        return [job];
+      },
+      async recordOutcome(input) {
+        outcomes.push(input.outcome);
+      }
+    };
+
+    await expect(runMediaModerationTick({
+      repository,
+      adapter: { async evaluate() { return { state: "evidence", signals }; } }
+    })).resolves.toEqual({
+      leased: 1,
+      completed: 1,
+      reviewRequired: 0,
+      failed: 0
+    });
+    expect(outcomes).toEqual([{ state: "evidence", signals }]);
+    expect(summarizeEvidence(signals, "live_room")).toEqual({
+      caseState: "review_required",
+      evidenceComplete: true,
+      matchedKnownHash: null,
+      reasonCode: "automated_checks_clear_manual_release_required"
+    });
+  });
+
+  it("holds a known-hash match for reporting review without automatic sanctions", () => {
+    const signals = clearMediaSignals();
+    const matched = {
+      ...signals[2]!,
+      normalizedSignal: "matched" as const,
+      providerIncidentReference: "opaque-incident-1"
+    };
+    signals[2] = matched;
+
+    expect(summarizeEvidence(signals)).toEqual({
+      caseState: "held_for_reporting",
+      evidenceComplete: true,
+      matchedKnownHash: matched,
+      reasonCode: "known_hash_match_requires_reporting_review"
+    });
+  });
+
+  it("preserves a valid known-hash match when a companion signal is malformed", () => {
+    const signals = clearMediaSignals();
+    const matched = {
+      ...signals[2]!,
+      normalizedSignal: "matched" as const,
+      providerIncidentReference: "opaque-incident-2"
+    };
+    signals[2] = matched;
+    signals[3] = { ...signals[3]!, payloadHash: "not-a-sha256" };
+
+    expect(summarizeEvidence(signals)).toEqual({
+      caseState: "held_for_reporting",
+      evidenceComplete: false,
+      matchedKnownHash: matched,
+      reasonCode: "known_hash_match_requires_reporting_review"
+    });
+  });
+
+  it("rejects incomplete or malformed normalized evidence", () => {
+    const incomplete = clearMediaSignals().slice(0, 3);
+    expect(summarizeEvidence(incomplete)).toMatchObject({
+      evidenceComplete: false,
+      reasonCode: "required_release_evidence_incomplete"
+    });
+
+    const malformed = clearMediaSignals();
+    malformed[1] = { ...malformed[1]!, payloadHash: "not-a-sha256" };
+    expect(summarizeEvidence(malformed)).toMatchObject({
+      evidenceComplete: false,
+      reasonCode: "required_release_evidence_invalid"
+    });
+  });
 });
+
+function clearMediaSignals(): MediaModerationSignal[] {
+  const payloadHash = "a".repeat(64);
+  return [
+    {
+      provider: "bunny_stream",
+      providerEventId: "container-1",
+      scanType: "container_integrity",
+      normalizedSignal: "clear",
+      payloadHash,
+      modelOrRulesetVersion: "bunny-stream-playability-v1"
+    },
+    {
+      provider: "bunny_shield",
+      providerEventId: "malware-1",
+      scanType: "malware",
+      normalizedSignal: "clear",
+      payloadHash,
+      modelOrRulesetVersion: "shield-antivirus-v1"
+    },
+    {
+      provider: "bunny_shield",
+      providerEventId: "known-hash-1",
+      scanType: "known_hash",
+      normalizedSignal: "clear",
+      payloadHash,
+      modelOrRulesetVersion: "shield-known-hash-v1"
+    },
+    {
+      provider: "internal",
+      providerEventId: "classification-1",
+      scanType: "content_classification",
+      normalizedSignal: "clear",
+      payloadHash,
+      modelOrRulesetVersion: "fixture-classifier-v1"
+    }
+  ];
+}
 
 describe("runNotificationDeliveryTick", () => {
   it("delivers queued notification attempts through the worker provider boundary", async () => {

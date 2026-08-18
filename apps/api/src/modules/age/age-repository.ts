@@ -32,38 +32,17 @@ export function createPostgresAgeRepository(database?: string | PostgresSql): Ag
   const { sql, ownsClient } = resolvePostgresClient(database);
 
   return {
+    async findLatestAgeStatusByUserId(userId) {
+      return findLatestAgeStatus(sql, "canonical", userId);
+    },
     async findLatestAgeStatusBySupabaseUserId(supabaseUserId) {
-      const rows = await sql<AgeStatusRow[]>`
-        select
-          case
-            when vr.status = 'valid' and vr.expires_at is not null and vr.expires_at <= now()
-              then 'expired'
-            else vr.status
-          end as status,
-          vr.provider
-        from users u
-        left join lateral (
-          select status, provider, expires_at
-          from verification_records
-          where subject_type = 'user'
-            and subject_id = u.id
-            and purpose = 'age_access'
-          order by created_at desc, id desc
-          limit 1
-        ) vr on true
-        where u.supabase_user_id = ${supabaseUserId}
-        limit 1
-      `;
-      const row = rows[0];
-
-      if (!row?.status) return requiredAgeStatus;
-      return { state: toAgeState(row.status), provider: row.provider };
+      return findLatestAgeStatus(sql, "legacy", supabaseUserId);
     },
 
     async createPendingAgeVerification(input) {
       await sql.begin(async (tx) => {
         const users = await tx<{ id: string }[]>`
-          select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
+          select id from users where id = ${input.userId} limit 1
         `;
         const user = users[0];
         if (!user) throw new Error("USER_NOT_FOUND");
@@ -181,6 +160,9 @@ export function createPostgresAgeRepository(database?: string | PostgresSql): Ag
 
 function unavailableAgeRepository(): AgeRepository {
   return {
+    async findLatestAgeStatusByUserId() {
+      throw new AgeRepositoryConfigurationError();
+    },
     async findLatestAgeStatusBySupabaseUserId() {
       throw new AgeRepositoryConfigurationError();
     },
@@ -194,6 +176,60 @@ function unavailableAgeRepository(): AgeRepository {
       throw new AgeRepositoryConfigurationError();
     }
   };
+}
+
+async function findLatestAgeStatus(
+  sql: PostgresSql,
+  identity: "canonical" | "legacy",
+  userId: string
+): Promise<AgeStatus> {
+  const rows = identity === "canonical"
+    ? await sql<AgeStatusRow[]>`
+        select
+          case
+            when vr.status = 'valid' and vr.expires_at is not null and vr.expires_at <= now()
+              then 'expired'
+            else vr.status
+          end as status,
+          vr.provider
+        from users u
+        left join lateral (
+          select status, provider, expires_at
+          from verification_records
+          where subject_type = 'user'
+            and subject_id = u.id
+            and purpose = 'age_access'
+          order by created_at desc, id desc
+          limit 1
+        ) vr on true
+        where u.id = ${userId}
+        limit 1
+      `
+    : await sql<AgeStatusRow[]>`
+        select
+          case
+            when vr.status = 'valid' and vr.expires_at is not null and vr.expires_at <= now()
+              then 'expired'
+            else vr.status
+          end as status,
+          vr.provider
+        from users u
+        left join lateral (
+          select status, provider, expires_at
+          from verification_records
+          where subject_type = 'user'
+            and subject_id = u.id
+            and purpose = 'age_access'
+          order by created_at desc, id desc
+          limit 1
+        ) vr on true
+        where u.supabase_user_id = ${userId}
+        limit 1
+      `;
+  const row = rows[0];
+
+  if (!row?.status) return requiredAgeStatus;
+  return { state: toAgeState(row.status), provider: row.provider };
 }
 
 async function applyAgeWebhookDecision(

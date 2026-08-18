@@ -201,6 +201,7 @@ function productionDeployEnv() {
         STAGING_VERIFICATION_PROOF_ID: "verification-proof",
         STAGING_PAYMENT_PROOF_ID: "payment-proof",
         STAGING_LIVEPEER_PROOF_ID: "livepeer-proof",
+        STAGING_MEDIA_SAFETY_PROOF_ID: "media-safety-proof",
         STAGING_REALTIME_PUSH_PROOF_ID: "realtime-push-proof",
         STAGING_MODERATION_PROOF_ID: "moderation-proof",
         STAGING_STORAGE_BACKUP_PROOF_ID: "storage-backup-proof",

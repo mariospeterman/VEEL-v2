@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
-import type { AgeRepository } from "../age/types.js";
+import { findAgeStatusForUser, type AgeRepository } from "../age/types.js";
 import type { SessionRepository, ApplicationSessionVerifier } from "../session/types.js";
 import {
   CreatorOnboardingIdempotencyConflictError,
@@ -109,7 +109,7 @@ export async function registerProfileRoutes(
     }
 
     try {
-      const dashboard = await options.profileRepository.getMyCreatorDashboard(access.supabaseUserId);
+      const dashboard = await options.profileRepository.getMyCreatorDashboard(access.userId);
 
       if (!dashboard) {
         return reply.code(403).send({
@@ -136,8 +136,9 @@ export async function registerProfileRoutes(
       return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
     }
 
-    try {      const onboarding = await options.profileRepository.getMyCreatorOnboarding(
-        verifiedSession.supabaseUserId
+    try {
+      const onboarding = await options.profileRepository.getMyCreatorOnboarding(
+        verifiedSession.userId
       );
 
       if (!onboarding) {
@@ -183,7 +184,7 @@ export async function registerProfileRoutes(
 
       try {
         const onboarding = await options.profileRepository.updateMyCreatorOnboarding({
-          supabaseUserId: verifiedSession.supabaseUserId,
+          userId: verifiedSession.userId,
           idempotencyKey: mutation.idempotencyKey,
           requestHash: mutation.requestHash,
           expectedWalletChain:
@@ -339,7 +340,7 @@ export async function registerProfileRoutes(
       }
 
       const extension = avatarExtension(contentType);
-      const objectPath = `profiles/${verifiedSession.supabaseUserId}/${randomUUID()}.${extension}`;
+      const objectPath = `profiles/${verifiedSession.userId}/${randomUUID()}.${extension}`;
       const supabase = createClient(supabaseUrl, supabaseKey, {
         auth: {
           persistSession: false
@@ -376,7 +377,7 @@ async function requireCreatorDashboardAccess(
   request: FastifyRequest,
   reply: FastifyReply,
   options: RegisterProfileRoutesOptions
-): Promise<{ supabaseUserId: string } | null> {
+): Promise<{ userId: string } | null> {
   const verifiedSession = await verifyRequestSession(request, options.authVerifier);
 
   if (!verifiedSession) {
@@ -385,8 +386,8 @@ async function requireCreatorDashboardAccess(
   }
 
   const [profile, ageStatus] = await Promise.all([
-    options.sessionRepository.findProfileBySupabaseUserId(verifiedSession.supabaseUserId),
-    options.ageRepository.findLatestAgeStatusBySupabaseUserId(verifiedSession.supabaseUserId)
+    options.sessionRepository.findProfileByUserId(verifiedSession.userId),
+    findAgeStatusForUser(options.ageRepository, verifiedSession.userId)
   ]);
 
   if (profile?.state !== "active" || !profile.handle || ageStatus.state !== "verified") {
@@ -398,7 +399,7 @@ async function requireCreatorDashboardAccess(
   }
 
   return {
-    supabaseUserId: verifiedSession.supabaseUserId
+    userId: verifiedSession.userId
   };
 }
 

@@ -14,11 +14,12 @@ import {
   AgeProviderUnavailableError
 } from "./age-provider-waterfall.js";
 import { isMockVerificationProviderReference } from "../verification/verification-provider-adapters.js";
-import type {
-  AgeProviderWaterfall,
-  AgeRepository,
-  AgeProvider,
-  CreateAgeSessionRequest
+import {
+  findAgeStatusForUser,
+  type AgeProviderWaterfall,
+  type AgeRepository,
+  type AgeProvider,
+  type CreateAgeSessionRequest
 } from "./types.js";
 import { mutationRateLimit } from "../../shared/rate-limits.js";
 import { contractRouteSchema } from "../../shared/openapi-route-schema.js";
@@ -135,8 +136,10 @@ export async function registerAgeRoutes(
       });
     }
 
-    try {      const latestAgeStatus = await options.ageRepository.findLatestAgeStatusBySupabaseUserId(
-        verifiedSession.supabaseUserId
+    try {
+      const latestAgeStatus = await findAgeStatusForUser(
+        options.ageRepository,
+        verifiedSession.userId
       );
 
       if (latestAgeStatus.state === "verified") {
@@ -147,7 +150,7 @@ export async function registerAgeRoutes(
       }
 
       const providerSession = await options.ageProviderWaterfall.createSession({
-        supabaseUserId: verifiedSession.supabaseUserId,
+        supabaseUserId: verifiedSession.userId,
         providerPreference,
         idempotencyKey,
         callbackUrl: `${app.config.WEB_URL}/age/callback`,
@@ -155,7 +158,7 @@ export async function registerAgeRoutes(
       });
 
       await options.ageRepository.createPendingAgeVerification({
-        supabaseUserId: verifiedSession.supabaseUserId,
+        userId: verifiedSession.userId,
         provider: providerSession.provider,
         providerReference: providerSession.providerReference,
         jurisdiction: providerSession.jurisdiction ?? null,
@@ -213,9 +216,7 @@ export async function registerAgeRoutes(
     }
 
     try {
-      const ageStatus = await options.ageRepository.findLatestAgeStatusBySupabaseUserId(
-        verifiedSession.supabaseUserId
-      );
+      const ageStatus = await findAgeStatusForUser(options.ageRepository, verifiedSession.userId);
 
       return reply.code(200).send(ageStatus);
     } catch (error) {

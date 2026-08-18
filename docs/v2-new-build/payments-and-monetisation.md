@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Solana Pay, monetisation, referrals
-Last updated: 2026-08-15
+Last updated: 2026-08-17
 Source of truth: yes
 
 Owns:
@@ -56,6 +56,7 @@ Current implementation state:
 - `GET /v1/activity/payments` includes backend-derived receipt number/state, in-app/email confirmation state, withdrawal-right status, latest refund/dispute review state, and whether a support review can be opened. `/app/activity` renders those facts and can submit the existing refund/access-issue review mutation for legal/policy exceptions; it still never executes refunds, moves funds, revokes access, or creates balances.
 - `GET /v1/profiles/me/creator-dashboard` exposes creator monetisation readiness, backend-derived readiness score, product toggles, confirmed earning records, platform fees, referral commissions, and recent payment activity from backend tables only. Its policy boundary is `creator_records_only_no_balances_payout_queue_or_social_priority`.
 - `GET /v1/profiles/me/creator-onboarding` and idempotent `PATCH /v1/profiles/me/creator-onboarding` are the canonical backend-owned Enable Earnings boundary covering profile, age, a user-owned Solana recipient wallet, exact Creator Earnings Terms acceptance, policy-driven KYC, tax profile, and one-time product readiness. The response returns the current safe configuration so the browser edits the actual selected wallet and product toggles. It does not create another account, balances, custody, payout queues, escrow, or social advantage.
+- Enable Earnings, its creator dashboard projection, and recipient-wallet validation resolve the canonical `users.id` from the opaque application session. They do not query a provider subject or require the transitional `users.supabase_user_id` compatibility value; provider recovery identity remains owned by `user_provider_identities`.
 - Admin reconciliation is available through role-gated read-only projections for payment intents, unlock entitlements, provider events, and operations counts. These projections never expose raw provider payloads, provider secrets, private keys, or frontend-computed payment truth.
 - `GET /v1/subscriptions/plans` and `GET /v1/subscriptions` expose backend-owned plan and current subscription state for app-ready users; `/subscriptions` reads those projections and does not render fixture plans or subscription state.
 - `GET`, `PUT`, and `DELETE /v1/subscriptions/creator-offer` own the creator's single profile-native Membership offer. The creator sets a bounded monthly USDC price, name, description, and benefits only after the canonical earnings/KYC/tax/recipient-wallet checks pass. The API converts minor units to atomic units, computes the existing platform-fee policy, stores exact creator/platform amounts, and resets every changed offer to `staging_required` with new joins disabled. The profile can explain the offer, but only `launch_approved` plans render an enabled `Join @handle` action.

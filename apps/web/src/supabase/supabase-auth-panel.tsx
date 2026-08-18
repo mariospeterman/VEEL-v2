@@ -6,14 +6,11 @@ import { ProviderLogo } from "@/brand/provider-logo";
 import { createSupabaseBrowserClient } from "./client";
 import { getSupabaseAuthConfig, type SupabaseAuthProvider } from "./supabase-auth-config";
 
-type SupabaseAuthPanelMode = "login" | "profile";
-
 interface SupabaseAuthPanelProps {
-  mode: SupabaseAuthPanelMode;
   next?: string;
 }
 
-export function SupabaseAuthPanel({ mode, next = "/app/home" }: SupabaseAuthPanelProps) {
+export function SupabaseAuthPanel({ next = "/app/home" }: SupabaseAuthPanelProps) {
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState<"email" | SupabaseAuthProvider["provider"] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -39,8 +36,8 @@ export function SupabaseAuthPanel({ mode, next = "/app/home" }: SupabaseAuthPane
       <div className="landing-supabase-auth">
         <p className="landing-auth-unavailable">
           {config.supabaseConfigured
-            ? "Supabase auth is configured. Enable email or social provider flags to show login methods."
-            : "Supabase auth is unavailable in this local build."}
+            ? "Recovery sign-in options are not enabled."
+            : "Recovery access is unavailable in this build."}
         </p>
       </div>
     );
@@ -56,7 +53,7 @@ export function SupabaseAuthPanel({ mode, next = "/app/home" }: SupabaseAuthPane
     }
 
     if (!supabase) {
-      setError("Supabase auth is unavailable in this local build.");
+      setError("Recovery access is unavailable in this build.");
       return;
     }
 
@@ -68,23 +65,23 @@ export function SupabaseAuthPanel({ mode, next = "/app/home" }: SupabaseAuthPane
       email: normalizedEmail,
       options: {
         emailRedirectTo: supabaseRedirectTo(next),
-        shouldCreateUser: mode === "profile"
+        shouldCreateUser: true
       }
     });
 
     setSubmitting(null);
 
     if (authError) {
-      setError(safeMutationMessage(authError, "Supabase email"));
+      setError(safeMutationMessage(authError, "Recovery access"));
       return;
     }
 
-    setMessage(mode === "profile" ? "Check your email to add Supabase auth." : "Check your email for the login link.");
+    setMessage("Check your email to add recovery access.");
   }
 
   async function startOAuthSignIn(provider: SupabaseAuthProvider["provider"]) {
     if (!supabase) {
-      setError("Supabase auth is unavailable in this local build.");
+      setError("Recovery access is unavailable in this build.");
       return;
     }
 
@@ -102,12 +99,12 @@ export function SupabaseAuthPanel({ mode, next = "/app/home" }: SupabaseAuthPane
     setSubmitting(null);
 
     if (authError) {
-      setError(safeMutationMessage(authError, "Supabase login"));
+      setError(safeMutationMessage(authError, "Recovery access"));
     }
   }
 
   return (
-    <div className="landing-supabase-auth" data-supabase-auth-mode={mode}>
+    <div className="landing-supabase-auth" data-recovery-auth="true">
       {config.emailEnabled ? (
         <form className="landing-email-row" noValidate onSubmit={startEmailSignIn}>
           <label>
@@ -115,7 +112,7 @@ export function SupabaseAuthPanel({ mode, next = "/app/home" }: SupabaseAuthPane
             <input
               autoComplete="email"
               inputMode="email"
-              name={`${mode}-supabase-email`}
+              name="recovery-email"
               onChange={(event) => {
                 setEmail(event.target.value);
                 if (error) setError(null);
@@ -127,12 +124,12 @@ export function SupabaseAuthPanel({ mode, next = "/app/home" }: SupabaseAuthPane
           </label>
           <button className="landing-provider-link" disabled={submitting !== null} type="submit">
             <ProviderLogo label="Email" name="email" />
-            <span>{submitting === "email" ? "Sending" : "Email login"}</span>
+            <span>{submitting === "email" ? "Sending" : "Send recovery link"}</span>
           </button>
         </form>
       ) : null}
       {config.oauthProviders.length > 0 ? (
-        <div className="landing-provider-row" aria-label="Supabase auth providers">
+        <div className="landing-provider-row" aria-label="Recovery sign-in options">
           {config.oauthProviders.map((provider) => (
             <button
               className="landing-provider-link"
@@ -142,7 +139,7 @@ export function SupabaseAuthPanel({ mode, next = "/app/home" }: SupabaseAuthPane
               type="button"
             >
               <ProviderLogo label={provider.label} name={provider.logo} />
-              <span>{submitting === provider.provider ? "Opening" : provider.label}</span>
+              <span>{submitting === provider.provider ? "Opening" : `Add ${provider.label} recovery`}</span>
             </button>
           ))}
         </div>

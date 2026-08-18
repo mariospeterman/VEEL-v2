@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: auth, wallets, onboarding, onramp, conversion
-Last updated: 2026-08-14
+Last updated: 2026-08-17
 Source of truth: yes
 
 Owns:
@@ -27,7 +27,7 @@ This document defines the locked three-step wallet-native onboarding target. The
 V2 supports one Account + Wallet step with two entry paths:
 
 1. External wallet connect for web3-native users.
-2. Social/email/passkey signup with a noncustodial embedded Solana wallet for mainstream users.
+2. A quiet secure-wallet action that opens the configured provider's official email/social/passkey surface and creates a noncustodial embedded Solana wallet.
 
 Wallet ownership remains user-controlled. Veel never holds private keys, never signs payment transactions without explicit user authorization, and never grants access from client-side wallet state. Supabase email auth is optional account recovery/profile management, not a required onboarding prerequisite.
 
@@ -38,8 +38,8 @@ Protected app access rule:
   1. wallet session from embedded or external noncustodial wallet
   2. profile setup
   3. age verification
-- Primary mainstream choices are Privy-backed email, Google, passkey, or another explicitly approved Privy method. “Continue with wallet” is the secondary web3-native choice. Consumer copy does not ask users to choose an auth provider.
-- External/native wallet connect remains first-class for web3-native users.
+- `Connect wallet` through the external/native Solana boundary is the primary landing login and onboarding action.
+- `Create secure WeVid wallet` is a quiet secondary action when Privy is configured. Email, Google, passkey, or another approved method appears only inside Privy's official surface after that click.
 - One wallet path is mandatory; the other path can be added, changed, or selected as primary later in profile/settings.
 - Wallet capability must be ready before age verification starts, but provider authentication, wallet provisioning, challenge signing, and session creation remain one continuous Step 1 flow.
 - No user enters the protected app shell until age verification is complete.
@@ -64,7 +64,7 @@ Use a wallet infrastructure provider instead of building key management.
 Provider docs checked for this implementation slice on 2026-06-14, with login and session teardown behavior rechecked on 2026-08-11:
 
 - Privy docs: React setup uses a `PrivyProvider` with `appId`; Solana support is exposed through Privy wallet APIs and must be configured with the project app id before embedded-wallet buttons are enabled.
-- Privy login configuration should not set wallet-first modal ordering unless external wallet login is also enabled in Privy login methods. Veel uses Privy email/social/passkey login to create or unlock a noncustodial embedded Solana wallet, while external wallet ownership remains handled by the Solana Wallet Adapter plus backend challenge flow.
+- WeVid does not use Privy's modal as the primary external-wallet chooser. Privy's official email/social/passkey surface appears only after `Create secure WeVid wallet`; external wallet ownership remains handled by Solana Wallet Adapter plus the backend challenge flow.
 - Solana Wallet Adapter docs: browser wallet connection should use wallet adapter/injected-wallet support for desktop and Android-compatible browsers, with backend nonce signing for authentication.
 - Solana Mobile Wallet Adapter docs: Android Chrome supports mobile wallet adapter flows through wallet adapter; iOS mobile wallet adapter support is not currently available, so iOS web must use wallet-specific universal/deep links or embedded providers.
 - Dynamic docs: embedded wallets support noncustodial MPC, Solana via EdDSA/FROST, and can remain an evaluated fallback.
@@ -280,9 +280,9 @@ Non-wallet actions:
 
 - Do not show crypto jargon during signup.
 - The flow should feel like one step with progressive checks, not a long form.
-- Viewer flow: teaser, Continue, auth, embedded wallet silently created/loaded, optional native wallet connect, age assurance before adult/protected access, first feed value moment, wallet funding/connect only at payment or allowance need.
+- Viewer flow: teaser, Connect wallet, backend challenge, minimal profile, age assurance before adult/protected access, first feed value moment. A configured secure embedded wallet remains an explicit secondary choice.
 - Explain wallet only when needed: "Your WeVid wallet lets you unlock, support creators, and pay from your wallet."
-- Preferred wallet CTAs: `Continue with email`, `Continue with Google`, `Continue with passkey`, and secondary `Continue with wallet`; payment surfaces may say `Pay from wallet`.
+- Preferred landing CTA: `Connect wallet`. Configured secondary CTA: `Create secure WeVid wallet`. Provider-owned email/social/passkey labels stay inside the provider surface; payment surfaces may say `Pay from wallet`.
 - Monetisation-readiness CTA: `Enable Earnings`.
 - Creator onboarding uses hosted verification for age, identity, liveness, country, wallet ownership, and tax basics.
 - Payment sheets show amount, asset, creator, platform/referral summary where useful, and confirmation.
@@ -307,6 +307,7 @@ Privy is the sole launch runtime, but remains disabled until staging proves the 
 
 Current implementation state:
 
+- Session access, age status/session creation, wallet list/link/primary/onramp mutations, profile access, and Enable Earnings resolve the canonical `users.id` from the opaque application session. Migration `0107` permits the transitional `users.supabase_user_id` value to be null and prevents it from containing a provider subject or a different user identifier; provider recovery identity remains exclusively in `user_provider_identities`.
 - Wallet table and backend wallet-readiness gate exist.
 - `GET /v1/wallets` returns normalized wallet resources for the authenticated user.
 - `PATCH /v1/wallets/{walletId}/primary` safely switches the user's primary wallet and writes an audit event.
@@ -327,7 +328,8 @@ Recommended decision record:
 
 ## Tests Required
 
-- email/social/passkey signup creates or loads wallet
+- primary external Connect wallet opens directly without a second WeVid click
+- secure-wallet choice opens the provider surface and email/social/passkey creates or loads the embedded wallet
 - external wallet link remains supported
 - wallet switch updates primary wallet safely
 - embedded wallet payment uses same payment intent path

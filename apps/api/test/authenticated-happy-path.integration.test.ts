@@ -26,6 +26,10 @@ import { grantAccessPass } from "../src/modules/event/event-access-pass-reposito
 import type { SubscriptionAuthorizationVerifier } from "../src/modules/subscription/types";
 import { createPostgresClient, type PostgresSql } from "../src/shared/postgres";
 import {
+  createPostgresMediaModerationRepository,
+  processMediaModerationJobs
+} from "../../worker/src/media-moderation";
+import {
   createPostgresProviderEventReplayRepository,
   createProviderSpecificReplayAdapter,
   processProviderEventReplays
@@ -74,7 +78,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     const shortRunId = runId.replaceAll("-", "").slice(0, 12);
     const buyerHandle = `buyer_${shortRunId}`;
     const creatorHandle = `creator_${shortRunId}`;
-    const seededCreatorUserId = randomUUID();
+    const seededCreatorUserId = creatorSupabaseUserId;
     const seededContentId = randomUUID();
     const seededMediaAssetId = randomUUID();
     const seededAccessRuleId = randomUUID();
@@ -153,7 +157,14 @@ describeIntegration("authenticated API happy path against Postgres", () => {
 
     const liveRepository = createPostgresLiveRepository(sql);
     const app = await buildApi({
-      authVerifier: integrationAuthVerifier,
+      authVerifier: {
+        async verifyToken(token) {
+          return (
+            (await integrationAuthVerifier.verifyToken(token)) ??
+            walletAuthRepository.verifySessionToken(token)
+          );
+        }
+      },
       walletAuthRepository: {
         ...walletAuthRepository,
         async rotateSessionToken(input) {
@@ -321,6 +332,11 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         isPrimary: true
       });
       const linkedWallet = linkResponse.json<{ id: string }>();
+      const linkedSessionCookieHeader = linkResponse.headers["set-cookie"];
+      const linkedSessionCookie = Array.isArray(linkedSessionCookieHeader)
+        ? linkedSessionCookieHeader[0]
+        : linkedSessionCookieHeader;
+      expect(linkedSessionCookie).toBeTruthy();
 
       const ageSessionResponse = await app.inject({
         method: "POST",
@@ -548,6 +564,87 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         receipt_count: "1",
         audit_count: "1"
       });
+
+      await expect(
+        sql`
+          update users
+          set supabase_user_id = ${randomUUID()}
+          where id = ${buyerSupabaseUserId}
+        `
+      ).rejects.toThrow(/users_legacy_supabase_id_canonical_check/);
+
+      // The opaque application session resolves users.id. Entry/access, age,
+      // wallet, profile, and earnings must not depend on the transitional
+      // compatibility column containing a value.
+      await sql`
+        update users
+        set supabase_user_id = null
+        where id = ${buyerSupabaseUserId}
+      `;
+
+      const canonicalIdentityResponses = await Promise.all([
+        app.inject({
+          method: "GET",
+          url: "/v1/session",
+          headers: authenticatedHeaders(`canonical-session-${runId}`)
+        }),
+        app.inject({
+          method: "GET",
+          url: "/v1/age/status",
+          headers: authenticatedHeaders(`canonical-age-${runId}`)
+        }),
+        app.inject({
+          method: "GET",
+          url: "/v1/wallets",
+          headers: authenticatedHeaders(`canonical-wallets-${runId}`)
+        }),
+        app.inject({
+          method: "GET",
+          url: "/v1/profiles/me/creator-onboarding",
+          headers: authenticatedHeaders(`canonical-onboarding-${runId}`)
+        }),
+        app.inject({
+          method: "GET",
+          url: "/v1/profiles/me/creator-dashboard",
+          headers: authenticatedHeaders(`canonical-dashboard-${runId}`)
+        })
+      ]);
+      expect(canonicalIdentityResponses.map((response) => response.statusCode)).toEqual([
+        200, 200, 200, 200, 200
+      ]);
+      expect(canonicalIdentityResponses[0]?.json()).toMatchObject({
+        authenticated: true,
+        user: { id: buyerSupabaseUserId, handle: buyerHandle },
+        appAccessState: { allowed: true }
+      });
+      expect(canonicalIdentityResponses[1]?.json()).toMatchObject({ state: "verified" });
+      expect(canonicalIdentityResponses[2]?.json()).toMatchObject({
+        items: [{ id: linkedWallet.id }]
+      });
+      expect(canonicalIdentityResponses[3]?.json()).toMatchObject({
+        canStartEarning: true,
+        configuration: { recipientWalletId: linkedWallet.id }
+      });
+
+      const canonicalPrimaryWalletResponse = await app.inject({
+        method: "PATCH",
+        url: `/v1/wallets/${linkedWallet.id}/primary`,
+        headers: {
+          cookie: linkedSessionCookie?.split(";", 1)[0] ?? "",
+          "idempotency-key": `canonical-primary-wallet-${runId}`
+        }
+      });
+      expect(canonicalPrimaryWalletResponse.statusCode, canonicalPrimaryWalletResponse.body).toBe(200);
+      expect(canonicalPrimaryWalletResponse.json()).toMatchObject({
+        id: linkedWallet.id,
+        isPrimary: true
+      });
+
+      await sql`
+        update users
+        set supabase_user_id = id
+        where id = ${buyerSupabaseUserId}
+      `;
 
       const commercialPolicyPayload = {
         minimumAmountMinor: 2_000_000,
@@ -1440,6 +1537,154 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         expect.objectContaining({ id: sfwContentId, publicationState: "appeal_pending" })
       ]));
 
+      await expect(moderationRepository.updateContentModeration({
+        supabaseUserId: creatorSupabaseUserId,
+        contentId: sfwContentId,
+        body: {
+          action: "approve",
+          reason: "This must remain held until automated evidence exists."
+        },
+        idempotencyKey: `sfw-appeal-premature-approve-${runId}`
+      })).rejects.toThrow("Required automated safety checks are incomplete");
+
+      const alternateMediaAssetId = randomUUID();
+      await sql`
+        insert into media_assets (
+          id, content_item_id, provider, provider_asset_id, provider_state,
+          provider_playable, ready_at, provider_checked_at
+        )
+        values (
+          ${alternateMediaAssetId}, ${sfwContentId}, 'bunny', ${`sfw-alternate-${runId}`}, 'ready',
+          true, now(), now()
+        )
+      `;
+      await sql`
+        insert into provider_media_scan_events (
+          media_safety_case_id, media_asset_id, provider, provider_event_id,
+          scan_type, normalized_signal, payload_hash, model_or_ruleset_version, observed_at
+        )
+        select
+          safety.id, evidence.media_asset_id, evidence.provider, evidence.provider_event_id,
+          evidence.scan_type, 'clear', ${"9".repeat(64)}, evidence.ruleset, now()
+        from media_safety_cases safety
+        cross join (values
+          (${sfwMediaAssetId}::uuid, 'bunny_stream', ${`split-container-${runId}`}, 'container_integrity', 'bunny-stream-playability-v1'),
+          (${sfwMediaAssetId}::uuid, 'bunny_shield', ${`split-malware-${runId}`}, 'malware', 'shield-antivirus-v1'),
+          (${alternateMediaAssetId}::uuid, 'bunny_shield', ${`split-known-hash-${runId}`}, 'known_hash', 'shield-known-hash-v1'),
+          (${alternateMediaAssetId}::uuid, 'internal', ${`split-classification-${runId}`}, 'content_classification', 'fixture-classifier-v1')
+        ) as evidence(media_asset_id, provider, provider_event_id, scan_type, ruleset)
+        where safety.content_item_id = ${sfwContentId}
+          and safety.state <> 'superseded'
+      `;
+
+      await expect(moderationRepository.updateContentModeration({
+        supabaseUserId: creatorSupabaseUserId,
+        contentId: sfwContentId,
+        body: {
+          action: "approve",
+          reason: "Evidence split across two uploads must never authorize release."
+        },
+        idempotencyKey: `sfw-appeal-split-evidence-${runId}`
+      })).rejects.toThrow("Required automated safety checks are incomplete");
+
+      const evidenceHash = "a".repeat(64);
+      await sql`
+        insert into provider_media_scan_events (
+          media_safety_case_id,
+          media_asset_id,
+          provider,
+          provider_event_id,
+          scan_type,
+          normalized_signal,
+          payload_hash,
+          model_or_ruleset_version,
+          observed_at
+        )
+        select
+          safety.id,
+          ${sfwMediaAssetId},
+          evidence.provider,
+          evidence.provider_event_id,
+          evidence.scan_type,
+          'clear',
+          ${evidenceHash},
+          evidence.ruleset,
+          now()
+        from media_safety_cases safety
+        cross join (values
+          ('bunny_stream', ${`container-${runId}`}, 'container_integrity', 'bunny-stream-playability-v1'),
+          ('bunny_shield', ${`malware-${runId}`}, 'malware', 'shield-antivirus-v1'),
+          ('bunny_shield', ${`known-hash-${runId}`}, 'known_hash', 'shield-known-hash-v1'),
+          ('internal', ${`classification-${runId}`}, 'content_classification', 'fixture-classifier-v1')
+        ) as evidence(provider, provider_event_id, scan_type, ruleset)
+        where safety.content_item_id = ${sfwContentId}
+          and safety.state <> 'superseded'
+      `;
+
+      await sql`
+        insert into provider_media_scan_events (
+          media_safety_case_id,
+          media_asset_id,
+          provider,
+          provider_event_id,
+          scan_type,
+          normalized_signal,
+          payload_hash,
+          model_or_ruleset_version,
+          observed_at
+        )
+        select
+          safety.id,
+          ${sfwMediaAssetId},
+          'bunny_shield',
+          ${`malware-suspected-${runId}`},
+          'malware',
+          'suspected',
+          ${"b".repeat(64)},
+          'shield-antivirus-v1',
+          now() + interval '1 second'
+        from media_safety_cases safety
+        where safety.content_item_id = ${sfwContentId}
+          and safety.state <> 'superseded'
+      `;
+
+      await expect(moderationRepository.updateContentModeration({
+        supabaseUserId: creatorSupabaseUserId,
+        contentId: sfwContentId,
+        body: {
+          action: "approve",
+          reason: "A newer adverse provider signal must keep this held."
+        },
+        idempotencyKey: `sfw-appeal-adverse-approve-${runId}`
+      })).rejects.toThrow("Required automated safety checks are incomplete");
+
+      await sql`
+        insert into provider_media_scan_events (
+          media_safety_case_id,
+          media_asset_id,
+          provider,
+          provider_event_id,
+          scan_type,
+          normalized_signal,
+          payload_hash,
+          model_or_ruleset_version,
+          observed_at
+        )
+        select
+          safety.id,
+          ${sfwMediaAssetId},
+          'bunny_shield',
+          ${`malware-cleared-${runId}`},
+          'malware',
+          'clear',
+          ${"c".repeat(64)},
+          'shield-antivirus-v1',
+          now() + interval '2 seconds'
+        from media_safety_cases safety
+        where safety.content_item_id = ${sfwContentId}
+          and safety.state <> 'superseded'
+      `;
+
       const approvedAppeal = await moderationRepository.updateContentModeration({
         supabaseUserId: creatorSupabaseUserId,
         contentId: sfwContentId,
@@ -1455,11 +1700,22 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         moderationState: "approved"
       });
       const approvedAppealRows = await sql<{
+        manual_review_count: string;
         publish_state: string;
         appeal_state: string;
         reviewed_at: Date | null;
       }[]>`
-        select ci.publish_state, mma.state as appeal_state, mma.reviewed_at
+        select
+          ci.publish_state,
+          mma.state as appeal_state,
+          mma.reviewed_at,
+          (
+            select count(*)
+            from provider_media_scan_events scan
+            where scan.media_safety_case_id = msc.id
+              and scan.scan_type = 'manual_review'
+              and scan.normalized_signal = 'clear'
+          ) as manual_review_count
         from content_items ci
         join media_safety_cases msc on msc.content_item_id = ci.id and msc.state <> 'superseded'
         join media_moderation_appeals mma on mma.media_safety_case_id = msc.id
@@ -1468,7 +1724,336 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(approvedAppealRows[0]).toMatchObject({
         publish_state: "published",
         appeal_state: "overturned",
+        manual_review_count: "1",
         reviewed_at: expect.any(Date)
+      });
+
+      const nonSelectedAssetJobId = randomUUID();
+      await sql`
+        insert into media_moderation_jobs (
+          id,
+          media_safety_case_id,
+          media_asset_id,
+          stage,
+          idempotency_key
+        )
+        select
+          ${nonSelectedAssetJobId},
+          safety.id,
+          ${alternateMediaAssetId},
+          'provider_scan_reconciliation',
+          ${`sfw-non-selected-rescan-${runId}`}
+        from media_safety_cases safety
+        where safety.content_item_id = ${sfwContentId}
+          and safety.state <> 'superseded'
+      `;
+
+      const nonSelectedAssetRepository = createPostgresMediaModerationRepository(databaseUrl);
+      try {
+        await expect(processMediaModerationJobs({
+          repository: nonSelectedAssetRepository,
+          adapter: {
+            async evaluate() {
+              return {
+                state: "review_required" as const,
+                reasonCode: "delayed_non_selected_asset_review"
+              };
+            }
+          },
+          now: new Date(Date.now() + 1_000)
+        })).resolves.toEqual({
+          leased: 1,
+          completed: 0,
+          reviewRequired: 1,
+          failed: 0
+        });
+      } finally {
+        await nonSelectedAssetRepository.close?.();
+      }
+
+      const [nonSelectedAssetRows] = await sql<{
+        case_state: string;
+        job_state: string;
+        moderation_state: string;
+        provider_release_allowed: boolean;
+        publish_state: string;
+      }[]>`
+        select
+          safety.state as case_state,
+          safety.provider_release_allowed,
+          content.moderation_state,
+          content.publish_state,
+          job.state as job_state
+        from content_items content
+        join media_safety_cases safety
+          on safety.content_item_id = content.id
+          and safety.state <> 'superseded'
+        join media_moderation_jobs job on job.id = ${nonSelectedAssetJobId}
+        where content.id = ${sfwContentId}
+      `;
+      expect(nonSelectedAssetRows).toEqual({
+        case_state: "approved",
+        job_state: "review_required",
+        moderation_state: "approved",
+        provider_release_allowed: true,
+        publish_state: "published"
+      });
+
+      const invalidRescanJobId = randomUUID();
+      await sql`
+        insert into media_moderation_jobs (
+          id,
+          media_safety_case_id,
+          media_asset_id,
+          stage,
+          idempotency_key
+        )
+        select
+          ${invalidRescanJobId},
+          safety.id,
+          ${sfwMediaAssetId},
+          'provider_scan_reconciliation',
+          ${`sfw-invalid-rescan-${runId}`}
+        from media_safety_cases safety
+        where safety.content_item_id = ${sfwContentId}
+          and safety.state <> 'superseded'
+      `;
+
+      const invalidRescanRepository = createPostgresMediaModerationRepository(databaseUrl);
+      try {
+        const clearSignals = [
+          {
+            provider: "bunny_stream" as const,
+            providerEventId: `invalid-rescan-container-${runId}`,
+            scanType: "container_integrity" as const,
+            normalizedSignal: "clear" as const,
+            payloadHash: "c".repeat(64),
+            modelOrRulesetVersion: "bunny-stream-playability-v1"
+          },
+          {
+            provider: "bunny_shield" as const,
+            providerEventId: `invalid-rescan-malware-${runId}`,
+            scanType: "malware" as const,
+            normalizedSignal: "clear" as const,
+            payloadHash: "c".repeat(64),
+            modelOrRulesetVersion: "shield-antivirus-v1"
+          },
+          {
+            provider: "bunny_shield" as const,
+            providerEventId: `invalid-rescan-known-hash-${runId}`,
+            scanType: "known_hash" as const,
+            normalizedSignal: "clear" as const,
+            payloadHash: "c".repeat(64),
+            modelOrRulesetVersion: "shield-known-hash-v1"
+          },
+          {
+            provider: "internal" as const,
+            providerEventId: `invalid-rescan-classification-${runId}`,
+            scanType: "content_classification" as const,
+            normalizedSignal: "clear" as const,
+            payloadHash: "c".repeat(64),
+            modelOrRulesetVersion: "fixture-classifier-v1"
+          }
+        ];
+        await expect(processMediaModerationJobs({
+          repository: invalidRescanRepository,
+          adapter: {
+            async evaluate() {
+              return {
+                state: "evidence" as const,
+                signals: [
+                  ...clearSignals,
+                  {
+                    ...clearSignals[1]!,
+                    providerEventId: `invalid-rescan-malformed-${runId}`,
+                    payloadHash: "not-a-sha256"
+                  }
+                ]
+              };
+            }
+          },
+          now: new Date(Date.now() + 2_000)
+        })).resolves.toEqual({
+          leased: 1,
+          completed: 0,
+          reviewRequired: 1,
+          failed: 0
+        });
+      } finally {
+        await invalidRescanRepository.close?.();
+      }
+
+      const [invalidRescanRows] = await sql<{
+        job_state: string;
+        moderation_state: string;
+        publish_state: string;
+        persisted_new_clear_count: string;
+        release_eligible_automated_count: string;
+      }[]>`
+        select
+          job.state as job_state,
+          content.moderation_state,
+          content.publish_state,
+          (
+            select count(*)::text
+            from provider_media_scan_events scan
+            where scan.provider_event_id like ${`invalid-rescan-%-${runId}`}
+          ) as persisted_new_clear_count,
+          (
+            select count(*)::text
+            from provider_media_scan_events scan
+            where scan.media_safety_case_id = safety.id
+              and scan.media_asset_id = ${sfwMediaAssetId}
+              and scan.scan_type in (
+                'container_integrity',
+                'malware',
+                'known_hash',
+                'content_classification'
+              )
+              and scan.release_eligible is true
+          ) as release_eligible_automated_count
+        from content_items content
+        join media_safety_cases safety
+          on safety.content_item_id = content.id
+          and safety.state <> 'superseded'
+        join media_moderation_jobs job on job.id = ${invalidRescanJobId}
+        where content.id = ${sfwContentId}
+      `;
+      expect(invalidRescanRows).toEqual({
+        job_state: "review_required",
+        moderation_state: "pending",
+        publish_state: "blocked",
+        persisted_new_clear_count: "0",
+        release_eligible_automated_count: "0"
+      });
+
+      await expect(moderationRepository.updateContentModeration({
+        supabaseUserId: creatorSupabaseUserId,
+        contentId: sfwContentId,
+        body: {
+          action: "approve",
+          reason: "An invalid rescan must invalidate stale release evidence."
+        },
+        idempotencyKey: `sfw-invalid-rescan-approve-${runId}`
+      })).rejects.toThrow("Required automated safety checks are incomplete");
+
+      const moderationJobId = randomUUID();
+      await sql`
+        insert into media_moderation_jobs (
+          id,
+          media_safety_case_id,
+          media_asset_id,
+          stage,
+          idempotency_key
+        )
+        select
+          ${moderationJobId},
+          safety.id,
+          ${sfwMediaAssetId},
+          'provider_scan_reconciliation',
+          ${`sfw-adverse-worker-${runId}`}
+        from media_safety_cases safety
+        where safety.content_item_id = ${sfwContentId}
+          and safety.state <> 'superseded'
+      `;
+
+      const mediaModerationRepository = createPostgresMediaModerationRepository(databaseUrl);
+      try {
+        const adverseEvidenceHash = "d".repeat(64);
+        await expect(processMediaModerationJobs({
+          repository: mediaModerationRepository,
+          adapter: {
+            async evaluate() {
+              return {
+                state: "evidence" as const,
+                signals: [
+                  {
+                    provider: "bunny_stream" as const,
+                    providerEventId: `worker-container-${runId}`,
+                    scanType: "container_integrity" as const,
+                    normalizedSignal: "clear" as const,
+                    payloadHash: adverseEvidenceHash,
+                    modelOrRulesetVersion: "bunny-stream-playability-v1"
+                  },
+                  {
+                    provider: "bunny_shield" as const,
+                    providerEventId: `worker-malware-${runId}`,
+                    scanType: "malware" as const,
+                    normalizedSignal: "clear" as const,
+                    payloadHash: adverseEvidenceHash,
+                    modelOrRulesetVersion: "shield-antivirus-v1"
+                  },
+                  {
+                    provider: "bunny_shield" as const,
+                    providerEventId: `worker-known-hash-${runId}`,
+                    scanType: "known_hash" as const,
+                    normalizedSignal: "matched" as const,
+                    payloadHash: adverseEvidenceHash,
+                    modelOrRulesetVersion: "shield-known-hash-v1",
+                    providerIncidentReference: `incident-${runId}`
+                  },
+                  {
+                    provider: "internal" as const,
+                    providerEventId: `worker-classification-${runId}`,
+                    scanType: "content_classification" as const,
+                    normalizedSignal: "clear" as const,
+                    payloadHash: "not-a-sha256",
+                    modelOrRulesetVersion: "fixture-classifier-v1"
+                  }
+                ]
+              };
+            }
+          },
+          now: new Date(Date.now() + 3_000)
+        })).resolves.toEqual({
+          leased: 1,
+          completed: 0,
+          reviewRequired: 1,
+          failed: 0
+        });
+      } finally {
+        await mediaModerationRepository.close?.();
+      }
+
+      const [adverseEvidenceRows] = await sql<{
+        case_state: string;
+        job_state: string;
+        moderation_state: string;
+        publish_state: string;
+        report_count: string;
+        invalid_signal_count: string;
+      }[]>`
+        select
+          safety.state as case_state,
+          content.moderation_state,
+          content.publish_state,
+          job.state as job_state,
+          (
+            select count(*)::text
+            from regulatory_report_workflows report
+            where report.media_safety_case_id = safety.id
+              and report.state = 'review_required'
+          ) as report_count
+          ,(
+            select count(*)::text
+            from provider_media_scan_events scan
+            where scan.provider = 'internal'
+              and scan.provider_event_id = ${`worker-classification-${runId}`}
+          ) as invalid_signal_count
+        from content_items content
+        join media_safety_cases safety
+          on safety.content_item_id = content.id
+          and safety.state <> 'superseded'
+        join media_moderation_jobs job on job.id = ${moderationJobId}
+        where content.id = ${sfwContentId}
+      `;
+      expect(adverseEvidenceRows).toEqual({
+        case_state: "held_for_reporting",
+        job_state: "review_required",
+        moderation_state: "pending",
+        publish_state: "blocked",
+        report_count: "1",
+        invalid_signal_count: "0"
       });
 
       const playbackSessionResponse = await app.inject({
@@ -3836,7 +4421,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     try {
       await sql`
         insert into users (id, supabase_user_id)
-        values (${userId}, ${providerSubject})
+        values (${userId}, ${userId})
       `;
       await sql`
         insert into user_provider_identities (
@@ -3896,7 +4481,6 @@ describeIntegration("authenticated API happy path against Postgres", () => {
 
     const sql = createPostgresClient(databaseUrl);
     const userId = randomUUID();
-    const supabaseUserId = randomUUID();
     const walletId = randomUUID();
     const sessionId = randomUUID();
     const intentId = randomUUID();
@@ -3907,7 +4491,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     const repository = createPostgresWalletAuthRepository(sql);
 
     try {
-      await sql`insert into users (id, supabase_user_id) values (${userId}, ${supabaseUserId})`;
+      await sql`insert into users (id, supabase_user_id) values (${userId}, ${userId})`;
       await sql`
         insert into wallets (id, user_id, provider, address, chain, is_primary)
         values (${walletId}, ${userId}, 'phantom', ${randomUUID()}, 'solana_devnet', true)
@@ -4375,8 +4959,10 @@ async function seedCanonicalIntegrationUser(
 ): Promise<void> {
   await sql`
     insert into users (id, supabase_user_id)
-    values (${input.userId}, ${input.supabaseUserId})
-    on conflict (supabase_user_id) do update set state = 'active'
+    values (${input.userId}, ${input.userId})
+    on conflict (id) do update set
+      supabase_user_id = excluded.supabase_user_id,
+      state = 'active'
   `;
   await sql`
     insert into user_provider_identities (
@@ -4564,7 +5150,7 @@ async function approveSeededContent(
       ${input.representationMode === "not_declared" ? null : new Date()}
     )
   `;
-  await sql`
+  const safetyCases = await sql<{ id: string }[]>`
     insert into media_safety_cases (
       content_item_id,
       declared_rating,
@@ -4585,6 +5171,64 @@ async function approveSeededContent(
       true,
       now()
     )
+    returning id
+  `;
+  const safetyCase = safetyCases[0];
+  if (!safetyCase) throw new Error("Integration safety-case fixture was not created");
+
+  const mediaAssets = await sql<{ id: string }[]>`
+    select id
+    from media_assets
+    where content_item_id = ${input.contentId}
+    order by created_at desc, id desc
+    limit 1
+  `;
+  const releaseMediaAsset = mediaAssets[0];
+  if (!releaseMediaAsset) throw new Error("Integration media-asset fixture was not created");
+
+  await sql`
+    insert into provider_media_scan_events (
+      media_safety_case_id,
+      media_asset_id,
+      provider,
+      provider_event_id,
+      scan_type,
+      normalized_signal,
+      payload_hash,
+      model_or_ruleset_version,
+      observed_at
+    )
+    values
+      (
+        ${safetyCase.id}, ${releaseMediaAsset.id}, 'bunny_stream', ${`fixture:container:${input.contentId}`},
+        'container_integrity', 'clear', encode(extensions.digest(${`${input.contentId}:container`}, 'sha256'), 'hex'),
+        'bunny-stream-playability-v1', now()
+      ),
+      (
+        ${safetyCase.id}, ${releaseMediaAsset.id}, 'bunny_shield', ${`fixture:malware:${input.contentId}`},
+        'malware', 'clear', encode(extensions.digest(${`${input.contentId}:malware`}, 'sha256'), 'hex'),
+        'fixture-shield-antivirus-v1', now()
+      ),
+      (
+        ${safetyCase.id}, ${releaseMediaAsset.id}, 'bunny_shield', ${`fixture:known-hash:${input.contentId}`},
+        'known_hash', 'clear', encode(extensions.digest(${`${input.contentId}:known-hash`}, 'sha256'), 'hex'),
+        'fixture-shield-known-hash-v1', now()
+      ),
+      (
+        ${safetyCase.id}, ${releaseMediaAsset.id}, 'internal', ${`fixture:classification:${input.contentId}`},
+        'content_classification', 'clear', encode(extensions.digest(${`${input.contentId}:classification`}, 'sha256'), 'hex'),
+        'fixture-classifier-v1', now()
+      ),
+      (
+        ${safetyCase.id}, ${releaseMediaAsset.id}, 'internal', ${`fixture:manual-review:${input.contentId}`},
+        'manual_review', 'clear', encode(extensions.digest(${`${input.contentId}:manual-review`}, 'sha256'), 'hex'),
+        'media-safety-v2', now()
+      )
+  `;
+  await sql`
+    update content_items
+    set release_media_asset_id = ${releaseMediaAsset.id}, updated_at = now()
+    where id = ${input.contentId}
   `;
   await sql`
     update content_items
@@ -4726,8 +5370,10 @@ async function seedDirectConversation(
 
   await sql`
     insert into users (id, supabase_user_id)
-    values (${input.creatorUserId}, ${input.creatorSupabaseUserId})
-    on conflict (supabase_user_id) do update set state = 'active'
+    values (${input.creatorUserId}, ${input.creatorUserId})
+    on conflict (id) do update set
+      supabase_user_id = excluded.supabase_user_id,
+      state = 'active'
   `;
   await sql`
     insert into conversations (id, type, state)
@@ -5598,6 +6244,15 @@ async function cleanupRun(
       `;
       await tx`
         delete from content_hashtags
+        where content_item_id in ${tx(contentIds)}
+      `;
+      await tx`
+        update content_items
+        set release_media_asset_id = null
+        where id in ${tx(contentIds)}
+      `;
+      await tx`
+        delete from media_safety_cases
         where content_item_id in ${tx(contentIds)}
       `;
       await tx`

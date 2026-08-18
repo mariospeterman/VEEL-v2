@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Bunny Stream, Bunny Shield, Livepeer, moderation, performer consent, reporting
-Last updated: 2026-08-15
+Last updated: 2026-08-16
 Source of truth: yes
 
 Owns:
@@ -25,7 +25,7 @@ The release predicate requires:
 3. an active creator declaration;
 4. valid adult-publisher identity plus scoped performer consent for adult/explicit media.
 
-Provider “clear” signals are normalized into `provider_media_scan_events` and still route to a staff release decision. Suspected or matched signals remain held. Automated systems do not issue irreversible user sanctions.
+Provider “clear” signals are normalized into `provider_media_scan_events` and still route to a staff release decision. Migration `0106` makes that evidence enforceable: the latest attributable container-integrity, malware, known-hash, and content-classification signals must all be clear for the same playable media asset before staff can approve. Approval selects that exact asset as the canonical release projection and records a normalized manual-review signal bound to it; public reads never substitute another upload. A later adverse required signal for the selected release immediately removes already-published content from public access, while valid adverse evidence remains effective even when a companion provider signal is malformed. A known-hash match also opens an idempotent reporting-review workflow. Automated systems do not issue irreversible user sanctions.
 
 ## Upload Decision
 
@@ -35,6 +35,7 @@ Bunny Shield upload scanning is not assumed to cover direct `video.bunnycdn.com/
 
 - `BUNNY_SHIELD_UPLOAD_COVERAGE=not_configured` is the default;
 - direct Stream TUS cannot be marked covered without written provider confirmation and a staging incident fixture;
+- staging requires `BUNNY_SHIELD_UPLOAD_COVERAGE=stream_tus_provider_confirmed`, a live Shield configuration check, and a release-manifest-bound `STAGING_MEDIA_SAFETY_PROOF_ID`; configuration or playability alone is not coverage evidence;
 - `MEDIA_MODERATION_MODE=disabled_fail_closed` routes ready assets to review;
 - a dedicated Shield-covered upload gateway is an allowed future option only if it preserves resumable uploads and does not duplicate Stream storage/transcoding.
 
@@ -65,6 +66,7 @@ Veel stores normalized decisions, payload hashes, opaque provider references, co
 | Path | State | Launch evidence still required |
 | --- | --- | --- |
 | Canonical DB release guard and manual review fallback | staging-approved | Admin browser QA and CI |
+| Normalized automated-evidence completeness guard | staging-approved | Real provider positive/negative fixtures |
 | Bunny Stream TUS/private playback | candidate | Real account, private quarantine, Early Play disabled, token/domain smoke |
 | Bunny Shield direct Stream TUS coverage | candidate/unproven | Written provider confirmation plus positive/negative staging fixtures |
 | Bunny Shield event-log reconciliation | candidate | Auth, pagination, incident semantics, reporting reconciliation fixture |
@@ -93,4 +95,4 @@ No candidate row can be treated as production protection.
 
 ## Rollback
 
-Migration `0088_media_safety_and_consent.down.sql` removes the new domain. It does not fabricate prior approvals. Production rollback must keep affected content unpublished until a replacement safety authority is explicitly approved.
+Migration `0106_media_release_evidence.down.sql` restores the earlier release predicate but deliberately retains additive container-integrity events, their media-asset bindings, the selected-release pointer, and the scan type so rollback cannot erase audit evidence. Content held by `0106` remains held. Migration `0088_media_safety_and_consent.down.sql` removes the wider domain only as part of a coordinated full-domain rollback. No rollback fabricates prior approvals; production rollback must keep affected content unpublished until a replacement safety authority is explicitly approved.
