@@ -1,9 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { AgeRepositoryConfigurationError } from "../age/age-repository.js";
-import type { AgeRepository, AgeStatus } from "../age/types.js";
+import { findAgeStatusForUser, type AgeRepository, type AgeStatus } from "../age/types.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import { WalletRepositoryConfigurationError } from "../wallet/wallet-repository.js";
-import type { WalletRepository } from "../wallet/types.js";
+import { hasWalletForUser, type WalletRepository } from "../wallet/types.js";
 import { SessionRepositoryConfigurationError } from "./session-repository.js";
 import type {
   AppAccessState,
@@ -36,12 +36,8 @@ export async function registerSessionRoutes(
     try {
       const [profile, ageStatus, hasWallet] = await Promise.all([
         options.sessionRepository.findProfileByUserId(verifiedSession.userId),
-        options.ageRepository.findLatestAgeStatusBySupabaseUserId(
-          verifiedSession.supabaseUserId
-        ),
-        options.walletRepository.hasWalletBySupabaseUserId(
-          verifiedSession.supabaseUserId
-        )
+        findAgeStatusForUser(options.ageRepository, verifiedSession.userId),
+        hasWalletForUser(options.walletRepository, verifiedSession.userId)
       ]);
 
       return reply.code(200).send(toSessionState(profile, ageStatus, hasWallet));
@@ -55,9 +51,7 @@ export async function registerSessionRoutes(
       if (error instanceof WalletRepositoryConfigurationError) {
         const [profile, ageStatus] = await Promise.all([
           options.sessionRepository.findProfileByUserId(verifiedSession.userId),
-          options.ageRepository.findLatestAgeStatusBySupabaseUserId(
-            verifiedSession.supabaseUserId
-          )
+          findAgeStatusForUser(options.ageRepository, verifiedSession.userId)
         ]);
 
         return reply.code(200).send(toSessionState(profile, ageStatus, false));

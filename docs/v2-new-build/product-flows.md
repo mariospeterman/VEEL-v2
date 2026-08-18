@@ -56,30 +56,30 @@ sequenceDiagram
 
 Rules:
 
-- Supabase Auth identifies the user.
-- Fastify maps identity to Veel profile, mandatory age gate, wallet, monetisation, and permissions.
+- A signed external or embedded Solana wallet is the canonical login credential. Supabase Auth is optional Settings recovery only.
+- Fastify maps the wallet session to the WeVid profile, mandatory age gate, monetisation, and permissions.
 - Protected app access requires age verified and a wallet path: external wallet linked or embedded noncustodial wallet created/loaded.
 - KYC/KYB is separate from normal viewing age access.
 - Onboarding order is strict:
-  1. identity choice creates the user session
-  2. wallet path is created or linked immediately: embedded wallet for email/social/passkey, or native external wallet for wallet-first users
-  3. age verification completes the app gate
-  4. protected app access opens
-- External wallet is not mandatory at signup. Mainstream users can enter with email/social/passkey and receive a user-controlled embedded wallet before age verification and protected app access.
+  1. direct external wallet connect is the primary entry action
+  2. the optional secure-wallet action opens the configured provider's official email/social/passkey surface and creates or loads a user-controlled embedded wallet
+  3. either wallet path signs the same backend challenge and creates the canonical application session
+  4. minimal profile and age verification complete the app gate
+  5. protected app access opens
+- WeVid never repeats the embedded provider's identity choices as separate landing buttons or adds Supabase as another entry step.
 
 ## Wallet Onboarding Flow
 
 ```mermaid
 flowchart TD
-  Entry["Open Veel"] --> AuthChoice["Choose email/social/passkey or external wallet"]
-  AuthChoice --> Mainstream["Email/social/passkey"]
-  AuthChoice --> Native["External wallet connect"]
-  Mainstream --> Profile["Create Veel profile"]
-  Profile --> Embedded["Create/load noncustodial embedded wallet"]
+  Entry["Open WeVid"] --> Native["Connect external wallet"]
+  Entry --> Secure["Create secure WeVid wallet (secondary)"]
+  Secure --> Provider["Provider-owned email/social/passkey surface"]
+  Provider --> Embedded["Create/load noncustodial embedded wallet"]
   Native --> Challenge["Wallet challenge/signature"]
-  Challenge --> Link["Link external wallet"]
-  Embedded --> WalletReady["Wallet path ready"]
-  Link --> WalletReady
+  Embedded --> Challenge
+  Challenge --> Profile["Create WeVid profile"]
+  Profile --> WalletReady["Wallet path ready"]
   WalletReady --> Age["Third-party age verification"]
   Age --> AppAccess["Protected app access"]
   AppAccess --> Paywall["Paid action"]

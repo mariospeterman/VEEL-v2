@@ -30,6 +30,53 @@ describe("database migrations", () => {
     }
   });
 
+  it("keeps the legacy Supabase column from becoming a second identity authority", () => {
+    const sql = readMigration("0107_canonical_access_identity.sql");
+    const downSql = readMigration("0107_canonical_access_identity.down.sql");
+
+    expect(sql).toContain("users_legacy_supabase_id_canonical_check");
+    expect(sql).toContain("supabase_user_id is null or supabase_user_id = id");
+    expect(sql).toContain("not valid");
+    expect(sql).toContain("validate constraint users_legacy_supabase_id_canonical_check");
+    expect(sql).toContain("user_provider_identities");
+    expect(sql).toContain("identity.provider_subject = u.supabase_user_id::text");
+    expect(sql).toContain("set supabase_user_id = id");
+    expect(downSql).toContain("drop constraint if exists users_legacy_supabase_id_canonical_check");
+    expect(sql).not.toMatch(/email|raw_payload|private_key|seed_phrase|mnemonic/i);
+  });
+
+  it("requires complete normalized evidence before uploaded media release", () => {
+    const sql = readMigration("0106_media_release_evidence.sql");
+    const downSql = readMigration("0106_media_release_evidence.down.sql");
+
+    expect(sql).toContain("'container_integrity'");
+    expect(sql).toContain("content_safety_automated_evidence_ready");
+    expect(sql).toContain("content_safety_automated_asset_evidence_ready");
+    expect(sql).toContain("content_safety_automated_candidate_asset");
+    expect(sql).toContain("release_media_asset_id");
+    expect(sql).toContain("release_eligible");
+    expect(sql).toContain("scan.media_asset_id = p_media_asset_id");
+    expect(sql).toContain("provider_media_scan_events_asset_scope");
+    expect(sql).toContain("provider_media_scan_event_asset_scope_invalid");
+    expect(sql).toContain("content_safety_release_evidence_ready");
+    expect(sql).toContain("count(*) = 4");
+    expect(sql).toContain("provider = 'bunny_shield'");
+    expect(sql).toContain("provider = 'bunny_stream'");
+    expect(sql).toContain("normalized_signal = 'clear'");
+    expect(sql).toContain("private.content_safety_release_evidence_ready(ci.id)");
+    expect(sql).toContain("provider_media_scan_events_adverse_hold");
+    expect(sql).toContain("publish_state = 'blocked'");
+    expect(sql).toContain("known_hash_match_requires_reporting_review");
+    expect(sql).toContain("required_release_evidence_incomplete");
+    expect(sql).not.toMatch(/raw_payload|illegal_media|file_bytes/i);
+    expect(downSql).toContain("drop function if exists private.content_safety_release_evidence_ready");
+    expect(downSql).toContain("drop function if exists private.content_safety_automated_evidence_ready");
+    expect(downSql).toContain("drop function if exists private.content_safety_automated_asset_evidence_ready");
+    expect(downSql).toContain("drop trigger if exists provider_media_scan_events_adverse_hold");
+    expect(downSql).toContain("release_requires_review_after_policy_rollback");
+    expect(downSql).toContain("publish_state = 'blocked'");
+  });
+
   it("creates the foundation tables before money, media, dating, events, or admin slices", () => {
     const sql = readMigration("0001_foundation.sql");
 

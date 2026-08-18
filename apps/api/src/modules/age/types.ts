@@ -9,7 +9,7 @@ export type AgeProvider = "yoti" | "sumsub" | "veriff" | "persona" | "didit";
 export type AgeProviderPreference = CreateAgeSessionRequest["providerPreference"];
 
 export interface CreatePendingAgeVerificationInput {
-  supabaseUserId: string;
+  userId: string;
   provider: AgeProvider;
   providerReference: string;
   jurisdiction?: string | null;
@@ -18,11 +18,24 @@ export interface CreatePendingAgeVerificationInput {
 }
 
 export interface AgeRepository {
+  findLatestAgeStatusByUserId?(userId: string): Promise<AgeStatus>;
+  /** @deprecated Legacy provider-subject lookup for unmigrated route modules. */
   findLatestAgeStatusBySupabaseUserId(supabaseUserId: string): Promise<AgeStatus>;
   createPendingAgeVerification(input: CreatePendingAgeVerificationInput): Promise<void>;
   applyProviderWebhook(input: ApplyAgeProviderWebhookInput): Promise<ProviderWebhookApplyResult>;
   updateVerificationFromWebhook(input: UpdateAgeVerificationFromWebhookInput): Promise<boolean>;
   close?(): Promise<void>;
+}
+
+export function findAgeStatusForUser(
+  repository: AgeRepository,
+  userId: string
+): Promise<AgeStatus> {
+  if (repository.findLatestAgeStatusByUserId) {
+    return repository.findLatestAgeStatusByUserId(userId);
+  }
+
+  return repository.findLatestAgeStatusBySupabaseUserId(userId);
 }
 
 export type ProviderWebhookApplyResult = "applied" | "duplicate" | "unmatched";

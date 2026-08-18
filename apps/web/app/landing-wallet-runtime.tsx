@@ -8,9 +8,11 @@ import { WalletLinkPanel } from "@/wallet/wallet-link-panel";
 import { WalletRuntimeBaseProviders } from "@/wallet/wallet-runtime-base-providers";
 
 export function LandingWalletRuntime({
+  autoStart,
   authState,
   onLinked
 }: {
+  autoStart?: boolean;
   authState: WebAuthState;
   onLinked?: ((address: string) => void) | undefined;
 }) {
@@ -20,7 +22,7 @@ export function LandingWalletRuntime({
     <WalletRuntimeBaseProviders>
       <div className="landing-wallet-runtime" aria-label="Wallet sign in" data-embedded={embeddedWallets.enabled ? "true" : "false"}>
         <div className="landing-wallet-connect-row">
-          <WalletLinkPanel authState={authState} compact loginSimple onLinked={onLinked} reloadOnSession={!onLinked} />
+          <WalletLinkPanel autoStart={Boolean(autoStart)} authState={authState} compact loginSimple onLinked={onLinked} reloadOnSession={!onLinked} />
         </div>
         {embeddedWallets.provider.configured ? (
           <EmbeddedWalletLauncher label="Create secure WeVid wallet" onLinked={onLinked} secondary />

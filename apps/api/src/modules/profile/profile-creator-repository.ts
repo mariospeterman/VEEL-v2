@@ -101,7 +101,8 @@ export function createProfileCreatorRepositoryMethods(
         left join lateral (
           select poster_url
           from media_assets
-          where content_item_id = ci.id
+          where id = ci.release_media_asset_id
+            and content_item_id = ci.id
           order by created_at asc
           limit 1
         ) ma on true

@@ -200,8 +200,10 @@ Do not use:
 ### Onboarding
 
 - public teaser or referral capture first
-- identity with email/social/passkey or external wallet
-- embedded wallet created/loaded or native wallet linked
+- direct external `Connect wallet` action first
+- quiet `Create secure WeVid wallet` action only when the embedded provider is configured
+- email/social/passkey choices remain inside that provider's official surface after the user selects it
+- minimal profile
 - age verification
 - protected app entry only after wallet path and age verification are complete
 - no skip-wallet path into the protected app shell

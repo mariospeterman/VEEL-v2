@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { WalletReadyState } from "@solana/wallet-adapter-base";
 import { useWallet, type Wallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
@@ -20,13 +20,14 @@ type ExternalWalletProvider = LinkWalletRequest["provider"];
 
 interface WalletLinkPanelProps {
   authState: WebAuthState;
+  autoStart?: boolean;
   compact?: boolean;
   loginSimple?: boolean;
   onLinked?: ((address: string) => void) | undefined;
   reloadOnSession?: boolean;
 }
 
-export function WalletLinkPanel({ authState, compact = false, loginSimple = false, onLinked, reloadOnSession = true }: WalletLinkPanelProps) {
+export function WalletLinkPanel({ autoStart = false, authState, compact = false, loginSimple = false, onLinked, reloadOnSession = true }: WalletLinkPanelProps) {
   const { connect, connected, connecting, disconnect, publicKey, signMessage, wallet, wallets } = useWallet();
   const { setVisible: setWalletModalVisible } = useWalletModal();
   const [mounted, setMounted] = useState(false);
@@ -34,6 +35,8 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
   const [state, setState] = useState<"idle" | "linking" | "linked" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [linkedAddress, setLinkedAddress] = useState<string | null>(null);
+  const primaryButtonRef = useRef<HTMLButtonElement | null>(null);
+  const autoStartHandledRef = useRef(false);
 
   const detectedWallets = useMemo(
     () =>
@@ -46,6 +49,12 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!autoStart || !mounted || autoStartHandledRef.current) return;
+    autoStartHandledRef.current = true;
+    primaryButtonRef.current?.click();
+  }, [autoStart, mounted]);
 
   useEffect(() => {
     if (!awaitingWallet || state === "linking" || !wallet) {
@@ -232,6 +241,7 @@ export function WalletLinkPanel({ authState, compact = false, loginSimple = fals
               className="auth-provider-button"
               disabled={state === "linking" || connecting}
               onClick={startWalletFlow}
+              ref={primaryButtonRef}
               type="button"
             >
               <ProviderLogo label="Connect wallet" name="wallet" />

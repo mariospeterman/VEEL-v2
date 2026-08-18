@@ -60,18 +60,18 @@ test("renders the public landing with the current WeVid visual contract", async 
 test("renders inline login and onboarding entry surfaces", async ({ page }) => {
   await page.goto("/?mode=login", { waitUntil: "domcontentloaded", timeout: 20_000 });
 
-  await expect(page.getByRole("heading", { name: "Log in." })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Connect wallet" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Welcome back." })).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByRole("button", { name: "Connect wallet" })).toBeEnabled({ timeout: 5_000 });
   await expect(page.getByText("Privy", { exact: true })).toHaveCount(0);
 
   await page.goto("/?mode=onboarding", { waitUntil: "domcontentloaded", timeout: 20_000 });
 
-  await expect(page.getByRole("heading", { name: "Create your account." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Set up your account." })).toBeVisible({ timeout: 5_000 });
   await expect(page.getByText(/powered by|google, email|passkey|solana wallet adapter/i)).toHaveCount(0);
 
   await page.getByRole("button", { name: /Connect wallet/ }).click();
   await expect(page.getByRole("dialog", { name: /wallet.*Solana|need a wallet/i })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Create your account." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Set up your account." })).toBeVisible();
   await expect(page.locator(".landing-progress-topic")).toHaveText("Onboarding");
 });
 
@@ -81,10 +81,20 @@ test("renders a deep-linked onboarding step without an entrance-animation delay"
     timeout: 20_000
   });
 
-  await expect(page.getByRole("heading", { name: "Create your account." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Set up your account." })).toBeVisible({ timeout: 5_000 });
   await expect(page.getByLabel("Handle")).toBeVisible();
   await expect(page.locator(".landing-auth-inline")).toHaveCSS("opacity", "1");
   await expect(page.locator(".landing-auth-inline")).toHaveCSS("visibility", "visible");
+});
+
+test("renders callback failures as product copy without implementation details", async ({ page }) => {
+  await page.goto("/?mode=login&error=recovery_exchange_failed", {
+    waitUntil: "domcontentloaded",
+    timeout: 20_000
+  });
+
+  await expect(page.getByText("We couldn't finish recovery access. Reconnect your wallet and try again.")).toBeVisible();
+  await expect(page.getByText(/supabase|api|provider redirect|allowlist/i)).toHaveCount(0);
 });
 
 test("renders the standalone age handoff without raw API/provider errors", async ({ page }) => {

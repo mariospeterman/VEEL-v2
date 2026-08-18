@@ -181,7 +181,7 @@ Human sets slice goal
 Use Privy as the launch embedded-wallet provider if staging checks confirm:
 
 - fully user-controlled/noncustodial Solana wallet flow works cleanly
-- email/social/passkey onboarding can create or load the wallet before age verification
+- the secondary secure-wallet action can create or load a wallet through the provider-owned email/social/passkey surface before age verification
 - external wallets can be used alongside embedded wallets
 - onramp/funding sends funds to the user wallet, not a Veel custodial balance
 - explicit user approval is enforced for money actions
@@ -192,11 +192,11 @@ Use Turnkey as fallback or second ADR if:
 
 - Privy cannot meet Solana, export/recovery, onramp, audit, or regional requirements
 - deeper policy controls and sub-organization isolation are required earlier than expected
-- Turnkey staging UX remains acceptable for mainstream email/social/passkey users
+- Turnkey staging UX remains acceptable as an explicit secondary secure-wallet path
 
 ### Rationale
 
-Privy is the launch default because consumer onboarding speed is a primary conversion risk: email/social/passkey users should get a user-controlled Solana wallet without installing a browser extension. Staging must verify Solana support, funding/onramp UX, export/recovery posture, external-wallet linking, pricing, and noncustodial user approval.
+Privy is the launch embedded-wallet provider, but not the primary landing action. Users who explicitly choose `Create secure WeVid wallet` should get a user-controlled Solana wallet through Privy's provider-owned email/social/passkey surface without installing a browser extension. Staging must verify Solana support, funding/onramp UX, export/recovery posture, external-wallet linking, pricing, and noncustodial user approval.
 
 Turnkey remains the advanced fallback when stronger policy controls, sub-organization isolation, or deeper wallet governance is more important than the fastest consumer activation path.
 

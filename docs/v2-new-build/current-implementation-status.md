@@ -37,24 +37,57 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `7ba3370` (green baseline through PR #68) |
-| Active slice | Launch 11F — canonical provider-event side-effect recovery |
-| Branch | `codex/provider-event-replay-recovery` |
-| Pull request | #69 |
-| State | `LOCAL_GREEN` |
-| Slice blockers | No code blocker. Real provider redelivery remains a pre-production staging proof; production paths stay fail-closed without provider credentials. |
-| Next unfinished slice | Launch 10 — Frontend system, accessibility, cross-browser, and PWA completion |
+| Merged baseline | `main` at `4860133` (green baseline through PR #72) |
+| Active slice | Pre-production staging convergence and release-candidate proof |
+| Branch | `codex/staging-convergence-status` |
+| Pull request | #73 |
+| State | `CODE_COMPLETE_PROVIDER_BLOCKED` |
+| Slice blockers | Shared staging URLs/database/Supabase, Privy, Solana/Helius, Bunny, Livepeer, verification, notification, Redis/OTel, feature, legal, hosting/OIDC, and provider-dashboard configuration are absent. Explicit production approval is also required. |
+| Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
 
-Provider replay unit, route, type, lint, docs, and real-Postgres proof is green on the
-current head. Pull-request clean-runner and review evidence is still required before merge;
-staging remains fail-closed until real provider redelivery evidence exists.
+The merged entry slice server-resolves login/onboarding state, presents one immediate primary
+`Connect wallet` action, preserves the first click while the wallet runtime loads, keeps the
+configured embedded-wallet provider as a quiet secondary action, and confines Supabase email
+or social identity to Settings recovery. Full web typecheck, focused unit/lint/docs/build checks,
+fresh canonical migration application, API/web health, server-rendered response checks, and nine
+production-preview Chromium entry/accessibility/PWA journeys are green. Pull-request clean-runner
+and protected main CI are green; real wallet/provider evidence remains a pre-production staging gate.
 
-Current human/provider gates do not block this process slice: shared staging credentials,
-provider dashboard/webhook/domain configuration, migration `0091` shared-project proof,
-production hosting/DNS approval, mainnet wallet approval, and unsettled legal/compliance
-decisions remain release gates. Provider-dependent product work may reach
-`CODE_COMPLETE_PROVIDER_BLOCKED` and merge only while the production path remains explicit
-and fail-closed.
+The merged media release-evidence slice closes the remaining gap between normalized scan storage
+and release authority. Direct Bunny Stream TUS stays unproven for Shield coverage, so production
+approval must require complete normalized malware, known-hash, container-integrity, classification,
+and human-review evidence rather than treating provider playability or a staff click as scan proof.
+Migration `0106` enforces that predicate per selected media asset in Postgres, admin approval binds
+the human evidence and public playback projection to that exact asset in the same transaction,
+worker outcomes preserve each valid adverse signal even if a companion is malformed, and known-hash
+matches immediately remove published media from public access and open a reporting-review workflow
+without automatic user sanctions. Staging additionally
+requires live Shield configuration proof and a release-bound direct-TUS coverage/fixture receipt.
+
+The merged Launch 02B slice removes the last legacy identity lookup from the entry, app-access,
+age, wallet, profile, and Enable Earnings journey. Those paths must accept the canonical
+`users.id` resolved by the opaque application session and remain functional when the transitional
+`users.supabase_user_id` value is null. Migration `0107` prevents that compatibility column from
+ever containing a provider subject or a different user identifier while unrelated repositories are
+migrated in later bounded slices. Supabase recovery subjects remain exclusively owned by
+`user_provider_identities`. The full workspace check, fresh-chain migration plus real-Postgres API
+integration, desktop/mobile Chromium, desktop Firefox, accessibility, PWA, and visible-browser
+entry proofs are green. Real provider acceptance remains a pre-production gate.
+
+The green `main` merge at `4860133` passed protected CI, isolated Postgres integration, database
+migration checks, security analysis, build, and full browser smoke. Release-artifact run
+`32043723824` then built and attested the web, API, and worker images and emitted the immutable
+manifest for that exact source. Staging-convergence run `32044089602` verified the manifest and
+attestations, then failed closed before deployment because the shared staging/provider/legal
+configuration groups listed above are absent. No staging migration, webhook change, or production
+promotion was attempted.
+
+These human/provider gates now block the active pre-production convergence slice: shared staging
+credentials, provider dashboard/webhook/domain configuration, migration `0091` shared-project
+proof, production hosting/DNS approval, mainnet wallet approval, and unsettled legal/compliance
+decisions. Independent product slices were allowed to reach `CODE_COMPLETE_PROVIDER_BLOCKED`
+while their production paths remained explicit and fail-closed; the core platform is now at the
+dedicated convergence gate and cannot advance to a release candidate without this evidence.
 
 Launch 09 local acceptance now includes migration `0099`, audited/idempotent organization
 provisioning, explicit owner/team/creator consent, normalized organization-KYB authorization,
@@ -66,8 +99,8 @@ proof; the real-Postgres journey and desktop/mobile production-preview browser p
 Real KYB callbacks, approved commercial evidence, and Solana devnet allocation settlement remain
 `CODE_COMPLETE_PROVIDER_BLOCKED` pre-production gates.
 
-Launch 10 local acceptance now includes a direct two-choice wallet entry with provider implementation
-copy removed, wallet/payment SDKs deferred to their interaction boundaries, a single keyboard-addressable
+Launch 10 local acceptance now includes an immediate primary external-wallet entry, a quiet configured
+secure-wallet secondary action with provider implementation copy removed, wallet/payment SDKs deferred to their interaction boundaries, a single keyboard-addressable
 main region, corrected light/dark contrast and form labels, reduced-motion behavior, a privacy-safe
 network-first offline fallback, install-grade manifest/icons, and representative authenticated Axe scans.
 The Node 22 production-preview matrix passed 49 desktop/mobile Chromium tests and 24 Firefox tests;

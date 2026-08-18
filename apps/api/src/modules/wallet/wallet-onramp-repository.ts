@@ -23,9 +23,8 @@ export function createWalletOnrampRepositoryMethods(
           wos.state,
           wos.created_at,
           wos.expires_at
-        from users u
-        join wallet_onramp_sessions wos on wos.user_id = u.id
-        where u.supabase_user_id = ${input.supabaseUserId}
+        from wallet_onramp_sessions wos
+        where wos.user_id = ${input.userId}
           and wos.idempotency_key = ${input.idempotencyKey}
         limit 1
       `;
@@ -40,7 +39,7 @@ export function createWalletOnrampRepositoryMethods(
           with target_user as (
             select id
             from users
-            where supabase_user_id = ${input.supabaseUserId}
+            where id = ${input.userId}
             limit 1
           ),
           target_wallet as (
@@ -100,9 +99,8 @@ export function createWalletOnrampRepositoryMethods(
               wos.state,
               wos.created_at,
               wos.expires_at
-            from users u
-            join wallet_onramp_sessions wos on wos.user_id = u.id
-            where u.supabase_user_id = ${input.supabaseUserId}
+            from wallet_onramp_sessions wos
+            where wos.user_id = ${input.userId}
               and wos.idempotency_key = ${input.idempotencyKey}
             limit 1
           `;

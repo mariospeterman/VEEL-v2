@@ -3,8 +3,8 @@ import { expect, test } from "@playwright/test";
 
 const publicSurfaces = [
   { name: "landing", path: "/", heading: "Create without asking the algorithm for permission." },
-  { name: "login", path: "/?mode=login", heading: "Log in." },
-  { name: "onboarding", path: "/?mode=onboarding", heading: "Create your account." },
+  { name: "login", path: "/?mode=login", heading: "Welcome back." },
+  { name: "onboarding", path: "/?mode=onboarding", heading: "Set up your account." },
   { name: "offline", path: "/offline", heading: "WeVid is offline" }
 ] as const;
 
@@ -29,7 +29,7 @@ test("entry presents a direct wallet action without provider implementation copy
 
   const connect = page.getByRole("button", { name: "Connect wallet" });
   await expect(connect).toBeVisible();
-  await expect(connect).toBeEnabled({ timeout: 30_000 });
+  await expect(connect).toBeEnabled({ timeout: 5_000 });
   await expect(page.getByText(/powered by|google, email|passkey|solana wallet adapter/i)).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Language" })).toHaveCount(0);
 
