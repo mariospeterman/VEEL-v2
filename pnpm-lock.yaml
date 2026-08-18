@@ -163,7 +163,7 @@ importers:
         version: 4.3.6(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@privy-io/react-auth':
         specifier: ^3.31.0
-        version: 3.37.0(833078238a1568bf6a3e52fccadd6dbf)
+        version: 3.37.0(8e8119bec121051c32cac9e78edad564)
       '@solana-program/memo':
         specifier: ^0.11.2
         version: 0.11.2(@solana/kit@6.10.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10))
@@ -189,8 +189,8 @@ importers:
         specifier: ^1.98.4
         version: 1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)
       '@stripe/stripe-js':
-        specifier: 1.54.2
-        version: 1.54.2
+        specifier: 9.13.0
+        version: 9.13.0
       '@supabase/ssr':
         specifier: ^0.10.3
         version: 0.10.3(@supabase/supabase-js@2.112.3(@opentelemetry/api@1.9.1))
@@ -3919,8 +3919,9 @@ packages:
     peerDependencies:
       '@stripe/stripe-js': ^1.46.0
 
-  '@stripe/stripe-js@1.54.2':
-    resolution: {integrity: sha512-R1PwtDvUfs99cAjfuQ/WpwJ3c92+DAMy9xGApjqlWQMj0FKQabUAys2swfTRNzuYAYJh7NqK2dzcYVNkKLEKUg==}
+  '@stripe/stripe-js@9.13.0':
+    resolution: {integrity: sha512-/0c72BUgzzVkVTlsw5uBn8x3waTdVJ/PZGfQ6jY1eu6K7olUPf4d9lgDPA9/0sIdsR8j7o3QIG8fOCO6ItcL7A==}
+    engines: {node: '>=12.16'}
 
   '@supabase/auth-js@2.112.3':
     resolution: {integrity: sha512-NA0rsgAlWZPvbhw8aUdmgfpHVgUAcd8zK5ov43l++o1bLIPXZhRiAlRobhwF5AatQuovpqxsMH50F4oyyV4XZw==}
@@ -9046,7 +9047,7 @@ snapshots:
 
   '@privy-io/popup@0.0.5': {}
 
-  '@privy-io/react-auth@3.37.0(833078238a1568bf6a3e52fccadd6dbf)':
+  '@privy-io/react-auth@3.37.0(8e8119bec121051c32cac9e78edad564)':
     dependencies:
       '@base-org/account': 1.1.1(@types/react@19.2.18)(bufferutil@4.1.0)(react@19.2.8)(typescript@5.9.3)(use-sync-external-store@1.6.0(react@19.2.8))(utf-8-validate@5.0.10)(zod@3.25.76)
       '@base-ui/react': 1.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -9068,7 +9069,7 @@ snapshots:
       '@privy-io/urls': 0.0.5
       '@scure/base': 1.2.6
       '@simplewebauthn/browser': 13.3.0
-      '@stripe/crypto': 1.1.3(@stripe/stripe-js@1.54.2)
+      '@stripe/crypto': 1.1.3(@stripe/stripe-js@9.13.0)
       '@tanstack/react-virtual': 3.14.9(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@wallet-standard/app': 1.1.1
       '@walletconnect/ethereum-provider': 2.22.4(@react-native-async-storage/async-storage@1.24.0)(@types/react@19.2.18)(bufferutil@4.1.0)(ioredis@5.11.1)(react@19.2.8)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
@@ -12279,11 +12280,11 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
-  '@stripe/crypto@1.1.3(@stripe/stripe-js@1.54.2)':
+  '@stripe/crypto@1.1.3(@stripe/stripe-js@9.13.0)':
     dependencies:
-      '@stripe/stripe-js': 1.54.2
+      '@stripe/stripe-js': 9.13.0
 
-  '@stripe/stripe-js@1.54.2': {}
+  '@stripe/stripe-js@9.13.0': {}
 
   '@supabase/auth-js@2.112.3':
     dependencies:
