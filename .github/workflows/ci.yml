@@ -17,9 +17,9 @@ jobs:
   pinned-toolchain-proof:
     name: pinned-toolchain-proof
     runs-on: ubuntu-latest
-    # Full validation includes three Playwright engines. Browser installation
-    # plus the smoke suite can exceed 20 minutes on an uncached hosted runner.
-    timeout-minutes: 30
+    # Full validation includes three Playwright engines. Match Playwright's
+    # GitHub Actions guidance so uncached Linux system dependencies can finish.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
 
