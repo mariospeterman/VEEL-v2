@@ -131,8 +131,8 @@ importers:
         specifier: 5.11.1
         version: 5.11.1
       jose:
-        specifier: 6.2.8
-        version: 6.2.8
+        specifier: 6.2.9
+        version: 6.2.9
       openapi-types:
         specifier: ^12.1.3
         version: 12.1.3
@@ -5542,8 +5542,8 @@ packages:
   jose@4.15.9:
     resolution: {integrity: sha512-1vUQX+IdDMVPj4k8kOxgUqlcK518yluMuGZwqlr44FS1ppZB/5GWh4rZG89erpOBOJjU/OBsnCVFfapsRz6nEA==}
 
-  jose@6.2.8:
-    resolution: {integrity: sha512-Bsdjwm3Qsd/P0jR+BHDe3LytDfY7WBq2HmCCLIwuVRHMuEC9ae7/R474GIUdF1NgCyZjzVo/A9DOiOBtXq8ZoQ==}
+  jose@6.2.9:
+    resolution: {integrity: sha512-XrchZOFZUl/T3vTwRe8XK+cJrGtMF4th1ARnDfwbBXFKThGhlsxEE4Zu03AD/bjJSt/9jT/mxrOCkJWOg77aPA==}
 
   joycon@3.1.1:
     resolution: {integrity: sha512-34wB/Y7MW7bzjKRjUKTa46I2Z7eV62Rkhva+KkopW7Qvv/OSWBqvkSY7vusOPrNuZcUG3tApvdVgNB8POj3SPw==}
@@ -7455,7 +7455,7 @@ snapshots:
       axios: 1.18.0
       axios-retry: 4.5.0(axios@1.18.0)
       bs58: 6.0.0
-      jose: 6.2.8
+      jose: 6.2.9
       md5: 2.3.0
       uncrypto: 0.1.3
       viem: 2.55.13(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
@@ -12653,7 +12653,7 @@ snapshots:
       fastify-plugin: 6.0.0
       fastify-raw-body: 6.0.1
       ioredis: 5.11.1
-      jose: 6.2.8
+      jose: 6.2.9
       openapi-types: 12.1.3
       postgres: 3.4.9
       tweetnacl: 1.0.3
@@ -14896,7 +14896,7 @@ snapshots:
 
   jose@4.15.9: {}
 
-  jose@6.2.8: {}
+  jose@6.2.9: {}
 
   joycon@3.1.1: {}
 
@@ -16079,7 +16079,7 @@ snapshots:
   supabase@2.113.0:
     dependencies:
       eciesjs: 0.5.0
-      jose: 6.2.8
+      jose: 6.2.9
     optionalDependencies:
       '@supabase/cli-darwin-arm64': 2.113.0
       '@supabase/cli-darwin-x64': 2.113.0
