@@ -17,7 +17,9 @@ jobs:
   pinned-toolchain-proof:
     name: pinned-toolchain-proof
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Full validation includes three Playwright engines. Match Playwright's
+    # GitHub Actions guidance so uncached Linux system dependencies can finish.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
 
