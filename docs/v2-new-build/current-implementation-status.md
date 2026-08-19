@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: implementation status, known gaps, and next hardening priorities
-Last updated: 2026-08-17
+Last updated: 2026-08-19
 Source of truth: yes
 
 Owns:
@@ -37,10 +37,10 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `4860133` (green baseline through PR #72) |
-| Active slice | Pre-production staging convergence and release-candidate proof |
-| Branch | `codex/staging-convergence-status` |
-| Pull request | #73 |
+| Merged baseline | `main` at `56e1e6c` (green baseline through PR #77) |
+| Active slice | No product implementation slice; pre-production staging convergence is the external gate |
+| Branch | Live source: the single open PR carrying `wevid-active-slice`; none at this snapshot |
+| Pull request | None at this snapshot |
 | State | `CODE_COMPLETE_PROVIDER_BLOCKED` |
 | Slice blockers | Shared staging URLs/database/Supabase, Privy, Solana/Helius, Bunny, Livepeer, verification, notification, Redis/OTel, feature, legal, hosting/OIDC, and provider-dashboard configuration are absent. Explicit production approval is also required. |
 | Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
@@ -74,8 +74,16 @@ migrated in later bounded slices. Supabase recovery subjects remain exclusively 
 integration, desktop/mobile Chromium, desktop Firefox, accessibility, PWA, and visible-browser
 entry proofs are green. Real provider acceptance remains a pre-production gate.
 
-The green `main` merge at `4860133` passed protected CI, isolated Postgres integration, database
-migration checks, security analysis, build, and full browser smoke. Release-artifact run
+The current green `main` merge at `56e1e6c` passed protected CI run `32311866844`, isolated
+Postgres integration, database migration checks, security analysis, build, and the full Chromium,
+Firefox, and WebKit browser smoke matrix. The reviewed maintenance queue also merged CI budget
+hardening (PR #78), `jose` 6.2.9 (PR #74), Zustand 5.0.15 (PR #76), and Next.js 16.3.1
+(PR #77). The isolated `@solana-program/system` 0.13.0 upgrade (PR #75) was rejected because it
+requires `@solana/kit` 7 while the web provider boundary intentionally remains on Kit 6.10; that
+change may return only as a coordinated provider migration.
+
+The last fully attested release-evidence baseline at `4860133` passed protected CI, isolated
+Postgres integration, database migration checks, security analysis, build, and full browser smoke. Release-artifact run
 `32043723824` then built and attested the web, API, and worker images and emitted the immutable
 manifest for that exact source. Staging-convergence run `32044089602` verified the manifest and
 attestations, then failed closed before deployment because the shared staging/provider/legal
@@ -177,8 +185,8 @@ Public product copy and API metadata use WeVid and Support. Technical package sc
 
 - Monorepo, pnpm workspace, CI/security workflow, docs checks, lint/typecheck/test/smoke scripts, GStack gates, and gitleaks local gate.
 - Toolchain versioning is explicit through `.node-version`, `.nvmrc`, `packageManager`, and `engines`: Node.js `22.16.0`, pnpm `10.0.0`, Corepack activation, `pnpm bootstrap`, `pnpm run doctor`, and `pnpm check`. The canonical CI proof job is `pinned-toolchain-proof`.
-- The production dependency graph no longer includes the unused `@solana/wallet-adapter-wallets` umbrella package or pnpm-auto-installed React Native/Metro peers. Next.js is pinned to `16.3.0`, Playwright is pinned to `1.60.0`, required Solana codec/Stripe peers are explicit exact service dependencies, patched `axios`/`ws` resolutions are enforced, and UUID 8–10 consumers resolve to patched `uuid@11.1.1`. Supported queued upgrades were reapplied individually after official review: `pnpm/action-setup@v6` in PR #36, ESLint 10 in PR #37, `@fastify/rate-limit` 11 in PR #38, `fastify-raw-body` 6 in PR #39, and `globals` 17 in PR #40. PR #41 was rejected because it changed only one Rolldown native binding while the runtime and every other binding remained 1.0.3. `pnpm deps:check` now guards both the vulnerable-resolution policy and exact Rolldown runtime/native-binding alignment. The current `pnpm audit --prod` reports one high advisory: unpatched `bigint-buffer` through official Solana SPL tooling; no critical, moderate, low, or informational advisory is reported. Exact reachability, mitigations, artifact evidence, ownership, review date, and production gate are recorded in [Production dependency security status](dependency-security-status.md).
-- Privy `3.37.0` declares `@farcaster/mini-app-solana` as an optional peer and dynamically imports it only after its own Farcaster-environment detection. WeVid has no Farcaster login, query, referrer, or mini-app configuration and does not install or alias that peer; normal Privy email/social/passkey plus Solana wallet creation/signing does not execute the branch. Next webpack and Turbopack now narrowly ignore only that expected optional-import diagnostic inside Privy while every other missing module remains visible. Privy's official Solana peer packages are explicit exact web dependencies compatible with the pinned `@solana/kit` major. Owner: identity-provider dependency review. Review date: 2026-09-15. Removal condition: remove the narrow ignore when Privy publishes a compatible bundler-clean optional import, or install and stage-prove the peer only if Farcaster becomes an approved product surface.
+- The production dependency graph no longer includes the unused `@solana/wallet-adapter-wallets` umbrella package or pnpm-auto-installed React Native/Metro peers. Next.js is pinned to `16.3.1`, Playwright is pinned to `1.62.1`, Fastify is pinned to `5.12.0`, `jose` is pinned to `6.2.9`, and Zustand resolves to `5.0.15`; required Solana codec/Stripe peers are explicit exact service dependencies, patched `axios`/`ws` resolutions are enforced, and UUID 8–10 consumers resolve to patched `uuid@11.1.1`. Supported queued upgrades were reapplied individually after official review: `pnpm/action-setup@v6` in PR #36, ESLint 10 in PR #37, `@fastify/rate-limit` 11 in PR #38, `fastify-raw-body` 6 in PR #39, `globals` 17 in PR #40, Supabase CLI in PR #58, Fastify in PR #60, Playwright in PR #59, Privy in PR #61, `jose` in PR #74, Zustand in PR #76, and Next.js in PR #77. PR #41 was rejected because it changed only one Rolldown native binding while the runtime and every other binding remained 1.0.3; PR #75 was rejected because it would have installed `@solana-program/system` against an unsupported `@solana/kit` major. `pnpm deps:check` guards both the vulnerable-resolution policy and exact Rolldown runtime/native-binding alignment. The current `pnpm audit --prod` reports one high advisory: unpatched `bigint-buffer` through official Solana SPL tooling; no critical, moderate, low, or informational advisory is reported. Exact reachability, mitigations, artifact evidence, ownership, review date, and production gate are recorded in [Production dependency security status](dependency-security-status.md).
+- Privy `3.37.1` declares `@farcaster/mini-app-solana` as an optional peer and dynamically imports it only after its own Farcaster-environment detection. WeVid has no Farcaster login, query, referrer, or mini-app configuration and does not install or alias that peer; normal Privy email/social/passkey plus Solana wallet creation/signing does not execute the branch. Next webpack and Turbopack now narrowly ignore only that expected optional-import diagnostic inside Privy while every other missing module remains visible. Privy's official Solana peer packages are explicit exact web dependencies compatible with the pinned `@solana/kit` major. Owner: identity-provider dependency review. Review date: 2026-09-15. Removal condition: remove the narrow ignore when Privy publishes a compatible bundler-clean optional import, or install and stage-prove the peer only if Farcaster becomes an approved product surface.
 - OpenAPI, route map, and Fastify route registration are checked for route drift. The canonical follow endpoints are present only with their migration, repository, abuse/idempotency controls, feed impact, and real-Postgres/browser proof; no contract-only current-viewer alias is restored because the session endpoint remains that boundary.
 - Fastify API bootstrap with route registration, dependency construction, shared app-level Postgres client construction, close-hook lifecycle, env validation, raw-body support for signed webhooks, global rate limit, OpenAPI plugin, and Supabase boundary plugin.
 - Shared backend helpers now cover the app-level Postgres client, explicit transaction boundary, common Idempotency-Key parsing/validation, stable idempotency request hashing, route-specific mutation rate-limit presets, and the first admin mutation route-policy guard for migrated route utilities.
@@ -282,11 +290,12 @@ The controlling branch evidence is recorded in `production-branch-inventory.md`.
 
 ### P3 Moderation, Providers, And Operations
 
-- [ ] Add upload quarantine, malware/container checks, hashes, sampled classification, known-illegal matching boundary, policy decisions, human review, appeals, and auditable release state.
+- [x] Add upload quarantine, malware/container checks, hashes, sampled classification, known-illegal matching boundary, policy decisions, human review, appeals, and auditable release state.
 - [x] Add moderation domain records and admin queues without exposing raw illegal material or provider payloads.
 - [ ] Complete staging proof for age, KYC, KYB, embedded wallet, Bunny, Livepeer, Solana/USDC, moderation, email, push, and onramp providers before launch approval.
 - [x] Complete provider webhook replay with idempotent side-effect recovery and dead-letter visibility.
-- [ ] Add redacted metrics/traces/logs, dashboards, alerts, backup/restore proof, artifact digest pinning, secret rotation, load tests, incident response, and rollback proof.
+- [x] Add redacted metrics/traces/logs, backup/restore proof tooling, artifact digest pinning, bounded load tests, incident response, and rollback proof.
+- [ ] Configure real OTLP destinations, dashboards, alerts, secret rotation evidence, and shared staging database/Storage restore receipts.
 
 ### P4 Functional Frontend Before Visual Polish
 
@@ -299,9 +308,9 @@ The controlling branch evidence is recorded in `production-branch-inventory.md`.
 
 ### P5 GitHub Integration And Production Declaration
 
-- [ ] Push the production-hardening branch and keep its pull request draft until all required evidence is green.
-- [ ] Merge through reviewed GitHub flow, synchronize local `main` with `origin/main`, and verify a clean worktree.
-- [ ] Review fresh dependency pull requests independently from current `main`; do not fold unrelated majors or lockfile churn into a product slice.
+- [x] Use protected `main` plus one short-lived reviewed slice branch and one `wevid-active-slice` PR at a time; do not retain a permanent production-hardening branch.
+- [x] Merge through reviewed GitHub flow, synchronize local `main` with `origin/main`, and verify a clean worktree after every slice.
+- [x] Review fresh dependency pull requests independently from current `main`; supported patches were landed separately and incompatible mixed-major churn was rejected.
 - [ ] Declare production readiness only after provider, security, compliance, deployment, observability, backup, and end-to-end evidence gates pass.
 
 ## Required Status Discipline
