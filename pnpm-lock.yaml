@@ -162,8 +162,8 @@ importers:
         specifier: 4.3.6
         version: 4.3.6(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@privy-io/react-auth':
-        specifier: ^3.31.0
-        version: 3.37.0(833078238a1568bf6a3e52fccadd6dbf)
+        specifier: ^3.37.1
+        version: 3.37.1(833078238a1568bf6a3e52fccadd6dbf)
       '@solana-program/memo':
         specifier: ^0.11.2
         version: 0.11.2(@solana/kit@6.10.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10))
@@ -996,8 +996,8 @@ packages:
     resolution: {integrity: sha512-9I2Zn6+NJLfaGoz9jN3lpwDgAYvfGeNYdbAIjJOqzs4Tpc+VU3Jqq4IofSUBKajiDS8k9fZIg18/z13mpk1bsA==}
     engines: {node: '>=8'}
 
-  '@marsidev/react-turnstile@1.5.5':
-    resolution: {integrity: sha512-+EtXbmsJwlRuIUruLb3UBAakpW0wFGeA17QQp0uG8Mv+Zh8MXktZT68P5HS2g1ssfeRd2+BZGupOE/F4KGajFQ==}
+  '@marsidev/react-turnstile@1.6.0':
+    resolution: {integrity: sha512-T2Um71ZdBgQBiyS01xgRMvDWk+mEsrLtXLFVhOC917OVEO584wbPOWj1sw35RaM17+q9QoADgLVcH60xr9NRqQ==}
     peerDependencies:
       react: ^17.0.2 || ^18.0.0 || ^19.0
       react-dom: ^17.0.2 || ^18.0.0 || ^19.0
@@ -1693,8 +1693,8 @@ packages:
   '@privy-io/api-base@1.9.5':
     resolution: {integrity: sha512-q3bfy/BFF8kktodfsVzpR2UprSN1RZkGwenrMtJwFxgwSKEUdG3BKjNUulH66F+FSa7TajxmKzZeXgVhxA9sXg==}
 
-  '@privy-io/api-types@0.18.0':
-    resolution: {integrity: sha512-MlyAO/RUfHvRVmo1EJRssrNhEviNg0ehdTGzNxxUYGgZuAAticb6/L3xYsG6w5TTMYlycSyt7afEyen24FiMtQ==}
+  '@privy-io/api-types@0.20.0':
+    resolution: {integrity: sha512-CqzPGb4xj2jJC07UiBhbdBf7a02UhI047IVu2rr6EP5xImhR0iD2aSxCbjVo9fx07TNM6Sv/O14Dcrqc96c8uw==}
 
   '@privy-io/are-addresses-equal@0.0.11':
     resolution: {integrity: sha512-KsvoquDTXAwCykRtxWRrLLRF5OrmBRm9MZSgMYM/rB/J3yWUrZhOARtiFelgs92Rn/JnTkDNA0iC9YenjIvaCA==}
@@ -1710,11 +1710,11 @@ packages:
     peerDependencies:
       viem: 2.55.10
 
-  '@privy-io/js-sdk-core@0.69.0':
-    resolution: {integrity: sha512-L9I0F7Q73jN0UglxjkNhjZywaXTN4olTPpueVAGY0f8q9oVJtliN3lvSdufL+Q8COeAIp/Ci+v9vuhOl5ExvPQ==}
+  '@privy-io/js-sdk-core@0.69.1':
+    resolution: {integrity: sha512-gBIrdxrNItkeW/96l+9L5LZzdoULVeOfAuvfOSlLDvC4Rgr3i7lDVXwajlRpAD+787ZxjWYTxAgfvvydzcZAfg==}
     peerDependencies:
       permissionless: ^0.2.47
-      viem: 2.55.10
+      viem: 2.55.13
     peerDependenciesMeta:
       permissionless:
         optional: true
@@ -1724,8 +1724,8 @@ packages:
   '@privy-io/popup@0.0.5':
     resolution: {integrity: sha512-lIwErJA86rHmLkSyapv86Z6hVzoLl544iZsVgk4tcVCHxbLBlLI4UmgLDmviNTZdp+uY0VEZe8fjUQIPpa6tZg==}
 
-  '@privy-io/react-auth@3.37.0':
-    resolution: {integrity: sha512-Iy1QgfXpBpPCy080tZwKK0DR8kyEX4ax61x/JN9ICApxB1IaMqyzDVR7OqxvLSU3+eUfFCE7lqRLXUnNH60k+A==}
+  '@privy-io/react-auth@3.37.1':
+    resolution: {integrity: sha512-vRxKhCvGN5RSdgYqTk/Ok9eiAqJQzlRFGqPDHJ6pX+Jm9AUxwkm5A7Q20pyi+PM/WLU1YwXlgNjoX9tCc1a0aw==}
     peerDependencies:
       '@abstract-foundation/agw-client': ^1.0.0
       '@farcaster/mini-app-solana': ^1.0.0
@@ -1752,8 +1752,8 @@ packages:
       permissionless:
         optional: true
 
-  '@privy-io/routes@0.2.10':
-    resolution: {integrity: sha512-dm6/iwA8dxueenyqgA1bJYx+8LjUDuTLKKTS2u47VVUA4MH4kY9cXGveD6V9AB92OXLci5QjfQxDjuNXFjcIwA==}
+  '@privy-io/routes@0.2.11':
+    resolution: {integrity: sha512-dOB5lo72SAgjZPqCYxGNy4Jjm/T3PgTlW7M7DDQ6O6tbloVawX5rH4qzIfSCL4OdAFpDdjueNmCgtc6CT+G+EA==}
 
   '@privy-io/urls@0.0.5':
     resolution: {integrity: sha512-cy4SQY60I9aGm+Er/gL4P+Rrsw2B7RoD6GKw5ZlwEN3jCm3tfclWeZI+xlJSKIwIu71YV9fWpO0bjLTs0tMLgQ==}
@@ -5378,8 +5378,8 @@ packages:
   hls.js@1.6.17:
     resolution: {integrity: sha512-NUplVGVuc1hSPwdB/9/cbRkUmLrYi75/hqiXKdA+l300pJNxDu96R7jRb2imDzWJqIUF4I5ThmAdp9GvOCXsuQ==}
 
-  hono@4.13.1:
-    resolution: {integrity: sha512-kdJoFVv2xmayw6cY09H7AbMJMt8Jn5jdlEdXsP7AGBdF2DIptVlKlOLKXP41yPip4/a3yQPv9gVcJYI8YY04dw==}
+  hono@4.13.3:
+    resolution: {integrity: sha512-r8AO2mYHoLxSHkgafNeC/BXyb2vWRxD3jem4Ts+ptav8oTG5FIRifAjuJEmZI4bSvvc2ns0GxmIYiZnHqN3mMw==}
     engines: {node: '>=16.9.0'}
 
   http-errors@2.0.1:
@@ -5618,8 +5618,8 @@ packages:
     resolution: {integrity: sha512-+bT2uH4E5LGE7h/n3evcS/sQlJXCpIp6ym8OWJ5eV6+67Dsql/LaaT7qJBAt2rzfoa/5QBGBhxDix1dMt2kQKQ==}
     engines: {node: '>= 0.8.0'}
 
-  libphonenumber-js@1.13.10:
-    resolution: {integrity: sha512-xJxrdqvbl2rtn2MaUJrUejz8J7/uZNC0V77oks2LxYrO/+ZtVpRmz+fEQMuu6VusnEB1fmpByiLS1WXecOnAnw==}
+  libphonenumber-js@1.13.11:
+    resolution: {integrity: sha512-ETER2kMaIFTI/Nh1a8Gk03dUF/SL0VZqtI+CcVHZxp5WIHYwNS7S+uiYZDYCvLy3lOR4/DAD5jf0h5WkePPpqg==}
 
   light-my-request@6.6.0:
     resolution: {integrity: sha512-CHYbu8RtboSIoVsHZ6Ye4cj4Aw/yg2oAFimlF7mNvfDV192LR7nDiKtSIfCuLT7KokPSTn/9kfVLm5OGN0A28A==}
@@ -6664,8 +6664,8 @@ packages:
     resolution: {integrity: sha512-6fPc+R4ihwqP6N/aIv2f1gMH8lOVtWQHoqC4yK6oSDVVocumAsfCqjkXnqiYMhmMwS/mEHLp7Vehlt3ql6lEig==}
     engines: {node: '>=8'}
 
-  styled-components@6.5.1:
-    resolution: {integrity: sha512-6AsQEXcG7QhtdzjwJ4s5Amx5R9veYH9AP3+U6nF2BAMU0i1iM3cAXKJXuAKZCdv3Y2ntVMcL44cPx4cIDxgYFg==}
+  styled-components@6.5.3:
+    resolution: {integrity: sha512-vAX79sfpmUerP9fsTTxoTrBDE0RuO4ahjInyWYoohNgqrdg63Ms4q6FJ/o2Fyity82NU3cujOT8Ewl9TThBdwg==}
     engines: {node: '>= 16'}
     peerDependencies:
       react: '>= 16.8.0'
@@ -8044,7 +8044,7 @@ snapshots:
 
   '@lukeed/ms@2.0.2': {}
 
-  '@marsidev/react-turnstile@1.5.5(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@marsidev/react-turnstile@1.6.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
@@ -9005,7 +9005,7 @@ snapshots:
     dependencies:
       zod: 3.25.76
 
-  '@privy-io/api-types@0.18.0': {}
+  '@privy-io/api-types@0.20.0': {}
 
   '@privy-io/are-addresses-equal@0.0.11(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)':
     dependencies:
@@ -9022,31 +9022,31 @@ snapshots:
     dependencies:
       '@scure/base': 1.2.6
 
-  '@privy-io/ethereum@0.2.2(viem@2.55.10(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))':
+  '@privy-io/ethereum@0.2.2(viem@2.55.13(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))':
     dependencies:
-      viem: 2.55.10(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
+      viem: 2.55.13(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
 
-  '@privy-io/js-sdk-core@0.69.0(viem@2.55.10(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))':
+  '@privy-io/js-sdk-core@0.69.1(viem@2.55.13(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))':
     dependencies:
       '@privy-io/api-base': 1.9.5
-      '@privy-io/api-types': 0.18.0
+      '@privy-io/api-types': 0.20.0
       '@privy-io/chains': 0.5.2
       '@privy-io/encoding': 0.2.2
-      '@privy-io/ethereum': 0.2.2(viem@2.55.10(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))
-      '@privy-io/routes': 0.2.10
+      '@privy-io/ethereum': 0.2.2(viem@2.55.13(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))
+      '@privy-io/routes': 0.2.11
       canonicalize: 2.1.0
       eventemitter3: 5.0.4
       fetch-retry: 6.0.0
       jose: 4.15.9
       js-cookie: 3.0.8
-      libphonenumber-js: 1.13.10
+      libphonenumber-js: 1.13.11
       set-cookie-parser: 2.7.2
     optionalDependencies:
-      viem: 2.55.10(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
+      viem: 2.55.13(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
 
   '@privy-io/popup@0.0.5': {}
 
-  '@privy-io/react-auth@3.37.0(833078238a1568bf6a3e52fccadd6dbf)':
+  '@privy-io/react-auth@3.37.1(833078238a1568bf6a3e52fccadd6dbf)':
     dependencies:
       '@base-org/account': 1.1.1(@types/react@19.2.18)(bufferutil@4.1.0)(react@19.2.8)(typescript@5.9.3)(use-sync-external-store@1.6.0(react@19.2.8))(utf-8-validate@5.0.10)(zod@3.25.76)
       '@base-ui/react': 1.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -9055,16 +9055,16 @@ snapshots:
       '@hcaptcha/react-hcaptcha': 1.17.4(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@headlessui/react': 2.2.10(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@heroicons/react': 2.2.0(react@19.2.8)
-      '@marsidev/react-turnstile': 1.5.5(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@marsidev/react-turnstile': 1.6.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@privy-io/api-base': 1.9.5
-      '@privy-io/api-types': 0.18.0
+      '@privy-io/api-types': 0.20.0
       '@privy-io/are-addresses-equal': 0.0.11(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
       '@privy-io/chains': 0.5.2
       '@privy-io/encoding': 0.2.2
-      '@privy-io/ethereum': 0.2.2(viem@2.55.10(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))
-      '@privy-io/js-sdk-core': 0.69.0(viem@2.55.10(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))
+      '@privy-io/ethereum': 0.2.2(viem@2.55.13(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))
+      '@privy-io/js-sdk-core': 0.69.1(viem@2.55.13(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))
       '@privy-io/popup': 0.0.5
-      '@privy-io/routes': 0.2.10
+      '@privy-io/routes': 0.2.11
       '@privy-io/urls': 0.0.5
       '@scure/base': 1.2.6
       '@simplewebauthn/browser': 13.3.0
@@ -9086,10 +9086,10 @@ snapshots:
       react-device-detect: 2.2.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react-dom: 19.2.8(react@19.2.8)
       secure-password-utilities: 0.2.1
-      styled-components: 6.5.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      styled-components: 6.5.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       stylis: 4.4.0
       tinycolor2: 1.6.0
-      viem: 2.55.10(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
+      viem: 2.55.13(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
       x402: 0.7.3(@react-native-async-storage/async-storage@1.24.0)(@solana/sysvars@7.1.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))(@tanstack/query-core@5.101.4)(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react@19.2.18)(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(ioredis@5.11.1)(react@19.2.8)(typescript@5.9.3)(utf-8-validate@5.0.10)
       zustand: 5.0.14(@types/react@19.2.18)(react@19.2.8)(use-sync-external-store@1.6.0(react@19.2.8))
     optionalDependencies:
@@ -9144,9 +9144,9 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@privy-io/routes@0.2.10':
+  '@privy-io/routes@0.2.11':
     dependencies:
-      '@privy-io/api-types': 0.18.0
+      '@privy-io/api-types': 0.20.0
 
   '@privy-io/urls@0.0.5': {}
 
@@ -14727,7 +14727,7 @@ snapshots:
 
   hls.js@1.6.17: {}
 
-  hono@4.13.1: {}
+  hono@4.13.3: {}
 
   http-errors@2.0.1:
     dependencies:
@@ -14973,7 +14973,7 @@ snapshots:
       prelude-ls: 1.2.1
       type-check: 0.4.0
 
-  libphonenumber-js@1.13.10: {}
+  libphonenumber-js@1.13.11: {}
 
   light-my-request@6.6.0:
     dependencies:
@@ -15578,7 +15578,7 @@ snapshots:
   porto@0.2.35(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react@19.2.18)(@wagmi/core@2.22.1(@tanstack/query-core@5.101.4)(@types/react@19.2.18)(react@19.2.8)(typescript@5.9.3)(use-sync-external-store@1.4.0(react@19.2.8))(viem@2.55.13(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)))(react@19.2.8)(typescript@5.9.3)(use-sync-external-store@1.4.0(react@19.2.8))(viem@2.55.13(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))(wagmi@2.19.5(@react-native-async-storage/async-storage@1.24.0)(@tanstack/query-core@5.101.4)(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react@19.2.18)(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(ioredis@5.11.1)(react@19.2.8)(typescript@5.9.3)(utf-8-validate@5.0.10)(viem@2.55.13(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))(zod@3.25.76)):
     dependencies:
       '@wagmi/core': 2.22.1(@tanstack/query-core@5.101.4)(@types/react@19.2.18)(react@19.2.8)(typescript@5.9.3)(use-sync-external-store@1.4.0(react@19.2.8))(viem@2.55.13(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))
-      hono: 4.13.1
+      hono: 4.13.3
       idb-keyval: 6.3.0
       mipd: 0.0.7(typescript@5.9.3)
       ox: 0.9.17(typescript@5.9.3)(zod@4.4.3)
@@ -16057,7 +16057,7 @@ snapshots:
 
   strip-json-comments@3.1.1: {}
 
-  styled-components@6.5.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
+  styled-components@6.5.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
     dependencies:
       '@emotion/is-prop-valid': 1.4.0
       css-to-react-native: 3.2.0
