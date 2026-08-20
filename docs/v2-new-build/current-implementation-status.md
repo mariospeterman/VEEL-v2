@@ -40,7 +40,7 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Merged baseline | `main` at `b5e1904` (green baseline through PR #86) |
 | Active slice | Convergence 02 — Universal composer |
 | Branch | `codex/converge-02-universal-composer` |
-| Pull request | Draft PR pending |
+| Pull request | Draft PR #87 |
 | State | `ACTIVE` |
 | Slice blockers | No code blocker; image-provider staging evidence remains external and must stay fail-closed. |
 | Next unfinished slice | Convergence 03 — Analytics Core |
