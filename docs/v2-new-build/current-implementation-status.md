@@ -40,8 +40,8 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Merged baseline | `main` at `6958ae8` (green baseline through PR #80) |
 | Active slice | Launch 11 hardening — Event Access transaction boundary |
 | Branch | `codex/launch-event-access-transaction-boundary` |
-| Pull request | Draft PR #81 |
-| State | `ACTIVE` |
+| Pull request | PR #81 |
+| State | `MERGE_READY` |
 | Slice blockers | No code blocker; provider/staging gates remain external and unchanged. |
 | Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
 
