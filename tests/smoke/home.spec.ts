@@ -14,6 +14,8 @@ const managedRelationshipId = "00000000-0000-4000-8000-000000000143";
 let apiServer: Server;
 let mutualsInterestAttempts = 0;
 let contentPreference: "both" | "sfw" | "nsfw" = "both";
+let pendingFeedRequestGate: { release: Promise<void>; started: () => void } | null = null;
+const feedRequestModes: string[] = [];
 const mutualsInterestKeys: string[] = [];
 
 test.beforeAll(async () => {
@@ -50,6 +52,8 @@ async function addE2eCookie(context: BrowserContext) {
 
 test.beforeEach(() => {
   contentPreference = "both";
+  pendingFeedRequestGate = null;
+  feedRequestModes.length = 0;
 });
 
 test("renders the public landing with the current WeVid visual contract", async ({ page }) => {
@@ -289,23 +293,19 @@ test("keeps one content preference across Settings and the compact feed filter",
 
   await page.goto("/app/home", { waitUntil: "domcontentloaded", timeout: 45_000 });
   await waitForClientReady(page);
-  let releasePendingFeedRequest: (() => void) | undefined;
-  let markPendingFeedRequestStarted: (() => void) | undefined;
+  const baselineFeedRequestCount = feedRequestModes.length;
+  let releasePendingFeedRequest: () => void = () => undefined;
+  let markPendingFeedRequestStarted: () => void = () => undefined;
   const pendingFeedRequestStarted = new Promise<void>((resolve) => {
     markPendingFeedRequestStarted = resolve;
   });
   const pendingFeedRequestRelease = new Promise<void>((resolve) => {
     releasePendingFeedRequest = resolve;
   });
-  const browserFeedRequestUrls: string[] = [];
-  await page.route("**/v1/content/feed?*", async (route) => {
-    browserFeedRequestUrls.push(route.request().url());
-    if (browserFeedRequestUrls.length === 1) {
-      markPendingFeedRequestStarted?.();
-      await pendingFeedRequestRelease;
-    }
-    await route.continue();
-  });
+  pendingFeedRequestGate = {
+    release: pendingFeedRequestRelease,
+    started: markPendingFeedRequestStarted
+  };
 
   await page.getByRole("tab", { name: "Following" }).click();
   await pendingFeedRequestStarted;
@@ -313,9 +313,9 @@ test("keeps one content preference across Settings and the compact feed filter",
   await expect(page.getByRole("button", { name: "Adult only" })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("button", { name: "Safe only" }).click();
   await expect(page.getByRole("button", { name: "Safe only" })).toHaveAttribute("aria-pressed", "true");
-  releasePendingFeedRequest?.();
-  await expect.poll(() => browserFeedRequestUrls.length).toBe(2);
-  expect(new URL(browserFeedRequestUrls[1]!).searchParams.get("mode")).toBe("following");
+  releasePendingFeedRequest();
+  await expect.poll(() => feedRequestModes.length).toBe(baselineFeedRequestCount + 2);
+  expect(feedRequestModes.at(-1)).toBe("following");
 });
 
 test("separates platform plans from creator memberships responsively", async ({ context, page }) => {
@@ -568,6 +568,13 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
   }
 
   if (method === "GET" && url.pathname === "/v1/content/feed") {
+    feedRequestModes.push(url.searchParams.get("mode") ?? "recommended");
+    const requestGate = pendingFeedRequestGate;
+    if (requestGate) {
+      pendingFeedRequestGate = null;
+      requestGate.started();
+      await requestGate.release;
+    }
     sendJson(response, 200, {
       items: [contentItem(), contentItem("00000000-0000-4000-8000-000000000041")],
       nextCursor: null,
