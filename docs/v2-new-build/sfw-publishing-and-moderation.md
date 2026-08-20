@@ -24,6 +24,7 @@ Review can instead produce `changes_requested`, `rejected`, `appeal_pending`, or
 - `private.content_safety_release_ready` and the database triggers remain the final release guard. Migration `0106` requires the latest normalized container-integrity, malware, known-hash, classification, and staff-review signals to be attributable and clear, and immediately blocks public access if a later required signal is not clear.
 - Public profile queries require ready, public, approved, and `publish_state = 'published'`.
 - Owner profile media includes private drafts and uploader-safe staff messages.
+- Creator publication submission and moderation-appeal state changes use the shared Postgres transaction boundary so canonical safety state and audit evidence commit or roll back together.
 - Appeals are owner-authorized, replay-safe, audited, and return the canonical safety case to the staff queue. A replay key is bound to the content id and normalized reason; changed-input reuse fails with a conflict.
 - Staff decisions close the active appeal in the same transaction. An accepted appeal restores release-eligible blocked content to published, while the database release guard still requires approved safety and provider-ready media.
 - Rejected and appealed owner states take precedence over the generic blocked projection so the creator can see the decision and reach the appeal workflow.

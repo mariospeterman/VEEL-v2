@@ -1,15 +1,15 @@
-import type postgres from "postgres";
+import { type PostgresSql, withPostgresTransaction } from "../../shared/postgres.js";
 import { ContentPublishConflictError } from "./content-errors.js";
 import { toContentItem } from "./content-repository-mappers.js";
 import type { ContentRow } from "./content-repository-rows.js";
 import type { ContentRepository } from "./types.js";
 
 export function createContentPublishRepositoryMethods(
-  sql: postgres.Sql
+  sql: PostgresSql
 ): Pick<ContentRepository, "publishOwnedContent"> {
   return {
     async publishOwnedContent(input) {
-      const result = await sql.begin(async (transaction) => {
+      const result = await withPostgresTransaction(sql, async (transaction) => {
         const rows = await transaction<
           (ContentRow & {
             content_state: string;

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type postgres from "postgres";
 import { hashIdempotencyPayload } from "../../shared/idempotency.js";
+import { type PostgresSql, withPostgresTransaction } from "../../shared/postgres.js";
 import { ContentModerationAppealConflictError } from "./content-errors.js";
 import type { ContentRepository, CreatorMediaPage } from "./types.js";
 
@@ -21,7 +21,7 @@ type OwnerMediaRow = {
 };
 
 export function createContentWorkflowRepositoryMethods(
-  sql: postgres.Sql
+  sql: PostgresSql
 ): Pick<ContentRepository, "listOwnedContent" | "createModerationAppeal"> {
   return {
     async listOwnedContent(input) {
@@ -82,7 +82,7 @@ export function createContentWorkflowRepositoryMethods(
     },
 
     async createModerationAppeal(input) {
-      return sql.begin(async (transaction) => {
+      return withPostgresTransaction(sql, async (transaction) => {
         const rows = await transaction<{
           case_id: string;
           creator_user_id: string;
