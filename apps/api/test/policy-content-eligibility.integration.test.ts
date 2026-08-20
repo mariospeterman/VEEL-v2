@@ -334,6 +334,20 @@ describeIntegration("canonical policy and content eligibility against Postgres",
           ${`creator-kyc-${suffix}`}, 'manual_review', 'high', now(), false
         )
       `;
+      await sql`
+        insert into verification_records (
+          subject_type, subject_id, purpose, status, provider, provider_reference,
+          method, assurance_level, reusable, created_at
+        ) values (
+          'user', ${creatorId}, 'creator_kyc', 'pending', 'internal',
+          ${`creator-kyc-renewal-${suffix}`}, 'manual_review', 'high', false,
+          now() + interval '1 second'
+        )
+      `;
+      const renewalState = await sql<Array<{ kyc_state: string }>>`
+        select kyc_state from private.resolve_creator_kyc_state(${creatorId})
+      `;
+      expect(renewalState[0]?.kyc_state).toBe("verified");
       const requiredReadiness = await sql<Array<{ product_type: string }>>`
         select 'support'::text as product_type
         from private.assert_recipient_monetisation_ready(

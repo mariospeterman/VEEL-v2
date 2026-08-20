@@ -285,7 +285,11 @@ as $$
     where vr.subject_type = 'user'
       and vr.subject_id = p_recipient_user_id
       and vr.purpose = 'creator_kyc'
-    order by vr.created_at desc, vr.id desc
+    order by (
+      vr.status = 'valid'
+      and vr.assurance_level in ('high', 'documentary')
+      and (vr.expires_at is null or vr.expires_at > now())
+    ) desc, vr.created_at desc, vr.id desc
     limit 1
   ) verification on true;
 $$;

@@ -153,6 +153,8 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   await page.getByRole("button", { name: "Upload video" }).click();
   await expect(page.getByText("Preview ready")).toBeVisible({ timeout: 15_000 });
   await page.getByLabel("Content rating").selectOption("explicit");
+  await expect(page.getByLabel(/every person shown is 18\+ and consented/)).not.toBeChecked();
+  await page.getByLabel(/every person shown is 18\+ and consented/).check();
   const metadataUpdate = page.waitForRequest((request) =>
     request.method() === "PATCH" &&
     new URL(request.url()).pathname === `/v1/content/${contentId}` &&

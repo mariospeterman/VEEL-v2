@@ -325,7 +325,11 @@ export function createProfileDashboardRepositoryMethods(
           where subject_type = 'user'
             and subject_id = ${identity.id}
             and purpose = 'creator_kyc'
-          order by created_at desc, id desc
+          order by (
+            status = 'valid'
+            and assurance_level in ('high', 'documentary')
+            and (expires_at is null or expires_at > now())
+          ) desc, created_at desc, id desc
           limit 1
         `;
         const kyc = kycRows[0];

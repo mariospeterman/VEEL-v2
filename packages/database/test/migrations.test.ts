@@ -1107,6 +1107,8 @@ describe("database migrations", () => {
 
     expect(sql).toContain("create function private.resolve_recipient_monetisation_policy");
     expect(sql).toContain("create function private.resolve_creator_kyc_state");
+    expect(sql).toContain("vr.status = 'valid'");
+    expect(sql).toContain("and vr.assurance_level in ('high', 'documentary')");
     expect(sql).toContain("create table recipient_monetisation_risk_assessments");
     expect(sql).toContain("recipient_monetisation_risk_active_lookup_idx");
     expect(sql).toContain("add column recipient_kyc_required boolean");

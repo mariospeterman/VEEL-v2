@@ -110,8 +110,25 @@ export function useCreateWorkspaceState(storageScope: string | null) {
     setUploadSession(null);
     setUploadProgress(0);
     setUploadState("idle");
+    setContentSafetyPolicyAccepted(false);
     void uploadRef.current?.abort();
     uploadRef.current = null;
+  }
+
+  function setNsfwLabelWithDeclarationReset(value: CreateContentRequest["nsfwLabel"]) {
+    if (value !== nsfwLabel) {
+      setContentSafetyPolicyAccepted(false);
+    }
+    setNsfwLabel(value);
+  }
+
+  function setRepresentationModeWithDeclarationReset(
+    value: CreateContentRequest["representationMode"]
+  ) {
+    if (value !== representationMode) {
+      setContentSafetyPolicyAccepted(false);
+    }
+    setRepresentationMode(value);
   }
 
   async function onCreateAndUpload(event: FormEvent<HTMLFormElement>) {
@@ -265,8 +282,8 @@ export function useCreateWorkspaceState(storageScope: string | null) {
       setCaption,
       setContentSafetyPolicyAccepted,
       setMediaType,
-      setNsfwLabel,
-      setRepresentationMode,
+      setNsfwLabel: setNsfwLabelWithDeclarationReset,
+      setRepresentationMode: setRepresentationModeWithDeclarationReset,
       setVisibility
     },
     state: {
