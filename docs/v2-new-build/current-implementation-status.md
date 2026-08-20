@@ -40,7 +40,7 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Merged baseline | `main` at `1938988` (green baseline through PR #83) |
 | Active slice | Launch 11 hardening — content publication safety transaction boundary |
 | Branch | `codex/launch-content-safety-transaction-boundary` |
-| Pull request | Draft PR pending |
+| Pull request | PR #84 |
 | State | `ACTIVE` |
 | Slice blockers | No code blocker; provider/staging gates remain external and unchanged. |
 | Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
