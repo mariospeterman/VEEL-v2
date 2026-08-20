@@ -121,7 +121,7 @@ begin
     and rmo.effective_at <= now()
     and (rmo.expires_at is null or rmo.expires_at > now());
 
-  select upper(vr.jurisdiction) into v_jurisdiction
+  select upper(btrim(vr.jurisdiction)) into v_jurisdiction
   from verification_records vr
   where vr.subject_type = 'user'
     and vr.subject_id = p_recipient_user_id
@@ -167,7 +167,11 @@ begin
       'product_policy_required', v_jurisdiction, v_risk_score,
       v_policy.effective_at, null::timestamptz;
   elsif v_jurisdiction is not null
-    and v_jurisdiction = any(v_policy.kyc_required_jurisdictions) then
+    and exists (
+      select 1
+      from unnest(v_policy.kyc_required_jurisdictions) configured_jurisdiction
+      where upper(btrim(configured_jurisdiction)) = v_jurisdiction
+    ) then
     return query select 'risk_based', true, v_policy.policy_version,
       'jurisdiction_policy_required', v_jurisdiction, v_risk_score,
       v_policy.effective_at, null::timestamptz;
@@ -398,7 +402,10 @@ comment on function private.assert_recipient_monetisation_ready(uuid, text, wall
   'Canonical recipient readiness using the deterministic recipient policy resolver. Adult publishing and Enterprise management remain independent.';
 
 update viewer_feed_preferences
-set default_feed_mode = 'recommended'
+set
+  nsfw_preference = default_feed_mode,
+  default_feed_mode = 'recommended',
+  updated_at = now()
 where default_feed_mode in ('nsfw', 'sfw');
 
 alter table viewer_feed_preferences

@@ -1113,8 +1113,10 @@ describe("database migrations", () => {
     expect(sql).toContain("add column recipient_kyc_policy_version text");
     expect(sql).toContain("'risk_threshold_required'");
     expect(sql).toContain("'jurisdiction_policy_required'");
+    expect(sql).toContain("upper(btrim(configured_jurisdiction)) = v_jurisdiction");
     expect(sql).toContain("create function private.eligible_content");
     expect(sql).toContain("case when p_viewer_user_id is null then 'sfw' else 'both' end");
+    expect(sql).toContain("nsfw_preference = default_feed_mode");
     expect(sql).toContain("default_feed_mode in ('recommended', 'following')");
     expect(sql).toContain("subscriptions_content_eligibility_idx");
     expect(sql).not.toMatch(/creator_balance|withdrawal_queue|payout_queue|escrow|private_key|seed_phrase|mnemonic/i);

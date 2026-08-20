@@ -31,8 +31,9 @@ describeIntegration("canonical policy and content eligibility against Postgres",
     const policySnapshot = await sql<Array<{
       kyc_mode: "disabled" | "risk_based" | "required";
       policy_version: string;
+      kyc_required_jurisdictions: string[];
     }>>`
-      select kyc_mode, policy_version
+      select kyc_mode, policy_version, kyc_required_jurisdictions
       from recipient_monetisation_policies
       where policy_key = 'default'
     `;
@@ -70,6 +71,37 @@ describeIntegration("canonical policy and content eligibility against Postgres",
         kyc_required: false,
         decision_reason: "risk_policy_not_triggered"
       });
+
+      await sql`
+        update verification_records
+        set jurisdiction = 'rs'
+        where subject_type = 'user'
+          and subject_id = ${creatorId}
+          and purpose = 'age_access'
+      `;
+      await sql`
+        update recipient_monetisation_policies
+        set kyc_required_jurisdictions = array['  rs  ']
+        where policy_key = 'default'
+      `;
+      const jurisdictionTriggered = await sql<Array<{
+        kyc_required: boolean;
+        decision_reason: string;
+        jurisdiction: string;
+      }>>`
+        select kyc_required, decision_reason, jurisdiction
+        from private.resolve_recipient_monetisation_policy(${creatorId}, 'support')
+      `;
+      expect(jurisdictionTriggered[0]).toMatchObject({
+        kyc_required: true,
+        decision_reason: "jurisdiction_policy_required",
+        jurisdiction: "RS"
+      });
+      await sql`
+        update recipient_monetisation_policies
+        set kyc_required_jurisdictions = ${policySnapshot[0]?.kyc_required_jurisdictions ?? []}
+        where policy_key = 'default'
+      `;
 
       await sql`
         insert into recipient_monetisation_risk_assessments (
@@ -133,7 +165,8 @@ describeIntegration("canonical policy and content eligibility against Postgres",
       await sql`
         update recipient_monetisation_policies
         set kyc_mode = ${policySnapshot[0]?.kyc_mode ?? "risk_based"},
-            policy_version = ${policySnapshot[0]?.policy_version ?? "recipient-risk-v1"}
+            policy_version = ${policySnapshot[0]?.policy_version ?? "recipient-risk-v1"},
+            kyc_required_jurisdictions = ${policySnapshot[0]?.kyc_required_jurisdictions ?? []}
         where policy_key = 'default'
       `;
 
@@ -200,7 +233,8 @@ describeIntegration("canonical policy and content eligibility against Postgres",
       await sql`
         update recipient_monetisation_policies
         set kyc_mode = ${policySnapshot[0]?.kyc_mode ?? "risk_based"},
-            policy_version = ${policySnapshot[0]?.policy_version ?? "recipient-risk-v1"}
+            policy_version = ${policySnapshot[0]?.policy_version ?? "recipient-risk-v1"},
+            kyc_required_jurisdictions = ${policySnapshot[0]?.kyc_required_jurisdictions ?? []}
         where policy_key = 'default'
       `;
 
@@ -470,7 +504,8 @@ describeIntegration("canonical policy and content eligibility against Postgres",
       await sql`
         update recipient_monetisation_policies
         set kyc_mode = ${policySnapshot[0]?.kyc_mode ?? "risk_based"},
-            policy_version = ${policySnapshot[0]?.policy_version ?? "recipient-risk-v1"}
+            policy_version = ${policySnapshot[0]?.policy_version ?? "recipient-risk-v1"},
+            kyc_required_jurisdictions = ${policySnapshot[0]?.kyc_required_jurisdictions ?? []}
         where policy_key = 'default'
       `;
       await sql`
