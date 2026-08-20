@@ -40,19 +40,26 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Merged baseline | `main` at `5889b39` (green baseline through PR #85) |
 | Active slice | Convergence 01 — policy and eligibility |
 | Branch | `codex/converge-01-policy-eligibility` |
-| Pull request | Draft PR pending |
+| Pull request | Draft PR #86 |
 | State | `ACTIVE` |
 | Slice blockers | No code blocker; provider/staging gates remain external and unchanged. |
 | Next unfinished slice | Convergence 02 — Universal composer |
 
-Convergence 01 is auditing and unifying the existing policy and eligibility authorities without
-merging their responsibilities. The first evidence-backed gaps are a nominal `risk_based` creator-KYC
-mode that does not yet evaluate deterministic product, jurisdiction, and risk inputs consistently, an
-obsolete `recommended` content-preference write, and duplicated public-content eligibility predicates
-across feed, detail, Discover, profile, share, unlock, and engagement surfaces. Contracts, reversible
-migrations, API projections, frontend controls, indexed SQL, and real-Postgres/browser proof will move
-together in this one slice. Adult-publisher, performer, age, creator-KYC, and Enterprise authorities
-remain separate, and no provider API behavior changes without renewed official evidence.
+Convergence 01 now has one deterministic recipient-KYC policy resolver for global mode, active
+account override, product, normalized jurisdiction, and active risk evidence; `risk_based` remains
+non-universal, global `required` cannot be weakened by an exemption, and every decision includes its
+reason, version, and effective/expiry evidence. Creator capability/onboarding/dashboard, one-time
+payment, Profile Membership, and recurring-collection paths consume that authority and snapshot or
+re-evaluate the decision as appropriate. One indexed viewer-relative SQL authority now gates feed,
+detail, Discover/search/hashtags, profile media, share, unlock, and engagement reads without per-item
+application loops. Ranking mode is only For You/Following; one persisted Both/Safe only/Adult only
+preference drives Home, Bits, Settings, Discover, search, hashtags, and profile media. Safe/Adult/
+Explicit creation remains one resumable draft lifecycle: Adult/Explicit upload and editing are allowed
+before contextual adult-publisher verification, while final publication rechecks that independent
+capability and never forces creator KYC or earnings. Migration `0108` rollback/reapply, 479 unit tests,
+five real-Postgres journeys, production build/typecheck/lint/docs/deploy checks, and 25 desktop plus 25
+mobile Chromium journeys are green locally. Firefox and clean-runner coverage remain protected-PR CI
+gates. No provider API behavior changed; provider/staging gates remain unchanged.
 
 PR #85 merged at `5889b39`. Exact-main CI run `32352695267`, database-migration run `32352695320`,
 security run `32352695299`, and immutable release-artifact run `32353578799` are green. Staging run

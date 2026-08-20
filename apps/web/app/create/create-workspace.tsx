@@ -2,10 +2,12 @@
 
 import { Select } from "./create-workspace-fields";
 import {
+  nsfwLabels,
   representationModes,
   useCreateWorkspaceState,
   visibilityValues
 } from "./create-workspace-state";
+import { AdultPublisherGate } from "../app/create/adult-publisher-gate";
 import type { VerificationStatus } from "@/api-client";
 
 export function CreateWorkspace({
@@ -17,6 +19,8 @@ export function CreateWorkspace({
 }) {
   const { actions, state } = useCreateWorkspaceState(storageScope);
   const ageReady = verification?.capabilities.canUploadMedia === true;
+  const adultPublishReady = verification?.capabilities.canPublishAdultMedia === true;
+  const adultSelected = state.nsfwLabel !== "none";
   const previewReady = state.draft?.playback?.state === "full";
   const uploading = state.uploadState === "uploading";
 
@@ -61,6 +65,13 @@ export function CreateWorkspace({
 
             <div className="grid gap-3 sm:grid-cols-2">
               <Select
+                label="Content rating"
+                onChange={actions.setNsfwLabel}
+                optionLabel={contentRatingLabel}
+                options={nsfwLabels}
+                value={state.nsfwLabel}
+              />
+              <Select
                 label="Who can see it after approval?"
                 onChange={actions.setVisibility}
                 optionLabel={visibilityLabel}
@@ -89,7 +100,11 @@ export function CreateWorkspace({
                 onChange={(event) => actions.setContentSafetyPolicyAccepted(event.currentTarget.checked)}
                 type="checkbox"
               />
-              <span>I have the right to upload and share this video, and it is safe-for-work.</span>
+              <span>
+                {adultSelected
+                  ? "I have the right to upload and share this video, and every person shown is 18+ and consented to this use."
+                  : "I have the right to upload and share this video, and it is Safe for everyone."}
+              </span>
             </label>
 
             <button
@@ -124,9 +139,19 @@ export function CreateWorkspace({
               </button>
             ) : null}
             {previewReady && state.publishState !== "submitted_for_review" ? (
-              <button className="rounded bg-(--foreground) px-4 py-2 text-sm font-semibold text-(--background) disabled:opacity-50" disabled={state.pending !== null} onClick={actions.onPublishDraft} type="button">
-                {state.pending === "publish" ? "Submitting…" : "Submit for review"}
-              </button>
+              <>
+                {adultSelected && !adultPublishReady ? (
+                  <AdultPublisherGate verification={verification} />
+                ) : null}
+                <button
+                  className="rounded bg-(--foreground) px-4 py-2 text-sm font-semibold text-(--background) disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={state.pending !== null || (adultSelected && !adultPublishReady)}
+                  onClick={actions.onPublishDraft}
+                  type="button"
+                >
+                  {state.pending === "publish" ? "Submitting…" : "Submit for review"}
+                </button>
+              </>
             ) : null}
           </div>
           {state.publishState === "submitted_for_review" ? (
@@ -148,6 +173,15 @@ function visibilityLabel(value: string) {
     followers: "Followers",
     subscribers: "Members",
     private: "Only me"
+  };
+  return labels[value] ?? value;
+}
+
+function contentRatingLabel(value: string) {
+  const labels: Record<string, string> = {
+    none: "Safe for everyone",
+    adult: "Adult",
+    explicit: "Explicit"
   };
   return labels[value] ?? value;
 }

@@ -57,7 +57,11 @@ export async function registerProfileRoutes(
     }
 
     try {
-      const profile = await options.profileRepository.findCreatorProfileByHandle(handle);
+      const viewer = await verifyRequestSession(request, options.authVerifier);
+      const profile = await options.profileRepository.findCreatorProfileByHandle(
+        handle,
+        viewer?.userId ?? null
+      );
 
       if (!profile) {
         return reply.code(404).send({

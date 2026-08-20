@@ -137,8 +137,9 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
     buffer: Buffer.from("mock-video")
   });
   await expect(page.locator("video")).toBeVisible();
+  await page.getByLabel("Content rating").selectOption("adult");
   await page.getByLabel("Caption").fill("Behind the scenes from today's studio shoot.");
-  await page.getByLabel("I have the right to upload and share this video, and it is safe-for-work.").check();
+  await page.getByLabel(/every person shown is 18\+ and consented/).check();
   await page.reload();
   await page.locator('input[type="file"]').setInputFiles({
     name: "studio-session.mp4",
@@ -146,8 +147,9 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
     buffer: Buffer.from("mock-video")
   });
   await expect(page.getByLabel("Caption")).toHaveValue("Behind the scenes from today's studio shoot.");
-  await expect(page.getByLabel("I have the right to upload and share this video, and it is safe-for-work.")).not.toBeChecked();
-  await page.getByLabel("I have the right to upload and share this video, and it is safe-for-work.").check();
+  await expect(page.getByLabel("Content rating")).toHaveValue("adult");
+  await expect(page.getByLabel(/every person shown is 18\+ and consented/)).not.toBeChecked();
+  await page.getByLabel(/every person shown is 18\+ and consented/).check();
   await page.getByRole("button", { name: "Upload video" }).click();
   await expect(page.getByText("Preview ready")).toBeVisible({ timeout: 15_000 });
   await page.getByRole("button", { name: "Submit for review" }).click();

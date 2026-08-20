@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: OpenAPI and database starting point
-Last updated: 2026-06-02
+Last updated: 2026-08-20
 Source of truth: yes
 
 Owns:
@@ -71,6 +71,15 @@ The first contract skeleton is in `packages/contracts/openapi.yaml`. It intentio
 - all sensitive provider payloads are either omitted or stored in restricted reconciliation tables
 - all admin mutations write audit events
 - all adult/content/Mutuals/event state is explicit and queryable
+
+## Canonical Policy And Content Eligibility
+
+- `recipient_monetisation_policies` owns global KYC mode plus deterministic product, jurisdiction, and risk-threshold triggers.
+- `recipient_monetisation_risk_assessments` stores normalized, expiring risk evidence and reason/source/policy provenance; RLS permits staff reads and browser roles cannot execute the private resolver.
+- `private.resolve_recipient_monetisation_policy(...)` is the single per-product KYC decision. `private.resolve_creator_kyc_state(...)` projects that decision for creator onboarding, dashboard, and verification capabilities. Payment and membership paths consume the same resolver through `private.assert_recipient_monetisation_ready(...)`.
+- `payment_intents`, creator `subscription_plans`, and `subscription_collections` retain the effective recipient-KYC requirement, mode, version, and reason for audit. Recurring collection rechecks the resolver and suspends before submission when newly required KYC evidence is absent.
+- `private.eligible_content(...)` is the indexed, viewer-relative content set used by feed, detail, Discover, profiles, shares, unlocks, and engagement. It applies age/release/moderation/profile state, public/follower/member visibility, active entitlement where applicable, the independent `both | sfw | nsfw` content preference, hidden creators/topics, blocks, and the viewer's own reports. Anonymous reads are public-visibility and Safe-only.
+- `viewer_feed_preferences.default_feed_mode` stores only ranking choice (`recommended | following`). Content preference remains separate and cannot be encoded as a ranking mode.
 
 ## Canonical Identity And Session Tables
 

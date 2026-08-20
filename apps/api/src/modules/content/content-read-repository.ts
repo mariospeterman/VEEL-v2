@@ -101,13 +101,10 @@ export function createContentReadRepositoryMethods(
         ) eg on true
         where ci.id = ${input.contentId}
           and (
-            (
-              u.state = 'active'
-              and
-              ci.state = 'ready'
-              and ci.publish_state = 'published'
-              and ci.visibility = 'public'
-              and ci.moderation_state = 'approved'
+            exists (
+              select 1
+              from private.eligible_content(viewer.id, null) eligible
+              where eligible.content_item_id = ci.id
             )
             or u.supabase_user_id = ${input.supabaseUserId}
           )
@@ -160,16 +157,10 @@ export function createContentReadRepositoryMethods(
           limit 1
         ) eg on true
         where ci.id = ${input.contentId}
-          and creator.state = 'active'
-          and ci.state = 'ready'
-          and ci.publish_state = 'published'
-          and ci.visibility = 'public'
-          and ci.moderation_state = 'approved'
-          and not exists (
+          and exists (
             select 1
-            from blocks b
-            where (b.blocker_user_id = viewer.id and b.blocked_user_id = ci.creator_user_id)
-               or (b.blocker_user_id = ci.creator_user_id and b.blocked_user_id = viewer.id)
+            from private.eligible_content(viewer.id, null) eligible
+            where eligible.content_item_id = ci.id
           )
         limit 1
       `;

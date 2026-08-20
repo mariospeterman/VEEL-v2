@@ -27,40 +27,9 @@ export function visibleContentSql(
     select ci.id, ci.creator_user_id
     from content_items ci
     join users viewer on viewer.supabase_user_id = ${supabaseUserId}
-    join users creator on creator.id = ci.creator_user_id and creator.state = 'active'
+    join private.eligible_content(viewer.id, null) eligible
+      on eligible.content_item_id = ci.id
     where ci.id = ${contentId}
-      and ci.state = 'ready'
-      and ci.publish_state = 'published'
-      and ci.visibility = 'public'
-      and ci.moderation_state = 'approved'
-      and not exists (
-        select 1
-        from viewer_hidden_creators hidden
-        where hidden.user_id = viewer.id
-          and hidden.creator_user_id = ci.creator_user_id
-      )
-      and not exists (
-        select 1
-        from viewer_hidden_topics hidden_topic
-        join hashtags hashtag on hashtag.slug = hidden_topic.topic
-        join content_hashtags content_hashtag
-          on content_hashtag.hashtag_id = hashtag.id
-          and content_hashtag.content_item_id = ci.id
-        where hidden_topic.user_id = viewer.id
-      )
-      and not exists (
-        select 1
-        from blocks b
-        where (b.blocker_user_id = viewer.id and b.blocked_user_id = ci.creator_user_id)
-           or (b.blocker_user_id = ci.creator_user_id and b.blocked_user_id = viewer.id)
-      )
-      and not exists (
-        select 1
-        from reports report
-        where report.reporter_user_id = viewer.id
-          and report.subject_type = 'content'
-          and report.subject_id = ci.id
-      )
   `;
 }
 

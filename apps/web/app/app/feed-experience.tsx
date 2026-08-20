@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
-import type { ContentItem, FeedPage } from "@/api-client";
+import type { ContentItem, FeedPage, FeedPreferences } from "@/api-client";
 import {
   ApiMutationError,
   getFeedPage,
   recordFeedImpression,
+  updateFeedPreferences,
   type FollowState
 } from "@/api-mutations";
 import { createMutationIdempotencyKey } from "@/api-mutation-transport";
@@ -14,14 +15,17 @@ import { safeMutationMessage } from "@/api-errors";
 import { ProviderPlayback } from "../provider-playback";
 import { FollowButton } from "../follow-button";
 import { ContentEngagementPanel } from "../content/[contentId]/content-engagement-panel";
+import { ContentPreferenceControl } from "./settings/content-preference-control";
 
 type FeedMode = "recommended" | "following";
 type FeedSurface = "home" | "bits";
 
 export function FeedExperience({
+  initialContentPreference,
   initialPage,
   surface
 }: {
+  initialContentPreference: FeedPreferences["nsfwPreference"];
   initialPage: FeedPage;
   surface: FeedSurface;
 }) {
@@ -30,6 +34,7 @@ export function FeedExperience({
     initialPage.mode === "following" ? "following" : "recommended"
   );
   const [pending, setPending] = useState(false);
+  const [modeSaving, setModeSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeId, setActiveId] = useState(initialPage.items[0]?.id ?? null);
   const [followOverrides, setFollowOverrides] = useState<Record<string, FollowState>>({});
@@ -169,8 +174,20 @@ export function FeedExperience({
   }, [activeId, page.items]);
 
   async function selectMode(nextMode: FeedMode) {
-    if (nextMode === mode) return;
-    if (await load(nextMode)) setMode(nextMode);
+    if (nextMode === mode || modeSaving) return;
+    if (!(await load(nextMode))) return;
+    setMode(nextMode);
+    setModeSaving(true);
+    try {
+      await updateFeedPreferences(
+        { defaultMode: nextMode },
+        createMutationIdempotencyKey()
+      );
+    } catch (failure) {
+      setError(safeMutationMessage(failure, "Default feed"));
+    } finally {
+      setModeSaving(false);
+    }
   }
 
   async function retryLoad() {
@@ -212,24 +229,40 @@ export function FeedExperience({
 
   return (
     <section aria-label={`${surface === "bits" ? "Bits" : "Home"} feed`}>
-      <div className="feed-mode-tabs" role="tablist" aria-label="Feed mode">
-        {(["recommended", "following"] as const).map((option) => (
-          <button
-            aria-controls="feed-items"
-            aria-disabled={pending}
-            aria-selected={mode === option}
-            className={mode === option ? "feed-mode-tab is-active" : "feed-mode-tab"}
-            id={`feed-mode-${option}`}
-            key={option}
-            onClick={() => void selectMode(option)}
-            onKeyDown={(event) => moveModeFocus(event, option)}
-            role="tab"
-            tabIndex={mode === option ? 0 : -1}
-            type="button"
-          >
-            {option === "recommended" ? "For you" : "Following"}
-          </button>
-        ))}
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="feed-mode-tabs" role="tablist" aria-label="Feed mode">
+          {(["recommended", "following"] as const).map((option) => (
+            <button
+              aria-controls="feed-items"
+              aria-disabled={pending || modeSaving}
+              aria-selected={mode === option}
+              className={mode === option ? "feed-mode-tab is-active" : "feed-mode-tab"}
+              id={`feed-mode-${option}`}
+              key={option}
+              disabled={pending || modeSaving}
+              onClick={() => void selectMode(option)}
+              onKeyDown={(event) => moveModeFocus(event, option)}
+              role="tab"
+              tabIndex={mode === option ? 0 : -1}
+              type="button"
+            >
+              {option === "recommended" ? "For you" : "Following"}
+            </button>
+          ))}
+        </div>
+        <details className="relative">
+          <summary className="min-h-11 cursor-pointer list-none rounded-full border border-(--line) px-4 py-2.5 text-sm font-semibold">
+            Content
+          </summary>
+          <div className="absolute right-0 z-20 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-(--line) bg-(--surface) p-3 shadow-xl">
+            <p className="mb-2 text-sm font-semibold">Show me</p>
+            <ContentPreferenceControl
+              compact
+              initialPreference={initialContentPreference}
+              onChanged={() => void load(mode)}
+            />
+          </div>
+        </details>
       </div>
 
       <div

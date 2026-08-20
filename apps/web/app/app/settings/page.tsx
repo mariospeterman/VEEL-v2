@@ -24,6 +24,7 @@ import { NotificationEnrollment } from "../../settings/notification-enrollment";
 import { NotificationPreferencesPanel } from "../../settings/notification-preferences-panel";
 import { RecoveryAccessPanel } from "../../settings/recovery-access-panel";
 import { SessionSecurityActions } from "../../settings/session-security-actions";
+import { ContentPreferenceControl } from "./content-preference-control";
 
 export const dynamic = "force-dynamic";
 
@@ -130,11 +131,16 @@ function FeedFacts({ feedPreferences }: { feedPreferences: ApiResult<FeedPrefere
   }
 
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
-      <Fact label="Default mode" value={feedPreferences.data.defaultMode} />
-      <Fact label="NSFW preference" value={feedPreferences.data.nsfwPreference} />
-      <Fact label="Hidden creators" value={String(feedPreferences.data.hiddenCreatorIds?.length ?? 0)} />
-      <Fact label="Hidden topics" value={String(feedPreferences.data.hiddenTopics?.length ?? 0)} />
+    <div className="grid gap-4">
+      <div>
+        <h3 className="mb-2 text-sm font-semibold">Content you want to see</h3>
+        <ContentPreferenceControl initialPreference={feedPreferences.data.nsfwPreference} />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Fact label="Feed" value={feedPreferences.data.defaultMode === "following" ? "Following" : "For you"} />
+        <Fact label="Hidden creators" value={String(feedPreferences.data.hiddenCreatorIds?.length ?? 0)} />
+        <Fact label="Hidden topics" value={String(feedPreferences.data.hiddenTopics?.length ?? 0)} />
+      </div>
     </div>
   );
 }

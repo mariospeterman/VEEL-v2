@@ -218,9 +218,9 @@ function eligibleFeedSql(
       (impression.content_item_id is not null) as seen_before,
       viewer.id as viewer_id
     from content_items ci
-    join users creator on creator.id = ci.creator_user_id and creator.state = 'active'
-    join profiles profile on profile.user_id = creator.id
     join viewer on true
+    join private.eligible_content(viewer.id, null) eligible
+      on eligible.content_item_id = ci.id
     left join content_engagement_counters counter on counter.content_item_id = ci.id
     left join user_follows follow
       on follow.follower_user_id = viewer.id
@@ -229,51 +229,9 @@ function eligibleFeedSql(
       on impression.user_id = viewer.id
       and impression.content_item_id = ci.id
       and impression.first_seen_at <= ${asOf}::timestamptz
-    left join viewer_feed_preferences preference on preference.user_id = viewer.id
-    where ci.state = 'ready'
-      and ci.publish_state = 'published'
-      and ci.visibility = 'public'
-      and ci.moderation_state = 'approved'
-      and profile.visibility = 'public'
-      and ci.creator_user_id <> viewer.id
+    where ci.creator_user_id <> viewer.id
       and ci.created_at <= ${asOf}::timestamptz
       and (${input.surface} = 'home' or ci.media_type in ('bit', 'clip'))
       and (${input.mode} <> 'following' or follow.state = 'active')
-      and (
-        (${input.mode} = 'sfw' and ci.nsfw_label = 'none')
-        or (${input.mode} = 'nsfw' and ci.nsfw_label <> 'none')
-        or (
-          ${input.mode} not in ('sfw', 'nsfw')
-          and (
-            coalesce(preference.nsfw_preference, 'both') = 'both'
-            or (preference.nsfw_preference = 'sfw' and ci.nsfw_label = 'none')
-            or (preference.nsfw_preference = 'nsfw' and ci.nsfw_label <> 'none')
-          )
-        )
-      )
-      and not exists (
-        select 1 from viewer_hidden_creators hidden
-        where hidden.user_id = viewer.id and hidden.creator_user_id = ci.creator_user_id
-      )
-      and not exists (
-        select 1
-        from viewer_hidden_topics hidden_topic
-        join hashtags hashtag on hashtag.slug = hidden_topic.topic
-        join content_hashtags content_hashtag
-          on content_hashtag.hashtag_id = hashtag.id
-          and content_hashtag.content_item_id = ci.id
-        where hidden_topic.user_id = viewer.id
-      )
-      and not exists (
-        select 1 from blocks block
-        where (block.blocker_user_id = viewer.id and block.blocked_user_id = ci.creator_user_id)
-           or (block.blocker_user_id = ci.creator_user_id and block.blocked_user_id = viewer.id)
-      )
-      and not exists (
-        select 1 from reports report
-        where report.reporter_user_id = viewer.id
-          and report.subject_type = 'content'
-          and report.subject_id = ci.id
-      )
   `;
 }

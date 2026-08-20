@@ -13,6 +13,7 @@ const organizationId = "00000000-0000-4000-8000-000000000140";
 const managedRelationshipId = "00000000-0000-4000-8000-000000000143";
 let apiServer: Server;
 let mutualsInterestAttempts = 0;
+let contentPreference: "both" | "sfw" | "nsfw" = "both";
 const mutualsInterestKeys: string[] = [];
 
 test.beforeAll(async () => {
@@ -46,6 +47,10 @@ async function addE2eCookie(context: BrowserContext) {
     }
   ]);
 }
+
+test.beforeEach(() => {
+  contentPreference = "both";
+});
 
 test("renders the public landing with the current WeVid visual contract", async ({ page }) => {
   await page.goto("/");
@@ -273,6 +278,23 @@ test("requires confirmation before logging out every device", async ({ context, 
   await page.waitForURL(/\/$/, { timeout: 15_000 });
 });
 
+test("keeps one content preference across Settings and the compact feed filter", async ({ context, page }) => {
+  await addE2eCookie(context);
+  await page.goto("/app/settings#feed", { waitUntil: "domcontentloaded", timeout: 45_000 });
+  await waitForClientReady(page);
+
+  await expect(page.getByRole("button", { name: "Both" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Adult only" }).click();
+  await expect(page.getByRole("button", { name: "Adult only" })).toHaveAttribute("aria-pressed", "true");
+
+  await page.goto("/app/home", { waitUntil: "domcontentloaded", timeout: 45_000 });
+  await waitForClientReady(page);
+  await page.getByText("Content", { exact: true }).click();
+  await expect(page.getByRole("button", { name: "Adult only" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Safe only" }).click();
+  await expect(page.getByRole("button", { name: "Safe only" })).toHaveAttribute("aria-pressed", "true");
+});
+
 test("separates platform plans from creator memberships responsively", async ({ context, page }) => {
   await addE2eCookie(context);
   await page.goto("/app/subscriptions", { waitUntil: "domcontentloaded", timeout: 45_000 });
@@ -483,6 +505,32 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
 
   if (method === "GET" && url.pathname === "/v1/session") {
     sendJson(response, 200, sessionState());
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/v1/feed/preferences") {
+    sendJson(response, 200, {
+      defaultMode: "recommended",
+      nsfwPreference: contentPreference,
+      hiddenCreatorIds: [],
+      hiddenTopics: []
+    });
+    return;
+  }
+
+  if (method === "PATCH" && url.pathname === "/v1/feed/preferences") {
+    if (!hasIdempotencyKey(request)) {
+      sendJson(response, 400, { message: "Idempotency-Key header is required" });
+      return;
+    }
+    const body = await readJsonBody<{ nsfwPreference?: "both" | "sfw" | "nsfw" }>(request);
+    if (body.nsfwPreference) contentPreference = body.nsfwPreference;
+    sendJson(response, 200, {
+      defaultMode: "recommended",
+      nsfwPreference: contentPreference,
+      hiddenCreatorIds: [],
+      hiddenTopics: []
+    });
     return;
   }
 

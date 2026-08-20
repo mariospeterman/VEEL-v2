@@ -7,7 +7,7 @@ export function createProfileCreatorRepositoryMethods(
   sql: postgres.Sql
 ): Pick<ProfileRepository, "findCreatorProfileByHandle"> {
   return {
-    async findCreatorProfileByHandle(handle) {
+    async findCreatorProfileByHandle(handle, viewerUserId = null) {
       const rows = await sql<CreatorProfileRow[]>`
         select
           u.id,
@@ -37,12 +37,9 @@ export function createProfileCreatorRepositoryMethods(
           coalesce(social.following_count, 0) as following_count,
           (
             select count(*)
-            from content_items ci
+            from private.eligible_content(${viewerUserId}, null) eligible
+            join content_items ci on ci.id = eligible.content_item_id
             where ci.creator_user_id = u.id
-              and ci.state = 'ready'
-              and ci.visibility = 'public'
-              and ci.moderation_state = 'approved'
-              and ci.publish_state = 'published'
           ) as content_count,
           (
             select count(*)
@@ -96,6 +93,8 @@ export function createProfileCreatorRepositoryMethods(
           p.display_name,
           p.avatar_url
         from content_items ci
+        join private.eligible_content(${viewerUserId}, null) eligible
+          on eligible.content_item_id = ci.id
         join users u on u.id = ci.creator_user_id
         join profiles p on p.user_id = u.id
         left join lateral (
@@ -107,10 +106,6 @@ export function createProfileCreatorRepositoryMethods(
           limit 1
         ) ma on true
         where ci.creator_user_id = ${row.id}
-          and ci.state = 'ready'
-          and ci.visibility = 'public'
-          and ci.moderation_state = 'approved'
-          and ci.publish_state = 'published'
         order by ci.created_at desc
         limit 12
       `;

@@ -42,8 +42,14 @@ export function createProfileDashboardRepositoryMethods(
           p.display_name,
           p.avatar_url,
           es.state,
-          es.earning_state,
-          es.kyc_state,
+          case
+            when es.earning_state = 'ready' and kyc.kyc_state in ('required', 'pending')
+              then 'review_required'
+            when es.earning_state = 'ready' and kyc.kyc_state = 'failed'
+              then 'held'
+            else es.earning_state
+          end as earning_state,
+          kyc.kyc_state,
           es.tax_profile_state,
           case when es.earnings_recipient_wallet_id is null then 'missing' else 'linked' end as recipient_wallet_state,
           es.support_enabled,
@@ -54,6 +60,7 @@ export function createProfileDashboardRepositoryMethods(
         from ensured_settings es
         join users u on u.id = es.user_id
         join profiles p on p.user_id = u.id
+        left join lateral private.resolve_creator_kyc_state(u.id) kyc on true
         limit 1
       `;
       const dashboard = dashboardRows[0];
@@ -168,8 +175,14 @@ export function createProfileDashboardRepositoryMethods(
             where w.user_id = u.id
           ) as wallet_count,
           es.state,
-          es.earning_state,
-          es.kyc_state,
+          case
+            when es.earning_state = 'ready' and kyc.kyc_state in ('required', 'pending')
+              then 'review_required'
+            when es.earning_state = 'ready' and kyc.kyc_state = 'failed'
+              then 'held'
+            else es.earning_state
+          end as earning_state,
+          kyc.kyc_state,
           es.tax_profile_state,
           es.earnings_recipient_wallet_id,
           es.earnings_terms_version,
@@ -181,6 +194,7 @@ export function createProfileDashboardRepositoryMethods(
         from ensured_settings es
         join users u on u.id = es.user_id
         left join profiles p on p.user_id = u.id
+        left join lateral private.resolve_creator_kyc_state(u.id) kyc on true
         left join lateral (
           select case
             when vr.status = 'valid' and vr.result_over_threshold is true
@@ -264,24 +278,40 @@ export function createProfileDashboardRepositoryMethods(
         `;
 
         const policyRows = await transaction<{
-          effective_kyc_mode: "disabled" | "risk_based" | "required";
+          kyc_required: boolean;
+          effective_kyc_mode: "disabled" | "risk_based" | "required" | null;
+          policy_version: string | null;
+          decision_reasons: string[];
         }[]>`
-          select case
-            when rmo.kyc_requirement = 'required' then 'required'
-            when rmo.kyc_requirement = 'not_required' then 'disabled'
-            when rmp.kyc_mode = 'required' then 'required'
-            else rmp.kyc_mode
-          end as effective_kyc_mode
-          from recipient_monetisation_policies rmp
-          left join recipient_monetisation_overrides rmo
-            on rmo.user_id = ${identity.id}
-           and rmo.effective_at <= now()
-           and (rmo.expires_at is null or rmo.expires_at > now())
-          where rmp.policy_key = 'default'
-            and rmp.effective_at <= now()
-          limit 1
+          with requested_products (product_type, enabled) as (values
+            ('support', ${input.request.products.support}),
+            ('content_unlock', ${input.request.products.contentUnlocks}),
+            ('event_access_pass', ${input.request.products.eventAccessAndLive}),
+            ('paid_message', ${input.request.products.paidMessages}),
+            ('creator_subscription', ${input.request.products.memberships})
+          ),
+          decisions as (
+            select decision.*
+            from requested_products product
+            cross join lateral private.resolve_recipient_monetisation_policy(
+              ${identity.id}, product.product_type
+            ) decision
+            where product.enabled
+          )
+          select
+            coalesce(bool_or(kyc_required), false) as kyc_required,
+            case
+              when coalesce(bool_or(effective_kyc_mode = 'required'), false) then 'required'
+              when coalesce(bool_or(effective_kyc_mode = 'risk_based'), false) then 'risk_based'
+              else max(effective_kyc_mode)
+            end as effective_kyc_mode,
+            max(policy_version) as policy_version,
+            coalesce(array_agg(distinct decision_reason)
+              filter (where decision_reason is not null), array[]::text[]) as decision_reasons
+          from decisions
         `;
-        const effectiveKycMode = policyRows[0]?.effective_kyc_mode ?? "required";
+        const policyDecision = policyRows[0];
+        const kycRequired = policyDecision?.kyc_required ?? true;
 
         const kycRows = await transaction<{
           status: string;
@@ -298,7 +328,7 @@ export function createProfileDashboardRepositoryMethods(
         `;
         const kyc = kycRows[0];
         const kycState: CreatorOnboardingRow["kyc_state"] =
-          effectiveKycMode !== "required"
+          !kycRequired
             ? "not_required"
             : kyc?.status === "valid" &&
                 (kyc.assurance_level === "high" || kyc.assurance_level === "documentary") &&
@@ -447,7 +477,10 @@ export function createProfileDashboardRepositoryMethods(
                 .filter(([, enabled]) => enabled)
                 .map(([product]) => product),
               earningState,
-              kycState
+              kycState,
+              kycPolicyMode: policyDecision?.effective_kyc_mode ?? "required",
+              kycPolicyVersion: policyDecision?.policy_version ?? "missing",
+              kycPolicyReasons: policyDecision?.decision_reasons ?? ["policy_missing_fail_closed"]
             })}
           )
         `;

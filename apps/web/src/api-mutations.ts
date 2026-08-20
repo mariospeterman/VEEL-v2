@@ -21,6 +21,7 @@ export type {
   CreateShareRequest,
   EngagementState,
   FeedPreferences,
+  UpdateFeedPreferencesRequest,
   FeedPage,
   FollowState,
   HideFeedCreatorRequest,
@@ -115,6 +116,7 @@ import type {
   CreateShareRequest,
   EngagementState,
   FeedPreferences,
+  UpdateFeedPreferencesRequest,
   FeedPage,
   FollowState,
   HideFeedCreatorRequest,
@@ -418,6 +420,18 @@ export async function hideFeedCreator(
   );
 }
 
+export async function updateFeedPreferences(
+  body: UpdateFeedPreferencesRequest,
+  idempotencyKey: string
+): Promise<FeedPreferences> {
+  return authenticatedMutation<FeedPreferences>(
+    "/v1/feed/preferences",
+    "PATCH",
+    body,
+    idempotencyKey
+  );
+}
+
 export async function blockUser(userId: string, idempotencyKey: string): Promise<BlockState> {
   return authenticatedMutation<BlockState>(
     `/v1/blocks/${encodeURIComponent(userId)}`,
@@ -428,7 +442,7 @@ export async function blockUser(userId: string, idempotencyKey: string): Promise
 }
 
 export async function getFeedPage(
-  mode: "recommended" | "following" | "nsfw" | "sfw",
+  mode: "recommended" | "following",
   surface: "home" | "bits",
   cursor?: string
 ): Promise<FeedPage> {

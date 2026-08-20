@@ -3712,7 +3712,7 @@ export interface components {
         };
         FeedPreferences: {
             /** @enum {string} */
-            defaultMode: "recommended" | "following" | "nsfw" | "sfw";
+            defaultMode: "recommended" | "following";
             /** @enum {string} */
             nsfwPreference: "both" | "nsfw" | "sfw";
             hiddenCreatorIds?: string[];
@@ -3720,7 +3720,7 @@ export interface components {
         };
         UpdateFeedPreferencesRequest: {
             /** @enum {string} */
-            defaultMode?: "recommended" | "following" | "nsfw" | "sfw";
+            defaultMode?: "recommended" | "following";
             /** @enum {string} */
             nsfwPreference?: "both" | "nsfw" | "sfw";
         };
@@ -3828,7 +3828,7 @@ export interface components {
             items: components["schemas"]["ContentItem"][];
             nextCursor?: string | null;
             /** @enum {string} */
-            mode: "recommended" | "following" | "nsfw" | "sfw";
+            mode: "recommended" | "following";
             /** @enum {string} */
             surface: "home" | "bits";
             /** @enum {string} */
@@ -7416,7 +7416,7 @@ export interface components {
         BunnySignature: string;
         Cursor: string;
         SearchQuery: string;
-        FeedMode: "recommended" | "following" | "nsfw" | "sfw";
+        FeedMode: "recommended" | "following";
         FeedSurface: "home" | "bits";
         ContentId: string;
         MediaAssetId: string;

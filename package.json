@@ -43,7 +43,7 @@
     "smoke": "node scripts/run-local-tool.mjs playwright test",
     "typecheck": "pnpm -r typecheck",
     "test": "node scripts/run-local-tool.mjs vitest run",
-    "test:integration:api": "VEEL_ENABLE_REAL_API_INTEGRATION_TESTS=1 node --env-file=.env scripts/run-local-tool.mjs vitest run apps/api/test/authenticated-happy-path.integration.test.ts"
+    "test:integration:api": "VEEL_ENABLE_REAL_API_INTEGRATION_TESTS=1 node --env-file=.env scripts/run-local-tool.mjs vitest run --no-file-parallelism apps/api/test/authenticated-happy-path.integration.test.ts apps/api/test/policy-content-eligibility.integration.test.ts"
   },
   "engines": {
     "node": ">=22.16.0 <23"

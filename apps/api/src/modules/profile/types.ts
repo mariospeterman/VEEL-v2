@@ -32,7 +32,10 @@ export interface ProfileRepository {
     input: UpsertMyProfileInput
   ): Promise<UserResource>;
   isHandleAvailable(handle: string): Promise<boolean>;
-  findCreatorProfileByHandle(handle: string): Promise<CreatorProfileResource | null>;
+  findCreatorProfileByHandle(
+    handle: string,
+    viewerUserId?: string | null
+  ): Promise<CreatorProfileResource | null>;
   getMyCreatorDashboard(
     userId: string
   ): Promise<CreatorMonetisationDashboardResource | null>;

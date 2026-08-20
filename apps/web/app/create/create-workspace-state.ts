@@ -66,11 +66,13 @@ export function useCreateWorkspaceState(storageScope: string | null) {
       const value = JSON.parse(saved) as {
         caption?: string;
         visibility?: CreateContentRequest["visibility"];
+        nsfwLabel?: CreateContentRequest["nsfwLabel"];
         representationMode?: CreateContentRequest["representationMode"];
         draftId?: string;
       };
       if (typeof value.caption === "string") setCaption(value.caption);
       if (value.visibility && visibilityValues.includes(value.visibility)) setVisibility(value.visibility);
+      if (value.nsfwLabel && nsfwLabels.includes(value.nsfwLabel)) setNsfwLabel(value.nsfwLabel);
       if (value.representationMode && representationModes.includes(value.representationMode)) {
         setRepresentationMode(value.representationMode);
       }
@@ -89,10 +91,11 @@ export function useCreateWorkspaceState(storageScope: string | null) {
     window.localStorage.setItem(localDraftKey, JSON.stringify({
       caption,
       visibility,
+      nsfwLabel,
       representationMode,
       draftId: draft?.id
     }));
-  }, [caption, visibility, representationMode, draft?.id, draftStorageReady, localDraftKey]);
+  }, [caption, visibility, nsfwLabel, representationMode, draft?.id, draftStorageReady, localDraftKey]);
 
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);

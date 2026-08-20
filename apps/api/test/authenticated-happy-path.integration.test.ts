@@ -1346,7 +1346,11 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           contentSafetyPolicyAccepted: true
         }
       });
-      expect(expiredAdultRepresentationEdit.statusCode, expiredAdultRepresentationEdit.body).toBe(403);
+      expect(expiredAdultRepresentationEdit.statusCode, expiredAdultRepresentationEdit.body).toBe(200);
+      expect(expiredAdultRepresentationEdit.json()).toMatchObject({
+        id: adultContentId,
+        nsfwLabel: "adult"
+      });
       await sql`
         update verification_records
         set expires_at = null

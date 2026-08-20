@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Home feed, Bits feed, Discover, hashtags, mentions, NSFW controls, ranking safety
-Last updated: 2026-08-15
+Last updated: 2026-08-20
 Source of truth: yes for v2 content delivery and discovery
 
 Owns:
@@ -28,18 +28,20 @@ Current implementation state:
 - `GET /v1/discover/search`, `/hashtags`, `/hashtags/{slug}`, `/creators`, `/events`, and `/live` are implemented as protected Discover read models.
 - The route requires authenticated app readiness server-side: profile, verified age state, and wallet readiness.
 - Captions are parsed server-side for normalized hashtags. Frontend does not submit trusted hashtag state.
-- Eligibility is applied before scoring: ready/published/approved public media, active creator, viewer NSFW preference, hidden creators/topics, blocks, and viewer reports. Bits additionally accepts only Bit/clip media. Following has no recommendation fallback and returns active followed creators only.
+- Eligibility is applied before scoring through `private.eligible_content(...)`: ready/published/approved media, active age-ready creator and public profile, age-ready viewer or constrained anonymous preview, public/follower/member visibility, active entitlement where applicable, viewer content preference, hidden creators/topics, blocks, and viewer reports. Feed, detail, Discover, public profile, share, unlock, and engagement consume this same gate. Anonymous public profiles are public-visibility and Safe-only. Bits additionally accepts only Bit/clip media. Following has no recommendation fallback and returns active followed creators only.
 - `deterministic_v1` freezes `generatedAt` and the prior-impression baseline on page one, then carries the same instant, feed mode/surface, an opaque fingerprint of the viewer's eligible ranking inputs, and `(ranking_score, created_at, id)` in a validated cursor. New posts and impressions emitted by the active scroll cannot shift that walk. Eligibility, follow, or engagement changes alter the read-time fingerprint and make the client restart from page one instead of skipping re-ranked items. This avoids any global mutation lock. Cross-surface reuse, stale fingerprints, and duplicate regressions are covered against more than one page of real Postgres fixtures. Access-rule and entitlement validity is always evaluated at request time.
 - Ranking uses only follow, bounded freshness, projected engagement quality, creator diversity, bounded exploration, and prior-impression de-prioritisation. Purchase value, wallet balance, settlement, creator earnings, checkout, membership, and Commerce Kit data are not queried and cannot influence ranking.
 - Engagement counters and follow counts are maintained as bounded write-time projections. The feed reads those projections, selects page IDs before playback/access lateral reads, and avoids count-correlated subqueries and per-card API calls.
 - The web Home surface renders the mixed feed plus its real live rail. `/app/bits` renders the same canonical projection as an immersive vertical surface. Both mount playback only for the active item, preload only the next poster, restore route scroll, reconcile real engagement/follow mutations, and render explicit loading/error/empty/exhausted states. Neither surface renders local business-data fixtures or raw provider payloads.
+- Create exposes the required human labels `Safe for everyone`, `Adult`, and `Explicit`. Adult/Explicit drafts and provider uploads remain private and resumable before adult-publisher verification; only explicit submission/publication rechecks the contextual adult-publisher capability. This never invokes creator KYC or earnings setup.
 
 ## Feed Surfaces
 
 ```text
 Home
   mixed feed: live/moments/replays rail + media cards
-  modes: Recommended, Following, NSFW, SFW
+  ranking tabs: For You, Following
+  content filter: Both, Safe only, Adult only
 
 Bits
   immersive short-video feed
@@ -66,8 +68,10 @@ Home should expose simple controls, not too many categories:
 
 - `Recommended`: recommended mixed media, default.
 - `Following`: creators the viewer follows.
-- `NSFW`: adult/protected media preference.
-- `SFW`: hides adult and explicit media.
+- Ranking mode and content preference are independent controls. `default_feed_mode` is only `recommended | following`; `nsfw_preference` is only `both | sfw | nsfw`.
+- `Both`: safe and adult/explicit media.
+- `Safe only`: excludes adult and explicit media.
+- `Adult only`: includes only adult and explicit media.
 
 Do not make dozens of top-level categories at launch. Use hashtags, search, and Discover for finer navigation.
 
@@ -160,8 +164,8 @@ Recommended launch behavior:
 - after age verification and wallet setup: viewer can choose feed preference
 - default feed mode for new verified users: `Recommended`
 - default safety preference: `both`
-- quick Home toggle: `Recommended`, `Following`, `NSFW`, `SFW`
-- saved preference under Settings
+- quick Home/Bits content filter independent from `For You`/`Following`
+- one-click `Both`, `Safe only`, and `Adult only` preference under Settings
 - clear content warnings and report/block controls
 
 Creator Create/Edit:
@@ -206,7 +210,8 @@ Backend ranking may use:
 - paid/unlocked state
 - creator quality/safety signals
 - diversity/fairness constraints
-- user feed preference: Recommended / Following / NSFW / SFW
+- ranking mode: Recommended / Following
+- content preference: Both / Safe only / Adult only
 
 Do not use:
 
@@ -260,7 +265,7 @@ The launch `deterministic_v1` pipeline is:
 3. boost fresh content
 4. boost good engagement ratio
 5. diversify creators
-6. apply NSFW preference
+6. apply the independent content preference
 7. apply prior-impression de-prioritisation and bounded deterministic exploration
 8. freeze the page-one timestamp and impression baseline, bind the cursor to mode/surface and an eligible-input fingerprint, and paginate by `(ranking_score, created_at, id)`
 
@@ -292,8 +297,7 @@ Paid distribution rule:
 ```text
 GET /v1/content/feed?mode=recommended
 GET /v1/content/feed?mode=following
-GET /v1/content/feed?mode=nsfw
-GET /v1/content/feed?mode=sfw
+PATCH /v1/feed/preferences { "defaultMode": "recommended|following", "nsfwPreference": "both|sfw|nsfw" }
 POST /v1/feed/impressions
 GET /v1/discover/hashtags/:slug
 GET /v1/discover/search?q=...
@@ -331,8 +335,10 @@ Admin cannot:
 ## Tests
 
 - unverified user cannot enter protected app/feed
-- `SFW` mode excludes adult and explicit media
-- `NSFW` mode is available only after the platform's required 18+ access and wallet setup
+- `Safe only` excludes adult and explicit media on every public content surface
+- `Adult only` includes only adult and explicit media and remains behind platform 18+ access
+- anonymous public profile content is Safe-only
+- ranking tabs never overwrite the saved content preference
 - following mode returns followed creators only or primarily, depending fallback policy
 - blocked creators/content do not appear
 - hashtags parse and normalize
