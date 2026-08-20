@@ -152,7 +152,14 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   await page.getByLabel(/every person shown is 18\+ and consented/).check();
   await page.getByRole("button", { name: "Upload video" }).click();
   await expect(page.getByText("Preview ready")).toBeVisible({ timeout: 15_000 });
+  await page.getByLabel("Content rating").selectOption("explicit");
+  const metadataUpdate = page.waitForRequest((request) =>
+    request.method() === "PATCH" &&
+    new URL(request.url()).pathname === `/v1/content/${contentId}` &&
+    request.postDataJSON()?.nsfwLabel === "explicit"
+  );
   await page.getByRole("button", { name: "Submit for review" }).click();
+  await metadataUpdate;
   await expect(page.getByText("Submitted. It remains private while review completes.")).toBeVisible();
   await expect(page.getByText(/Bunny|TUS|provider/i)).toHaveCount(0);
   const createLayout = await page.evaluate(() => ({

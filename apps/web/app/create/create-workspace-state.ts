@@ -13,6 +13,7 @@ import {
   updateContent,
   type ContentItem,
   type CreateContentRequest,
+  type UpdateContentRequest,
   type UploadSession
 } from "@/api-mutations";
 
@@ -124,13 +125,10 @@ export function useCreateWorkspaceState(storageScope: string | null) {
 
     try {
       let activeDraft = draft;
+      const metadata = currentDraftMetadata();
       const body = {
         mediaType,
-        nsfwLabel,
-        visibility,
-        representationMode,
-        contentSafetyPolicyAccepted,
-        ...(caption.trim() ? { caption: caption.trim() } : {})
+        ...metadata
       } satisfies CreateContentRequest;
 
       if (!activeDraft) {
@@ -140,7 +138,7 @@ export function useCreateWorkspaceState(storageScope: string | null) {
         }
         activeDraft = await createContentDraft(body, draftMutationRef.current.idempotencyKey);
       } else {
-        activeDraft = await updateContent(activeDraft.id, body);
+        activeDraft = await updateContent(activeDraft.id, metadata);
       }
       setDraft(activeDraft);
 
@@ -235,7 +233,8 @@ export function useCreateWorkspaceState(storageScope: string | null) {
     setPending("publish");
     setError(null);
     try {
-      setDraft(await publishContent(draft.id, { confirmation: "submit_for_review" }));
+      const updatedDraft = await updateContent(draft.id, currentDraftMetadata());
+      setDraft(await publishContent(updatedDraft.id, { confirmation: "submit_for_review" }));
       setPublishState("submitted_for_review");
       if (localDraftKey) window.localStorage.removeItem(localDraftKey);
     } catch (caught) {
@@ -243,6 +242,16 @@ export function useCreateWorkspaceState(storageScope: string | null) {
     } finally {
       setPending(null);
     }
+  }
+
+  function currentDraftMetadata() {
+    return {
+      nsfwLabel,
+      visibility,
+      representationMode,
+      contentSafetyPolicyAccepted,
+      caption: caption.trim()
+    } satisfies UpdateContentRequest;
   }
 
   return {
