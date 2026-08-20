@@ -37,16 +37,10 @@ export function createEngagementIntakeRepositoryMethods(
           select content.id
           from content_items content
           join actor on true
+          join private.eligible_content(actor.id, null) eligible
+            on eligible.content_item_id = content.id
           where ${input.body.targetType} = 'content'
             and content.id = ${input.body.targetId}
-            and content.state = 'ready'
-            and content.visibility = 'public'
-            and content.moderation_state = 'approved'
-            and not exists (
-              select 1 from blocks block
-              where (block.blocker_user_id = actor.id and block.blocked_user_id = content.creator_user_id)
-                 or (block.blocker_user_id = content.creator_user_id and block.blocked_user_id = actor.id)
-            )
           union all
           select target.id
           from users target

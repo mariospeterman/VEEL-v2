@@ -95,7 +95,7 @@ export function createEngagementPreferencesRepositoryMethods(
         await transaction`delete from viewer_hidden_topics where user_id = ${actor.id}`;
         await transaction`
           insert into viewer_feed_preferences (user_id, default_feed_mode, nsfw_preference, updated_at)
-          values (${actor.id}, 'recommended', 'recommended', now())
+          values (${actor.id}, 'recommended', 'both', now())
           on conflict (user_id) do update
           set default_feed_mode = 'recommended', nsfw_preference = 'both', updated_at = now()
         `;

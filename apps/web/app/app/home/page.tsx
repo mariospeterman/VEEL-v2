@@ -1,5 +1,6 @@
 import {
   getDiscoverSearch,
+  getFeedPreferences,
   getHomeFeed,
   type LiveRoom
 } from "@/api-client";
@@ -14,8 +15,10 @@ export const dynamic = "force-dynamic";
 export default async function AppHomePage() {
   await requireAppAccess("/app/home");
 
+  const preferences = await getFeedPreferences();
+  const initialMode = preferences.ok ? preferences.data.defaultMode : "recommended";
   const [feed, discover] = await Promise.all([
-    getHomeFeed("recommended", "home"),
+    getHomeFeed(initialMode, "home"),
     getDiscoverSearch("")
   ]);
   const liveRooms = discover.ok ? discover.data.liveRooms.slice(0, 3) : [];
@@ -23,17 +26,21 @@ export default async function AppHomePage() {
   return (
     <AppShell>
       <PageHeader
-        action={<StatusPill tone="good">SFW filter active</StatusPill>}
+        action={<StatusPill tone="good">Ready</StatusPill>}
         eyebrow="Home"
         title="Your feed"
       >
-        Released media from creators you follow, plus safe recommendations.
+        New posts from creators you follow, plus recommendations chosen for you.
       </PageHeader>
 
       <section className="screen-grid lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="scroll-pane">
           {feed.ok ? (
-            <FeedExperience initialPage={feed.data} surface="home" />
+            <FeedExperience
+              initialContentPreference={preferences.ok ? preferences.data.nsfwPreference : "both"}
+              initialPage={feed.data}
+              surface="home"
+            />
           ) : (
             <ErrorState result={feed} title="Feed needs your session" context="Home feed" />
           )}

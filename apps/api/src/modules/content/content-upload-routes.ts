@@ -65,7 +65,7 @@ export async function registerContentUploadRoutes(
 
       const creatorAccess = await verifyCreatorCapability(
         access.supabaseUserId,
-        content.nsfwLabel === "none" ? "canUploadMedia" : "canPublishAdultMedia",
+        "canUploadMedia",
         options
       );
 

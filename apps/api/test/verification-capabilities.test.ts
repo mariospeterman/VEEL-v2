@@ -55,6 +55,40 @@ describe("universal account capability policy", () => {
     expect(resolution.capabilities.canMonetize).toBe(false);
   });
 
+  it("does not require creator KYC when the canonical recipient policy does not trigger it", () => {
+    const resolution = resolveCapabilitiesFromRecords({
+      ageAccess: validRecord("age_access"),
+      adultPublisherEligibility: null,
+      creatorKyc: null,
+      creatorKycRequired: false,
+      orgKyb: null
+    });
+
+    expect(resolution.capabilities.canMonetize).toBe(true);
+    expect(resolution.capabilities.canReceiveCreatorProceeds).toBe(true);
+    expect(resolution.missingRequirements).not.toContain("creator_kyc_required_for_earning");
+    expect(resolution.capabilities.canPublishAdultMedia).toBe(false);
+  });
+
+  it("uses canonical verified KYC while a newer renewal remains pending", () => {
+    const resolution = resolveCapabilitiesFromRecords({
+      ageAccess: validRecord("age_access"),
+      adultPublisherEligibility: null,
+      creatorKyc: {
+        ...validRecord("creator_kyc"),
+        status: "pending",
+        verifiedAt: null
+      },
+      creatorKycRequired: true,
+      creatorKycState: "verified",
+      orgKyb: null
+    });
+
+    expect(resolution.capabilities.canMonetize).toBe(true);
+    expect(resolution.capabilities.canReceiveCreatorProceeds).toBe(true);
+    expect(resolution.missingRequirements).not.toContain("creator_kyc_required_for_earning");
+  });
+
   it("does not infer paid plan or organization capabilities from identity checks", () => {
     const resolution = resolveCapabilitiesFromRecords({
       ageAccess: validRecord("age_access"),

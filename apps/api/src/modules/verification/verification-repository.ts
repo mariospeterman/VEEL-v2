@@ -246,7 +246,7 @@ export function createPostgresVerificationRepository(database?: string | Postgre
       }))) {
         throw new Error("ORGANIZATION_ACCESS_REQUIRED");
       }
-      const [ageAccess, adultPublisherEligibility, creatorKyc, orgKyb] = await Promise.all([
+      const [ageAccess, adultPublisherEligibility, creatorKyc, orgKyb, policyRows] = await Promise.all([
         this.findLatestUserVerification({
           supabaseUserId: input.supabaseUserId,
           purpose: "age_access"
@@ -264,14 +264,28 @@ export function createPostgresVerificationRepository(database?: string | Postgre
               organizationId: input.organizationId,
               purpose: "org_kyb"
             })
-          : Promise.resolve(null)
+          : Promise.resolve(null),
+        sql<Array<{
+          kyc_required: boolean;
+          kyc_state: "not_required" | "required" | "pending" | "verified" | "failed";
+        }>>`
+          select kyc.kyc_required, kyc.kyc_state
+          from users actor
+          cross join lateral private.resolve_creator_kyc_state(actor.id) kyc
+          where actor.supabase_user_id = ${input.supabaseUserId}
+          limit 1
+        `
       ]);
 
       return resolveCapabilitiesFromRecords({
         ageAccess,
         adultPublisherEligibility,
         creatorKyc,
-        orgKyb
+        orgKyb,
+        creatorKycRequired: policyRows[0]?.kyc_required ?? true,
+        ...(policyRows[0]?.kyc_state
+          ? { creatorKycState: policyRows[0].kyc_state }
+          : {})
       });
     },
     async close() {
@@ -491,10 +505,15 @@ export function resolveCapabilitiesFromRecords(input: {
   adultPublisherEligibility?: VerificationRecordResource | null;
   creatorKyc: VerificationRecordResource | null;
   orgKyb: VerificationRecordResource | null;
+  creatorKycRequired?: boolean;
+  creatorKycState?: "not_required" | "required" | "pending" | "verified" | "failed";
 }): CapabilityResolution {
   const hasAge = isValid(input.ageAccess);
   const hasAdultPublisherEligibility = hasAge && isValid(input.adultPublisherEligibility ?? null);
-  const hasCreatorKyc = isValid(input.creatorKyc);
+  const hasCreatorKyc = input.creatorKycState
+    ? input.creatorKycState === "verified"
+    : isValid(input.creatorKyc);
+  const creatorKycSatisfied = input.creatorKycRequired === false || hasCreatorKyc;
   const capabilities: Record<CapabilityKey, boolean> = {
     canAccessApp: hasAge,
     canCreateProfile: hasAge,
@@ -504,8 +523,8 @@ export function resolveCapabilitiesFromRecords(input: {
     canUploadMedia: hasAge,
     canPublishMedia: hasAge,
     canPublishAdultMedia: hasAdultPublisherEligibility,
-    canMonetize: hasAge && hasCreatorKyc,
-    canReceiveCreatorProceeds: hasAge && hasCreatorKyc,
+    canMonetize: hasAge && creatorKycSatisfied,
+    canReceiveCreatorProceeds: hasAge && creatorKycSatisfied,
     canAccessCreatorDashboard: hasAge,
     canCreateOrganization: hasAge,
     canAccessStudio: false,
@@ -515,7 +534,10 @@ export function resolveCapabilitiesFromRecords(input: {
     canUseComplianceExports: false,
     canAccessEnterprise: false
   };
-  const missingRequirements = missingFromCapabilities(capabilities);
+  const missingRequirements = missingFromCapabilities(
+    capabilities,
+    input.creatorKycRequired !== false
+  );
 
   return {
     capabilities,
@@ -542,7 +564,10 @@ export function isValid(record: VerificationRecordResource | null): boolean {
   return new Date(record.expiresAt).getTime() > Date.now();
 }
 
-function missingFromCapabilities(capabilities: Record<CapabilityKey, boolean>): string[] {
+function missingFromCapabilities(
+  capabilities: Record<CapabilityKey, boolean>,
+  creatorKycRequired: boolean
+): string[] {
   const missing = new Set<string>();
 
   if (!capabilities.canAccessApp) {
@@ -551,7 +576,7 @@ function missingFromCapabilities(capabilities: Record<CapabilityKey, boolean>): 
   if (!capabilities.canPublishAdultMedia) {
     missing.add("adult_publisher_eligibility_required");
   }
-  if (!capabilities.canMonetize) {
+  if (!capabilities.canMonetize && creatorKycRequired) {
     missing.add("creator_kyc_required_for_earning");
   }
   return [...missing];

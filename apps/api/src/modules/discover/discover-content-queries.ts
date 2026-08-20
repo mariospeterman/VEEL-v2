@@ -76,6 +76,9 @@ export async function listContent(
           and sr.state = 'created'
       ) as share_count
     from content_items ci
+    join viewer on true
+    join private.eligible_content(viewer.id, null) eligible
+      on eligible.content_item_id = ci.id
     join users creator on creator.id = ci.creator_user_id
     join profiles p on p.user_id = creator.id
     left join lateral (
@@ -108,12 +111,7 @@ export async function listContent(
         and (ends_at is null or ends_at > now())
       limit 1
     ) eg on true
-    where ci.state = 'ready'
-      and creator.state = 'active'
-      and ci.publish_state = 'published'
-      and ci.visibility = 'public'
-      and ci.moderation_state = 'approved'
-      and (${input.cursor ?? null}::timestamptz is null or ci.created_at < ${input.cursor ?? null}::timestamptz)
+    where (${input.cursor ?? null}::timestamptz is null or ci.created_at < ${input.cursor ?? null}::timestamptz)
       and (
         ${search}::text is null
         or ci.caption ilike '%' || ${search} || '%'
@@ -137,18 +135,6 @@ export async function listContent(
             and h.slug = ${input.slug ?? null}
             and h.state in ('active', 'restricted')
         )
-      )
-      and not exists (
-        select 1
-        from viewer_hidden_creators vhc
-        where vhc.user_id = (select id from viewer)
-          and vhc.creator_user_id = ci.creator_user_id
-      )
-      and not exists (
-        select 1
-        from blocks b
-        where (b.blocker_user_id = (select id from viewer) and b.blocked_user_id = ci.creator_user_id)
-           or (b.blocker_user_id = ci.creator_user_id and b.blocked_user_id = (select id from viewer))
       )
     order by ci.created_at desc
     limit ${input.limit + 1}

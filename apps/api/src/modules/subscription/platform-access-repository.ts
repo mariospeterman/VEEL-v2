@@ -300,7 +300,10 @@ async function resolvePlatformAccess(sql: QuerySql, actorId: string): Promise<Pl
           where subscription.subscriber_user_id = ${actorId}
             and subscription.plan_id = policy.subscription_plan_id
             and subscription.state in ('active', 'renewal_pending', 'grace_period')
-            and (subscription.current_period_ends_at is null or subscription.current_period_ends_at > now())
+            and subscription.current_period_starts_at is not null
+            and subscription.current_period_starts_at <= now()
+            and subscription.current_period_ends_at is not null
+            and subscription.current_period_ends_at > now()
         )
         or exists (
           select 1

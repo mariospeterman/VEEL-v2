@@ -27,7 +27,7 @@ export interface RegisterContentRoutesOptions {
   subscriptionRepository: SubscriptionRepository;
 }
 
-export const feedModes = new Set(["recommended", "following", "nsfw", "sfw"]);
+export const feedModes = new Set(["recommended", "following"]);
 export const feedSurfaces = new Set(["home", "bits"]);
 export const contentMediaTypes = new Set(["bit", "clip", "image", "vod", "live_replay"]);
 export const contentVisibilityValues = new Set(["public", "followers", "subscribers", "private"]);

@@ -160,7 +160,10 @@ export async function listLive(
           and s.creator_user_id = lr.creator_user_id
           and s.scope = 'creator'
           and s.state in ('active', 'renewal_pending', 'grace_period')
-          and (s.current_period_ends_at is null or s.current_period_ends_at > now())
+          and s.current_period_starts_at is not null
+          and s.current_period_starts_at <= now()
+          and s.current_period_ends_at is not null
+          and s.current_period_ends_at > now()
       ) as has_active_membership,
       lr.creator_user_id = (select id from viewer) as is_creator
     from live_rooms lr

@@ -8,7 +8,7 @@ Date: 2026-08-12
 
 Veel keeps three independent server-owned truths:
 
-1. **Earning eligibility** decides whether a universal account may receive creator-side proceeds for a specific product. `private.assert_recipient_monetisation_ready(...)` is the canonical gate. Its KYC requirement is policy-driven (`disabled`, `risk_based`, or `required`), and it also checks account, age, tax, product, and noncustodial recipient-wallet readiness.
+1. **Earning eligibility** decides whether a universal account may receive creator-side proceeds for a specific product. `private.resolve_recipient_monetisation_policy(...)` is the canonical deterministic KYC decision and `private.assert_recipient_monetisation_ready(...)` is the atomic payment gate that consumes it. `disabled` and `required` are explicit policy decisions. A required account override can tighten any mode, while global `required` cannot be weakened by an account exemption and global `disabled` cannot be tightened by ordinary risk inputs. `risk_based` requires KYC only when a configured product, normalized jurisdiction, or active normalized risk assessment reaches the configured threshold. Account overrides remain auditable. The payment gate also checks account, age, tax, product, and noncustodial recipient-wallet readiness.
 2. **Adult/performer eligibility** decides whether adult/explicit media may be released. Adult-publisher eligibility belongs to the uploader. Every real performer has separate verification evidence and explicit consent bound to the exact content revision and allowed uses. A verification result never implies consent.
 3. **Enterprise management relationship** decides whether an organization may manage a universal creator and receive an agreed share of creator-side proceeds. It requires an accepted, versioned agreement plus active Enterprise entitlement, verified KYB, and a verified organization settlement wallet. KYB or a tier alone never creates a relationship.
 
@@ -35,6 +35,9 @@ The payment intent snapshots all amounts and recipient wallets. When the Enterpr
 - A rounded zero-value Enterprise share creates no transfer, allocation record, or Enterprise recipient snapshot.
 - Content/media changes supersede pending performer requests and revoke prior content-revision consent.
 - Adult publishing, performer consent, creator KYC, organization KYB, and Enterprise entitlement are never aliases.
+- Risk assessments store normalized reason codes, source, policy version, effective/expiry time, and assessor where applicable; raw provider identity payloads do not enter the policy table.
+- Creator onboarding, verification capabilities, dashboard readiness, membership offers, and one-time payment intents consume the same recipient-policy resolver rather than recreating KYC rules.
+- New payment intents and creator Membership offers snapshot the effective KYC requirement, mode, policy version, and reason. Each recurring collection re-evaluates the same policy; a newly required but unsatisfied creator KYC decision suspends collection before submission and records a redacted subscription event.
 - Browser payloads cannot supply recipients, fee rates, shares, verification decisions, or relationship truth.
 
 ## Ownership And Change Rule

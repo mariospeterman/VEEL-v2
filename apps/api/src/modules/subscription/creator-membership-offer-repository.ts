@@ -68,10 +68,22 @@ export function createCreatorMembershipOfferRepositoryMethods(
           return receipt.response_body;
         }
 
-        let recipientRows: { address: string }[];
+        let recipientRows: Array<{
+          address: string;
+          kyc_required: boolean;
+          effective_kyc_mode: "disabled" | "risk_based" | "required";
+          policy_version: string;
+          decision_reason: string;
+        }>;
         try {
-          recipientRows = await transaction<{ address: string }[]>`
-            select address
+          recipientRows = await transaction<Array<{
+            address: string;
+            kyc_required: boolean;
+            effective_kyc_mode: "disabled" | "risk_based" | "required";
+            policy_version: string;
+            decision_reason: string;
+          }>>`
+            select address, kyc_required, effective_kyc_mode, policy_version, decision_reason
             from private.assert_recipient_monetisation_ready(
               ${actor.id},
               'creator_subscription',
@@ -85,7 +97,8 @@ export function createCreatorMembershipOfferRepositoryMethods(
           }
           throw error;
         }
-        const recipientWallet = recipientRows[0]?.address;
+        const recipientDecision = recipientRows[0];
+        const recipientWallet = recipientDecision?.address;
         if (!recipientWallet) throw new SubscriptionPolicyError("recipient_wallet_missing");
 
         const planId = `creator_${actor.id}_monthly`;
@@ -95,7 +108,10 @@ export function createCreatorMembershipOfferRepositoryMethods(
             amount_minor, amount_atomic, currency, period_days, period_seconds,
             billing_mode, provider_state, token_mint, token_program, provider,
             program_id, plan_pda, merchant_wallet, creator_amount_atomic,
-            platform_fee_amount_atomic, allocation_amount_atomic, state, updated_at
+            platform_fee_amount_atomic, allocation_amount_atomic,
+            recipient_kyc_required, recipient_kyc_policy_mode,
+            recipient_kyc_policy_version, recipient_kyc_decision_reason,
+            state, updated_at
           )
           values (
             ${planId}, 'creator', ${actor.id}, ${input.body.label.trim()},
@@ -104,7 +120,11 @@ export function createCreatorMembershipOfferRepositoryMethods(
             'delegated_solana_subscription', 'staging_required', ${input.tokenMint}, 'spl_token',
             'official_solana_subscription_program', ${input.programId}, null,
             ${recipientWallet}, ${input.creatorAmountAtomic}, ${input.platformAmountAtomic},
-            0, 'disabled', now()
+            0, ${recipientDecision?.kyc_required ?? true},
+            ${recipientDecision?.effective_kyc_mode ?? "required"},
+            ${recipientDecision?.policy_version ?? "missing"},
+            ${recipientDecision?.decision_reason ?? "policy_missing_fail_closed"},
+            'disabled', now()
           )
           on conflict (id) do update set
             label = excluded.label,
@@ -119,6 +139,10 @@ export function createCreatorMembershipOfferRepositoryMethods(
             creator_amount_atomic = excluded.creator_amount_atomic,
             platform_fee_amount_atomic = excluded.platform_fee_amount_atomic,
             allocation_amount_atomic = 0,
+            recipient_kyc_required = excluded.recipient_kyc_required,
+            recipient_kyc_policy_mode = excluded.recipient_kyc_policy_mode,
+            recipient_kyc_policy_version = excluded.recipient_kyc_policy_version,
+            recipient_kyc_decision_reason = excluded.recipient_kyc_decision_reason,
             provider_state = 'staging_required',
             state = 'disabled',
             updated_at = now()

@@ -66,6 +66,10 @@ export interface DueSubscriptionCollection {
   programId: string;
   periodSeconds: number;
   creatorReceiverWallet: string | null;
+  recipientKycRequired: boolean;
+  recipientKycPolicyMode: "disabled" | "risk_based" | "required";
+  recipientKycPolicyVersion: string;
+  recipientKycDecisionReason: string;
 }
 
 export interface SubscriptionCollectionRepository {
@@ -477,6 +481,71 @@ export function createPostgresSubscriptionCollectionRepository(
           `;
         }
 
+        const policySuspended = await transaction<Array<{
+          subscription_id: string;
+          effective_kyc_mode: string;
+          policy_version: string;
+          decision_reason: string;
+        }>>`
+          with blocked as (
+            select
+              s.id as subscription_id,
+              policy.effective_kyc_mode,
+              policy.policy_version,
+              policy.decision_reason
+            from subscriptions s
+            join subscription_plans sp on sp.id = s.plan_id
+            cross join lateral private.resolve_recipient_monetisation_policy(
+              s.creator_user_id, 'creator_subscription'
+            ) policy
+            where s.scope = 'creator'
+              and s.state in ('active', 'renewal_pending', 'grace_period')
+              and s.cancel_at_period_end = false
+              and s.next_collection_at <= ${input.now}
+              and sp.state = 'active'
+              and sp.provider_state = 'launch_approved'
+              and policy.kyc_required
+              and not exists (
+                select 1 from verification_records verification
+                where verification.subject_type = 'user'
+                  and verification.subject_id = s.creator_user_id
+                  and verification.purpose = 'creator_kyc'
+                  and verification.status = 'valid'
+                  and verification.assurance_level in ('high', 'documentary')
+                  and (verification.expires_at is null or verification.expires_at > ${input.now})
+              )
+            order by s.next_collection_at asc
+            limit ${input.limit}
+            for update of s skip locked
+          )
+          update subscriptions subscription
+          set state = 'suspended', next_collection_at = null, updated_at = now()
+          from blocked
+          where subscription.id = blocked.subscription_id
+          returning
+            subscription.id as subscription_id,
+            blocked.effective_kyc_mode,
+            blocked.policy_version,
+            blocked.decision_reason
+        `;
+
+        for (const row of policySuspended) {
+          await transaction`
+            insert into subscription_events (
+              id, subscription_id, actor_user_id, action, metadata
+            ) values (
+              ${randomUUID()}, ${row.subscription_id}, null,
+              'subscription.collection_policy_suspended',
+              ${transaction.json({
+                kycRequired: true,
+                kycPolicyMode: row.effective_kyc_mode,
+                kycPolicyVersion: row.policy_version,
+                kycDecisionReason: row.decision_reason
+              })}
+            )
+          `;
+        }
+
         const dueRows = await transaction<DueSubscriptionRow[]>`
           select
             s.id as subscription_id,
@@ -501,9 +570,16 @@ export function createPostgresSubscriptionCollectionRepository(
             sp.token_program,
             coalesce(s.provider, sp.provider) as provider,
             coalesce(s.program_id, sp.program_id) as program_id,
-            s.merchant_wallet as creator_receiver_wallet
+            s.merchant_wallet as creator_receiver_wallet,
+            coalesce(policy.kyc_required, false) as recipient_kyc_required,
+            coalesce(policy.effective_kyc_mode, 'disabled') as recipient_kyc_policy_mode,
+            coalesce(policy.policy_version, 'platform-plan-not-applicable') as recipient_kyc_policy_version,
+            coalesce(policy.decision_reason, 'platform_plan_not_applicable') as recipient_kyc_decision_reason
           from subscriptions s
           join subscription_plans sp on sp.id = s.plan_id
+          left join lateral private.resolve_recipient_monetisation_policy(
+            s.creator_user_id, 'creator_subscription'
+          ) policy on s.scope = 'creator'
           where s.state in ('active', 'renewal_pending', 'grace_period')
             and s.renewal_mode = 'delegated_solana_subscription'
             and s.cancel_at_period_end = false
@@ -522,6 +598,19 @@ export function createPostgresSubscriptionCollectionRepository(
             and sp.token_program is not null
             and coalesce(s.program_id, sp.program_id) is not null
             and coalesce(s.amount_atomic, sp.amount_atomic, sp.amount_minor) <= sp.amount_atomic
+            and (
+              s.scope = 'platform'
+              or not policy.kyc_required
+              or exists (
+                select 1 from verification_records verification
+                where verification.subject_type = 'user'
+                  and verification.subject_id = s.creator_user_id
+                  and verification.purpose = 'creator_kyc'
+                  and verification.status = 'valid'
+                  and verification.assurance_level in ('high', 'documentary')
+                  and (verification.expires_at is null or verification.expires_at > ${input.now})
+              )
+            )
           order by s.next_collection_at asc
           limit ${input.limit}
           for update skip locked
@@ -544,6 +633,10 @@ export function createPostgresSubscriptionCollectionRepository(
               platform_fee_amount_atomic,
               allocation_amount_atomic,
               creator_receiver_wallet,
+              recipient_kyc_required,
+              recipient_kyc_policy_mode,
+              recipient_kyc_policy_version,
+              recipient_kyc_decision_reason,
               currency,
               state,
               collector_wallet,
@@ -562,6 +655,10 @@ export function createPostgresSubscriptionCollectionRepository(
               ${row.platform_fee_amount_atomic},
               ${row.allocation_amount_atomic},
               ${row.creator_receiver_wallet},
+              ${row.recipient_kyc_required},
+              ${row.recipient_kyc_policy_mode},
+              ${row.recipient_kyc_policy_version},
+              ${row.recipient_kyc_decision_reason},
               ${row.currency},
               'due',
               ${row.collector_address},
@@ -621,7 +718,11 @@ export function createPostgresSubscriptionCollectionRepository(
             metadata: {
               planId: row.plan_id,
               attemptCount: collection.attempt_count,
-              leaseToken
+              leaseToken,
+              kycRequired: row.recipient_kyc_required,
+              kycPolicyMode: row.recipient_kyc_policy_mode,
+              kycPolicyVersion: row.recipient_kyc_policy_version,
+              kycDecisionReason: row.recipient_kyc_decision_reason
             }
           });
 
@@ -651,7 +752,11 @@ export function createPostgresSubscriptionCollectionRepository(
             provider: row.provider,
             programId: row.program_id,
             periodSeconds: Number(row.period_seconds),
-            creatorReceiverWallet: row.creator_receiver_wallet
+            creatorReceiverWallet: row.creator_receiver_wallet,
+            recipientKycRequired: row.recipient_kyc_required,
+            recipientKycPolicyMode: row.recipient_kyc_policy_mode,
+            recipientKycPolicyVersion: row.recipient_kyc_policy_version,
+            recipientKycDecisionReason: row.recipient_kyc_decision_reason
           });
         }
 
@@ -805,6 +910,10 @@ interface DueSubscriptionRow {
   provider: string;
   program_id: string;
   creator_receiver_wallet: string | null;
+  recipient_kyc_required: boolean;
+  recipient_kyc_policy_mode: "disabled" | "risk_based" | "required";
+  recipient_kyc_policy_version: string;
+  recipient_kyc_decision_reason: string;
 }
 
 interface CollectionLeaseRow {

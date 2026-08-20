@@ -29,6 +29,10 @@ interface SettlementAuthorityRow {
   buyer_user_id: string;
   creator_user_id: string;
   creator_wallet: string;
+  recipient_kyc_required: boolean;
+  recipient_kyc_policy_mode: "disabled" | "risk_based" | "required";
+  recipient_kyc_policy_version: string;
+  recipient_kyc_decision_reason: string;
   referral_token_id: string | null;
   referrer_user_id: string | null;
   referral_wallet: string | null;
@@ -188,6 +192,10 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
               tu.id as buyer_user_id,
               cc.id as creator_user_id,
               readiness.address as creator_wallet,
+              readiness.kyc_required as recipient_kyc_required,
+              readiness.effective_kyc_mode as recipient_kyc_policy_mode,
+              readiness.policy_version as recipient_kyc_policy_version,
+              readiness.decision_reason as recipient_kyc_decision_reason,
               rr.id as referral_token_id,
               rr.creator_user_id as referrer_user_id,
               rr.address as referral_wallet,
@@ -298,6 +306,10 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
             minimum_amount_minor,
             platform_fee_bps,
             referral_share_of_platform_fee_bps,
+            recipient_kyc_required,
+            recipient_kyc_policy_mode,
+            recipient_kyc_policy_version,
+            recipient_kyc_decision_reason,
             quoted_at,
             expires_at
           )
@@ -337,6 +349,10 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
             ${minimumAmountMinor},
             ${platformFeeBps},
             ${referralShareOfPlatformFeeBps},
+            ${authority.recipient_kyc_required},
+            ${authority.recipient_kyc_policy_mode},
+            ${authority.recipient_kyc_policy_version},
+            ${authority.recipient_kyc_decision_reason},
             ${input.quotedAt},
             ${expiresAt}
           )

@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const chromiumExecutablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+
 export default defineConfig({
   testDir: "tests/smoke",
   timeout: 45_000,
@@ -30,6 +32,7 @@ export default defineConfig({
       name: "desktop-chromium",
       use: {
         ...devices["Desktop Chrome"],
+        launchOptions: chromiumExecutablePath ? { executablePath: chromiumExecutablePath } : undefined,
         viewport: { width: 1440, height: 1000 }
       }
     },
@@ -43,7 +46,8 @@ export default defineConfig({
     {
       name: "mobile-chromium",
       use: {
-        ...devices["Pixel 7"]
+        ...devices["Pixel 7"],
+        launchOptions: chromiumExecutablePath ? { executablePath: chromiumExecutablePath } : undefined
       }
     },
     ...(process.platform === "darwin" ? [] : [

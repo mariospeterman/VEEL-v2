@@ -288,6 +288,31 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         planId: seededSubscriptionPlanId
       });
 
+      const unchangedPublishedSafetyUpdate = await app.inject({
+        method: "PATCH",
+        url: `/v1/content/${seededContentId}`,
+        headers: creatorAuthenticatedHeaders(`published-metadata-unchanged-${runId}`),
+        payload: {
+          caption: `Updated published caption ${runId}`,
+          nsfwLabel: "adult",
+          representationMode: "no_real_person",
+          contentSafetyPolicyAccepted: true
+        }
+      });
+      expect(unchangedPublishedSafetyUpdate.statusCode, unchangedPublishedSafetyUpdate.body).toBe(200);
+      const unchangedPublishedSafetyRows = await sql<{
+        moderation_state: string;
+        publish_state: string;
+        published_at: Date | null;
+      }[]>`
+        select moderation_state, publish_state, published_at
+        from content_items
+        where id = ${seededContentId}
+      `;
+      expect(unchangedPublishedSafetyRows[0]?.publish_state).toBe("published");
+      expect(unchangedPublishedSafetyRows[0]?.moderation_state).toBe("approved");
+      expect(unchangedPublishedSafetyRows[0]?.published_at).toBeInstanceOf(Date);
+
       const walletKeypair = nacl.sign.keyPair();
       const walletAddress = bs58.encode(walletKeypair.publicKey);
       const challengeResponse = await app.inject({
@@ -1346,7 +1371,11 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           contentSafetyPolicyAccepted: true
         }
       });
-      expect(expiredAdultRepresentationEdit.statusCode, expiredAdultRepresentationEdit.body).toBe(403);
+      expect(expiredAdultRepresentationEdit.statusCode, expiredAdultRepresentationEdit.body).toBe(200);
+      expect(expiredAdultRepresentationEdit.json()).toMatchObject({
+        id: adultContentId,
+        nsfwLabel: "adult"
+      });
       await sql`
         update verification_records
         set expires_at = null

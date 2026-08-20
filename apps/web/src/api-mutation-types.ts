@@ -70,6 +70,7 @@ export type CreateReportRequest = components["schemas"]["CreateReportRequest"];
 export type ModerationIntake = components["schemas"]["ModerationIntake"];
 export type HideFeedCreatorRequest = components["schemas"]["HideFeedCreatorRequest"];
 export type FeedPreferences = components["schemas"]["FeedPreferences"];
+export type UpdateFeedPreferencesRequest = components["schemas"]["UpdateFeedPreferencesRequest"];
 export type BlockState = components["schemas"]["BlockState"];
 export type FollowState = components["schemas"]["FollowState"];
 export type FeedPage = components["schemas"]["FeedPage"];

@@ -2456,6 +2456,58 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("uses anonymous public eligibility for a session without current age evidence", async () => {
+    let eligibleViewerUserId: string | null | undefined;
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      ageRepository: requiredAgeRepository,
+      profileRepository: {
+        ...fakeProfileRepository,
+        async findCreatorProfileByHandle(handle, viewerUserId) {
+          eligibleViewerUserId = viewerUserId;
+          return fakeProfileRepository.findCreatorProfileByHandle(handle, viewerUserId);
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/profiles/maki",
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(eligibleViewerUserId).toBeNull();
+    await app.close();
+  });
+
+  it("uses viewer-relative eligibility only for an age-ready session", async () => {
+    let eligibleViewerUserId: string | null | undefined;
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      ageRepository: verifiedAgeRepository,
+      profileRepository: {
+        ...fakeProfileRepository,
+        async findCreatorProfileByHandle(handle, viewerUserId) {
+          eligibleViewerUserId = viewerUserId;
+          return fakeProfileRepository.findCreatorProfileByHandle(handle, viewerUserId);
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/profiles/maki",
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(eligibleViewerUserId).toBe("00000000-0000-4000-8000-000000000001");
+    await app.close();
+  });
+
   it("returns the current creator monetisation dashboard for a verified creator", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -3687,7 +3739,7 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("creates a content draft for an app-ready user", async () => {
+  it("creates a private adult draft before adult-publisher verification", async () => {
     const contentRepository: ContentRepository = {
       async createDraft(input) {
         expect(input).toMatchObject({
@@ -3696,7 +3748,7 @@ describe("buildApi", () => {
           mediaType: "vod",
           caption: "studio cut",
           visibility: "private",
-          nsfwLabel: "none",
+          nsfwLabel: "adult",
           representationMode: "self_only",
           contentSafetyPolicyAccepted: true,
           dailyDraftQuota: 20
@@ -3704,7 +3756,7 @@ describe("buildApi", () => {
         expect(input.requestHash).toMatch(/^[a-f0-9]{64}$/);
         expect(input.quotaWindowStart).toBeInstanceOf(Date);
 
-        return homeFeedItem;
+        return { ...homeFeedItem, nsfwLabel: "adult" };
       },
       async createMediaAsset() {
         throw new Error("not implemented");
@@ -3737,7 +3789,7 @@ describe("buildApi", () => {
       }),
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
-      verificationRepository: creatorVerifiedVerificationRepository(),
+      verificationRepository: verificationRepositoryStub(),
       contentRepository
     });
     await app.ready();
@@ -3753,14 +3805,14 @@ describe("buildApi", () => {
         mediaType: "vod",
         caption: "studio cut",
         visibility: "private",
-        nsfwLabel: "none",
+        nsfwLabel: "adult",
         representationMode: "self_only",
         contentSafetyPolicyAccepted: true
       }
     });
 
     expect(response.statusCode, JSON.stringify(response.json())).toBe(201);
-    expect(response.json()).toEqual(homeFeedItem);
+    expect(response.json()).toEqual({ ...homeFeedItem, nsfwLabel: "adult" });
 
     await app.close();
   });
@@ -4013,22 +4065,13 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("rechecks adult-publisher capability before a representation-only edit in any editable state", async () => {
-    const updateOwnedContent = vi.fn();
+  it("keeps an adult draft editable before adult-publisher verification", async () => {
+    const updateOwnedContent = vi.fn(async () => ({
+      ...homeFeedItem,
+      nsfwLabel: "adult" as const
+    }));
     const contentRepository: ContentRepository = {
       ...contentRepositoryWithDetail(homeFeedItem),
-      async findOwnedContentForUpdate(input) {
-        expect(input).toEqual({
-          supabaseUserId: "00000000-0000-4000-8000-000000000001",
-          contentId: "00000000-0000-4000-8000-000000000040"
-        });
-        return {
-          id: input.contentId,
-          mediaType: "vod",
-          caption: "Published adult item",
-          nsfwLabel: "adult"
-        };
-      },
       updateOwnedContent
     };
     const app = await buildApi({
@@ -4064,8 +4107,8 @@ describe("buildApi", () => {
       }
     });
 
-    expect(response.statusCode).toBe(403);
-    expect(updateOwnedContent).not.toHaveBeenCalled();
+    expect(response.statusCode, response.body).toBe(200);
+    expect(updateOwnedContent).toHaveBeenCalledOnce();
     await app.close();
   });
 
@@ -4397,6 +4440,59 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("keeps an adult draft private when adult-publisher verification is missing", async () => {
+    const publishOwnedContent = vi.fn();
+    const contentRepository: ContentRepository = {
+      ...contentRepositoryWithDetail(homeFeedItem),
+      async findOwnedContentForUpload() {
+        return {
+          id: "00000000-0000-4000-8000-000000000040",
+          mediaType: "vod",
+          caption: "adult draft",
+          nsfwLabel: "adult"
+        };
+      },
+      publishOwnedContent
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      verificationRepository: verificationRepositoryStub(),
+      contentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040/publish",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "adult-content-publish-1"
+      },
+      payload: { confirmation: "submit_for_review" }
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({
+      code: "verification_required",
+      message: "Adult publisher verification is required for adult or explicit media."
+    });
+    expect(publishOwnedContent).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it("fails content publish closed until provider media is ready", async () => {
     const contentRepository: ContentRepository = {
       async createDraft() {
@@ -4468,7 +4564,7 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("creates a Bunny upload session for an owned content draft", async () => {
+  it("uploads an adult draft before adult-publisher verification", async () => {
     const createdAssets: CreateMediaAssetInput[] = [];
     const contentRepository: ContentRepository = {
       async createDraft() {
@@ -4494,7 +4590,7 @@ describe("buildApi", () => {
           id: "00000000-0000-4000-8000-000000000040",
           mediaType: "vod",
           caption: "studio cut",
-          nsfwLabel: "none"
+          nsfwLabel: "adult"
         };
       },
       async listHomeFeed() {
@@ -4541,7 +4637,7 @@ describe("buildApi", () => {
         }
       }),
       ageRepository: verifiedAgeRepository,
-      verificationRepository: creatorVerifiedVerificationRepository(),
+      verificationRepository: adultDraftVerificationRepository(),
       walletRepository: walletRepositoryWithWallet,
       contentRepository,
       mediaUploadProvider
@@ -13150,6 +13246,27 @@ function creatorVerifiedVerificationRepository(): VerificationRepository {
             reusable: true
           }
         }
+      };
+    }
+  };
+}
+
+function adultDraftVerificationRepository(): VerificationRepository {
+  const repository = creatorVerifiedVerificationRepository();
+
+  return {
+    ...repository,
+    async resolveCapabilities(input) {
+      const resolution = await repository.resolveCapabilities(input);
+
+      return {
+        ...resolution,
+        capabilities: {
+          ...resolution.capabilities,
+          canPublishAdultMedia: false
+        },
+        missingRequirements: ["adult_publisher_verification_required"],
+        nextBestAction: "verify_adult_publisher"
       };
     }
   };

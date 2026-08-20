@@ -13,6 +13,7 @@ import {
   updateContent,
   type ContentItem,
   type CreateContentRequest,
+  type UpdateContentRequest,
   type UploadSession
 } from "@/api-mutations";
 
@@ -66,11 +67,13 @@ export function useCreateWorkspaceState(storageScope: string | null) {
       const value = JSON.parse(saved) as {
         caption?: string;
         visibility?: CreateContentRequest["visibility"];
+        nsfwLabel?: CreateContentRequest["nsfwLabel"];
         representationMode?: CreateContentRequest["representationMode"];
         draftId?: string;
       };
       if (typeof value.caption === "string") setCaption(value.caption);
       if (value.visibility && visibilityValues.includes(value.visibility)) setVisibility(value.visibility);
+      if (value.nsfwLabel && nsfwLabels.includes(value.nsfwLabel)) setNsfwLabel(value.nsfwLabel);
       if (value.representationMode && representationModes.includes(value.representationMode)) {
         setRepresentationMode(value.representationMode);
       }
@@ -89,10 +92,11 @@ export function useCreateWorkspaceState(storageScope: string | null) {
     window.localStorage.setItem(localDraftKey, JSON.stringify({
       caption,
       visibility,
+      nsfwLabel,
       representationMode,
       draftId: draft?.id
     }));
-  }, [caption, visibility, representationMode, draft?.id, draftStorageReady, localDraftKey]);
+  }, [caption, visibility, nsfwLabel, representationMode, draft?.id, draftStorageReady, localDraftKey]);
 
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -106,8 +110,25 @@ export function useCreateWorkspaceState(storageScope: string | null) {
     setUploadSession(null);
     setUploadProgress(0);
     setUploadState("idle");
+    setContentSafetyPolicyAccepted(false);
     void uploadRef.current?.abort();
     uploadRef.current = null;
+  }
+
+  function setNsfwLabelWithDeclarationReset(value: CreateContentRequest["nsfwLabel"]) {
+    if (value !== nsfwLabel) {
+      setContentSafetyPolicyAccepted(false);
+    }
+    setNsfwLabel(value);
+  }
+
+  function setRepresentationModeWithDeclarationReset(
+    value: CreateContentRequest["representationMode"]
+  ) {
+    if (value !== representationMode) {
+      setContentSafetyPolicyAccepted(false);
+    }
+    setRepresentationMode(value);
   }
 
   async function onCreateAndUpload(event: FormEvent<HTMLFormElement>) {
@@ -121,13 +142,10 @@ export function useCreateWorkspaceState(storageScope: string | null) {
 
     try {
       let activeDraft = draft;
+      const metadata = currentDraftMetadata();
       const body = {
         mediaType,
-        nsfwLabel,
-        visibility,
-        representationMode,
-        contentSafetyPolicyAccepted,
-        ...(caption.trim() ? { caption: caption.trim() } : {})
+        ...metadata
       } satisfies CreateContentRequest;
 
       if (!activeDraft) {
@@ -137,7 +155,7 @@ export function useCreateWorkspaceState(storageScope: string | null) {
         }
         activeDraft = await createContentDraft(body, draftMutationRef.current.idempotencyKey);
       } else {
-        activeDraft = await updateContent(activeDraft.id, body);
+        activeDraft = await updateContent(activeDraft.id, metadata);
       }
       setDraft(activeDraft);
 
@@ -232,7 +250,8 @@ export function useCreateWorkspaceState(storageScope: string | null) {
     setPending("publish");
     setError(null);
     try {
-      setDraft(await publishContent(draft.id, { confirmation: "submit_for_review" }));
+      const updatedDraft = await updateContent(draft.id, currentDraftMetadata());
+      setDraft(await publishContent(updatedDraft.id, { confirmation: "submit_for_review" }));
       setPublishState("submitted_for_review");
       if (localDraftKey) window.localStorage.removeItem(localDraftKey);
     } catch (caught) {
@@ -240,6 +259,16 @@ export function useCreateWorkspaceState(storageScope: string | null) {
     } finally {
       setPending(null);
     }
+  }
+
+  function currentDraftMetadata() {
+    return {
+      nsfwLabel,
+      visibility,
+      representationMode,
+      contentSafetyPolicyAccepted,
+      caption: caption.trim()
+    } satisfies UpdateContentRequest;
   }
 
   return {
@@ -253,8 +282,8 @@ export function useCreateWorkspaceState(storageScope: string | null) {
       setCaption,
       setContentSafetyPolicyAccepted,
       setMediaType,
-      setNsfwLabel,
-      setRepresentationMode,
+      setNsfwLabel: setNsfwLabelWithDeclarationReset,
+      setRepresentationMode: setRepresentationModeWithDeclarationReset,
       setVisibility
     },
     state: {

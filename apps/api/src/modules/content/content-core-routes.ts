@@ -75,7 +75,6 @@ export async function registerContentCoreRoutes(
     }
 
     try {
-      const isAdultRated = body.nsfwLabel !== "none";
       if (
         (typeof body.representationMode !== "string" ||
           !representationModes.has(body.representationMode) ||
@@ -85,17 +84,6 @@ export async function registerContentCoreRoutes(
           code: "validation_failed",
           message: "A people-and-rights declaration and policy acceptance are required"
         });
-      }
-
-      if (isAdultRated) {
-        const creatorAccess = await verifyCreatorCapability(
-          access.supabaseUserId,
-          "canPublishAdultMedia",
-          options
-        );
-        if (!creatorAccess.ok) {
-          return reply.code(creatorAccess.statusCode).send(creatorAccess.body);
-        }
       }
 
       const abusePolicy = await resolveContentCreationAbusePolicy(options.contentRepository);
@@ -319,39 +307,6 @@ export async function registerContentCoreRoutes(
           code: "service_unavailable",
           message: "Content storage is not configured"
         });
-      }
-
-      let currentContent = null;
-      if (body?.representationMode && body.nsfwLabel === undefined) {
-        if (!options.contentRepository.findOwnedContentForUpdate) {
-          return reply.code(503).send({
-            code: "service_unavailable",
-            message: "Content storage is not configured"
-          });
-        }
-        currentContent = await options.contentRepository.findOwnedContentForUpdate({
-          supabaseUserId: access.supabaseUserId,
-          contentId: params.contentId
-        });
-        if (!currentContent) {
-          return reply.code(404).send({
-            code: "not_found",
-            message: "Content was not found"
-          });
-        }
-      }
-      const adultDeclaration =
-        (body?.nsfwLabel !== undefined && body.nsfwLabel !== "none") ||
-        (body?.representationMode !== undefined && currentContent?.nsfwLabel !== "none");
-      if (adultDeclaration) {
-        const creatorAccess = await verifyCreatorCapability(
-          access.supabaseUserId,
-          "canPublishAdultMedia",
-          options
-        );
-        if (!creatorAccess.ok) {
-          return reply.code(creatorAccess.statusCode).send(creatorAccess.body);
-        }
       }
 
       const content = await options.contentRepository.updateOwnedContent({

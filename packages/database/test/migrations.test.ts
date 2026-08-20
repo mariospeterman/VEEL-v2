@@ -1100,4 +1100,34 @@ describe("database migrations", () => {
     expect(downSql).toContain("expires_at = created_at + interval '24 hours'");
     expect(downSql).toContain("and expires_at = 'infinity'::timestamptz");
   });
+
+  it("converges deterministic recipient policy and set-based content eligibility", () => {
+    const sql = readMigration("0108_policy_content_eligibility_convergence.sql");
+    const downSql = readMigration("0108_policy_content_eligibility_convergence.down.sql");
+
+    expect(sql).toContain("create function private.resolve_recipient_monetisation_policy");
+    expect(sql).toContain("create function private.resolve_creator_kyc_state");
+    expect(sql).toContain("vr.status = 'valid'");
+    expect(sql).toContain("and vr.assurance_level in ('high', 'documentary')");
+    expect(sql).toContain("create table recipient_monetisation_risk_assessments");
+    expect(sql).toContain("recipient_monetisation_risk_active_lookup_idx");
+    expect(sql).toContain("add column recipient_kyc_required boolean");
+    expect(sql).toContain("add column recipient_kyc_policy_version text");
+    expect(sql).toContain("'risk_threshold_required'");
+    expect(sql).toContain("'jurisdiction_policy_required'");
+    expect(sql).toContain("upper(btrim(configured_jurisdiction)) = v_jurisdiction");
+    expect(sql).toContain("('live_pass', settings.live_passes_enabled)");
+    expect(sql).toContain("('event_ticket', settings.live_passes_enabled)");
+    expect(sql).toContain("create function private.eligible_content");
+    expect(sql).toContain("case when p_viewer_user_id is null then 'sfw' else 'both' end");
+    expect(sql).toContain("membership.current_period_starts_at is not null");
+    expect(sql).toContain("membership.current_period_ends_at is not null");
+    expect(sql).toContain("nsfw_preference = default_feed_mode");
+    expect(sql).toContain("default_feed_mode in ('recommended', 'following')");
+    expect(sql).toContain("subscriptions_content_eligibility_idx");
+    expect(sql).not.toMatch(/creator_balance|withdrawal_queue|payout_queue|escrow|private_key|seed_phrase|mnemonic/i);
+    expect(downSql).toContain("drop function if exists private.resolve_creator_kyc_state");
+    expect(downSql).toContain("drop column if exists recipient_kyc_policy_version");
+    expect(downSql).toContain("default_feed_mode in ('recommended', 'following', 'nsfw', 'sfw')");
+  });
 });

@@ -114,7 +114,7 @@ jobs:
         shell: bash
         run: |
           eval "$(pnpm exec supabase status -o env)"
-          VEEL_ENABLE_REAL_API_INTEGRATION_TESTS=1 API_INTEGRATION_DATABASE_URL="$DB_URL" pnpm exec vitest run apps/api/test/authenticated-happy-path.integration.test.ts
+          VEEL_ENABLE_REAL_API_INTEGRATION_TESTS=1 API_INTEGRATION_DATABASE_URL="$DB_URL" pnpm exec vitest run --no-file-parallelism apps/api/test/authenticated-happy-path.integration.test.ts apps/api/test/policy-content-eligibility.integration.test.ts
 
       - name: Stop isolated Supabase database
         if: always()

@@ -37,23 +37,34 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `2e9f40e` (green baseline through PR #84) |
-| Active slice | Launch 11 hardening — payment commercial-policy transaction boundary |
-| Branch | `codex/launch-payment-policy-transaction-boundary` |
-| Pull request | PR #85 |
-| State | `MERGE_READY` |
+| Merged baseline | `main` at `5889b39` (green baseline through PR #85) |
+| Active slice | Convergence 01 — policy and eligibility |
+| Branch | `codex/converge-01-policy-eligibility` |
+| Pull request | Draft PR #86 |
+| State | `ACTIVE` |
 | Slice blockers | No code blocker; provider/staging gates remain external and unchanged. |
-| Next unfinished slice | Convergence 01 — policy and eligibility |
+| Next unfinished slice | Convergence 02 — Universal composer |
 
-The active payment-policy hardening slice moves the lifetime-idempotent audited admin commercial
-policy override onto the shared Postgres transaction helper without changing SQL, pricing rules,
-contract, route, schema, RLS, or provider behavior. Admin authorization remains at the route policy,
-and the policy row, audit evidence, and replay receipt still commit or roll back together.
-The helper commit/rollback proof, focused payment-policy and API route tests, guarded real-Postgres
-commercial-policy journey, docs check, focused lint, and API typecheck are green. Exact-head CI run
-`32350025257`, database-migration run `32350025173`, preview-preflight run `32350025165`, and security
-run `32350025155` are green; no review thread or automated suggestion remains. Shared staging,
-Solana/provider, hosting/operations, legal, mainnet, and production-approval gates remain external.
+Convergence 01 now has one deterministic recipient-KYC policy resolver for global mode, active
+account override, product, normalized jurisdiction, and active risk evidence; `risk_based` remains
+non-universal, global `required` cannot be weakened by an exemption, and every decision includes its
+reason, version, and effective/expiry evidence. Creator capability/onboarding/dashboard, one-time
+payment, Profile Membership, and recurring-collection paths consume that authority and snapshot or
+re-evaluate the decision as appropriate. One indexed viewer-relative SQL authority now gates feed,
+detail, Discover/search/hashtags, profile media, share, unlock, and engagement reads without per-item
+application loops. Ranking mode is only For You/Following; one persisted Both/Safe only/Adult only
+preference drives Home, Bits, Settings, Discover, search, hashtags, and profile media. Safe/Adult/
+Explicit creation remains one resumable draft lifecycle: Adult/Explicit upload and editing are allowed
+before contextual adult-publisher verification, while final publication rechecks that independent
+capability and never forces creator KYC or earnings. Migration `0108` rollback/reapply, 479 unit tests,
+five real-Postgres journeys, production build/typecheck/lint/docs/deploy checks, and 25 desktop plus 25
+mobile Chromium journeys are green locally. Firefox and clean-runner coverage remain protected-PR CI
+gates. No provider API behavior changed; provider/staging gates remain unchanged.
+
+PR #85 merged at `5889b39`. Exact-main CI run `32352695267`, database-migration run `32352695320`,
+security run `32352695299`, and immutable release-artifact run `32353578799` are green. Staging run
+`32354283844` verified that exact manifest and its attestations, then failed closed before deployment
+or migration on the recorded shared staging/provider/operations/legal configuration groups.
 
 The merged entry slice server-resolves login/onboarding state, presents one immediate primary
 `Connect wallet` action, preserves the first click while the wallet runtime loads, keeps the

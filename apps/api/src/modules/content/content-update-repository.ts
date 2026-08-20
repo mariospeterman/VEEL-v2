@@ -6,6 +6,10 @@ import type { ContentRow } from "./content-repository-rows.js";
 import type { ContentRepository, UpdateOwnedContentInput } from "./types.js";
 import { recordContentSafetyDeclaration } from "./content-safety-repository.js";
 
+interface ContentUpdateRow extends ContentRow {
+  representation_mode: UpdateOwnedContentInput["representationMode"] | "not_declared" | null;
+}
+
 export function createContentUpdateRepositoryMethods(
   sql: postgres.Sql
 ): Pick<ContentRepository, "findOwnedContentForUpdate" | "updateOwnedContent"> {
@@ -37,12 +41,25 @@ export function createContentUpdateRepositoryMethods(
     },
     async updateOwnedContent(input) {
       const result = await sql.begin(async (transaction) => {
-        const rows = await transaction<ContentRow[]>`
+        const rows = await transaction<ContentUpdateRow[]>`
           with actor as (
             select id
             from users
             where supabase_user_id = ${input.supabaseUserId}
             limit 1
+          ),
+          current_safety as (
+            select
+              ci.id,
+              coalesce((
+                select declaration.representation_mode
+                from content_safety_declarations declaration
+                where declaration.content_item_id = ci.id
+                  and declaration.state = 'active'
+                limit 1
+              ), 'not_declared') as representation_mode
+            from content_items ci
+            where ci.id = ${input.contentId}
           ),
           updated_content as (
             update content_items ci
@@ -50,9 +67,40 @@ export function createContentUpdateRepositoryMethods(
               caption = case when ${input.captionProvided} then ${input.caption ?? null} else ci.caption end,
               visibility = case when ${Boolean(input.visibility)} then ${input.visibility ?? ""} else ci.visibility end,
               nsfw_label = case when ${Boolean(input.nsfwLabel)} then ${input.nsfwLabel ?? ""} else ci.nsfw_label end,
+              publish_state = case
+                when ci.publish_state = 'published' and (
+                  (${Boolean(input.nsfwLabel)} and ci.nsfw_label is distinct from ${input.nsfwLabel ?? ""})
+                  or (
+                    ${Boolean(input.representationMode)}
+                    and safety.representation_mode is distinct from ${input.representationMode ?? "not_declared"}
+                  )
+                ) then 'submitted_for_review'
+                else ci.publish_state
+              end,
+              moderation_state = case
+                when ci.publish_state = 'published' and (
+                  (${Boolean(input.nsfwLabel)} and ci.nsfw_label is distinct from ${input.nsfwLabel ?? ""})
+                  or (
+                    ${Boolean(input.representationMode)}
+                    and safety.representation_mode is distinct from ${input.representationMode ?? "not_declared"}
+                  )
+                ) then 'pending'
+                else ci.moderation_state
+              end,
+              published_at = case
+                when ci.publish_state = 'published' and (
+                  (${Boolean(input.nsfwLabel)} and ci.nsfw_label is distinct from ${input.nsfwLabel ?? ""})
+                  or (
+                    ${Boolean(input.representationMode)}
+                    and safety.representation_mode is distinct from ${input.representationMode ?? "not_declared"}
+                  )
+                ) then null
+                else ci.published_at
+              end,
               updated_at = now()
-            from actor
+            from actor, current_safety safety
             where ci.id = ${input.contentId}
+              and safety.id = ci.id
               and ci.creator_user_id = actor.id
               and ci.state <> 'deleted'
             returning ci.id, ci.creator_user_id, ci.media_type, ci.caption, ci.nsfw_label
@@ -83,7 +131,14 @@ export function createContentUpdateRepositoryMethods(
             u.id as creator_id,
             p.handle,
             p.display_name,
-            p.avatar_url
+            p.avatar_url,
+            (
+              select declaration.representation_mode
+              from content_safety_declarations declaration
+              where declaration.content_item_id = ci.id
+                and declaration.state = 'active'
+              limit 1
+            ) as representation_mode
           from updated_content ci
           join users u on u.id = ci.creator_user_id
           left join profiles p on p.user_id = u.id
@@ -105,7 +160,7 @@ export function createContentUpdateRepositoryMethods(
             contentId: row.id,
             creatorUserId: row.creator_id,
             rating: row.nsfw_label ?? "none",
-            representationMode: input.representationMode ?? "not_declared",
+            representationMode: input.representationMode ?? row.representation_mode ?? "not_declared",
             policyAccepted: input.contentSafetyPolicyAccepted
           });
         }

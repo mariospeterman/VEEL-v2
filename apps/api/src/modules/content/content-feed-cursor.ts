@@ -1,6 +1,6 @@
 interface FeedCursorPayload {
   version: 1;
-  mode: "recommended" | "following" | "nsfw" | "sfw";
+  mode: "recommended" | "following";
   surface: "home" | "bits";
   asOf: string;
   rankingRevision: string;
@@ -49,7 +49,7 @@ export function decodeFeedCursor(cursor: string): FeedCursorPayload {
     const value = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as Partial<FeedCursorPayload>;
     if (
       value.version !== 1 ||
-      !["recommended", "following", "nsfw", "sfw"].includes(value.mode ?? "") ||
+      !["recommended", "following"].includes(value.mode ?? "") ||
       !["home", "bits"].includes(value.surface ?? "") ||
       !isCanonicalTimestamp(value.asOf) ||
       !isRankingRevision(value.rankingRevision) ||
