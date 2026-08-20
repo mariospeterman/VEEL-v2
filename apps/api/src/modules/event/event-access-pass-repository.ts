@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import type postgres from "postgres";
+import { type PostgresSql, withPostgresTransaction } from "../../shared/postgres.js";
 import type { AccessPassRow } from "./event-repository-rows.js";
 
 export function hashQrToken(token: string): string {
@@ -7,7 +7,7 @@ export function hashQrToken(token: string): string {
 }
 
 export async function grantAccessPass(
-  sql: postgres.Sql,
+  sql: PostgresSql,
   input: {
     supabaseUserId: string;
     eventId: string;
@@ -17,7 +17,7 @@ export async function grantAccessPass(
 ): Promise<AccessPassRow[]> {
   const qrToken = newQrToken();
 
-  return sql.begin(async (transaction) => {
+  return withPostgresTransaction(sql, async (transaction) => {
     // The advisory lock must be acquired in a separate statement. A lock CTE in
     // the inventory statement would retain the statement snapshot taken before
     // a concurrent waiter acquired the lock and could therefore over-issue.
