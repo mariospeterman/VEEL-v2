@@ -37,15 +37,21 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `5889b39` (green baseline through PR #85) |
-| Active slice | Convergence 01 — policy and eligibility |
-| Branch | `codex/converge-01-policy-eligibility` |
-| Pull request | Draft PR #86 |
+| Merged baseline | `main` at `b5e1904` (green baseline through PR #86) |
+| Active slice | Convergence 02 — Universal composer |
+| Branch | `codex/converge-02-universal-composer` |
+| Pull request | Draft PR pending |
 | State | `ACTIVE` |
-| Slice blockers | No code blocker; provider/staging gates remain external and unchanged. |
-| Next unfinished slice | Convergence 02 — Universal composer |
+| Slice blockers | No code blocker; image-provider staging evidence remains external and must stay fail-closed. |
+| Next unfinished slice | Convergence 03 — Analytics Core |
 
-Convergence 01 now has one deterministic recipient-KYC policy resolver for global mode, active
+Convergence 02 is extending the existing `content_items` and `media_assets` authorities into one
+draft lifecycle and renderer family for photo, video, carousel, mixed media, text, and polls. It must
+reuse the canonical Create route, safety/publication workflow, Bunny video boundary, viewer-relative
+eligibility, and feed/detail/profile projections; image-provider acceptance remains a separately
+recorded staging gate and cannot create a second content, upload, moderation, or rendering system.
+
+Merged Convergence 01 has one deterministic recipient-KYC policy resolver for global mode, active
 account override, product, normalized jurisdiction, and active risk evidence; `risk_based` remains
 non-universal, global `required` cannot be weakened by an exemption, and every decision includes its
 reason, version, and effective/expiry evidence. Creator capability/onboarding/dashboard, one-time
@@ -59,7 +65,10 @@ before contextual adult-publisher verification, while final publication rechecks
 capability and never forces creator KYC or earnings. Migration `0108` rollback/reapply, 479 unit tests,
 five real-Postgres journeys, production build/typecheck/lint/docs/deploy checks, and 25 desktop plus 25
 mobile Chromium journeys are green locally. Firefox and clean-runner coverage remain protected-PR CI
-gates. No provider API behavior changed; provider/staging gates remain unchanged.
+gates. No provider API behavior changed; provider/staging gates remain unchanged. PR #86 merged as
+`b5e1904`; exact-main CI `32399020903`, database `32399021003`, security `32399020923`, and release
+artifact `32400011806` are green. Staging convergence `32400705957` verified the immutable artifact,
+then failed closed at the recorded shared staging/provider/operations/legal configuration gate.
 
 PR #85 merged at `5889b39`. Exact-main CI run `32352695267`, database-migration run `32352695320`,
 security run `32352695299`, and immutable release-artifact run `32353578799` are green. Staging run
