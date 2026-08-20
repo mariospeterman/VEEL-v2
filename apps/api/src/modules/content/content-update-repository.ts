@@ -50,6 +50,27 @@ export function createContentUpdateRepositoryMethods(
               caption = case when ${input.captionProvided} then ${input.caption ?? null} else ci.caption end,
               visibility = case when ${Boolean(input.visibility)} then ${input.visibility ?? ""} else ci.visibility end,
               nsfw_label = case when ${Boolean(input.nsfwLabel)} then ${input.nsfwLabel ?? ""} else ci.nsfw_label end,
+              publish_state = case
+                when ci.publish_state = 'published' and (
+                  (${Boolean(input.nsfwLabel)} and ci.nsfw_label is distinct from ${input.nsfwLabel ?? ""})
+                  or ${Boolean(input.representationMode)}
+                ) then 'submitted_for_review'
+                else ci.publish_state
+              end,
+              moderation_state = case
+                when ci.publish_state = 'published' and (
+                  (${Boolean(input.nsfwLabel)} and ci.nsfw_label is distinct from ${input.nsfwLabel ?? ""})
+                  or ${Boolean(input.representationMode)}
+                ) then 'pending'
+                else ci.moderation_state
+              end,
+              published_at = case
+                when ci.publish_state = 'published' and (
+                  (${Boolean(input.nsfwLabel)} and ci.nsfw_label is distinct from ${input.nsfwLabel ?? ""})
+                  or ${Boolean(input.representationMode)}
+                ) then null
+                else ci.published_at
+              end,
               updated_at = now()
             from actor
             where ci.id = ${input.contentId}

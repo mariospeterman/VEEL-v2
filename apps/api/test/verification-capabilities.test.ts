@@ -70,6 +70,25 @@ describe("universal account capability policy", () => {
     expect(resolution.capabilities.canPublishAdultMedia).toBe(false);
   });
 
+  it("uses canonical verified KYC while a newer renewal remains pending", () => {
+    const resolution = resolveCapabilitiesFromRecords({
+      ageAccess: validRecord("age_access"),
+      adultPublisherEligibility: null,
+      creatorKyc: {
+        ...validRecord("creator_kyc"),
+        status: "pending",
+        verifiedAt: null
+      },
+      creatorKycRequired: true,
+      creatorKycState: "verified",
+      orgKyb: null
+    });
+
+    expect(resolution.capabilities.canMonetize).toBe(true);
+    expect(resolution.capabilities.canReceiveCreatorProceeds).toBe(true);
+    expect(resolution.missingRequirements).not.toContain("creator_kyc_required_for_earning");
+  });
+
   it("does not infer paid plan or organization capabilities from identity checks", () => {
     const resolution = resolveCapabilitiesFromRecords({
       ageAccess: validRecord("age_access"),

@@ -265,8 +265,11 @@ export function createPostgresVerificationRepository(database?: string | Postgre
               purpose: "org_kyb"
             })
           : Promise.resolve(null),
-        sql<Array<{ kyc_required: boolean }>>`
-          select kyc.kyc_required
+        sql<Array<{
+          kyc_required: boolean;
+          kyc_state: "not_required" | "required" | "pending" | "verified" | "failed";
+        }>>`
+          select kyc.kyc_required, kyc.kyc_state
           from users actor
           cross join lateral private.resolve_creator_kyc_state(actor.id) kyc
           where actor.supabase_user_id = ${input.supabaseUserId}
@@ -279,7 +282,10 @@ export function createPostgresVerificationRepository(database?: string | Postgre
         adultPublisherEligibility,
         creatorKyc,
         orgKyb,
-        creatorKycRequired: policyRows[0]?.kyc_required ?? true
+        creatorKycRequired: policyRows[0]?.kyc_required ?? true,
+        ...(policyRows[0]?.kyc_state
+          ? { creatorKycState: policyRows[0].kyc_state }
+          : {})
       });
     },
     async close() {
@@ -500,10 +506,13 @@ export function resolveCapabilitiesFromRecords(input: {
   creatorKyc: VerificationRecordResource | null;
   orgKyb: VerificationRecordResource | null;
   creatorKycRequired?: boolean;
+  creatorKycState?: "not_required" | "required" | "pending" | "verified" | "failed";
 }): CapabilityResolution {
   const hasAge = isValid(input.ageAccess);
   const hasAdultPublisherEligibility = hasAge && isValid(input.adultPublisherEligibility ?? null);
-  const hasCreatorKyc = isValid(input.creatorKyc);
+  const hasCreatorKyc = input.creatorKycState
+    ? input.creatorKycState === "verified"
+    : isValid(input.creatorKyc);
   const creatorKycSatisfied = input.creatorKycRequired === false || hasCreatorKyc;
   const capabilities: Record<CapabilityKey, boolean> = {
     canAccessApp: hasAge,
