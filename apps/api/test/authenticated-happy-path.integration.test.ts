@@ -1399,7 +1399,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         url: "/v1/content",
         headers: authenticatedHeaders(`content-create-${runId}`),
         payload: {
-          mediaType: "image",
+          mediaType: "vod",
           visibility: "public",
           nsfwLabel: "none",
           representationMode: "self_only",
@@ -1410,7 +1410,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
 
       expect(createContentResponse.statusCode, createContentResponse.body).toBe(201);
       expect(createContentResponse.json()).toMatchObject({
-        mediaType: "image",
+        mediaType: "vod",
         accessState: "free",
         caption: `Integration draft ${runId}`
       });
@@ -1431,7 +1431,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         url: "/v1/content",
         headers: authenticatedHeaders(`content-create-${runId}`),
         payload: {
-          mediaType: "image",
+          mediaType: "vod",
           visibility: "public",
           nsfwLabel: "none",
           representationMode: "self_only",
@@ -1447,7 +1447,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         url: "/v1/content",
         headers: authenticatedHeaders(`content-create-${runId}`),
         payload: {
-          mediaType: "image",
+          mediaType: "vod",
           visibility: "public",
           nsfwLabel: "none",
           representationMode: "self_only",
@@ -4920,7 +4920,7 @@ async function seedCreatorPaidContent(
     values (
       ${input.contentId},
       ${input.creatorUserId},
-      'image',
+      'vod',
       'ready',
       'submitted_for_review',
       null,

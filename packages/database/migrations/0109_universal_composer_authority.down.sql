@@ -3,6 +3,9 @@ drop trigger if exists content_polls_enforce_shape on content_polls;
 drop trigger if exists content_items_enforce_poll_shape on content_items;
 drop function if exists private.enforce_poll_shape();
 
+drop trigger if exists content_polls_clear_children on content_polls;
+drop function if exists private.clear_poll_children_for_parent_delete();
+
 drop trigger if exists content_poll_votes_sync_counts on content_poll_votes;
 drop function if exists private.sync_poll_vote_counts();
 drop trigger if exists content_poll_options_lock_after_vote on content_poll_options;
@@ -17,6 +20,9 @@ drop function if exists private.enforce_content_asset_shape();
 drop table if exists content_poll_votes;
 drop table if exists content_poll_options;
 drop table if exists content_polls;
+
+drop trigger if exists media_assets_assign_position on media_assets;
+drop function if exists private.assign_media_asset_position();
 
 drop index if exists media_assets_content_release_idx;
 drop index if exists media_assets_content_cover_uidx;

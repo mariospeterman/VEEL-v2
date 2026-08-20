@@ -92,6 +92,37 @@ where ordered.id = asset.id;
 alter table media_assets
   alter column position set not null;
 
+create function private.assign_media_asset_position()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public, private
+as $$
+begin
+  perform 1
+  from content_items
+  where id = new.content_item_id
+  for update;
+
+  if new.position is null then
+    select coalesce(max(asset.position) + 1, 0)
+    into new.position
+    from media_assets asset
+    where asset.content_item_id = new.content_item_id;
+  end if;
+
+  if new.position not between 0 and 9 then
+    raise exception using errcode = '23514', message = 'content_asset_count_exceeded';
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger media_assets_assign_position
+before insert on media_assets
+for each row execute function private.assign_media_asset_position();
+
 create unique index media_assets_content_position_uidx
   on media_assets (content_item_id, position);
 
@@ -153,6 +184,27 @@ comment on column media_assets.position is
   'Server-owned zero-based order; at most ten assets are permitted per content item.';
 comment on column media_assets.source_lineage_reference is
   'Opaque provenance reference only; private prompts, credentials, and raw provider payloads are forbidden.';
+
+create function private.clear_poll_children_for_parent_delete()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public, private
+as $$
+begin
+  delete from content_poll_votes
+  where content_item_id = old.content_item_id;
+
+  delete from content_poll_options
+  where content_item_id = old.content_item_id;
+
+  return old;
+end;
+$$;
+
+create trigger content_polls_clear_children
+before delete on content_polls
+for each row execute function private.clear_poll_children_for_parent_delete();
 
 create function private.enforce_content_asset_shape()
 returns trigger
