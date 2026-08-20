@@ -131,8 +131,12 @@ for (const field of activeStateFields) {
 }
 
 const canonicalSlices = new Set(
-  [...buildPlan.matchAll(/^\| ([0-9]{2}[A-Z]?) \| ([^|]+) \|/gm)].map(
-    ([, sliceId, goal]) => `Launch ${sliceId} — ${goal.trim()}`,
+  [
+    ...buildPlan.matchAll(
+      /^\| ((?:[0-9]{2}[A-Z]?)|(?:Convergence [0-9]{2})) \| ([^|]+) \|/gm,
+    ),
+  ].map(([, sliceId, goal]) =>
+    `${sliceId.startsWith("Convergence ") ? sliceId : `Launch ${sliceId}`} — ${goal.trim()}`,
   ),
 );
 const nextSlice = activeStateValues.get("Next unfinished slice");
