@@ -6,19 +6,22 @@ import { createContentUpdateRepositoryMethods } from "../src/modules/content/con
 describe("content update repository", () => {
   it("withdraws published content when its safety declaration changes", async () => {
     const queries: string[] = [];
-    const transaction = vi.fn((strings: TemplateStringsArray) => {
+    const values: unknown[] = [];
+    const transaction = vi.fn((strings: TemplateStringsArray, ...queryValues: unknown[]) => {
       const query = strings.join("?");
       queries.push(query);
+      values.push(...queryValues);
       if (query.includes("with actor as")) {
         return Promise.resolve([{
           id: "00000000-0000-4000-8000-000000000040",
           media_type: "vod",
           caption: "Published media",
-          nsfw_label: "adult",
+          nsfw_label: "explicit",
           creator_id: "00000000-0000-4000-8000-000000000001",
           handle: "creator",
           display_name: "Creator",
-          avatar_url: null
+          avatar_url: null,
+          representation_mode: "self_only"
         }]);
       }
       return Promise.resolve([]);
@@ -35,7 +38,6 @@ describe("content update repository", () => {
       idempotencyKey: "published-safety-edit-1",
       captionProvided: false,
       nsfwLabel: "adult",
-      representationMode: "self_only",
       contentSafetyPolicyAccepted: true,
       teaserStartMsProvided: false,
       teaserEndMsProvided: false,
@@ -49,5 +51,8 @@ describe("content update repository", () => {
     expect(updateQuery).toContain("moderation_state = case");
     expect(updateQuery).toContain("then 'pending'");
     expect(updateQuery).toContain("published_at = case");
+    expect(updateQuery).toContain("declaration.representation_mode");
+    expect(values).toContain("self_only");
+    expect(values).not.toContain("not_declared");
   });
 });

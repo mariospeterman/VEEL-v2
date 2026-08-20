@@ -6,6 +6,10 @@ import type { ContentRow } from "./content-repository-rows.js";
 import type { ContentRepository, UpdateOwnedContentInput } from "./types.js";
 import { recordContentSafetyDeclaration } from "./content-safety-repository.js";
 
+interface ContentUpdateRow extends ContentRow {
+  representation_mode: UpdateOwnedContentInput["representationMode"] | "not_declared" | null;
+}
+
 export function createContentUpdateRepositoryMethods(
   sql: postgres.Sql
 ): Pick<ContentRepository, "findOwnedContentForUpdate" | "updateOwnedContent"> {
@@ -37,7 +41,7 @@ export function createContentUpdateRepositoryMethods(
     },
     async updateOwnedContent(input) {
       const result = await sql.begin(async (transaction) => {
-        const rows = await transaction<ContentRow[]>`
+        const rows = await transaction<ContentUpdateRow[]>`
           with actor as (
             select id
             from users
@@ -104,7 +108,14 @@ export function createContentUpdateRepositoryMethods(
             u.id as creator_id,
             p.handle,
             p.display_name,
-            p.avatar_url
+            p.avatar_url,
+            (
+              select declaration.representation_mode
+              from content_safety_declarations declaration
+              where declaration.content_item_id = ci.id
+                and declaration.state = 'active'
+              limit 1
+            ) as representation_mode
           from updated_content ci
           join users u on u.id = ci.creator_user_id
           left join profiles p on p.user_id = u.id
@@ -126,7 +137,7 @@ export function createContentUpdateRepositoryMethods(
             contentId: row.id,
             creatorUserId: row.creator_id,
             rating: row.nsfw_label ?? "none",
-            representationMode: input.representationMode ?? "not_declared",
+            representationMode: input.representationMode ?? row.representation_mode ?? "not_declared",
             policyAccepted: input.contentSafetyPolicyAccepted
           });
         }
