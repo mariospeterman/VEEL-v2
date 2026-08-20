@@ -58,9 +58,23 @@ export async function registerProfileRoutes(
 
     try {
       const viewer = await verifyRequestSession(request, options.authVerifier);
+      let eligibleViewerUserId: string | null = null;
+      if (viewer) {
+        try {
+          const ageStatus = await findAgeStatusForUser(options.ageRepository, viewer.userId);
+          if (ageStatus.state === "verified") {
+            eligibleViewerUserId = viewer.userId;
+          }
+        } catch (error) {
+          request.log.warn(
+            { error, viewerUserId: viewer.userId },
+            "Profile viewer age status is unavailable; using public eligibility"
+          );
+        }
+      }
       const profile = await options.profileRepository.findCreatorProfileByHandle(
         handle,
-        viewer?.userId ?? null
+        eligibleViewerUserId
       );
 
       if (!profile) {

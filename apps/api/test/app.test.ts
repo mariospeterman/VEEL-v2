@@ -2456,6 +2456,58 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("uses anonymous public eligibility for a session without current age evidence", async () => {
+    let eligibleViewerUserId: string | null | undefined;
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      ageRepository: requiredAgeRepository,
+      profileRepository: {
+        ...fakeProfileRepository,
+        async findCreatorProfileByHandle(handle, viewerUserId) {
+          eligibleViewerUserId = viewerUserId;
+          return fakeProfileRepository.findCreatorProfileByHandle(handle, viewerUserId);
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/profiles/maki",
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(eligibleViewerUserId).toBeNull();
+    await app.close();
+  });
+
+  it("uses viewer-relative eligibility only for an age-ready session", async () => {
+    let eligibleViewerUserId: string | null | undefined;
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      ageRepository: verifiedAgeRepository,
+      profileRepository: {
+        ...fakeProfileRepository,
+        async findCreatorProfileByHandle(handle, viewerUserId) {
+          eligibleViewerUserId = viewerUserId;
+          return fakeProfileRepository.findCreatorProfileByHandle(handle, viewerUserId);
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/profiles/maki",
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(eligibleViewerUserId).toBe("00000000-0000-4000-8000-000000000001");
+    await app.close();
+  });
+
   it("returns the current creator monetisation dashboard for a verified creator", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
