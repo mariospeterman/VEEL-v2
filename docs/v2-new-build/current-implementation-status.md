@@ -37,23 +37,27 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `2e9f40e` (green baseline through PR #84) |
-| Active slice | Launch 11 hardening — payment commercial-policy transaction boundary |
-| Branch | `codex/launch-payment-policy-transaction-boundary` |
-| Pull request | PR #85 |
-| State | `MERGE_READY` |
+| Merged baseline | `main` at `5889b39` (green baseline through PR #85) |
+| Active slice | Convergence 01 — policy and eligibility |
+| Branch | `codex/converge-01-policy-eligibility` |
+| Pull request | Draft PR pending |
+| State | `ACTIVE` |
 | Slice blockers | No code blocker; provider/staging gates remain external and unchanged. |
-| Next unfinished slice | Convergence 01 — policy and eligibility |
+| Next unfinished slice | Convergence 02 — Universal composer |
 
-The active payment-policy hardening slice moves the lifetime-idempotent audited admin commercial
-policy override onto the shared Postgres transaction helper without changing SQL, pricing rules,
-contract, route, schema, RLS, or provider behavior. Admin authorization remains at the route policy,
-and the policy row, audit evidence, and replay receipt still commit or roll back together.
-The helper commit/rollback proof, focused payment-policy and API route tests, guarded real-Postgres
-commercial-policy journey, docs check, focused lint, and API typecheck are green. Exact-head CI run
-`32350025257`, database-migration run `32350025173`, preview-preflight run `32350025165`, and security
-run `32350025155` are green; no review thread or automated suggestion remains. Shared staging,
-Solana/provider, hosting/operations, legal, mainnet, and production-approval gates remain external.
+Convergence 01 is auditing and unifying the existing policy and eligibility authorities without
+merging their responsibilities. The first evidence-backed gaps are a nominal `risk_based` creator-KYC
+mode that does not yet evaluate deterministic product, jurisdiction, and risk inputs consistently, an
+obsolete `recommended` content-preference write, and duplicated public-content eligibility predicates
+across feed, detail, Discover, profile, share, unlock, and engagement surfaces. Contracts, reversible
+migrations, API projections, frontend controls, indexed SQL, and real-Postgres/browser proof will move
+together in this one slice. Adult-publisher, performer, age, creator-KYC, and Enterprise authorities
+remain separate, and no provider API behavior changes without renewed official evidence.
+
+PR #85 merged at `5889b39`. Exact-main CI run `32352695267`, database-migration run `32352695320`,
+security run `32352695299`, and immutable release-artifact run `32353578799` are green. Staging run
+`32354283844` verified that exact manifest and its attestations, then failed closed before deployment
+or migration on the recorded shared staging/provider/operations/legal configuration groups.
 
 The merged entry slice server-resolves login/onboarding state, presents one immediate primary
 `Connect wallet` action, preserves the first click while the wallet runtime loads, keeps the
