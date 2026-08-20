@@ -37,11 +37,11 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `6958ae8` (green baseline through PR #80) |
-| Active slice | Launch 11 hardening — Event Access transaction boundary |
-| Branch | `codex/launch-event-access-transaction-boundary` |
-| Pull request | PR #81 |
-| State | `MERGE_READY` |
+| Merged baseline | `main` at `0728175` (green baseline through PR #81) |
+| Active slice | Launch 11 hardening — admin moderation transaction boundary |
+| Branch | `codex/launch-admin-moderation-transaction-boundary` |
+| Pull request | Draft PR pending |
+| State | `ACTIVE` |
 | Slice blockers | No code blocker; provider/staging gates remain external and unchanged. |
 | Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
 
@@ -74,11 +74,11 @@ migrated in later bounded slices. Supabase recovery subjects remain exclusively 
 integration, desktop/mobile Chromium, desktop Firefox, accessibility, PWA, and visible-browser
 entry proofs are green. Real provider acceptance remains a pre-production gate.
 
-The current green `main` merge at `6958ae8` passed protected CI run `32316644344`, isolated
+The current green `main` merge at `0728175` passed protected CI run `32322038599`, isolated
 Postgres integration, database migration checks, security analysis, build, and the full Chromium,
-Firefox, and WebKit browser smoke matrix. Release-artifact run `32317177553` built and attested the
+Firefox, and WebKit browser smoke matrix. Release-artifact run `32322648311` built and attested the
 web, API, and worker images and emitted the immutable manifest for that exact source. Staging
-convergence run `32317729104` then verified the manifest and attestations and failed closed at its
+convergence run `32323056536` then verified the manifest and attestations and failed closed at its
 configuration gate because the recorded shared staging/provider/legal values remain absent; no
 deployment or migration was attempted. The reviewed maintenance queue also merged CI budget
 hardening (PR #78), `jose` 6.2.9 (PR #74), Zustand 5.0.15 (PR #76), and Next.js 16.3.1
@@ -242,7 +242,7 @@ Public product copy and API metadata use WeVid and Support. Technical package sc
 
 ## P0 Before Broad Expansion
 
-1. Continue migrating money/access/admin/safety mutations onto the shared Postgres transaction helper slice by slice; payment submission settlement, refund/dispute request creation, and Event Access inventory reservation/issuance are already on the shared boundary.
+1. Continue migrating money/access/admin/safety mutations onto the shared Postgres transaction helper slice by slice; payment submission settlement, refund/dispute request creation, Event Access inventory reservation/issuance, and admin content-moderation/report-review state transitions are already on the shared boundary.
 2. Continue migrating route modules onto shared idempotency helpers, route-policy/RBAC, route-specific rate-limit presets, and test factory helpers. The first admin mutation routes are migrated; money/access/safety routes still need slice-by-slice adoption and durable generic idempotency conflict behavior where route-specific stores are insufficient.
 3. Obtain Bunny Shield direct-Stream-TUS and Livepeer moderation/suspension staging evidence. Until then moderation remains fail closed and adult live remains disabled.
 4. Run live sandbox proof for one launch-approved age provider and for the separate Didit creator/adult-publisher identity workflows. Code, signed webhook handling, replay protection, capability projection, and the onboarding shortcut are wired; provider credentials, workflow IDs, callbacks, retention approval, and operational evidence remain launch blockers.

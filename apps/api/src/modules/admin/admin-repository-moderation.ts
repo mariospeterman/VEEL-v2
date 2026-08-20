@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import type postgres from "postgres";
+import { type PostgresSql, withPostgresTransaction } from "../../shared/postgres.js";
 import type { AdminRepository } from "./types.js";
 import { AdminRepositoryStateConflictError } from "./admin-repository-errors.js";
 import {
@@ -13,7 +13,7 @@ import {
 } from "./admin-repository-mappers.js";
 
 export function createModerationRepository(
-  sql: postgres.Sql
+  sql: PostgresSql
 ): Pick<AdminRepository, "listContent" | "updateContentModeration" | "listReports" | "updateReport"> {
   return {
     async listContent(input) {
@@ -47,7 +47,7 @@ export function createModerationRepository(
     },
     async updateContentModeration(input) {
       const moderation = contentModerationForAction(input.body.action);
-      const rows = await sql.begin(async (transaction) => {
+      const rows = await withPostgresTransaction(sql, async (transaction) => {
         const actorRows = await transaction<{ id: string }[]>`
           select id
           from users
@@ -291,7 +291,7 @@ export function createModerationRepository(
       return page(rows, toAdminReport);
     },
     async updateReport(input) {
-      const rows = await sql.begin(async (transaction) => {
+      const rows = await withPostgresTransaction(sql, async (transaction) => {
         const updatedRows = await transaction<AdminReportRow[]>`
           with actor as (
             select id
