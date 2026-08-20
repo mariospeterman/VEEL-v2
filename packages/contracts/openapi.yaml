@@ -3806,8 +3806,17 @@ components:
       properties:
         id: { type: string, format: uuid }
         creator: { $ref: "#/components/schemas/User" }
-        mediaType: { type: string, enum: [bit, clip, image, vod, live_replay] }
+        mediaType: { type: string, enum: [bit, clip, image, vod, live_replay, carousel, text, poll] }
         caption: { type: string, nullable: true }
+        bodyText: { type: string, minLength: 1, maxLength: 10000, nullable: true }
+        mediaAssets:
+          type: array
+          maxItems: 10
+          items: { $ref: "#/components/schemas/ContentMediaAsset" }
+        poll:
+          allOf:
+            - $ref: "#/components/schemas/ContentPoll"
+          nullable: true
         posterUrl: { type: string, format: uri, nullable: true }
         playback: { $ref: "#/components/schemas/PlaybackResource" }
         accessState: { type: string, enum: [free, teaser, locked, unlocked, subscribed, pass_required] }
@@ -3824,6 +3833,60 @@ components:
         following: { type: boolean }
         followerCount: { type: integer, minimum: 0 }
         followingCount: { type: integer, minimum: 0 }
+    ContentMediaAsset:
+      type: object
+      required: [id, kind, position, provider, providerState, requiredForRelease, isCover, originClassification]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [image, video] }
+        position: { type: integer, minimum: 0, maximum: 9 }
+        provider: { type: string, enum: [bunny, livepeer] }
+        providerState: { type: string }
+        posterUrl: { type: string, format: uri, nullable: true }
+        mimeType: { type: string, enum: [image/jpeg, image/png, image/webp, image/avif, video/mp4, video/quicktime, video/webm], nullable: true }
+        widthPixels: { type: integer, minimum: 1, maximum: 16384, nullable: true }
+        heightPixels: { type: integer, minimum: 1, maximum: 16384, nullable: true }
+        durationMs: { type: integer, minimum: 0, nullable: true }
+        altText: { type: string, minLength: 1, maxLength: 1000, nullable: true }
+        requiredForRelease: { type: boolean }
+        isCover: { type: boolean }
+        focalPointX: { type: number, minimum: 0, maximum: 1, nullable: true }
+        focalPointY: { type: number, minimum: 0, maximum: 1, nullable: true }
+        originClassification: { type: string, enum: [human_created, ai_assisted, ai_generated, materially_ai_manipulated] }
+        visibleLabelState: { type: string, enum: [none, ai_assisted, ai_generated, manipulated] }
+    ContentPollOption:
+      type: object
+      required: [id, position, text, voteCount]
+      properties:
+        id: { type: string, format: uuid }
+        position: { type: integer, minimum: 0, maximum: 3 }
+        text: { type: string, minLength: 1, maxLength: 200 }
+        voteCount: { type: integer, minimum: 0 }
+    ContentPoll:
+      type: object
+      required: [question, options, state, totalVoteCount, closesAt, viewerOptionId]
+      properties:
+        question: { type: string, minLength: 1, maxLength: 500 }
+        options:
+          type: array
+          minItems: 2
+          maxItems: 4
+          items: { $ref: "#/components/schemas/ContentPollOption" }
+        state: { type: string, enum: [open, closed, cancelled] }
+        totalVoteCount: { type: integer, minimum: 0 }
+        closesAt: { type: string, format: date-time, nullable: true }
+        viewerOptionId: { type: string, format: uuid, nullable: true }
+    ContentPollDraft:
+      type: object
+      required: [question, options]
+      properties:
+        question: { type: string, minLength: 1, maxLength: 500 }
+        options:
+          type: array
+          minItems: 2
+          maxItems: 4
+          items: { type: string, minLength: 1, maxLength: 200 }
+        closesAt: { type: string, format: date-time, nullable: true }
     RecordFeedImpressionRequest:
       type: object
       required: [contentId]
@@ -3976,8 +4039,10 @@ components:
       type: object
       required: [mediaType, visibility, nsfwLabel, representationMode, contentSafetyPolicyAccepted]
       properties:
-        mediaType: { type: string, enum: [bit, clip, image, vod, live_replay] }
+        mediaType: { type: string, enum: [bit, clip, image, vod, live_replay, carousel, text, poll] }
         caption: { type: string }
+        bodyText: { type: string, minLength: 1, maxLength: 10000 }
+        poll: { $ref: "#/components/schemas/ContentPollDraft" }
         visibility: { type: string, enum: [public, followers, subscribers, private] }
         nsfwLabel: { type: string, enum: [none, adult, explicit] }
         representationMode: { type: string, enum: [no_real_person, self_only, declared_performers] }
@@ -4005,7 +4070,7 @@ components:
       required: [id, mediaType, visibility, publicationState, reviewState, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
-        mediaType: { type: string, enum: [bit, clip, image, vod, live_replay] }
+        mediaType: { type: string, enum: [bit, clip, image, vod, live_replay, carousel, text, poll] }
         caption: { type: string, nullable: true }
         posterUrl: { type: string, format: uri, nullable: true }
         visibility: { type: string, enum: [public, followers, subscribers, private] }

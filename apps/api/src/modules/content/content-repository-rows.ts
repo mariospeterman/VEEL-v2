@@ -34,6 +34,9 @@ export interface ContentRow {
   id: string;
   media_type: ContentItem["mediaType"];
   caption: string | null;
+  body_text?: string | null;
+  media_assets?: ContentItem["mediaAssets"];
+  poll?: ContentItem["poll"];
   nsfw_label: NonNullable<ContentItem["nsfwLabel"]>;
   creator_id: string;
   handle: string | null;

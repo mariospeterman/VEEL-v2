@@ -67,6 +67,8 @@ export interface CreateContentDraftInput {
   requestHash: string;
   mediaType: ContentItem["mediaType"];
   caption?: string | null | undefined;
+  bodyText?: string | null | undefined;
+  poll?: components["schemas"]["ContentPollDraft"] | undefined;
   visibility: string;
   nsfwLabel: NonNullable<ContentItem["nsfwLabel"]>;
   representationMode: "not_declared" | NonNullable<CreateContentRequest["representationMode"]>;

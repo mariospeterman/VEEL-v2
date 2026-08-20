@@ -29,7 +29,16 @@ export interface RegisterContentRoutesOptions {
 
 export const feedModes = new Set(["recommended", "following"]);
 export const feedSurfaces = new Set(["home", "bits"]);
-export const contentMediaTypes = new Set(["bit", "clip", "image", "vod", "live_replay"]);
+export const contentMediaTypes = new Set([
+  "bit",
+  "clip",
+  "image",
+  "vod",
+  "live_replay",
+  "carousel",
+  "text",
+  "poll"
+]);
 export const contentVisibilityValues = new Set(["public", "followers", "subscribers", "private"]);
 export const nsfwLabels = new Set(["none", "adult", "explicit"]);
 export const representationModes = new Set([

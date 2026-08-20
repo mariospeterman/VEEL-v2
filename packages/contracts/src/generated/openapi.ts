@@ -3855,8 +3855,11 @@ export interface components {
             id: string;
             creator: components["schemas"]["User"];
             /** @enum {string} */
-            mediaType: "bit" | "clip" | "image" | "vod" | "live_replay";
+            mediaType: "bit" | "clip" | "image" | "vod" | "live_replay" | "carousel" | "text" | "poll";
             caption?: string | null;
+            bodyText?: string | null;
+            mediaAssets?: components["schemas"]["ContentMediaAsset"][];
+            poll?: components["schemas"]["ContentPoll"] | null;
             /** Format: uri */
             posterUrl?: string | null;
             playback?: components["schemas"]["PlaybackResource"];
@@ -3874,6 +3877,56 @@ export interface components {
             following: boolean;
             followerCount: number;
             followingCount: number;
+        };
+        ContentMediaAsset: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "image" | "video";
+            position: number;
+            /** @enum {string} */
+            provider: "bunny" | "livepeer";
+            providerState: string;
+            /** Format: uri */
+            posterUrl?: string | null;
+            /** @enum {string|null} */
+            mimeType?: "image/jpeg" | "image/png" | "image/webp" | "image/avif" | "video/mp4" | "video/quicktime" | "video/webm" | null;
+            widthPixels?: number | null;
+            heightPixels?: number | null;
+            durationMs?: number | null;
+            altText?: string | null;
+            requiredForRelease: boolean;
+            isCover: boolean;
+            focalPointX?: number | null;
+            focalPointY?: number | null;
+            /** @enum {string} */
+            originClassification: "human_created" | "ai_assisted" | "ai_generated" | "materially_ai_manipulated";
+            /** @enum {string} */
+            visibleLabelState?: "none" | "ai_assisted" | "ai_generated" | "manipulated";
+        };
+        ContentPollOption: {
+            /** Format: uuid */
+            id: string;
+            position: number;
+            text: string;
+            voteCount: number;
+        };
+        ContentPoll: {
+            question: string;
+            options: components["schemas"]["ContentPollOption"][];
+            /** @enum {string} */
+            state: "open" | "closed" | "cancelled";
+            totalVoteCount: number;
+            /** Format: date-time */
+            closesAt: string | null;
+            /** Format: uuid */
+            viewerOptionId: string | null;
+        };
+        ContentPollDraft: {
+            question: string;
+            options: string[];
+            /** Format: date-time */
+            closesAt?: string | null;
         };
         RecordFeedImpressionRequest: {
             /** Format: uuid */
@@ -4006,8 +4059,10 @@ export interface components {
         };
         CreateContentRequest: {
             /** @enum {string} */
-            mediaType: "bit" | "clip" | "image" | "vod" | "live_replay";
+            mediaType: "bit" | "clip" | "image" | "vod" | "live_replay" | "carousel" | "text" | "poll";
             caption?: string;
+            bodyText?: string;
+            poll?: components["schemas"]["ContentPollDraft"];
             /** @enum {string} */
             visibility: "public" | "followers" | "subscribers" | "private";
             /** @enum {string} */
@@ -4039,7 +4094,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            mediaType: "bit" | "clip" | "image" | "vod" | "live_replay";
+            mediaType: "bit" | "clip" | "image" | "vod" | "live_replay" | "carousel" | "text" | "poll";
             caption?: string | null;
             /** Format: uri */
             posterUrl?: string | null;

@@ -1416,6 +1416,82 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       });
       const sfwContentId = createContentResponse.json().id as string;
 
+      const textDraftResponse = await app.inject({
+        method: "POST",
+        url: "/v1/content",
+        headers: authenticatedHeaders(`text-content-create-${runId}`),
+        payload: {
+          mediaType: "text",
+          visibility: "public",
+          nsfwLabel: "none",
+          representationMode: "self_only",
+          contentSafetyPolicyAccepted: true,
+          bodyText: `  Structured text ${runId}  `
+        }
+      });
+      expect(textDraftResponse.statusCode, textDraftResponse.body).toBe(201);
+      expect(textDraftResponse.json()).toMatchObject({
+        mediaType: "text",
+        bodyText: `Structured text ${runId}`
+      });
+
+      const pollClosesAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      const pollDraftResponse = await app.inject({
+        method: "POST",
+        url: "/v1/content",
+        headers: authenticatedHeaders(`poll-content-create-${runId}`),
+        payload: {
+          mediaType: "poll",
+          visibility: "public",
+          nsfwLabel: "none",
+          representationMode: "self_only",
+          contentSafetyPolicyAccepted: true,
+          poll: {
+            question: "  Which format next?  ",
+            options: ["  Photos  ", "Video", "Text"],
+            closesAt: pollClosesAt
+          }
+        }
+      });
+      expect(pollDraftResponse.statusCode, pollDraftResponse.body).toBe(201);
+      expect(pollDraftResponse.json()).toMatchObject({
+        mediaType: "poll",
+        poll: {
+          question: "Which format next?",
+          state: "open",
+          totalVoteCount: 0,
+          closesAt: pollClosesAt,
+          viewerOptionId: null,
+          options: [
+            expect.objectContaining({ position: 0, text: "Photos", voteCount: 0 }),
+            expect.objectContaining({ position: 1, text: "Video", voteCount: 0 }),
+            expect.objectContaining({ position: 2, text: "Text", voteCount: 0 })
+          ]
+        }
+      });
+
+      const universalDraftRows = await sql<{
+        media_type: string;
+        body_text: string | null;
+        poll_option_count: number;
+      }[]>`
+        select
+          content.media_type,
+          content.body_text,
+          (
+            select count(*)::integer
+            from content_poll_options option
+            where option.content_item_id = content.id
+          ) as poll_option_count
+        from content_items content
+        where content.id in (${textDraftResponse.json().id as string}, ${pollDraftResponse.json().id as string})
+        order by content.media_type
+      `;
+      expect(universalDraftRows).toEqual([
+        { media_type: "poll", body_text: null, poll_option_count: 3 },
+        { media_type: "text", body_text: `Structured text ${runId}`, poll_option_count: 0 }
+      ]);
+
       const contentCreateReceipt = await sql<{ expires_at: string }[]>`
         select receipt.expires_at::text as expires_at
         from idempotency_keys receipt

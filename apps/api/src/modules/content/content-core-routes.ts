@@ -74,6 +74,14 @@ export async function registerContentCoreRoutes(
       });
     }
 
+    const compositionError = validateCreateCompositionBody(body);
+    if (compositionError) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: compositionError
+      });
+    }
+
     try {
       if (
         (typeof body.representationMode !== "string" ||
@@ -87,9 +95,12 @@ export async function registerContentCoreRoutes(
       }
 
       const abusePolicy = await resolveContentCreationAbusePolicy(options.contentRepository);
+      const poll = normalizePollDraft(body.poll);
       const draftBody = {
         mediaType: body.mediaType,
         caption: typeof body.caption === "string" ? body.caption : null,
+        bodyText: typeof body.bodyText === "string" ? body.bodyText.trim() : null,
+        ...(poll ? { poll } : {}),
         visibility: body.visibility,
         nsfwLabel: body.nsfwLabel,
         representationMode: body.representationMode as NonNullable<CreateContentRequest["representationMode"]>,
@@ -509,6 +520,71 @@ export async function registerContentCoreRoutes(
       throw error;
     }
   });
+}
+
+function validateCreateCompositionBody(body: Partial<CreateContentRequest>): string | null {
+  if ("bodyText" in body) {
+    if (typeof body.bodyText !== "string") {
+      return "bodyText must be a string";
+    }
+    const length = body.bodyText.trim().length;
+    if (length < 1 || length > 10_000) {
+      return "bodyText must be between 1 and 10000 characters";
+    }
+    if (body.mediaType !== "text") {
+      return "bodyText is only valid for text content";
+    }
+  }
+
+  if ("poll" in body) {
+    if (body.mediaType !== "poll") {
+      return "poll is only valid for poll content";
+    }
+    if (!body.poll || typeof body.poll !== "object" || Array.isArray(body.poll)) {
+      return "poll must include a question and two to four options";
+    }
+    if (
+      typeof body.poll.question !== "string" ||
+      body.poll.question.trim().length < 1 ||
+      body.poll.question.trim().length > 500
+    ) {
+      return "poll question must be between 1 and 500 characters";
+    }
+    if (!Array.isArray(body.poll.options) || body.poll.options.length < 2 || body.poll.options.length > 4) {
+      return "poll must include two to four options";
+    }
+    const options = body.poll.options.map((option) =>
+      typeof option === "string" ? option.trim() : ""
+    );
+    if (options.some((option) => option.length < 1 || option.length > 200)) {
+      return "poll options must be between 1 and 200 characters";
+    }
+    if (new Set(options.map((option) => option.toLocaleLowerCase("en-US"))).size !== options.length) {
+      return "poll options must be unique";
+    }
+    if (
+      body.poll.closesAt !== undefined &&
+      body.poll.closesAt !== null &&
+      (typeof body.poll.closesAt !== "string" ||
+        Number.isNaN(Date.parse(body.poll.closesAt)) ||
+        Date.parse(body.poll.closesAt) <= Date.now())
+    ) {
+      return "poll closesAt must be a future ISO date-time or null";
+    }
+  }
+
+  return null;
+}
+
+function normalizePollDraft(
+  poll: CreateContentRequest["poll"] | undefined
+): CreateContentRequest["poll"] | undefined {
+  if (!poll) return undefined;
+  return {
+    question: poll.question.trim(),
+    options: poll.options.map((option) => option.trim()),
+    ...(poll.closesAt !== undefined ? { closesAt: poll.closesAt } : {})
+  };
 }
 
 function validateUpdateContentBody(body: Partial<UpdateContentRequest> | undefined): string | null {

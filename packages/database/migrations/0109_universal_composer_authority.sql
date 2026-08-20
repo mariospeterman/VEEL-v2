@@ -12,8 +12,8 @@ alter table content_items
     body_text is null or char_length(body_text) between 1 and 10000
   ),
   add constraint content_items_text_shape_check check (
-    (media_type = 'text' and body_text is not null)
-    or (media_type <> 'text' and body_text is null)
+    media_type = 'text'
+    or body_text is null
   );
 
 alter table media_assets
@@ -350,6 +350,8 @@ as $$
 declare
   v_content_item_id uuid;
   v_media_type text;
+  v_publish_state text;
+  v_body_text text;
   v_option_count integer;
 begin
   if tg_table_name = 'content_items' then
@@ -361,7 +363,8 @@ begin
     end;
   end if;
 
-  select media_type into v_media_type
+  select media_type, publish_state, body_text
+  into v_media_type, v_publish_state, v_body_text
   from content_items
   where id = v_content_item_id;
 
@@ -371,23 +374,33 @@ begin
   end if;
 
   if v_media_type = 'poll' then
-    if not exists (
+    if v_publish_state not in ('draft', 'unpublished') and not exists (
       select 1 from content_polls poll where poll.content_item_id = v_content_item_id
     ) then
       raise exception using errcode = '23514', message = 'poll_definition_required';
     end if;
 
-    select count(*) into v_option_count
-    from content_poll_options option
-    where option.content_item_id = v_content_item_id;
+    if exists (
+      select 1 from content_polls poll where poll.content_item_id = v_content_item_id
+    ) then
+      select count(*) into v_option_count
+      from content_poll_options option
+      where option.content_item_id = v_content_item_id;
 
-    if v_option_count not between 2 and 4 then
-      raise exception using errcode = '23514', message = 'poll_requires_two_to_four_options';
+      if v_option_count not between 2 and 4 then
+        raise exception using errcode = '23514', message = 'poll_requires_two_to_four_options';
+      end if;
     end if;
   elsif exists (
     select 1 from content_polls poll where poll.content_item_id = v_content_item_id
   ) then
     raise exception using errcode = '23514', message = 'poll_definition_requires_poll_content';
+  end if;
+
+  if v_media_type = 'text'
+     and v_publish_state not in ('draft', 'unpublished')
+     and v_body_text is null then
+    raise exception using errcode = '23514', message = 'text_body_required';
   end if;
 
   if tg_op = 'DELETE' then return old; end if;
@@ -396,7 +409,7 @@ end;
 $$;
 
 create constraint trigger content_items_enforce_poll_shape
-after insert or update of media_type on content_items
+after insert or update of media_type, publish_state, body_text on content_items
 deferrable initially deferred
 for each row execute function private.enforce_poll_shape();
 

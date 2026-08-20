@@ -91,6 +91,7 @@ export function createContentDraftRepositoryMethods(
             creator_user_id,
             media_type,
             caption,
+            body_text,
             visibility,
             nsfw_label
           )
@@ -99,10 +100,43 @@ export function createContentDraftRepositoryMethods(
             ${user.id},
             ${input.mediaType},
             ${input.caption ?? null},
+            ${input.bodyText ?? null},
             ${input.visibility},
             ${input.nsfwLabel}
           )
         `;
+
+        if (input.poll) {
+          await transaction`
+            insert into content_polls (
+              content_item_id,
+              question,
+              closes_at
+            )
+            values (
+              ${contentId},
+              ${input.poll.question},
+              ${input.poll.closesAt ?? null}
+            )
+          `;
+
+          for (const [position, optionText] of input.poll.options.entries()) {
+            await transaction`
+              insert into content_poll_options (
+                id,
+                content_item_id,
+                position,
+                option_text
+              )
+              values (
+                ${randomUUID()},
+                ${contentId},
+                ${position},
+                ${optionText}
+              )
+            `;
+          }
+        }
 
         await recordContentSafetyDeclaration(transaction, {
           contentId,
@@ -160,14 +194,44 @@ async function selectContentRow(
       ci.id,
       ci.media_type,
       ci.caption,
+      ci.body_text,
       ci.nsfw_label,
       u.id as creator_id,
       p.handle,
       p.display_name,
-      p.avatar_url
+      p.avatar_url,
+      poll_projection.poll
     from content_items ci
     join users u on u.id = ci.creator_user_id
     left join profiles p on p.user_id = u.id
+    left join lateral (
+      select jsonb_build_object(
+        'question', poll.question,
+        'options', coalesce((
+          select jsonb_agg(
+            jsonb_build_object(
+              'id', option.id,
+              'position', option.position,
+              'text', option.option_text,
+              'voteCount', option.vote_count
+            )
+            order by option.position
+          )
+          from content_poll_options option
+          where option.content_item_id = poll.content_item_id
+        ), '[]'::jsonb),
+        'state', poll.state,
+        'totalVoteCount', coalesce((
+          select sum(option.vote_count)
+          from content_poll_options option
+          where option.content_item_id = poll.content_item_id
+        ), 0),
+        'closesAt', poll.closes_at,
+        'viewerOptionId', null
+      ) as poll
+      from content_polls poll
+      where poll.content_item_id = ci.id
+    ) poll_projection on true
     where ci.id = ${input.contentId}
       and ci.creator_user_id = ${input.creatorUserId}
     limit 1

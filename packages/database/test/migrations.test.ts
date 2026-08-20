@@ -1154,6 +1154,9 @@ describe("database migrations", () => {
     expect(sql).toContain("delete from content_poll_options");
     expect(sql).toContain("create trigger content_poll_votes_sync_counts");
     expect(sql).toContain("poll_requires_two_to_four_options");
+    expect(sql).toContain("v_publish_state not in ('draft', 'unpublished')");
+    expect(sql).toContain("text_body_required");
+    expect(sql).toContain("update of media_type, publish_state, body_text");
     expect(sql).toContain("alter table content_poll_votes enable row level security");
     expect(sql).not.toMatch(/creator_balance|withdrawal_queue|payout_queue|escrow|private_key|seed_phrase|mnemonic/i);
     expect(downSql).toContain("drop table if exists content_poll_votes");

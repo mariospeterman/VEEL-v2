@@ -3817,6 +3817,100 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("validates universal text and poll draft inputs before repository mutation", async () => {
+    let createCalls = 0;
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        createCalls += 1;
+        return homeFeedItem;
+      },
+      async createMediaAsset() {
+        throw new Error("not implemented");
+      },
+      async findContentDetail() {
+        throw new Error("not implemented");
+      },
+      async findContentUnlockOffer() {
+        throw new Error("not implemented");
+      },
+      async findOwnedContentForUpload() {
+        throw new Error("not implemented");
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      verificationRepository: verificationRepositoryStub(),
+      contentRepository
+    });
+    await app.ready();
+
+    const duplicatePollOptions = await app.inject({
+      method: "POST",
+      url: "/v1/content",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "poll-duplicate-options"
+      },
+      payload: {
+        mediaType: "poll",
+        visibility: "public",
+        nsfwLabel: "none",
+        representationMode: "no_real_person",
+        contentSafetyPolicyAccepted: true,
+        poll: {
+          question: "Choose one",
+          options: ["Photo", " photo "]
+        }
+      }
+    });
+    expect(duplicatePollOptions.statusCode).toBe(400);
+    expect(duplicatePollOptions.json()).toMatchObject({
+      code: "validation_failed",
+      message: "poll options must be unique"
+    });
+
+    const bodyOnImage = await app.inject({
+      method: "POST",
+      url: "/v1/content",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "image-with-body"
+      },
+      payload: {
+        mediaType: "image",
+        visibility: "public",
+        nsfwLabel: "none",
+        representationMode: "no_real_person",
+        contentSafetyPolicyAccepted: true,
+        bodyText: "This belongs to a text post"
+      }
+    });
+    expect(bodyOnImage.statusCode).toBe(400);
+    expect(bodyOnImage.json()).toMatchObject({
+      code: "validation_failed",
+      message: "bodyText is only valid for text content"
+    });
+    expect(createCalls).toBe(0);
+
+    await app.close();
+  });
+
   it("blocks content draft creation when the daily server quota is reached", async () => {
     const contentRepository: ContentRepository = {
       async createDraft(input) {

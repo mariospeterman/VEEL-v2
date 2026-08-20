@@ -56,8 +56,12 @@ family, and the candidate Bunny Storage plus Optimizer image boundary. Migration
 `content_items`/`media_assets` and adds subordinate poll state with bounded positions, one current
 vote per user, durable idempotency evidence, option locking, transactional counters, RLS, and a
 reversible down migration. The full forward chain and `0109` rollback/reapply passed against an
-isolated PostgreSQL database; API contracts, repository mutations, frontend composer/renderers,
-release-all-assets enforcement, and browser/provider proof remain active-slice work.
+isolated PostgreSQL database. OpenAPI/runtime media-type contracts and atomic initial text/poll
+draft creation now reuse the canonical create route, normalize bounded plain text and poll values,
+preserve lifetime idempotency, allow incomplete private drafts, and enforce completed text/poll
+shape when publication begins. Composition autosave/reorder/remove mutations, universal feed/detail
+projections, frontend composer/renderers, release-all-assets enforcement, voting, and browser/provider
+proof remain active-slice work.
 
 Merged Convergence 01 has one deterministic recipient-KYC policy resolver for global mode, active
 account override, product, normalized jurisdiction, and active risk evidence; `risk_based` remains

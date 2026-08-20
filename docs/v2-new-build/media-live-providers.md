@@ -22,7 +22,7 @@ Non-goals:
 
 Current implementation state:
 
-- `POST /v1/content` creates a server-owned content draft for app-ready users.
+- `POST /v1/content` creates one server-owned content draft for app-ready users across video, image, carousel, text, and poll formats. Initial plain text and poll definitions are validated, normalized, and stored in the same transaction as the canonical `content_items` row; incomplete text/poll drafts remain private and fail closed at submission until their required shape is complete.
 - Content draft creation persists a non-expiring server-only receipt keyed by actor, action, and `Idempotency-Key`. An exact replay returns the original draft, changed-input reuse fails with `409`, and retries never consume draft quota twice.
 - Adult/explicit draft creation requires a first-party representation declaration and explicit policy acceptance. `self_only` reuses the creator's valid Didit-backed adult-publisher identity and records one scoped consent; MCP cannot accept this declaration for the creator.
 - `POST /v1/content` enforces a backend-owned draft quota before inserting content. The default policy is 20 drafts per rolling 24 hours, and an active `safety.content_creation_abuse_policy` admin software-policy flag can tighten or relax the draft count/window without giving the browser, money, tiers, Mutuals, recommendations, messages, or moderation priority any control.

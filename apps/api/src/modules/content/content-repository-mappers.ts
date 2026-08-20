@@ -17,6 +17,9 @@ export function toContentItem(
     },
     mediaType: row.media_type,
     caption: row.caption,
+    ...(row.body_text !== undefined ? { bodyText: row.body_text } : {}),
+    ...(row.media_assets !== undefined ? { mediaAssets: row.media_assets } : {}),
+    ...(row.poll !== undefined ? { poll: normalizeContentPoll(row.poll) } : {}),
     posterUrl,
     playback: playbackForRow(row as Partial<PlaybackProjectionRow>, accessState),
     accessState,
@@ -31,6 +34,16 @@ export function toContentItem(
     ...(typeof row.viewer_following_creator === "boolean"
       ? { viewerFollowingCreator: row.viewer_following_creator }
       : {})
+  };
+}
+
+function normalizeContentPoll(
+  poll: Exclude<ContentItem["poll"], undefined>
+): Exclude<ContentItem["poll"], undefined> {
+  if (!poll) return poll;
+  return {
+    ...poll,
+    closesAt: poll.closesAt ? new Date(poll.closesAt).toISOString() : null
   };
 }
 
