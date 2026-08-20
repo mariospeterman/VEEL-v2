@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: canonical implementation and production-completion order
-Last updated: 2026-08-17
+Last updated: 2026-08-20
 Source of truth: yes
 
 Owns:
@@ -58,11 +58,29 @@ The historical milestones below remain useful implementation context. New produc
 | 09 | Enterprise managed creators | `CODE_COMPLETE_PROVIDER_BLOCKED` and merged through PR #50 at `0627737`; contracts, reversible migration, authorization and durable idempotency, normalized KYB/entitlement and bilateral agreement gates, exact allocation/reporting, operations UI, 185 focused tests, four real-Postgres journeys, protected CI, and desktop/mobile browser proof are green. Real KYB callbacks, approved Enterprise commercial evidence, and Solana devnet allocation settlement remain pre-production gates. |
 | 10 | Frontend system, accessibility, cross-browser, and PWA completion | `CODE_COMPLETE_PROVIDER_BLOCKED` on PR #51; the direct wallet-first entry, deferred wallet/payment runtimes, unified app shell, accessibility repairs, installable privacy-safe PWA, desktop/mobile Chromium, and Firefox evidence are green. Linux CI WebKit must pass before merge; real wallet extensions, Privy target domains/devices, push delivery, installed iOS PWA, screen-reader/zoom, and staging Web Vitals remain pre-production evidence gates. |
 | 11 | Actual deployment, observability, recovery, and legal launch | `CODE_COMPLETE_PROVIDER_BLOCKED`: release operations merged through PRs #52–#55, and merge `4860133` produced verified immutable images/manifest in run `32043723824`. Convergence run `32044089602` verified the artifact and failed closed before deployment on absent shared staging, provider, operations, legal, and hosting configuration. Those inputs plus final counsel and explicit production approval remain external pre-production gates. |
-| Post-core | Expanded Mutuals, WeVid-native Product Offers plus lightweight Orders/Fulfillment, adult live, full AI/MCP, NFT/transferable passes, resale, custom contracts, and uncommitted advanced Enterprise work | Separately gated and disabled or absent; physical commerce reuses the Slice 06 payment boundary and requires seller/trader, product-safety, shipping/privacy, tax, refund, and operations approval before code |
+| Convergence 01 | policy and eligibility | Next unfinished slice: unify risk-based recipient monetisation/KYC policy, adult-publisher eligibility, viewer content preference, and indexed content eligibility without merging those authorities |
+| Convergence 02 | Universal composer | Pending Convergence 01: one draft lifecycle and renderer family for photo, video, carousel, mixed media, text, and polls |
+| Convergence 03 | Analytics Core | Pending Convergence 02: one versioned metric registry, typed projections, deterministic reconciliation, explicit freshness/privacy, and one authorized query service |
+| Convergence 04 | Analytics surfaces | Pending Convergence 03: user, creator, Enterprise, admin, export, and later MCP surfaces consume identical authorized metric objects |
+| Convergence 05 | Scalable realtime | Pending Convergence 04: private scoped Broadcast transports minimal invalidations; canonical APIs remain truth and reconnect gaps recover safely |
+| Convergence 06 | Consumer social experience | Pending Convergence 05: one accessible action rail, comments sheet, replies, comment likes, mentions, internal shares, hashtags, polls, and responsive UX |
+| Convergence 07 | Remote MCP profile bridge | Pending Convergence 06 and current official protocol re-verification: stateless OAuth profile/analytics/private-draft preparation bridge with no hosted WeVid model or consequential direct actions |
+| Convergence 08 | MCP media and provenance bridge | Pending Convergence 07: short-lived private-draft media capabilities, quarantine/provider verification, structured provenance, trusted human review, and no MCP publish endpoint |
+| Separate add-on | `wevid-agency` | Only after the core bridge: a user-owned, separately authorized package for external AI, sourced research, local FFmpeg, and optional user-owned generation providers; it is not part of the WeVid API runtime and requires a separately authorized repository boundary |
+| Deferred post-core | WeVid-native Product Offers plus lightweight Orders/Fulfillment, adult live, expanded Mutuals, NFT/transferable passes, resale, custom contracts, and uncommitted advanced Enterprise work | Separately gated and disabled or absent; physical commerce reuses the Slice 06 payment boundary and requires seller/trader, product-safety, shipping/privacy, tax, refund, and operations approval before code |
 
 Core SFW launch requires Slices 00–07 and 10–11. Slice 08 is required only before recurring platform plans or Profile Memberships are sold. Slice 09 is required only before Enterprise customers are onboarded. Existing safe foundations for conditional/post-core work may remain, but incomplete capabilities stay hidden, disabled, and fail-closed.
 
-After Launch 11 code merges, its remaining work is pre-production staging convergence and release-candidate proof; post-core physical commerce, expanded Mutuals, adult media/live, and full AI/MCP stay separately gated.
+Launch 11's remaining provider, hosting, legal, and production work stays fail-closed as pre-production
+staging convergence rather than blocking independent code slices. The ordered Convergence 01–08 program
+then becomes the canonical implementation sequence, one protected short-lived PR at a time. It reuses
+existing identity, session, content, payment, entitlement, provider, admin, and audit authorities; it must
+not create parallel policy, eligibility, composer, renderer, analytics, realtime, OAuth, or MCP systems.
+WeVid Core owns deterministic analytics and the scoped data/action bridge, but hosts no LLM or model-key
+gateway. The optional WeVid Agency remains a separate, user-owned add-on and publication stays human-controlled.
+
+The next unfinished slice is **Convergence 01 — policy and eligibility** on
+`codex/converge-01-policy-eligibility`.
 
 Each completed slice requires the actual UI-to-database/provider path, authorization and runtime validation, focused unit and real-Postgres integration proof, browser proof, operational recovery, canonical docs updates, and redacted provider staging evidence when a provider is involved. Mocks prove application logic only.
 
