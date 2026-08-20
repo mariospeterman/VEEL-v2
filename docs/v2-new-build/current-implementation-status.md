@@ -238,7 +238,7 @@ Public product copy and API metadata use WeVid and Support. Technical package sc
 
 ## P0 Before Broad Expansion
 
-1. Continue migrating money/access/admin/safety mutations onto the shared Postgres transaction helper slice by slice; payment submission settlement is already on the shared boundary.
+1. Continue migrating money/access/admin/safety mutations onto the shared Postgres transaction helper slice by slice; payment submission settlement and refund/dispute request creation are already on the shared boundary.
 2. Continue migrating route modules onto shared idempotency helpers, route-policy/RBAC, route-specific rate-limit presets, and test factory helpers. The first admin mutation routes are migrated; money/access/safety routes still need slice-by-slice adoption and durable generic idempotency conflict behavior where route-specific stores are insufficient.
 3. Obtain Bunny Shield direct-Stream-TUS and Livepeer moderation/suspension staging evidence. Until then moderation remains fail closed and adult live remains disabled.
 4. Run live sandbox proof for one launch-approved age provider and for the separate Didit creator/adult-publisher identity workflows. Code, signed webhook handling, replay protection, capability projection, and the onboarding shortcut are wired; provider credentials, workflow IDs, callbacks, retention approval, and operational evidence remain launch blockers.
