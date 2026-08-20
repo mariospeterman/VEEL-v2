@@ -329,18 +329,7 @@ export function createProfileDashboardRepositoryMethods(
           limit 1
         `;
         const kyc = kycRows[0];
-        const kycState: CreatorOnboardingRow["kyc_state"] =
-          !kycRequired
-            ? "not_required"
-            : kyc?.status === "valid" &&
-                (kyc.assurance_level === "high" || kyc.assurance_level === "documentary") &&
-                (!kyc.expires_at || kyc.expires_at > new Date())
-              ? "verified"
-              : kyc?.status === "pending"
-                ? "pending"
-                : kyc?.status === "invalid" || kyc?.status === "blocked"
-                  ? "failed"
-                  : "required";
+        const kycState = resolveCreatorOnboardingKycState(kycRequired, kyc);
 
         const readinessRows = await transaction<{
           has_profile: boolean;
@@ -491,4 +480,30 @@ export function createProfileDashboardRepositoryMethods(
       });
     }
   };
+}
+
+export function resolveCreatorOnboardingKycState(
+  kycRequired: boolean,
+  kyc:
+    | { status: string; assurance_level: string; expires_at: Date | null }
+    | undefined,
+  now = new Date()
+): CreatorOnboardingRow["kyc_state"] {
+  if (!kycRequired) {
+    return "not_required";
+  }
+  if (
+    kyc?.status === "valid" &&
+    (kyc.assurance_level === "high" || kyc.assurance_level === "documentary") &&
+    (!kyc.expires_at || kyc.expires_at > now)
+  ) {
+    return "verified";
+  }
+  if (kyc?.status === "pending") {
+    return "pending";
+  }
+  if (kyc?.status === "invalid" || kyc?.status === "blocked" || kyc?.status === "revoked") {
+    return "failed";
+  }
+  return "required";
 }
