@@ -212,7 +212,9 @@ as $$
     cross join lateral (values
       ('support', settings.support_enabled),
       ('content_unlock', settings.content_unlocks_enabled),
+      ('live_pass', settings.live_passes_enabled),
       ('event_access_pass', settings.live_passes_enabled),
+      ('event_ticket', settings.live_passes_enabled),
       ('paid_message', settings.paid_messages_enabled),
       ('creator_subscription', settings.subscriptions_enabled)
     ) product(product_type, enabled)
@@ -479,10 +481,10 @@ as $$
                   and membership.creator_user_id = ci.creator_user_id
                   and membership.scope = 'creator'
                   and membership.state in ('active', 'renewal_pending', 'grace_period')
-                  and (
-                    membership.current_period_ends_at is null
-                    or membership.current_period_ends_at > now()
-                  )
+                  and membership.current_period_starts_at is not null
+                  and membership.current_period_starts_at <= now()
+                  and membership.current_period_ends_at is not null
+                  and membership.current_period_ends_at > now()
               )
               or exists (
                 select 1 from entitlements entitlement

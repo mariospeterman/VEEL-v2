@@ -1114,8 +1114,12 @@ describe("database migrations", () => {
     expect(sql).toContain("'risk_threshold_required'");
     expect(sql).toContain("'jurisdiction_policy_required'");
     expect(sql).toContain("upper(btrim(configured_jurisdiction)) = v_jurisdiction");
+    expect(sql).toContain("('live_pass', settings.live_passes_enabled)");
+    expect(sql).toContain("('event_ticket', settings.live_passes_enabled)");
     expect(sql).toContain("create function private.eligible_content");
     expect(sql).toContain("case when p_viewer_user_id is null then 'sfw' else 'both' end");
+    expect(sql).toContain("membership.current_period_starts_at is not null");
+    expect(sql).toContain("membership.current_period_ends_at is not null");
     expect(sql).toContain("nsfw_preference = default_feed_mode");
     expect(sql).toContain("default_feed_mode in ('recommended', 'following')");
     expect(sql).toContain("subscriptions_content_eligibility_idx");

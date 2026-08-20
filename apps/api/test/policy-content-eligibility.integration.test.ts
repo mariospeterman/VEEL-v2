@@ -32,8 +32,9 @@ describeIntegration("canonical policy and content eligibility against Postgres",
       kyc_mode: "disabled" | "risk_based" | "required";
       policy_version: string;
       kyc_required_jurisdictions: string[];
+      kyc_required_product_types: string[];
     }>>`
-      select kyc_mode, policy_version, kyc_required_jurisdictions
+      select kyc_mode, policy_version, kyc_required_jurisdictions, kyc_required_product_types
       from recipient_monetisation_policies
       where policy_key = 'default'
     `;
@@ -249,11 +250,31 @@ describeIntegration("canonical policy and content eligibility against Postgres",
         insert into creator_monetisation_settings (
           user_id, state, earning_state, tax_profile_state,
           earnings_recipient_wallet_id, earnings_terms_version,
-          earnings_terms_accepted_at, support_enabled, subscriptions_enabled
+          earnings_terms_accepted_at, support_enabled, live_passes_enabled,
+          subscriptions_enabled
         ) values (
           ${creatorId}, 'active', 'ready', 'not_required', ${creatorWalletId},
-          'wevid-creator-earnings-v1', now(), true, true
+          'wevid-creator-earnings-v1', now(), true, true, true
         )
+      `;
+      await sql`
+        update recipient_monetisation_policies
+        set kyc_required_product_types = array['live_pass']
+        where policy_key = 'default'
+      `;
+      const livePolicy = await sql<Array<{
+        kyc_required: boolean;
+        decision_reasons: string[];
+      }>>`
+        select kyc_required, decision_reasons
+        from private.resolve_creator_monetisation_policy(${creatorId})
+      `;
+      expect(livePolicy[0]?.kyc_required).toBe(true);
+      expect(livePolicy[0]?.decision_reasons).toContain("product_policy_required");
+      await sql`
+        update recipient_monetisation_policies
+        set kyc_required_product_types = ${policySnapshot[0]?.kyc_required_product_types ?? []}
+        where policy_key = 'default'
       `;
       const readiness = await sql<Array<{
         product_type: string;
@@ -414,6 +435,19 @@ describeIntegration("canonical policy and content eligibility against Postgres",
         [safeContentId, adultContentId, followerContentId, subscriberContentId].sort()
       );
 
+      await sql`
+        update subscriptions
+        set state = 'renewal_pending',
+            current_period_starts_at = null,
+            current_period_ends_at = null
+        where id = ${membershipId}
+      `;
+      const authorizationOnly = await sql<Array<{ content_item_id: string }>>`
+        select content_item_id from private.eligible_content(${viewerId}, 'both')
+        where content_item_id = ${subscriberContentId}
+      `;
+      expect(authorizationOnly).toEqual([]);
+
       await sql`delete from subscriptions where id = ${membershipId}`;
       await sql`
         insert into entitlements (
@@ -505,7 +539,8 @@ describeIntegration("canonical policy and content eligibility against Postgres",
         update recipient_monetisation_policies
         set kyc_mode = ${policySnapshot[0]?.kyc_mode ?? "risk_based"},
             policy_version = ${policySnapshot[0]?.policy_version ?? "recipient-risk-v1"},
-            kyc_required_jurisdictions = ${policySnapshot[0]?.kyc_required_jurisdictions ?? []}
+            kyc_required_jurisdictions = ${policySnapshot[0]?.kyc_required_jurisdictions ?? []},
+            kyc_required_product_types = ${policySnapshot[0]?.kyc_required_product_types ?? []}
         where policy_key = 'default'
       `;
       await sql`

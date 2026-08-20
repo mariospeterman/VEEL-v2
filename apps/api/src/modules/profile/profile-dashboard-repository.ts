@@ -286,7 +286,9 @@ export function createProfileDashboardRepositoryMethods(
           with requested_products (product_type, enabled) as (values
             ('support', ${input.request.products.support}),
             ('content_unlock', ${input.request.products.contentUnlocks}),
+            ('live_pass', ${input.request.products.eventAccessAndLive}),
             ('event_access_pass', ${input.request.products.eventAccessAndLive}),
+            ('event_ticket', ${input.request.products.eventAccessAndLive}),
             ('paid_message', ${input.request.products.paidMessages}),
             ('creator_subscription', ${input.request.products.memberships})
           ),
