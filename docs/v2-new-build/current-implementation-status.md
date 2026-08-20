@@ -50,6 +50,14 @@ draft lifecycle and renderer family for photo, video, carousel, mixed media, tex
 reuse the canonical Create route, safety/publication workflow, Bunny video boundary, viewer-relative
 eligibility, and feed/detail/profile projections; image-provider acceptance remains a separately
 recorded staging gate and cannot create a second content, upload, moderation, or rendering system.
+The accepted product contract now fixes the three progressive Create choices, one server draft,
+ordered/revisioned assets, plain structured text, transactional polls, provenance, one renderer
+family, and the candidate Bunny Storage plus Optimizer image boundary. Migration `0109` extends
+`content_items`/`media_assets` and adds subordinate poll state with bounded positions, one current
+vote per user, durable idempotency evidence, option locking, transactional counters, RLS, and a
+reversible down migration. The full forward chain and `0109` rollback/reapply passed against an
+isolated PostgreSQL database; API contracts, repository mutations, frontend composer/renderers,
+release-all-assets enforcement, and browser/provider proof remain active-slice work.
 
 Merged Convergence 01 has one deterministic recipient-KYC policy resolver for global mode, active
 account override, product, normalized jurisdiction, and active risk evidence; `risk_based` remains
