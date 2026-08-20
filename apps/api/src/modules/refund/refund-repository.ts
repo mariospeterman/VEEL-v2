@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
+import {
+  resolvePostgresClient,
+  type PostgresSql,
+  withPostgresTransaction
+} from "../../shared/postgres.js";
 import type { RefundDisputeRequest, RefundRepository } from "./types.js";
 
 export class RefundRepositoryConfigurationError extends Error {
@@ -97,7 +101,7 @@ export function createPostgresRefundRepository(database?: string | PostgresSql):
       };
     },
     async createRequest(input) {
-      const rows = await sql.begin(async (transaction) => {
+      const rows = await withPostgresTransaction(sql, async (transaction) => {
         const insertedRows = await transaction<RefundDisputeRow[]>`
           with target_user as (
             select id
