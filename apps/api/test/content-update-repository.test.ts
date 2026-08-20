@@ -6,11 +6,11 @@ import { createContentUpdateRepositoryMethods } from "../src/modules/content/con
 describe("content update repository", () => {
   it("withdraws published content when its safety declaration changes", async () => {
     const queries: string[] = [];
-    const values: unknown[] = [];
+    const queryCalls: Array<{ query: string; values: unknown[] }> = [];
     const transaction = vi.fn((strings: TemplateStringsArray, ...queryValues: unknown[]) => {
       const query = strings.join("?");
       queries.push(query);
-      values.push(...queryValues);
+      queryCalls.push({ query, values: queryValues });
       if (query.includes("with actor as")) {
         return Promise.resolve([{
           id: "00000000-0000-4000-8000-000000000040",
@@ -51,8 +51,12 @@ describe("content update repository", () => {
     expect(updateQuery).toContain("moderation_state = case");
     expect(updateQuery).toContain("then 'pending'");
     expect(updateQuery).toContain("published_at = case");
+    expect(updateQuery).toContain("safety.representation_mode is distinct from");
     expect(updateQuery).toContain("declaration.representation_mode");
-    expect(values).toContain("self_only");
-    expect(values).not.toContain("not_declared");
+    const declarationCall = queryCalls.find(({ query }) =>
+      query.includes("insert into content_safety_declarations")
+    );
+    expect(declarationCall?.values).toContain("self_only");
+    expect(declarationCall?.values).not.toContain("not_declared");
   });
 });

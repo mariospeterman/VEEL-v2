@@ -48,6 +48,19 @@ export function createContentUpdateRepositoryMethods(
             where supabase_user_id = ${input.supabaseUserId}
             limit 1
           ),
+          current_safety as (
+            select
+              ci.id,
+              coalesce((
+                select declaration.representation_mode
+                from content_safety_declarations declaration
+                where declaration.content_item_id = ci.id
+                  and declaration.state = 'active'
+                limit 1
+              ), 'not_declared') as representation_mode
+            from content_items ci
+            where ci.id = ${input.contentId}
+          ),
           updated_content as (
             update content_items ci
             set
@@ -57,27 +70,37 @@ export function createContentUpdateRepositoryMethods(
               publish_state = case
                 when ci.publish_state = 'published' and (
                   (${Boolean(input.nsfwLabel)} and ci.nsfw_label is distinct from ${input.nsfwLabel ?? ""})
-                  or ${Boolean(input.representationMode)}
+                  or (
+                    ${Boolean(input.representationMode)}
+                    and safety.representation_mode is distinct from ${input.representationMode ?? "not_declared"}
+                  )
                 ) then 'submitted_for_review'
                 else ci.publish_state
               end,
               moderation_state = case
                 when ci.publish_state = 'published' and (
                   (${Boolean(input.nsfwLabel)} and ci.nsfw_label is distinct from ${input.nsfwLabel ?? ""})
-                  or ${Boolean(input.representationMode)}
+                  or (
+                    ${Boolean(input.representationMode)}
+                    and safety.representation_mode is distinct from ${input.representationMode ?? "not_declared"}
+                  )
                 ) then 'pending'
                 else ci.moderation_state
               end,
               published_at = case
                 when ci.publish_state = 'published' and (
                   (${Boolean(input.nsfwLabel)} and ci.nsfw_label is distinct from ${input.nsfwLabel ?? ""})
-                  or ${Boolean(input.representationMode)}
+                  or (
+                    ${Boolean(input.representationMode)}
+                    and safety.representation_mode is distinct from ${input.representationMode ?? "not_declared"}
+                  )
                 ) then null
                 else ci.published_at
               end,
               updated_at = now()
-            from actor
+            from actor, current_safety safety
             where ci.id = ${input.contentId}
+              and safety.id = ci.id
               and ci.creator_user_id = actor.id
               and ci.state <> 'deleted'
             returning ci.id, ci.creator_user_id, ci.media_type, ci.caption, ci.nsfw_label

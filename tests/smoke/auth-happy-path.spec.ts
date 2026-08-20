@@ -157,7 +157,7 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   await page.getByLabel(/every person shown is 18\+ and consented/).check();
   const metadataUpdate = page.waitForRequest((request) =>
     request.method() === "PATCH" &&
-    new URL(request.url()).pathname === `/v1/content/${contentId}` &&
+    new URL(request.url()).pathname === `/v1/content/${draftContentId}` &&
     request.postDataJSON()?.nsfwLabel === "explicit"
   );
   await page.getByRole("button", { name: "Submit for review" }).click();
