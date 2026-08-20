@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: implementation status, known gaps, and next hardening priorities
-Last updated: 2026-08-19
+Last updated: 2026-08-20
 Source of truth: yes
 
 Owns:
@@ -37,12 +37,12 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `56e1e6c` (green baseline through PR #77) |
-| Active slice | No product implementation slice; pre-production staging convergence is the external gate |
-| Branch | Live source: the single open PR carrying `wevid-active-slice`; none at this snapshot |
-| Pull request | None at this snapshot |
-| State | `CODE_COMPLETE_PROVIDER_BLOCKED` |
-| Slice blockers | Shared staging URLs/database/Supabase, Privy, Solana/Helius, Bunny, Livepeer, verification, notification, Redis/OTel, feature, legal, hosting/OIDC, and provider-dashboard configuration are absent. Explicit production approval is also required. |
+| Merged baseline | `main` at `6958ae8` (green baseline through PR #80) |
+| Active slice | Launch 11 hardening — Event Access transaction boundary |
+| Branch | `codex/launch-event-access-transaction-boundary` |
+| Pull request | PR #81 |
+| State | `MERGE_READY` |
+| Slice blockers | No code blocker; provider/staging gates remain external and unchanged. |
 | Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
 
 The merged entry slice server-resolves login/onboarding state, presents one immediate primary
@@ -74,9 +74,13 @@ migrated in later bounded slices. Supabase recovery subjects remain exclusively 
 integration, desktop/mobile Chromium, desktop Firefox, accessibility, PWA, and visible-browser
 entry proofs are green. Real provider acceptance remains a pre-production gate.
 
-The current green `main` merge at `56e1e6c` passed protected CI run `32311866844`, isolated
+The current green `main` merge at `6958ae8` passed protected CI run `32316644344`, isolated
 Postgres integration, database migration checks, security analysis, build, and the full Chromium,
-Firefox, and WebKit browser smoke matrix. The reviewed maintenance queue also merged CI budget
+Firefox, and WebKit browser smoke matrix. Release-artifact run `32317177553` built and attested the
+web, API, and worker images and emitted the immutable manifest for that exact source. Staging
+convergence run `32317729104` then verified the manifest and attestations and failed closed at its
+configuration gate because the recorded shared staging/provider/legal values remain absent; no
+deployment or migration was attempted. The reviewed maintenance queue also merged CI budget
 hardening (PR #78), `jose` 6.2.9 (PR #74), Zustand 5.0.15 (PR #76), and Next.js 16.3.1
 (PR #77). The isolated `@solana-program/system` 0.13.0 upgrade (PR #75) was rejected because it
 requires `@solana/kit` 7 while the web provider boundary intentionally remains on Kit 6.10; that
@@ -201,7 +205,7 @@ Public product copy and API metadata use WeVid and Support. Technical package sc
 - Launch 04 adds the canonical follow graph, projected social/engagement counts, durable command and impression receipts, server-owned deterministic Home/Bits ranking, opaque frozen compound cursors, real mixed/vertical web feeds, active-item-only playback, keyboard-operable feed tabs, follow/profile integration, and desktop/mobile browser proof. Migration `0094` is reversible, indexes every new foreign-key access path, relocates `pgcrypto` from exposed `public` to `extensions`, and produces a clean local Supabase security/performance advisor result; the representative eligibility query completed its local `EXPLAIN (ANALYZE, BUFFERS)` proof in under one millisecond on the test dataset.
 - Provider media readiness only updates playback/readiness projection; moderation approval and public access remain separate backend/admin-owned truth.
 - Media safety has one canonical release authority through migrations `0088` and `0089`: uploader declarations, reusable verified performer subjects, content-scoped consent, quarantine/review cases, minimized provider-signal records, appeals/reporting workflow records, durable moderation jobs, release-enforcement triggers, and admin queue health/dead-letter retry visibility. The worker fails closed to human review until the exact provider path is staging-approved.
-- Native SOL and one-time USDC payment intents, noncustodial creator split settlement facts, explicit exact-version checkout consent before capability/signature acceptance, short-lived capability-token Solana Pay checkout, exact-pinned Commerce Kit query/SVG-QR interoperability, server-composed unsigned split transaction, submitted-signature capture, exact backend settlement verification at configured finality, shared transaction boundary for payment submission settlement, content unlock entitlement grant after confirmed settlement, and one shared browser checkout for Support, content unlock, paid live, Event Access Pass, and paid messages.
+- Native SOL and one-time USDC payment intents, noncustodial creator split settlement facts, explicit exact-version checkout consent before capability/signature acceptance, short-lived capability-token Solana Pay checkout, exact-pinned Commerce Kit query/SVG-QR interoperability, server-composed unsigned split transaction, submitted-signature capture, exact backend settlement verification at configured finality, shared transaction boundaries for payment submission settlement and Event Access inventory reservation/issuance, content unlock entitlement grant after confirmed settlement, and one shared browser checkout for Support, content unlock, paid live, Event Access Pass, and paid messages.
 - Payment intents store withdrawal-waiver and terms evidence only after an explicit authenticated consent action. Migration `0096` removes the historical automatic timestamp default, marks legacy confirmation payload evidence for review, cancels in-flight waiver-required intents that cannot prove consent, and adds a database transition guard so settlement cannot create new confirmed access with missing consent.
 - Confirmed payment settlement now writes durable receipt, receipt line, compliance-ledger, in-app confirmation delivery, pending email-provider delivery, notification, and audit evidence in the same backend transaction used for entitlement/product settlement.
 - Activity payment projections and `/app/activity` now expose backend-derived receipt/confirmation/withdrawal-review state and a real refund/access-issue review request form for exceptions. This is review-state only: no automatic refund, custody, balance, payout queue, or access revocation is executed from the user surface.
@@ -238,7 +242,7 @@ Public product copy and API metadata use WeVid and Support. Technical package sc
 
 ## P0 Before Broad Expansion
 
-1. Continue migrating money/access/admin/safety mutations onto the shared Postgres transaction helper slice by slice; payment submission settlement and refund/dispute request creation are already on the shared boundary.
+1. Continue migrating money/access/admin/safety mutations onto the shared Postgres transaction helper slice by slice; payment submission settlement, refund/dispute request creation, and Event Access inventory reservation/issuance are already on the shared boundary.
 2. Continue migrating route modules onto shared idempotency helpers, route-policy/RBAC, route-specific rate-limit presets, and test factory helpers. The first admin mutation routes are migrated; money/access/safety routes still need slice-by-slice adoption and durable generic idempotency conflict behavior where route-specific stores are insufficient.
 3. Obtain Bunny Shield direct-Stream-TUS and Livepeer moderation/suspension staging evidence. Until then moderation remains fail closed and adult live remains disabled.
 4. Run live sandbox proof for one launch-approved age provider and for the separate Didit creator/adult-publisher identity workflows. Code, signed webhook handling, replay protection, capability projection, and the onboarding shortcut are wired; provider credentials, workflow IDs, callbacks, retention approval, and operational evidence remain launch blockers.

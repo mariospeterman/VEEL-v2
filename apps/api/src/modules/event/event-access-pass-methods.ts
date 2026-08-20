@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type postgres from "postgres";
+import { type PostgresSql, withPostgresTransaction } from "../../shared/postgres.js";
 import type { EventRepository, AccessPassOffer } from "./types.js";
 import { grantAccessPass, hashQrToken } from "./event-access-pass-repository.js";
 import { toEventAccessPass, toEventAccessPassRequest } from "./event-repository-mappers.js";
@@ -8,7 +8,7 @@ import type { AccessPassRequestRow, AccessPassRow } from "./event-repository-row
 type FindEventMethod = EventRepository["findEvent"];
 
 export function createEventAccessPassRepositoryMethods(
-  sql: postgres.Sql,
+  sql: PostgresSql,
   findEvent: FindEventMethod
 ): Pick<
   EventRepository,
@@ -69,7 +69,7 @@ export function createEventAccessPassRepositoryMethods(
       } satisfies AccessPassOffer;
     },
     async recordAccessPassPurchaseRequest(input) {
-      return sql.begin(async (transaction) => {
+      return withPostgresTransaction(sql, async (transaction) => {
         // Acquire inventory serialization before the capacity statement. Keeping the
         // lock inside that statement would let a waiter retain its pre-lock snapshot.
         await transaction`
