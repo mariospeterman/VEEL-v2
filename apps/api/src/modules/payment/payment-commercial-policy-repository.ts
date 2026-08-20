@@ -1,4 +1,8 @@
-import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
+import {
+  resolvePostgresClient,
+  type PostgresSql,
+  withPostgresTransaction
+} from "../../shared/postgres.js";
 import type {
   AdminPaymentCommercialPolicy,
   PaymentCommercialPolicyRepository
@@ -68,7 +72,7 @@ export function createPostgresPaymentCommercialPolicyRepository(
       return { items: rows.map(toPaymentCommercialPolicy) };
     },
     async updateOverride(input) {
-      return sql.begin(async (transaction) => {
+      return withPostgresTransaction(sql, async (transaction) => {
         const actorRows = await transaction<{ id: string }[]>`
           select id
           from users

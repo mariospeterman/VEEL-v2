@@ -37,21 +37,18 @@ Exactly one write/integration slice may be active. An open pull request carrying
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `1938988` (green baseline through PR #83) |
-| Active slice | Launch 11 hardening — content publication safety transaction boundary |
-| Branch | `codex/launch-content-safety-transaction-boundary` |
-| Pull request | PR #84 |
-| State | `MERGE_READY` |
+| Merged baseline | `main` at `2e9f40e` (green baseline through PR #84) |
+| Active slice | Launch 11 hardening — payment commercial-policy transaction boundary |
+| Branch | `codex/launch-payment-policy-transaction-boundary` |
+| Pull request | Draft PR pending |
+| State | `ACTIVE` |
 | Slice blockers | No code blocker; provider/staging gates remain external and unchanged. |
 | Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
 
-The active content-safety hardening slice moves creator publication submission and moderation-appeal
-state changes onto the shared Postgres transaction helper without changing their SQL, contract,
-route, schema, RLS, or provider behavior. The helper commit/rollback unit proof, API route suite,
-guarded real-Postgres integration journey, docs check, focused lint, and API typecheck are green.
-Exact-head protected toolchain/browser, preview, migration, dependency, CodeQL, and secret checks
-are green with no review thread or automated suggestion requiring a code change.
-Real Bunny, moderation, shared-staging, and legal evidence remain external pre-production gates.
+The active payment-policy hardening slice moves the lifetime-idempotent audited admin commercial
+policy override onto the shared Postgres transaction helper without changing SQL, pricing rules,
+contract, route, schema, RLS, or provider behavior. Admin authorization remains at the route policy,
+and the policy row, audit evidence, and replay receipt still commit or roll back together.
 
 The merged entry slice server-resolves login/onboarding state, presents one immediate primary
 `Connect wallet` action, preserves the first click while the wallet runtime loads, keeps the
@@ -82,14 +79,14 @@ migrated in later bounded slices. Supabase recovery subjects remain exclusively 
 integration, desktop/mobile Chromium, desktop Firefox, accessibility, PWA, and visible-browser
 entry proofs are green. Real provider acceptance remains a pre-production gate.
 
-The current green `main` merge at `1938988` passed protected CI run `32336752223`, isolated
+The current green `main` merge at `2e9f40e` passed protected CI run `32345418645`, isolated
 Postgres integration, database migration checks, security analysis, build, and the full Chromium,
-Firefox, and WebKit browser smoke matrix. Release-artifact run `32337408404` built and attested the
+Firefox, and WebKit browser smoke matrix. Release-artifact run `32346177861` built and attested the
 web, API, and worker images and emitted the immutable manifest for that exact source. Staging
-convergence run `32337951027` then verified the manifest and attestations and failed closed at its
+convergence run `32346806456` then verified the manifest and attestations and failed closed at its
 configuration gate because the recorded shared staging/provider/legal values remain absent; no
-deployment or migration was attempted. PR #83 additionally moved payment-intent creation and
-checkout-consent state changes onto the shared Postgres transaction boundary. The reviewed maintenance queue also merged CI budget
+deployment or migration was attempted. PR #84 additionally moved creator publication and moderation-
+appeal state changes onto the shared Postgres transaction boundary. The reviewed maintenance queue also merged CI budget
 hardening (PR #78), `jose` 6.2.9 (PR #74), Zustand 5.0.15 (PR #76), and Next.js 16.3.1
 (PR #77). The isolated `@solana-program/system` 0.13.0 upgrade (PR #75) was rejected because it
 requires `@solana/kit` 7 while the web provider boundary intentionally remains on Kit 6.10; that
@@ -251,7 +248,7 @@ Public product copy and API metadata use WeVid and Support. Technical package sc
 
 ## P0 Before Broad Expansion
 
-1. Continue migrating money/access/admin/safety mutations onto the shared Postgres transaction helper slice by slice; payment intent creation and checkout consent, payment submission settlement, refund/dispute request creation, Event Access inventory reservation/issuance, admin content-moderation/report-review state transitions, and creator publication/appeal safety transitions are already on the shared boundary.
+1. Continue migrating money/access/admin/safety mutations onto the shared Postgres transaction helper slice by slice; payment intent creation and checkout consent, payment submission settlement, refund/dispute request creation, Event Access inventory reservation/issuance, admin payment commercial-policy overrides, admin content-moderation/report-review state transitions, and creator publication/appeal safety transitions are already on the shared boundary.
 2. Continue migrating route modules onto shared idempotency helpers, route-policy/RBAC, route-specific rate-limit presets, and test factory helpers. The first admin mutation routes are migrated; money/access/safety routes still need slice-by-slice adoption and durable generic idempotency conflict behavior where route-specific stores are insufficient.
 3. Obtain Bunny Shield direct-Stream-TUS and Livepeer moderation/suspension staging evidence. Until then moderation remains fail closed and adult live remains disabled.
 4. Run live sandbox proof for one launch-approved age provider and for the separate Didit creator/adult-publisher identity workflows. Code, signed webhook handling, replay protection, capability projection, and the onboarding shortcut are wired; provider credentials, workflow IDs, callbacks, retention approval, and operational evidence remain launch blockers.
