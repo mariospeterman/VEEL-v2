@@ -33,6 +33,13 @@ export class ContentDraftQuotaExceededError extends Error {
   }
 }
 
+export class ContentPollVoteConflictError extends Error {
+  constructor(readonly reason: "idempotency_conflict" | "poll_closed") {
+    super(reason);
+    this.name = "ContentPollVoteConflictError";
+  }
+}
+
 export class ContentModerationAppealConflictError extends Error {
   constructor(readonly reason: "not_appealable" | "appeal_already_open" | "idempotency_conflict") {
     super(reason);

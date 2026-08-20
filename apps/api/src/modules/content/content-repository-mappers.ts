@@ -50,7 +50,7 @@ export function toContentItem(
   };
 }
 
-function normalizeContentPoll(
+export function normalizeContentPoll(
   poll: Exclude<ContentItem["poll"], undefined>
 ): Exclude<ContentItem["poll"], undefined> {
   if (!poll) return poll;

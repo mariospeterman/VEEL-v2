@@ -8,6 +8,7 @@ import { createContentQuotaRepositoryMethods } from "./content-quota-repository.
 import { createContentReadRepositoryMethods } from "./content-read-repository.js";
 import { createContentUpdateRepositoryMethods } from "./content-update-repository.js";
 import { createContentWorkflowRepositoryMethods } from "./content-workflow-repository.js";
+import { createContentPollRepositoryMethods } from "./content-poll-repository.js";
 import type { ContentRepository } from "./types.js";
 
 type PostgresContentRepository = ContentRepository & Required<Pick<
@@ -24,6 +25,7 @@ export {
   ContentEventDraftConflictError,
   ContentPublishConflictError,
   ContentModerationAppealConflictError,
+  ContentPollVoteConflictError,
   ContentRepositoryConfigurationError
 } from "./content-errors.js";
 
@@ -45,6 +47,7 @@ export function createPostgresContentRepository(
     ...createContentReadRepositoryMethods(sql),
     ...createContentUpdateRepositoryMethods(sql),
     ...createContentWorkflowRepositoryMethods(sql),
+    ...createContentPollRepositoryMethods(sql),
     async close() {
       if (ownsClient) {
         await sql.end({ timeout: 5 });
@@ -113,6 +116,9 @@ function createUnavailableContentRepository(): PostgresContentRepository {
       throw new ContentRepositoryConfigurationError();
     },
     async publishOwnedContent() {
+      throw new ContentRepositoryConfigurationError();
+    },
+    async voteOnPoll() {
       throw new ContentRepositoryConfigurationError();
     }
   };

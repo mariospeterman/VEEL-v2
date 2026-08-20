@@ -11,6 +11,7 @@ export type FeedSurface = "home" | "bits";
 export type UploadSession = components["schemas"]["UploadSession"];
 export type UpdateContentRequest = components["schemas"]["UpdateContentRequest"];
 export type PublishContentRequest = components["schemas"]["PublishContentRequest"];
+export type VoteOnContentPollRequest = components["schemas"]["VoteOnContentPollRequest"];
 export type CreatorMediaPage = components["schemas"]["CreatorMediaPage"];
 export type MediaModerationAppeal = components["schemas"]["MediaModerationAppeal"];
 export type CreateMediaModerationAppealRequest =
@@ -45,7 +46,16 @@ export interface ContentRepository {
   updateMediaAssetPlayback?(input: UpdateMediaAssetPlaybackInput): Promise<void>;
   updateOwnedContent?(input: UpdateOwnedContentInput): Promise<ContentItem | null>;
   publishOwnedContent?(input: PublishOwnedContentInput): Promise<ContentItem | null>;
+  voteOnPoll?(input: VoteOnContentPollInput): Promise<NonNullable<ContentItem["poll"]> | null>;
   close?(): Promise<void>;
+}
+
+export interface VoteOnContentPollInput {
+  appUserId: string;
+  contentId: string;
+  optionId: string;
+  idempotencyKey: string;
+  requestHash: string;
 }
 
 export interface ListOwnedContentInput {

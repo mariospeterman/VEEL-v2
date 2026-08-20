@@ -3911,6 +3911,62 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("casts an authenticated poll vote through the backend authority", async () => {
+    const optionId = "00000000-0000-4000-8000-000000000021";
+    const contentId = "00000000-0000-4000-8000-000000000020";
+    let receivedInput: unknown;
+    const contentRepository: ContentRepository = {
+      async createDraft() { throw new Error("not implemented"); },
+      async createMediaAsset() { throw new Error("not implemented"); },
+      async findContentDetail() { throw new Error("not implemented"); },
+      async findContentUnlockOffer() { throw new Error("not implemented"); },
+      async findOwnedContentForUpload() { throw new Error("not implemented"); },
+      async listHomeFeed() { throw new Error("not implemented"); },
+      async voteOnPoll(input) {
+        receivedInput = input;
+        return {
+          question: "Choose one",
+          options: [
+            { id: optionId, position: 0, text: "Photo", voteCount: 1 },
+            { id: "00000000-0000-4000-8000-000000000022", position: 1, text: "Video", voteCount: 0 }
+          ],
+          state: "open",
+          totalVoteCount: 1,
+          closesAt: null,
+          viewerOptionId: optionId
+        };
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({ async onFind() {
+        return { id: "00000000-0000-4000-8000-000000000010", state: "active", handle: "maki", displayName: "Maki", avatarUrl: null };
+      } }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      verificationRepository: verificationRepositoryStub(),
+      contentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/content/${contentId}/poll-votes`,
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "poll-vote-0001" },
+      payload: { optionId }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(200);
+    expect(response.json()).toMatchObject({ totalVoteCount: 1, viewerOptionId: optionId });
+    expect(receivedInput).toMatchObject({
+      appUserId: "00000000-0000-4000-8000-000000000010",
+      contentId,
+      optionId,
+      idempotencyKey: "poll-vote-0001"
+    });
+    await app.close();
+  });
+
   it("blocks content draft creation when the daily server quota is reached", async () => {
     const contentRepository: ContentRepository = {
       async createDraft(input) {

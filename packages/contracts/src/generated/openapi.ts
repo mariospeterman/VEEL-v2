@@ -863,6 +863,26 @@ export interface paths {
         patch: operations["updateContent"];
         trace?: never;
     };
+    "/v1/content/{contentId}/poll-votes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cast or replace the signed-in viewer's poll vote
+         * @description The backend validates content eligibility and poll state, updates counters transactionally, and preserves lifetime idempotency receipts.
+         */
+        post: operations["voteOnContentPoll"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/content/{contentId}/publish": {
         parameters: {
             query?: never;
@@ -3928,6 +3948,10 @@ export interface components {
             /** Format: date-time */
             closesAt?: string | null;
         };
+        VoteOnContentPollRequest: {
+            /** Format: uuid */
+            optionId: string;
+        };
         RecordFeedImpressionRequest: {
             /** Format: uuid */
             contentId: string;
@@ -6381,6 +6405,15 @@ export interface components {
                 "application/json": components["schemas"]["ContentItem"];
             };
         };
+        /** @description Current poll state */
+        ContentPoll: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ContentPoll"];
+            };
+        };
         /** @description Owner-visible publication workspace */
         CreatorMediaPage: {
             headers: {
@@ -7575,6 +7608,11 @@ export interface components {
         CreateContent: {
             content: {
                 "application/json": components["schemas"]["CreateContentRequest"];
+            };
+        };
+        VoteOnContentPoll: {
+            content: {
+                "application/json": components["schemas"]["VoteOnContentPollRequest"];
             };
         };
         UpdateContent: {
@@ -8847,6 +8885,30 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    voteOnContentPoll: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                contentId: components["parameters"]["ContentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["VoteOnContentPoll"];
+        responses: {
+            200: components["responses"]["ContentPoll"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };

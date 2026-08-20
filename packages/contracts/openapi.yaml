@@ -744,6 +744,26 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/content/{contentId}/poll-votes:
+    post:
+      operationId: voteOnContentPoll
+      tags: [Content]
+      summary: Cast or replace the signed-in viewer's poll vote
+      description: The backend validates content eligibility and poll state, updates counters transactionally, and preserves lifetime idempotency receipts.
+      parameters:
+        - $ref: "#/components/parameters/ContentId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/VoteOnContentPoll"
+      responses:
+        "200": { $ref: "#/components/responses/ContentPoll" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/content/{contentId}/publish:
     post:
       operationId: publishContent
@@ -2966,6 +2986,7 @@ components:
     RecordFeedImpression: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RecordFeedImpressionRequest" } } } }
     UploadProfileAvatar: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UploadProfileAvatarRequest" } } } }
     CreateContent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateContentRequest" } } } }
+    VoteOnContentPoll: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/VoteOnContentPollRequest" } } } }
     UpdateContent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateContentRequest" } } } }
     PublishContent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PublishContentRequest" } } } }
     CreateMediaModerationAppeal: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateMediaModerationAppealRequest" } } } }
@@ -3087,6 +3108,7 @@ components:
     NotificationDevice: { description: Notification device, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationDevice" } } } }
     RealtimeAccessToken: { description: Short-lived user-scoped Realtime access token, content: { application/json: { schema: { $ref: "#/components/schemas/RealtimeAccessToken" } } } }
     ContentItem: { description: Content item, content: { application/json: { schema: { $ref: "#/components/schemas/ContentItem" } } } }
+    ContentPoll: { description: Current poll state, content: { application/json: { schema: { $ref: "#/components/schemas/ContentPoll" } } } }
     CreatorMediaPage: { description: Owner-visible publication workspace, content: { application/json: { schema: { $ref: "#/components/schemas/CreatorMediaPage" } } } }
     MediaModerationAppeal: { description: Creator moderation appeal, content: { application/json: { schema: { $ref: "#/components/schemas/MediaModerationAppeal" } } } }
     UploadSession: { description: Safe upload session, content: { application/json: { schema: { $ref: "#/components/schemas/UploadSession" } } } }
@@ -3887,6 +3909,12 @@ components:
           maxItems: 4
           items: { type: string, minLength: 1, maxLength: 200 }
         closesAt: { type: string, format: date-time, nullable: true }
+    VoteOnContentPollRequest:
+      type: object
+      additionalProperties: false
+      required: [optionId]
+      properties:
+        optionId: { type: string, format: uuid }
     RecordFeedImpressionRequest:
       type: object
       required: [contentId]
