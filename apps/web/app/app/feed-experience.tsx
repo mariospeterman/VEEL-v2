@@ -35,6 +35,7 @@ export function FeedExperience({
   );
   const [pending, setPending] = useState(false);
   const [modeSaving, setModeSaving] = useState(false);
+  const [preferenceRefreshVersion, setPreferenceRefreshVersion] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [activeId, setActiveId] = useState(initialPage.items[0]?.id ?? null);
   const [followOverrides, setFollowOverrides] = useState<Record<string, FollowState>>({});
@@ -43,6 +44,7 @@ export function FeedExperience({
   const pendingRef = useRef(false);
   const seenRef = useRef(new Set<string>());
   const retryRef = useRef<{ mode: FeedMode; cursor?: string } | null>(null);
+  const processedPreferenceRefreshRef = useRef(0);
   const restoreKey = `wevid:${surface}:${mode}:scroll`;
 
   const load = useCallback(async (nextMode: FeedMode, cursor?: string) => {
@@ -82,6 +84,18 @@ export function FeedExperience({
       setPending(false);
     }
   }, [surface]);
+
+  useEffect(() => {
+    if (
+      pending ||
+      pendingRef.current ||
+      preferenceRefreshVersion === processedPreferenceRefreshRef.current
+    ) {
+      return;
+    }
+    processedPreferenceRefreshRef.current = preferenceRefreshVersion;
+    void load(mode);
+  }, [load, mode, pending, preferenceRefreshVersion]);
 
   useEffect(() => {
     const scrollContainer = surface === "bits"
@@ -259,7 +273,7 @@ export function FeedExperience({
             <ContentPreferenceControl
               compact
               initialPreference={initialContentPreference}
-              onChanged={() => void load(mode)}
+              onChanged={() => setPreferenceRefreshVersion((current) => current + 1)}
             />
           </div>
         </details>

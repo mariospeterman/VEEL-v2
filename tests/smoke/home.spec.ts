@@ -289,10 +289,33 @@ test("keeps one content preference across Settings and the compact feed filter",
 
   await page.goto("/app/home", { waitUntil: "domcontentloaded", timeout: 45_000 });
   await waitForClientReady(page);
+  let releasePendingFeedRequest: (() => void) | undefined;
+  let markPendingFeedRequestStarted: (() => void) | undefined;
+  const pendingFeedRequestStarted = new Promise<void>((resolve) => {
+    markPendingFeedRequestStarted = resolve;
+  });
+  const pendingFeedRequestRelease = new Promise<void>((resolve) => {
+    releasePendingFeedRequest = resolve;
+  });
+  const browserFeedRequestUrls: string[] = [];
+  await page.route("**/v1/content/feed?*", async (route) => {
+    browserFeedRequestUrls.push(route.request().url());
+    if (browserFeedRequestUrls.length === 1) {
+      markPendingFeedRequestStarted?.();
+      await pendingFeedRequestRelease;
+    }
+    await route.continue();
+  });
+
+  await page.getByRole("tab", { name: "Following" }).click();
+  await pendingFeedRequestStarted;
   await page.getByText("Content", { exact: true }).click();
   await expect(page.getByRole("button", { name: "Adult only" })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("button", { name: "Safe only" }).click();
   await expect(page.getByRole("button", { name: "Safe only" })).toHaveAttribute("aria-pressed", "true");
+  releasePendingFeedRequest?.();
+  await expect.poll(() => browserFeedRequestUrls.length).toBe(2);
+  expect(new URL(browserFeedRequestUrls[1]!).searchParams.get("mode")).toBe("following");
 });
 
 test("separates platform plans from creator memberships responsively", async ({ context, page }) => {
