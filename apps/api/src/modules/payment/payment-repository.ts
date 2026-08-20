@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
+import {
+  resolvePostgresClient,
+  type PostgresSql,
+  withPostgresTransaction
+} from "../../shared/postgres.js";
 import type { PaymentRepository } from "./types.js";
 export { createPostgresPaymentEvidenceRepository } from "./payment-evidence-repository.js";
 import {
@@ -77,7 +81,7 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
     async createOrReuseIntent(input) {
       let rows: PaymentIntentRow[];
       try {
-        rows = await sql.begin(async (transaction) => {
+        rows = await withPostgresTransaction(sql, async (transaction) => {
           const existing = await transaction<PaymentIntentRow[]>`
             select pi.*
             from payment_intents pi
@@ -382,7 +386,7 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
           }
 
           return inserted;
-        }) as PaymentIntentRow[];
+        });
       } catch (error) {
         if (isRecipientMonetisationPolicyError(error)) {
           throw new PaymentRecipientNotReadyError(error.message);
@@ -467,7 +471,7 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
       return rows[0] ? toStoredPaymentIntent(rows[0]) : null;
     },
     async acceptCheckoutTerms(input) {
-      return sql.begin(async (transaction) => {
+      return withPostgresTransaction(sql, async (transaction) => {
         const actorRows = await transaction<{ id: string }[]>`
           select id
           from users
