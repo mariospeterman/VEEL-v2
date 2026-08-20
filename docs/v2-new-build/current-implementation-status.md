@@ -40,8 +40,8 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Merged baseline | `main` at `d9be434` (green baseline through PR #82) |
 | Active slice | Launch 11 hardening — payment intent transaction boundary |
 | Branch | `codex/launch-payment-intent-transaction-boundary` |
-| Pull request | Draft PR #83 |
-| State | `ACTIVE` |
+| Pull request | PR #83 |
+| State | `MERGE_READY` |
 | Slice blockers | No code blocker; provider/staging gates remain external and unchanged. |
 | Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
 
