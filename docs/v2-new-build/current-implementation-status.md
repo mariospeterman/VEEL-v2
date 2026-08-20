@@ -41,7 +41,7 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Active slice | Launch 11 hardening — content publication safety transaction boundary |
 | Branch | `codex/launch-content-safety-transaction-boundary` |
 | Pull request | PR #84 |
-| State | `LOCAL_GREEN` |
+| State | `MERGE_READY` |
 | Slice blockers | No code blocker; provider/staging gates remain external and unchanged. |
 | Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
 
@@ -49,6 +49,8 @@ The active content-safety hardening slice moves creator publication submission a
 state changes onto the shared Postgres transaction helper without changing their SQL, contract,
 route, schema, RLS, or provider behavior. The helper commit/rollback unit proof, API route suite,
 guarded real-Postgres integration journey, docs check, focused lint, and API typecheck are green.
+Exact-head protected toolchain/browser, preview, migration, dependency, CodeQL, and secret checks
+are green with no review thread or automated suggestion requiring a code change.
 Real Bunny, moderation, shared-staging, and legal evidence remain external pre-production gates.
 
 The merged entry slice server-resolves login/onboarding state, presents one immediate primary
