@@ -41,7 +41,7 @@ Exactly one write/integration slice may be active. An open pull request carrying
 | Active slice | Launch 11 hardening — payment commercial-policy transaction boundary |
 | Branch | `codex/launch-payment-policy-transaction-boundary` |
 | Pull request | PR #85 |
-| State | `ACTIVE` |
+| State | `LOCAL_GREEN` |
 | Slice blockers | No code blocker; provider/staging gates remain external and unchanged. |
 | Next unfinished slice | Launch 11 — Actual deployment, observability, recovery, and legal launch |
 
@@ -49,6 +49,9 @@ The active payment-policy hardening slice moves the lifetime-idempotent audited 
 policy override onto the shared Postgres transaction helper without changing SQL, pricing rules,
 contract, route, schema, RLS, or provider behavior. Admin authorization remains at the route policy,
 and the policy row, audit evidence, and replay receipt still commit or roll back together.
+The helper commit/rollback proof, focused payment-policy and API route tests, guarded real-Postgres
+commercial-policy journey, docs check, focused lint, and API typecheck are green. Shared staging,
+Solana/provider, hosting/operations, legal, mainnet, and production-approval gates remain external.
 
 The merged entry slice server-resolves login/onboarding state, presents one immediate primary
 `Connect wallet` action, preserves the first click while the wallet runtime loads, keeps the
