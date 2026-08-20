@@ -313,6 +313,21 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(unchangedPublishedSafetyRows[0]?.moderation_state).toBe("approved");
       expect(unchangedPublishedSafetyRows[0]?.published_at).toBeInstanceOf(Date);
 
+      const creatorPaidContentDetail = await app.inject({
+        method: "GET",
+        url: `/v1/content/${seededContentId}`,
+        headers: creatorAuthenticatedHeaders(`creator-paid-content-detail-${runId}`)
+      });
+      expect(creatorPaidContentDetail.statusCode, creatorPaidContentDetail.body).toBe(200);
+      expect(creatorPaidContentDetail.json()).toMatchObject({
+        id: seededContentId,
+        accessState: "unlocked",
+        mediaAssets: [{
+          id: seededMediaAssetId,
+          posterUrl: "https://media.example.test/integration-poster.jpg"
+        }]
+      });
+
       const walletKeypair = nacl.sign.keyPair();
       const walletAddress = bs58.encode(walletKeypair.publicKey);
       const challengeResponse = await app.inject({
@@ -944,9 +959,17 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         rankingVersion: "deterministic_v1"
       });
       const staleFollowingPage = followingFeedResponse.json<{
-        items: Array<{ id: string; creator: { id: string }; viewerFollowingCreator: boolean }>;
+        items: Array<{
+          id: string;
+          creator: { id: string };
+          viewerFollowingCreator: boolean;
+          mediaAssets?: Array<{ id: string; position: number; posterUrl: string | null }>;
+        }>;
         nextCursor: string | null;
       }>();
+      expect(staleFollowingPage.items.find((item) => item.id === seededContentId)).toMatchObject({
+        mediaAssets: [{ id: seededMediaAssetId, position: 0, posterUrl: null }]
+      });
       expect(staleFollowingPage.nextCursor).toEqual(expect.any(String));
       await sql`
         update content_engagement_counters
@@ -1470,6 +1493,39 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         }
       });
 
+      const textDetailResponse = await app.inject({
+        method: "GET",
+        url: `/v1/content/${textDraftResponse.json().id as string}`,
+        headers: authenticatedHeaders(`text-content-detail-${runId}`)
+      });
+      expect(textDetailResponse.statusCode, textDetailResponse.body).toBe(200);
+      expect(textDetailResponse.json()).toMatchObject({
+        id: textDraftResponse.json().id,
+        mediaType: "text",
+        bodyText: `Structured text ${runId}`
+      });
+
+      const pollDetailResponse = await app.inject({
+        method: "GET",
+        url: `/v1/content/${pollDraftResponse.json().id as string}`,
+        headers: authenticatedHeaders(`poll-content-detail-${runId}`)
+      });
+      expect(pollDetailResponse.statusCode, pollDetailResponse.body).toBe(200);
+      expect(pollDetailResponse.json()).toMatchObject({
+        id: pollDraftResponse.json().id,
+        mediaType: "poll",
+        poll: {
+          question: "Which format next?",
+          totalVoteCount: 0,
+          viewerOptionId: null,
+          options: [
+            expect.objectContaining({ position: 0, text: "Photos", voteCount: 0 }),
+            expect.objectContaining({ position: 1, text: "Video", voteCount: 0 }),
+            expect.objectContaining({ position: 2, text: "Text", voteCount: 0 })
+          ]
+        }
+      });
+
       const universalDraftRows = await sql<{
         media_type: string;
         body_text: string | null;
@@ -1579,6 +1635,29 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           true, now(), now()
         )
       `;
+      const universalMediaDetailResponse = await app.inject({
+        method: "GET",
+        url: `/v1/content/${sfwContentId}`,
+        headers: authenticatedHeaders(`universal-media-detail-${runId}`)
+      });
+      expect(universalMediaDetailResponse.statusCode, universalMediaDetailResponse.body).toBe(200);
+      expect(universalMediaDetailResponse.json()).toMatchObject({
+        id: sfwContentId,
+        accessState: "unlocked",
+        mediaAssets: [
+          {
+            id: sfwMediaAssetId,
+            kind: "video",
+            position: 0,
+            provider: "bunny",
+            providerState: "ready",
+            requiredForRelease: true,
+            isCover: false,
+            originClassification: "human_created",
+            visibleLabelState: "none"
+          }
+        ]
+      });
       await sql`
         update media_safety_cases
         set

@@ -72,6 +72,15 @@ the old/new option counters in the same Postgres transaction. Option text/order 
 after the first vote. Counts and viewer choice come from the backend projection; the browser never
 increments them optimistically as truth.
 
+Authenticated feed and detail reads project this composition from the canonical rows in one query:
+bounded plain text, every normalized asset in server-owned position order, and the poll options,
+transactional counts, close state, and current viewer choice. Only the frontend-safe OpenAPI fields
+leave the API; provider payloads, private provenance details, checksums, and storage references do
+not. The legacy top-level poster/playback projection remains the compatibility path for the selected
+release asset until the shared renderer family consumes the ordered asset projection. Paid or
+otherwise gated cards redact body text, poll state/options, and per-asset delivery URLs until the
+viewer has canonical access; the creator remains authorized through the canonical app user id.
+
 ## Safety And Release
 
 Every media asset begins private and unavailable for public rendering. All assets marked

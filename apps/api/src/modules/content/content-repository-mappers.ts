@@ -6,6 +6,8 @@ export function toContentItem(
   posterUrl: string | null,
   accessState: ContentItem["accessState"] = "free"
 ): ContentItem {
+  const fullCompositionAllowed = ["free", "unlocked", "subscribed"].includes(accessState);
+
   return {
     id: row.id,
     creator: {
@@ -17,9 +19,20 @@ export function toContentItem(
     },
     mediaType: row.media_type,
     caption: row.caption,
-    ...(row.body_text !== undefined ? { bodyText: row.body_text } : {}),
-    ...(row.media_assets !== undefined ? { mediaAssets: row.media_assets } : {}),
-    ...(row.poll !== undefined ? { poll: normalizeContentPoll(row.poll) } : {}),
+    ...(row.body_text !== undefined
+      ? { bodyText: fullCompositionAllowed ? row.body_text : null }
+      : {}),
+    ...(Array.isArray(row.media_assets)
+      ? {
+          mediaAssets: row.media_assets.map((asset) => ({
+            ...asset,
+            posterUrl: fullCompositionAllowed ? (asset.posterUrl ?? null) : null
+          }))
+        }
+      : {}),
+    ...(row.poll !== undefined
+      ? { poll: fullCompositionAllowed ? normalizeContentPoll(row.poll) : null }
+      : {}),
     posterUrl,
     playback: playbackForRow(row as Partial<PlaybackProjectionRow>, accessState),
     accessState,
@@ -51,8 +64,9 @@ export function accessStateForRule(row: {
   access_type: string | null;
   product_type: string | null;
   entitlement_id?: string | null;
+  viewer_is_creator?: boolean;
 }): ContentItem["accessState"] {
-  if (row.entitlement_id) {
+  if (row.viewer_is_creator || row.entitlement_id) {
     return "unlocked";
   }
 

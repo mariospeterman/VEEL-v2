@@ -59,9 +59,12 @@ reversible down migration. The full forward chain and `0109` rollback/reapply pa
 isolated PostgreSQL database. OpenAPI/runtime media-type contracts and atomic initial text/poll
 draft creation now reuse the canonical create route, normalize bounded plain text and poll values,
 preserve lifetime idempotency, allow incomplete private drafts, and enforce completed text/poll
-shape when publication begins. Composition autosave/reorder/remove mutations, universal feed/detail
-projections, frontend composer/renderers, release-all-assets enforcement, voting, and browser/provider
-proof remain active-slice work.
+shape when publication begins. Authenticated feed/detail reads now return normalized body text,
+server-ordered frontend-safe assets, poll counts/state, and the current viewer choice directly from
+the canonical rows without provider payloads or browser-owned truth. Locked projections redact full
+text, poll, and per-asset delivery data while canonical creator access remains available. Composition
+autosave/reorder/remove mutations, frontend composer/renderers, release-all-assets enforcement,
+voting, and browser/provider proof remain active-slice work.
 
 Merged Convergence 01 has one deterministic recipient-KYC policy resolver for global mode, active
 account override, product, normalized jurisdiction, and active risk evidence; `risk_based` remains
