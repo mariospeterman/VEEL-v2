@@ -19,6 +19,13 @@ export class ContentEventDraftConflictError extends Error {
   }
 }
 
+export class ContentCompositionConflictError extends Error {
+  constructor(readonly reason: "revision_conflict" | "composition_locked" | "idempotency_conflict") {
+    super(reason);
+    this.name = "ContentCompositionConflictError";
+  }
+}
+
 export class ContentDraftIdempotencyConflictError extends Error {
   constructor() {
     super("content_draft_idempotency_conflict");

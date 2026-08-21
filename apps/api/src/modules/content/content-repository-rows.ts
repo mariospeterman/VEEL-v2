@@ -37,6 +37,7 @@ export interface ContentRow {
   media_type: ContentItem["mediaType"];
   caption: string | null;
   body_text?: string | null;
+  asset_revision?: number;
   media_assets?: ContentMediaAssetProjection[] | null;
   poll?: ContentItem["poll"];
   nsfw_label: NonNullable<ContentItem["nsfwLabel"]>;

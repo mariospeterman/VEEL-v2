@@ -1502,8 +1502,53 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(textDetailResponse.json()).toMatchObject({
         id: textDraftResponse.json().id,
         mediaType: "text",
-        bodyText: `Structured text ${runId}`
+        bodyText: `Structured text ${runId}`,
+        compositionRevision: 1
       });
+
+      const textAutosaveKey = `text-content-autosave-${runId}`;
+      const textAutosaveResponse = await app.inject({
+        method: "PATCH",
+        url: `/v1/content/${textDraftResponse.json().id as string}`,
+        headers: authenticatedHeaders(textAutosaveKey),
+        payload: {
+          bodyText: `  Revised structured text ${runId}  `,
+          expectedCompositionRevision: 1
+        }
+      });
+      expect(textAutosaveResponse.statusCode, textAutosaveResponse.body).toBe(200);
+      expect(textAutosaveResponse.json()).toMatchObject({
+        bodyText: `Revised structured text ${runId}`,
+        compositionRevision: 2
+      });
+
+      const textAutosaveReplay = await app.inject({
+        method: "PATCH",
+        url: `/v1/content/${textDraftResponse.json().id as string}`,
+        headers: authenticatedHeaders(textAutosaveKey),
+        payload: {
+          bodyText: `  Revised structured text ${runId}  `,
+          expectedCompositionRevision: 1
+        }
+      });
+      expect(textAutosaveReplay.statusCode, textAutosaveReplay.body).toBe(200);
+      expect(textAutosaveReplay.json()).toMatchObject({ compositionRevision: 2 });
+
+      const changedTextAutosaveReplay = await app.inject({
+        method: "PATCH",
+        url: `/v1/content/${textDraftResponse.json().id as string}`,
+        headers: authenticatedHeaders(textAutosaveKey),
+        payload: { bodyText: "Changed key reuse", expectedCompositionRevision: 2 }
+      });
+      expect(changedTextAutosaveReplay.statusCode, changedTextAutosaveReplay.body).toBe(409);
+
+      const staleTextAutosave = await app.inject({
+        method: "PATCH",
+        url: `/v1/content/${textDraftResponse.json().id as string}`,
+        headers: authenticatedHeaders(`text-content-stale-${runId}`),
+        payload: { bodyText: "Stale overwrite", expectedCompositionRevision: 1 }
+      });
+      expect(staleTextAutosave.statusCode, staleTextAutosave.body).toBe(409);
 
       const pollDetailResponse = await app.inject({
         method: "GET",
@@ -1545,7 +1590,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       `;
       expect(universalDraftRows).toEqual([
         { media_type: "poll", body_text: null, poll_option_count: 3 },
-        { media_type: "text", body_text: `Structured text ${runId}`, poll_option_count: 0 }
+        { media_type: "text", body_text: `Revised structured text ${runId}`, poll_option_count: 0 }
       ]);
 
       const contentCreateReceipt = await sql<{ expires_at: string }[]>`

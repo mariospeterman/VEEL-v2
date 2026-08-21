@@ -3831,6 +3831,7 @@ components:
         mediaType: { type: string, enum: [bit, clip, image, vod, live_replay, carousel, text, poll] }
         caption: { type: string, nullable: true }
         bodyText: { type: string, minLength: 1, maxLength: 10000, nullable: true }
+        compositionRevision: { type: integer, minimum: 1 }
         mediaAssets:
           type: array
           maxItems: 10
@@ -4080,6 +4081,8 @@ components:
       type: object
       properties:
         caption: { type: string }
+        bodyText: { type: string, minLength: 1, maxLength: 10000 }
+        expectedCompositionRevision: { type: integer, minimum: 1 }
         visibility: { type: string, enum: [public, followers, subscribers, private] }
         nsfwLabel: { type: string, enum: [none, adult, explicit] }
         representationMode: { type: string, enum: [no_real_person, self_only, declared_performers] }

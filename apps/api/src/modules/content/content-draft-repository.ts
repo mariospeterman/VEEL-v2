@@ -195,6 +195,7 @@ async function selectContentRow(
       ci.media_type,
       ci.caption,
       ci.body_text,
+      ci.asset_revision,
       ci.nsfw_label,
       u.id as creator_id,
       p.handle,

@@ -104,6 +104,10 @@ export interface UpdateOwnedContentInput {
   idempotencyKey: string;
   caption?: string | null | undefined;
   captionProvided: boolean;
+  bodyText?: string | undefined;
+  bodyTextProvided: boolean;
+  expectedCompositionRevision?: number | undefined;
+  requestHash?: string | undefined;
   visibility?: string | undefined;
   nsfwLabel?: NonNullable<ContentItem["nsfwLabel"]> | undefined;
   representationMode?: NonNullable<UpdateContentRequest["representationMode"]> | undefined;

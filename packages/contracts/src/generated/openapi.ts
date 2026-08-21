@@ -3878,6 +3878,7 @@ export interface components {
             mediaType: "bit" | "clip" | "image" | "vod" | "live_replay" | "carousel" | "text" | "poll";
             caption?: string | null;
             bodyText?: string | null;
+            compositionRevision?: number;
             mediaAssets?: components["schemas"]["ContentMediaAsset"][];
             poll?: components["schemas"]["ContentPoll"] | null;
             /** Format: uri */
@@ -4098,6 +4099,8 @@ export interface components {
         };
         UpdateContentRequest: {
             caption?: string;
+            bodyText?: string;
+            expectedCompositionRevision?: number;
             /** @enum {string} */
             visibility?: "public" | "followers" | "subscribers" | "private";
             /** @enum {string} */

@@ -101,6 +101,7 @@ export function createContentFeedRepositoryMethods(
           ci.media_type,
           ci.caption,
           ci.body_text,
+          ci.asset_revision,
           ci.nsfw_label,
           ci.created_at,
           page_ids.ranking_score,

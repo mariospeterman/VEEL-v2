@@ -23,6 +23,7 @@ export {
   ContentDraftIdempotencyConflictError,
   ContentDraftQuotaExceededError,
   ContentEventDraftConflictError,
+  ContentCompositionConflictError,
   ContentPublishConflictError,
   ContentModerationAppealConflictError,
   ContentPollVoteConflictError,

@@ -4145,6 +4145,10 @@ describe("buildApi", () => {
           idempotencyKey: "content-update-1",
           caption: "updated #studio",
           captionProvided: true,
+          bodyText: undefined,
+          bodyTextProvided: false,
+          expectedCompositionRevision: undefined,
+          requestHash: undefined,
           visibility: "followers",
           nsfwLabel: "adult",
           representationMode: "self_only",
@@ -4212,6 +4216,43 @@ describe("buildApi", () => {
       nsfwLabel: "adult"
     });
 
+    await app.close();
+  });
+
+  it("autosaves text drafts with an optimistic composition revision", async () => {
+    const updateOwnedContent = vi.fn(async () => ({
+      ...homeFeedItem,
+      mediaType: "text" as const,
+      bodyText: "Revised text",
+      compositionRevision: 2
+    }));
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({ async onFind() {
+        return { id: "00000000-0000-4000-8000-000000000010", state: "active", handle: "maki", displayName: "Maki", avatarUrl: null };
+      } }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      verificationRepository: verificationRepositoryStub(),
+      contentRepository: { ...contentRepositoryWithDetail(homeFeedItem), updateOwnedContent }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "text-autosave-0001" },
+      payload: { bodyText: " Revised text ", expectedCompositionRevision: 1 }
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json()).toMatchObject({ bodyText: "Revised text", compositionRevision: 2 });
+    expect(updateOwnedContent).toHaveBeenCalledWith(expect.objectContaining({
+      bodyText: "Revised text",
+      bodyTextProvided: true,
+      expectedCompositionRevision: 1,
+      requestHash: expect.stringMatching(/^[0-9a-f]{64}$/)
+    }));
     await app.close();
   });
 

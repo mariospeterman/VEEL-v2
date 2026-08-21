@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type postgres from "postgres";
-import { ContentEventDraftConflictError } from "./content-errors.js";
+import { ContentCompositionConflictError, ContentEventDraftConflictError } from "./content-errors.js";
 import { extractHashtagSlugs, toContentItem } from "./content-repository-mappers.js";
 import type { ContentRow } from "./content-repository-rows.js";
 import type { ContentRepository, UpdateOwnedContentInput } from "./types.js";
@@ -41,6 +41,48 @@ export function createContentUpdateRepositoryMethods(
     },
     async updateOwnedContent(input) {
       const result = await sql.begin(async (transaction) => {
+        const actorRows = await transaction<{ id: string }[]>`
+          select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
+        `;
+        const actor = actorRows[0];
+        if (!actor) return null;
+
+        let compositionReceiptKey: string | null = null;
+        if (input.bodyTextProvided) {
+          compositionReceiptKey = `content:update:${actor.id}:${input.idempotencyKey}`;
+          await transaction`
+            insert into idempotency_keys (key, actor_user_id, scope, request_hash, expires_at)
+            values (${compositionReceiptKey}, ${actor.id}, 'content.update', ${input.requestHash ?? ""}, 'infinity'::timestamptz)
+            on conflict (key) do nothing
+          `;
+          const receipts = await transaction<{ request_hash: string; response_body: { contentId?: string } | null }[]>`
+            select request_hash, response_body from idempotency_keys where key = ${compositionReceiptKey} for update
+          `;
+          const receipt = receipts[0];
+          if (!receipt || receipt.request_hash !== input.requestHash) {
+            throw new ContentCompositionConflictError("idempotency_conflict");
+          }
+          if (receipt.response_body?.contentId) {
+            const replay = await selectOwnedCompositionRow(transaction, receipt.response_body.contentId, actor.id);
+            return replay ? toContentItem(replay, null) : null;
+          }
+
+          const drafts = await transaction<{ media_type: string; publish_state: string; asset_revision: number }[]>`
+            select media_type, publish_state, asset_revision
+            from content_items
+            where id = ${input.contentId} and creator_user_id = ${actor.id}
+            for update
+          `;
+          const draft = drafts[0];
+          if (!draft) return null;
+          if (draft.media_type !== "text" || !["draft", "unpublished"].includes(draft.publish_state)) {
+            throw new ContentCompositionConflictError("composition_locked");
+          }
+          if (Number(draft.asset_revision) !== input.expectedCompositionRevision) {
+            throw new ContentCompositionConflictError("revision_conflict");
+          }
+        }
+
         const rows = await transaction<ContentUpdateRow[]>`
           with actor as (
             select id
@@ -65,6 +107,8 @@ export function createContentUpdateRepositoryMethods(
             update content_items ci
             set
               caption = case when ${input.captionProvided} then ${input.caption ?? null} else ci.caption end,
+              body_text = case when ${input.bodyTextProvided} then ${input.bodyText ?? null} else ci.body_text end,
+              asset_revision = case when ${input.bodyTextProvided} then ci.asset_revision + 1 else ci.asset_revision end,
               visibility = case when ${Boolean(input.visibility)} then ${input.visibility ?? ""} else ci.visibility end,
               nsfw_label = case when ${Boolean(input.nsfwLabel)} then ${input.nsfwLabel ?? ""} else ci.nsfw_label end,
               publish_state = case
@@ -103,7 +147,7 @@ export function createContentUpdateRepositoryMethods(
               and safety.id = ci.id
               and ci.creator_user_id = actor.id
               and ci.state <> 'deleted'
-            returning ci.id, ci.creator_user_id, ci.media_type, ci.caption, ci.nsfw_label
+            returning ci.id, ci.creator_user_id, ci.media_type, ci.caption, ci.body_text, ci.asset_revision, ci.nsfw_label
           ),
           updated_media as (
             update media_assets ma
@@ -127,6 +171,8 @@ export function createContentUpdateRepositoryMethods(
             ci.id,
             ci.media_type,
             ci.caption,
+            ci.body_text,
+            ci.asset_revision,
             ci.nsfw_label,
             u.id as creator_id,
             p.handle,
@@ -167,12 +213,37 @@ export function createContentUpdateRepositoryMethods(
 
         await upsertLinkedEventDraft(transaction, input, row.id, row.creator_id);
 
+        if (compositionReceiptKey) {
+          await transaction`
+            update idempotency_keys
+            set response_status = 200, response_body = ${transaction.json({ contentId: row.id })}::jsonb
+            where key = ${compositionReceiptKey}
+          `;
+        }
+
         return toContentItem(row, null);
       });
 
       return result;
     }
   };
+}
+
+async function selectOwnedCompositionRow(
+  transaction: postgres.TransactionSql,
+  contentId: string,
+  creatorUserId: string
+): Promise<ContentUpdateRow | null> {
+  const rows = await transaction<ContentUpdateRow[]>`
+    select ci.id, ci.media_type, ci.caption, ci.body_text, ci.asset_revision, ci.nsfw_label,
+      u.id as creator_id, p.handle, p.display_name, p.avatar_url, 'not_declared'::text as representation_mode
+    from content_items ci
+    join users u on u.id = ci.creator_user_id
+    left join profiles p on p.user_id = u.id
+    where ci.id = ${contentId} and ci.creator_user_id = ${creatorUserId}
+    limit 1
+  `;
+  return rows[0] ?? null;
 }
 
 async function upsertLinkedEventDraft(

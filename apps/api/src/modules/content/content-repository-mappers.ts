@@ -22,6 +22,7 @@ export function toContentItem(
     ...(row.body_text !== undefined
       ? { bodyText: fullCompositionAllowed ? row.body_text : null }
       : {}),
+    ...(row.asset_revision !== undefined ? { compositionRevision: Number(row.asset_revision) } : {}),
     ...(Array.isArray(row.media_assets)
       ? {
           mediaAssets: row.media_assets.map((asset) => ({

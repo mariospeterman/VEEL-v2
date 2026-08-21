@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import {
   ContentDraftIdempotencyConflictError,
+  ContentCompositionConflictError,
   ContentDraftQuotaExceededError,
   ContentEventDraftConflictError,
   ContentModerationAppealConflictError,
@@ -326,6 +327,10 @@ export async function registerContentCoreRoutes(
         idempotencyKey,
         caption: body && "caption" in body ? body.caption ?? null : undefined,
         captionProvided: Boolean(body && "caption" in body),
+        bodyText: body && "bodyText" in body && typeof body.bodyText === "string" ? body.bodyText.trim() : undefined,
+        bodyTextProvided: Boolean(body && "bodyText" in body),
+        expectedCompositionRevision: body?.expectedCompositionRevision,
+        requestHash: body && "bodyText" in body ? hashIdempotencyPayload(body) : undefined,
         visibility: body?.visibility,
         nsfwLabel: body?.nsfwLabel,
         representationMode: body?.representationMode,
@@ -354,6 +359,17 @@ export async function registerContentCoreRoutes(
         return reply.code(409).send({
           code: "conflict",
           message: "Linked Event Access draft is no longer editable"
+        });
+      }
+
+      if (error instanceof ContentCompositionConflictError) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: error.reason === "revision_conflict"
+            ? "Draft composition changed; reload before saving"
+            : error.reason === "idempotency_conflict"
+              ? "Idempotency key was already used for a different composition update"
+              : "Published or non-text composition cannot be edited as text"
         });
       }
 
@@ -594,6 +610,7 @@ function validateUpdateContentBody(body: Partial<UpdateContentRequest> | undefin
 
   const hasKnownField =
     "caption" in body ||
+    "bodyText" in body ||
     "visibility" in body ||
     "nsfwLabel" in body ||
     "representationMode" in body ||
@@ -616,6 +633,18 @@ function validateUpdateContentBody(body: Partial<UpdateContentRequest> | undefin
 
   if ("caption" in body && typeof body.caption !== "string") {
     return "caption must be a string";
+  }
+
+
+  if ("bodyText" in body) {
+    if (typeof body.bodyText !== "string" || body.bodyText.trim().length < 1 || body.bodyText.trim().length > 10_000) {
+      return "bodyText must be between 1 and 10000 characters";
+    }
+    if (!Number.isInteger(body.expectedCompositionRevision) || (body.expectedCompositionRevision ?? 0) < 1) {
+      return "expectedCompositionRevision is required for bodyText autosave";
+    }
+  } else if ("expectedCompositionRevision" in body) {
+    return "expectedCompositionRevision requires a composition update";
   }
 
   if (typeof body.caption === "string" && body.caption.length > 2_200) {
