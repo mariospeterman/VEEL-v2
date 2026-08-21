@@ -61,3 +61,5 @@ alter table content_items
   drop constraint if exists content_items_media_type_check,
   drop column if exists asset_revision,
   drop column if exists body_text;
+drop function if exists private.content_composition_safety_ready(uuid);
+drop function if exists private.content_composition_provider_ready(uuid);

@@ -454,7 +454,7 @@ export async function registerContentCoreRoutes(
           message:
             error.reason === "blocked"
               ? "Content is blocked and cannot be published"
-              : "Content cannot be published until provider media is ready"
+              : "Content cannot be published until every required asset is ready"
         });
       }
 

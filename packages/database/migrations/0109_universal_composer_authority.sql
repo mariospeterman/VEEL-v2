@@ -133,6 +133,88 @@ create unique index media_assets_content_cover_uidx
 create index media_assets_content_release_idx
   on media_assets (content_item_id, required_for_release, position);
 
+create function private.content_composition_provider_ready(p_content_item_id uuid)
+returns boolean
+language sql
+stable
+security invoker
+set search_path = public, private
+as $$
+  select coalesce((
+    select case
+      when content.media_type in ('text', 'poll') then not exists (
+        select 1 from media_assets asset where asset.content_item_id = content.id
+      )
+      else exists (
+        select 1 from media_assets asset
+        where asset.content_item_id = content.id and asset.required_for_release is true
+      ) and not exists (
+        select 1 from media_assets asset
+        where asset.content_item_id = content.id
+          and asset.required_for_release is true
+          and (asset.provider_playable is not true or asset.ready_at is null)
+      )
+    end
+    from content_items content
+    where content.id = p_content_item_id
+  ), false);
+$$;
+
+create function private.content_composition_safety_ready(p_content_item_id uuid)
+returns boolean
+language sql
+stable
+security invoker
+set search_path = public, private
+as $$
+  select coalesce((
+    select
+      safety.state = 'approved'
+      and safety.provider_release_allowed is true
+      and private.content_performer_readiness(content.id)
+      and private.content_composition_provider_ready(content.id)
+      and case
+        when content.media_type in ('text', 'poll') then true
+        else not exists (
+          select 1
+          from media_assets asset
+          where asset.content_item_id = content.id
+            and asset.required_for_release is true
+            and (
+              not private.content_safety_automated_asset_evidence_ready(content.id, asset.id)
+              or not coalesce((
+                select
+                  scan.provider = 'internal'
+                  and scan.normalized_signal = 'clear'
+                  and scan.provider_event_id is not null
+                  and scan.payload_hash ~ '^[0-9a-f]{64}$'
+                  and scan.model_or_ruleset_version is not null
+                from provider_media_scan_events scan
+                where scan.media_safety_case_id = safety.id
+                  and scan.media_asset_id = asset.id
+                  and scan.scan_type = 'manual_review'
+                  and scan.release_eligible is true
+                order by scan.observed_at desc, scan.created_at desc, scan.id desc
+                limit 1
+              ), false)
+            )
+        )
+      end
+    from content_items content
+    join media_safety_cases safety
+      on safety.content_item_id = content.id and safety.state <> 'superseded'
+    where content.id = p_content_item_id
+  ), false);
+$$;
+
+revoke all on function private.content_composition_provider_ready(uuid) from public, anon, authenticated;
+revoke all on function private.content_composition_safety_ready(uuid) from public, anon, authenticated;
+
+comment on function private.content_composition_provider_ready(uuid) is
+  'Requires every release-required media asset to be provider-ready; text and polls require no media assets.';
+comment on function private.content_composition_safety_ready(uuid) is
+  'Requires canonical approval and performer readiness, plus complete normalized automated and manual evidence for every release-required media asset.';
+
 create table content_polls (
   content_item_id uuid primary key references content_items(id) on delete cascade,
   question text not null check (char_length(question) between 1 and 500),

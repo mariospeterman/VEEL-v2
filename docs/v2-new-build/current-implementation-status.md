@@ -63,8 +63,12 @@ shape when publication begins. Authenticated feed/detail reads now return normal
 server-ordered frontend-safe assets, poll counts/state, and the current viewer choice directly from
 the canonical rows without provider payloads or browser-owned truth. Locked projections redact full
 text, poll, and per-asset delivery data while canonical creator access remains available. Composition
-autosave/reorder/remove mutations, frontend composer/renderers, release-all-assets enforcement,
-voting, and browser/provider proof remain active-slice work.
+poll voting is now app-ready-authenticated, eligibility-gated, rate-limited, transactionally counted,
+and backed by lifetime idempotency receipts. Publication requires every release-required asset to be
+provider-ready and to carry its own complete normalized automated plus manual review evidence; text
+and polls remain media-free but still require canonical moderation and performer readiness.
+Composition autosave/reorder/remove mutations, frontend composer/renderers, and browser/provider proof
+remain active-slice work.
 
 Merged Convergence 01 has one deterministic recipient-KYC policy resolver for global mode, active
 account override, product, normalized jurisdiction, and active risk evidence; `risk_based` remains

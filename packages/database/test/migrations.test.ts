@@ -1153,6 +1153,10 @@ describe("database migrations", () => {
     expect(sql).toContain("delete from content_poll_votes");
     expect(sql).toContain("delete from content_poll_options");
     expect(sql).toContain("create trigger content_poll_votes_sync_counts");
+    expect(sql).toContain("create function private.content_composition_provider_ready");
+    expect(sql).toContain("asset.required_for_release is true");
+    expect(sql).toContain("create function private.content_composition_safety_ready");
+    expect(sql).toContain("private.content_safety_automated_asset_evidence_ready(content.id, asset.id)");
     expect(sql).toContain("poll_requires_two_to_four_options");
     expect(sql).toContain("v_publish_state not in ('draft', 'unpublished')");
     expect(sql).toContain("text_body_required");
@@ -1162,6 +1166,7 @@ describe("database migrations", () => {
     expect(downSql).toContain("drop table if exists content_poll_votes");
     expect(downSql).toContain("drop function if exists private.clear_poll_children_for_parent_delete");
     expect(downSql).toContain("drop function if exists private.assign_media_asset_position");
+    expect(downSql).toContain("drop function if exists private.content_composition_safety_ready");
     expect(downSql).toContain("drop column if exists origin_classification");
     expect(downSql).toContain("drop column if exists body_text");
   });

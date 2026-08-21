@@ -4708,7 +4708,7 @@ describe("buildApi", () => {
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({
       code: "conflict",
-      message: "Content cannot be published until provider media is ready"
+      message: "Content cannot be published until every required asset is ready"
     });
 
     await app.close();
