@@ -107,6 +107,7 @@ export interface UpdateOwnedContentInput {
   bodyText?: string | undefined;
   bodyTextProvided: boolean;
   expectedCompositionRevision?: number | undefined;
+  assetOrder?: string[] | undefined;
   requestHash?: string | undefined;
   visibility?: string | undefined;
   nsfwLabel?: NonNullable<ContentItem["nsfwLabel"]> | undefined;

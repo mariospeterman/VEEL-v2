@@ -4101,6 +4101,7 @@ export interface components {
             caption?: string;
             bodyText?: string;
             expectedCompositionRevision?: number;
+            assetOrder?: string[];
             /** @enum {string} */
             visibility?: "public" | "followers" | "subscribers" | "private";
             /** @enum {string} */

@@ -123,8 +123,10 @@ create trigger media_assets_assign_position
 before insert on media_assets
 for each row execute function private.assign_media_asset_position();
 
-create unique index media_assets_content_position_uidx
-  on media_assets (content_item_id, position);
+alter table media_assets
+  add constraint media_assets_content_position_uidx
+  unique (content_item_id, position)
+  deferrable initially immediate;
 
 create unique index media_assets_content_cover_uidx
   on media_assets (content_item_id)

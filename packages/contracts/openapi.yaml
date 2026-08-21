@@ -4083,6 +4083,12 @@ components:
         caption: { type: string }
         bodyText: { type: string, minLength: 1, maxLength: 10000 }
         expectedCompositionRevision: { type: integer, minimum: 1 }
+        assetOrder:
+          type: array
+          minItems: 1
+          maxItems: 10
+          uniqueItems: true
+          items: { type: string, format: uuid }
         visibility: { type: string, enum: [public, followers, subscribers, private] }
         nsfwLabel: { type: string, enum: [none, adult, explicit] }
         representationMode: { type: string, enum: [no_real_person, self_only, declared_performers] }

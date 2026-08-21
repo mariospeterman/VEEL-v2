@@ -26,7 +26,8 @@ drop function if exists private.assign_media_asset_position();
 
 drop index if exists media_assets_content_release_idx;
 drop index if exists media_assets_content_cover_uidx;
-drop index if exists media_assets_content_position_uidx;
+alter table media_assets
+  drop constraint if exists media_assets_content_position_uidx;
 
 alter table media_assets
   drop constraint if exists media_assets_provenance_privacy_check,

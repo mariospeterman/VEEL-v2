@@ -1593,6 +1593,42 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         { media_type: "text", body_text: `Revised structured text ${runId}`, poll_option_count: 0 }
       ]);
 
+      const carouselContentId = randomUUID();
+      const firstCarouselAssetId = randomUUID();
+      const secondCarouselAssetId = randomUUID();
+      await sql.begin(async (transaction) => {
+        await transaction`
+          insert into content_items (id, creator_user_id, media_type, visibility, nsfw_label)
+          values (${carouselContentId}, ${buyerSupabaseUserId}, 'carousel', 'private', 'none')
+        `;
+        await transaction`
+          insert into media_assets (id, content_item_id, provider, provider_asset_id, provider_state, asset_kind, position)
+          values
+            (${firstCarouselAssetId}, ${carouselContentId}, 'bunny', ${`carousel-first-${runId}`}, 'pending', 'image', 0),
+            (${secondCarouselAssetId}, ${carouselContentId}, 'bunny', ${`carousel-second-${runId}`}, 'pending', 'image', 1)
+        `;
+      });
+      const reorderResponse = await app.inject({
+        method: "PATCH",
+        url: `/v1/content/${carouselContentId}`,
+        headers: authenticatedHeaders(`carousel-reorder-${runId}`),
+        payload: {
+          assetOrder: [secondCarouselAssetId, firstCarouselAssetId],
+          expectedCompositionRevision: 3
+        }
+      });
+      expect(reorderResponse.statusCode, reorderResponse.body).toBe(200);
+      expect(reorderResponse.json()).toMatchObject({ compositionRevision: 4 });
+      const reorderedAssets = await sql<{ id: string; position: number }[]>`
+        select id, position from media_assets
+        where content_item_id = ${carouselContentId}
+        order by position
+      `;
+      expect(reorderedAssets).toEqual([
+        { id: secondCarouselAssetId, position: 0 },
+        { id: firstCarouselAssetId, position: 1 }
+      ]);
+
       const contentCreateReceipt = await sql<{ expires_at: string }[]>`
         select receipt.expires_at::text as expires_at
         from idempotency_keys receipt

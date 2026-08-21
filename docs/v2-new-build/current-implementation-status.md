@@ -68,8 +68,11 @@ and backed by lifetime idempotency receipts. Publication requires every release-
 provider-ready and to carry its own complete normalized automated plus manual review evidence; text
 and polls remain media-free but still require canonical moderation and performer readiness.
 Text drafts now autosave through the canonical content PATCH authority with a server composition
-revision, lifetime idempotency receipt, exact replay, and stale-write rejection. Asset reorder/remove
-mutations, frontend composer/renderers, and browser/provider proof remain active-slice work.
+revision, lifetime idempotency receipt, exact replay, and stale-write rejection. Asset reorder
+requests now persist only a complete, duplicate-free canonical asset set, use the same optimistic
+revision/idempotency authority, and swap positions under a deferred unique constraint in one
+transaction. Asset removal with provider cleanup/audit semantics, frontend composer/renderers, and
+browser/provider proof remain active-slice work.
 
 Merged Convergence 01 has one deterministic recipient-KYC policy resolver for global mode, active
 account override, product, normalized jurisdiction, and active risk evidence; `risk_based` remains

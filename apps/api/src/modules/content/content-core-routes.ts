@@ -38,6 +38,8 @@ import {
   type RegisterContentRoutesOptions
 } from "./content-route-shared.js";
 
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export async function registerContentCoreRoutes(
   app: FastifyInstance,
   options: RegisterContentRoutesOptions
@@ -330,7 +332,8 @@ export async function registerContentCoreRoutes(
         bodyText: body && "bodyText" in body && typeof body.bodyText === "string" ? body.bodyText.trim() : undefined,
         bodyTextProvided: Boolean(body && "bodyText" in body),
         expectedCompositionRevision: body?.expectedCompositionRevision,
-        requestHash: body && "bodyText" in body ? hashIdempotencyPayload(body) : undefined,
+        assetOrder: body?.assetOrder,
+        requestHash: body && ("bodyText" in body || "assetOrder" in body) ? hashIdempotencyPayload(body) : undefined,
         visibility: body?.visibility,
         nsfwLabel: body?.nsfwLabel,
         representationMode: body?.representationMode,
@@ -611,6 +614,7 @@ function validateUpdateContentBody(body: Partial<UpdateContentRequest> | undefin
   const hasKnownField =
     "caption" in body ||
     "bodyText" in body ||
+    "assetOrder" in body ||
     "visibility" in body ||
     "nsfwLabel" in body ||
     "representationMode" in body ||
@@ -636,14 +640,29 @@ function validateUpdateContentBody(body: Partial<UpdateContentRequest> | undefin
   }
 
 
+  const hasCompositionUpdate = "bodyText" in body || "assetOrder" in body;
   if ("bodyText" in body) {
     if (typeof body.bodyText !== "string" || body.bodyText.trim().length < 1 || body.bodyText.trim().length > 10_000) {
       return "bodyText must be between 1 and 10000 characters";
     }
-    if (!Number.isInteger(body.expectedCompositionRevision) || (body.expectedCompositionRevision ?? 0) < 1) {
-      return "expectedCompositionRevision is required for bodyText autosave";
+  }
+
+  if ("assetOrder" in body) {
+    if (
+      !Array.isArray(body.assetOrder) ||
+      body.assetOrder.length < 1 ||
+      body.assetOrder.length > 10 ||
+      body.assetOrder.some((id) => typeof id !== "string" || !uuidPattern.test(id)) ||
+      new Set(body.assetOrder).size !== body.assetOrder.length
+    ) {
+      return "assetOrder must contain one to ten unique asset ids";
     }
-  } else if ("expectedCompositionRevision" in body) {
+  }
+
+  if (hasCompositionUpdate && (!Number.isInteger(body.expectedCompositionRevision) || (body.expectedCompositionRevision ?? 0) < 1)) {
+    return "expectedCompositionRevision is required for composition updates";
+  }
+  if (!hasCompositionUpdate && "expectedCompositionRevision" in body) {
     return "expectedCompositionRevision requires a composition update";
   }
 

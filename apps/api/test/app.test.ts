@@ -4148,6 +4148,7 @@ describe("buildApi", () => {
           bodyText: undefined,
           bodyTextProvided: false,
           expectedCompositionRevision: undefined,
+          assetOrder: undefined,
           requestHash: undefined,
           visibility: "followers",
           nsfwLabel: "adult",
@@ -4251,6 +4252,38 @@ describe("buildApi", () => {
       bodyText: "Revised text",
       bodyTextProvided: true,
       expectedCompositionRevision: 1,
+      requestHash: expect.stringMatching(/^[0-9a-f]{64}$/)
+    }));
+    await app.close();
+  });
+
+  it("persists a complete canonical asset order with optimistic concurrency", async () => {
+    const firstId = "00000000-0000-4000-8000-000000000051";
+    const secondId = "00000000-0000-4000-8000-000000000052";
+    const updateOwnedContent = vi.fn(async () => ({ ...homeFeedItem, compositionRevision: 4 }));
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({ async onFind() {
+        return { id: "00000000-0000-4000-8000-000000000010", state: "active", handle: "maki", displayName: "Maki", avatarUrl: null };
+      } }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      verificationRepository: verificationRepositoryStub(),
+      contentRepository: { ...contentRepositoryWithDetail(homeFeedItem), updateOwnedContent }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "asset-reorder-0001" },
+      payload: { assetOrder: [secondId, firstId], expectedCompositionRevision: 3 }
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(updateOwnedContent).toHaveBeenCalledWith(expect.objectContaining({
+      assetOrder: [secondId, firstId],
+      expectedCompositionRevision: 3,
       requestHash: expect.stringMatching(/^[0-9a-f]{64}$/)
     }));
     await app.close();
@@ -4505,6 +4538,7 @@ describe("buildApi", () => {
           bodyText: undefined,
           bodyTextProvided: false,
           expectedCompositionRevision: undefined,
+          assetOrder: undefined,
           requestHash: undefined,
           visibility: undefined,
           nsfwLabel: undefined,

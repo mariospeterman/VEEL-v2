@@ -1136,7 +1136,8 @@ describe("database migrations", () => {
     const downSql = readMigration("0109_universal_composer_authority.down.sql");
 
     expect(sql).toContain("'carousel', 'text', 'poll'");
-    expect(sql).toContain("create unique index media_assets_content_position_uidx");
+    expect(sql).toContain("add constraint media_assets_content_position_uidx");
+    expect(sql).toContain("deferrable initially immediate");
     expect(sql).toContain("position between 0 and 9");
     expect(sql).toContain("create function private.assign_media_asset_position");
     expect(sql).toContain("where id = new.content_item_id\n  for update");

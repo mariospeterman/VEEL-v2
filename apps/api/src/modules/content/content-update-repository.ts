@@ -48,7 +48,8 @@ export function createContentUpdateRepositoryMethods(
         if (!actor) return null;
 
         let compositionReceiptKey: string | null = null;
-        if (input.bodyTextProvided) {
+        const hasCompositionUpdate = input.bodyTextProvided || Boolean(input.assetOrder);
+        if (hasCompositionUpdate) {
           compositionReceiptKey = `content:update:${actor.id}:${input.idempotencyKey}`;
           await transaction`
             insert into idempotency_keys (key, actor_user_id, scope, request_hash, expires_at)
@@ -67,19 +68,51 @@ export function createContentUpdateRepositoryMethods(
             return replay ? toContentItem(replay, null) : null;
           }
 
-          const drafts = await transaction<{ media_type: string; publish_state: string; asset_revision: number }[]>`
-            select media_type, publish_state, asset_revision
+          const drafts = await transaction<{
+            media_type: string;
+            publish_state: string;
+            asset_revision: number;
+            release_media_asset_id: string | null;
+          }[]>`
+            select media_type, publish_state, asset_revision, release_media_asset_id
             from content_items
             where id = ${input.contentId} and creator_user_id = ${actor.id}
             for update
           `;
           const draft = drafts[0];
           if (!draft) return null;
-          if (draft.media_type !== "text" || !["draft", "unpublished"].includes(draft.publish_state)) {
+          if (!["draft", "unpublished"].includes(draft.publish_state)) {
+            throw new ContentCompositionConflictError("composition_locked");
+          }
+          if (input.bodyTextProvided && draft.media_type !== "text") {
+            throw new ContentCompositionConflictError("composition_locked");
+          }
+          if (input.assetOrder && (["text", "poll"].includes(draft.media_type) || draft.release_media_asset_id)) {
             throw new ContentCompositionConflictError("composition_locked");
           }
           if (Number(draft.asset_revision) !== input.expectedCompositionRevision) {
             throw new ContentCompositionConflictError("revision_conflict");
+          }
+
+          if (input.assetOrder) {
+            const assets = await transaction<{ id: string }[]>`
+              select id from media_assets
+              where content_item_id = ${input.contentId}
+              order by position
+              for update
+            `;
+            const currentIds = assets.map((asset) => asset.id).sort();
+            const requestedIds = [...input.assetOrder].sort();
+            if (currentIds.length !== requestedIds.length || currentIds.some((id, index) => id !== requestedIds[index])) {
+              throw new ContentCompositionConflictError("revision_conflict");
+            }
+            await transaction`set constraints media_assets_content_position_uidx deferred`;
+            for (const [position, assetId] of input.assetOrder.entries()) {
+              await transaction`
+                update media_assets set position = ${position}
+                where id = ${assetId} and content_item_id = ${input.contentId}
+              `;
+            }
           }
         }
 
@@ -108,7 +141,10 @@ export function createContentUpdateRepositoryMethods(
             set
               caption = case when ${input.captionProvided} then ${input.caption ?? null} else ci.caption end,
               body_text = case when ${input.bodyTextProvided} then ${input.bodyText ?? null} else ci.body_text end,
-              asset_revision = case when ${input.bodyTextProvided} then ci.asset_revision + 1 else ci.asset_revision end,
+              asset_revision = case
+                when ${hasCompositionUpdate} then ${input.expectedCompositionRevision ?? 0} + 1
+                else ci.asset_revision
+              end,
               visibility = case when ${Boolean(input.visibility)} then ${input.visibility ?? ""} else ci.visibility end,
               nsfw_label = case when ${Boolean(input.nsfwLabel)} then ${input.nsfwLabel ?? ""} else ci.nsfw_label end,
               publish_state = case
