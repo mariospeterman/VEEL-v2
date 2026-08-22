@@ -1595,6 +1595,10 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           updated_at = now()
         where content_item_id = ${pollContentId}
       `;
+      const pollReleaseReadiness = await sql<{ ready: boolean }[]>`
+        select private.content_safety_release_ready(${pollContentId}) as ready
+      `;
+      expect(pollReleaseReadiness[0]?.ready).toBe(true);
       await sql`
         update content_items
         set

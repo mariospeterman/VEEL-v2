@@ -209,6 +209,19 @@ as $$
   ), false);
 $$;
 
+-- Keep the long-lived publication trigger on one canonical release predicate.
+-- The earlier implementation required a release media asset for every content
+-- item, which is intentionally invalid for text and poll compositions.
+create or replace function private.content_safety_release_ready(p_content_item_id uuid)
+returns boolean
+language sql
+stable
+security invoker
+set search_path = public, private
+as $$
+  select private.content_composition_safety_ready(p_content_item_id);
+$$;
+
 revoke all on function private.content_composition_provider_ready(uuid) from public, anon, authenticated;
 revoke all on function private.content_composition_safety_ready(uuid) from public, anon, authenticated;
 
@@ -216,6 +229,8 @@ comment on function private.content_composition_provider_ready(uuid) is
   'Requires every release-required media asset to be provider-ready; text and polls require no media assets.';
 comment on function private.content_composition_safety_ready(uuid) is
   'Requires canonical approval and performer readiness, plus complete normalized automated and manual evidence for every release-required media asset.';
+comment on function private.content_safety_release_ready(uuid) is
+  'Canonical publication trigger predicate for text, poll, and provider-backed media compositions.';
 
 create table content_polls (
   content_item_id uuid primary key references content_items(id) on delete cascade,

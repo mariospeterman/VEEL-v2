@@ -21,6 +21,44 @@ drop table if exists content_poll_votes;
 drop table if exists content_poll_options;
 drop table if exists content_polls;
 
+-- Restore the media-only release predicate from 0106 before removing the
+-- composition-aware functions and columns introduced by this migration.
+create or replace function private.content_safety_release_ready(p_content_item_id uuid)
+returns boolean
+language sql
+stable
+security invoker
+set search_path = public, private
+as $$
+  select coalesce((
+    select
+      msc.state = 'approved'
+      and msc.provider_release_allowed is true
+      and private.content_safety_automated_evidence_ready(ci.id)
+      and private.content_safety_release_evidence_ready(ci.id)
+      and private.content_performer_readiness(ci.id)
+      and exists (
+        select 1
+        from media_assets ma
+        where ma.id = ci.release_media_asset_id
+          and ma.content_item_id = ci.id
+          and ma.provider_playable is true
+          and ma.ready_at is not null
+      )
+    from content_items ci
+    join media_safety_cases msc
+      on msc.content_item_id = ci.id
+      and msc.state <> 'superseded'
+    where ci.id = p_content_item_id
+  ), false);
+$$;
+
+comment on function private.content_safety_release_ready(uuid) is
+  'Requires canonical moderation, automated and manual evidence, performer readiness, and provider-ready release media.';
+
+drop function if exists private.content_composition_safety_ready(uuid);
+drop function if exists private.content_composition_provider_ready(uuid);
+
 drop trigger if exists media_assets_assign_position on media_assets;
 drop function if exists private.assign_media_asset_position();
 
@@ -62,5 +100,3 @@ alter table content_items
   drop constraint if exists content_items_media_type_check,
   drop column if exists asset_revision,
   drop column if exists body_text;
-drop function if exists private.content_composition_safety_ready(uuid);
-drop function if exists private.content_composition_provider_ready(uuid);
