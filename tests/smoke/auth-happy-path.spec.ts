@@ -142,6 +142,7 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   await page.getByLabel("Caption").fill("Behind the scenes from today's studio shoot.");
   await page.getByLabel(/every person shown is 18\+ and consented/).check();
   await page.reload();
+  await page.getByRole("button", { name: /Photos or video/ }).click();
   await page.locator('input[type="file"]').setInputFiles({
     name: "studio-session.mp4",
     mimeType: "video/mp4",
