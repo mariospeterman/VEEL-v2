@@ -1,4 +1,5 @@
 import type { components } from "@veel/contracts";
+import type { ContentDetailRow } from "../content/content-repository-rows.js";
 
 export interface ProfileRow {
   id: string;
@@ -34,16 +35,8 @@ export interface CreatorProfileRow extends ProfileRow {
   membership_merchant_wallet: string | null;
 }
 
-export interface CreatorContentRow {
-  id: string;
-  media_type: components["schemas"]["ContentItem"]["mediaType"];
-  caption: string | null;
-  poster_url: string | null;
-  nsfw_label: NonNullable<components["schemas"]["ContentItem"]["nsfwLabel"]>;
-  creator_id: string;
-  handle: string | null;
-  display_name: string | null;
-  avatar_url: string | null;
+export interface CreatorContentRow extends ContentDetailRow {
+  viewer_is_creator: boolean;
 }
 
 export interface DashboardRow extends ProfileRow {

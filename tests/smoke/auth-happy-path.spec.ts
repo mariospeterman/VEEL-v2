@@ -274,6 +274,11 @@ test("renders canonical text and poll posts and accepts backend-confirmed votes"
   await confirmedVote;
   await expect(page.getByRole("button", { name: /Carousel/ })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByText("1 vote", { exact: true })).toBeVisible();
+
+  await page.goto("/profile/ariamoon");
+  await expect(page.getByRole("heading", { name: "Aria Moon" })).toBeVisible();
+  await expect(page.getByText("A structured text post with a real consumer renderer.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What should we publish next?" })).toBeVisible();
 });
 
 test("shows and updates audited payment commercial policy overrides", async ({ page }) => {
@@ -467,6 +472,42 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
       events: [],
       liveRooms: [liveRoom()],
       nextCursor: null
+    });
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/v1/profiles/ariamoon") {
+    sendJson(response, 200, {
+      user: user(),
+      bio: "Independent creator",
+      locationLabel: null,
+      links: [],
+      stats: {
+        contentCount: 2,
+        liveRoomCount: 0,
+        confirmedPaymentCount: 0,
+        followerCount: 12,
+        followingCount: 4
+      },
+      monetisation: {
+        supportEnabled: false,
+        contentUnlocksEnabled: false,
+        livePassesEnabled: false,
+        paidMessagesEnabled: false,
+        subscriptionsEnabled: false,
+        membershipOffer: null
+      },
+      recentContent: [textContentItem(), pollContentItem()]
+    });
+    return;
+  }
+
+  if (method === "GET" && url.pathname === `/v1/follows/${user().id}`) {
+    sendJson(response, 200, {
+      userId: user().id,
+      following: false,
+      followerCount: 12,
+      followingCount: 4
     });
     return;
   }

@@ -8,6 +8,12 @@ export function createProfileCreatorRepositoryMethods(
 ): Pick<ProfileRepository, "findCreatorProfileByHandle"> {
   return {
     async findCreatorProfileByHandle(handle, viewerUserId = null) {
+      const viewerRows = viewerUserId
+        ? await sql<{ id: string }[]>`
+            select id from users where supabase_user_id = ${viewerUserId} limit 1
+          `
+        : [];
+      const appViewerUserId = viewerRows[0]?.id ?? null;
       const rows = await sql<CreatorProfileRow[]>`
         select
           u.id,
@@ -37,7 +43,7 @@ export function createProfileCreatorRepositoryMethods(
           coalesce(social.following_count, 0) as following_count,
           (
             select count(*)
-            from private.eligible_content(${viewerUserId}, null) eligible
+            from private.eligible_content(${appViewerUserId}, null) eligible
             join content_items ci on ci.id = eligible.content_item_id
             where ci.creator_user_id = u.id
           ) as content_count,
@@ -86,25 +92,120 @@ export function createProfileCreatorRepositoryMethods(
           ci.id,
           ci.media_type,
           ci.caption,
+          ci.body_text,
+          ci.asset_revision,
           ci.nsfw_label,
-          ma.poster_url,
+          media.poster_url,
+          media.playback_url,
+          media.provider,
+          media.provider_state,
+          media.provider_playable,
+          universal_assets.media_assets,
+          poll_projection.poll,
+          access_rule.access_type,
+          access_rule.product_type,
+          entitlement.id as entitlement_id,
+          entitlement.state as entitlement_state,
+          entitlement.granted_at as entitlement_granted_at,
+          entitlement.ends_at as entitlement_ends_at,
+          coalesce(${appViewerUserId}::uuid = ci.creator_user_id, false) as viewer_is_creator,
           u.id as creator_id,
           p.handle,
           p.display_name,
           p.avatar_url
         from content_items ci
-        join private.eligible_content(${viewerUserId}, null) eligible
+        join private.eligible_content(${appViewerUserId}, null) eligible
           on eligible.content_item_id = ci.id
         join users u on u.id = ci.creator_user_id
         join profiles p on p.user_id = u.id
         left join lateral (
-          select poster_url
+          select poster_url, playback_url, provider, provider_state, provider_playable
           from media_assets
           where id = ci.release_media_asset_id
             and content_item_id = ci.id
           order by created_at asc
           limit 1
-        ) ma on true
+        ) media on true
+        left join lateral (
+          select access_type, product_type
+          from content_access_rules
+          where content_item_id = ci.id
+            and state = 'active'
+            and (starts_at is null or starts_at <= now())
+            and (ends_at is null or ends_at > now())
+          order by created_at desc
+          limit 1
+        ) access_rule on true
+        left join lateral (
+          select id, state, granted_at, ends_at
+          from entitlements
+          where user_id = ${appViewerUserId}
+            and target_type = 'content'
+            and target_id = ci.id
+            and product_type = 'content_unlock'
+            and state = 'active'
+            and starts_at <= now()
+            and (ends_at is null or ends_at > now())
+          order by granted_at desc
+          limit 1
+        ) entitlement on true
+        left join lateral (
+          select jsonb_agg(
+            jsonb_build_object(
+              'id', asset.id,
+              'kind', asset.asset_kind,
+              'position', asset.position,
+              'provider', asset.provider,
+              'providerState', asset.provider_state,
+              'posterUrl', asset.poster_url,
+              'mimeType', asset.mime_type,
+              'widthPixels', asset.width_pixels,
+              'heightPixels', asset.height_pixels,
+              'durationMs', asset.duration_ms,
+              'altText', asset.alt_text,
+              'requiredForRelease', asset.required_for_release,
+              'isCover', asset.is_cover,
+              'focalPointX', asset.focal_point_x,
+              'focalPointY', asset.focal_point_y,
+              'originClassification', asset.origin_classification,
+              'visibleLabelState', asset.visible_label_state
+            )
+            order by asset.position
+          ) as media_assets
+          from media_assets asset
+          where asset.content_item_id = ci.id
+        ) universal_assets on true
+        left join lateral (
+          select jsonb_build_object(
+            'question', poll.question,
+            'options', coalesce((
+              select jsonb_agg(
+                jsonb_build_object(
+                  'id', option.id,
+                  'position', option.position,
+                  'text', option.option_text,
+                  'voteCount', option.vote_count
+                )
+                order by option.position
+              )
+              from content_poll_options option
+              where option.content_item_id = poll.content_item_id
+            ), '[]'::jsonb),
+            'state', poll.state,
+            'totalVoteCount', coalesce((
+              select sum(option.vote_count)
+              from content_poll_options option
+              where option.content_item_id = poll.content_item_id
+            ), 0),
+            'closesAt', poll.closes_at,
+            'viewerOptionId', viewer_vote.option_id
+          ) as poll
+          from content_polls poll
+          left join content_poll_votes viewer_vote
+            on viewer_vote.content_item_id = poll.content_item_id
+            and viewer_vote.voter_user_id = ${appViewerUserId}
+          where poll.content_item_id = ci.id
+        ) poll_projection on true
         where ci.creator_user_id = ${row.id}
         order by ci.created_at desc
         limit 12

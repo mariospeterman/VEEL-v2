@@ -1610,6 +1610,25 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         where id = ${pollContentId}
       `;
 
+      const publicPollProfile = await app.inject({
+        method: "GET",
+        url: `/v1/profiles/${buyerHandle}`
+      });
+      expect(publicPollProfile.statusCode, publicPollProfile.body).toBe(200);
+      expect(publicPollProfile.json().recentContent).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: pollContentId,
+          mediaType: "poll",
+          accessState: "free",
+          poll: expect.objectContaining({
+            question: "Which format next?",
+            options: expect.arrayContaining([
+              expect.objectContaining({ id: firstPollOptionId, text: "Photos", voteCount: 0 })
+            ])
+          })
+        })
+      ]));
+
       const firstPollVoteKey = `poll-vote-first-${runId}`;
       const firstPollVote = await app.inject({
         method: "POST",
@@ -1989,6 +2008,13 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         },
         idempotencyKey: `sfw-appeal-split-evidence-${runId}`
       })).rejects.toThrow("Required automated safety checks are incomplete");
+
+      await sql`
+        update media_assets
+        set required_for_release = false
+        where id = ${alternateMediaAssetId}
+          and content_item_id = ${sfwContentId}
+      `;
 
       const evidenceHash = "a".repeat(64);
       await sql`

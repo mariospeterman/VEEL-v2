@@ -34,7 +34,7 @@ export function toContentItem(
     ...(row.poll !== undefined
       ? { poll: fullCompositionAllowed ? normalizeContentPoll(row.poll) : null }
       : {}),
-    posterUrl,
+    posterUrl: fullCompositionAllowed || accessState === "teaser" ? posterUrl : null,
     playback: playbackForRow(row as Partial<PlaybackProjectionRow>, accessState),
     accessState,
     nsfwLabel: row.nsfw_label,
