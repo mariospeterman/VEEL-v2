@@ -113,6 +113,17 @@ responsive derivatives after release. No image provider path is production-enabl
 proves private upload, Shield coverage, sanitization, optimized delivery, deletion, recovery, and
 credential rotation for the exact release artifact.
 
+The implemented upload boundary accepts raw JPEG, PNG, or WebP bodies up to 20 MB. It re-encodes
+the detected format with Sharp after orientation normalization, strips source metadata, limits
+decoded pixels and dimensions, then binds the sanitized SHA-256 checksum to a durable idempotent
+asset reservation before the server-only Bunny upload. Exact retries converge on the original
+opaque object path; changed-input key reuse conflicts. A completed Storage upload remains
+`stored_private` and explicitly non-playable until independent provider scan, classification, and
+human release evidence exists. `BUNNY_STORAGE_IMAGE_UPLOAD_ENABLED=false` is the default and the
+adapter also requires the Storage zone credential, regional endpoint, private Pull Zone, and token
+key before accepting uploads. The token key is reserved for the protected delivery path and never
+enters a browser bundle.
+
 Official references:
 
 - https://bunny.net/docs/api-reference/storage/index

@@ -385,7 +385,10 @@ end;
 $$;
 
 create trigger media_assets_bump_asset_revision
-after insert or update of position, asset_kind, alt_text, is_cover, focal_point_x, focal_point_y or delete
+after insert or update of position, asset_kind, alt_text, is_cover, focal_point_x, focal_point_y,
+  origin_classification, source_lineage_reference, workflow_provider_reference,
+  provenance_human_review_state, visible_label_state, machine_readable_marking_state, c2pa_reference
+  or delete
 on media_assets
 for each row execute function private.bump_content_asset_revision();
 

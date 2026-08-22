@@ -55,6 +55,33 @@ export async function authenticatedEmptyMutation(
   }
 }
 
+export async function authenticatedBinaryMutation<T>(
+  path: string,
+  body: Blob,
+  idempotencyKey?: string
+): Promise<T> {
+  const { token } = await browserSessionToken();
+  const env = readPublicWebEnv();
+  const headers = new Headers({
+    accept: "application/json",
+    "content-type": body.type,
+    "idempotency-key": idempotencyKey ?? createMutationIdempotencyKey()
+  });
+  if (token) headers.set("authorization", `Bearer ${token}`);
+
+  const response = await mutationFetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
+    body,
+    cache: "no-store",
+    credentials: "include",
+    headers,
+    method: "POST"
+  });
+  if (!response.ok) {
+    throw new ApiMutationError(await errorMessage(response), response.status);
+  }
+  return (await response.json()) as T;
+}
+
 export async function publicMutation<T>(
   path: string,
   method: "POST",

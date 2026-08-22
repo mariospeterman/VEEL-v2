@@ -1089,6 +1089,38 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "409": { $ref: "#/components/responses/Conflict" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/content/{contentId}/image-assets:
+    post:
+      operationId: uploadContentImageAsset
+      tags: [Content, Media]
+      summary: Sanitize and store one private image asset for an owned draft
+      description: The API validates and removes metadata before a server-only Bunny Storage upload. Exact retries reuse one durable reservation; release remains blocked pending provider and safety evidence.
+      parameters:
+        - $ref: "#/components/parameters/ContentId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema: { type: string, format: binary }
+          image/png:
+            schema: { type: string, format: binary }
+          image/webp:
+            schema: { type: string, format: binary }
+      responses:
+        "201":
+          description: Private sanitized image stored; public release still awaits safety evidence
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImageAssetUploadResult" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "413": { $ref: "#/components/responses/ValidationFailed" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/media/uploads:
     post:
       operationId: createMediaUpload
@@ -1105,6 +1137,30 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/media/assets/{mediaAssetId}:
+    patch:
+      operationId: updateContentMediaAsset
+      tags: [Media]
+      summary: Update accessibility and provenance fields on an owned draft asset
+      parameters:
+        - $ref: "#/components/parameters/MediaAssetId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateContentMediaAssetRequest" }
+      responses:
+        "200":
+          description: Updated asset and authoritative composition revision
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContentMediaAssetMutationResult" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/media/assets/{mediaAssetId}/sync:
     post:
@@ -3877,6 +3933,35 @@ components:
         focalPointY: { type: number, minimum: 0, maximum: 1, nullable: true }
         originClassification: { type: string, enum: [human_created, ai_assisted, ai_generated, materially_ai_manipulated] }
         visibleLabelState: { type: string, enum: [none, ai_assisted, ai_generated, manipulated] }
+    ImageAssetUploadResult:
+      type: object
+      required: [mediaAssetId, kind, mimeType, widthPixels, heightPixels, releaseState]
+      properties:
+        mediaAssetId: { type: string, format: uuid }
+        kind: { type: string, enum: [image] }
+        mimeType: { type: string, enum: [image/jpeg, image/png, image/webp] }
+        widthPixels: { type: integer, minimum: 1, maximum: 16384 }
+        heightPixels: { type: integer, minimum: 1, maximum: 16384 }
+        releaseState: { type: string, enum: [awaiting_safety_evidence] }
+    UpdateContentMediaAssetRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedCompositionRevision]
+      properties:
+        expectedCompositionRevision: { type: integer, minimum: 1 }
+        altText: { type: string, minLength: 1, maxLength: 1000, nullable: true }
+        originClassification:
+          type: string
+          enum: [human_created, ai_assisted, ai_generated, materially_ai_manipulated]
+      anyOf:
+        - required: [altText]
+        - required: [originClassification]
+    ContentMediaAssetMutationResult:
+      type: object
+      required: [compositionRevision, asset]
+      properties:
+        compositionRevision: { type: integer, minimum: 1 }
+        asset: { $ref: "#/components/schemas/ContentMediaAsset" }
     ContentPollOption:
       type: object
       required: [id, position, text, voteCount]

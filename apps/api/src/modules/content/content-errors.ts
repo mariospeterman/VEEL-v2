@@ -26,6 +26,19 @@ export class ContentCompositionConflictError extends Error {
   }
 }
 
+export class ContentImageUploadConflictError extends Error {
+  constructor(
+    readonly reason:
+      | "draft_locked"
+      | "format_invalid"
+      | "idempotency_conflict"
+      | "receipt_invalid"
+  ) {
+    super(reason);
+    this.name = "ContentImageUploadConflictError";
+  }
+}
+
 export class ContentDraftIdempotencyConflictError extends Error {
   constructor() {
     super("content_draft_idempotency_conflict");

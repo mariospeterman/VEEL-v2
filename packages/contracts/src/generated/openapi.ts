@@ -1122,6 +1122,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/content/{contentId}/image-assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sanitize and store one private image asset for an owned draft
+         * @description The API validates and removes metadata before a server-only Bunny Storage upload. Exact retries reuse one durable reservation; release remains blocked pending provider and safety evidence.
+         */
+        post: operations["uploadContentImageAsset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/media/uploads": {
         parameters: {
             query?: never;
@@ -1137,6 +1157,23 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/media/assets/{mediaAssetId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update accessibility and provenance fields on an owned draft asset */
+        patch: operations["updateContentMediaAsset"];
         trace?: never;
     };
     "/v1/media/assets/{mediaAssetId}/sync": {
@@ -3924,6 +3961,28 @@ export interface components {
             originClassification: "human_created" | "ai_assisted" | "ai_generated" | "materially_ai_manipulated";
             /** @enum {string} */
             visibleLabelState?: "none" | "ai_assisted" | "ai_generated" | "manipulated";
+        };
+        ImageAssetUploadResult: {
+            /** Format: uuid */
+            mediaAssetId: string;
+            /** @enum {string} */
+            kind: "image";
+            /** @enum {string} */
+            mimeType: "image/jpeg" | "image/png" | "image/webp";
+            widthPixels: number;
+            heightPixels: number;
+            /** @enum {string} */
+            releaseState: "awaiting_safety_evidence";
+        };
+        UpdateContentMediaAssetRequest: {
+            expectedCompositionRevision: number;
+            altText?: string | null;
+            /** @enum {string} */
+            originClassification?: "human_created" | "ai_assisted" | "ai_generated" | "materially_ai_manipulated";
+        } | unknown | unknown;
+        ContentMediaAssetMutationResult: {
+            compositionRevision: number;
+            asset: components["schemas"]["ContentMediaAsset"];
         };
         ContentPollOption: {
             /** Format: uuid */
@@ -9365,6 +9424,45 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    uploadContentImageAsset: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                contentId: components["parameters"]["ContentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "image/jpeg": string;
+                "image/png": string;
+                "image/webp": string;
+            };
+        };
+        responses: {
+            /** @description Private sanitized image stored; public release still awaits safety evidence */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageAssetUploadResult"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["ValidationFailed"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     createMediaUpload: {
         parameters: {
             query?: never;
@@ -9383,6 +9481,40 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    updateContentMediaAsset: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                mediaAssetId: components["parameters"]["MediaAssetId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateContentMediaAssetRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated asset and authoritative composition revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentMediaAssetMutationResult"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };

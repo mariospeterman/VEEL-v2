@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  authenticatedBinaryMutation,
   authenticatedEmptyMutation,
   authenticatedGet,
   authenticatedMutation,
@@ -81,6 +82,9 @@ export type {
   UpsertCreatorMembershipOfferRequest,
   UploadProfileAvatarRequest,
   UploadSession,
+  ImageAssetUploadResult,
+  UpdateContentMediaAssetRequest,
+  ContentMediaAssetMutationResult,
   VerificationSession,
   User,
   CreatorOnboarding,
@@ -178,6 +182,9 @@ import type {
   UpsertCreatorMembershipOfferRequest,
   UploadProfileAvatarRequest,
   UploadSession,
+  ImageAssetUploadResult,
+  UpdateContentMediaAssetRequest,
+  ContentMediaAssetMutationResult,
   VerificationSession,
   User,
   CreatorOnboarding,
@@ -342,6 +349,31 @@ export async function getMyContentPage(cursor: string): Promise<CreatorMediaPage
 
 export async function createMediaUpload(body: CreateUploadRequest): Promise<UploadSession> {
   return authenticatedMutation<UploadSession>("/v1/media/uploads", "POST", body);
+}
+
+export async function uploadContentImageAsset(
+  contentId: string,
+  file: File,
+  idempotencyKey?: string
+): Promise<ImageAssetUploadResult> {
+  return authenticatedBinaryMutation<ImageAssetUploadResult>(
+    `/v1/content/${encodeURIComponent(contentId)}/image-assets`,
+    file,
+    idempotencyKey
+  );
+}
+
+export async function updateContentMediaAsset(
+  mediaAssetId: string,
+  body: UpdateContentMediaAssetRequest,
+  idempotencyKey?: string
+): Promise<ContentMediaAssetMutationResult> {
+  return authenticatedMutation<ContentMediaAssetMutationResult>(
+    `/v1/media/assets/${encodeURIComponent(mediaAssetId)}`,
+    "PATCH",
+    body,
+    idempotencyKey
+  );
 }
 
 export async function syncMediaAsset(mediaAssetId: string): Promise<void> {

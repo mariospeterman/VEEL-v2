@@ -47,6 +47,7 @@ export const representationModes = new Set([
   "declared_performers"
 ]);
 export const videoMimeTypes = new Set(["video/mp4", "video/quicktime", "video/webm"]);
+export const imageMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 export const dailyContentDraftQuota = 20;
 export const dailyMediaUploadQuota = 30;
 export const contentCreationQuotaWindowHours = 24;

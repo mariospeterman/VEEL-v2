@@ -2,8 +2,10 @@ import { createHash, createHmac, randomUUID } from "node:crypto";
 import { TextEncoder } from "node:util";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
+import sharp from "sharp";
 import { describe, expect, it, vi } from "vitest";
 import { buildApi } from "../src/app";
+import type { MediaUploadProviderAdapter } from "../src/modules/content/types";
 import type { AgeProviderWaterfall } from "../src/modules/age/types";
 import { createPostgresAdminRepository } from "../src/modules/admin/admin-repository";
 import type {
@@ -101,6 +103,25 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     const ageProviderWaterfall = createIntegrationAgeWaterfall(providerReference);
     const walletAuthRepository = createPostgresWalletAuthRepository(sql);
     const settlementInputs: PaymentSettlementInput[] = [];
+    const storedImageUploads: Array<{ providerAssetId: string; body: Buffer; checksumSha256: string }> = [];
+    const mediaUploadProvider: MediaUploadProviderAdapter = {
+      provider: "bunny",
+      isConfigured: () => false,
+      async createUploadSession() {
+        throw new Error("This journey does not create a video upload session.");
+      },
+      isImageUploadConfigured: () => true,
+      createImageObjectReference(input) {
+        return `images/${input.contentId}/${input.mediaAssetId}.${input.extension}`;
+      },
+      async uploadImageObject(input) {
+        storedImageUploads.push({
+          providerAssetId: input.providerAssetId,
+          body: Buffer.from(input.body),
+          checksumSha256: input.checksumSha256
+        });
+      }
+    };
     const settlementVerifier: PaymentSettlementVerifier = {
       async verifyTransfer(input) {
         settlementInputs.push(input);
@@ -172,6 +193,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         }
       },
       ageProviderWaterfall,
+      mediaUploadProvider,
       settlementVerifier,
       subscriptionAuthorizationVerifier,
       subscriptionAuthorizationTransactionBuilder: async ({ context }) => {
@@ -1749,6 +1771,156 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         { media_type: "poll", body_text: null, poll_option_count: 3 },
         { media_type: "text", body_text: `Revised structured text ${runId}`, poll_option_count: 0 }
       ]);
+
+      const imageDraftResponse = await app.inject({
+        method: "POST",
+        url: "/v1/content",
+        headers: authenticatedHeaders(`image-content-create-${runId}`),
+        payload: {
+          mediaType: "image",
+          visibility: "public",
+          nsfwLabel: "none",
+          representationMode: "self_only",
+          contentSafetyPolicyAccepted: true,
+          caption: `Sanitized image ${runId}`
+        }
+      });
+      expect(imageDraftResponse.statusCode, imageDraftResponse.body).toBe(201);
+      const imageContentId = imageDraftResponse.json().id as string;
+      const sourceImage = await sharp({
+        create: {
+          width: 9,
+          height: 6,
+          channels: 3,
+          background: { r: 25, g: 80, b: 140 }
+        }
+      }).jpeg().withMetadata({ orientation: 6 }).toBuffer();
+      const imageUploadKey = `image-asset-upload-${runId}`;
+      const imageUploadResponse = await app.inject({
+        method: "POST",
+        url: `/v1/content/${imageContentId}/image-assets`,
+        headers: {
+          ...authenticatedHeaders(imageUploadKey),
+          "content-type": "image/jpeg"
+        },
+        payload: sourceImage
+      });
+      expect(imageUploadResponse.statusCode, imageUploadResponse.body).toBe(201);
+      expect(imageUploadResponse.json()).toMatchObject({
+        kind: "image",
+        mimeType: "image/jpeg",
+        widthPixels: 6,
+        heightPixels: 9,
+        releaseState: "awaiting_safety_evidence"
+      });
+      const imageMediaAssetId = imageUploadResponse.json().mediaAssetId as string;
+      expect(storedImageUploads).toHaveLength(1);
+      const storedImageMetadata = await sharp(storedImageUploads[0]!.body).metadata();
+      expect(storedImageMetadata.exif).toBeUndefined();
+      expect(storedImageMetadata.orientation).toBeUndefined();
+      expect(storedImageUploads[0]!.checksumSha256).toBe(
+        createHash("sha256").update(storedImageUploads[0]!.body).digest("hex")
+      );
+
+      const replayedImageUpload = await app.inject({
+        method: "POST",
+        url: `/v1/content/${imageContentId}/image-assets`,
+        headers: {
+          ...authenticatedHeaders(imageUploadKey),
+          "content-type": "image/jpeg"
+        },
+        payload: sourceImage
+      });
+      expect(replayedImageUpload.statusCode, replayedImageUpload.body).toBe(201);
+      expect(replayedImageUpload.json().mediaAssetId).toBe(imageMediaAssetId);
+      expect(storedImageUploads).toHaveLength(1);
+
+      const changedSourceImage = await sharp({
+        create: {
+          width: 3,
+          height: 3,
+          channels: 3,
+          background: { r: 180, g: 20, b: 20 }
+        }
+      }).jpeg().toBuffer();
+      const conflictingImageUpload = await app.inject({
+        method: "POST",
+        url: `/v1/content/${imageContentId}/image-assets`,
+        headers: {
+          ...authenticatedHeaders(imageUploadKey),
+          "content-type": "image/jpeg"
+        },
+        payload: changedSourceImage
+      });
+      expect(conflictingImageUpload.statusCode, conflictingImageUpload.body).toBe(409);
+      const persistedImageAssets = await sql<{
+        id: string;
+        provider_state: string;
+        provider_playable: boolean;
+        mime_type: string;
+        width_pixels: number;
+        height_pixels: number;
+        checksum_sha256: string;
+      }[]>`
+        select id, provider_state, provider_playable, mime_type,
+          width_pixels, height_pixels, checksum_sha256
+        from media_assets
+        where content_item_id = ${imageContentId}
+      `;
+      expect(persistedImageAssets).toEqual([
+        {
+          id: imageMediaAssetId,
+          provider_state: "stored_private",
+          provider_playable: false,
+          mime_type: "image/jpeg",
+          width_pixels: 6,
+          height_pixels: 9,
+          checksum_sha256: storedImageUploads[0]!.checksumSha256
+        }
+      ]);
+
+      const imageAssetUpdateKey = `image-asset-update-${runId}`;
+      const imageAssetUpdate = await app.inject({
+        method: "PATCH",
+        url: `/v1/media/assets/${imageMediaAssetId}`,
+        headers: authenticatedHeaders(imageAssetUpdateKey),
+        payload: {
+          expectedCompositionRevision: 2,
+          altText: "A blue and red integration fixture",
+          originClassification: "human_created"
+        }
+      });
+      expect(imageAssetUpdate.statusCode, imageAssetUpdate.body).toBe(200);
+      expect(imageAssetUpdate.json()).toMatchObject({
+        compositionRevision: 3,
+        asset: {
+          id: imageMediaAssetId,
+          altText: "A blue and red integration fixture",
+          originClassification: "human_created"
+        }
+      });
+      const replayedImageAssetUpdate = await app.inject({
+        method: "PATCH",
+        url: `/v1/media/assets/${imageMediaAssetId}`,
+        headers: authenticatedHeaders(imageAssetUpdateKey),
+        payload: {
+          expectedCompositionRevision: 2,
+          altText: "A blue and red integration fixture",
+          originClassification: "human_created"
+        }
+      });
+      expect(replayedImageAssetUpdate.statusCode, replayedImageAssetUpdate.body).toBe(200);
+      expect(replayedImageAssetUpdate.json()).toEqual(imageAssetUpdate.json());
+      const conflictingImageAssetUpdate = await app.inject({
+        method: "PATCH",
+        url: `/v1/media/assets/${imageMediaAssetId}`,
+        headers: authenticatedHeaders(imageAssetUpdateKey),
+        payload: {
+          expectedCompositionRevision: 2,
+          altText: "Changed text"
+        }
+      });
+      expect(conflictingImageAssetUpdate.statusCode, conflictingImageAssetUpdate.body).toBe(409);
 
       const carouselContentId = randomUUID();
       const firstCarouselAssetId = randomUUID();

@@ -74,6 +74,7 @@ Official references checked:
 
 - Bunny Stream owns VOD upload/resumability, storage, encoding, delivery, and provider playback. Bunny Shield is used only on upload paths with staging-proven coverage.
 - Bunny Storage plus Optimizer is the candidate image boundary: the API streams sanitized originals to opaque private paths with the server-only Storage `AccessKey`, while Optimizer produces responsive derivatives after release. The path stays fail-closed until exact staging evidence exists.
+- Private image ingestion is additionally feature-gated by `BUNNY_STORAGE_IMAGE_UPLOAD_ENABLED=false`. Configuration requires the zone-scoped `BUNNY_STORAGE_ACCESS_KEY`, `BUNNY_STORAGE_ZONE_NAME`, regional `BUNNY_STORAGE_API_ENDPOINT`, `BUNNY_STORAGE_PULL_ZONE_URL`, and server-only `BUNNY_STORAGE_PULL_ZONE_TOKEN_KEY`. Upload completion records `stored_private` with `provider_playable=false`; it is not release evidence.
 - Livepeer owns live ingest, transcoding, recording, and provider playback.
 - WeVid backend owns drafts/quarantine, performer and consent requirements, moderation/release, room/access/monetisation policy, entitlement/playback authorization, report and suspend/end orchestration, and replay release.
 - Frontend uses official provider player/component boundaries wrapped in WeVid layout primitives.

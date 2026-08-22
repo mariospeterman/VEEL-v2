@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Bunny Stream, Bunny Shield, Livepeer, moderation, performer consent, reporting
-Last updated: 2026-08-16
+Last updated: 2026-08-22
 Source of truth: yes
 
 Owns:
@@ -41,6 +41,15 @@ Bunny Shield upload scanning is not assumed to cover direct `video.bunnycdn.com/
 
 Disable Bunny Stream Early Play for quarantined uploads. Enabling Keep Original requires a retention/deletion review because the source file becomes a distinct provider-held copy.
 
+Image uploads use the same canonical safety case but a separate narrow Bunny Storage boundary.
+The API detects and re-encodes JPEG, PNG, or WebP, applies decoded-pixel and dimension limits,
+normalizes orientation, strips metadata, computes the sanitized checksum, and durably reserves an
+opaque object path before the server-only upload. Storage acceptance only advances the asset to
+`stored_private`; it does not set provider playability or satisfy scan, classification, or human
+review evidence. The path defaults disabled and remains candidate pending exact staging proof of
+Shield coverage, private token-authenticated delivery, Optimizer behavior, deletion, recovery, and
+credential rotation.
+
 ## Live Decision
 
 Livepeer remains the live/replay provider. Official APIs support multistream targets and the stream `suspended` property. The preferred safety path is a provider-supported moderation rendition/target plus server-side suspension, but it remains candidate until staging proves:
@@ -70,6 +79,7 @@ Veel stores normalized decisions, payload hashes, opaque provider references, co
 | Bunny Stream TUS/private playback | candidate | Real account, private quarantine, Early Play disabled, token/domain smoke |
 | Bunny Shield direct Stream TUS coverage | candidate/unproven | Written provider confirmation plus positive/negative staging fixtures |
 | Bunny Shield event-log reconciliation | candidate | Auth, pagination, incident semantics, reporting reconciliation fixture |
+| Bunny Storage private image ingestion | candidate/code-complete boundary | Storage/Shield credentials, sanitization fixture, signed Pull Zone delivery, Optimizer, deletion/recovery, and rotation proof |
 | Livepeer moderation multistream | candidate | Real target/session/webhook smoke |
 | Livepeer emergency suspension | candidate | Measured ingest/playback block and recovery test |
 | Adult live | disabled | Counsel/policy approval and launch-approved monitoring/suspension |

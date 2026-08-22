@@ -2,6 +2,7 @@ import { createHash, createHmac } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
+import sharp from "sharp";
 import { buildApi } from "../src/app";
 import { AdminRepositoryStateConflictError } from "../src/modules/admin/admin-repository";
 import type { AdminRepository } from "../src/modules/admin/types";
@@ -12,8 +13,10 @@ import { ContentDraftQuotaExceededError } from "../src/modules/content/content-r
 import type {
   ContentItem,
   ContentRepository,
+  CompleteImageAssetUploadInput,
   CreateMediaAssetInput,
-  MediaUploadProviderAdapter
+  MediaUploadProviderAdapter,
+  ReserveImageAssetUploadInput
 } from "../src/modules/content/types";
 import type {
   AgeProviderWaterfall,
@@ -4908,6 +4911,147 @@ describe("buildApi", () => {
         providerState: "created"
       }
     ]);
+
+    await app.close();
+  });
+
+  it("sanitizes and durably reserves an image before private provider upload", async () => {
+    const source = await sharp({
+      create: {
+        width: 7,
+        height: 4,
+        channels: 3,
+        background: { r: 120, g: 30, b: 60 }
+      }
+    }).jpeg().withMetadata({ orientation: 6 }).toBuffer();
+    let reservationInput: ReserveImageAssetUploadInput | null = null;
+    let completionInput: CompleteImageAssetUploadInput | null = null;
+    let providerInput: {
+      providerAssetId: string;
+      body: Buffer;
+      mimeType: "image/jpeg" | "image/png" | "image/webp";
+      checksumSha256: string;
+    } | null = null;
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        throw new Error("not implemented");
+      },
+      async createMediaAsset() {
+        throw new Error("video upload should not be used");
+      },
+      async reserveImageAssetUpload(input) {
+        reservationInput = input;
+        return {
+          mediaAssetId: input.mediaAssetId,
+          providerAssetId: input.providerAssetId,
+          completed: false
+        };
+      },
+      async completeImageAssetUpload(input) {
+        completionInput = input;
+      },
+      async findContentDetail() {
+        throw new Error("not implemented");
+      },
+      async findContentUnlockOffer() {
+        throw new Error("not implemented");
+      },
+      async findOwnedContentForUpload() {
+        return {
+          id: "00000000-0000-4000-8000-000000000040",
+          mediaType: "image",
+          caption: null,
+          nsfwLabel: "none"
+        };
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      }
+    };
+    const mediaUploadProvider: MediaUploadProviderAdapter = {
+      provider: "bunny",
+      isConfigured() {
+        return false;
+      },
+      async createUploadSession() {
+        throw new Error("video upload should not be used");
+      },
+      isImageUploadConfigured() {
+        return true;
+      },
+      createImageObjectReference(input) {
+        return `images/${input.contentId}/${input.mediaAssetId}.${input.extension}`;
+      },
+      async uploadImageObject(input) {
+        providerInput = input;
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      verificationRepository: creatorVerifiedVerificationRepository(),
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository,
+      mediaUploadProvider
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040/image-assets",
+      headers: {
+        authorization: "Bearer valid-token",
+        "content-type": "image/jpeg",
+        "idempotency-key": "image-upload-1"
+      },
+      payload: source
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      kind: "image",
+      mimeType: "image/jpeg",
+      widthPixels: 4,
+      heightPixels: 7,
+      releaseState: "awaiting_safety_evidence"
+    });
+    expect(reservationInput).toMatchObject({
+      contentId: "00000000-0000-4000-8000-000000000040",
+      idempotencyKey: "image-upload-1",
+      mimeType: "image/jpeg",
+      widthPixels: 4,
+      heightPixels: 7
+    });
+    const reserved = reservationInput as unknown as ReserveImageAssetUploadInput;
+    const uploaded = providerInput as unknown as {
+      providerAssetId: string;
+      body: Buffer;
+      mimeType: "image/jpeg" | "image/png" | "image/webp";
+      checksumSha256: string;
+    };
+    expect(uploaded).toMatchObject({
+      providerAssetId: reserved.providerAssetId,
+      mimeType: "image/jpeg",
+      checksumSha256: reserved.checksumSha256
+    });
+    expect(completionInput).toEqual({
+      mediaAssetId: reserved.mediaAssetId,
+      providerAssetId: reserved.providerAssetId
+    });
+    const storedMetadata = await sharp(uploaded.body).metadata();
+    expect(storedMetadata.exif).toBeUndefined();
+    expect(storedMetadata.orientation).toBeUndefined();
 
     await app.close();
   });

@@ -9,7 +9,7 @@ import {
   type CreateContentRequest
 } from "@/api-mutations";
 import type { VerificationStatus } from "@/api-client";
-import { CreateWorkspace } from "./create-workspace";
+import { MediaComposer } from "./media-composer";
 import {
   nsfwLabels,
   representationModes,
@@ -59,7 +59,7 @@ export function UniversalComposer({
       </fieldset>
 
       {format === "media" ? (
-        <CreateWorkspace storageScope={storageScope} verification={verification} />
+        <MediaComposer storageScope={storageScope} verification={verification} />
       ) : format === "text" || format === "poll" ? (
         <TextOrPollComposer format={format} />
       ) : (

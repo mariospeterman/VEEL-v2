@@ -29,6 +29,9 @@ export interface ContentRepository {
   captureProviderObservationCutoff?(): Promise<Date>;
   createDraft(input: CreateContentDraftInput): Promise<ContentItem>;
   createMediaAsset(input: CreateMediaAssetInput): Promise<{ id: string } | void>;
+  reserveImageAssetUpload?(input: ReserveImageAssetUploadInput): Promise<ReservedImageAssetUpload>;
+  completeImageAssetUpload?(input: CompleteImageAssetUploadInput): Promise<void>;
+  updateOwnedMediaAsset?(input: UpdateOwnedMediaAssetInput): Promise<MediaAssetMutationResult | null>;
   countContentDraftsCreatedSince?(input: CountContentQuotaInput): Promise<number>;
   countMediaAssetsCreatedSince?(input: CountContentQuotaInput): Promise<number>;
   getContentCreationAbusePolicy?(): Promise<ContentCreationAbusePolicy | null>;
@@ -183,6 +186,50 @@ export interface CreateMediaAssetInput {
   providerState: string;
 }
 
+export interface ReserveImageAssetUploadInput {
+  supabaseUserId: string;
+  contentId: string;
+  mediaAssetId: string;
+  idempotencyKey: string;
+  requestHash: string;
+  providerAssetId: string;
+  mimeType: "image/jpeg" | "image/png" | "image/webp";
+  widthPixels: number;
+  heightPixels: number;
+  checksumSha256: string;
+}
+
+export interface ReservedImageAssetUpload {
+  mediaAssetId: string;
+  providerAssetId: string;
+  completed: boolean;
+}
+
+export interface CompleteImageAssetUploadInput {
+  mediaAssetId: string;
+  providerAssetId: string;
+}
+
+export interface UpdateOwnedMediaAssetInput {
+  supabaseUserId: string;
+  mediaAssetId: string;
+  idempotencyKey: string;
+  requestHash: string;
+  expectedCompositionRevision: number;
+  altText?: string | null;
+  altTextProvided: boolean;
+  originClassification?:
+    | "human_created"
+    | "ai_assisted"
+    | "ai_generated"
+    | "materially_ai_manipulated";
+}
+
+export interface MediaAssetMutationResult {
+  compositionRevision: number;
+  asset: NonNullable<ContentItem["mediaAssets"]>[number];
+}
+
 export interface UpdateMediaAssetPlaybackInput {
   mediaAssetId: string;
   providerObservationCutoff: Date;
@@ -231,6 +278,18 @@ export interface MediaUploadProviderAdapter {
   createUploadSession(
     input: CreateMediaUploadProviderSessionInput
   ): Promise<MediaUploadProviderSession>;
+  isImageUploadConfigured?(): boolean;
+  createImageObjectReference?(input: {
+    contentId: string;
+    mediaAssetId: string;
+    extension: "jpg" | "png" | "webp";
+  }): string;
+  uploadImageObject?(input: {
+    providerAssetId: string;
+    body: Buffer;
+    mimeType: "image/jpeg" | "image/png" | "image/webp";
+    checksumSha256: string;
+  }): Promise<void>;
   createPlaybackResource?(
     input: CreateMediaPlaybackResourceInput
   ): NonNullable<ContentItem["playback"]>;
