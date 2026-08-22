@@ -1169,7 +1169,11 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Remove an asset from an owned draft and durably schedule provider cleanup
+         * @description The canonical composition is updated transactionally before provider deletion. Provider failure remains a retryable audited cleanup state and cannot restore the asset to the composition.
+         */
+        delete: operations["retireContentMediaAsset"];
         options?: never;
         head?: never;
         /** Update accessibility and provenance fields on an owned draft asset */
@@ -3984,6 +3988,17 @@ export interface components {
             compositionRevision: number;
             asset: components["schemas"]["ContentMediaAsset"];
         };
+        RetireContentMediaAssetRequest: {
+            expectedCompositionRevision: number;
+            reason: string;
+        };
+        RetireContentMediaAssetResult: {
+            /** Format: uuid */
+            mediaAssetId: string;
+            compositionRevision: number;
+            /** @enum {string} */
+            cleanupState: "pending" | "retry" | "completed";
+        };
         ContentPollOption: {
             /** Format: uuid */
             id: string;
@@ -5708,6 +5723,9 @@ export interface components {
             /** Format: uuid */
             contentItemId: string;
             /** @enum {string} */
+            assetKind: "image" | "video";
+            position: number | null;
+            /** @enum {string} */
             provider: "bunny" | "livepeer";
             providerAssetId: string;
             providerState: string;
@@ -5717,6 +5735,11 @@ export interface components {
             readyAt?: string | null;
             /** Format: date-time */
             providerCheckedAt?: string | null;
+            /** Format: date-time */
+            retiredAt: string | null;
+            /** @enum {string} */
+            providerCleanupState: "not_required" | "pending" | "retry" | "completed";
+            providerCleanupErrorCode: string | null;
             /** Format: date-time */
             createdAt: string;
         };
@@ -9481,6 +9504,49 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    retireContentMediaAsset: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                mediaAssetId: components["parameters"]["MediaAssetId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetireContentMediaAssetRequest"];
+            };
+        };
+        responses: {
+            /** @description Asset retired and provider cleanup completed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetireContentMediaAssetResult"];
+                };
+            };
+            /** @description Asset retired; provider cleanup is durably pending retry */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetireContentMediaAssetResult"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };

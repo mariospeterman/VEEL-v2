@@ -5056,6 +5056,141 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("retires a draft asset before deleting the provider object and returns authoritative cleanup state", async () => {
+    const calls: string[] = [];
+    const contentRepository: ContentRepository = {
+      async createDraft() { throw new Error("not implemented"); },
+      async createMediaAsset() { throw new Error("not implemented"); },
+      async findContentDetail() { throw new Error("not implemented"); },
+      async findContentUnlockOffer() { throw new Error("not implemented"); },
+      async findOwnedContentForUpload() { throw new Error("not implemented"); },
+      async listHomeFeed() { throw new Error("not implemented"); },
+      async retireOwnedMediaAsset(input) {
+        calls.push(`retire:${input.expectedCompositionRevision}:${input.reason}`);
+        return {
+          contentId: "00000000-0000-4000-8000-000000000040",
+          mediaAssetId: input.mediaAssetId,
+          compositionRevision: 4,
+          cleanupState: "pending",
+          provider: "bunny",
+          providerAssetId: "images/content/asset.webp",
+          assetKind: "image"
+        };
+      },
+      async completeMediaAssetCleanup(input) {
+        calls.push(`cleanup:${input.succeeded}`);
+      }
+    };
+    const mediaUploadProvider: MediaUploadProviderAdapter = {
+      provider: "bunny",
+      isConfigured() { return true; },
+      async createUploadSession() { throw new Error("not implemented"); },
+      async deleteProviderAsset(input) {
+        calls.push(`provider-delete:${input.assetKind}:${input.providerAssetId}`);
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      verificationRepository: creatorVerifiedVerificationRepository(),
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository,
+      mediaUploadProvider
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "DELETE",
+      url: "/v1/media/assets/00000000-0000-4000-8000-000000000041",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "asset-remove-1"
+      },
+      payload: { expectedCompositionRevision: 3, reason: "creator_removed" }
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json()).toEqual({
+      mediaAssetId: "00000000-0000-4000-8000-000000000041",
+      compositionRevision: 4,
+      cleanupState: "completed"
+    });
+    expect(calls).toEqual([
+      "retire:3:creator_removed",
+      "provider-delete:image:images/content/asset.webp",
+      "cleanup:true"
+    ]);
+    await app.close();
+  });
+
+  it("keeps provider cleanup durably retryable without restoring a retired asset", async () => {
+    let cleanupSucceeded: boolean | null = null;
+    const contentRepository: ContentRepository = {
+      async createDraft() { throw new Error("not implemented"); },
+      async createMediaAsset() { throw new Error("not implemented"); },
+      async findContentDetail() { throw new Error("not implemented"); },
+      async findContentUnlockOffer() { throw new Error("not implemented"); },
+      async findOwnedContentForUpload() { throw new Error("not implemented"); },
+      async listHomeFeed() { throw new Error("not implemented"); },
+      async retireOwnedMediaAsset(input) {
+        return {
+          contentId: "00000000-0000-4000-8000-000000000040",
+          mediaAssetId: input.mediaAssetId,
+          compositionRevision: 4,
+          cleanupState: "pending",
+          provider: "bunny",
+          providerAssetId: "images/content/asset.webp",
+          assetKind: "image"
+        };
+      },
+      async completeMediaAssetCleanup(input) {
+        cleanupSucceeded = input.succeeded;
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return { id: "00000000-0000-4000-8000-000000000010", state: "active", handle: "maki", displayName: "Maki", avatarUrl: null };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      verificationRepository: creatorVerifiedVerificationRepository(),
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository,
+      mediaUploadProvider: {
+        provider: "bunny",
+        isConfigured() { return true; },
+        async createUploadSession() { throw new Error("not implemented"); },
+        async deleteProviderAsset() { throw new Error("provider outage"); }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "DELETE",
+      url: "/v1/media/assets/00000000-0000-4000-8000-000000000041",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "asset-remove-retry-1" },
+      payload: { expectedCompositionRevision: 3, reason: "creator_removed" }
+    });
+
+    expect(response.statusCode, response.body).toBe(202);
+    expect(response.json()).toMatchObject({ cleanupState: "retry", compositionRevision: 4 });
+    expect(cleanupSucceeded).toBe(false);
+    await app.close();
+  });
+
   it("blocks media uploads when the daily server quota is reached before calling Bunny", async () => {
     let providerCalled = false;
     const contentRepository: ContentRepository = {
@@ -12857,6 +12992,8 @@ const fakeAdminRepository: AdminRepository = {
         {
           id: "00000000-0000-4000-8000-000000000070",
           contentItemId: "00000000-0000-4000-8000-000000000040",
+          assetKind: "video",
+          position: 0,
           provider: "bunny",
           providerAssetId: "bunny-video-1",
           providerState: "ready",
@@ -12864,6 +13001,9 @@ const fakeAdminRepository: AdminRepository = {
           hasPlaybackUrl: true,
           readyAt: "2026-06-06T15:00:00.000Z",
           providerCheckedAt: "2026-06-06T15:01:00.000Z",
+          retiredAt: null,
+          providerCleanupState: "not_required",
+          providerCleanupErrorCode: null,
           createdAt: "2026-06-06T14:00:00.000Z"
         }
       ],

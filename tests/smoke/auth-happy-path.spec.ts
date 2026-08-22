@@ -293,6 +293,15 @@ test("builds an accessible private photo draft and explains its fail-closed revi
   await expect(page.getByText(/Publication stays blocked until/)).toBeVisible();
   await page.getByRole("button", { name: "Review and submit" }).click();
   await expect(page.getByText("Photos are still completing safety review", { exact: true })).toBeVisible();
+  const assetRemoval = page.waitForRequest((request) =>
+    request.method() === "DELETE" &&
+    new URL(request.url()).pathname === `/v1/media/assets/${imageMediaAssetId}` &&
+    request.postDataJSON()?.reason === "creator_removed"
+  );
+  await page.getByRole("button", { name: "Remove" }).click();
+  await assetRemoval;
+  await expect(page.getByRole("status")).toHaveText("Photo removed.");
+  await expect(page.getByText("Stored privately", { exact: true })).toHaveCount(0);
   await expect(page.getByText(/BUNNY_STORAGE|provider_asset|stored_private/i)).toHaveCount(0);
 });
 
@@ -622,6 +631,15 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
     return;
   }
 
+  if (method === "DELETE" && url.pathname === `/v1/media/assets/${imageMediaAssetId}`) {
+    sendJson(response, 200, {
+      mediaAssetId: imageMediaAssetId,
+      compositionRevision: 4,
+      cleanupState: "completed"
+    });
+    return;
+  }
+
   if (method === "POST" && url.pathname === "/v1/media/uploads") {
     sendJson(response, 201, {
       uploadUrl: "https://bunny.example.test/tus/studio-session",
@@ -692,7 +710,7 @@ function setCorsHeaders(response: ServerResponse) {
   response.setHeader("Access-Control-Allow-Origin", e2eOrigin);
   response.setHeader("Access-Control-Allow-Credentials", "true");
   response.setHeader("Access-Control-Allow-Headers", "authorization,content-type,idempotency-key,accept");
-  response.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,OPTIONS");
+  response.setHeader("Access-Control-Allow-Methods", "DELETE,GET,POST,PATCH,OPTIONS");
 }
 
 function sendJson(response: ServerResponse, status: number, body: unknown) {

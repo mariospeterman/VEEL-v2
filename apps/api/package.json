@@ -13,6 +13,11 @@
       "types": "./src/provider-event-replay-runtime.ts",
       "development": "./src/provider-event-replay-runtime.ts",
       "default": "./dist/provider-event-replay-runtime.js"
+    },
+    "./media-upload-provider": {
+      "types": "./src/media-upload-provider.ts",
+      "development": "./src/media-upload-provider.ts",
+      "default": "./dist/media-upload-provider.js"
     }
   },
   "scripts": {

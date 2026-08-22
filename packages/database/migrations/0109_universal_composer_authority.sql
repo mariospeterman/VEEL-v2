@@ -25,6 +25,17 @@ alter table media_assets
   add column alt_text text,
   add column checksum_sha256 text,
   add column required_for_release boolean not null default true,
+  add column retired_at timestamptz,
+  add column retired_by_user_id uuid references users(id) on delete restrict,
+  add column retirement_reason text,
+  add column provider_cleanup_state text not null default 'not_required' check (
+    provider_cleanup_state in ('not_required', 'pending', 'retry', 'completed')
+  ),
+  add column provider_cleanup_error_code text,
+  add column provider_cleanup_attempt_count integer not null default 0 check (provider_cleanup_attempt_count >= 0),
+  add column provider_cleanup_next_attempt_at timestamptz,
+  add column provider_cleanup_lease_token uuid,
+  add column provider_cleanup_leased_until timestamptz,
   add column is_cover boolean not null default false,
   add column focal_point_x numeric(5,4),
   add column focal_point_y numeric(5,4),
@@ -45,7 +56,36 @@ alter table media_assets
     machine_readable_marking_state in ('unavailable', 'pending', 'present', 'invalid')
   ),
   add column c2pa_reference text,
-  add constraint media_assets_position_check check (position between 0 and 9),
+  add constraint media_assets_position_check check (
+    (retired_at is null and position between 0 and 9)
+    or (retired_at is not null and position is null)
+  ),
+  add constraint media_assets_retirement_check check (
+    (
+      retired_at is null
+      and retired_by_user_id is null
+      and retirement_reason is null
+      and provider_cleanup_state = 'not_required'
+      and provider_cleanup_error_code is null
+      and provider_cleanup_attempt_count = 0
+      and provider_cleanup_next_attempt_at is null
+      and provider_cleanup_lease_token is null
+      and provider_cleanup_leased_until is null
+    )
+    or (
+      retired_at is not null
+      and retired_by_user_id is not null
+      and retirement_reason is not null
+      and char_length(retirement_reason) between 1 and 240
+      and provider_cleanup_state in ('pending', 'retry', 'completed')
+      and (provider_cleanup_error_code is null or char_length(provider_cleanup_error_code) between 1 and 120)
+      and (
+        (provider_cleanup_state = 'completed' and provider_cleanup_next_attempt_at is null)
+        or (provider_cleanup_state in ('pending', 'retry') and provider_cleanup_next_attempt_at is not null)
+      )
+      and ((provider_cleanup_lease_token is null) = (provider_cleanup_leased_until is null))
+    )
+  ),
   add constraint media_assets_mime_type_check check (
     mime_type is null
     or mime_type in (
@@ -89,9 +129,6 @@ set position = ordered.next_position
 from ordered_assets ordered
 where ordered.id = asset.id;
 
-alter table media_assets
-  alter column position set not null;
-
 create function private.assign_media_asset_position()
 returns trigger
 language plpgsql
@@ -104,14 +141,15 @@ begin
   where id = new.content_item_id
   for update;
 
-  if new.position is null then
+  if new.retired_at is null and new.position is null then
     select coalesce(max(asset.position) + 1, 0)
     into new.position
     from media_assets asset
-    where asset.content_item_id = new.content_item_id;
+    where asset.content_item_id = new.content_item_id
+      and asset.retired_at is null;
   end if;
 
-  if new.position not between 0 and 9 then
+  if new.retired_at is null and new.position not between 0 and 9 then
     raise exception using errcode = '23514', message = 'content_asset_count_exceeded';
   end if;
 
@@ -133,7 +171,12 @@ create unique index media_assets_content_cover_uidx
   where is_cover;
 
 create index media_assets_content_release_idx
-  on media_assets (content_item_id, required_for_release, position);
+  on media_assets (content_item_id, required_for_release, position)
+  where retired_at is null;
+
+create index media_assets_provider_cleanup_idx
+  on media_assets (provider_cleanup_next_attempt_at, created_at)
+  where retired_at is not null and provider_cleanup_state in ('pending', 'retry');
 
 create function private.content_composition_provider_ready(p_content_item_id uuid)
 returns boolean
@@ -145,14 +188,18 @@ as $$
   select coalesce((
     select case
       when content.media_type in ('text', 'poll') then not exists (
-        select 1 from media_assets asset where asset.content_item_id = content.id
+        select 1 from media_assets asset
+        where asset.content_item_id = content.id and asset.retired_at is null
       )
       else exists (
         select 1 from media_assets asset
-        where asset.content_item_id = content.id and asset.required_for_release is true
+        where asset.content_item_id = content.id
+          and asset.retired_at is null
+          and asset.required_for_release is true
       ) and not exists (
         select 1 from media_assets asset
         where asset.content_item_id = content.id
+          and asset.retired_at is null
           and asset.required_for_release is true
           and (asset.provider_playable is not true or asset.ready_at is null)
       )
@@ -181,6 +228,7 @@ as $$
           select 1
           from media_assets asset
           where asset.content_item_id = content.id
+            and asset.retired_at is null
             and asset.required_for_release is true
             and (
               not private.content_safety_automated_asset_evidence_ready(content.id, asset.id)
@@ -344,7 +392,8 @@ begin
     )
   into v_asset_count, v_invalid_kind_count
   from media_assets
-  where content_item_id = v_content_item_id;
+  where content_item_id = v_content_item_id
+    and retired_at is null;
 
   if v_asset_count > 10 then
     raise exception using errcode = '23514', message = 'content_asset_count_exceeded';
@@ -360,7 +409,7 @@ end;
 $$;
 
 create constraint trigger media_assets_enforce_content_shape
-after insert or update of content_item_id, asset_kind or delete on media_assets
+after insert or update of content_item_id, asset_kind, retired_at or delete on media_assets
 deferrable initially deferred
 for each row execute function private.enforce_content_asset_shape();
 
@@ -387,7 +436,8 @@ $$;
 create trigger media_assets_bump_asset_revision
 after insert or update of position, asset_kind, alt_text, is_cover, focal_point_x, focal_point_y,
   origin_classification, source_lineage_reference, workflow_provider_reference,
-  provenance_human_review_state, visible_label_state, machine_readable_marking_state, c2pa_reference
+  provenance_human_review_state, visible_label_state, machine_readable_marking_state, c2pa_reference,
+  retired_at
   or delete
 on media_assets
 for each row execute function private.bump_content_asset_revision();

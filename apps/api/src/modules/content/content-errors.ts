@@ -39,6 +39,19 @@ export class ContentImageUploadConflictError extends Error {
   }
 }
 
+export class ContentAssetRetirementConflictError extends Error {
+  constructor(
+    readonly reason:
+      | "revision_conflict"
+      | "composition_locked"
+      | "idempotency_conflict"
+      | "asset_already_retired"
+  ) {
+    super(reason);
+    this.name = "ContentAssetRetirementConflictError";
+  }
+}
+
 export class ContentDraftIdempotencyConflictError extends Error {
   constructor() {
     super("content_draft_idempotency_conflict");

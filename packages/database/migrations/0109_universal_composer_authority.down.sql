@@ -63,6 +63,7 @@ drop trigger if exists media_assets_assign_position on media_assets;
 drop function if exists private.assign_media_asset_position();
 
 drop index if exists media_assets_content_release_idx;
+drop index if exists media_assets_provider_cleanup_idx;
 drop index if exists media_assets_content_cover_uidx;
 alter table media_assets
   drop constraint if exists media_assets_content_position_uidx;
@@ -74,6 +75,7 @@ alter table media_assets
   drop constraint if exists media_assets_alt_text_check,
   drop constraint if exists media_assets_dimensions_check,
   drop constraint if exists media_assets_mime_type_check,
+  drop constraint if exists media_assets_retirement_check,
   drop constraint if exists media_assets_position_check,
   drop column if exists c2pa_reference,
   drop column if exists machine_readable_marking_state,
@@ -85,6 +87,15 @@ alter table media_assets
   drop column if exists focal_point_y,
   drop column if exists focal_point_x,
   drop column if exists is_cover,
+  drop column if exists provider_cleanup_error_code,
+  drop column if exists provider_cleanup_leased_until,
+  drop column if exists provider_cleanup_lease_token,
+  drop column if exists provider_cleanup_next_attempt_at,
+  drop column if exists provider_cleanup_attempt_count,
+  drop column if exists provider_cleanup_state,
+  drop column if exists retirement_reason,
+  drop column if exists retired_by_user_id,
+  drop column if exists retired_at,
   drop column if exists required_for_release,
   drop column if exists checksum_sha256,
   drop column if exists alt_text,

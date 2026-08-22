@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import {
+  ContentAssetRetirementConflictError,
   ContentImageUploadConflictError,
   ContentRepositoryConfigurationError
 } from "./content-repository.js";
@@ -406,6 +407,117 @@ export async function registerContentUploadRoutes(
             error.reason === "idempotency_conflict"
               ? "Idempotency-Key was already used for different asset changes"
               : "The draft changed; refresh it before editing this asset"
+        });
+      }
+      if (error instanceof ContentRepositoryConfigurationError) {
+        return reply.code(503).send({ code: "service_unavailable", message: "Content storage is not configured" });
+      }
+      throw error;
+    }
+  });
+
+  app.delete("/v1/media/assets/:mediaAssetId", async (request, reply) => {
+    const access = await verifyAppReadyAccess(request, options);
+    if (!access.ok) return reply.code(access.statusCode).send(access.body);
+
+    const idempotencyKey = request.headers["idempotency-key"];
+    const params = request.params as { mediaAssetId?: string };
+    const body = request.body as {
+      expectedCompositionRevision?: unknown;
+      reason?: unknown;
+    } | undefined;
+    const reason = typeof body?.reason === "string" ? body.reason.trim() : "";
+    if (
+      typeof idempotencyKey !== "string" ||
+      !params.mediaAssetId ||
+      !body ||
+      !Number.isInteger(body.expectedCompositionRevision) ||
+      Number(body.expectedCompositionRevision) < 1 ||
+      !reason ||
+      reason.length > 240
+    ) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: "A composition revision, idempotency key, and removal reason are required"
+      });
+    }
+    if (
+      !options.contentRepository.retireOwnedMediaAsset ||
+      !options.contentRepository.completeMediaAssetCleanup
+    ) {
+      return reply.code(503).send({
+        code: "service_unavailable",
+        message: "Asset removal is unavailable"
+      });
+    }
+
+    try {
+      const normalized = {
+        expectedCompositionRevision: Number(body.expectedCompositionRevision),
+        reason
+      };
+      const retired = await options.contentRepository.retireOwnedMediaAsset({
+        supabaseUserId: access.supabaseUserId,
+        mediaAssetId: params.mediaAssetId,
+        idempotencyKey,
+        requestHash: createHash("sha256").update(JSON.stringify(normalized)).digest("hex"),
+        expectedCompositionRevision: normalized.expectedCompositionRevision,
+        reason
+      });
+      if (!retired) {
+        return reply.code(404).send({ code: "not_found", message: "Editable media asset was not found" });
+      }
+
+      let cleanupState = retired.cleanupState;
+      if (cleanupState !== "completed") {
+        try {
+          if (
+            retired.provider !== options.mediaUploadProvider.provider ||
+            !options.mediaUploadProvider.deleteProviderAsset
+          ) {
+            throw new MediaUploadProviderConfigurationError();
+          }
+          await options.mediaUploadProvider.deleteProviderAsset({
+            providerAssetId: retired.providerAssetId,
+            assetKind: retired.assetKind
+          });
+          await options.contentRepository.completeMediaAssetCleanup({
+            supabaseUserId: access.supabaseUserId,
+            mediaAssetId: retired.mediaAssetId,
+            idempotencyKey,
+            succeeded: true
+          });
+          cleanupState = "completed";
+        } catch (error) {
+          const errorCode = error instanceof MediaUploadProviderConfigurationError
+            ? "provider_delete_not_configured"
+            : "provider_delete_failed";
+          await options.contentRepository.completeMediaAssetCleanup({
+            supabaseUserId: access.supabaseUserId,
+            mediaAssetId: retired.mediaAssetId,
+            idempotencyKey,
+            succeeded: false,
+            errorCode
+          });
+          request.log.warn({ error, mediaAssetId: retired.mediaAssetId }, "Retired media cleanup is pending retry");
+          cleanupState = "retry";
+        }
+      }
+
+      return reply.code(cleanupState === "completed" ? 200 : 202).send({
+        mediaAssetId: retired.mediaAssetId,
+        compositionRevision: retired.compositionRevision,
+        cleanupState
+      });
+    } catch (error) {
+      if (error instanceof ContentAssetRetirementConflictError) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: error.reason === "idempotency_conflict"
+            ? "Idempotency-Key was already used for a different removal"
+            : error.reason === "revision_conflict"
+              ? "The draft changed; refresh it before removing this asset"
+              : "This asset can no longer be removed from the draft"
         });
       }
       if (error instanceof ContentRepositoryConfigurationError) {

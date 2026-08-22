@@ -52,6 +52,7 @@ export function createContentWorkflowRepositoryMethods(
             (array_agg(poster_url order by created_at asc))[1] as poster_url
           from media_assets
           where content_item_id = ci.id
+            and retired_at is null
         ) media on true
         where u.supabase_user_id = ${input.supabaseUserId}
           and ci.state <> 'deleted'

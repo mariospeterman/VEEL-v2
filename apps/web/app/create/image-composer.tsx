@@ -8,6 +8,7 @@ import {
   createContentDraft,
   getContentForMutation,
   publishContent,
+  retireContentMediaAsset,
   updateContent,
   updateContentMediaAsset,
   uploadContentImageAsset,
@@ -46,11 +47,13 @@ export function ImageComposer({
   const [representationMode, setRepresentationMode] = useState<CreateContentRequest["representationMode"]>("self_only");
   const [accepted, setAccepted] = useState(false);
   const [draft, setDraft] = useState<ContentItem | null>(null);
-  const [pending, setPending] = useState<"upload" | "reorder" | "publish" | null>(null);
+  const [pending, setPending] = useState<"upload" | "reorder" | "details" | "remove" | "publish" | null>(null);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const uploadKeys = useRef(new Map<string, string>());
+  const removalKeys = useRef(new Map<string, string>());
   const previewUrls = useRef(new Set<string>());
   const draftKey = storageScope ? `wevid:create:${storageScope}:image-draft-v1` : null;
   const allUploaded = assets.length > 0 && assets.every((asset) => asset.mediaAssetId);
@@ -101,11 +104,11 @@ export function ImageComposer({
         originClassification: "human_created"
       };
     }));
-    setDraft(null);
     setProgress(0);
     setAccepted(false);
     setSubmitted(false);
     setError(null);
+    setNotice(null);
   }
 
   async function onUpload(event: FormEvent<HTMLFormElement>) {
@@ -181,6 +184,61 @@ export function ImageComposer({
     }
   }
 
+  async function saveAssetDetails(asset: LocalAsset) {
+    if (!draft || !asset.mediaAssetId) return;
+    setPending("details");
+    setError(null);
+    setNotice(null);
+    try {
+      const updated = await updateContentMediaAsset(asset.mediaAssetId, {
+        expectedCompositionRevision: draft.compositionRevision ?? 1,
+        altText: asset.altText.trim(),
+        originClassification: asset.originClassification
+      });
+      setDraft({ ...draft, compositionRevision: updated.compositionRevision });
+      setNotice("Photo details saved.");
+    } catch (caught) {
+      setError(messageFor(caught));
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function removeAsset(asset: LocalAsset) {
+    if (!asset.mediaAssetId) {
+      URL.revokeObjectURL(asset.previewUrl);
+      previewUrls.current.delete(asset.previewUrl);
+      setAssets((current) => current.filter((item) => item.key !== asset.key));
+      return;
+    }
+    if (!draft) return;
+    let idempotencyKey = removalKeys.current.get(asset.mediaAssetId);
+    if (!idempotencyKey) {
+      idempotencyKey = createMutationIdempotencyKey();
+      removalKeys.current.set(asset.mediaAssetId, idempotencyKey);
+    }
+    setPending("remove");
+    setError(null);
+    setNotice(null);
+    try {
+      const removed = await retireContentMediaAsset(asset.mediaAssetId, {
+        expectedCompositionRevision: draft.compositionRevision ?? 1,
+        reason: "creator_removed"
+      }, idempotencyKey);
+      URL.revokeObjectURL(asset.previewUrl);
+      previewUrls.current.delete(asset.previewUrl);
+      setAssets((current) => current.filter((item) => item.key !== asset.key));
+      setDraft({ ...draft, compositionRevision: removed.compositionRevision });
+      setNotice(removed.cleanupState === "completed"
+        ? "Photo removed."
+        : "Photo removed. Private provider cleanup is queued for retry.");
+    } catch (caught) {
+      setError(messageFor(caught));
+    } finally {
+      setPending(null);
+    }
+  }
+
   async function onPublish() {
     if (!draft) return;
     setPending("publish");
@@ -211,7 +269,7 @@ export function ImageComposer({
         </div>
         <label className="grid min-h-32 cursor-pointer place-items-center rounded border border-dashed border-(--line) bg-(--background) p-6 text-center focus-within:ring-2 focus-within:ring-(--accent)">
           <span><span className="block font-semibold">Choose 1–10 photos</span><span className="mt-1 block text-sm text-(--muted)">JPEG, PNG, or WebP · 20 MB each</span></span>
-          <input accept="image/jpeg,image/png,image/webp" className="sr-only" multiple onChange={onFiles} type="file" />
+          <input accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={assets.some((asset) => Boolean(asset.mediaAssetId))} multiple onChange={onFiles} type="file" />
         </label>
 
         {assets.length > 0 ? <ol aria-label="Photo order" className="grid gap-3 sm:grid-cols-2">
@@ -220,7 +278,7 @@ export function ImageComposer({
             <div className="flex items-center justify-between gap-2 text-sm"><span className="font-semibold">Photo {index + 1}</span><span className="text-(--muted)">{asset.mediaAssetId ? "Stored privately" : "Not uploaded"}</span></div>
             <label className="grid gap-1 text-sm"><span className="text-(--muted)">Alt text</span><textarea className="min-h-20 rounded border border-(--line) bg-(--panel) px-3 py-2" maxLength={1000} onChange={(event) => { const altText = event.currentTarget.value; setAssets((current) => current.map((item) => item.key === asset.key ? { ...item, altText } : item)); }} value={asset.altText} /></label>
             <Select label="How was this made?" onChange={(originClassification) => setAssets((current) => current.map((item) => item.key === asset.key ? { ...item, originClassification } : item))} optionLabel={originLabel} options={origins} value={asset.originClassification} />
-            <div className="flex gap-2"><button aria-label={`Move photo ${index + 1} earlier`} className="rounded border border-(--line) px-3 py-2 text-sm disabled:opacity-40" disabled={index === 0 || pending !== null} onClick={() => void moveAsset(index, -1)} type="button">Earlier</button><button aria-label={`Move photo ${index + 1} later`} className="rounded border border-(--line) px-3 py-2 text-sm disabled:opacity-40" disabled={index === assets.length - 1 || pending !== null} onClick={() => void moveAsset(index, 1)} type="button">Later</button>{!asset.mediaAssetId ? <button className="ml-auto rounded border border-(--line) px-3 py-2 text-sm" onClick={() => { URL.revokeObjectURL(asset.previewUrl); previewUrls.current.delete(asset.previewUrl); setAssets((current) => current.filter((item) => item.key !== asset.key)); }} type="button">Remove</button> : null}</div>
+            <div className="flex flex-wrap gap-2"><button aria-label={`Move photo ${index + 1} earlier`} className="rounded border border-(--line) px-3 py-2 text-sm disabled:opacity-40" disabled={index === 0 || pending !== null} onClick={() => void moveAsset(index, -1)} type="button">Earlier</button><button aria-label={`Move photo ${index + 1} later`} className="rounded border border-(--line) px-3 py-2 text-sm disabled:opacity-40" disabled={index === assets.length - 1 || pending !== null} onClick={() => void moveAsset(index, 1)} type="button">Later</button>{asset.mediaAssetId ? <button className="rounded border border-(--line) px-3 py-2 text-sm disabled:opacity-40" disabled={pending !== null || !asset.altText.trim()} onClick={() => void saveAssetDetails(asset)} type="button">Save details</button> : null}<button className="ml-auto rounded border border-(--line) px-3 py-2 text-sm disabled:opacity-40" disabled={pending !== null} onClick={() => void removeAsset(asset)} type="button">{pending === "remove" ? "Removing…" : "Remove"}</button></div>
           </li>)}
         </ol> : null}
 
@@ -233,6 +291,7 @@ export function ImageComposer({
       </form>
 
       {allUploaded ? <section aria-live="polite" className="grid gap-3 border-t border-(--line) p-4 sm:p-5"><p className="text-sm leading-6 text-(--muted)">Upload complete. Publication stays blocked until the configured image provider and safety review return complete release evidence.</p><button className="justify-self-start rounded bg-(--foreground) px-4 py-2 text-sm font-semibold text-(--background) disabled:opacity-50" disabled={pending !== null || submitted} onClick={() => void onPublish()} type="button">{pending === "publish" ? "Checking readiness…" : submitted ? "Submitted for review" : "Review and submit"}</button></section> : null}
+      {notice ? <p className="border-t border-(--line) p-4 text-sm font-medium text-(--muted)" role="status">{notice}</p> : null}
       {error ? <p className="border-t border-(--line) p-4 text-sm font-medium text-red-400" role="alert">{error}</p> : null}
     </section>
   );

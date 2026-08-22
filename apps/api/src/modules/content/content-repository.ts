@@ -24,6 +24,7 @@ export {
   ContentDraftQuotaExceededError,
   ContentEventDraftConflictError,
   ContentCompositionConflictError,
+  ContentAssetRetirementConflictError,
   ContentImageUploadConflictError,
   ContentPublishConflictError,
   ContentModerationAppealConflictError,

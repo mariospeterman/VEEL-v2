@@ -63,4 +63,56 @@ describe("Bunny private image storage adapter", () => {
 
     expect(adapter.isImageUploadConfigured?.()).toBe(false);
   });
+
+  it("deletes retired image and video objects through their documented provider APIs", async () => {
+    const fetchMock = vi.fn(
+      async (_input: string | URL | Request, _init?: RequestInit) =>
+        new Response(null, { status: 200 })
+    );
+    const adapter = createBunnyStreamUploadAdapter(
+      {
+        BUNNY_STREAM_API_KEY: "stream-library-key",
+        BUNNY_STREAM_LIBRARY_ID: "12345",
+        BUNNY_STORAGE_IMAGE_UPLOAD_ENABLED: true,
+        BUNNY_STORAGE_ACCESS_KEY: "storage-zone-password",
+        BUNNY_STORAGE_ZONE_NAME: "private-zone",
+        BUNNY_STORAGE_API_ENDPOINT: "https://de.storage.bunnycdn.com"
+      },
+      fetchMock as typeof fetch
+    );
+
+    await adapter.deleteProviderAsset?.({
+      assetKind: "image",
+      providerAssetId: "images/content-id/asset-id.webp"
+    });
+    await adapter.deleteProviderAsset?.({ assetKind: "video", providerAssetId: "video-guid" });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ href: "https://de.storage.bunnycdn.com/private-zone/images/content-id/asset-id.webp" }),
+      { method: "DELETE", headers: { AccessKey: "storage-zone-password" } }
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://video.bunnycdn.com/library/12345/videos/video-guid",
+      { method: "DELETE", headers: { AccessKey: "stream-library-key" } }
+    );
+  });
+
+  it("treats an already-absent retired object as an idempotent cleanup success", async () => {
+    const adapter = createBunnyStreamUploadAdapter(
+      {
+        BUNNY_STORAGE_IMAGE_UPLOAD_ENABLED: true,
+        BUNNY_STORAGE_ACCESS_KEY: "storage-zone-password",
+        BUNNY_STORAGE_ZONE_NAME: "private-zone",
+        BUNNY_STORAGE_API_ENDPOINT: "https://storage.bunnycdn.com"
+      },
+      async () => new Response(null, { status: 404 })
+    );
+
+    await expect(adapter.deleteProviderAsset?.({
+      assetKind: "image",
+      providerAssetId: "images/content-id/already-gone.webp"
+    })).resolves.toBeUndefined();
+  });
 });

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildWorkerRuntime,
+  runMediaAssetCleanupTick,
   runMediaModerationTick,
   runScheduledWorkerTick,
   runNotificationDeliveryTick,
@@ -8,6 +9,12 @@ import {
   runProviderEventReplayTick,
   runSubscriptionCollectionTick
 } from "../src/index";
+import type {
+  MediaAssetCleanupOutcome,
+  MediaAssetCleanupProvider,
+  MediaAssetCleanupRepository,
+  QueuedMediaAssetCleanup
+} from "../src/media-asset-cleanup";
 import {
   summarizeEvidence,
   type MediaModerationSignal,
@@ -69,7 +76,8 @@ describe("buildWorkerRuntime", () => {
         "notification-deliveries",
         "payment-confirmation-emails",
         "provider-event-replays",
-        "media-moderation"
+        "media-moderation",
+        "media-asset-cleanups"
       ],
       schedules: [
         {
@@ -96,6 +104,11 @@ describe("buildWorkerRuntime", () => {
           name: "media-moderation",
           cadence: "every_minute",
           sourceIndex: "media_moderation_jobs_lease_idx"
+        },
+        {
+          name: "media-asset-cleanups",
+          cadence: "every_minute",
+          sourceIndex: "media_assets_provider_cleanup_idx"
         }
       ]
     });
@@ -109,6 +122,9 @@ describe("runScheduledWorkerTick", () => {
 
     const result = await runScheduledWorkerTick({
       runners: {
+        async mediaAssetCleanups() {
+          calls.push("asset-cleanups");
+        },
         async mediaModeration() {
           calls.push("moderation");
         },
@@ -134,8 +150,16 @@ describe("runScheduledWorkerTick", () => {
       }
     });
 
-    expect(calls.sort()).toEqual(["email", "moderation", "notifications", "provider-replays", "subscriptions"]);
+    expect(calls.sort()).toEqual([
+      "asset-cleanups",
+      "email",
+      "moderation",
+      "notifications",
+      "provider-replays",
+      "subscriptions"
+    ]);
     expect(result).toEqual({
+      mediaAssetCleanups: "completed",
       mediaModeration: "completed",
       notificationDeliveries: "completed",
       paymentConfirmationEmails: "failed",
@@ -147,6 +171,69 @@ describe("runScheduledWorkerTick", () => {
         task: "paymentConfirmationEmails",
         errorName: "Error"
       }
+    ]);
+  });
+});
+
+describe("runMediaAssetCleanupTick", () => {
+  const cleanup: QueuedMediaAssetCleanup = {
+    mediaAssetId: "media-asset-1",
+    contentId: "content-1",
+    provider: "bunny",
+    providerAssetId: "images/content-1/media-asset-1.webp",
+    assetKind: "image",
+    leaseToken: "00000000-0000-4000-8000-000000000099",
+    attemptCount: 0
+  };
+
+  function repositoryFixture(): MediaAssetCleanupRepository & {
+    outcomes: MediaAssetCleanupOutcome[];
+  } {
+    const outcomes: MediaAssetCleanupOutcome[] = [];
+    return {
+      outcomes,
+      async leaseDueCleanups() {
+        return [cleanup];
+      },
+      async recordCleanupOutcome(input) {
+        outcomes.push(input.outcome);
+      }
+    };
+  }
+
+  it("completes provider cleanup through the scheduled worker boundary", async () => {
+    const repository = repositoryFixture();
+    const removed: string[] = [];
+    const provider: MediaAssetCleanupProvider = {
+      async remove(input) {
+        removed.push(input.providerAssetId);
+      }
+    };
+
+    await expect(runMediaAssetCleanupTick({ repository, provider })).resolves.toEqual({
+      leased: 1,
+      completed: 1,
+      retrying: 0
+    });
+    expect(removed).toEqual([cleanup.providerAssetId]);
+    expect(repository.outcomes).toEqual([{ state: "completed" }]);
+  });
+
+  it("keeps failed provider cleanup retryable without exposing the provider error", async () => {
+    const repository = repositoryFixture();
+    const provider: MediaAssetCleanupProvider = {
+      async remove() {
+        throw new Error("provider credential details");
+      }
+    };
+
+    await expect(runMediaAssetCleanupTick({ repository, provider })).resolves.toEqual({
+      leased: 1,
+      completed: 0,
+      retrying: 1
+    });
+    expect(repository.outcomes).toEqual([
+      { state: "retry", errorCode: "provider_delete_failed" }
     ]);
   });
 });

@@ -96,6 +96,41 @@ export function createBunnyStreamUploadAdapter(
         throw new MediaUploadProviderError();
       }
     },
+    async deleteProviderAsset(input) {
+      if (input.assetKind === "image") {
+        const accessKey = env.BUNNY_STORAGE_ACCESS_KEY;
+        const zoneName = env.BUNNY_STORAGE_ZONE_NAME;
+        const endpoint = env.BUNNY_STORAGE_API_ENDPOINT;
+        if (!env.BUNNY_STORAGE_IMAGE_UPLOAD_ENABLED || !accessKey || !zoneName || !endpoint) {
+          throw new MediaUploadProviderConfigurationError();
+        }
+        const deleteUrl = new URL(
+          `${encodeURIComponent(zoneName)}/${encodedObjectPath(input.providerAssetId)}`,
+          withTrailingSlash(endpoint)
+        );
+        const response = await fetchImpl(deleteUrl, {
+          method: "DELETE",
+          headers: { AccessKey: accessKey }
+        });
+        if (response.status !== 200 && response.status !== 404) {
+          throw new MediaUploadProviderError();
+        }
+        return;
+      }
+
+      const apiKey = env.BUNNY_STREAM_API_KEY;
+      const libraryId = env.BUNNY_STREAM_LIBRARY_ID;
+      if (!apiKey || !libraryId) {
+        throw new MediaUploadProviderConfigurationError();
+      }
+      const response = await fetchImpl(
+        `https://video.bunnycdn.com/library/${encodeURIComponent(libraryId)}/videos/${encodeURIComponent(input.providerAssetId)}`,
+        { method: "DELETE", headers: { AccessKey: apiKey } }
+      );
+      if (response.status !== 200 && response.status !== 404) {
+        throw new MediaUploadProviderError();
+      }
+    },
     async createUploadSession(
       input: CreateMediaUploadProviderSessionInput
     ): Promise<MediaUploadProviderSession> {

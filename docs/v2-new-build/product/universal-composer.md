@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: one creator draft and rendering lifecycle for photo, video, carousel, text, and poll posts
-Last updated: 2026-08-20
+Last updated: 2026-08-22
 Source of truth: yes for Convergence 02 product behavior
 
 Owns:
@@ -124,10 +124,23 @@ adapter also requires the Storage zone credential, regional endpoint, private Pu
 key before accepting uploads. The token key is reserved for the protected delivery path and never
 enters a browser bundle.
 
+Draft asset removal is a two-authority operation, not a browser splice. The database first retires
+the asset, removes it from the ordered active composition, advances the optimistic revision, stops
+unfinished moderation jobs, and records a lifetime idempotency receipt plus audit event. Provider
+deletion then uses Bunny Storage `DELETE` for images or Bunny Stream `DELETE` for videos. A provider
+outage leaves an explicit durable `retry` cleanup state while the retired object remains private and
+excluded from every read/release predicate; an already-absent provider object is treated as an
+idempotent cleanup success. A lease-based worker drains due cleanup rows every minute with bounded
+exponential backoff, so cleanup survives API restarts and concurrent workers cannot own the same
+attempt. Normalized safety evidence is retained against the retired asset, while admin operations
+show the normalized cleanup state without provider credentials or raw payloads.
+
 Official references:
 
 - https://bunny.net/docs/api-reference/storage/index
 - https://bunny.net/docs/api-reference/storage/manage-files/upload-file
+- https://docs.bunny.net/api-reference/storage/manage-files/delete-file
+- https://docs.bunny.net/api-reference/stream/manage-videos/delete-video
 - https://bunny.net/docs/optimizer/dynamic-images/overview
 - https://bunny.net/docs/optimizer/limits
 - https://bunny.net/docs/shield/upload-scanning

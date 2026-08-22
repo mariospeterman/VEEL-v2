@@ -50,6 +50,10 @@ review evidence. The path defaults disabled and remains candidate pending exact 
 Shield coverage, private token-authenticated delivery, Optimizer behavior, deletion, recovery, and
 credential rotation.
 
+Draft image/video removal retires the canonical composition row first, preserves normalized
+evidence and audit history, then invokes the documented Bunny deletion endpoint. Provider failure
+is a durable retry state rather than a composition rollback.
+
 ## Live Decision
 
 Livepeer remains the live/replay provider. Official APIs support multistream targets and the stream `suspended` property. The preferred safety path is a provider-supported moderation rendition/target plus server-side suspension, but it remains candidate until staging proves:

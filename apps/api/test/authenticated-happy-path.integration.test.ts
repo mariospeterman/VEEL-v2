@@ -104,6 +104,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     const walletAuthRepository = createPostgresWalletAuthRepository(sql);
     const settlementInputs: PaymentSettlementInput[] = [];
     const storedImageUploads: Array<{ providerAssetId: string; body: Buffer; checksumSha256: string }> = [];
+    const deletedProviderAssets: Array<{ providerAssetId: string; assetKind: "image" | "video" }> = [];
     const mediaUploadProvider: MediaUploadProviderAdapter = {
       provider: "bunny",
       isConfigured: () => false,
@@ -120,6 +121,9 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           body: Buffer.from(input.body),
           checksumSha256: input.checksumSha256
         });
+      },
+      async deleteProviderAsset(input) {
+        deletedProviderAssets.push(input);
       }
     };
     const settlementVerifier: PaymentSettlementVerifier = {
@@ -178,6 +182,10 @@ describeIntegration("authenticated API happy path against Postgres", () => {
 
     const liveRepository = createPostgresLiveRepository(sql);
     const app = await buildApi({
+      // This suite proves one intentionally exhaustive cross-product journey.
+      // Dedicated route tests own rate-limit thresholds, so the shared loopback
+      // address must not exhaust the production global budget mid-journey.
+      rateLimitStore: IntegrationJourneyRateLimitStore,
       authVerifier: {
         async verifyToken(token) {
           return (
@@ -1921,6 +1929,71 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         }
       });
       expect(conflictingImageAssetUpdate.statusCode, conflictingImageAssetUpdate.body).toBe(409);
+
+      const imageAssetRemovalKey = `image-asset-removal-${runId}`;
+      const imageAssetRemovalRequest = {
+        method: "DELETE" as const,
+        url: `/v1/media/assets/${imageMediaAssetId}`,
+        headers: authenticatedHeaders(imageAssetRemovalKey),
+        payload: {
+          expectedCompositionRevision: 3,
+          reason: "creator_removed"
+        }
+      };
+      const imageAssetRemoval = await app.inject(imageAssetRemovalRequest);
+      expect(imageAssetRemoval.statusCode, imageAssetRemoval.body).toBe(200);
+      expect(imageAssetRemoval.json()).toEqual({
+        mediaAssetId: imageMediaAssetId,
+        compositionRevision: 4,
+        cleanupState: "completed"
+      });
+      expect(deletedProviderAssets).toEqual([{
+        providerAssetId: storedImageUploads[0]!.providerAssetId,
+        assetKind: "image"
+      }]);
+      const replayedImageAssetRemoval = await app.inject(imageAssetRemovalRequest);
+      expect(replayedImageAssetRemoval.statusCode, replayedImageAssetRemoval.body).toBe(200);
+      expect(replayedImageAssetRemoval.json()).toEqual(imageAssetRemoval.json());
+      expect(deletedProviderAssets).toHaveLength(1);
+      const retiredImageEvidence = await sql<{
+        position: number | null;
+        retired: boolean;
+        cleanup_state: string;
+        asset_revision: number;
+        content_state: string;
+        audit_count: number;
+      }[]>`
+        select
+          asset.position,
+          asset.retired_at is not null as retired,
+          asset.provider_cleanup_state as cleanup_state,
+          content.asset_revision::integer,
+          content.state as content_state,
+          (
+            select count(*)::integer
+            from audit_events audit
+            where audit.subject_id = content.id
+              and audit.action = 'content_media_asset_retired'
+          ) as audit_count
+        from media_assets asset
+        join content_items content on content.id = asset.content_item_id
+        where asset.id = ${imageMediaAssetId}
+      `;
+      expect(retiredImageEvidence).toEqual([{
+        position: null,
+        retired: true,
+        cleanup_state: "completed",
+        asset_revision: 4,
+        content_state: "draft",
+        audit_count: 1
+      }]);
+      const retiredImageDetail = await app.inject({
+        method: "GET",
+        url: `/v1/content/${imageContentId}`,
+        headers: authenticatedHeaders(`image-after-removal-${runId}`)
+      });
+      expect(retiredImageDetail.statusCode, retiredImageDetail.body).toBe(200);
+      expect(retiredImageDetail.json().mediaAssets).toEqual([]);
 
       const carouselContentId = randomUUID();
       const firstCarouselAssetId = randomUUID();
@@ -5279,6 +5352,21 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     }
   }, 30_000);
 });
+
+class IntegrationJourneyRateLimitStore {
+  constructor(_options: unknown) {}
+
+  incr(
+    _key: string,
+    callback: (error: Error | null, result?: { current: number; ttl: number }) => void
+  ) {
+    callback(null, { current: 1, ttl: 60_000 });
+  }
+
+  child() {
+    return this;
+  }
+}
 
 function integrationDatabaseUrl(): string {
   const databaseUrl =

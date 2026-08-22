@@ -85,6 +85,8 @@ export type {
   ImageAssetUploadResult,
   UpdateContentMediaAssetRequest,
   ContentMediaAssetMutationResult,
+  RetireContentMediaAssetRequest,
+  RetireContentMediaAssetResult,
   VerificationSession,
   User,
   CreatorOnboarding,
@@ -185,6 +187,8 @@ import type {
   ImageAssetUploadResult,
   UpdateContentMediaAssetRequest,
   ContentMediaAssetMutationResult,
+  RetireContentMediaAssetRequest,
+  RetireContentMediaAssetResult,
   VerificationSession,
   User,
   CreatorOnboarding,
@@ -371,6 +375,19 @@ export async function updateContentMediaAsset(
   return authenticatedMutation<ContentMediaAssetMutationResult>(
     `/v1/media/assets/${encodeURIComponent(mediaAssetId)}`,
     "PATCH",
+    body,
+    idempotencyKey
+  );
+}
+
+export async function retireContentMediaAsset(
+  mediaAssetId: string,
+  body: RetireContentMediaAssetRequest,
+  idempotencyKey?: string
+): Promise<RetireContentMediaAssetResult> {
+  return authenticatedMutation<RetireContentMediaAssetResult>(
+    `/v1/media/assets/${encodeURIComponent(mediaAssetId)}`,
+    "DELETE",
     body,
     idempotencyKey
   );

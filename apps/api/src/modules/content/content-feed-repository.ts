@@ -145,6 +145,7 @@ export function createContentFeedRepositoryMethods(
           from media_assets
           where id = ci.release_media_asset_id
             and content_item_id = ci.id
+            and retired_at is null
           order by created_at asc
           limit 1
         ) media on true
@@ -196,6 +197,7 @@ export function createContentFeedRepositoryMethods(
           ) as media_assets
           from media_assets asset
           where asset.content_item_id = ci.id
+            and asset.retired_at is null
         ) universal_assets on true
         left join lateral (
           select jsonb_build_object(

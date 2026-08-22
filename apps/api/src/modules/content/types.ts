@@ -32,6 +32,8 @@ export interface ContentRepository {
   reserveImageAssetUpload?(input: ReserveImageAssetUploadInput): Promise<ReservedImageAssetUpload>;
   completeImageAssetUpload?(input: CompleteImageAssetUploadInput): Promise<void>;
   updateOwnedMediaAsset?(input: UpdateOwnedMediaAssetInput): Promise<MediaAssetMutationResult | null>;
+  retireOwnedMediaAsset?(input: RetireOwnedMediaAssetInput): Promise<RetiredMediaAssetResult | null>;
+  completeMediaAssetCleanup?(input: CompleteMediaAssetCleanupInput): Promise<void>;
   countContentDraftsCreatedSince?(input: CountContentQuotaInput): Promise<number>;
   countMediaAssetsCreatedSince?(input: CountContentQuotaInput): Promise<number>;
   getContentCreationAbusePolicy?(): Promise<ContentCreationAbusePolicy | null>;
@@ -153,7 +155,7 @@ export interface FindOwnedMediaAssetForSyncInput {
 }
 
 export interface FindMediaAssetByProviderAssetInput {
-  provider: "bunny";
+  provider: "bunny" | "livepeer";
   providerAssetId: string;
 }
 
@@ -230,6 +232,33 @@ export interface MediaAssetMutationResult {
   asset: NonNullable<ContentItem["mediaAssets"]>[number];
 }
 
+export interface RetireOwnedMediaAssetInput {
+  supabaseUserId: string;
+  mediaAssetId: string;
+  idempotencyKey: string;
+  requestHash: string;
+  expectedCompositionRevision: number;
+  reason: string;
+}
+
+export interface RetiredMediaAssetResult {
+  contentId: string;
+  mediaAssetId: string;
+  compositionRevision: number;
+  cleanupState: "pending" | "retry" | "completed";
+  provider: "bunny" | "livepeer";
+  providerAssetId: string;
+  assetKind: "image" | "video";
+}
+
+export interface CompleteMediaAssetCleanupInput {
+  supabaseUserId: string;
+  mediaAssetId: string;
+  idempotencyKey: string;
+  succeeded: boolean;
+  errorCode?: string;
+}
+
 export interface UpdateMediaAssetPlaybackInput {
   mediaAssetId: string;
   providerObservationCutoff: Date;
@@ -289,6 +318,10 @@ export interface MediaUploadProviderAdapter {
     body: Buffer;
     mimeType: "image/jpeg" | "image/png" | "image/webp";
     checksumSha256: string;
+  }): Promise<void>;
+  deleteProviderAsset?(input: {
+    providerAssetId: string;
+    assetKind: "image" | "video";
   }): Promise<void>;
   createPlaybackResource?(
     input: CreateMediaPlaybackResourceInput

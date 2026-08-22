@@ -77,6 +77,7 @@ export function createContentReadRepositoryMethods(
           select poster_url, playback_url, provider, provider_state, provider_playable
           from media_assets
           where content_item_id = ci.id
+            and retired_at is null
             and (ci.release_media_asset_id is null or id = ci.release_media_asset_id)
           order by (id = ci.release_media_asset_id) desc, created_at asc
           limit 1
@@ -129,6 +130,7 @@ export function createContentReadRepositoryMethods(
           ) as media_assets
           from media_assets asset
           where asset.content_item_id = ci.id
+            and asset.retired_at is null
         ) universal_assets on true
         left join lateral (
           select jsonb_build_object(

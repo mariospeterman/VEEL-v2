@@ -1162,6 +1162,35 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      operationId: retireContentMediaAsset
+      tags: [Media]
+      summary: Remove an asset from an owned draft and durably schedule provider cleanup
+      description: The canonical composition is updated transactionally before provider deletion. Provider failure remains a retryable audited cleanup state and cannot restore the asset to the composition.
+      parameters:
+        - $ref: "#/components/parameters/MediaAssetId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RetireContentMediaAssetRequest" }
+      responses:
+        "200":
+          description: Asset retired and provider cleanup completed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RetireContentMediaAssetResult" }
+        "202":
+          description: Asset retired; provider cleanup is durably pending retry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RetireContentMediaAssetResult" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/media/assets/{mediaAssetId}/sync:
     post:
       operationId: syncMediaAsset
@@ -3962,6 +3991,21 @@ components:
       properties:
         compositionRevision: { type: integer, minimum: 1 }
         asset: { $ref: "#/components/schemas/ContentMediaAsset" }
+    RetireContentMediaAssetRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedCompositionRevision, reason]
+      properties:
+        expectedCompositionRevision: { type: integer, minimum: 1 }
+        reason: { type: string, minLength: 1, maxLength: 240 }
+    RetireContentMediaAssetResult:
+      type: object
+      additionalProperties: false
+      required: [mediaAssetId, compositionRevision, cleanupState]
+      properties:
+        mediaAssetId: { type: string, format: uuid }
+        compositionRevision: { type: integer, minimum: 1 }
+        cleanupState: { type: string, enum: [pending, retry, completed] }
     ContentPollOption:
       type: object
       required: [id, position, text, voteCount]
@@ -5772,10 +5816,12 @@ components:
         reason: { type: string, minLength: 1, maxLength: 1000 }
     AdminMediaAsset:
       type: object
-      required: [id, contentItemId, provider, providerAssetId, providerState, providerPlayable, hasPlaybackUrl, createdAt]
+      required: [id, contentItemId, assetKind, position, provider, providerAssetId, providerState, providerPlayable, hasPlaybackUrl, retiredAt, providerCleanupState, providerCleanupErrorCode, createdAt]
       properties:
         id: { type: string, format: uuid }
         contentItemId: { type: string, format: uuid }
+        assetKind: { type: string, enum: [image, video] }
+        position: { type: integer, minimum: 0, maximum: 9, nullable: true }
         provider: { type: string, enum: [bunny, livepeer] }
         providerAssetId: { type: string }
         providerState: { type: string }
@@ -5783,6 +5829,9 @@ components:
         hasPlaybackUrl: { type: boolean }
         readyAt: { type: string, format: date-time, nullable: true }
         providerCheckedAt: { type: string, format: date-time, nullable: true }
+        retiredAt: { type: string, format: date-time, nullable: true }
+        providerCleanupState: { type: string, enum: [not_required, pending, retry, completed] }
+        providerCleanupErrorCode: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
     AdminAgeCheck:
       type: object

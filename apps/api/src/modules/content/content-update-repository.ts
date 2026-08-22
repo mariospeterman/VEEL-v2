@@ -98,6 +98,7 @@ export function createContentUpdateRepositoryMethods(
             const assets = await transaction<{ id: string }[]>`
               select id from media_assets
               where content_item_id = ${input.contentId}
+                and retired_at is null
               order by position
               for update
             `;
@@ -110,7 +111,9 @@ export function createContentUpdateRepositoryMethods(
             for (const [position, assetId] of input.assetOrder.entries()) {
               await transaction`
                 update media_assets set position = ${position}
-                where id = ${assetId} and content_item_id = ${input.contentId}
+                where id = ${assetId}
+                  and content_item_id = ${input.contentId}
+                  and retired_at is null
               `;
             }
           }
@@ -201,6 +204,7 @@ export function createContentUpdateRepositoryMethods(
                 else ma.thumbnail_frame_ms
               end
             where ma.content_item_id = (select id from updated_content)
+              and ma.retired_at is null
             returning ma.id
           )
           select
