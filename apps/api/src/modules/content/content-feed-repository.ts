@@ -173,7 +173,7 @@ export function createContentFeedRepositoryMethods(
           limit 1
         ) entitlement on true
         left join lateral (
-          select jsonb_agg(
+          select coalesce(jsonb_agg(
             jsonb_build_object(
               'id', asset.id,
               'kind', asset.asset_kind,
@@ -194,7 +194,7 @@ export function createContentFeedRepositoryMethods(
               'visibleLabelState', asset.visible_label_state
             )
             order by asset.position
-          ) as media_assets
+          ), '[]'::jsonb) as media_assets
           from media_assets asset
           where asset.content_item_id = ci.id
             and asset.retired_at is null
