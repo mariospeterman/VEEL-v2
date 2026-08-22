@@ -31,7 +31,7 @@ export function createContentPollRepositoryMethods(sql: postgres.Sql): Pick<Cont
             and item.publish_state = 'published'
             and exists (
               select 1 from private.eligible_content(${input.appUserId}, null) eligible
-              where eligible.content_id = item.id
+              where eligible.content_item_id = item.id
             )
           for update of poll
         `;

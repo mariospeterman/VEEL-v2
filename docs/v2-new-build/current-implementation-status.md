@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: implementation status, known gaps, and next hardening priorities
-Last updated: 2026-08-20
+Last updated: 2026-08-22
 Source of truth: yes
 
 Owns:
@@ -30,49 +30,27 @@ Non-goals:
 - Blockchain is payment truth. Entitlements are access truth. Compliance ledger is reporting truth. Accounting export/integration is bookkeeping truth.
 - WeVid remains noncustodial: no internal credits, balances, escrow, withdrawals, payout queues, or server-held user private keys.
 
-## Active Production Slice
+## Merged Baseline And Next Planned Slice
 
-Exactly one write/integration slice may be active. An open pull request carrying the
-`wevid-active-slice` label is the concurrency mutex.
+Protected `main` owns stable merged truth only. Live branch, pull-request, head-SHA, CI, and review
+state come from the one open pull request carrying `wevid-active-slice`; they are intentionally not
+copied into this document. The machine-readable companion is `production-status.json`.
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `b5e1904` (green baseline through PR #86) |
-| Active slice | Convergence 02 — Universal composer |
-| Branch | `codex/converge-02-universal-composer` |
-| Pull request | Draft PR #87 |
-| State | `ACTIVE` |
-| Slice blockers | No code blocker; image-provider staging evidence remains external and must stay fail-closed. |
-| Next unfinished slice | Convergence 03 — Analytics Core |
+| Latest merged baseline | `b5e190480032c38db485138206cb09e296d7053a` |
+| Latest merged slice | Convergence 01 — policy and eligibility |
+| Latest merged migration | `packages/database/migrations/0108_policy_content_eligibility_convergence.sql` |
+| Latest merged evidence | `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`, `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN` |
+| Known launch blockers | `STAGING_PROVEN`, `PROVIDER_APPROVED`, `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED` remain outstanding. |
+| Next planned slice | Convergence 02 — Universal composer |
 
-Convergence 02 is extending the existing `content_items` and `media_assets` authorities into one
-draft lifecycle and renderer family for photo, video, carousel, mixed media, text, and polls. It must
-reuse the canonical Create route, safety/publication workflow, Bunny video boundary, viewer-relative
-eligibility, and feed/detail/profile projections; image-provider acceptance remains a separately
-recorded staging gate and cannot create a second content, upload, moderation, or rendering system.
-The accepted product contract now fixes the three progressive Create choices, one server draft,
-ordered/revisioned assets, plain structured text, transactional polls, provenance, one renderer
-family, and the candidate Bunny Storage plus Optimizer image boundary. Migration `0109` extends
-`content_items`/`media_assets` and adds subordinate poll state with bounded positions, one current
-vote per user, durable idempotency evidence, option locking, transactional counters, RLS, and a
-reversible down migration. The full forward chain and `0109` rollback/reapply passed against an
-isolated PostgreSQL database. OpenAPI/runtime media-type contracts and atomic initial text/poll
-draft creation now reuse the canonical create route, normalize bounded plain text and poll values,
-preserve lifetime idempotency, allow incomplete private drafts, and enforce completed text/poll
-shape when publication begins. Authenticated feed/detail reads now return normalized body text,
-server-ordered frontend-safe assets, poll counts/state, and the current viewer choice directly from
-the canonical rows without provider payloads or browser-owned truth. Locked projections redact full
-text, poll, and per-asset delivery data while canonical creator access remains available. Composition
-poll voting is now app-ready-authenticated, eligibility-gated, rate-limited, transactionally counted,
-and backed by lifetime idempotency receipts. Publication requires every release-required asset to be
-provider-ready and to carry its own complete normalized automated plus manual review evidence; text
-and polls remain media-free but still require canonical moderation and performer readiness.
-Text drafts now autosave through the canonical content PATCH authority with a server composition
-revision, lifetime idempotency receipt, exact replay, and stale-write rejection. Asset reorder
-requests now persist only a complete, duplicate-free canonical asset set, use the same optimistic
-revision/idempotency authority, and swap positions under a deferred unique constraint in one
-transaction. Asset removal with provider cleanup/audit semantics, frontend composer/renderers, and
-browser/provider proof remain active-slice work.
+Next planned production slice: **Convergence 02 — Universal composer**.
+
+Readiness vocabulary is fixed to `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`,
+`REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN`, `STAGING_PROVEN`, `PROVIDER_APPROVED`,
+`LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED`. “Accepted” describes a
+design decision; it never means implemented, tested, approved, enabled, or launch-ready.
 
 Merged Convergence 01 has one deterministic recipient-KYC policy resolver for global mode, active
 account override, product, normalized jurisdiction, and active risk evidence; `risk_based` remains

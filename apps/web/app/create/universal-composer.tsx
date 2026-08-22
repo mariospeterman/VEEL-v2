@@ -154,13 +154,17 @@ function TextOrPollComposer({ format }: { format: "text" | "poll" }) {
             <input className="rounded border border-(--line) bg-(--background) px-3 py-2" maxLength={500} onChange={(event) => setQuestion(event.currentTarget.value)} value={question} />
           </label>
           {options.map((option, index) => (
-            <label className="grid gap-1 text-sm" key={index}>
+            <label className="grid gap-1 text-sm" htmlFor={`poll-option-${index}`} key={index}>
               <span className="text-(--muted)">Choice {index + 1}</span>
               <span className="flex gap-2">
                 <input
                   className="min-w-0 flex-1 rounded border border-(--line) bg-(--background) px-3 py-2"
+                  id={`poll-option-${index}`}
                   maxLength={200}
-                  onChange={(event) => setOptions((current) => current.map((value, optionIndex) => optionIndex === index ? event.currentTarget.value : value))}
+                  onChange={(event) => {
+                    const nextValue = event.currentTarget.value;
+                    setOptions((current) => current.map((value, optionIndex) => optionIndex === index ? nextValue : value));
+                  }}
                   value={option}
                 />
                 {options.length > 2 ? <button aria-label={`Remove choice ${index + 1}`} className="rounded border border-(--line) px-3" onClick={() => setOptions((current) => current.filter((_, optionIndex) => optionIndex !== index))} type="button">Remove</button> : null}

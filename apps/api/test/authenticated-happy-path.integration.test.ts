@@ -1571,6 +1571,127 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         }
       });
 
+      const pollContentId = pollDraftResponse.json().id as string;
+      const pollOptions = pollDraftResponse.json().poll.options as Array<{ id: string }>;
+      const firstPollOptionId = pollOptions[0]?.id;
+      const secondPollOptionId = pollOptions[1]?.id;
+      const thirdPollOptionId = pollOptions[2]?.id;
+      if (!firstPollOptionId || !secondPollOptionId || !thirdPollOptionId) {
+        throw new Error("Integration poll options were not created");
+      }
+      await sql`
+        update profiles
+        set visibility = 'public', updated_at = now()
+        where user_id = ${buyerSupabaseUserId}
+      `;
+      await sql`
+        update content_items
+        set
+          state = 'ready',
+          moderation_state = 'approved',
+          publish_state = 'published',
+          published_at = now(),
+          updated_at = now()
+        where id = ${pollContentId}
+      `;
+
+      const firstPollVoteKey = `poll-vote-first-${runId}`;
+      const firstPollVote = await app.inject({
+        method: "POST",
+        url: `/v1/content/${pollContentId}/poll-votes`,
+        headers: authenticatedHeaders(firstPollVoteKey),
+        payload: { optionId: firstPollOptionId }
+      });
+      expect(firstPollVote.statusCode, firstPollVote.body).toBe(200);
+      expect(firstPollVote.json()).toMatchObject({
+        totalVoteCount: 1,
+        viewerOptionId: firstPollOptionId,
+        options: [expect.objectContaining({ id: firstPollOptionId, voteCount: 1 })]
+      });
+
+      const replayedPollVote = await app.inject({
+        method: "POST",
+        url: `/v1/content/${pollContentId}/poll-votes`,
+        headers: authenticatedHeaders(firstPollVoteKey),
+        payload: { optionId: firstPollOptionId }
+      });
+      expect(replayedPollVote.statusCode, replayedPollVote.body).toBe(200);
+      expect(replayedPollVote.json()).toEqual(firstPollVote.json());
+
+      const conflictingPollVote = await app.inject({
+        method: "POST",
+        url: `/v1/content/${pollContentId}/poll-votes`,
+        headers: authenticatedHeaders(firstPollVoteKey),
+        payload: { optionId: secondPollOptionId }
+      });
+      expect(conflictingPollVote.statusCode, conflictingPollVote.body).toBe(409);
+
+      const changedPollVote = await app.inject({
+        method: "POST",
+        url: `/v1/content/${pollContentId}/poll-votes`,
+        headers: authenticatedHeaders(`poll-vote-change-${runId}`),
+        payload: { optionId: secondPollOptionId }
+      });
+      expect(changedPollVote.statusCode, changedPollVote.body).toBe(200);
+      expect(changedPollVote.json()).toMatchObject({
+        totalVoteCount: 1,
+        viewerOptionId: secondPollOptionId,
+        options: [
+          expect.objectContaining({ id: firstPollOptionId, voteCount: 0 }),
+          expect.objectContaining({ id: secondPollOptionId, voteCount: 1 })
+        ]
+      });
+
+      const invalidPollVote = await app.inject({
+        method: "POST",
+        url: `/v1/content/${pollContentId}/poll-votes`,
+        headers: authenticatedHeaders(`poll-vote-invalid-${runId}`),
+        payload: { optionId: randomUUID() }
+      });
+      expect(invalidPollVote.statusCode, invalidPollVote.body).toBe(404);
+
+      await sql`update profiles set visibility = 'private', updated_at = now() where user_id = ${buyerSupabaseUserId}`;
+      const ineligiblePollVote = await app.inject({
+        method: "POST",
+        url: `/v1/content/${pollContentId}/poll-votes`,
+        headers: authenticatedHeaders(`poll-vote-ineligible-${runId}`),
+        payload: { optionId: firstPollOptionId }
+      });
+      expect(ineligiblePollVote.statusCode, ineligiblePollVote.body).toBe(404);
+      await sql`update profiles set visibility = 'public', updated_at = now() where user_id = ${buyerSupabaseUserId}`;
+
+      await sql`update content_polls set state = 'closed', updated_at = now() where content_item_id = ${pollContentId}`;
+      const closedPollVote = await app.inject({
+        method: "POST",
+        url: `/v1/content/${pollContentId}/poll-votes`,
+        headers: authenticatedHeaders(`poll-vote-closed-${runId}`),
+        payload: { optionId: firstPollOptionId }
+      });
+      expect(closedPollVote.statusCode, closedPollVote.body).toBe(409);
+      await sql`update content_polls set state = 'open', updated_at = now() where content_item_id = ${pollContentId}`;
+
+      const concurrentPollVotes = await Promise.all([
+        app.inject({
+          method: "POST",
+          url: `/v1/content/${pollContentId}/poll-votes`,
+          headers: authenticatedHeaders(`poll-vote-concurrent-a-${runId}`),
+          payload: { optionId: firstPollOptionId }
+        }),
+        app.inject({
+          method: "POST",
+          url: `/v1/content/${pollContentId}/poll-votes`,
+          headers: authenticatedHeaders(`poll-vote-concurrent-b-${runId}`),
+          payload: { optionId: thirdPollOptionId }
+        })
+      ]);
+      expect(concurrentPollVotes.map((response) => response.statusCode)).toEqual([200, 200]);
+      const persistedPollVotes = await sql<{ total_votes: string; counted_votes: string }[]>`
+        select
+          (select count(*)::text from content_poll_votes where content_item_id = ${pollContentId}) as total_votes,
+          (select coalesce(sum(vote_count), 0)::text from content_poll_options where content_item_id = ${pollContentId}) as counted_votes
+      `;
+      expect(persistedPollVotes[0]).toEqual({ total_votes: "1", counted_votes: "1" });
+
       const universalDraftRows = await sql<{
         media_type: string;
         body_text: string | null;

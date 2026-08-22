@@ -231,13 +231,13 @@ test("creates text and poll posts through the canonical composer", async ({ page
   await textCreate;
   await expect(page.getByRole("heading", { name: "Submitted for review" })).toBeVisible();
 
-  await page.reload();
-  await page.getByRole("button", { name: "Poll", exact: true }).click();
+  await gotoUntilVisible(page, "/app/create", () => page.getByRole("heading", { name: "Share something" }));
+  await page.getByRole("button", { name: /^Poll/ }).click();
   await page.getByLabel("Question").fill("Which format should come next?");
-  await page.getByLabel("Choice 1").fill("Photo");
-  await page.getByLabel("Choice 2").fill("Carousel");
+  await page.locator("#poll-option-0").fill("Photo");
+  await page.locator("#poll-option-1").fill("Carousel");
   await page.getByRole("button", { name: "Add choice" }).click();
-  await page.getByLabel("Choice 3").fill("Long-form video");
+  await page.locator("#poll-option-2").fill("Long-form video");
   await page.getByLabel(/I have the right to share this post/).check();
   const pollCreate = page.waitForRequest((request) => {
     if (request.method() !== "POST" || new URL(request.url()).pathname !== "/v1/content") return false;
