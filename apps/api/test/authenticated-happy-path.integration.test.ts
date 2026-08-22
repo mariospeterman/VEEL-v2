@@ -1585,6 +1585,17 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         where user_id = ${buyerSupabaseUserId}
       `;
       await sql`
+        update media_safety_cases
+        set
+          state = 'approved',
+          decision_source = 'staff',
+          reason_code = 'integration_fixture_approved',
+          provider_release_allowed = true,
+          decided_at = now(),
+          updated_at = now()
+        where content_item_id = ${pollContentId}
+      `;
+      await sql`
         update content_items
         set
           state = 'ready',
