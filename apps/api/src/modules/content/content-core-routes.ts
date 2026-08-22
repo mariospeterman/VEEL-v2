@@ -202,7 +202,15 @@ export async function registerContentCoreRoutes(
         query.cursor ? { ...feedInput, cursor: query.cursor } : feedInput
       );
 
-      return reply.code(200).send(feed);
+      const items = await Promise.all(feed.items.map((content) => withSignedPlayback({
+        content,
+        mediaUploadProvider: options.mediaUploadProvider,
+        subscriptionRepository: options.subscriptionRepository,
+        supabaseUserId: access.supabaseUserId,
+        appUserId: access.appUserId
+      })));
+
+      return reply.code(200).send({ ...feed, items });
     } catch (error) {
       if (error instanceof ContentRepositoryConfigurationError) {
         request.log.warn({ error }, "Content repository is not configured");

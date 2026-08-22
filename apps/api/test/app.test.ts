@@ -3096,6 +3096,86 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("replaces stored Bunny feed playback URLs with backend-signed resources", async () => {
+    const storedPlaybackUrl =
+      "https://vz-example.b-cdn.net/11111111-1111-4111-8111-111111111111/playlist.m3u8";
+    const signedPlaybackUrl =
+      "https://iframe.mediadelivery.net/embed/123/11111111-1111-4111-8111-111111111111?token=signed&expires=1770000900";
+    const feedItem: ContentItem = {
+      ...homeFeedItem,
+      creator: {
+        ...homeFeedItem.creator,
+        id: "00000000-0000-4000-8000-000000000011"
+      },
+      mediaType: "vod",
+      accessState: "unlocked",
+      playback: {
+        state: "full",
+        url: storedPlaybackUrl,
+        provider: "bunny"
+      }
+    };
+    const contentRepository: ContentRepository = {
+      async createDraft() { throw new Error("not implemented"); },
+      async createMediaAsset() { throw new Error("not implemented"); },
+      async findContentDetail() { throw new Error("not implemented"); },
+      async findContentUnlockOffer() { throw new Error("not implemented"); },
+      async findOwnedContentForUpload() { throw new Error("not implemented"); },
+      async listHomeFeed() {
+        return {
+          items: [feedItem],
+          nextCursor: null,
+          mode: "recommended",
+          surface: "home",
+          rankingVersion: "deterministic_v1",
+          generatedAt: "2026-06-05T12:00:00.000Z"
+        };
+      }
+    };
+    const mediaUploadProvider: MediaUploadProviderAdapter = {
+      provider: "bunny",
+      isConfigured: () => true,
+      async createUploadSession() { throw new Error("not implemented"); },
+      createPlaybackResource(input) {
+        expect(input.providerAssetId).toBe("11111111-1111-4111-8111-111111111111");
+        return {
+          state: "full",
+          url: signedPlaybackUrl,
+          provider: "bunny",
+          resourceType: "embed",
+          expiresAt: "2026-02-02T10:15:00.000Z"
+        };
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository,
+      mediaUploadProvider
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/content/feed",
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).not.toContain(storedPlaybackUrl);
+    expect(response.json().items[0].playback).toEqual({
+      state: "full",
+      url: signedPlaybackUrl,
+      provider: "bunny",
+      resourceType: "embed",
+      expiresAt: "2026-02-02T10:15:00.000Z"
+    });
+
+    await app.close();
+  });
+
   it("requires a first-page refresh when mutable feed ranking inputs changed", async () => {
     const contentRepository: ContentRepository = {
       async createDraft() { throw new Error("not implemented"); },
