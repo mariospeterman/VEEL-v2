@@ -213,6 +213,44 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   await expect.poll(() => page.evaluate(() => document.cookie.includes("veel_e2e_access_token="))).toBe(false);
 });
 
+test("creates text and poll posts through the canonical composer", async ({ page }) => {
+  await gotoUntilVisible(page, "/app/create", () => page.getByRole("heading", { name: "Share something" }));
+
+  await expect(page.getByRole("button", { name: /Photos or video/ })).toHaveAttribute("aria-pressed", "false");
+  await page.getByRole("button", { name: /Write something/ }).click();
+  await expect(page.getByRole("button", { name: /Write something/ })).toHaveAttribute("aria-pressed", "true");
+  await page.getByLabel("Your post").fill("A text post owned by the canonical content API.");
+  await page.getByLabel("Who can see it after approval?").selectOption("followers");
+  await page.getByLabel(/I have the right to share this post/).check();
+  const textCreate = page.waitForRequest((request) => {
+    if (request.method() !== "POST" || new URL(request.url()).pathname !== "/v1/content") return false;
+    const body = request.postDataJSON();
+    return body?.mediaType === "text" && body?.bodyText === "A text post owned by the canonical content API.";
+  });
+  await page.getByRole("button", { name: "Submit for review" }).click();
+  await textCreate;
+  await expect(page.getByRole("heading", { name: "Submitted for review" })).toBeVisible();
+
+  await page.reload();
+  await page.getByRole("button", { name: "Poll", exact: true }).click();
+  await page.getByLabel("Question").fill("Which format should come next?");
+  await page.getByLabel("Choice 1").fill("Photo");
+  await page.getByLabel("Choice 2").fill("Carousel");
+  await page.getByRole("button", { name: "Add choice" }).click();
+  await page.getByLabel("Choice 3").fill("Long-form video");
+  await page.getByLabel(/I have the right to share this post/).check();
+  const pollCreate = page.waitForRequest((request) => {
+    if (request.method() !== "POST" || new URL(request.url()).pathname !== "/v1/content") return false;
+    const body = request.postDataJSON();
+    return body?.mediaType === "poll" &&
+      body?.poll?.question === "Which format should come next?" &&
+      JSON.stringify(body?.poll?.options) === JSON.stringify(["Photo", "Carousel", "Long-form video"]);
+  });
+  await page.getByRole("button", { name: "Submit for review" }).click();
+  await pollCreate;
+  await expect(page.getByRole("heading", { name: "Submitted for review" })).toBeVisible();
+});
+
 test("shows and updates audited payment commercial policy overrides", async ({ page }) => {
   await page.goto("/admin", { waitUntil: "domcontentloaded" });
 
