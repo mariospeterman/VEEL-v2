@@ -12,7 +12,7 @@ import {
 } from "@/api-mutations";
 import { createMutationIdempotencyKey } from "@/api-mutation-transport";
 import { safeMutationMessage } from "@/api-errors";
-import { ProviderPlayback } from "../provider-playback";
+import { ContentRenderer } from "../content/content-renderer";
 import { FollowButton } from "../follow-button";
 import { ContentEngagementPanel } from "../content/[contentId]/content-engagement-panel";
 import { ContentPreferenceControl } from "./settings/content-preference-control";
@@ -362,17 +362,7 @@ function FeedCard({
       </header>
 
       <div className="feed-media">
-        {active ? (
-          <ProviderPlayback
-            playback={item.playback}
-            posterUrl={item.posterUrl}
-            title={`${item.creator.displayName} media`}
-          />
-        ) : item.posterUrl ? (
-          <img alt="" className="feed-poster" loading="lazy" src={item.posterUrl} />
-        ) : (
-          <div className="feed-media-placeholder">Media loads when this post becomes active.</div>
-        )}
+        <ContentRenderer active={active} item={item} title={`${item.creator.displayName} post`} />
         <span className="feed-access-pill">{item.accessState}</span>
       </div>
 

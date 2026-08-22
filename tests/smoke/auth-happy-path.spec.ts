@@ -7,6 +7,12 @@ const e2eOrigin = new URL(process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3
 const contentId = "00000000-0000-4000-8000-000000000040";
 const draftContentId = "00000000-0000-4000-8000-000000000041";
 const mediaAssetId = "00000000-0000-4000-8000-000000000042";
+const textContentId = "00000000-0000-4000-8000-000000000045";
+const pollContentId = "00000000-0000-4000-8000-000000000046";
+const pollOptionIds = [
+  "00000000-0000-4000-8000-000000000047",
+  "00000000-0000-4000-8000-000000000048"
+] as const;
 const paymentIntentId = "00000000-0000-4000-8000-000000000050";
 
 let apiServer: Server;
@@ -174,7 +180,7 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
 
   await page.goto(`/content/${contentId}`);
   await expect(page.getByRole("heading", { name: "Media viewer" })).toBeVisible();
-  await expect(page.getByText("Access required")).toBeVisible();
+  await expect(page.getByText("Locked media")).toBeVisible();
   await page.getByRole("button", { name: "Unlock content" }).click();
   await expect(page.getByText("The wallet approval is not payment proof.")).toBeVisible();
   await expect(page.getByText("25 SOL", { exact: true })).toBeVisible();
@@ -249,6 +255,25 @@ test("creates text and poll posts through the canonical composer", async ({ page
   await page.getByRole("button", { name: "Submit for review" }).click();
   await pollCreate;
   await expect(page.getByRole("heading", { name: "Submitted for review" })).toBeVisible();
+});
+
+test("renders canonical text and poll posts and accepts backend-confirmed votes", async ({ page }) => {
+  await page.goto(`/content/${textContentId}`);
+  await expect(page.getByText("A structured text post with a real consumer renderer.")).toBeVisible();
+
+  await page.goto(`/content/${pollContentId}`);
+  await expect(page.getByRole("heading", { name: "What should we publish next?" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Photo/ })).toHaveAttribute("aria-pressed", "false");
+
+  const confirmedVote = page.waitForRequest((request) =>
+    request.method() === "POST" &&
+    new URL(request.url()).pathname === `/v1/content/${pollContentId}/poll-votes` &&
+    request.postDataJSON()?.optionId === pollOptionIds[1]
+  );
+  await page.getByRole("button", { name: /Carousel/ }).click();
+  await confirmedVote;
+  await expect(page.getByRole("button", { name: /Carousel/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText("1 vote", { exact: true })).toBeVisible();
 });
 
 test("shows and updates audited payment commercial policy overrides", async ({ page }) => {
@@ -453,6 +478,21 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
 
   if (method === "GET" && url.pathname === `/v1/content/${draftContentId}`) {
     sendJson(response, 200, contentItem({ id: draftContentId, accessState: "free", playbackState: "full" }));
+    return;
+  }
+
+  if (method === "GET" && url.pathname === `/v1/content/${textContentId}`) {
+    sendJson(response, 200, textContentItem());
+    return;
+  }
+
+  if (method === "GET" && url.pathname === `/v1/content/${pollContentId}`) {
+    sendJson(response, 200, pollContentItem());
+    return;
+  }
+
+  if (method === "POST" && url.pathname === `/v1/content/${pollContentId}/poll-votes`) {
+    sendJson(response, 200, pollContentItem(pollOptionIds[1]).poll);
     return;
   }
 
@@ -815,6 +855,36 @@ function contentItem(overrides: {
       shareCount: 8
     },
     viewerFollowingCreator: false
+  };
+}
+
+function textContentItem() {
+  return {
+    ...contentItem({ id: textContentId, accessState: "free" }),
+    mediaType: "text",
+    bodyText: "A structured text post with a real consumer renderer.",
+    caption: null,
+    playback: null
+  };
+}
+
+function pollContentItem(viewerOptionId: string | null = null) {
+  return {
+    ...contentItem({ id: pollContentId, accessState: "free" }),
+    mediaType: "poll",
+    caption: null,
+    playback: null,
+    poll: {
+      question: "What should we publish next?",
+      options: [
+        { id: pollOptionIds[0], position: 0, text: "Photo", voteCount: 0 },
+        { id: pollOptionIds[1], position: 1, text: "Carousel", voteCount: viewerOptionId ? 1 : 0 }
+      ],
+      state: "open",
+      totalVoteCount: viewerOptionId ? 1 : 0,
+      closesAt: null,
+      viewerOptionId
+    }
   };
 }
 

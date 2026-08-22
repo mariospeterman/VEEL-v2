@@ -12,6 +12,7 @@ export type {
   AccessPassIntent,
   AgeSession,
   ContentItem,
+  ContentPoll,
   ContentUnlockIntent,
   BlockState,
   Comment,
@@ -74,6 +75,7 @@ export type {
   TransactionRequestPostResponse,
   AcceptPaymentIntentTermsRequest,
   UpdateContentRequest,
+  VoteOnContentPollRequest,
   UpdateProfileRequest,
   UpdateCreatorOnboardingRequest,
   UpsertCreatorMembershipOfferRequest,
@@ -107,6 +109,7 @@ import type {
   AccessPassIntent,
   AgeSession,
   ContentItem,
+  ContentPoll,
   ContentUnlockIntent,
   BlockState,
   Comment,
@@ -169,6 +172,7 @@ import type {
   TransactionRequestPostResponse,
   AcceptPaymentIntentTermsRequest,
   UpdateContentRequest,
+  VoteOnContentPollRequest,
   UpdateProfileRequest,
   UpdateCreatorOnboardingRequest,
   UpsertCreatorMembershipOfferRequest,
@@ -303,6 +307,19 @@ export async function publishContent(
     `/v1/content/${encodeURIComponent(contentId)}/publish`,
     "POST",
     body
+  );
+}
+
+export async function voteOnContentPoll(
+  contentId: string,
+  body: VoteOnContentPollRequest,
+  idempotencyKey: string
+): Promise<ContentPoll> {
+  return authenticatedMutation<ContentPoll>(
+    `/v1/content/${encodeURIComponent(contentId)}/poll-votes`,
+    "POST",
+    body,
+    idempotencyKey
   );
 }
 

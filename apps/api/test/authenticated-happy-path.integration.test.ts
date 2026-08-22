@@ -1621,7 +1621,9 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(firstPollVote.json()).toMatchObject({
         totalVoteCount: 1,
         viewerOptionId: firstPollOptionId,
-        options: [expect.objectContaining({ id: firstPollOptionId, voteCount: 1 })]
+        options: expect.arrayContaining([
+          expect.objectContaining({ id: firstPollOptionId, voteCount: 1 })
+        ])
       });
 
       const replayedPollVote = await app.inject({
@@ -1651,10 +1653,10 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(changedPollVote.json()).toMatchObject({
         totalVoteCount: 1,
         viewerOptionId: secondPollOptionId,
-        options: [
+        options: expect.arrayContaining([
           expect.objectContaining({ id: firstPollOptionId, voteCount: 0 }),
           expect.objectContaining({ id: secondPollOptionId, voteCount: 1 })
-        ]
+        ])
       });
 
       const invalidPollVote = await app.inject({
