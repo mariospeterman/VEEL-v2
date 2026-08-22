@@ -516,7 +516,7 @@ export function createContentMediaRepositoryMethods(
           update content_items
           set
             asset_revision = ${input.expectedCompositionRevision + 1},
-            state = case
+            state = (case
               when not exists (
                 select 1 from media_assets remaining
                 where remaining.content_item_id = content_items.id
@@ -524,7 +524,7 @@ export function createContentMediaRepositoryMethods(
               ) then 'draft'
               when private.content_composition_provider_ready(content_items.id) then 'ready'
               else 'processing'
-            end,
+            end)::content_state,
             updated_at = now()
           where id = ${asset.content_item_id}
         `;
