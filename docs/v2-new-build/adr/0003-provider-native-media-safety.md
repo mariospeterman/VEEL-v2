@@ -66,7 +66,7 @@ Livepeer remains the live/replay provider. Official APIs support multistream tar
 
 `LIVEPEER_ADULT_LIVE_ENABLED=false` remains the default. A thumbnail is only a fallback signal, not continuous moderation.
 
-Convergence 05 strengthens the candidate boundary without promoting it: every room carries the exact `this_live_stream_is_sfw` declaration but begins `monitoring_pending` and locally quarantined. Stream creation binds the configured source-profile moderation multistream target. Viewer playback and chat release only after the signed `multistream.connected` acknowledgement for that exact target and a fresh signed stream heartbeat converge with the canonical room. Disconnect, error, inconsistent target identity, or heartbeat expiry denies local delivery first and then enters a durable worker suspension queue. Provider failure never reopens local delivery. Staff resume also returns to monitoring-pending instead of fabricating approval. Adult live remains disabled regardless of credentials.
+Convergence 05 strengthens the candidate boundary without promoting it: every room carries the exact `this_live_stream_is_sfw` declaration but begins `monitoring_pending` and locally quarantined. Stream creation binds the configured source-profile moderation multistream target. Viewer playback and chat release only after the signed `multistream.connected` acknowledgement for that exact target and a fresh worker-owned `GET /stream/{id}` observation confirming active, healthy, recent provider state converge with the canonical room. The one-time `stream.started` lifecycle callback is never treated as a recurring heartbeat. Disconnect, error, inconsistent target identity, provider uncertainty, or health expiry denies local delivery first and then enters a durable worker suspension queue. Provider failure never reopens local delivery. Staff resume also returns to monitoring-pending instead of fabricating approval. Adult live remains disabled regardless of credentials.
 
 Recorded replays are a new quarantined content revision, not permission to reuse the live playback projection. `recording.ready` creates a private replay, separate provider asset, safety case, and moderation job; playback is issued only after provider readiness plus canonical approval and publication.
 
@@ -105,6 +105,7 @@ Livepeer behavior was rechecked on 2026-08-23 before the Convergence 05 adapter 
 - Livepeer update stream/suspension: https://docs.livepeer.org/api-reference/stream/update
 - Livepeer terminate stream: https://docs.livepeer.org/api-reference/stream/terminate
 - Livepeer create stream/JWT/multistream fields: https://docs.livepeer.org/api-reference/stream/create
+- Livepeer retrieve stream health fields: https://docs.livepeer.org/api-reference/stream/get
 - Livepeer webhook signatures: https://docs.livepeer.org/developers/guides/setup-and-listen-to-webhooks
 - Livepeer webhook event configuration: https://docs.livepeer.org/v2/solutions/livepeer-studio/docs/api-reference/webhooks/update
 - Livepeer OBS ingest: https://docs.livepeer.org/developers/guides/stream-via-obs

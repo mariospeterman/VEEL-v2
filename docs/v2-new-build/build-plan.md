@@ -67,8 +67,8 @@ accessibility, browser, and immutable-artifact evidence. Anything outside that d
 | Convergence 02 | Universal composer | Merged through PR #87 at `692bf49`: one canonical photo/video/mixed-media/text/poll draft lifecycle, ordered assets, transactional polls, all-required-assets release authority, shared renderers, durable provider cleanup, exact-main CI/database/security, and immutable artifact evidence are green; Bunny image staging remains fail-closed on recorded provider gates |
 | Convergence 03 | Analytics Core | Merged through PR #88 at `96f334c`: one versioned registry of roughly 50 metrics, typed projections and facts, bounded worker recomputation/reconciliation, explicit freshness/privacy, authorized creator/organization/platform scopes, admin health/recovery, exact-main CI/database/security, and real-Postgres/browser proof are green |
 | Convergence 04 | Lifecycle correctness, login/onboarding separation, and analytics surfaces | Merged through PR #89 at `c517c3e`: purpose-bound login/onboarding, lookup-only recovery, exact lifecycle resume, PII-free onboarding instrumentation, shared analytics surfaces, exact-main CI/database/security, real-Postgres, and browser proof are green; provider staging remains fail closed |
-| Convergence 05 | Realtime, messaging, and live safety | Active after Convergence 04: private scoped Broadcast transports minimal invalidations, consent-safe natural messaging removes payment bypass, and live release requires acknowledged healthy monitoring while canonical APIs remain truth |
-| Convergence 06 | Consumer social experience | Pending Convergence 05: one accessible action rail, comments sheet, replies, comment likes, mentions, internal shares, hashtags, polls, and responsive UX |
+| Convergence 05 | Realtime, messaging, and live safety | Merged through PR #90 at `730c6c3`: private scoped Broadcast transports minimal invalidations, consent-safe natural messaging removes payment bypass, and live release requires acknowledged healthy monitoring while canonical APIs remain truth; real Supabase/Livepeer staging evidence remains fail closed |
+| Convergence 06 | Consumer social experience | Next after Convergence 05: one accessible action rail, comments sheet, replies, comment likes, mentions, internal shares, hashtags, polls, and responsive UX |
 | Convergence 07 | Remote MCP profile bridge | Pending Convergence 06 and current official protocol re-verification: stateless OAuth profile/analytics/private-draft preparation bridge with no hosted WeVid model or consequential direct actions |
 | Convergence 08 | MCP media and provenance bridge | Pending Convergence 07: short-lived private-draft media capabilities, quarantine/provider verification, structured provenance, trusted human review, and no MCP publish endpoint |
 | Separate add-on | `wevid-agency` | Only after the core bridge: a user-owned, separately authorized package for external AI, sourced research, local FFmpeg, and optional user-owned generation providers; it is not part of the WeVid API runtime and requires a separately authorized repository boundary |
@@ -84,8 +84,8 @@ not create parallel policy, eligibility, composer, renderer, analytics, realtime
 WeVid Core owns deterministic analytics and the scoped data/action bridge, but hosts no LLM or model-key
 gateway. The optional WeVid Agency remains a separate, user-owned add-on and publication stays human-controlled.
 
-Next planned production slice: **Convergence 05 — Realtime, messaging, and live safety**.
-Its branch contract is `codex/converge-05-realtime-messaging-live-safety`; GitHub, not this document, owns
+Next planned production slice: **Convergence 06 — Consumer social experience**.
+Its branch contract is `codex/converge-06-consumer-social-experience`; GitHub, not this document, owns
 whether that branch currently has the one active pull request.
 
 Each completed slice requires the actual UI-to-database/provider path, authorization and runtime validation, focused unit and real-Postgres integration proof, browser proof, operational recovery, canonical docs updates, and redacted provider staging evidence when a provider is involved. Mocks prove application logic only.

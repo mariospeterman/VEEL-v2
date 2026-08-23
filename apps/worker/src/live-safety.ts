@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 
+export const liveSafetyHoldEligibleStates = ["monitoring_pending", "monitoring"] as const;
+export const liveSafetyProviderConcurrency = 5;
+const liveSafetyMaxBatchSize = 25;
+
 export interface LiveSafetyProviderAction {
   id: string;
   roomId: string;
@@ -9,9 +13,35 @@ export interface LiveSafetyProviderAction {
   attemptCount: number;
 }
 
+export interface LiveSafetyHealthCheck {
+  id: string;
+  roomId: string;
+  providerStreamId: string;
+  leaseToken: string;
+}
+
 export interface LiveSafetyRepository {
-  holdDueSessions(input: { now: Date; limit: number }): Promise<number>;
-  claimProviderActions(input: { now: Date; limit: number }): Promise<LiveSafetyProviderAction[]>;
+  claimHealthChecks(input: {
+    now: Date;
+    limit: number;
+    excludeSessionIds?: string[];
+  }): Promise<LiveSafetyHealthCheck[]>;
+  completeHealthCheck(input: {
+    id: string;
+    leaseToken: string;
+    completedAt: Date;
+    healthy: boolean;
+  }): Promise<void>;
+  holdDueSessions(input: {
+    now: Date;
+    limit: number;
+    excludeSessionIds?: string[];
+  }): Promise<number>;
+  claimProviderActions(input: {
+    now: Date;
+    limit: number;
+    excludeActionIds?: string[];
+  }): Promise<LiveSafetyProviderAction[]>;
   completeProviderAction(input: { id: string; leaseToken: string; now: Date }): Promise<void>;
   retryProviderAction(input: {
     id: string;
@@ -25,10 +55,14 @@ export interface LiveSafetyRepository {
 }
 
 export interface LiveSafetyProvider {
+  checkHealth(input: { providerStreamId: string; observedAt: Date }): Promise<{ healthy: boolean }>;
   suspend(input: { providerStreamId: string }): Promise<void>;
 }
 
 export interface ProcessLiveSafetyResult {
+  healthChecked: number;
+  healthConfirmed: number;
+  healthFailed: number;
   held: number;
   claimed: number;
   completed: number;
@@ -42,40 +76,122 @@ export async function processLiveSafety(input: {
   now?: Date;
   limit?: number;
 }): Promise<ProcessLiveSafetyResult> {
-  const now = input.now ?? new Date();
-  const limit = input.limit ?? 25;
-  const held = await input.repository.holdDueSessions({ now, limit });
-  const actions = await input.repository.claimProviderActions({ now, limit });
+  const limit = Math.max(1, Math.min(input.limit ?? liveSafetyMaxBatchSize, liveSafetyMaxBatchSize));
   let completed = 0;
   let retried = 0;
   let deadLettered = 0;
+  let claimed = 0;
+  const claimedActionIds: string[] = [];
 
-  for (const action of actions) {
-    try {
-      await input.provider.suspend({ providerStreamId: action.providerStreamId });
-      await input.repository.completeProviderAction({
-        id: action.id,
-        leaseToken: action.leaseToken,
-        now
+  const processProviderActions = async () => {
+    let remaining = limit;
+    while (remaining > 0) {
+      const claimAt = input.now ?? new Date();
+      const waveLimit = Math.min(liveSafetyProviderConcurrency, remaining);
+      const actions = await input.repository.claimProviderActions({
+        now: claimAt,
+        limit: waveLimit,
+        excludeActionIds: [...claimedActionIds]
       });
-      completed += 1;
-    } catch (error) {
-      const deadLetter = action.attemptCount >= 10;
-      const delaySeconds = Math.min(3600, 2 ** Math.min(action.attemptCount, 10) * 15);
-      await input.repository.retryProviderAction({
-        id: action.id,
-        leaseToken: action.leaseToken,
-        now,
-        retryAt: new Date(now.getTime() + delaySeconds * 1000),
-        failureCode: error instanceof Error ? error.name.slice(0, 120) : "provider_failure",
-        deadLetter
-      });
-      if (deadLetter) deadLettered += 1;
-      else retried += 1;
+      if (actions.length === 0) break;
+      claimed += actions.length;
+      claimedActionIds.push(...actions.map((action) => action.id));
+      await Promise.all(actions.map(async (action) => {
+        try {
+          await input.provider.suspend({ providerStreamId: action.providerStreamId });
+          await input.repository.completeProviderAction({
+            id: action.id,
+            leaseToken: action.leaseToken,
+            now: input.now ?? new Date()
+          });
+          completed += 1;
+        } catch (error) {
+          const failedAt = input.now ?? new Date();
+          const deadLetter = action.attemptCount >= 10;
+          const delaySeconds = Math.min(3600, 2 ** Math.min(action.attemptCount, 10) * 15);
+          await input.repository.retryProviderAction({
+            id: action.id,
+            leaseToken: action.leaseToken,
+            now: failedAt,
+            retryAt: new Date(failedAt.getTime() + delaySeconds * 1000),
+            failureCode: error instanceof Error ? error.name.slice(0, 120) : "provider_failure",
+            deadLetter
+          });
+          if (deadLetter) deadLettered += 1;
+          else retried += 1;
+        }
+      }));
+      remaining -= actions.length;
+      if (actions.length < waveLimit) break;
     }
-  }
+  };
 
-  return { held, claimed: actions.length, completed, retried, deadLettered };
+  // Existing local denials must reach the provider before any potentially slow health batch.
+  await processProviderActions();
+  const healthChecks: LiveSafetyHealthCheck[] = [];
+  let healthConfirmed = 0;
+  let healthFailed = 0;
+  const confirmedSessionIds: string[] = [];
+  const claimedHealthCheckIds: string[] = [];
+  let remainingHealthChecks = limit;
+  while (remainingHealthChecks > 0) {
+    const healthClaimAt = input.now ?? new Date();
+    const waveLimit = Math.min(liveSafetyProviderConcurrency, remainingHealthChecks);
+    const wave = await input.repository.claimHealthChecks({
+      now: healthClaimAt,
+      limit: waveLimit,
+      excludeSessionIds: [...claimedHealthCheckIds]
+    });
+    if (wave.length === 0) break;
+    healthChecks.push(...wave);
+    claimedHealthCheckIds.push(...wave.map((check) => check.id));
+    await Promise.all(wave.map(async (check) => {
+      const observedAt = input.now ?? new Date();
+      let healthy = false;
+      try {
+        healthy = (await input.provider.checkHealth({
+          providerStreamId: check.providerStreamId,
+          observedAt
+        })).healthy;
+      } catch {
+        // Provider uncertainty is deliberately fail-closed at the existing session authority.
+      }
+      await input.repository.completeHealthCheck({
+        id: check.id,
+        leaseToken: check.leaseToken,
+        completedAt: input.now ?? new Date(),
+        healthy
+      });
+      if (healthy) {
+        healthConfirmed += 1;
+        confirmedSessionIds.push(check.id);
+      } else {
+        healthFailed += 1;
+      }
+    }));
+    remainingHealthChecks -= wave.length;
+    if (wave.length < waveLimit) break;
+  }
+  const holdAt = input.now ?? new Date();
+  const held = await input.repository.holdDueSessions({
+    now: holdAt,
+    limit,
+    excludeSessionIds: confirmedSessionIds
+  });
+  // Pick up suspension work created by this hold pass without waiting for the next worker tick.
+  // Excluding this tick's earlier claims preserves their configured retry deadlines.
+  await processProviderActions();
+
+  return {
+    healthChecked: healthChecks.length,
+    healthConfirmed,
+    healthFailed,
+    held,
+    claimed,
+    completed,
+    retried,
+    deadLettered
+  };
 }
 
 export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSafetyRepository {
@@ -83,6 +199,67 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
   const sql = postgres(databaseUrl, { max: 4, idle_timeout: 20, connect_timeout: 10 });
 
   return {
+    async claimHealthChecks(input) {
+      const leaseToken = randomUUID();
+      const rows = await sql<{
+        id: string;
+        room_id: string;
+        provider_stream_id: string;
+      }[]>`
+        with candidates as (
+          select session.id
+          from live_safety_sessions session
+          join live_rooms room on room.id = session.room_id
+          where session.state in ('target_connected', 'monitoring')
+            and session.next_check_at <= ${input.now}
+            and (session.lease_expires_at is null or session.lease_expires_at <= ${input.now})
+            and not (session.id = any(${input.excludeSessionIds ?? []}::uuid[]))
+            and room.state = 'live'
+            and room.provider_stream_id is not null
+          order by session.next_check_at, session.created_at
+          limit ${input.limit}
+          for update of session skip locked
+        )
+        update live_safety_sessions session
+        set lease_token = ${leaseToken}, lease_expires_at = ${input.now} + interval '2 minutes',
+            updated_at = ${input.now}
+        from candidates, live_rooms room
+        where session.id = candidates.id and room.id = session.room_id
+        returning session.id, session.room_id, room.provider_stream_id
+      `;
+      return rows.map((row) => ({
+        id: row.id,
+        roomId: row.room_id,
+        providerStreamId: row.provider_stream_id,
+        leaseToken
+      }));
+    },
+    async completeHealthCheck(input) {
+      if (input.healthy) {
+        await sql.begin(async (transaction) => {
+          const updated = await transaction<{ room_id: string }[]>`
+            update live_safety_sessions
+            set state = 'monitoring', last_heartbeat_at = ${input.completedAt},
+                heartbeat_expires_at = ${input.completedAt} + interval '90 seconds',
+                next_check_at = ${input.completedAt} + interval '30 seconds',
+                lease_token = null, lease_expires_at = null, updated_at = ${input.completedAt}
+            where id = ${input.id}
+              and lease_token = ${input.leaseToken}
+              and state in ('target_connected', 'monitoring')
+            returning room_id
+          `;
+          const roomId = updated[0]?.room_id;
+          if (roomId) {
+            await releaseHealthyLiveSafetyCase(transaction, {
+              roomId,
+              observedAt: input.completedAt
+            });
+          }
+        });
+        return;
+      }
+      await sql.begin((transaction) => holdUnhealthyLiveSafetySession(transaction, input));
+    },
     async holdDueSessions(input) {
       return sql.begin(async (transaction) => {
         const due = await transaction<{ session_id: string; room_id: string; reason_code: string }[]>`
@@ -95,8 +272,10 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
             end as reason_code
           from live_safety_sessions session
           join live_rooms room on room.id = session.room_id
-          where session.state in ('monitoring_pending', 'target_connected', 'monitoring')
+          where session.state in ${transaction([...liveSafetyHoldEligibleStates])}
             and session.next_check_at <= ${input.now}
+            and not (session.id = any(${input.excludeSessionIds ?? []}::uuid[]))
+            and (session.lease_expires_at is null or session.lease_expires_at <= ${input.now})
             and room.state = 'live'
             and (
               session.state <> 'monitoring'
@@ -115,25 +294,11 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
                 last_heartbeat_at = null, heartbeat_expires_at = null, updated_at = ${input.now}
             where id = ${target.session_id}
           `;
-          await transaction`
-            update media_safety_cases
-            set state = 'review_required', reason_code = ${target.reason_code},
-                provider_release_allowed = false, decided_at = null, updated_at = ${input.now}
-            where live_room_id = ${target.room_id} and state <> 'superseded'
-          `;
-          await transaction`
-            update live_rooms
-            set state_before_suspension = 'live', state = 'suspended',
-                provider_state = 'suspension_pending', playback_url = null,
-                suspended_at = coalesce(suspended_at, ${input.now}),
-                suspension_reason = ${target.reason_code}, updated_at = ${input.now}
-            where id = ${target.room_id}
-          `;
-          await transaction`
-            insert into live_safety_provider_actions (room_id, action, reason_code)
-            values (${target.room_id}, 'suspend', ${target.reason_code})
-            on conflict (room_id, action) where state in ('queued', 'processing', 'retry') do nothing
-          `;
+          await persistLiveSafetyHold(transaction, {
+            roomId: target.room_id,
+            reasonCode: target.reason_code,
+            heldAt: input.now
+          });
         }
         return due.length;
       });
@@ -153,6 +318,7 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
           where action.state in ('queued', 'retry', 'processing')
             and action.next_attempt_at <= ${input.now}
             and (action.lease_expires_at is null or action.lease_expires_at <= ${input.now})
+            and not (action.id = any(${input.excludeActionIds ?? []}::uuid[]))
             and room.provider_stream_id is not null
           order by action.next_attempt_at, action.created_at
           limit ${input.limit}
@@ -197,9 +363,98 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
   };
 }
 
+export async function holdUnhealthyLiveSafetySession(
+  transaction: postgres.TransactionSql,
+  input: { id: string; leaseToken: string; completedAt: Date }
+): Promise<void> {
+  const held = await transaction<{
+    room_id: string;
+    reason_code: string;
+    room_state: string;
+  }[]>`
+    with target as (
+      select session.room_id, room.state as room_state,
+        case
+          when session.state = 'monitoring' then 'live_monitoring_heartbeat_expired'
+          else 'live_monitoring_not_connected'
+        end as reason_code
+      from live_safety_sessions session
+      join live_rooms room on room.id = session.room_id
+      where session.id = ${input.id}
+        and session.lease_token = ${input.leaseToken}
+        and session.state in ('target_connected', 'monitoring')
+        and room.state in ('live', 'ended', 'replay_ready')
+      for update of session, room
+    )
+    update live_safety_sessions session
+    set state = case
+          when target.room_state in ('ended', 'replay_ready') then 'ended'
+          else 'held'
+        end,
+        hold_reason_code = case when target.room_state = 'live' then target.reason_code else null end,
+        held_at = case when target.room_state = 'live' then ${input.completedAt} else null end,
+        last_heartbeat_at = null, heartbeat_expires_at = null, next_check_at = ${input.completedAt},
+        lease_token = null, lease_expires_at = null, updated_at = ${input.completedAt}
+    from target
+    where session.id = ${input.id}
+    returning target.room_id, target.reason_code, target.room_state
+  `;
+  const target = held[0];
+  if (!target || target.room_state !== "live") return;
+  await persistLiveSafetyHold(transaction, {
+    roomId: target.room_id,
+    reasonCode: target.reason_code,
+    heldAt: input.completedAt
+  });
+}
+
+async function persistLiveSafetyHold(
+  transaction: postgres.TransactionSql,
+  input: { roomId: string; reasonCode: string; heldAt: Date }
+): Promise<void> {
+  const suspended = await transaction<{ id: string }[]>`
+    update live_rooms
+    set state_before_suspension = 'live', state = 'suspended',
+        provider_state = 'suspension_pending', playback_url = null,
+        suspended_at = coalesce(suspended_at, ${input.heldAt}),
+        suspension_reason = ${input.reasonCode}, updated_at = ${input.heldAt}
+    where id = ${input.roomId} and state = 'live'
+    returning id
+  `;
+  if (!suspended[0]) return;
+  await transaction`
+    update media_safety_cases
+    set state = 'review_required', reason_code = ${input.reasonCode},
+        provider_release_allowed = false, decided_at = null, updated_at = ${input.heldAt}
+    where live_room_id = ${input.roomId} and state <> 'superseded'
+  `;
+  await transaction`
+    insert into live_safety_provider_actions (room_id, action, reason_code)
+    values (${input.roomId}, 'suspend', ${input.reasonCode})
+    on conflict (room_id, action) where state in ('queued', 'processing', 'retry') do nothing
+  `;
+}
+
+export async function releaseHealthyLiveSafetyCase(
+  transaction: postgres.TransactionSql,
+  input: { roomId: string; observedAt: Date }
+): Promise<void> {
+  await transaction`
+    update media_safety_cases safety
+    set state = 'approved', decision_source = 'automated',
+        reason_code = 'live_monitoring_healthy', provider_release_allowed = true,
+        decided_at = ${input.observedAt}, updated_at = ${input.observedAt}
+    where safety.live_room_id = ${input.roomId}
+      and safety.state <> 'superseded'
+      and private.live_safety_release_ready(${input.roomId})
+  `;
+}
+
 function createUnavailableLiveSafetyRepository(): LiveSafetyRepository {
   const unavailable = async (): Promise<never> => { throw new Error("DATABASE_URL_NOT_CONFIGURED"); };
   return {
+    claimHealthChecks: unavailable,
+    completeHealthCheck: unavailable,
     holdDueSessions: unavailable,
     claimProviderActions: unavailable,
     completeProviderAction: unavailable,

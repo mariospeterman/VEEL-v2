@@ -3,6 +3,7 @@ import type { ServerEnv } from "@veel/config";
 import type {
   CreatedLiveProviderRoom,
   LiveProviderAdapter,
+  LiveProviderRoomHealth,
   LiveProviderRoomStatus
 } from "./types.js";
 
@@ -36,6 +37,8 @@ interface LivepeerStreamResponse {
   lastTerminatedAt?: number | null;
   record?: boolean;
   suspended?: boolean;
+  lastSeen?: number;
+  isHealthy?: boolean;
 }
 
 interface LivepeerPlaybackResponse {
@@ -151,6 +154,38 @@ export function createLivepeerProviderAdapter(
         playbackUrl: stream.suspended ? null : playbackUrl
       };
     },
+    async getRoomHealth(input) {
+      const apiKey = env.LIVEPEER_API_KEY;
+      if (!apiKey) throw new LiveProviderConfigurationError();
+
+      const response = await livepeerFetch(
+        env,
+        fetchImpl,
+        `/stream/${encodeURIComponent(input.providerStreamId)}`,
+        { headers: { authorization: `Bearer ${apiKey}` } }
+      );
+      const stream = (await response.json()) as LivepeerStreamResponse;
+      const lastSeenAt = livepeerLastSeenAt(stream.lastSeen);
+      const recent = lastSeenAt !== null &&
+        input.observedAt.getTime() - lastSeenAt.getTime() <= 90_000 &&
+        lastSeenAt.getTime() <= input.observedAt.getTime() + 30_000;
+      const reason: LiveProviderRoomHealth["reason"] = stream.suspended
+        ? "suspended"
+        : stream.isActive !== true
+          ? "inactive"
+          : stream.isHealthy !== true
+            ? "unhealthy"
+            : !recent
+              ? "stale"
+              : "healthy";
+
+      return {
+        providerStreamId: stream.id ?? input.providerStreamId,
+        healthy: reason === "healthy",
+        reason,
+        observedAt: input.observedAt
+      };
+    },
     async createPlaybackJwt(input) {
       if (
         !env.LIVEPEER_ACCESS_CONTROL_PRIVATE_KEY ||
@@ -200,6 +235,13 @@ export function createLivepeerProviderAdapter(
       );
     }
   };
+}
+
+function livepeerLastSeenAt(value: number | undefined): Date | null {
+  if (!Number.isFinite(value)) return null;
+  const milliseconds = (value as number) < 10_000_000_000 ? (value as number) * 1000 : value as number;
+  const observedAt = new Date(milliseconds);
+  return Number.isNaN(observedAt.getTime()) ? null : observedAt;
 }
 
 async function findPlaybackUrl(

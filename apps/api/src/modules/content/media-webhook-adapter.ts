@@ -267,9 +267,6 @@ function mapLivepeerSafetyEvent(eventType: string): {
   if (eventType === "multistream.connected") {
     return { eventKind: "target_connected", normalizedSignal: "healthy" };
   }
-  if (eventType === "stream.started") {
-    return { eventKind: "heartbeat", normalizedSignal: "healthy" };
-  }
   if (eventType === "multistream.disconnected") {
     return { eventKind: "target_disconnected", normalizedSignal: "disconnected" };
   }

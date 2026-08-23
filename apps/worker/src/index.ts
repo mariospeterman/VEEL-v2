@@ -329,6 +329,12 @@ export async function runLiveSafetyTick(input: {
   const repository = input.repository ?? createPostgresLiveSafetyRepository(config.DATABASE_URL);
   const livepeer = createLivepeerProviderAdapter(config);
   const provider = input.provider ?? {
+    async checkHealth({ providerStreamId, observedAt }) {
+      if (!livepeer.isConfigured() || !livepeer.getRoomHealth) {
+        throw new Error("LIVEPEER_NOT_CONFIGURED");
+      }
+      return livepeer.getRoomHealth({ providerStreamId, observedAt });
+    },
     async suspend({ providerStreamId }) {
       if (!livepeer.isConfigured()) throw new Error("LIVEPEER_NOT_CONFIGURED");
       await livepeer.setRoomSuspended({ providerStreamId, suspended: true });

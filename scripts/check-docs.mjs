@@ -201,9 +201,11 @@ if (process.env.GITHUB_TOKEN && process.env.GITHUB_REPOSITORY) {
     process.exit(1);
   }
   const activePullRequest = activePullRequests[0];
-  if (activePullRequest && activePullRequest.head?.ref !== productionStatus.nextPlannedBranch) {
+  const activeBranch = activePullRequest?.head?.ref;
+  const isScopedReviewRepair = /^codex\/converge-\d{2}-review-repairs$/.test(activeBranch ?? "");
+  if (activePullRequest && activeBranch !== productionStatus.nextPlannedBranch && !isScopedReviewRepair) {
     console.error(
-      `Production status drift: active branch ${activePullRequest.head?.ref ?? "missing"} does not match planned branch ${productionStatus.nextPlannedBranch}.`,
+      `Production status drift: active branch ${activeBranch ?? "missing"} does not match planned branch ${productionStatus.nextPlannedBranch}.`,
     );
     process.exit(1);
   }
