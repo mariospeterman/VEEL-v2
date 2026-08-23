@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 
 export const liveSafetyHoldEligibleStates = ["monitoring_pending", "monitoring"] as const;
-export const liveSafetyHealthConcurrency = 5;
+export const liveSafetyProviderConcurrency = 5;
 const liveSafetyMaxBatchSize = 25;
 
 export interface LiveSafetyProviderAction {
@@ -21,7 +21,11 @@ export interface LiveSafetyHealthCheck {
 }
 
 export interface LiveSafetyRepository {
-  claimHealthChecks(input: { now: Date; limit: number }): Promise<LiveSafetyHealthCheck[]>;
+  claimHealthChecks(input: {
+    now: Date;
+    limit: number;
+    excludeSessionIds?: string[];
+  }): Promise<LiveSafetyHealthCheck[]>;
   completeHealthCheck(input: {
     id: string;
     leaseToken: string;
@@ -72,7 +76,6 @@ export async function processLiveSafety(input: {
   now?: Date;
   limit?: number;
 }): Promise<ProcessLiveSafetyResult> {
-  const now = input.now ?? new Date();
   const limit = Math.max(1, Math.min(input.limit ?? liveSafetyMaxBatchSize, liveSafetyMaxBatchSize));
   let completed = 0;
   let retried = 0;
@@ -80,50 +83,69 @@ export async function processLiveSafety(input: {
   let claimed = 0;
   const claimedActionIds: string[] = [];
 
-  const processProviderActions = async (actionNow: Date, excludeActionIds: string[] = []) => {
-    const actions = await input.repository.claimProviderActions({
-      now: actionNow,
-      limit,
-      excludeActionIds
-    });
-    claimed += actions.length;
-    claimedActionIds.push(...actions.map((action) => action.id));
-    for (const action of actions) {
-      try {
-        await input.provider.suspend({ providerStreamId: action.providerStreamId });
-        await input.repository.completeProviderAction({
-          id: action.id,
-          leaseToken: action.leaseToken,
-          now: actionNow
-        });
-        completed += 1;
-      } catch (error) {
-        const deadLetter = action.attemptCount >= 10;
-        const delaySeconds = Math.min(3600, 2 ** Math.min(action.attemptCount, 10) * 15);
-        await input.repository.retryProviderAction({
-          id: action.id,
-          leaseToken: action.leaseToken,
-          now: actionNow,
-          retryAt: new Date(actionNow.getTime() + delaySeconds * 1000),
-          failureCode: error instanceof Error ? error.name.slice(0, 120) : "provider_failure",
-          deadLetter
-        });
-        if (deadLetter) deadLettered += 1;
-        else retried += 1;
-      }
+  const processProviderActions = async () => {
+    let remaining = limit;
+    while (remaining > 0) {
+      const claimAt = input.now ?? new Date();
+      const waveLimit = Math.min(liveSafetyProviderConcurrency, remaining);
+      const actions = await input.repository.claimProviderActions({
+        now: claimAt,
+        limit: waveLimit,
+        excludeActionIds: [...claimedActionIds]
+      });
+      if (actions.length === 0) break;
+      claimed += actions.length;
+      claimedActionIds.push(...actions.map((action) => action.id));
+      await Promise.all(actions.map(async (action) => {
+        try {
+          await input.provider.suspend({ providerStreamId: action.providerStreamId });
+          await input.repository.completeProviderAction({
+            id: action.id,
+            leaseToken: action.leaseToken,
+            now: input.now ?? new Date()
+          });
+          completed += 1;
+        } catch (error) {
+          const failedAt = input.now ?? new Date();
+          const deadLetter = action.attemptCount >= 10;
+          const delaySeconds = Math.min(3600, 2 ** Math.min(action.attemptCount, 10) * 15);
+          await input.repository.retryProviderAction({
+            id: action.id,
+            leaseToken: action.leaseToken,
+            now: failedAt,
+            retryAt: new Date(failedAt.getTime() + delaySeconds * 1000),
+            failureCode: error instanceof Error ? error.name.slice(0, 120) : "provider_failure",
+            deadLetter
+          });
+          if (deadLetter) deadLettered += 1;
+          else retried += 1;
+        }
+      }));
+      remaining -= actions.length;
+      if (actions.length < waveLimit) break;
     }
   };
 
   // Existing local denials must reach the provider before any potentially slow health batch.
-  await processProviderActions(now);
-  const healthClaimAt = input.now ?? new Date();
-  const healthChecks = await input.repository.claimHealthChecks({ now: healthClaimAt, limit });
+  await processProviderActions();
+  const healthChecks: LiveSafetyHealthCheck[] = [];
   let healthConfirmed = 0;
   let healthFailed = 0;
   const confirmedSessionIds: string[] = [];
-  for (let offset = 0; offset < healthChecks.length; offset += liveSafetyHealthConcurrency) {
-    const batch = healthChecks.slice(offset, offset + liveSafetyHealthConcurrency);
-    await Promise.all(batch.map(async (check) => {
+  const claimedHealthCheckIds: string[] = [];
+  let remainingHealthChecks = limit;
+  while (remainingHealthChecks > 0) {
+    const healthClaimAt = input.now ?? new Date();
+    const waveLimit = Math.min(liveSafetyProviderConcurrency, remainingHealthChecks);
+    const wave = await input.repository.claimHealthChecks({
+      now: healthClaimAt,
+      limit: waveLimit,
+      excludeSessionIds: [...claimedHealthCheckIds]
+    });
+    if (wave.length === 0) break;
+    healthChecks.push(...wave);
+    claimedHealthCheckIds.push(...wave.map((check) => check.id));
+    await Promise.all(wave.map(async (check) => {
       const observedAt = input.now ?? new Date();
       let healthy = false;
       try {
@@ -147,6 +169,8 @@ export async function processLiveSafety(input: {
         healthFailed += 1;
       }
     }));
+    remainingHealthChecks -= wave.length;
+    if (wave.length < waveLimit) break;
   }
   const holdAt = input.now ?? new Date();
   const held = await input.repository.holdDueSessions({
@@ -156,7 +180,7 @@ export async function processLiveSafety(input: {
   });
   // Pick up suspension work created by this hold pass without waiting for the next worker tick.
   // Excluding this tick's earlier claims preserves their configured retry deadlines.
-  await processProviderActions(holdAt, claimedActionIds);
+  await processProviderActions();
 
   return {
     healthChecked: healthChecks.length,
@@ -189,6 +213,7 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
           where session.state in ('target_connected', 'monitoring')
             and session.next_check_at <= ${input.now}
             and (session.lease_expires_at is null or session.lease_expires_at <= ${input.now})
+            and not (session.id = any(${input.excludeSessionIds ?? []}::uuid[]))
             and room.state = 'live'
             and room.provider_stream_id is not null
           order by session.next_check_at, session.created_at

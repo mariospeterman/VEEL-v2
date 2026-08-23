@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type postgres from "postgres";
 import {
-  liveSafetyHealthConcurrency,
   liveSafetyHoldEligibleStates,
+  liveSafetyProviderConcurrency,
   processLiveSafety,
   releaseHealthyLiveSafetyCase,
   type LiveSafetyHealthCheck,
@@ -14,14 +14,22 @@ function repositoryWith(
   actions: LiveSafetyProviderAction[],
   healthChecks: LiveSafetyHealthCheck[] = []
 ) {
+  const queuedActions = [...actions];
+  const queuedHealthChecks = [...healthChecks];
   const completed: string[] = [];
   const retried: Array<{ id: string; deadLetter: boolean }> = [];
   const healthResults: Array<{ id: string; healthy: boolean }> = [];
+  const healthClaimInputs: Array<{ excludeSessionIds?: string[]; limit: number }> = [];
   const holdInputs: Array<{ excludeSessionIds?: string[] }> = [];
   const actionClaimInputs: Array<{ excludeActionIds?: string[] }> = [];
-  let actionClaimCount = 0;
   const repository: LiveSafetyRepository = {
-    async claimHealthChecks() { return healthChecks; },
+    async claimHealthChecks(input) {
+      healthClaimInputs.push({
+        excludeSessionIds: input.excludeSessionIds,
+        limit: input.limit
+      });
+      return queuedHealthChecks.splice(0, input.limit);
+    },
     async completeHealthCheck(input) { healthResults.push({ id: input.id, healthy: input.healthy }); },
     async holdDueSessions(input) {
       holdInputs.push({ excludeSessionIds: input.excludeSessionIds });
@@ -29,13 +37,20 @@ function repositoryWith(
     },
     async claimProviderActions(input) {
       actionClaimInputs.push({ excludeActionIds: input.excludeActionIds });
-      actionClaimCount += 1;
-      return actionClaimCount === 1 ? actions : [];
+      return queuedActions.splice(0, input.limit);
     },
     async completeProviderAction(input) { completed.push(input.id); },
     async retryProviderAction(input) { retried.push({ id: input.id, deadLetter: input.deadLetter }); }
   };
-  return { repository, completed, retried, healthResults, holdInputs, actionClaimInputs };
+  return {
+    repository,
+    completed,
+    retried,
+    healthResults,
+    holdInputs,
+    actionClaimInputs,
+    healthClaimInputs
+  };
 }
 
 describe("live safety watchdog", () => {
@@ -332,7 +347,67 @@ describe("live safety watchdog", () => {
       }
     });
 
-    expect(maxActive).toBe(liveSafetyHealthConcurrency);
+    expect(maxActive).toBe(liveSafetyProviderConcurrency);
     expect(state.healthResults).toHaveLength(25);
+  });
+
+  it("claims health checks in separately leased waves", async () => {
+    const claimLimits: number[] = [];
+    const healthChecks = Array.from({ length: 12 }, (_, index) => ({
+      id: `session-${index}`,
+      roomId: `room-${index}`,
+      providerStreamId: `stream-${index}`,
+      leaseToken: `health-lease-${index}`
+    }));
+    const state = repositoryWith([], healthChecks);
+    const claimHealthChecks = state.repository.claimHealthChecks.bind(state.repository);
+    state.repository.claimHealthChecks = async (input) => {
+      claimLimits.push(input.limit);
+      return claimHealthChecks(input);
+    };
+
+    await processLiveSafety({
+      repository: state.repository,
+      provider: {
+        async checkHealth() { return { healthy: true }; },
+        async suspend() {}
+      }
+    });
+
+    expect(claimLimits).toEqual([5, 5, 5]);
+    expect(state.healthClaimInputs.map((claim) => claim.excludeSessionIds?.length)).toEqual([
+      0,
+      5,
+      10
+    ]);
+  });
+
+  it("processes suspension actions in separately leased concurrent waves", async () => {
+    const actions = Array.from({ length: 12 }, (_, index) => ({
+      id: `action-${index}`,
+      roomId: `room-${index}`,
+      providerStreamId: `stream-${index}`,
+      leaseToken: `action-lease-${index}`,
+      attemptCount: 1
+    }));
+    const state = repositoryWith(actions);
+    let active = 0;
+    let maxActive = 0;
+
+    await processLiveSafety({
+      repository: state.repository,
+      provider: {
+        async checkHealth() { return { healthy: true }; },
+        async suspend() {
+          active += 1;
+          maxActive = Math.max(maxActive, active);
+          await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          active -= 1;
+        }
+      }
+    });
+
+    expect(maxActive).toBe(liveSafetyProviderConcurrency);
+    expect(state.completed).toHaveLength(12);
   });
 });
