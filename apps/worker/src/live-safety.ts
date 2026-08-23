@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 
+export const liveSafetyHoldEligibleStates = ["monitoring_pending", "monitoring"] as const;
+
 export interface LiveSafetyProviderAction {
   id: string;
   roomId: string;
@@ -66,11 +68,12 @@ export async function processLiveSafety(input: {
   let healthConfirmed = 0;
   let healthFailed = 0;
   for (const check of healthChecks) {
+    const observedAt = input.now ?? new Date();
     let healthy = false;
     try {
       healthy = (await input.provider.checkHealth({
         providerStreamId: check.providerStreamId,
-        observedAt: now
+        observedAt
       })).healthy;
     } catch {
       // Provider uncertainty is deliberately fail-closed at the existing session authority.
@@ -78,14 +81,15 @@ export async function processLiveSafety(input: {
     await input.repository.completeHealthCheck({
       id: check.id,
       leaseToken: check.leaseToken,
-      observedAt: now,
+      observedAt,
       healthy
     });
     if (healthy) healthConfirmed += 1;
     else healthFailed += 1;
   }
-  const held = await input.repository.holdDueSessions({ now, limit });
-  const actions = await input.repository.claimProviderActions({ now, limit });
+  const holdAt = input.now ?? new Date();
+  const held = await input.repository.holdDueSessions({ now: holdAt, limit });
+  const actions = await input.repository.claimProviderActions({ now: holdAt, limit });
   let completed = 0;
   let retried = 0;
   let deadLettered = 0;
@@ -96,7 +100,7 @@ export async function processLiveSafety(input: {
       await input.repository.completeProviderAction({
         id: action.id,
         leaseToken: action.leaseToken,
-        now
+        now: holdAt
       });
       completed += 1;
     } catch (error) {
@@ -105,8 +109,8 @@ export async function processLiveSafety(input: {
       await input.repository.retryProviderAction({
         id: action.id,
         leaseToken: action.leaseToken,
-        now,
-        retryAt: new Date(now.getTime() + delaySeconds * 1000),
+        now: holdAt,
+        retryAt: new Date(holdAt.getTime() + delaySeconds * 1000),
         failureCode: error instanceof Error ? error.name.slice(0, 120) : "provider_failure",
         deadLetter
       });
@@ -182,7 +186,8 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
       }
       await sql`
         update live_safety_sessions
-        set heartbeat_expires_at = case
+        set state = 'monitoring',
+            heartbeat_expires_at = case
               when last_heartbeat_at is null then null
               else ${input.observedAt}
             end,
@@ -205,7 +210,7 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
             end as reason_code
           from live_safety_sessions session
           join live_rooms room on room.id = session.room_id
-          where session.state in ('monitoring_pending', 'target_connected', 'monitoring')
+          where session.state in ${transaction([...liveSafetyHoldEligibleStates])}
             and session.next_check_at <= ${input.now}
             and (session.lease_expires_at is null or session.lease_expires_at <= ${input.now})
             and room.state = 'live'

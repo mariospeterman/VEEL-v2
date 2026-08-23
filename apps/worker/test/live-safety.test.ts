@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  liveSafetyHoldEligibleStates,
   processLiveSafety,
   type LiveSafetyHealthCheck,
   type LiveSafetyProviderAction,
@@ -25,6 +26,11 @@ function repositoryWith(
 }
 
 describe("live safety watchdog", () => {
+  it("does not hold target-connected sessions deferred beyond the polling batch limit", () => {
+    expect(liveSafetyHoldEligibleStates).not.toContain("target_connected");
+    expect(liveSafetyHoldEligibleStates).toEqual(["monitoring_pending", "monitoring"]);
+  });
+
   it("holds stale viewer access before suspending the provider", async () => {
     const action = {
       id: "action-1",
@@ -123,5 +129,45 @@ describe("live safety watchdog", () => {
 
     expect(state.healthResults).toEqual([{ id: "session-2", healthy: false }]);
     expect(result.healthFailed).toBe(1);
+  });
+
+  it("timestamps each sequential provider health request when it starts", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-23T12:00:00.000Z"));
+    try {
+      const state = repositoryWith([], [
+        {
+          id: "session-1",
+          roomId: "room-1",
+          providerStreamId: "stream-1",
+          leaseToken: "health-lease-1"
+        },
+        {
+          id: "session-2",
+          roomId: "room-2",
+          providerStreamId: "stream-2",
+          leaseToken: "health-lease-2"
+        }
+      ]);
+      const observedAt: string[] = [];
+      await processLiveSafety({
+        repository: state.repository,
+        provider: {
+          async checkHealth(input) {
+            observedAt.push(input.observedAt.toISOString());
+            if (input.providerStreamId === "stream-1") vi.advanceTimersByTime(31_000);
+            return { healthy: true };
+          },
+          async suspend() {}
+        }
+      });
+
+      expect(observedAt).toEqual([
+        "2026-08-23T12:00:00.000Z",
+        "2026-08-23T12:00:31.000Z"
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
