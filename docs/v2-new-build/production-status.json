@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "latestMergedBaseline": "c517c3e401fdf3d2a14b000fdb1b87602645a7f5",
-  "latestMergedSlice": "Convergence 04 — Lifecycle correctness and analytics surfaces",
-  "latestMergedMigration": "packages/database/migrations/0111_auth_lifecycle_purpose.sql",
-  "nextPlannedSlice": "Convergence 05 — Realtime, messaging, and live safety",
-  "nextPlannedBranch": "codex/converge-05-realtime-messaging-live-safety",
+  "latestMergedBaseline": "730c6c3a2af1fa58a5fecc3f832e013e422e4335",
+  "latestMergedSlice": "Convergence 05 — Realtime, messaging, and live safety",
+  "latestMergedMigration": "packages/database/migrations/0112_realtime_messaging_live_safety.sql",
+  "nextPlannedSlice": "Convergence 06 — Consumer social experience",
+  "nextPlannedBranch": "codex/converge-06-consumer-social-experience",
   "latestMergedEvidenceStates": [
     "DESIGNED",
     "CODE_COMPLETE",

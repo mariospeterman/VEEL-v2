@@ -38,19 +38,30 @@ copied into this document. The machine-readable companion is `production-status.
 
 | Field | Current value |
 | --- | --- |
-| Latest merged baseline | `c517c3e401fdf3d2a14b000fdb1b87602645a7f5` |
-| Latest merged slice | Convergence 04 — Lifecycle correctness and analytics surfaces |
-| Latest merged migration | `packages/database/migrations/0111_auth_lifecycle_purpose.sql` |
+| Latest merged baseline | `730c6c3a2af1fa58a5fecc3f832e013e422e4335` |
+| Latest merged slice | Convergence 05 — Realtime, messaging, and live safety |
+| Latest merged migration | `packages/database/migrations/0112_realtime_messaging_live_safety.sql` |
 | Latest merged evidence | `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`, `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN` |
 | Known launch blockers | `STAGING_PROVEN`, `PROVIDER_APPROVED`, `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED` remain outstanding. |
-| Next planned slice | Convergence 05 — Realtime, messaging, and live safety |
+| Next planned slice | Convergence 06 — Consumer social experience |
 
-Next planned production slice: **Convergence 05 — Realtime, messaging, and live safety**.
+Next planned production slice: **Convergence 06 — Consumer social experience**.
 
 Readiness vocabulary is fixed to `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`,
 `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN`, `STAGING_PROVEN`, `PROVIDER_APPROVED`,
 `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED`. “Accepted” describes a
 design decision; it never means implemented, tested, approved, enabled, or launch-ready.
+
+Merged Convergence 05 now has one scoped private-realtime protocol for messages, presence, typing,
+notifications, and live invalidation; consent-bound direct messaging with one introduction; replies,
+reactions, revision-bound attachments, and a bounded offline queue; exact creator media offers and
+two-phase structured requests without paid access to people; and provider-evidence-driven live safety
+that denies playback locally before retrying provider suspension. Migration `0112` rollback/reapply,
+551 unit/integration tests, six clean-runner real-Postgres journeys, 172 Chromium/Firefox/WebKit
+browser checks, production build, and exact-main CI `32665010776`, database `32665010765`, and
+security `32665010773` are green. PR #90 merged as `730c6c3`. Adult live remains disabled, replay
+remains quarantined, and real provider/staging acceptance remains fail closed behind the recorded
+release gates.
 
 Merged Convergence 04 now has one purpose-bound wallet challenge/session authority that keeps
 returning-user login lookup-only, makes unknown identities return `account_not_found` without
