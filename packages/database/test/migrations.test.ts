@@ -9,6 +9,19 @@ const migrationsDir = join(packageRoot, "migrations");
 const readMigration = (fileName: string) => readFileSync(join(migrationsDir, fileName), "utf8");
 
 describe("database migrations", () => {
+  it("binds wallet authentication challenges to login or onboarding purpose", () => {
+    const sql = readMigration("0111_auth_lifecycle_purpose.sql");
+    const downSql = readMigration("0111_auth_lifecycle_purpose.down.sql");
+
+    expect(sql).toContain("add column purpose text");
+    expect(sql).toContain("consumed_at = coalesce(consumed_at, now())");
+    expect(sql).toContain("purpose in ('login', 'onboarding')");
+    expect(sql).toContain("alter column purpose set not null");
+    expect(sql).toContain("wallet_auth_challenges_purpose_address_created_idx");
+    expect(sql).not.toMatch(/email|provider_token|wallet_signature|identity_document|raw_payload|private_key/i);
+    expect(downSql).toContain("drop column if exists purpose");
+  });
+
   it("adds typed server-only Analytics Core projections with bounded recovery", () => {
     const sql = readMigration("0110_analytics_core.sql");
     const downSql = readMigration("0110_analytics_core.down.sql");

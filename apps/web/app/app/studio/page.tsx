@@ -3,7 +3,9 @@ import {
   getManagedCreatorReporting,
   getOrganizationDashboards,
   getOrganizationMembers,
+  queryAnalytics,
   getWallets,
+  type AnalyticsQueryResponse,
   type ApiResult,
   type OrganizationDashboardPage
 } from "@/api-client";
@@ -11,6 +13,7 @@ import { requireAppAccess } from "@/supabase/route-guard";
 import { AppShell } from "../../app-shell";
 import { Card, EmptyState, ErrorState, Fact, PageHeader, StatusPill } from "../../ui";
 import { EnterpriseManagementPanel } from "./enterprise-management-panel";
+import { AnalyticsSummary, analyticsWindow } from "../analytics-summary";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +27,7 @@ export default async function StudioPage() {
   ]);
   const dashboardItems = dashboards.ok ? dashboards.data.items : [];
   const relationshipItems = relationships.ok ? relationships.data.items : [];
-  const [memberEntries, reportingEntries] = await Promise.all([
+  const [memberEntries, reportingEntries, analyticsEntries] = await Promise.all([
     Promise.all(dashboardItems.map(async (dashboard) => {
       const organizationId = dashboard.organization.organizationId;
       const result = dashboard.organization.membershipState === "active"
@@ -35,8 +38,26 @@ export default async function StudioPage() {
     Promise.all(relationshipItems.map(async (relationship) => {
       const result = await getManagedCreatorReporting(relationship.id);
       return [relationship.id, result.ok ? result.data : null] as const;
+    })),
+    Promise.all(dashboardItems.map(async (dashboard) => {
+      const organizationId = dashboard.organization.organizationId;
+      const queryCurrency = (currency: "SOL" | "USDC") => queryAnalytics({
+        scope: { type: "organization" as const, organizationId },
+        metricKeys: [
+          "organization.commerce.confirmed_allocations" as const,
+          "organization.commerce.creator_net_minor" as const,
+          "organization.commerce.management_minor" as const
+        ],
+        window: analyticsWindow(30),
+        comparisonWindow: analyticsWindow(30, 30),
+        granularity: "total" as const,
+        timezone: "UTC" as const,
+        dimensions: { currency }
+      });
+      return [organizationId, await Promise.all([queryCurrency("SOL"), queryCurrency("USDC")])] as const;
     }))
   ]);
+  const organizationAnalytics = Object.fromEntries(analyticsEntries) as Record<string, Array<ApiResult<AnalyticsQueryResponse>>>;
 
   return (
     <AppShell>
@@ -47,7 +68,7 @@ export default async function StudioPage() {
             or preferential social treatment.
         </PageHeader>
 
-        <DashboardList dashboards={dashboards} />
+        <DashboardList analytics={organizationAnalytics} dashboards={dashboards} />
         {relationships.ok ? (
           <EnterpriseManagementPanel
             dashboards={dashboardItems}
@@ -64,7 +85,10 @@ export default async function StudioPage() {
   );
 }
 
-function DashboardList({ dashboards }: { dashboards: ApiResult<OrganizationDashboardPage> }) {
+function DashboardList({ analytics, dashboards }: {
+  analytics: Record<string, Array<ApiResult<AnalyticsQueryResponse>>>;
+  dashboards: ApiResult<OrganizationDashboardPage>;
+}) {
   if (!dashboards.ok) {
     return <ErrorState result={dashboards} title="Studio / Enterprise unavailable" context="Studio / Enterprise" />;
   }
@@ -81,7 +105,8 @@ function DashboardList({ dashboards }: { dashboards: ApiResult<OrganizationDashb
   return (
     <section className="grid gap-4">
       {dashboards.data.items.map((dashboard) => (
-        <Card className="p-4" key={dashboard.organization.id}>
+        <section className="grid gap-3" key={dashboard.organization.id}>
+        <Card className="p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-(--accent-text)">{dashboard.organization.plan}</p>
@@ -134,6 +159,12 @@ function DashboardList({ dashboards }: { dashboards: ApiResult<OrganizationDashb
             </div>
           </div>
         </Card>
+        <AnalyticsSummary
+          description="The same versioned metric objects used across WeVid, restricted to this active Enterprise organization and separated by native currency."
+          queries={analytics[dashboard.organization.organizationId] ?? []}
+          title={`${dashboard.organization.name} analytics`}
+        />
+        </section>
       ))}
     </section>
   );

@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: auth, wallets, onboarding, onramp, conversion
-Last updated: 2026-08-17
+Last updated: 2026-08-23
 Source of truth: yes
 
 Owns:
@@ -24,10 +24,14 @@ This document defines the locked three-step wallet-native onboarding target. The
 
 ## Decision
 
+The public entry is one `Continue to WeVid` path. It starts in server-enforced `login` purpose. A known wallet resumes the existing account; an unknown wallet or Privy identity returns `account_not_found` and the UI offers an explicit `Start onboarding` transition before any provisional user or embedded wallet may be created.
+
 V2 supports one Account + Wallet step with two entry paths:
 
 1. External wallet connect for web3-native users.
 2. A quiet secure-wallet action that opens the configured provider's official email/social/passkey surface and creates a noncustodial embedded Solana wallet.
+
+Privy's official React configuration was re-verified on 2026-08-23. Login config uses `embeddedWallets.solana.createOnLogin="off"` and retrieves an existing Solana wallet through `useWallets`; it never calls `createWallet()`. Onboarding alone uses `createOnLogin="users-without-wallets"` and may call the official Solana `useCreateWallet` hook when no wallet exists. Both paths still sign the normal WeVid purpose-bound ownership challenge. Privy authentication is evidence for obtaining the user-controlled wallet, not WeVid account truth.
 
 Wallet ownership remains user-controlled. Veel never holds private keys, never signs payment transactions without explicit user authorization, and never grants access from client-side wallet state. Supabase email auth is optional account recovery/profile management, not a required onboarding prerequisite.
 

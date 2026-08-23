@@ -27,6 +27,7 @@ export function createPostgresAnalyticsRepository(database?: string | PostgresSq
     };
     return {
       authorizeScope: fail,
+      recordOnboardingEvent: fail,
       queryMetric: fail,
       getWatermark: fail,
       recordSuppression: fail,
@@ -38,6 +39,23 @@ export function createPostgresAnalyticsRepository(database?: string | PostgresSq
   const { sql, ownsClient } = resolvePostgresClient(database);
 
   return {
+    async recordOnboardingEvent(input) {
+      await sql`
+        insert into analytics_onboarding_journey_events (
+          journey_id, user_id, event_key, source, idempotency_key, occurred_at, expires_at
+        ) values (
+          ${input.journeyId}::uuid,
+          ${input.userId ?? null}::uuid,
+          ${input.eventKey},
+          ${input.source},
+          ${input.idempotencyKey},
+          ${input.occurredAt},
+          ${input.occurredAt}::timestamptz + interval '90 days'
+        )
+        on conflict (journey_id, idempotency_key) do nothing
+      `;
+    },
+
     async authorizeScope(actorUserId, scope) {
       if (scope.type === "viewer") {
         const userId = scope.userId ?? actorUserId;

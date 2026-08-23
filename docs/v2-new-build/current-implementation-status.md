@@ -38,19 +38,30 @@ copied into this document. The machine-readable companion is `production-status.
 
 | Field | Current value |
 | --- | --- |
-| Latest merged baseline | `692bf49cd56405d6dd1693d183b17119ac7519f0` |
-| Latest merged slice | Convergence 02 — Universal composer |
-| Latest merged migration | `packages/database/migrations/0109_universal_composer_authority.sql` |
+| Latest merged baseline | `96f334cb999203cadae41a6c31dd99ea000e0c50` |
+| Latest merged slice | Convergence 03 — Analytics Core |
+| Latest merged migration | `packages/database/migrations/0110_analytics_core.sql` |
 | Latest merged evidence | `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`, `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN` |
 | Known launch blockers | `STAGING_PROVEN`, `PROVIDER_APPROVED`, `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED` remain outstanding. |
-| Next planned slice | Convergence 03 — Analytics Core |
+| Next planned slice | Convergence 04 — Lifecycle correctness, login/onboarding separation, and analytics surfaces |
 
-Next planned production slice: **Convergence 03 — Analytics Core**.
+Next planned production slice: **Convergence 04 — Lifecycle correctness, login/onboarding separation, and analytics surfaces**.
 
 Readiness vocabulary is fixed to `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`,
 `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN`, `STAGING_PROVEN`, `PROVIDER_APPROVED`,
 `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED`. “Accepted” describes a
 design decision; it never means implemented, tested, approved, enabled, or launch-ready.
+
+Merged Convergence 03 now has one versioned registry of roughly 50 metrics over typed canonical
+facts and nine daily projection families, one authorized query service for creator, organization,
+and platform scopes, deterministic privacy suppression and insights, leased incremental worker
+recomputation with restart and late-fact convergence, reconciliation evidence, and audited admin
+health, backfill, and queue-recovery controls. Migration `0110` rollback/reapply, real-Postgres
+projection parity and cross-organization authorization, 521 unit/integration tests, production build,
+desktop/mobile admin browser proof, and exact-main CI `32647285224`, database `32647285233`, and
+security `32647285226` are green. PR #88 merged as `96f334c`. Analytics remains derived read
+authority only; blockchain settlement, entitlements, compliance, accounting, and domain facts remain
+canonical.
 
 Merged Convergence 02 now has one canonical creator draft lifecycle and renderer family for image,
 video, mixed carousel, structured text, and polls. Migration `0109` owns ordered bounded assets,

@@ -25,6 +25,7 @@ import type {
 } from "../src/modules/age/types";
 import type { AiRepository, AiSession, AiToolCall } from "../src/modules/ai/types";
 import {
+  WalletAuthAccountNotFoundError,
   WalletRecoveryCredentialRequiredError,
   WalletRecoveryLinkConflictError,
   type WalletAuthRepository
@@ -181,6 +182,7 @@ describe("buildApi", () => {
           payload: {
             chain: "solana_devnet",
             provider: "phantom",
+            purpose: "login",
             address: "1".repeat(32)
           },
           headers: { "x-test-request": String(index) }
@@ -661,6 +663,105 @@ describe("buildApi", () => {
         reason: "wallet_required"
       }
     });
+
+    await app.close();
+  });
+
+  it("binds wallet auth challenge creation to the requested purpose", async () => {
+    const inputs: unknown[] = [];
+    const app = await buildApi({
+      walletAuthRepository: fakeWalletAuthRepository({
+        async createChallenge(input) {
+          inputs.push(input);
+          return {
+            id: "00000000-0000-4000-8000-000000000701",
+            chain: input.chain,
+            provider: input.provider,
+            purpose: input.purpose,
+            address: input.address,
+            message: input.message,
+            expiresAt: input.expiresAt,
+            consumedAt: null
+          };
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/wallet/challenges",
+      payload: {
+        chain: "solana_devnet",
+        provider: "phantom",
+        purpose: "login",
+        address: bs58.encode(nacl.sign.keyPair().publicKey)
+      }
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({ purpose: "login" });
+    expect(inputs).toHaveLength(1);
+    expect(inputs[0]).toMatchObject({ purpose: "login" });
+    expect((inputs[0] as { message: string }).message).toContain("Purpose: login");
+
+    await app.close();
+  });
+
+  it("rejects purpose changes and returns a typed account-not-found result without a session cookie", async () => {
+    const keyPair = nacl.sign.keyPair();
+    const address = bs58.encode(keyPair.publicKey);
+    const message = "purpose-bound-wallet-auth-message";
+    const signature = Buffer.from(nacl.sign.detached(new TextEncoder().encode(message), keyPair.secretKey)).toString("base64");
+    let sessionCalls = 0;
+    const app = await buildApi({
+      walletAuthRepository: fakeWalletAuthRepository({
+        async findChallenge() {
+          return {
+            id: "00000000-0000-4000-8000-000000000702",
+            chain: "solana_devnet",
+            provider: "phantom",
+            purpose: "login",
+            address,
+            message,
+            expiresAt: new Date(Date.now() + 60_000),
+            consumedAt: null
+          };
+        },
+        async createSessionFromChallenge() {
+          sessionCalls += 1;
+          throw new WalletAuthAccountNotFoundError();
+        }
+      })
+    });
+    await app.ready();
+
+    const proof = {
+      challengeId: "00000000-0000-4000-8000-000000000702",
+      message,
+      signature,
+      signatureEncoding: "base64"
+    } as const;
+    const mismatch = await app.inject({
+      method: "POST",
+      url: "/v1/auth/wallet/sessions",
+      payload: { address, chain: "solana_devnet", provider: "phantom", purpose: "onboarding", proof }
+    });
+    expect(mismatch.statusCode).toBe(400);
+    expect(sessionCalls).toBe(0);
+
+    const accountNotFound = await app.inject({
+      method: "POST",
+      url: "/v1/auth/wallet/sessions",
+      payload: { address, chain: "solana_devnet", provider: "phantom", purpose: "login", proof }
+    });
+    expect(accountNotFound.statusCode).toBe(404);
+    expect(accountNotFound.json()).toEqual({
+      code: "account_not_found",
+      message: "No WeVid account is linked to this authentication method"
+    });
+    expect(accountNotFound.headers["set-cookie"]).toBeUndefined();
+    expect(sessionCalls).toBe(1);
 
     await app.close();
   });

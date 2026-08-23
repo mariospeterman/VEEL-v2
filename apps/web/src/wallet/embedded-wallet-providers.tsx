@@ -6,8 +6,10 @@ import { embeddedWalletProviderConfig } from "@/providers/onboarding-provider-co
 import { readPublicWebEnv } from "@/public-env";
 import { useCallback, useMemo } from "react";
 import { useProviderSessionLogoutRegistration } from "./provider-session-logout";
+import type { WalletAuthPurpose } from "./backend-wallet-auth";
+import { embeddedWalletCreationForPurpose } from "./auth-purpose-policy";
 
-export function EmbeddedWalletProviders({ children }: Readonly<{ children: React.ReactNode }>) {
+export function EmbeddedWalletProviders({ children, purpose = "login" }: Readonly<{ children: React.ReactNode; purpose?: WalletAuthPurpose }>) {
   const env = readPublicWebEnv();
   const provider = embeddedWalletProviderConfig(env);
   const solanaChain = env.NEXT_PUBLIC_SOLANA_CHAIN;
@@ -26,7 +28,7 @@ export function EmbeddedWalletProviders({ children }: Readonly<{ children: React
       },
       embeddedWallets: {
         solana: {
-          createOnLogin: "users-without-wallets"
+          createOnLogin: embeddedWalletCreationForPurpose(purpose)
         }
       },
       loginMethods: ["email", "google", "twitter", "discord", "passkey"],
@@ -39,7 +41,7 @@ export function EmbeddedWalletProviders({ children }: Readonly<{ children: React
         }
       }
     }),
-    [solanaChain, solanaRpcUrl, solanaSubscriptionsUrl]
+    [purpose, solanaChain, solanaRpcUrl, solanaSubscriptionsUrl]
   );
 
   if (provider.provider.configured && env.NEXT_PUBLIC_PRIVY_APP_ID) {

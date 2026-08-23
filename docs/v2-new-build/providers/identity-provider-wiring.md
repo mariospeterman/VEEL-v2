@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: documentation
-Last updated: 2026-08-14
+Last updated: 2026-08-23
 Source of truth: yes
 
 Owns:
@@ -25,6 +25,9 @@ Local mock flows remain useful for development, but real provider launches and r
 webhooks must be configured before production rollout.
 
 Current implementation state:
+
+- Wallet authentication requires the immutable signed purpose `login` or `onboarding`. Login can create only an application session for an existing wallet mapping; unknown identities return `account_not_found` without creating a user, profile, wallet, or provider mapping. Onboarding may create one provisional account after verified wallet ownership and reuses an existing mapping without duplication.
+- Current official Privy React/Solana documentation was re-checked on 2026-08-23. `embeddedWallets.solana.createOnLogin` is explicitly `off` in login mode and `users-without-wallets` only in onboarding mode. Existing Solana wallets are obtained through `useWallets`; `useCreateWallet` is never invoked by login.
 
 - `POST /v1/age/sessions` is wired to an injectable backend provider waterfall.
 - `GET /v1/age/status` is the browser-safe age read projection. `/age` reads it through the typed web API helper and starts `POST /v1/age/sessions` only after explicit authenticated user action.
@@ -91,6 +94,7 @@ Current implementation state:
 - Social/OAuth providers use PKCE and must exchange the returned `code` with `exchangeCodeForSession(code)` in `/auth/confirm`.
 - Supabase recovery auth is not a second account path. Linking begins from a recently authenticated WeVid session, issues a short-lived one-use HttpOnly intent, then verifies the Supabase subject on the server. If that subject belongs to another user, the API returns conflict instead of merging profiles, wallets, age state, payments, creator KYC, or organization KYB.
 - Recovery is optional and primarily benefits external-wallet-only users. Privy users are not asked to repeat equivalent recovery setup. Recovery login resolves an existing provider-subject mapping and rotates the canonical WeVid session; it never creates a user from a matching email.
+- Landing recovery email uses Supabase `signInWithOtp` with `shouldCreateUser=false`; an unknown recovery identity therefore cannot silently become a Supabase or WeVid signup. OAuth recovery still fails closed at the backend mapping boundary.
 - Local preview on port `3008` requires the local web env and Supabase dashboard redirect allowlist to include `http://localhost:3008/auth/confirm` and, when testing through Playwright or `127.0.0.1`, `http://127.0.0.1:3008/auth/confirm`.
 
 ### Production rollout notes

@@ -11,10 +11,19 @@ import {
 } from "@/api-mutations";
 import type { WebAuthState } from "@/supabase/auth-state";
 import { ProviderLogo } from "@/brand/provider-logo";
+import { SupabaseAuthPanel } from "@/supabase/supabase-auth-panel";
+import type { WalletAuthPurpose } from "@/wallet/backend-wallet-auth";
+import {
+  consumeExpectedOnboardingJourneyExit,
+  markOnboardingJourneyHandoff,
+  recordOnboardingEvent
+} from "@/analytics/onboarding-analytics";
 
 type LandingWalletRuntimeProps = {
   autoStart?: boolean;
   authState: WebAuthState;
+  purpose: WalletAuthPurpose;
+  onAccountNotFound?: (() => void) | undefined;
   onLinked?: ((address: string) => void) | undefined;
 };
 
@@ -45,16 +54,34 @@ export function LandingAuthSurface({
   initialOnboardingStep: number;
   mode: "login" | "onboard";
 }) {
+  const [authMode, setAuthMode] = useState(mode);
   const [onboardingStep, setOnboardingStep] = useState(initialOnboardingStep);
   const currentStep = onboardingSteps[onboardingStep] ?? onboardingSteps[0]!;
 
   useEffect(() => {
+    setAuthMode(mode);
     setOnboardingStep(initialOnboardingStep);
-  }, [initialOnboardingStep]);
+  }, [initialOnboardingStep, mode]);
+
+  useEffect(() => {
+    if (authMode !== "onboard") return;
+    if (onboardingStep === 1) recordOnboardingEvent("profile_step_viewed");
+    if (onboardingStep === 2) recordOnboardingEvent("age_step_started");
+  }, [authMode, onboardingStep]);
+
+  useEffect(() => {
+    const recordAbandonment = () => {
+      if (authMode === "onboard" && !consumeExpectedOnboardingJourneyExit()) {
+        recordOnboardingEvent("onboarding_abandoned");
+      }
+    };
+    window.addEventListener("pagehide", recordAbandonment);
+    return () => window.removeEventListener("pagehide", recordAbandonment);
+  }, [authMode]);
 
   return (
-    <div className="landing-auth-inline" data-auth-mode={mode} data-story-part>
-      {mode === "onboard" ? (
+    <div className="landing-auth-inline" data-auth-mode={authMode} data-story-part>
+      {authMode === "onboard" ? (
         <LandingOnboardingStep
           authState={authState}
           currentStep={currentStep}
@@ -62,16 +89,28 @@ export function LandingAuthSurface({
           setOnboardingStep={setOnboardingStep}
         />
       ) : (
-        <LandingLoginForm authState={authState} />
+        <LandingLoginForm
+          authState={authState}
+          onAccountNotFound={() => {
+            recordOnboardingEvent("account_not_found");
+            setOnboardingStep(0);
+            setAuthMode("onboard");
+          }}
+        />
       )}
     </div>
   );
 }
 
-function LandingLoginForm({ authState }: { authState: WebAuthState }) {
+function LandingLoginForm({ authState, onAccountNotFound }: { authState: WebAuthState; onAccountNotFound: () => void }) {
   return (
     <div className="landing-auth-block">
-      <LandingWalletList authState={authState} />
+      <p className="landing-auth-method-title">Continue with your WeVid account</p>
+      <LandingWalletList authState={authState} onAccountNotFound={onAccountNotFound} purpose="login" />
+      <div className="landing-recovery-entry">
+        <p>Use account recovery</p>
+        <SupabaseAuthPanel mode="recovery" />
+      </div>
     </div>
   );
 }
@@ -120,12 +159,17 @@ function LandingOnboardingStep({
 function OnboardingWalletStep({ authState, onLinked }: { authState: WebAuthState; onLinked: (address: string) => void }) {
   return (
     <div className="landing-auth-block">
-      <LandingWalletList authState={authState} onLinked={onLinked} />
+      <LandingWalletList authState={authState} onLinked={onLinked} purpose="onboarding" />
     </div>
   );
 }
 
-function LandingWalletList({ authState, onLinked }: { authState: WebAuthState; onLinked?: (address: string) => void }) {
+function LandingWalletList({ authState, onAccountNotFound, onLinked, purpose }: {
+  authState: WebAuthState;
+  onAccountNotFound?: (() => void) | undefined;
+  onLinked?: ((address: string) => void) | undefined;
+  purpose: WalletAuthPurpose;
+}) {
   const [runtime, setRuntime] = useState<ComponentType<LandingWalletRuntimeProps> | null>(null);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [runtimeAttempt, setRuntimeAttempt] = useState(0);
@@ -136,7 +180,10 @@ function LandingWalletList({ authState, onLinked }: { authState: WebAuthState; o
 
     void import("./landing-wallet-runtime")
       .then((module) => {
-        if (!cancelled) setRuntime(() => module.LandingWalletRuntime);
+        if (!cancelled) {
+          setRuntime(() => module.LandingWalletRuntime);
+          recordOnboardingEvent("wallet_runtime_ready");
+        }
       })
       .catch(() => {
         if (!cancelled) setRuntimeError("Sign-in options could not load. Refresh and try again.");
@@ -149,7 +196,7 @@ function LandingWalletList({ authState, onLinked }: { authState: WebAuthState; o
 
   if (runtime) {
     const Runtime = runtime;
-    return <Runtime authState={authState} autoStart={autoStart} onLinked={onLinked} />;
+    return <Runtime authState={authState} autoStart={autoStart} onAccountNotFound={onAccountNotFound} onLinked={onLinked} purpose={purpose} />;
   }
 
   return (
@@ -160,11 +207,13 @@ function LandingWalletList({ authState, onLinked }: { authState: WebAuthState; o
             aria-describedby="wallet-runtime-status"
             className="auth-provider-button"
             disabled={autoStart}
-            onClick={() => setAutoStart(true)}
+            onClick={() => {
+              setAutoStart(true);
+            }}
             type="button"
           >
-            <ProviderLogo label="Connect wallet" name="wallet" />
-            <span><strong>{autoStart ? "Opening wallet" : "Connect wallet"}</strong></span>
+            <ProviderLogo label={purpose === "login" ? "Use an existing wallet" : "Use an external wallet"} name="wallet" />
+            <span><strong>{autoStart ? "Opening wallet" : purpose === "login" ? "Use an existing wallet" : "Use an external wallet"}</strong></span>
           </button>
           <p className="sr-only" id="wallet-runtime-status" role="status">
             {autoStart ? "Opening wallet connection" : "Wallet connection ready"}
@@ -224,6 +273,7 @@ function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
         handle: normalizedHandle
       });
       await updateMyProfile(profilePayload);
+      recordOnboardingEvent("profile_step_completed");
       await continueFromProfile();
     } catch (reason) {
       setError(reason instanceof Error && !(reason instanceof ApiMutationError) ? reason.message : safeMutationMessage(reason, "Profile setup"));
@@ -237,6 +287,8 @@ function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
     const reason = session.appAccessState.reason;
 
     if (session.appAccessState.allowed) {
+      recordOnboardingEvent("protected_app_entered");
+      markOnboardingJourneyHandoff();
       window.location.assign("/app/home");
       return;
     }
@@ -328,6 +380,9 @@ function OnboardingAgeStep() {
         try {
           const session = await getCurrentSession();
           if (session.appAccessState.allowed) {
+            recordOnboardingEvent("age_step_completed");
+            recordOnboardingEvent("protected_app_entered");
+            markOnboardingJourneyHandoff();
             window.location.assign(resolveSafeNextPath());
             return;
           }
@@ -374,12 +429,17 @@ function OnboardingAgeStep() {
     try {
       const session = await createAgeSession({ providerPreference: "reusable_first" });
       setMessage("Opening the secure age check. WeVid stores only the signed result.");
+      markOnboardingJourneyHandoff();
       window.location.assign(session.launchUrl);
     } catch (reason) {
+      recordOnboardingEvent("age_step_failed", Date.now().toString(36));
       const nextError = ageErrorMessage(reason);
       setError(nextError);
 
       if (reason instanceof ApiMutationError && reason.status === 409 && reason.message.toLowerCase().includes("verified")) {
+        recordOnboardingEvent("age_step_completed");
+        recordOnboardingEvent("protected_app_entered");
+        markOnboardingJourneyHandoff();
         window.location.assign(resolveSafeNextPath());
       }
     } finally {
@@ -397,16 +457,21 @@ function OnboardingAgeStep() {
       const reason = session.appAccessState.reason;
 
       if (session.appAccessState.allowed) {
+        recordOnboardingEvent("age_step_completed");
+        recordOnboardingEvent("protected_app_entered");
+        markOnboardingJourneyHandoff();
         window.location.assign(resolveSafeNextPath());
         return;
       }
 
       if (reason === "identity_required") {
+        markOnboardingJourneyHandoff();
         window.location.assign("/?mode=onboarding&step=profile&next=%2Fapp%2Fhome");
         return;
       }
 
       if (reason === "wallet_required") {
+        markOnboardingJourneyHandoff();
         window.location.assign("/?mode=onboarding&step=wallet&next=%2Fapp%2Fhome");
         return;
       }

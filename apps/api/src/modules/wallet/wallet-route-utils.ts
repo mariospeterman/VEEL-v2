@@ -53,6 +53,33 @@ export function buildWalletLinkMessage(input: {
   ].join("\n");
 }
 
+export function buildWalletAuthMessage(input: {
+  domain: string;
+  uri: string;
+  address: string;
+  chain: string;
+  purpose: "login" | "onboarding";
+  nonce: string;
+  issuedAt: Date;
+  expiresAt: Date;
+}): string {
+  const action = input.purpose === "login" ? "log in to" : "start onboarding with";
+
+  return [
+    `${input.domain} wants you to ${action} WeVid.`,
+    "",
+    "This signature proves wallet ownership. It does not move funds or approve a payment.",
+    "",
+    `Purpose: ${input.purpose}`,
+    `URI: ${input.uri}`,
+    `Address: ${input.address}`,
+    `Chain: ${input.chain}`,
+    `Nonce: ${input.nonce}`,
+    `Issued At: ${input.issuedAt.toISOString()}`,
+    `Expiration Time: ${input.expiresAt.toISOString()}`
+  ].join("\n");
+}
+
 export function hashNonce(nonce: string): string {
   return createHash("sha256").update(nonce).digest("hex");
 }

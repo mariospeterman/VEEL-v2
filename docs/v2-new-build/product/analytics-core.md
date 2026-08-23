@@ -25,6 +25,7 @@ Launch scope:
 Implemented boundary:
 - migration `0110_analytics_core.sql` owns viewer, creator, creator-content, creator-product, organization-creator, platform-commerce, platform-operations, retention-cohort, and onboarding-funnel daily projections plus bounded typed profile-open, offer-impression, and onboarding-journey facts; versioned jobs, watermarks, reconciliation evidence, and privacy-suppression counters remain server-only
 - `POST /v1/analytics/query` accepts only registered v1 metric keys, a maximum of 20 unique metrics, bounded windows up to 366 days, `day` or `total` granularity, explicit UTC, and allowlisted dimensions
+- `POST /v1/analytics/onboarding-events` accepts only the closed lifecycle vocabulary, a random journey UUID, a bounded idempotency key, and a recent timestamp. It stores no email, wallet address, signature, provider token, identity document, raw provider payload, or arbitrary metadata; delivery never controls product behavior.
 - viewer results are self-only, creator results are self-only, Enterprise results recheck active membership/entitlement/agreement authority, and platform results require active staff plus a bounded purpose code
 - audience-derived results require a conservative cohort of at least five; suppressed values also suppress numerator and denominator, native-value metrics require explicit `SOL` or `USDC` without conversion, and every count/seconds/minor-unit scalar is serialized as a lossless decimal string
 - the existing worker runtime recomputes bounded two-day UTC windows transactionally so duplicate and late facts converge; retries, dead letters, parity evidence, and watermarks are exposed through `GET /v1/admin/analytics/health`
@@ -140,6 +141,9 @@ creator-content daily, creator-product daily, organization-creator daily, platfo
 platform-operations daily, retention cohort daily, and onboarding-funnel daily. Public, anonymous, and authenticated database
 roles receive no direct table privileges; RLS remains enabled as defense in depth and consumers use
 the authorized API rather than PostgREST projection access.
+
+Anonymous onboarding events are rate-limited, allowlisted observational telemetry. They are never
+identity, entitlement, payment, compliance, or other business authority.
 
 The existing worker runtime owns bounded leased batches, incremental watermarks, idempotent reruns,
 late-arriving facts, retry/dead-letter behavior, deterministic backfill, and source reconciliation.

@@ -22,7 +22,7 @@ Non-goals:
 
 This folder is the canonical WeVid engineering pack. Technical `veel` identifiers remain where compatibility requires them; public product language is WeVid.
 
-Next planned production slice: **Convergence 03 — Analytics Core**. Stable merged status is in
+Next planned production slice: **Convergence 04 — Lifecycle correctness, login/onboarding separation, and analytics surfaces**. Stable merged status is in
 `current-implementation-status.md` and `production-status.json`; transient branch and pull-request
 truth comes from GitHub's single `wevid-active-slice` label.
 
@@ -81,6 +81,7 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 
 - [SFW publishing and moderation](sfw-publishing-and-moderation.md)
 - [Universal composer](product/universal-composer.md)
+- [Lifecycle auth and analytics surfaces](product/lifecycle-auth-and-analytics-surfaces.md)
 - [Enterprise managed creators](enterprise-managed-creators.md)
 
 12. [Product flows](product-flows.md)

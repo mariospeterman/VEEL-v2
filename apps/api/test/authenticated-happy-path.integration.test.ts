@@ -5240,6 +5240,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       const challengeA = await repository.createChallenge({
         chain: "solana_devnet",
         provider: "phantom",
+        purpose: "onboarding",
         address,
         message: `device-a-${randomUUID()}`,
         nonceHash: randomUUID(),
@@ -5247,6 +5248,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       });
       const sessionA = await repository.createSessionFromChallenge({
         challengeId: challengeA.id,
+        purpose: "onboarding",
         expiresAt
       });
       const verifiedA = await repository.verifySessionToken(sessionA.accessToken);
@@ -5256,6 +5258,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       const challengeB = await repository.createChallenge({
         chain: "solana_devnet",
         provider: "phantom",
+        purpose: "login",
         address,
         message: `device-b-${randomUUID()}`,
         nonceHash: randomUUID(),
@@ -5263,6 +5266,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       });
       const sessionB = await repository.createSessionFromChallenge({
         challengeId: challengeB.id,
+        purpose: "login",
         expiresAt
       });
 
@@ -5285,6 +5289,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       const challengeC = await repository.createChallenge({
         chain: "solana_devnet",
         provider: "phantom",
+        purpose: "login",
         address,
         message: `device-c-${randomUUID()}`,
         nonceHash: randomUUID(),
@@ -5292,6 +5297,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       });
       const sessionC = await repository.createSessionFromChallenge({
         challengeId: challengeC.id,
+        purpose: "login",
         expiresAt
       });
 
@@ -5307,6 +5313,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       const challengeD = await repository.createChallenge({
         chain: "solana_devnet",
         provider: "phantom",
+        purpose: "login",
         address,
         message: `device-d-${randomUUID()}`,
         nonceHash: randomUUID(),
@@ -5314,6 +5321,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       });
       const sessionD = await repository.createSessionFromChallenge({
         challengeId: challengeD.id,
+        purpose: "login",
         expiresAt
       });
       const accountSecurityCount = await repository.revokeAllSessions({

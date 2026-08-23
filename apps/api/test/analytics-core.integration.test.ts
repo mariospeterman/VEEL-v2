@@ -31,6 +31,7 @@ describeIntegration("Analytics Core against migrated Postgres", () => {
     const organizationMembershipId = randomUUID();
     const organizationWaiverId = randomUUID();
     const providerEventId = randomUUID();
+    const instrumentationJourneyId = randomUUID();
     const viewerIds = Array.from({ length: 7 }, () => randomUUID());
     const jobIds: string[] = [];
     const today = new Date().toISOString().slice(0, 10);
@@ -42,6 +43,21 @@ describeIntegration("Analytics Core against migrated Postgres", () => {
         insert into users (id, supabase_user_id, state)
         values (${creatorId}, ${creatorId}, 'active')
       `;
+      const instrumentationEvent = {
+        journeyId: instrumentationJourneyId,
+        userId: creatorId,
+        eventKey: "login_opened" as const,
+        source: "browser" as const,
+        idempotencyKey: "login-opened",
+        occurredAt: new Date()
+      };
+      await analyticsRepository.recordOnboardingEvent(instrumentationEvent);
+      await analyticsRepository.recordOnboardingEvent(instrumentationEvent);
+      const instrumentationRows = await sql<Array<{ count: string | number }>>`
+        select count(*) as count from analytics_onboarding_journey_events
+        where journey_id = ${instrumentationJourneyId}::uuid
+      `;
+      expect(Number(instrumentationRows[0]?.count)).toBe(1);
       for (const viewerId of viewerIds) {
         await sql`insert into users (id, supabase_user_id, state) values (${viewerId}, ${viewerId}, 'active')`;
       }
@@ -289,6 +305,7 @@ describeIntegration("Analytics Core against migrated Postgres", () => {
       await sql`delete from analytics_reconciliation_runs where job_id = any(${jobIds}::uuid[])`;
       await sql`delete from analytics_projection_watermarks where last_job_id = any(${jobIds}::uuid[])`;
       await sql`delete from analytics_projection_jobs where id = any(${jobIds}::uuid[])`;
+      await sql`delete from analytics_onboarding_journey_events where journey_id = ${instrumentationJourneyId}::uuid`;
       await sql`delete from analytics_onboarding_journey_events where user_id = any(${viewerIds}::uuid[])`;
       await sql`delete from analytics_offer_impression_receipts where user_id = any(${viewerIds}::uuid[])`;
       await sql`delete from analytics_profile_open_receipts where actor_user_id = any(${viewerIds}::uuid[])`;

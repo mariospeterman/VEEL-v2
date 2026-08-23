@@ -1,5 +1,6 @@
 import {
   getPaymentActivity,
+  queryAnalytics,
   getWalletTransactionActivity,
   type ActivityItem,
   type WalletTransaction
@@ -9,15 +10,27 @@ import { requireAppAccess } from "@/supabase/route-guard";
 import { formatAssetAmount } from "@/format-asset-amount";
 import { AppShell } from "../../app-shell";
 import { Card, EmptyState, ErrorState, Fact, PageHeader, StatusPill } from "../../ui";
+import { AnalyticsSummary, analyticsWindow } from "../analytics-summary";
 
 export const dynamic = "force-dynamic";
 
 export default async function ActivityPage() {
   await requireAppAccess("/app/activity");
 
-  const [paymentActivity, walletTransactions] = await Promise.all([
+  const [paymentActivity, walletTransactions, viewerAnalytics] = await Promise.all([
     getPaymentActivity(),
-    getWalletTransactionActivity()
+    getWalletTransactionActivity(),
+    queryAnalytics({
+      scope: { type: "viewer" },
+      metricKeys: [
+        "viewer.content.qualified_views", "viewer.content.watch_seconds", "viewer.content.completion_rate",
+        "viewer.engagement.saves", "viewer.engagement.shares", "viewer.lifecycle.return_sessions"
+      ],
+      window: analyticsWindow(30),
+      comparisonWindow: analyticsWindow(30, 30),
+      granularity: "total",
+      timezone: "UTC"
+    })
   ]);
 
   return (
@@ -26,7 +39,15 @@ export default async function ActivityPage() {
         Backend-derived payment, receipt, wallet transaction, and support review state.
       </PageHeader>
 
-      <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="mt-5">
+        <AnalyticsSummary
+          description="A restrained summary of your own credited activity. WeVid does not expose a surveillance-style viewing history."
+          queries={[viewerAnalytics]}
+          title="Your last 30 days"
+        />
+      </div>
+
+      <section className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <section className="grid content-start gap-4">
           <div className="grid gap-3">
             {paymentActivity.ok ? (

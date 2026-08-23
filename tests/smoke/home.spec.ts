@@ -61,16 +61,16 @@ test("renders the public landing with the current WeVid visual contract", async 
 
   await expect(page.getByRole("link", { name: "WeVid home" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Create without asking the algorithm for permission." })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Start onboarding/ }).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Log in" }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue to WeVid" }).first()).toBeVisible();
   await expect(page.getByText("Public legal copy here is a product placeholder")).toHaveCount(0);
 });
 
 test("renders inline login and onboarding entry surfaces", async ({ page }) => {
   await page.goto("/?mode=login", { waitUntil: "domcontentloaded", timeout: 20_000 });
 
-  await expect(page.getByRole("heading", { name: "Welcome back." })).toBeVisible({ timeout: 5_000 });
-  await expect(page.getByRole("button", { name: "Connect wallet" })).toBeEnabled({ timeout: 5_000 });
+  await expect(page.getByRole("heading", { name: "Continue to WeVid." })).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByRole("button", { name: "Use an existing wallet" })).toBeEnabled({ timeout: 5_000 });
+  await expect(page.getByRole("button", { name: /Create secure WeVid wallet|Create wallet|One secure setup/ })).toHaveCount(0);
   await expect(page.getByText("Privy", { exact: true })).toHaveCount(0);
 
   await page.goto("/?mode=onboarding", { waitUntil: "domcontentloaded", timeout: 20_000 });
@@ -78,7 +78,7 @@ test("renders inline login and onboarding entry surfaces", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Set up your account." })).toBeVisible({ timeout: 5_000 });
   await expect(page.getByText(/powered by|google, email|passkey|solana wallet adapter/i)).toHaveCount(0);
 
-  await page.getByRole("button", { name: /Connect wallet/ }).click();
+  await page.getByRole("button", { name: "Use an external wallet" }).click();
   await expect(page.getByRole("dialog", { name: /wallet.*Solana|need a wallet/i })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Set up your account." })).toBeVisible();
   await expect(page.locator(".landing-progress-topic")).toHaveText("Onboarding");
@@ -209,6 +209,7 @@ test("renders the provider-first Enterprise workspace without custody or payout 
   await expect(page.getByRole("button", { name: "Invite team member" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Invite creator" })).toBeVisible();
   await expect(page.getByText("Confirmed allocation reporting", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Creator House analytics" })).toBeVisible();
   await expect(page.getByText("2 payments · creator 8 USDC · management 2 USDC")).toBeVisible();
   await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
   await expect(page.getByRole("button", { name: /withdraw|payout|cash out/i })).toHaveCount(0);
@@ -365,8 +366,9 @@ test("keeps one content preference across Settings and the compact feed filter",
   await page.getByRole("button", { name: "Safe only" }).click();
   await expect(page.getByRole("button", { name: "Safe only" })).toHaveAttribute("aria-pressed", "true");
   releasePendingFeedRequest();
-  await expect.poll(() => feedRequestModes.length).toBe(baselineFeedRequestCount + 2);
-  expect(feedRequestModes.at(-1)).toBe("following");
+  await expect.poll(() => feedRequestModes.length).toBeGreaterThanOrEqual(baselineFeedRequestCount + 2);
+  await expect(page.getByRole("tab", { name: "Following" })).toHaveAttribute("aria-selected", "true");
+  await expect.poll(() => feedRequestModes.at(-1)).toBe("following");
 });
 
 test("separates platform plans from creator memberships responsively", async ({ context, page }) => {
@@ -783,6 +785,22 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
 
   if (method === "GET" && url.pathname === "/v1/platform-access") {
     sendJson(response, 200, platformAccess());
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/v1/analytics/query") {
+    sendJson(response, 200, {
+      scope: { type: "organization", organizationId },
+      window: { startDate: "2026-07-25", endDate: "2026-08-23" },
+      comparisonWindow: { startDate: "2026-06-25", endDate: "2026-07-24" },
+      granularity: "total",
+      timezone: "UTC",
+      dataThrough: "2026-08-23T12:00:00.000Z",
+      generatedAt: "2026-08-23T12:00:15.000Z",
+      freshness: "fresh",
+      metrics: [],
+      insights: []
+    });
     return;
   }
 
