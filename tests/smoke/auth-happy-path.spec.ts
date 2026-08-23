@@ -638,7 +638,7 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
   }
 
   if (method === "GET" && url.pathname === `/v1/content/${draftContentId}`) {
-    sendJson(response, 200, contentItem({ id: draftContentId, accessState: "free", playbackState: "full" }));
+    sendJson(response, 200, videoDraftContentItem());
     return;
   }
 
@@ -665,6 +665,10 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
   if (method === "POST" && url.pathname === "/v1/content") {
     if (body?.mediaType === "image" || body?.mediaType === "carousel") {
       sendJson(response, 201, imageDraftContentItem(1));
+      return;
+    }
+    if (body?.mediaType === "bit" || body?.mediaType === "clip" || body?.mediaType === "vod") {
+      sendJson(response, 201, videoDraftContentItem(1));
       return;
     }
     sendJson(response, 201, contentItem({
@@ -727,18 +731,18 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
   if (method === "PATCH" && url.pathname === `/v1/media/assets/${mediaAssetId}`) {
     sendJson(response, 200, {
       compositionRevision: 3,
-      asset: contentItem({ id: draftContentId, accessState: "free", playbackState: "full" }).mediaAssets[0]
+      asset: videoDraftMediaAsset()
     });
     return;
   }
 
   if (method === "PATCH" && url.pathname === `/v1/content/${draftContentId}`) {
-    sendJson(response, 200, contentItem({ id: draftContentId, accessState: "free", playbackState: "full" }));
+    sendJson(response, 200, videoDraftContentItem());
     return;
   }
 
   if (method === "POST" && url.pathname === `/v1/content/${draftContentId}/publish`) {
-    sendJson(response, 200, contentItem({ id: draftContentId, accessState: "free", playbackState: "full" }));
+    sendJson(response, 200, videoDraftContentItem());
     return;
   }
 
@@ -1079,6 +1083,43 @@ function contentItem(overrides: {
       shareCount: 8
     },
     viewerFollowingCreator: false
+  };
+}
+
+function videoDraftMediaAsset() {
+  return {
+    id: mediaAssetId,
+    kind: "video",
+    position: 0,
+    provider: "bunny",
+    providerState: "ready",
+    posterUrl: null,
+    playback: {
+      state: "full",
+      url: "https://media.example.test/studio.mp4",
+      provider: "bunny",
+      resourceType: "direct",
+      expiresAt: null
+    },
+    mimeType: "video/mp4",
+    widthPixels: null,
+    heightPixels: null,
+    durationMs: 60_000,
+    altText: "Studio video preview",
+    requiredForRelease: true,
+    isCover: false,
+    focalPointX: null,
+    focalPointY: null,
+    originClassification: "human_created",
+    visibleLabelState: "none"
+  };
+}
+
+function videoDraftContentItem(compositionRevision = 2) {
+  return {
+    ...contentItem({ id: draftContentId, accessState: "free", playbackState: "full" }),
+    compositionRevision,
+    mediaAssets: [videoDraftMediaAsset()]
   };
 }
 
