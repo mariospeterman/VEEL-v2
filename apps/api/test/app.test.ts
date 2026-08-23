@@ -10186,7 +10186,8 @@ describe("buildApi", () => {
             providerState: "created",
             hostIngestUrl: "rtmp://rtmp.livepeer.com/live/test",
             hostStreamKey: "test",
-            playbackUrl: "https://livepeercdn.studio/hls/livepeer-playback-1/index.m3u8"
+            playbackUrl: "https://livepeercdn.studio/hls/livepeer-playback-1/index.m3u8",
+            moderationTargetReference: "moderation-target-1"
           };
         },
         async getRoomStatus() {
@@ -10344,7 +10345,8 @@ describe("buildApi", () => {
             providerState: "waiting" as const,
             playbackUrl: "https://livepeercdn.studio/hls/playback-orphan-39/index.m3u8",
             hostIngestUrl: "rtmp://rtmp.livepeer.com/live",
-            hostStreamKey: "secret"
+            hostStreamKey: "secret",
+            moderationTargetReference: "moderation-target-39"
           };
         },
         async getRoomStatus() {
@@ -13381,6 +13383,9 @@ const fakeAdminRepository: AdminRepository = {
           replayWindowHours: 48,
           hasPlaybackUrl: true,
           hasHostStreamKey: true,
+          monitoringState: "monitoring",
+          monitoringHealthy: true,
+          pendingProviderAction: false,
           startsAt: "2026-06-06T15:00:00.000Z",
           endedAt: null,
           createdAt: "2026-06-06T14:00:00.000Z",
