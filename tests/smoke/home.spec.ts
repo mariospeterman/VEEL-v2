@@ -202,9 +202,7 @@ test("keeps representative authenticated workspaces free of blocking accessibili
 
 test("renders the provider-first Enterprise workspace without custody or payout controls", async ({ context, page }) => {
   await addE2eCookie(context);
-  page.on("pageerror", (error) => console.info("studio pageerror", error.message));
-  const studioResponse = await page.goto("/app/studio", { waitUntil: "domcontentloaded", timeout: 45_000 });
-  console.info("studio diagnostic", page.url(), studioResponse?.status(), studioResponse?.headers(), await page.content());
+  await page.goto("/app/studio", { waitUntil: "domcontentloaded", timeout: 45_000 });
 
   await expect(page.getByRole("heading", { name: "Studio / Enterprise capabilities" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Teams and managed creators" })).toBeVisible();
@@ -568,9 +566,6 @@ async function waitForClientReady(page: import("@playwright/test").Page) {
 async function handleApiRequest(request: IncomingMessage, response: ServerResponse) {
   const method = request.method ?? "GET";
   const url = new URL(request.url ?? "/", "http://127.0.0.1:4000");
-  if (url.pathname.includes("analytics") || url.pathname.includes("organization") || url.pathname.includes("managed-creator") || url.pathname === "/v1/wallets") {
-    console.info("studio api", method, url.pathname);
-  }
   setCorsHeaders(response);
 
   if (method === "OPTIONS") {
