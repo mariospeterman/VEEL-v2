@@ -271,6 +271,29 @@ test("follows from the real Home feed and renders the immersive Bits surface", a
   expect(layout.scrollWidth).toBe(layout.clientWidth);
 });
 
+test("renders ordered mixed carousel assets with visible and keyboard controls", async ({ context, page }) => {
+  await addE2eCookie(context);
+  await page.goto("/app/home", { waitUntil: "domcontentloaded", timeout: 45_000 });
+  await waitForClientReady(page);
+
+  const carouselPost = page.getByRole("article", { name: "Post by Aria Moon" }).nth(1);
+  const carousel = carouselPost.getByRole("group", { name: "Media carousel" });
+  await expect(carousel).toBeVisible();
+  await expect(carousel.getByText("1 of 3", { exact: true })).toBeVisible();
+
+  await carousel.getByRole("button", { name: "Next media" }).click();
+  await expect(carousel.getByText("2 of 3", { exact: true })).toBeVisible();
+  await expect(carousel.locator("iframe")).toHaveCount(1);
+
+  await carousel.focus();
+  await carousel.press("ArrowRight");
+  await expect(carousel.getByText("3 of 3", { exact: true })).toBeVisible();
+  await expect(carousel.locator("iframe")).toHaveCount(1);
+
+  await carousel.getByRole("button", { name: "Previous media" }).click();
+  await expect(carousel.getByText("2 of 3", { exact: true })).toBeVisible();
+});
+
 test("requires confirmation before logging out every device", async ({ context, page }) => {
   await addE2eCookie(context);
   await page.goto("/app/settings#security", { waitUntil: "domcontentloaded", timeout: 45_000 });
@@ -576,7 +599,7 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
       await requestGate.release;
     }
     sendJson(response, 200, {
-      items: [contentItem(), contentItem("00000000-0000-4000-8000-000000000041")],
+      items: [contentItem(), carouselContentItem()],
       nextCursor: null,
       mode: url.searchParams.get("mode") ?? "recommended",
       surface: url.searchParams.get("surface") ?? "home",
@@ -1198,6 +1221,63 @@ function contentItem(id = "00000000-0000-4000-8000-000000000040") {
       shareCount: 8
     },
     viewerFollowingCreator: false
+  };
+}
+
+function carouselContentItem() {
+  const id = "00000000-0000-4000-8000-000000000041";
+  return {
+    ...contentItem(id),
+    mediaType: "carousel",
+    caption: "Three moments from the studio",
+    mediaAssets: [
+      {
+        id: "10000000-0000-4000-8000-000000000001",
+        kind: "image",
+        position: 0,
+        provider: "bunny",
+        providerState: "ready",
+        posterUrl: "/icon-512.png",
+        altText: "WeVid studio mark",
+        requiredForRelease: true,
+        isCover: true,
+        originClassification: "human_created"
+      },
+      {
+        id: "10000000-0000-4000-8000-000000000002",
+        kind: "video",
+        position: 1,
+        provider: "bunny",
+        providerState: "ready",
+        playback: {
+          state: "full",
+          url: "https://iframe.mediadelivery.net/embed/123/11111111-1111-4111-8111-111111111111?token=first",
+          provider: "bunny",
+          resourceType: "embed"
+        },
+        posterUrl: "/icon-512.png",
+        requiredForRelease: true,
+        isCover: false,
+        originClassification: "human_created"
+      },
+      {
+        id: "10000000-0000-4000-8000-000000000003",
+        kind: "video",
+        position: 2,
+        provider: "bunny",
+        providerState: "ready",
+        playback: {
+          state: "full",
+          url: "https://iframe.mediadelivery.net/embed/123/22222222-2222-4222-8222-222222222222?token=second",
+          provider: "bunny",
+          resourceType: "embed"
+        },
+        posterUrl: "/icon-512.png",
+        requiredForRelease: true,
+        isCover: false,
+        originClassification: "human_created"
+      }
+    ]
   };
 }
 

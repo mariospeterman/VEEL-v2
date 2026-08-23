@@ -76,11 +76,12 @@ Authenticated feed and detail reads project this composition from the canonical 
 bounded plain text, every normalized asset in server-owned position order, and the poll options,
 transactional counts, close state, and current viewer choice. Only the frontend-safe OpenAPI fields
 leave the API; provider payloads, private provenance details, checksums, and storage references do
-not. The legacy top-level poster/playback projection remains the compatibility path for the selected
-release asset until the shared renderer family consumes the ordered asset projection. Feed and detail
-routes pass that projection through the same backend signer; a stored Bunny playlist URL is never
-serialized to the browser, and signer failure returns normalized blocked playback. Paid or otherwise
-gated cards redact body text, poll state/options, and per-asset delivery URLs until the
+not. The top-level poster/playback projection remains the compatibility path for the selected release
+asset, while every ordered video asset carries its own normalized playback resource for the shared
+carousel renderer. Feed and detail routes pass both projections through the same backend signer,
+deduplicate signing of the selected asset, and never serialize a stored Bunny playlist URL; signer
+failure returns normalized blocked playback. Paid or otherwise gated cards redact body text, poll
+state/options, and per-asset delivery URLs until the
 viewer has canonical access; the creator remains authorized through the canonical app user id.
 
 ## Safety And Release

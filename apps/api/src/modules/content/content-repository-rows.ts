@@ -1,6 +1,9 @@
 import type { ContentItem, Entitlement } from "./types.js";
 
-export type ContentMediaAssetProjection = NonNullable<ContentItem["mediaAssets"]>[number];
+export type ContentMediaAssetProjection = NonNullable<ContentItem["mediaAssets"]>[number] & {
+  playbackUrl?: string | null;
+  providerPlayable?: boolean | null;
+};
 
 export interface FeedRow {
   id: string;

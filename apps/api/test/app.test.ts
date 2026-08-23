@@ -3385,6 +3385,100 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("signs every ordered Bunny video in a mixed carousel without exposing stored URLs", async () => {
+    const firstProviderAssetId = "11111111-1111-4111-8111-111111111111";
+    const secondProviderAssetId = "22222222-2222-4222-8222-222222222222";
+    const storedUrl = (providerAssetId: string) =>
+      `https://vz-example.b-cdn.net/${providerAssetId}/playlist.m3u8`;
+    const signedUrl = (providerAssetId: string) =>
+      `https://iframe.mediadelivery.net/embed/123/${providerAssetId}?token=signed`;
+    const carousel: ContentItem = {
+      ...homeFeedItem,
+      mediaType: "carousel",
+      accessState: "unlocked",
+      playback: {
+        state: "full",
+        url: storedUrl(firstProviderAssetId),
+        provider: "bunny"
+      },
+      mediaAssets: [
+        {
+          id: "10000000-0000-4000-8000-000000000001",
+          kind: "video",
+          position: 0,
+          provider: "bunny",
+          providerState: "ready",
+          playback: { state: "full", url: storedUrl(firstProviderAssetId), provider: "bunny" },
+          posterUrl: "https://media.example.test/first.jpg",
+          requiredForRelease: true,
+          isCover: true,
+          originClassification: "human_created"
+        },
+        {
+          id: "10000000-0000-4000-8000-000000000002",
+          kind: "image",
+          position: 1,
+          provider: "bunny",
+          providerState: "ready",
+          posterUrl: "https://media.example.test/photo.jpg",
+          requiredForRelease: true,
+          isCover: false,
+          originClassification: "human_created"
+        },
+        {
+          id: "10000000-0000-4000-8000-000000000003",
+          kind: "video",
+          position: 2,
+          provider: "bunny",
+          providerState: "ready",
+          playback: { state: "full", url: storedUrl(secondProviderAssetId), provider: "bunny" },
+          posterUrl: "https://media.example.test/second.jpg",
+          requiredForRelease: true,
+          isCover: false,
+          originClassification: "human_created"
+        }
+      ]
+    };
+    const signedProviderAssetIds: string[] = [];
+    const mediaUploadProvider: MediaUploadProviderAdapter = {
+      provider: "bunny",
+      isConfigured: () => true,
+      async createUploadSession() { throw new Error("not implemented"); },
+      createPlaybackResource({ providerAssetId }) {
+        signedProviderAssetIds.push(providerAssetId);
+        return {
+          state: "full",
+          url: signedUrl(providerAssetId),
+          provider: "bunny",
+          resourceType: "embed"
+        };
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository: contentRepositoryWithDetail(carousel),
+      mediaUploadProvider
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/content/${carousel.id}`,
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).not.toContain("vz-example.b-cdn.net");
+    expect(signedProviderAssetIds).toEqual([firstProviderAssetId, secondProviderAssetId]);
+    expect(response.json().mediaAssets.map((asset: { playback?: { url: string } }) => asset.playback?.url ?? null))
+      .toEqual([signedUrl(firstProviderAssetId), null, signedUrl(secondProviderAssetId)]);
+
+    await app.close();
+  });
+
   it("attaches public-media accounting and blocks signed playback when allowance is exhausted", async () => {
     const publicVod: ContentItem = {
       ...homeFeedItem,

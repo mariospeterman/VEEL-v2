@@ -3949,6 +3949,7 @@ export interface components {
             /** @enum {string} */
             provider: "bunny" | "livepeer";
             providerState: string;
+            playback?: components["schemas"]["PlaybackResource"];
             /** Format: uri */
             posterUrl?: string | null;
             /** @enum {string|null} */

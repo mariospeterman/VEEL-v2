@@ -180,6 +180,8 @@ export function createContentFeedRepositoryMethods(
               'position', asset.position,
               'provider', asset.provider,
               'providerState', asset.provider_state,
+              'playbackUrl', asset.playback_url,
+              'providerPlayable', asset.provider_playable,
               'posterUrl', asset.poster_url,
               'mimeType', asset.mime_type,
               'widthPixels', asset.width_pixels,

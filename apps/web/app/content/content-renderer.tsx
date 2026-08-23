@@ -97,8 +97,12 @@ function CarouselAsset({ active, asset, item, title }: {
     return <img alt={asset.altText ?? ""} className="h-full w-full object-contain" loading={active ? "eager" : "lazy"} src={asset.posterUrl} />;
   }
 
-  if (asset.kind === "video" && active && item.mediaAssets?.filter((entry) => entry.kind === "video").length === 1) {
-    return <ProviderPlayback playback={item.playback} posterUrl={asset.posterUrl ?? item.posterUrl} title={title} />;
+  if (asset.kind === "video" && active) {
+    const playback = asset.playback
+      ?? (item.mediaAssets?.filter((entry) => entry.kind === "video").length === 1
+        ? item.playback
+        : undefined);
+    return <ProviderPlayback playback={playback} posterUrl={asset.posterUrl ?? item.posterUrl} title={title} />;
   }
 
   if (asset.posterUrl) {

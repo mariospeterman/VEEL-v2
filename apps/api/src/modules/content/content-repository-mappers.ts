@@ -25,10 +25,22 @@ export function toContentItem(
     ...(row.asset_revision !== undefined ? { compositionRevision: Number(row.asset_revision) } : {}),
     ...(Array.isArray(row.media_assets)
       ? {
-          mediaAssets: row.media_assets.map((asset) => ({
-            ...asset,
-            posterUrl: fullCompositionAllowed ? (asset.posterUrl ?? null) : null
-          }))
+          mediaAssets: row.media_assets.map((asset) => {
+            const { playbackUrl, providerPlayable, ...publicAsset } = asset;
+            return {
+              ...publicAsset,
+              posterUrl: fullCompositionAllowed ? (asset.posterUrl ?? null) : null,
+              ...(asset.kind === "video"
+                ? {
+                    playback: playbackForRow({
+                      playback_url: playbackUrl ?? null,
+                      provider: asset.provider,
+                      provider_playable: providerPlayable ?? false
+                    }, accessState)
+                  }
+                : {})
+            };
+          })
         }
       : {}),
     ...(row.poll !== undefined

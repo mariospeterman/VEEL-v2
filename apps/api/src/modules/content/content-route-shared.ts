@@ -134,101 +134,91 @@ export async function withSignedPlayback(input: {
   appUserId: string;
 }): Promise<components["schemas"]["ContentItem"]> {
   const { content, mediaUploadProvider } = input;
-  const playback = content.playback;
-
-  if (playback?.state === "full" && playback.provider === "livepeer") {
-    return {
-      ...content,
-      playback: {
-        state: "blocked",
-        url: null,
-        provider: "livepeer"
-      }
-    };
-  }
-
-  if (playback?.state !== "full" || playback.provider !== "bunny" || !playback.url) {
-    return content;
-  }
-
-  const blockedPlayback: NonNullable<components["schemas"]["ContentItem"]["playback"]> = {
-    state: "blocked",
-    url: null,
-    provider: "bunny"
-  };
+  type PlaybackResource = NonNullable<components["schemas"]["ContentItem"]["playback"]>;
+  let blockReason: PlaybackResource["blockReason"] | undefined;
 
   const potentiallyAccounted =
     ["vod", "live_replay"].includes(content.mediaType) &&
     content.accessState === "free" &&
     content.creator.id !== input.appUserId;
+  const hasFullBunnyPlayback = [
+    content.playback,
+    ...(content.mediaAssets ?? []).map((asset) => asset.playback)
+  ].some((playback) => playback?.state === "full" && playback.provider === "bunny");
   let usage: components["schemas"]["PlaybackUsageContext"] | undefined;
 
-  if (potentiallyAccounted) {
+  if (potentiallyAccounted && hasFullBunnyPlayback) {
     if (!input.subscriptionRepository.getPlatformPlaybackDecision) {
-      return {
-        ...content,
-        playback: { ...blockedPlayback, blockReason: "provider_unavailable" }
-      };
+      blockReason = "provider_unavailable";
+    } else {
+      try {
+        const decision = await input.subscriptionRepository.getPlatformPlaybackDecision({
+          supabaseUserId: input.supabaseUserId,
+          targetType: "content",
+          targetId: content.id
+        });
+        if (decision.limitReached) {
+          blockReason = "allowance_exhausted";
+        } else if (decision.countsTowardAllowance) {
+          usage = {
+            policy: "public_media_allowance",
+            targetType: "content",
+            targetId: content.id,
+            heartbeatIntervalSeconds: 15
+          };
+        }
+      } catch {
+        blockReason = "provider_unavailable";
+      }
     }
+  }
+
+  const signedBunnyResources = new Map<string, PlaybackResource>();
+  const sign = (
+    playback: PlaybackResource | undefined,
+    attachUsage: boolean
+  ): PlaybackResource | undefined => {
+    if (!playback || playback.state !== "full") return playback;
+    if (playback.provider === "livepeer") {
+      return { state: "blocked", url: null, provider: "livepeer" };
+    }
+    if (playback.provider !== "bunny" || !playback.url) return playback;
+
+    const blockedPlayback: PlaybackResource = {
+      state: "blocked",
+      url: null,
+      provider: "bunny",
+      ...(blockReason ? { blockReason } : {})
+    };
+    if (blockReason || !mediaUploadProvider.createPlaybackResource) return blockedPlayback;
+
+    const providerAssetId = bunnyProviderAssetIdFromPlaybackUrl(playback.url);
+    if (!providerAssetId) return blockedPlayback;
 
     try {
-      const decision = await input.subscriptionRepository.getPlatformPlaybackDecision({
-        supabaseUserId: input.supabaseUserId,
-        targetType: "content",
-        targetId: content.id
-      });
-      if (decision.limitReached) {
-        return {
-          ...content,
-          playback: { ...blockedPlayback, blockReason: "allowance_exhausted" }
-        };
-      }
-      if (decision.countsTowardAllowance) {
-        usage = {
-          policy: "public_media_allowance",
-          targetType: "content",
-          targetId: content.id,
-          heartbeatIntervalSeconds: 15
-        };
-      }
-    } catch {
+      const signed = signedBunnyResources.get(providerAssetId)
+        ?? mediaUploadProvider.createPlaybackResource({ providerAssetId });
+      signedBunnyResources.set(providerAssetId, signed);
       return {
-        ...content,
-        playback: { ...blockedPlayback, blockReason: "provider_unavailable" }
+        ...signed,
+        ...(attachUsage && usage ? { usage } : {})
       };
+    } catch {
+      return blockedPlayback;
     }
-  }
+  };
 
-  if (!mediaUploadProvider.createPlaybackResource) {
-    return {
-      ...content,
-      playback: blockedPlayback
-    };
-  }
+  const playback = sign(content.playback, true);
+  const mediaAssets = content.mediaAssets?.map((asset) => {
+    if (!asset.playback) return asset;
+    return { ...asset, playback: sign(asset.playback, false)! };
+  });
 
-  const providerAssetId = bunnyProviderAssetIdFromPlaybackUrl(playback.url);
-
-  if (!providerAssetId) {
-    return {
-      ...content,
-      playback: blockedPlayback
-    };
-  }
-
-  try {
-    return {
-      ...content,
-      playback: {
-        ...mediaUploadProvider.createPlaybackResource({ providerAssetId }),
-        ...(usage ? { usage } : {})
-      }
-    };
-  } catch {
-    return {
-      ...content,
-      playback: blockedPlayback
-    };
-  }
+  return {
+    ...content,
+    ...(playback ? { playback } : {}),
+    ...(mediaAssets ? { mediaAssets } : {})
+  };
 }
 
 type AppReadyAccessResult =
