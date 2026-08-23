@@ -367,9 +367,13 @@ export async function holdUnhealthyLiveSafetySession(
   transaction: postgres.TransactionSql,
   input: { id: string; leaseToken: string; completedAt: Date }
 ): Promise<void> {
-  const held = await transaction<{ room_id: string; reason_code: string }[]>`
+  const held = await transaction<{
+    room_id: string;
+    reason_code: string;
+    room_state: string;
+  }[]>`
     with target as (
-      select session.room_id,
+      select session.room_id, room.state as room_state,
         case
           when session.state = 'monitoring' then 'live_monitoring_heartbeat_expired'
           else 'live_monitoring_not_connected'
@@ -379,19 +383,24 @@ export async function holdUnhealthyLiveSafetySession(
       where session.id = ${input.id}
         and session.lease_token = ${input.leaseToken}
         and session.state in ('target_connected', 'monitoring')
-        and room.state = 'live'
+        and room.state in ('live', 'ended', 'replay_ready')
       for update of session, room
     )
     update live_safety_sessions session
-    set state = 'held', hold_reason_code = target.reason_code, held_at = ${input.completedAt},
+    set state = case
+          when target.room_state in ('ended', 'replay_ready') then 'ended'
+          else 'held'
+        end,
+        hold_reason_code = case when target.room_state = 'live' then target.reason_code else null end,
+        held_at = case when target.room_state = 'live' then ${input.completedAt} else null end,
         last_heartbeat_at = null, heartbeat_expires_at = null, next_check_at = ${input.completedAt},
         lease_token = null, lease_expires_at = null, updated_at = ${input.completedAt}
     from target
     where session.id = ${input.id}
-    returning target.room_id, target.reason_code
+    returning target.room_id, target.reason_code, target.room_state
   `;
   const target = held[0];
-  if (!target) return;
+  if (!target || target.room_state !== "live") return;
   await persistLiveSafetyHold(transaction, {
     roomId: target.room_id,
     reasonCode: target.reason_code,

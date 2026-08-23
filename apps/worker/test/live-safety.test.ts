@@ -63,7 +63,8 @@ describe("live safety watchdog", () => {
       if (query.includes("update live_safety_sessions session")) {
         return [{
           room_id: "room-1",
-          reason_code: "live_monitoring_heartbeat_expired"
+          reason_code: "live_monitoring_heartbeat_expired",
+          room_state: "live"
         }];
       }
       if (query.includes("update live_rooms")) return [{ id: "room-1" }];
@@ -77,9 +78,9 @@ describe("live safety watchdog", () => {
     });
 
     expect(queries).toHaveLength(4);
-    expect(queries[0]).toContain("state = 'held'");
+    expect(queries[0]).toContain("else 'held'");
     expect(queries[0]).toContain("join live_rooms room");
-    expect(queries[0]).toContain("room.state = 'live'");
+    expect(queries[0]).toContain("room.state in ('live', 'ended', 'replay_ready')");
     expect(queries[0]).toContain("for update of session, room");
     expect(queries[1]).toContain("state = 'suspended'");
     expect(queries[1]).toContain("state = 'live'");
@@ -90,8 +91,13 @@ describe("live safety watchdog", () => {
   it("does not hold or suspend a room that became terminal during health polling", async () => {
     const queries: string[] = [];
     const transaction = (async (strings: TemplateStringsArray) => {
-      queries.push(strings.join("?"));
-      return [];
+      const query = strings.join("?");
+      queries.push(query);
+      return [{
+        room_id: "room-ended",
+        reason_code: "live_monitoring_heartbeat_expired",
+        room_state: "ended"
+      }];
     }) as unknown as postgres.TransactionSql;
 
     await holdUnhealthyLiveSafetySession(transaction, {
@@ -101,7 +107,8 @@ describe("live safety watchdog", () => {
     });
 
     expect(queries).toHaveLength(1);
-    expect(queries[0]).toContain("room.state = 'live'");
+    expect(queries[0]).toContain("then 'ended'");
+    expect(queries[0]).toContain("lease_token = null");
   });
 
   it("releases the canonical safety case only through the backend predicate", async () => {
