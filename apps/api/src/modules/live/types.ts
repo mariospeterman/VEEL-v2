@@ -17,6 +17,7 @@ export interface CreatedLiveProviderRoom {
   hostIngestUrl: string;
   hostStreamKey: string;
   playbackUrl: string | null;
+  moderationTargetReference: string;
 }
 
 export interface LiveProviderRoomStatus {
@@ -126,6 +127,18 @@ export interface RecordLiveProviderWebhookInput {
   replayPayload?: Record<string, unknown>;
 }
 
+export interface RecordLiveSafetyEventInput {
+  provider: "livepeer" | "moderation_provider";
+  providerEventId: string;
+  providerStreamId: string;
+  eventKind: "target_connected" | "heartbeat" | "target_disconnected" | "adverse_signal" | "provider_inconsistent";
+  normalizedSignal: "healthy" | "known_illegal_hash" | "apparent_minor_sexual_context" | "severe_sexual_violence" | "severe_graphic_violence" | "disconnected" | "inconsistent";
+  payloadHash: string;
+  signatureHash: string | null;
+  observedAt: Date;
+  moderationTargetReference: string | null;
+}
+
 export interface UpdateLiveRoomFromWebhookInput {
   providerEventId: string;
   providerStreamId: string;
@@ -209,6 +222,7 @@ export interface LiveRepository {
   }): Promise<void>;
   recordLivePassPurchaseRequest(input: CreateLivePassPurchaseRequestInput): Promise<void>;
   recordLiveProviderWebhook?(input: RecordLiveProviderWebhookInput): Promise<boolean>;
+  recordLiveSafetyEvent?(input: RecordLiveSafetyEventInput): Promise<boolean>;
   updateRoomStatus(input: UpdateLiveRoomStatusInput): Promise<void>;
   updateRoomFromWebhook?(input: UpdateLiveRoomFromWebhookInput): Promise<boolean>;
   listChatMessages(input: FindLiveRoomInput): Promise<LiveChatPage | null>;

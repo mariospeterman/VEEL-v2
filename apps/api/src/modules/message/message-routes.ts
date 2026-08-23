@@ -1,23 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { mutationRateLimit } from "../../shared/rate-limits.js";
 import {
-  PaymentIdempotencyConflictError,
-  PaymentAmountBelowPolicyError,
-  PaymentRecipientNotReadyError,
-  PaymentRepositoryConfigurationError
-} from "../payment/payment-repository.js";
-import { defaultPaymentCommercialPolicy } from "../payment/payment-commercial-policy.js";
-import {
-  assertSolanaAddress,
-  createSolanaReferenceAddress,
-  SolanaPaymentConfigurationError
-} from "../payment/solana-payment.js";
-import { toPaymentIntentResponse } from "../payment/payment-route-shared.js";
-import {
   conflictResponse,
-  hashMessageBody,
   hashMessageActionRequest,
-  hashPaymentRequest,
   notFoundResponse,
   requiredIdempotencyKey,
   serviceUnavailableResponse,
@@ -36,16 +21,19 @@ import {
 import type {
   CreateDirectConversationRequest,
   CreateMessageRequest,
-  CreatePaidMessageIntentRequest,
-  RespondToMessageRequest
+  RespondToMessageRequest,
+  UpdateConversationMuteRequest
 } from "./types.js";
+import { registerMessageCommercialRoutes } from "./message-commercial-routes.js";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const reactionKeys = new Set(["like", "love", "laugh", "support"] as const);
 
 export async function registerMessageRoutes(
   app: FastifyInstance,
   options: RegisterMessageRoutesOptions
 ): Promise<void> {
+  await registerMessageCommercialRoutes(app, options);
   app.get("/v1/messages/conversations", async (request, reply) => {
     const access = await verifyMessageReadyAccess(request, options);
 
@@ -155,6 +143,32 @@ export async function registerMessageRoutes(
     }
   });
 
+  app.patch("/v1/messages/conversations/:conversationId/mute", mutationRateLimit("messageMutation"), async (request, reply) => {
+    const access = await verifyMessageReadyAccess(request, options);
+    if (!access.ok) return reply.code(access.statusCode).send(access.body);
+    const idempotencyKey = requiredIdempotencyKey(request);
+    const conversationId = (request.params as { conversationId?: string }).conversationId ?? "";
+    const body = request.body as Partial<UpdateConversationMuteRequest> | undefined;
+    if (!idempotencyKey || !uuidPattern.test(conversationId) || typeof body?.muted !== "boolean") {
+      return reply.code(400).send(validationResponse("A valid conversation, muted flag, and Idempotency-Key are required"));
+    }
+    try {
+      const conversation = await options.messageRepository.updateConversationMute({
+        supabaseUserId: access.supabaseUserId,
+        conversationId,
+        muted: body.muted,
+        idempotencyKey,
+        requestHash: hashMessageActionRequest({ conversationId, muted: body.muted })
+      });
+      if (!conversation) return reply.code(404).send(notFoundResponse("Conversation was not found"));
+      return reply.code(200).send(conversation);
+    } catch (error) {
+      const handled = messageMutationErrorReply(request, reply, error);
+      if (handled) return handled;
+      throw error;
+    }
+  });
+
   app.get("/v1/messages/conversations/:conversationId/messages", async (request, reply) => {
     const access = await verifyMessageReadyAccess(request, options);
 
@@ -204,10 +218,20 @@ export async function registerMessageRoutes(
       return reply.code(400).send(validationResponse(validationError));
     }
 
-    if (body?.paidMessageIntentId) {
-      return reply
-        .code(400)
-        .send(validationResponse("Use paid-message-intents for paid message delivery"));
+    if (
+      (body?.replyToMessageId != null && !uuidPattern.test(body.replyToMessageId)) ||
+      (body?.sharedContentItemId != null && !uuidPattern.test(body.sharedContentItemId))
+    ) {
+      return reply.code(400).send(validationResponse("Reply and shared content references must be valid UUIDs"));
+    }
+    if (
+      body?.attachmentContentItemIds !== undefined &&
+      (!Array.isArray(body.attachmentContentItemIds) ||
+        body.attachmentContentItemIds.length > 4 ||
+        new Set(body.attachmentContentItemIds).size !== body.attachmentContentItemIds.length ||
+        body.attachmentContentItemIds.some((id) => typeof id !== "string" || !uuidPattern.test(id)))
+    ) {
+      return reply.code(400).send(validationResponse("Attachments must contain up to four unique content UUIDs"));
     }
 
     const conversationId = (request.params as { conversationId?: string }).conversationId ?? "";
@@ -217,7 +241,10 @@ export async function registerMessageRoutes(
         supabaseUserId: access.supabaseUserId,
         conversationId,
         body: body?.body?.trim() ?? "",
-        idempotencyKey
+        idempotencyKey,
+        replyToMessageId: body?.replyToMessageId ?? null,
+        sharedContentItemId: body?.sharedContentItemId ?? null,
+        attachmentContentItemIds: body?.attachmentContentItemIds ?? []
       });
 
       if (!message) {
@@ -233,124 +260,46 @@ export async function registerMessageRoutes(
     }
   });
 
-  app.post("/v1/messages/conversations/:conversationId/paid-message-intents", mutationRateLimit("paymentMutation"), async (request, reply) => {
+  const updateReaction = (reacted: boolean) => async (request: FastifyRequest, reply: FastifyReply) => {
     const access = await verifyMessageReadyAccess(request, options);
-
-    if (!access.ok) {
-      return reply.code(access.statusCode).send(access.body);
-    }
-
+    if (!access.ok) return reply.code(access.statusCode).send(access.body);
     const idempotencyKey = requiredIdempotencyKey(request);
-
-    if (!idempotencyKey) {
-      return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
+    const params = request.params as { conversationId?: string; messageId?: string; reactionKey?: string };
+    if (
+      !idempotencyKey ||
+      !uuidPattern.test(params.conversationId ?? "") ||
+      !uuidPattern.test(params.messageId ?? "") ||
+      !reactionKeys.has(params.reactionKey as "like" | "love" | "laugh" | "support")
+    ) {
+      return reply.code(400).send(validationResponse("A valid message reaction request is required"));
     }
-
-    const body = request.body as Partial<CreatePaidMessageIntentRequest> | undefined;
-    const validationError = validateMessageBody(body);
-
-    if (validationError) {
-      return reply.code(400).send(validationResponse(validationError));
-    }
-
-    const platformFeeWallet = app.config.PAYMENT_PLATFORM_FEE_WALLET ?? app.config.PAYMENT_PLATFORM_TREASURY_WALLET;
-
-    if (!platformFeeWallet) {
-      return reply.code(503).send(serviceUnavailableResponse("Payment platform fee wallet is not configured"));
-    }
-
-    const conversationId = (request.params as { conversationId?: string }).conversationId ?? "";
-
     try {
-      assertSolanaAddress(platformFeeWallet);
-      const price = await options.messageRepository.findConversationPrice({
+      const message = await options.messageRepository.updateMessageReaction({
         supabaseUserId: access.supabaseUserId,
-        conversationId
+        conversationId: params.conversationId as string,
+        messageId: params.messageId as string,
+        reactionKey: params.reactionKey as "like" | "love" | "laugh" | "support",
+        reacted
       });
-
-      if (!price) {
-        return reply.code(404).send(notFoundResponse("Conversation was not found"));
-      }
-
-      const intentBody = {
-        productType: "paid_message" as const,
-        targetId: conversationId,
-        amountMinor: price.amountMinor,
-        bodyHash: hashMessageBody(body?.body?.trim() ?? "")
-      };
-      const commercialPolicy = defaultPaymentCommercialPolicy(
-        app.config,
-        "paid_message",
-        price.currency
-      );
-      const intent = await options.paymentRepository.createOrReuseIntent({
-        supabaseUserId: access.supabaseUserId,
-        idempotencyKey,
-        requestHash: hashPaymentRequest(intentBody),
-        productType: "paid_message",
-        targetId: conversationId,
-        amountMinor: price.amountMinor,
-        currency: price.currency,
-        solanaCluster: app.config.SOLANA_CLUSTER,
-        treasuryWallet: app.config.PAYMENT_PLATFORM_TREASURY_WALLET ?? platformFeeWallet,
-        platformFeeWallet,
-        ...commercialPolicy,
-        settlementKind: "creator_split",
-        creatorUserId: price.recipientUserId,
-        referenceAddress: createSolanaReferenceAddress(),
-        referralToken: null
-      });
-
-      await options.messageRepository.recordPaidMessageDraft({
-        supabaseUserId: access.supabaseUserId,
-        conversationId,
-        paymentIntentId: intent.id,
-        body: body?.body?.trim() ?? "",
-        amountMinor: price.amountMinor,
-        currency: price.currency
-      });
-
-      return reply.code(201).send({
-        state: "payment_required",
-        conversationId,
-        paymentIntent: {
-          ...toPaymentIntentResponse(intent),
-          targetId: intent.targetId,
-          referenceAddress: intent.referenceAddress,
-          expiresAt: intent.expiresAt.toISOString()
-        }
-      });
+      if (!message) return reply.code(404).send(notFoundResponse("Message was not found"));
+      return reply.code(200).send(message);
     } catch (error) {
-      if (error instanceof PaymentIdempotencyConflictError) {
-        return reply.code(409).send(conflictResponse("Idempotency key was already used"));
-      }
-
-      if (error instanceof PaymentRecipientNotReadyError) {
-        return reply.code(409).send(conflictResponse("This creator cannot receive payments yet"));
-      }
-
-
-      if (error instanceof PaymentAmountBelowPolicyError) {
-        return reply.code(409).send(conflictResponse(
-          `Paid message price is below the current minimum of ${error.minimumAmountMinor} atomic units`
-        ));
-      }
-
-      if (
-        error instanceof MessageRepositoryConfigurationError ||
-        error instanceof PaymentRepositoryConfigurationError ||
-        error instanceof SolanaPaymentConfigurationError
-      ) {
-        request.log.warn({ error }, "Paid message intent failed");
-        return reply.code(503).send(serviceUnavailableResponse("Paid messages are not configured"));
-      }
-
       const handled = messageMutationErrorReply(request, reply, error);
       if (handled) return handled;
-
       throw error;
     }
-  });
+  };
+  app.put(
+    "/v1/messages/conversations/:conversationId/messages/:messageId/reactions/:reactionKey",
+    mutationRateLimit("messageMutation"),
+    updateReaction(true)
+  );
+  app.delete(
+    "/v1/messages/conversations/:conversationId/messages/:messageId/reactions/:reactionKey",
+    mutationRateLimit("messageMutation"),
+    updateReaction(false)
+  );
+
 }
 
 function messageMutationErrorReply(

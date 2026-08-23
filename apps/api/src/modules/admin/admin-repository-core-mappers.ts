@@ -44,7 +44,8 @@ export interface WorkerQueueHealthRow {
     | "payment_confirmation_emails"
     | "provider_event_replays"
     | "media_moderation"
-    | "analytics_projections";
+    | "analytics_projections"
+    | "live_safety";
   pending_count: string | number;
   processing_count: string | number;
   failed_count: string | number;

@@ -6163,6 +6163,9 @@ describe("buildApi", () => {
       async onRecordLiveProviderWebhook() {
         return false;
       },
+      async onRecordLiveSafetyEvent() {
+        return false;
+      },
       async onUpdateRoomFromWebhook(input) {
         appliedEvents.push(input);
         return true;
@@ -10183,7 +10186,8 @@ describe("buildApi", () => {
             providerState: "created",
             hostIngestUrl: "rtmp://rtmp.livepeer.com/live/test",
             hostStreamKey: "test",
-            playbackUrl: "https://livepeercdn.studio/hls/livepeer-playback-1/index.m3u8"
+            playbackUrl: "https://livepeercdn.studio/hls/livepeer-playback-1/index.m3u8",
+            moderationTargetReference: "moderation-target-1"
           };
         },
         async getRoomStatus() {
@@ -10341,7 +10345,8 @@ describe("buildApi", () => {
             providerState: "waiting" as const,
             playbackUrl: "https://livepeercdn.studio/hls/playback-orphan-39/index.m3u8",
             hostIngestUrl: "rtmp://rtmp.livepeer.com/live",
-            hostStreamKey: "secret"
+            hostStreamKey: "secret",
+            moderationTargetReference: "moderation-target-39"
           };
         },
         async getRoomStatus() {
@@ -11023,7 +11028,7 @@ describe("buildApi", () => {
   });
 
   it("creates a normal conversation message through the backend", async () => {
-    const createdInputs: Array<{ body: string; idempotencyKey: string }> = [];
+    const createdInputs: Array<{ body: string; idempotencyKey: string; replyToMessageId?: string | null; sharedContentItemId?: string | null; attachmentContentItemIds?: string[] }> = [];
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       sessionRepository: appReadySessionRepository,
@@ -11031,7 +11036,13 @@ describe("buildApi", () => {
       walletRepository: walletRepositoryWithWallet,
       messageRepository: fakeMessageRepository({
         async onCreateMessage(input) {
-          createdInputs.push({ body: input.body, idempotencyKey: input.idempotencyKey });
+          createdInputs.push({
+            body: input.body,
+            idempotencyKey: input.idempotencyKey,
+            ...(input.replyToMessageId !== undefined ? { replyToMessageId: input.replyToMessageId } : {}),
+            ...(input.sharedContentItemId !== undefined ? { sharedContentItemId: input.sharedContentItemId } : {}),
+            ...(input.attachmentContentItemIds !== undefined ? { attachmentContentItemIds: input.attachmentContentItemIds } : {})
+          });
           return messageFixture({
             conversationId: input.conversationId,
             body: input.body
@@ -11048,7 +11059,12 @@ describe("buildApi", () => {
         authorization: "Bearer valid-token",
         "idempotency-key": "message-create-1"
       },
-      payload: { body: "Hello from Veel" }
+      payload: {
+        body: "Hello from Veel",
+        replyToMessageId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab31",
+        sharedContentItemId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac31",
+        attachmentContentItemIds: ["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac32"]
+      }
     });
 
     expect(response.statusCode).toBe(201);
@@ -11058,7 +11074,13 @@ describe("buildApi", () => {
       deliveryState: "visible"
     });
     expect(createdInputs).toEqual([
-      { body: "Hello from Veel", idempotencyKey: "message-create-1" }
+      {
+        body: "Hello from Veel",
+        idempotencyKey: "message-create-1",
+        replyToMessageId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab31",
+        sharedContentItemId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac31",
+        attachmentContentItemIds: ["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac32"]
+      }
     ]);
 
     await app.close();
@@ -11094,25 +11116,19 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("creates a server-priced paid message intent and stores the backend delivery draft", async () => {
+  it("removes the unsafe paid-message creation route while retaining historical settlement compatibility", async () => {
     vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
-    const draftRecords: Array<{ paymentIntentId: string; body: string }> = [];
+    let paymentIntentCreated = false;
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       sessionRepository: appReadySessionRepository,
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
-      messageRepository: fakeMessageRepository({
-        async onRecordPaidMessageDraft(input) {
-          draftRecords.push({
-            paymentIntentId: input.paymentIntentId,
-            body: input.body
-          });
-        }
-      }),
+      messageRepository: fakeMessageRepository(),
       paymentRepository: {
         ...checkoutPaymentRepositoryMethods,
         async createOrReuseIntent(input) {
+          paymentIntentCreated = true;
           return {
             ...storedPaymentIntent,
             id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab50",
@@ -11147,22 +11163,86 @@ describe("buildApi", () => {
       payload: { body: "Paid hello" }
     });
 
-    expect(response.statusCode).toBe(201);
-    expect(response.json()).toMatchObject({
-      state: "payment_required",
-      conversationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab12",
-      paymentIntent: {
-        productType: "paid_message",
-        amountMinor: 10000000
+    expect(response.statusCode).toBe(404);
+    expect(paymentIntentCreated).toBe(false);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("requires creator acceptance before creating a structured-request payment intent", async () => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    let accepted = false;
+    let paymentTargetId: string | null = null;
+    let boundPaymentIntentId: string | null = null;
+    let paymentIntentCreateCount = 0;
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      messageRepository: fakeMessageRepository({
+        async onUpdateStructuredCreatorRequest(input) {
+          accepted = input.body.action === "accept";
+          return { ...creatorRequestFixture(input.conversationId), state: "accepted", agreedAmountMinor: 10_000_000 };
+        },
+        async onFindStructuredCreatorRequestPaymentAuthority(input) {
+          return accepted ? {
+            targetId: input.requestId,
+            paymentIntentId: boundPaymentIntentId,
+            creatorUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab20",
+            amountMinor: 10_000_000,
+            currency: "SOL",
+            productType: "paid_message"
+          } : null;
+        },
+        async onBindStructuredCreatorRequestPaymentIntent(input) {
+          boundPaymentIntentId = input.paymentIntentId;
+          return {
+            ...creatorRequestFixture(input.conversationId),
+            id: input.resourceId,
+            state: "payment_pending",
+            paymentIntentId: input.paymentIntentId
+          };
+        }
+      }),
+      paymentRepository: {
+        ...checkoutPaymentRepositoryMethods,
+        async createOrReuseIntent(input) {
+          paymentIntentCreateCount += 1;
+          paymentTargetId = input.targetId;
+          return { ...storedPaymentIntent, id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab50", productType: input.productType, targetId: input.targetId, amountMinor: input.amountMinor, referenceAddress: input.referenceAddress, expiresAt: input.expiresAt, requestHash: input.requestHash };
+        },
+        async findIntent(input) {
+          return input.paymentIntentId === boundPaymentIntentId
+            ? { ...storedPaymentIntent, id: input.paymentIntentId, productType: "paid_message", targetId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac03" }
+            : null;
+        },
+        async recordTransactionRequest() { return null; },
+        async recordSubmission() {}
       }
     });
-    expect(draftRecords).toEqual([
-      {
-        paymentIntentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab50",
-        body: "Paid hello"
-      }
-    ]);
+    await app.ready();
+    const paymentUrl = "/v1/messages/conversations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab12/creator-requests/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac03/payment-intents";
+    const beforeAcceptance = await app.inject({ method: "POST", url: paymentUrl, headers: { authorization: "Bearer valid-token", "idempotency-key": "creator-request-payment-before" }, payload: {} });
+    expect(beforeAcceptance.statusCode).toBe(409);
 
+    const acceptedResponse = await app.inject({
+      method: "PATCH",
+      url: "/v1/messages/conversations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab12/creator-requests/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac03",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "creator-request-accept" },
+      payload: { action: "accept", agreedAmountMinor: 10_000_000 }
+    });
+    expect(acceptedResponse.statusCode).toBe(200);
+
+    const afterAcceptance = await app.inject({ method: "POST", url: paymentUrl, headers: { authorization: "Bearer valid-token", "idempotency-key": "creator-request-payment-after" }, payload: {} });
+    expect(afterAcceptance.statusCode).toBe(201);
+    expect(afterAcceptance.json()).toMatchObject({ productType: "paid_message" });
+    expect(paymentTargetId).toBe("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac03");
+    const paymentReplay = await app.inject({ method: "POST", url: paymentUrl, headers: { authorization: "Bearer valid-token", "idempotency-key": "creator-request-payment-retry" }, payload: {} });
+    expect(paymentReplay.statusCode).toBe(201);
+    expect(paymentReplay.json()).toMatchObject({ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab50", productType: "paid_message" });
+    expect(paymentIntentCreateCount).toBe(1);
     await app.close();
     vi.unstubAllEnvs();
   });
@@ -12141,6 +12221,7 @@ function fakeLiveRepository(
     onFailControl: LiveRepository["failControl"];
     onRecordLivePassPurchaseRequest: LiveRepository["recordLivePassPurchaseRequest"];
     onRecordLiveProviderWebhook: NonNullable<LiveRepository["recordLiveProviderWebhook"]>;
+    onRecordLiveSafetyEvent: NonNullable<LiveRepository["recordLiveSafetyEvent"]>;
     onUpdateRoomStatus: LiveRepository["updateRoomStatus"];
     onUpdateRoomFromWebhook: NonNullable<LiveRepository["updateRoomFromWebhook"]>;
     onListChatMessages: LiveRepository["listChatMessages"];
@@ -12196,6 +12277,9 @@ function fakeLiveRepository(
     async recordLiveProviderWebhook(input) {
       return overrides.onRecordLiveProviderWebhook?.(input) ?? true;
     },
+    async recordLiveSafetyEvent(input) {
+      return overrides.onRecordLiveSafetyEvent?.(input) ?? true;
+    },
     async updateRoomStatus(input) {
       await overrides.onUpdateRoomStatus?.(input);
     },
@@ -12231,6 +12315,9 @@ function messageFixture(overrides: Partial<Message> = {}): Message {
     body: overrides.body ?? "Visible message",
     deliveryState: overrides.deliveryState ?? "visible",
     paymentIntentId: overrides.paymentIntentId ?? null,
+    replyToMessageId: overrides.replyToMessageId ?? null,
+    sharedContentItemId: overrides.sharedContentItemId ?? null,
+    reactions: overrides.reactions ?? [],
     createdAt: overrides.createdAt ?? "2026-06-04T23:45:00.000Z"
   };
 }
@@ -12502,6 +12589,17 @@ function fakeMessageRepository(
     onCreateDirectConversation: MessageRepository["createDirectConversation"];
     onRespondToMessageRequest: MessageRepository["respondToMessageRequest"];
     onMarkConversationRead: MessageRepository["markConversationRead"];
+    onUpdateConversationMute: MessageRepository["updateConversationMute"];
+    onUpdateMessageReaction: MessageRepository["updateMessageReaction"];
+    onListCommercialInteractions: MessageRepository["listCommercialInteractions"];
+    onCreateCreatorMediaOffer: MessageRepository["createCreatorMediaOffer"];
+    onUpdateCreatorMediaOffer: MessageRepository["updateCreatorMediaOffer"];
+    onFindCreatorMediaOfferPaymentAuthority: MessageRepository["findCreatorMediaOfferPaymentAuthority"];
+    onBindCreatorMediaOfferPaymentIntent: MessageRepository["bindCreatorMediaOfferPaymentIntent"];
+    onCreateStructuredCreatorRequest: MessageRepository["createStructuredCreatorRequest"];
+    onUpdateStructuredCreatorRequest: MessageRepository["updateStructuredCreatorRequest"];
+    onFindStructuredCreatorRequestPaymentAuthority: MessageRepository["findStructuredCreatorRequestPaymentAuthority"];
+    onBindStructuredCreatorRequestPaymentIntent: MessageRepository["bindStructuredCreatorRequestPaymentIntent"];
     onCreateMessage: MessageRepository["createMessage"];
     onFindConversationPrice: MessageRepository["findConversationPrice"];
     onRecordPaidMessageDraft: MessageRepository["recordPaidMessageDraft"];
@@ -12521,6 +12619,7 @@ function fakeMessageRepository(
               requestState: "accepted",
               requestRole: "initiator",
               canSend: true,
+              muted: false,
               lastMessage: {
                 body: "Visible message",
                 sender: homeFeedItem.creator,
@@ -12550,7 +12649,8 @@ function fakeMessageRepository(
         counterpart: homeFeedItem.creator,
         requestState: "pending",
         requestRole: "initiator",
-        canSend: true
+        canSend: true,
+        muted: false
       };
     },
     async respondToMessageRequest(input) {
@@ -12562,7 +12662,8 @@ function fakeMessageRepository(
         counterpart: homeFeedItem.creator,
         requestState: input.action === "accept" ? "accepted" : "declined",
         requestRole: "recipient",
-        canSend: input.action === "accept"
+        canSend: input.action === "accept",
+        muted: false
       };
     },
     async markConversationRead(input) {
@@ -12570,6 +12671,86 @@ function fakeMessageRepository(
         conversationId: input.conversationId,
         unreadCount: 0,
         readAt: "2026-06-04T23:50:00.000Z"
+      };
+    },
+    async updateConversationMute(input) {
+      return overrides.onUpdateConversationMute?.(input) ?? {
+        id: input.conversationId,
+        type: "direct",
+        title: "Maki",
+        unreadCount: 0,
+        counterpart: homeFeedItem.creator,
+        requestState: "accepted",
+        requestRole: "initiator",
+        canSend: true,
+        muted: input.muted
+      };
+    },
+    async updateMessageReaction(input) {
+      return overrides.onUpdateMessageReaction?.(input) ?? messageFixture({
+        id: input.messageId,
+        conversationId: input.conversationId,
+        reactions: input.reacted ? [{ key: input.reactionKey, count: 1, reacted: true }] : []
+      });
+    },
+    async listCommercialInteractions(input) {
+      return overrides.onListCommercialInteractions?.(input) ?? { mediaOffers: [], creatorRequests: [] };
+    },
+    async createCreatorMediaOffer(input) {
+      return overrides.onCreateCreatorMediaOffer?.(input) ?? mediaOfferFixture(input.conversationId, input.body.contentItemId);
+    },
+    async updateCreatorMediaOffer(input) {
+      return overrides.onUpdateCreatorMediaOffer?.(input) ?? {
+        ...mediaOfferFixture(input.conversationId),
+        id: input.offerId,
+        state: input.action === "decline" ? "declined" : "withdrawn"
+      };
+    },
+    async findCreatorMediaOfferPaymentAuthority(input) {
+      return overrides.onFindCreatorMediaOfferPaymentAuthority?.(input) ?? {
+        targetId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac01",
+        paymentIntentId: null,
+        creatorUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab20",
+        amountMinor: 10_000_000,
+        currency: "SOL",
+        productType: "content_unlock"
+      };
+    },
+    async bindCreatorMediaOfferPaymentIntent(input) {
+      return overrides.onBindCreatorMediaOfferPaymentIntent?.(input) ?? {
+        ...mediaOfferFixture(input.conversationId),
+        id: input.resourceId,
+        state: "accepted",
+        paymentIntentId: input.paymentIntentId
+      };
+    },
+    async createStructuredCreatorRequest(input) {
+      return overrides.onCreateStructuredCreatorRequest?.(input) ?? creatorRequestFixture(input.conversationId, input.body.creatorUserId);
+    },
+    async updateStructuredCreatorRequest(input) {
+      return overrides.onUpdateStructuredCreatorRequest?.(input) ?? {
+        ...creatorRequestFixture(input.conversationId),
+        id: input.requestId,
+        state: input.body.action === "accept" || input.body.action === "accept_terms" ? "accepted" : "declined",
+        agreedAmountMinor: input.body.agreedAmountMinor ?? 10_000_000
+      };
+    },
+    async findStructuredCreatorRequestPaymentAuthority(input) {
+      return overrides.onFindStructuredCreatorRequestPaymentAuthority?.(input) ?? {
+        targetId: input.requestId,
+        paymentIntentId: null,
+        creatorUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab20",
+        amountMinor: 10_000_000,
+        currency: "SOL",
+        productType: "paid_message"
+      };
+    },
+    async bindStructuredCreatorRequestPaymentIntent(input) {
+      return overrides.onBindStructuredCreatorRequestPaymentIntent?.(input) ?? {
+        ...creatorRequestFixture(input.conversationId),
+        id: input.resourceId,
+        state: "payment_pending",
+        paymentIntentId: input.paymentIntentId
       };
     },
     async findConversationPrice(input) {
@@ -12585,6 +12766,53 @@ function fakeMessageRepository(
     async recordPaidMessageDraft(input) {
       await overrides.onRecordPaidMessageDraft?.(input);
     }
+  };
+}
+
+function mediaOfferFixture(conversationId: string, contentItemId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac01") {
+  return {
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac02",
+    conversationId,
+    creatorUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab20",
+    buyerUserId: "00000000-0000-4000-8000-000000000011",
+    contentItemId,
+    contentRevision: 1,
+    title: "Approved media offer",
+    description: null,
+    amountMinor: 10_000_000,
+    currency: "SOL" as const,
+    state: "offered" as const,
+    paymentIntentId: null,
+    expiresAt: "2026-09-01T00:00:00.000Z",
+    purchasedAt: null,
+    createdAt: "2026-08-23T12:00:00.000Z",
+    updatedAt: "2026-08-23T12:00:00.000Z"
+  };
+}
+
+function creatorRequestFixture(conversationId: string, creatorUserId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab20") {
+  return {
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac03",
+    conversationId,
+    requesterUserId: "00000000-0000-4000-8000-000000000011",
+    creatorUserId,
+    deliverable: "One approved custom video",
+    permittedCategory: "video" as const,
+    proposedAmountMinor: 10_000_000,
+    agreedAmountMinor: null,
+    currency: "SOL" as const,
+    expectedDeliveryDays: 14,
+    clarificationRule: "One written clarification before acceptance.",
+    cancellationRule: "Cancellation before payment.",
+    state: "proposed" as const,
+    paymentIntentId: null,
+    expiresAt: "2026-09-01T00:00:00.000Z",
+    acceptedAt: null,
+    activatedAt: null,
+    deliveredAt: null,
+    completedAt: null,
+    createdAt: "2026-08-23T12:00:00.000Z",
+    updatedAt: "2026-08-23T12:00:00.000Z"
   };
 }
 
@@ -12939,7 +13167,9 @@ const fakeAdminRepository: AdminRepository = {
       subscriptionProviderReadiness: "staging_required",
       organizationCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 },
       managedCreatorCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 },
-      enterpriseAllocationCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 }
+      enterpriseAllocationCounts: { total: 1, pending: 0, submitted: 0, confirmed: 1, failed: 0 },
+      creatorMediaOfferCounts: { total: 2, pending: 1, submitted: 0, confirmed: 1, failed: 0 },
+      structuredCreatorRequestCounts: { total: 3, pending: 1, submitted: 1, confirmed: 1, failed: 0 }
     };
   },
   async getNotificationHealth() {
@@ -13346,6 +13576,9 @@ const fakeAdminRepository: AdminRepository = {
           replayWindowHours: 48,
           hasPlaybackUrl: true,
           hasHostStreamKey: true,
+          monitoringState: "monitoring",
+          monitoringHealthy: true,
+          pendingProviderAction: false,
           startsAt: "2026-06-06T15:00:00.000Z",
           endedAt: null,
           createdAt: "2026-06-06T14:00:00.000Z",

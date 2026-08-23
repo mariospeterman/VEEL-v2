@@ -100,13 +100,13 @@ export function createLiveRoomRepositoryMethods(
           select
             sr.id,
             'none',
-            'approved',
+            'quarantined',
             'automated',
-            'creator_sfw_attestation',
-            'sfw-live-v1',
-            true,
+            'live_monitoring_pending',
+            'sfw-live-monitoring-v2',
+            false,
             ${sql.json({ attestation: "this_live_stream_is_sfw" })},
-            now()
+            null
           from selected_room sr
           where not exists (
             select 1
@@ -124,6 +124,20 @@ export function createLiveRoomRepositoryMethods(
           join selected_room sr on sr.id = existing.live_room_id
           where existing.state <> 'superseded'
           limit 1
+        ),
+        inserted_session as (
+          insert into live_safety_sessions (
+            room_id, media_safety_case_id, moderation_target_reference, state, next_check_at
+          )
+          select
+            ts.live_room_id, ts.id, ${input.providerRoom.moderationTargetReference},
+            'monitoring_pending', now()
+          from target_safety ts
+          on conflict (room_id) do update
+          set moderation_target_reference = excluded.moderation_target_reference,
+              next_check_at = now(),
+              updated_at = now()
+          returning id
         ),
         inserted_job as (
           insert into media_moderation_jobs (
@@ -146,6 +160,7 @@ export function createLiveRoomRepositoryMethods(
         ${liveRoomSelectSql(sql)}
         join selected_room sr on sr.id = lr.id
         cross join (select count(*) from inserted_job) job_effect
+        cross join (select count(*) from inserted_session) session_effect
       `;
       const row = rows[0];
 
@@ -233,13 +248,13 @@ export function createLiveRoomRepositoryMethods(
           select
             sr.id,
             'none',
-            'approved',
+            'quarantined',
             'automated',
-            'creator_sfw_attestation',
-            'sfw-live-v1',
-            true,
+            'live_monitoring_pending',
+            'sfw-live-monitoring-v2',
+            false,
             ${sql.json({ attestation: "this_live_stream_is_sfw" })},
-            now()
+            null
           from selected_room sr
           where not exists (
             select 1
@@ -257,6 +272,15 @@ export function createLiveRoomRepositoryMethods(
           join selected_room sr on sr.id = existing.live_room_id
           where existing.state <> 'superseded'
           limit 1
+        ),
+        inserted_session as (
+          insert into live_safety_sessions (
+            room_id, media_safety_case_id, state, next_check_at
+          )
+          select ts.live_room_id, ts.id, 'monitoring_pending', now()
+          from target_safety ts
+          on conflict (room_id) do nothing
+          returning id
         ),
         inserted_job as (
           insert into media_moderation_jobs (
@@ -279,6 +303,7 @@ export function createLiveRoomRepositoryMethods(
         ${liveRoomSelectSql(sql)}
         join selected_room sr on sr.id = lr.id
         cross join (select count(*) from inserted_job) job_effect
+        cross join (select count(*) from inserted_session) session_effect
       `;
       const row = rows[0];
 
@@ -340,9 +365,19 @@ export function createLiveRoomRepositoryMethods(
             and lr.provider_stream_id is null
             and lr.provider_creation_claim_id = ${input.claimId}
           returning *
+        ),
+        updated_session as (
+          update live_safety_sessions session
+          set moderation_target_reference = ${input.providerRoom.moderationTargetReference},
+              next_check_at = now(),
+              updated_at = now()
+          from updated_room room
+          where session.room_id = room.id
+          returning session.id
         )
         ${liveRoomSelectSql(sql)}
         join updated_room ur on ur.id = lr.id
+        cross join (select count(*) from updated_session) session_effect
       `;
 
       return rows[0] ? toLiveRoom(rows[0]) : null;

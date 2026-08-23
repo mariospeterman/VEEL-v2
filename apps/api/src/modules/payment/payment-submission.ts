@@ -7,6 +7,10 @@ import { deliverPaidMessage } from "./payment-paid-message-settlement.js";
 import { recordPaymentDurableConfirmation } from "./payment-durable-confirmation.js";
 import { recordReferralCommission, recordSupportSettlementLedger } from "./payment-settlement-ledger.js";
 import { insertSettlementAttempt, recordWalletTransaction } from "./payment-settlement-records.js";
+import {
+  settleCreatorMediaOffer,
+  settleStructuredCreatorRequest
+} from "./payment-creator-commercial-settlement.js";
 
 export class PaymentSubmissionWriteConflictError extends Error {
   constructor() {
@@ -101,11 +105,17 @@ export async function recordPaymentSubmission(
     }
 
     if (input.settlement.confirmed && updatedIntent?.product_type === "content_unlock") {
-      await grantContentUnlockEntitlement(transaction, {
+      const mediaOffer = await settleCreatorMediaOffer(transaction, {
         userId: updatedIntent.user_id,
-        contentId: updatedIntent.target_id,
         paymentIntentId: updatedIntent.payment_intent_id
       });
+      if (mediaOffer.kind !== "remediation") {
+        await grantContentUnlockEntitlement(transaction, {
+          userId: updatedIntent.user_id,
+          contentId: mediaOffer.kind === "purchased" ? mediaOffer.contentItemId : updatedIntent.target_id,
+          paymentIntentId: updatedIntent.payment_intent_id
+        });
+      }
     }
 
     if (input.settlement.confirmed && updatedIntent?.product_type === "support") {
@@ -144,10 +154,16 @@ export async function recordPaymentSubmission(
     }
 
     if (input.settlement.confirmed && updatedIntent?.product_type === "paid_message") {
-      await deliverPaidMessage(transaction, {
+      const structuredRequestSettled = await settleStructuredCreatorRequest(transaction, {
         userId: updatedIntent.user_id,
         paymentIntentId: updatedIntent.payment_intent_id
       });
+      if (!structuredRequestSettled) {
+        await deliverPaidMessage(transaction, {
+          userId: updatedIntent.user_id,
+          paymentIntentId: updatedIntent.payment_intent_id
+        });
+      }
     }
 
     if (

@@ -240,6 +240,8 @@ export function SummaryMetrics({ summary }: { summary: ApiResult<AdminOpsSummary
       <Metric label="Managed creators" value={summary.data.managedCreatorCounts.total.toString()} />
       <Metric label="Managed allocations" value={summary.data.enterpriseAllocationCounts.confirmed.toString()} />
       <Metric label="Unlocks" value={summary.data.unlockCounts.total.toString()} />
+      <Metric label="Media offers" value={summary.data.creatorMediaOfferCounts.total.toString()} />
+      <Metric label="Creator requests" value={summary.data.structuredCreatorRequestCounts.total.toString()} />
     </div>
   );
 }

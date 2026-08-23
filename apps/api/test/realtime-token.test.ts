@@ -35,6 +35,7 @@ describe("canonical-session Realtime tokens", () => {
     expect(verified.payload.role).toBe("authenticated");
     expect(verified.payload.wevid_session).toBe(true);
     expect(Date.parse(issued.expiresAt)).toBeGreaterThan(Date.now());
+    expect(issued.accountTopic).toBe(`account:${userId}`);
     expect((verified.payload.exp ?? 0) - (verified.payload.iat ?? 0)).toBe(120);
   });
 
@@ -80,7 +81,7 @@ describe("canonical-session Realtime tokens", () => {
       realtimeTokenIssuer: {
         async issueToken(input) {
           seen.push(input.userId);
-          return { token: "signed-token", expiresAt: "2030-01-01T00:00:00.000Z" };
+          return { token: "signed-token", expiresAt: "2030-01-01T00:00:00.000Z", accountTopic: `account:${userId}` };
         }
       }
     });
@@ -94,7 +95,7 @@ describe("canonical-session Realtime tokens", () => {
       }
     });
     expect(response.statusCode).toBe(201);
-    expect(response.json()).toEqual({ token: "signed-token", expiresAt: "2030-01-01T00:00:00.000Z" });
+    expect(response.json()).toEqual({ token: "signed-token", expiresAt: "2030-01-01T00:00:00.000Z", accountTopic: `account:${userId}` });
     expect(seen).toEqual([userId]);
     await app.close();
   });
@@ -124,7 +125,7 @@ describe("canonical-session Realtime tokens", () => {
       realtimeTokenIssuer: {
         async issueToken() {
           issued = true;
-          return { token: "must-not-mint", expiresAt: "2030-01-01T00:00:00.000Z" };
+          return { token: "must-not-mint", expiresAt: "2030-01-01T00:00:00.000Z", accountTopic: `account:${userId}` };
         }
       }
     });

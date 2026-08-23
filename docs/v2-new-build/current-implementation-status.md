@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: implementation status, known gaps, and next hardening priorities
-Last updated: 2026-08-22
+Last updated: 2026-08-23
 Source of truth: yes
 
 Owns:
@@ -38,19 +38,31 @@ copied into this document. The machine-readable companion is `production-status.
 
 | Field | Current value |
 | --- | --- |
-| Latest merged baseline | `96f334cb999203cadae41a6c31dd99ea000e0c50` |
-| Latest merged slice | Convergence 03 — Analytics Core |
-| Latest merged migration | `packages/database/migrations/0110_analytics_core.sql` |
+| Latest merged baseline | `c517c3e401fdf3d2a14b000fdb1b87602645a7f5` |
+| Latest merged slice | Convergence 04 — Lifecycle correctness and analytics surfaces |
+| Latest merged migration | `packages/database/migrations/0111_auth_lifecycle_purpose.sql` |
 | Latest merged evidence | `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`, `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN` |
 | Known launch blockers | `STAGING_PROVEN`, `PROVIDER_APPROVED`, `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED` remain outstanding. |
-| Next planned slice | Convergence 04 — Lifecycle correctness, login/onboarding separation, and analytics surfaces |
+| Next planned slice | Convergence 05 — Realtime, messaging, and live safety |
 
-Next planned production slice: **Convergence 04 — Lifecycle correctness, login/onboarding separation, and analytics surfaces**.
+Next planned production slice: **Convergence 05 — Realtime, messaging, and live safety**.
 
 Readiness vocabulary is fixed to `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`,
 `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN`, `STAGING_PROVEN`, `PROVIDER_APPROVED`,
 `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED`. “Accepted” describes a
 design decision; it never means implemented, tested, approved, enabled, or launch-ready.
+
+Merged Convergence 04 now has one purpose-bound wallet challenge/session authority that keeps
+returning-user login lookup-only, makes unknown identities return `account_not_found` without
+identity writes, and permits provisional account or embedded-wallet creation only after explicit
+onboarding. Recovery remains lookup-only and email never authorizes a merge. The landing surface
+uses one `Continue to WeVid` entry, resumes the exact backend-owned lifecycle state, and records a
+PII-free, handoff-safe onboarding journey. Creator, viewer, Enterprise, and admin analytics surfaces
+consume the same authorized Analytics Core objects. Migration `0111` rollback/reapply, 530 tests,
+real-Postgres auth and analytics journeys, production build, desktop/mobile browser proof, and exact-
+main CI `32653173090`, database `32653173142`, and security `32653173064` are green. PR #89 merged
+as `c517c3e`. Real Privy, recovery, age, and shared staging acceptance remains fail closed behind the
+recorded provider and release gates.
 
 Merged Convergence 03 now has one versioned registry of roughly 50 metrics over typed canonical
 facts and nine daily projection families, one authorized query service for creator, organization,

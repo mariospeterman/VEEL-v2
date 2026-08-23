@@ -71,7 +71,7 @@ const invalidReservationSolanaSignature = deterministicBase58Signature(151);
 const validSubscriptionAuthorizationSignature = deterministicBase58Signature(149);
 
 describeIntegration("authenticated API happy path against Postgres", () => {
-  it("links wallet, verifies age, creates content, unlocks content, buys Event Access, sends a paid message, buys paid live event access, and verifies subscriptions", async () => {
+  it("links wallet, verifies age, creates content, unlocks content, buys Event Access, funds a structured creator request, buys paid live event access, and verifies subscriptions", async () => {
     const databaseUrl = integrationDatabaseUrl();
     assertIntegrationDatabaseIsAllowed(databaseUrl);
 
@@ -3821,163 +3821,139 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       `;
       expect(normalMessageRows[0]?.message_count).toBe("1");
 
-      const paidMessageBody = `Paid integration hello ${shortRunId}`;
-      const paidMessageIntentResponse = await app.inject({
+      const creatorRequestResponse = await app.inject({
         method: "POST",
-        url: `/v1/messages/conversations/${seededConversationId}/paid-message-intents`,
-        headers: authenticatedHeaders(`paid-message-${runId}`),
+        url: `/v1/messages/conversations/${seededConversationId}/creator-requests`,
+        headers: authenticatedHeaders(`creator-request-${runId}`),
         payload: {
-          body: paidMessageBody
-        }
-      });
-
-      expect(paidMessageIntentResponse.statusCode, paidMessageIntentResponse.body).toBe(201);
-      expect(paidMessageIntentResponse.json()).toMatchObject({
-        state: "payment_required",
-        conversationId: seededConversationId,
-        paymentIntent: {
-          productType: "paid_message",
-          targetId: seededConversationId,
-          amountMinor: 10000000,
+          creatorUserId: seededCreatorUserId,
+          deliverable: `One edited integration video ${shortRunId}`,
+          permittedCategory: "video",
+          proposedAmountMinor: 10000000,
           currency: "SOL",
-          state: "pending"
+          expectedDeliveryDays: 14,
+          clarificationRule: "One written clarification before acceptance.",
+          cancellationRule: "Cancellation before payment; remediation after verified settlement.",
+          expiresAt: new Date(Date.now() + 86_400_000).toISOString()
         }
       });
-      const paidMessageIntent = paidMessageIntentResponse.json<{
-        paymentIntent: {
-          id: string;
-          amountMinor: number;
-        };
-      }>();
+      expect(creatorRequestResponse.statusCode, creatorRequestResponse.body).toBe(201);
+      const creatorRequest = creatorRequestResponse.json<{ id: string }>();
 
-      await acceptImmediateCheckout(paidMessageIntent.paymentIntent.id, "paid-message");
+      const acceptCreatorRequestResponse = await app.inject({
+        method: "PATCH",
+        url: `/v1/messages/conversations/${seededConversationId}/creator-requests/${creatorRequest.id}`,
+        headers: creatorAuthenticatedHeaders(`creator-request-accept-${runId}`),
+        payload: { action: "accept", agreedAmountMinor: 10000000 }
+      });
+      expect(acceptCreatorRequestResponse.statusCode, acceptCreatorRequestResponse.body).toBe(200);
+      expect(acceptCreatorRequestResponse.json()).toMatchObject({ id: creatorRequest.id, state: "accepted" });
 
-      const paidMessageSubmissionResponse = await app.inject({
+      const creatorRequestIntentResponse = await app.inject({
         method: "POST",
-        url: `/v1/payments/intents/${paidMessageIntent.paymentIntent.id}/submissions`,
-        headers: authenticatedHeaders(`paid-message-submission-${runId}`),
-        payload: {
-          signature: validPaidMessageSolanaSignature
-        }
+        url: `/v1/messages/conversations/${seededConversationId}/creator-requests/${creatorRequest.id}/payment-intents`,
+        headers: authenticatedHeaders(`creator-request-payment-${runId}`),
+        payload: {}
+      });
+      expect(creatorRequestIntentResponse.statusCode, creatorRequestIntentResponse.body).toBe(201);
+      const creatorRequestIntent = creatorRequestIntentResponse.json<{ id: string; amountMinor: number }>();
+      expect(creatorRequestIntentResponse.json()).toMatchObject({
+        productType: "paid_message",
+        amountMinor: 10000000,
+        currency: "SOL",
+        state: "pending"
       });
 
-      expect(paidMessageSubmissionResponse.statusCode, paidMessageSubmissionResponse.body).toBe(202);
-      const confirmedPaidMessageIntentResponse = await app.inject({
+      await acceptImmediateCheckout(creatorRequestIntent.id, "creator-request");
+      const creatorRequestSubmissionResponse = await app.inject({
+        method: "POST",
+        url: `/v1/payments/intents/${creatorRequestIntent.id}/submissions`,
+        headers: authenticatedHeaders(`creator-request-submission-${runId}`),
+        payload: { signature: validPaidMessageSolanaSignature }
+      });
+      expect(creatorRequestSubmissionResponse.statusCode, creatorRequestSubmissionResponse.body).toBe(202);
+
+      const confirmedCreatorRequestIntentResponse = await app.inject({
         method: "GET",
-        url: `/v1/payments/intents/${paidMessageIntent.paymentIntent.id}`,
-        headers: authenticatedHeaders(`paid-message-intent-${runId}`)
+        url: `/v1/payments/intents/${creatorRequestIntent.id}`,
+        headers: authenticatedHeaders(`creator-request-intent-${runId}`)
       });
-
-      expect(confirmedPaidMessageIntentResponse.statusCode, confirmedPaidMessageIntentResponse.body).toBe(200);
-      expect(confirmedPaidMessageIntentResponse.json()).toMatchObject({
-        id: paidMessageIntent.paymentIntent.id,
+      expect(confirmedCreatorRequestIntentResponse.statusCode, confirmedCreatorRequestIntentResponse.body).toBe(200);
+      expect(confirmedCreatorRequestIntentResponse.json()).toMatchObject({
+        id: creatorRequestIntent.id,
         state: "confirmed",
         productType: "paid_message"
       });
       expect(settlementInputs).toHaveLength(3);
-      expect(settlementInputs[2]).toEqual(
-        expect.objectContaining({
-          signature: validPaidMessageSolanaSignature,
-          treasuryWallet,
-          totalAmountMinor: paidMessageIntent.paymentIntent.amountMinor
-        })
-      );
-      expect(settlementInputs[2]?.referenceAddress).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
+      expect(settlementInputs[2]).toEqual(expect.objectContaining({
+        signature: validPaidMessageSolanaSignature,
+        treasuryWallet,
+        totalAmountMinor: creatorRequestIntent.amountMinor
+      }));
 
-      const paidMessagesResponse = await app.inject({
-        method: "GET",
-        url: `/v1/messages/conversations/${seededConversationId}/messages`,
-        headers: authenticatedHeaders(`paid-message-list-${runId}`)
-      });
-
-      expect(paidMessagesResponse.statusCode, paidMessagesResponse.body).toBe(200);
-      expect(paidMessagesResponse.json()).toMatchObject({
-        items: [
-          {
-            conversationId: seededConversationId,
-            body: normalMessageBody,
-            deliveryState: "visible",
-            paymentIntentId: null
-          },
-          {
-            conversationId: seededConversationId,
-            body: paidMessageBody,
-            deliveryState: "visible",
-            paymentIntentId: paidMessageIntent.paymentIntent.id
-          }
-        ]
-      });
-
-      const paidMessageRows = await sql<{
+      const commercialMessageRows = await sql<{
+        request_state: string;
         payment_intent_count: string;
         wallet_transaction_count: string;
         settlement_attempt_count: string;
-        delivery_request_count: string;
-        message_count: string;
+        paid_message_count: string;
+        legacy_delivery_count: string;
         audit_event_count: string;
       }[]>`
         select
-          (
-            select count(*)
-            from payment_intents pi
-            join users u on u.id = pi.user_id
-            where u.supabase_user_id = ${buyerSupabaseUserId}
-              and pi.id = ${paidMessageIntent.paymentIntent.id}
-              and pi.target_id = ${seededConversationId}
-              and pi.product_type = 'paid_message'
-              and pi.state = 'confirmed'
-          ) as payment_intent_count,
-          (
-            select count(*)
-            from wallet_transaction_records wtr
-            join users u on u.id = wtr.user_id
-            where u.supabase_user_id = ${buyerSupabaseUserId}
-              and wtr.payment_intent_id = ${paidMessageIntent.paymentIntent.id}
-              and wtr.state = 'confirmed'
-          ) as wallet_transaction_count,
-          (
-            select count(*)
-            from payment_settlement_attempts psa
-            where psa.payment_intent_id = ${paidMessageIntent.paymentIntent.id}
-              and psa.state = 'confirmed'
-          ) as settlement_attempt_count,
-          (
-            select count(*)
-            from paid_message_delivery_requests pmdr
-            join users u on u.id = pmdr.sender_user_id
-            where u.supabase_user_id = ${buyerSupabaseUserId}
-              and pmdr.payment_intent_id = ${paidMessageIntent.paymentIntent.id}
-              and pmdr.conversation_id = ${seededConversationId}
-              and pmdr.state = 'delivered'
-              and pmdr.delivered_at is not null
-          ) as delivery_request_count,
-          (
-            select count(*)
-            from messages m
-            join users u on u.id = m.sender_user_id
-            where u.supabase_user_id = ${buyerSupabaseUserId}
-              and m.payment_intent_id = ${paidMessageIntent.paymentIntent.id}
-              and m.conversation_id = ${seededConversationId}
-              and m.delivery_state = 'visible'
-              and m.body = ${paidMessageBody}
-          ) as message_count,
-          (
-            select count(*)
-            from audit_events ae
-            join messages m on m.id = ae.subject_id
-            where m.payment_intent_id = ${paidMessageIntent.paymentIntent.id}
-              and ae.action = 'paid_message_delivered'
-          ) as audit_event_count
+          request.state as request_state,
+          (select count(*) from payment_intents where id = ${creatorRequestIntent.id} and target_id = request.id and state = 'confirmed')::text as payment_intent_count,
+          (select count(*) from wallet_transaction_records where payment_intent_id = ${creatorRequestIntent.id} and state = 'confirmed')::text as wallet_transaction_count,
+          (select count(*) from payment_settlement_attempts where payment_intent_id = ${creatorRequestIntent.id} and state = 'confirmed')::text as settlement_attempt_count,
+          (select count(*) from messages where payment_intent_id = ${creatorRequestIntent.id})::text as paid_message_count,
+          (select count(*) from paid_message_delivery_requests where payment_intent_id = ${creatorRequestIntent.id})::text as legacy_delivery_count,
+          (select count(*) from audit_events where subject_type = 'structured_creator_request' and subject_id = request.id and action = 'creator_request.activated_after_settlement')::text as audit_event_count
+        from structured_creator_requests request
+        where request.id = ${creatorRequest.id}
       `;
-
-      expect(paidMessageRows[0]).toEqual({
+      expect(commercialMessageRows[0]).toEqual({
+        request_state: "active",
         payment_intent_count: "1",
         wallet_transaction_count: "1",
         settlement_attempt_count: "1",
-        delivery_request_count: "1",
-        message_count: "1",
+        paid_message_count: "0",
+        legacy_delivery_count: "0",
         audit_event_count: "1"
       });
+      const remediationRequestResponse = await app.inject({
+        method: "POST",
+        url: `/v1/messages/conversations/${seededConversationId}/creator-requests`,
+        headers: authenticatedHeaders(`creator-request-remediation-${runId}`),
+        payload: {
+          creatorUserId: seededCreatorUserId,
+          deliverable: `A second edited integration video ${shortRunId}`,
+          permittedCategory: "video",
+          proposedAmountMinor: 10000000,
+          currency: "SOL",
+          expectedDeliveryDays: 14,
+          clarificationRule: "One written clarification before acceptance.",
+          cancellationRule: "Cancellation before payment; remediation after verified settlement.",
+          expiresAt: new Date(Date.now() + 86_400_000).toISOString()
+        }
+      });
+      expect(remediationRequestResponse.statusCode, remediationRequestResponse.body).toBe(201);
+      const remediationRequest = remediationRequestResponse.json<{ id: string }>();
+      const acceptRemediationRequestResponse = await app.inject({
+        method: "PATCH",
+        url: `/v1/messages/conversations/${seededConversationId}/creator-requests/${remediationRequest.id}`,
+        headers: creatorAuthenticatedHeaders(`creator-request-remediation-accept-${runId}`),
+        payload: { action: "accept", agreedAmountMinor: 10000000 }
+      });
+      expect(acceptRemediationRequestResponse.statusCode, acceptRemediationRequestResponse.body).toBe(200);
+      const creatorRequestRemediationIntentResponse = await app.inject({
+        method: "POST",
+        url: `/v1/messages/conversations/${seededConversationId}/creator-requests/${remediationRequest.id}/payment-intents`,
+        headers: authenticatedHeaders(`creator-request-remediation-payment-${runId}`),
+        payload: {}
+      });
+      expect(creatorRequestRemediationIntentResponse.statusCode, creatorRequestRemediationIntentResponse.body).toBe(201);
+      const creatorRequestRemediationIntent = creatorRequestRemediationIntentResponse.json<{ id: string }>();
+      await acceptImmediateCheckout(creatorRequestRemediationIntent.id, "creator-request-remediation");
 
       await sql`
         insert into direct_message_requests (
@@ -4004,15 +3980,6 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         canSend: true
       });
 
-      const declinedPaidIntentResponse = await app.inject({
-        method: "POST",
-        url: `/v1/messages/conversations/${seededConversationId}/paid-message-intents`,
-        headers: authenticatedHeaders(`paid-message-decline-${runId}`),
-        payload: { body: `Must not deliver after decline ${shortRunId}` }
-      });
-      expect(declinedPaidIntentResponse.statusCode, declinedPaidIntentResponse.body).toBe(201);
-      const declinedPaidIntent = declinedPaidIntentResponse.json<{ paymentIntent: { id: string } }>();
-
       const declineBeforeSettlementResponse = await app.inject({
         method: "PATCH",
         url: `/v1/messages/conversations/${seededConversationId}/request`,
@@ -4021,42 +3988,43 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       });
       expect(declineBeforeSettlementResponse.statusCode, declineBeforeSettlementResponse.body).toBe(200);
 
-      await acceptImmediateCheckout(declinedPaidIntent.paymentIntent.id, "declined-paid-message");
-
-      const declinedPaidSubmissionResponse = await app.inject({
+      const creatorRequestRemediationSubmissionResponse = await app.inject({
         method: "POST",
-        url: `/v1/payments/intents/${declinedPaidIntent.paymentIntent.id}/submissions`,
-        headers: authenticatedHeaders(`paid-message-decline-submission-${runId}`),
+        url: `/v1/payments/intents/${creatorRequestRemediationIntent.id}/submissions`,
+        headers: authenticatedHeaders(`creator-request-remediation-submission-${runId}`),
         payload: { signature: validDeclinedPaidMessageSolanaSignature }
       });
-      expect(declinedPaidSubmissionResponse.statusCode, declinedPaidSubmissionResponse.body).toBe(202);
-      const declinedDeliveryRows = await sql<{
-        delivery_state: string;
+      expect(creatorRequestRemediationSubmissionResponse.statusCode, creatorRequestRemediationSubmissionResponse.body).toBe(202);
+      const creatorRequestRemediationRows = await sql<{
+        request_state: string;
         message_count: string;
-        recipient_notification_count: string;
-        remediation_count: string;
+        legacy_delivery_count: string;
+        creator_notification_count: string;
+        requester_remediation_count: string;
       }[]>`
         select
-          request.state as delivery_state,
+          request.state as request_state,
           (select count(*) from messages where payment_intent_id = request.payment_intent_id)::text as message_count,
+          (select count(*) from paid_message_delivery_requests where payment_intent_id = request.payment_intent_id)::text as legacy_delivery_count,
           (
             select count(*) from notifications
-            where user_id = request.recipient_user_id
-              and related_resource_id = request.payment_intent_id
-          )::text as recipient_notification_count,
+            where user_id = request.creator_user_id
+              and related_resource_id = request.id
+          )::text as creator_notification_count,
           (
             select count(*) from notifications
-            where user_id = request.sender_user_id
-              and idempotency_key = 'paid-message-remediation:' || request.payment_intent_id
-          )::text as remediation_count
-        from paid_message_delivery_requests request
-        where request.payment_intent_id = ${declinedPaidIntent.paymentIntent.id}
+            where user_id = request.requester_user_id
+              and idempotency_key = 'creator-request-remediation:' || request.id
+          )::text as requester_remediation_count
+        from structured_creator_requests request
+        where request.id = ${remediationRequest.id}
       `;
-      expect(declinedDeliveryRows[0]).toEqual({
-        delivery_state: "cancelled",
+      expect(creatorRequestRemediationRows[0]).toEqual({
+        request_state: "remediation",
         message_count: "0",
-        recipient_notification_count: "0",
-        remediation_count: "1"
+        legacy_delivery_count: "0",
+        creator_notification_count: "0",
+        requester_remediation_count: "1"
       });
 
       await sql`
@@ -4075,7 +4043,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       );
       expect(concurrentRequestMessages.map((response) => response.statusCode).sort()).toEqual([
         201,
-        201,
+        409,
         409
       ]);
       const requestCeilingRows = await sql<{
@@ -4093,8 +4061,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         group by request.requester_message_count
       `;
       expect(requestCeilingRows[0]).toEqual({
-        message_count: "2",
-        requester_message_count: 2
+        message_count: "1",
+        requester_message_count: 1
       });
 
       await sql`
@@ -6152,14 +6120,51 @@ async function seedCreatorLiveRoom(
     values (
       ${input.liveRoomId},
       'none',
-      'approved',
+      'quarantined',
       'automated',
-      'creator_sfw_attestation',
+      'live_monitoring_pending',
       'sfw-live-v1',
-      true,
+      false,
       ${sql.json({ attestation: "this_live_stream_is_sfw" })},
-      now()
+      null
     )
+  `;
+  await sql`
+    insert into live_safety_sessions (
+      room_id,
+      media_safety_case_id,
+      moderation_target_reference,
+      state,
+      acknowledgement_event_id,
+      acknowledged_at,
+      last_heartbeat_at,
+      heartbeat_expires_at,
+      next_check_at
+    )
+    select
+      ${input.liveRoomId},
+      safety.id,
+      ${`moderation-target-${input.shortRunId}`},
+      'monitoring',
+      ${`target-connected-${input.shortRunId}`},
+      now(),
+      now(),
+      now() + interval '5 minutes',
+      now() + interval '1 minute'
+    from media_safety_cases safety
+    where safety.live_room_id = ${input.liveRoomId}
+      and safety.state <> 'superseded'
+  `;
+  await sql`
+    update media_safety_cases
+    set
+      state = 'approved',
+      reason_code = 'live_monitoring_healthy',
+      provider_release_allowed = true,
+      decided_at = now(),
+      updated_at = now()
+    where live_room_id = ${input.liveRoomId}
+      and state <> 'superseded'
   `;
 }
 

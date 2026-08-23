@@ -42,6 +42,8 @@ export function createAccessRepository(
         organizationRows,
         managedCreatorRows,
         enterpriseAllocationRows,
+        creatorMediaOfferRows,
+        structuredCreatorRequestRows,
         reportRows,
         workerQueueRows
       ] = await Promise.all([
@@ -116,6 +118,22 @@ export function createAccessRepository(
             count(*) filter (where state in ('failed', 'reversed')) as failed
           from managed_creator_allocation_records
         `,
+        sql<CountRow[]>`
+          select count(*) as total,
+            count(*) filter (where state = 'offered') as pending,
+            count(*) filter (where state = 'accepted') as submitted,
+            count(*) filter (where state = 'purchased') as confirmed,
+            count(*) filter (where state in ('declined', 'withdrawn', 'expired', 'remediation')) as failed
+          from creator_media_offers
+        `,
+        sql<CountRow[]>`
+          select count(*) as total,
+            count(*) filter (where state in ('proposed', 'terms_proposed')) as pending,
+            count(*) filter (where state in ('accepted', 'payment_pending')) as submitted,
+            count(*) filter (where state in ('active', 'delivered', 'completed')) as confirmed,
+            count(*) filter (where state in ('declined', 'remediation', 'cancelled', 'expired')) as failed
+          from structured_creator_requests
+        `,
         sql<{ open_reports: string | number }[]>`
           select 0 as open_reports
         `,
@@ -175,6 +193,15 @@ export function createAccessRepository(
             count(*) filter (where state = 'dead_letter') as dead_letter_count,
             min(next_attempt_at) filter (where state in ('queued', 'retry')) as oldest_pending_at
           from analytics_projection_jobs
+          union all
+          select
+            'live_safety'::text as name,
+            count(*) filter (where state in ('queued', 'retry')) as pending_count,
+            count(*) filter (where state = 'processing') as processing_count,
+            count(*) filter (where state = 'retry') as failed_count,
+            count(*) filter (where state = 'dead_letter') as dead_letter_count,
+            min(next_attempt_at) filter (where state in ('queued', 'retry')) as oldest_pending_at
+          from live_safety_provider_actions
         `
       ]);
 
@@ -197,6 +224,8 @@ export function createAccessRepository(
         organizationCounts: toCounts(organizationRows[0]),
         managedCreatorCounts: toCounts(managedCreatorRows[0]),
         enterpriseAllocationCounts: toCounts(enterpriseAllocationRows[0]),
+        creatorMediaOfferCounts: toCounts(creatorMediaOfferRows[0]),
+        structuredCreatorRequestCounts: toCounts(structuredCreatorRequestRows[0]),
         subscriptionProviderReadiness: subscriptionProvider?.launch_approved
           ? "launch_approved"
           : subscriptionProvider?.staging_required
@@ -339,6 +368,8 @@ export function createAccessRepository(
           return run("media_moderation_jobs", "queued");
         case "analytics_projections":
           return run("analytics_projection_jobs", "queued", "text", "last_error_code");
+        case "live_safety":
+          return run("live_safety_provider_actions", "queued", "text", "last_failure_code");
       }
     },
     async listUsers(input) {

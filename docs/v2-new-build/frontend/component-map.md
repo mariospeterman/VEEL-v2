@@ -69,7 +69,7 @@ This document describes current v2 route and component ownership.
 ### `app/app/messages/page.tsx`
 
 - conversation, inbox, and activity shell
-- paid-message handoff where backend projects it
+- media-offer and creator-accepted request handoff where the backend projects it
 
 ### `app/app/profile/page.tsx`
 

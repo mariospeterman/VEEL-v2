@@ -44,12 +44,16 @@ export async function recordPaymentDurableConfirmation(
         case
           when pi.product_type in ('tip', 'support', 'creator_subscription') then pi.target_id
           when pi.product_type = 'content_unlock' then (
-            select ci.creator_user_id from content_items ci where ci.id = pi.target_id
+            select coalesce(
+              (select offer.creator_user_id from creator_media_offers offer where offer.id = pi.target_id),
+              (select ci.creator_user_id from content_items ci where ci.id = pi.target_id)
+            )
           )
           when pi.product_type = 'paid_message' then (
-            select pmdr.recipient_user_id
-            from paid_message_delivery_requests pmdr
-            where pmdr.payment_intent_id = pi.id
+            select coalesce(
+              (select request.creator_user_id from structured_creator_requests request where request.payment_intent_id = pi.id),
+              (select pmdr.recipient_user_id from paid_message_delivery_requests pmdr where pmdr.payment_intent_id = pi.id)
+            )
           )
           when pi.product_type = 'live_pass' then (
             select lr.creator_user_id
@@ -367,7 +371,7 @@ function descriptionForProduct(productType: StoredPaymentIntent["productType"]):
     case "content_unlock":
       return "Digital content access";
     case "paid_message":
-      return "Paid message delivery";
+      return "Creator commercial interaction";
     case "live_pass":
       return "Live pass access";
     case "event_access_pass":

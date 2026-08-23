@@ -36,6 +36,7 @@ export async function listConversations(
         else null
       end as request_role,
       request.requester_message_count,
+      own_member.muted_at,
       exists (
         select 1 from blocks b
         where (b.blocker_user_id = own_member.user_id and b.blocked_user_id = other_member.user_id)
@@ -105,6 +106,7 @@ export async function readConversationByUserId(
         else null
       end as request_role,
       request.requester_message_count,
+      own_member.muted_at,
       exists (
         select 1 from blocks b
         where (b.blocker_user_id = own_member.user_id and b.blocked_user_id = other_member.user_id)
@@ -148,14 +150,14 @@ export async function readConversationByUserId(
 }
 
 export async function listMessages(sql: postgres.Sql, input: ConversationInput) {
-  const participant = await isParticipant(sql, input.supabaseUserId, input.conversationId);
+  const participantId = await findParticipantId(sql, input.supabaseUserId, input.conversationId);
 
-  if (!participant) {
+  if (!participantId) {
     return null;
   }
 
   const rows = await sql<MessageRow[]>`
-    ${messageSelectSql(sql)}
+    ${messageSelectSql(sql, participantId)}
     where m.conversation_id = ${input.conversationId}
       and m.delivery_state = 'visible'
     order by m.created_at desc
@@ -167,13 +169,13 @@ export async function listMessages(sql: postgres.Sql, input: ConversationInput) 
   };
 }
 
-async function isParticipant(
+async function findParticipantId(
   sql: postgres.Sql,
   supabaseUserId: string,
   conversationId: string
-): Promise<boolean> {
-  const rows = await sql<{ ok: boolean }[]>`
-    select true as ok
+): Promise<string | null> {
+  const rows = await sql<{ user_id: string }[]>`
+    select cm.user_id
     from conversation_members cm
     join users u on u.id = cm.user_id
     where u.supabase_user_id = ${supabaseUserId}
@@ -181,5 +183,5 @@ async function isParticipant(
     limit 1
   `;
 
-  return Boolean(rows[0]?.ok);
+  return rows[0]?.user_id ?? null;
 }

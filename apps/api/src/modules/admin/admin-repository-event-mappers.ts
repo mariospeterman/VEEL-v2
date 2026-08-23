@@ -69,6 +69,11 @@ export interface LiveRoomRow {
   replay_window_hours: number;
   has_playback_url: boolean;
   has_host_stream_key: boolean;
+  monitoring_state: AdminLiveRoom["monitoringState"];
+  monitoring_healthy: boolean;
+  monitoring_heartbeat_expires_at: Date | null;
+  monitoring_hold_reason_code: string | null;
+  pending_provider_action: boolean;
   starts_at: Date | null;
   ended_at: Date | null;
   created_at: Date;
@@ -168,6 +173,11 @@ export function toLiveRoom(row: LiveRoomRow): AdminLiveRoom {
     replayWindowHours: row.replay_window_hours,
     hasPlaybackUrl: row.has_playback_url,
     hasHostStreamKey: row.has_host_stream_key,
+    monitoringState: row.monitoring_state,
+    monitoringHealthy: row.monitoring_healthy,
+    monitoringHeartbeatExpiresAt: row.monitoring_heartbeat_expires_at?.toISOString() ?? null,
+    monitoringHoldReasonCode: row.monitoring_hold_reason_code,
+    pendingProviderAction: row.pending_provider_action,
     startsAt: row.starts_at?.toISOString() ?? null,
     endedAt: row.ended_at?.toISOString() ?? null,
     createdAt: row.created_at.toISOString(),

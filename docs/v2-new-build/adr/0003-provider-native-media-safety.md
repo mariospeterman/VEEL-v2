@@ -66,7 +66,7 @@ Livepeer remains the live/replay provider. Official APIs support multistream tar
 
 `LIVEPEER_ADULT_LIVE_ENABLED=false` remains the default. A thumbnail is only a fallback signal, not continuous moderation.
 
-Launch 07 implements the candidate boundary without promoting it: every room carries the exact `this_live_stream_is_sfw` declaration, creates a canonical live safety case and continuous-monitoring job, configures the official source-profile moderation multistream target at stream creation, and blocks production provider configuration unless the complete Livepeer capability tuple exists and media moderation is `launch_approved`. Staff suspension changes canonical room and safety state before the provider request. Resume releases locally only after provider confirmation. Adult live remains disabled regardless of credentials.
+Convergence 05 strengthens the candidate boundary without promoting it: every room carries the exact `this_live_stream_is_sfw` declaration but begins `monitoring_pending` and locally quarantined. Stream creation binds the configured source-profile moderation multistream target. Viewer playback and chat release only after the signed `multistream.connected` acknowledgement for that exact target and a fresh signed stream heartbeat converge with the canonical room. Disconnect, error, inconsistent target identity, or heartbeat expiry denies local delivery first and then enters a durable worker suspension queue. Provider failure never reopens local delivery. Staff resume also returns to monitoring-pending instead of fabricating approval. Adult live remains disabled regardless of credentials.
 
 Recorded replays are a new quarantined content revision, not permission to reuse the live playback projection. `recording.ready` creates a private replay, separate provider asset, safety case, and moderation job; playback is issued only after provider readiness plus canonical approval and publication.
 
@@ -92,6 +92,8 @@ No candidate row can be treated as production protection.
 
 ## Official Documentation Checked
 
+Livepeer behavior was rechecked on 2026-08-23 before the Convergence 05 adapter and webhook changes.
+
 - Bunny Shield upload scanning: https://docs.bunny.net/shield/upload-scanning
 - Bunny Shield upload-scanning configuration API: https://docs.bunny.net/reference/get_shield-shield-zone-shieldzoneid-upload-scanning
 - Bunny Shield event logs: https://docs.bunny.net/api-reference/shield/eventlogs/get-shieldevent-logs-
@@ -104,6 +106,7 @@ No candidate row can be treated as production protection.
 - Livepeer terminate stream: https://docs.livepeer.org/api-reference/stream/terminate
 - Livepeer create stream/JWT/multistream fields: https://docs.livepeer.org/api-reference/stream/create
 - Livepeer webhook signatures: https://docs.livepeer.org/developers/guides/setup-and-listen-to-webhooks
+- Livepeer webhook event configuration: https://docs.livepeer.org/v2/solutions/livepeer-studio/docs/api-reference/webhooks/update
 - Livepeer OBS ingest: https://docs.livepeer.org/developers/guides/stream-via-obs
 - Livepeer live thumbnails: https://docs.livepeer.org/developers/guides/thumbnails-live
 

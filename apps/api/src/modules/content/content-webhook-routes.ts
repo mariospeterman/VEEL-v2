@@ -45,10 +45,11 @@ export async function registerContentWebhookRoutes(
           env: app.config
         });
 
-        if (normalized.provider === "livepeer" && normalized.livepeerStream) {
+        if (normalized.provider === "livepeer") {
           if (
             !options.liveRepository?.recordLiveProviderWebhook ||
-            !options.liveRepository.updateRoomFromWebhook
+            (normalized.livepeerStream && !options.liveRepository.updateRoomFromWebhook) ||
+            (normalized.livepeerSafety && !options.liveRepository.recordLiveSafetyEvent)
           ) {
             return reply.code(503).send({
               code: "service_unavailable",
@@ -62,16 +63,17 @@ export async function registerContentWebhookRoutes(
             normalizedState: normalized.providerState,
             signatureHash: normalized.signatureHash,
             replayPayload: {
-              kind: "livepeer_stream",
-              providerStreamId: normalized.livepeerStream.providerStreamId,
-              providerPlaybackId: normalized.livepeerStream.providerPlaybackId,
+              kind: normalized.livepeerStream ? "livepeer_stream" : "livepeer_safety",
+              providerStreamId: normalized.livepeerStream?.providerStreamId ?? normalized.livepeerSafety?.providerStreamId ?? "",
+              providerPlaybackId: normalized.livepeerStream?.providerPlaybackId ?? null,
               providerState: normalized.providerState,
-              roomState: normalized.livepeerStream.roomState,
-              playbackUrl: normalized.livepeerStream.playbackUrl
+              roomState: normalized.livepeerStream?.roomState ?? null,
+              playbackUrl: normalized.livepeerStream?.playbackUrl ?? null,
+              safetyEventKind: normalized.livepeerSafety?.eventKind ?? null
             }
           });
 
-          if (!isNewLiveEvent) {
+          if (!isNewLiveEvent && !normalized.livepeerSafety) {
             return reply.code(202).send({
               provider: normalized.provider,
               received: 1,
@@ -79,14 +81,30 @@ export async function registerContentWebhookRoutes(
             });
           }
 
-          const appliedLiveEvent = await options.liveRepository.updateRoomFromWebhook({
-            providerEventId: normalized.providerEventId,
-            providerStreamId: normalized.livepeerStream.providerStreamId,
-            providerPlaybackId: normalized.livepeerStream.providerPlaybackId,
-            providerState: normalized.providerState,
-            state: normalized.livepeerStream.roomState,
-            playbackUrl: normalized.livepeerStream.playbackUrl
-          });
+          let appliedLiveEvent = false;
+          if (isNewLiveEvent && normalized.livepeerStream && options.liveRepository.updateRoomFromWebhook) {
+            appliedLiveEvent = await options.liveRepository.updateRoomFromWebhook({
+              providerEventId: normalized.providerEventId,
+              providerStreamId: normalized.livepeerStream.providerStreamId,
+              providerPlaybackId: normalized.livepeerStream.providerPlaybackId,
+              providerState: normalized.providerState,
+              state: normalized.livepeerStream.roomState,
+              playbackUrl: normalized.livepeerStream.playbackUrl
+            });
+          }
+          if (normalized.livepeerSafety && options.liveRepository.recordLiveSafetyEvent) {
+            appliedLiveEvent = await options.liveRepository.recordLiveSafetyEvent({
+              provider: "livepeer",
+              providerEventId: normalized.providerEventId,
+              providerStreamId: normalized.livepeerSafety.providerStreamId,
+              eventKind: normalized.livepeerSafety.eventKind,
+              normalizedSignal: normalized.livepeerSafety.normalizedSignal,
+              payloadHash: normalized.payloadHash ?? "",
+              signatureHash: normalized.signatureHash,
+              observedAt: normalized.livepeerSafety.observedAt,
+              moderationTargetReference: normalized.livepeerSafety.moderationTargetReference
+            }) || appliedLiveEvent;
+          }
 
           return reply.code(202).send({
             provider: normalized.provider,

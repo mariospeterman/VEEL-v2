@@ -210,6 +210,13 @@ export function createLiveControlRepositoryMethods(
                 reviewed_by_user_id = ${actor.id}, updated_at = now()
             where live_room_id = ${room.id} and state <> 'superseded'
           `;
+          await transaction`
+            update live_safety_sessions
+            set state = 'held', hold_reason_code = 'live_staff_suspended',
+                held_at = coalesce(held_at, now()), last_heartbeat_at = null,
+                heartbeat_expires_at = null, updated_at = now()
+            where room_id = ${room.id}
+          `;
         }
 
         return { ...toReservation(control), providerStreamId: room.provider_stream_id };
@@ -247,10 +254,17 @@ export function createLiveControlRepositoryMethods(
         if (control.action === "staff_resumed") {
           await transaction`
             update media_safety_cases
-            set state = 'approved', decision_source = 'staff', reason_code = 'live_staff_resumed',
-                provider_release_allowed = true, reviewed_by_user_id = ${control.actor_user_id},
-                decided_at = now(), updated_at = now()
+            set state = 'quarantined', decision_source = 'staff', reason_code = 'live_monitoring_reconnect_required',
+                provider_release_allowed = false, reviewed_by_user_id = ${control.actor_user_id},
+                decided_at = null, updated_at = now()
             where live_room_id = ${control.room_id} and state <> 'superseded'
+          `;
+          await transaction`
+            update live_safety_sessions
+            set state = 'monitoring_pending', acknowledgement_event_id = null,
+                acknowledged_at = null, last_heartbeat_at = null, heartbeat_expires_at = null,
+                hold_reason_code = null, held_at = null, next_check_at = now(), updated_at = now()
+            where room_id = ${control.room_id}
           `;
         }
 

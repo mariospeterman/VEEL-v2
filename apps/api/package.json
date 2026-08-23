@@ -18,6 +18,11 @@
       "types": "./src/media-upload-provider.ts",
       "development": "./src/media-upload-provider.ts",
       "default": "./dist/media-upload-provider.js"
+    },
+    "./live-provider": {
+      "types": "./src/live-provider.ts",
+      "development": "./src/live-provider.ts",
+      "default": "./dist/live-provider.js"
     }
   },
   "scripts": {

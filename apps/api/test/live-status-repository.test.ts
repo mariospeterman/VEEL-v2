@@ -3,6 +3,159 @@ import { createLiveStatusRepositoryMethods } from "../src/modules/live/live-stat
 import type { PostgresSql, PostgresTransaction } from "../src/shared/postgres";
 
 describe("live status repository", () => {
+  it("fails closed when Livepeer acknowledges a different moderation target", async () => {
+    const queries: string[] = [];
+    const values: unknown[] = [];
+    const transaction = vi.fn((strings: TemplateStringsArray, ...queryValues: unknown[]) => {
+      const query = strings.join("?");
+      queries.push(query);
+      values.push(...queryValues);
+      if (query.includes("from live_rooms room") && query.includes("expected_target")) {
+        return Promise.resolve([{
+          room_id: "room-1",
+          room_state: "live",
+          session_id: "session-1",
+          expected_target: "rtmp://moderation/expected",
+          acknowledged_at: null
+        }]);
+      }
+      if (query.includes("insert into live_safety_monitoring_events")) return Promise.resolve([{ id: "event-1" }]);
+      return Promise.resolve([]);
+    }) as unknown as PostgresTransaction;
+    const sql = { begin: vi.fn(async (work: (tx: PostgresTransaction) => Promise<unknown>) => work(transaction)) } as unknown as PostgresSql;
+
+    const applied = await createLiveStatusRepositoryMethods(sql).recordLiveSafetyEvent!({
+      provider: "livepeer",
+      providerEventId: "connected-wrong-target",
+      providerStreamId: "stream-1",
+      eventKind: "target_connected",
+      normalizedSignal: "healthy",
+      moderationTargetReference: "rtmp://moderation/wrong",
+      payloadHash: "a".repeat(64),
+      signatureHash: "b".repeat(64),
+      observedAt: new Date("2026-08-23T12:00:00.000Z")
+    });
+
+    expect(applied).toBe(true);
+    expect(values).toContain("provider_inconsistent");
+    expect(values).toContain("inconsistent");
+    expect(values).toContain("live_monitoring_inconsistent");
+    expect(queries.join("\n")).toContain("state = 'suspended'");
+    expect(queries.join("\n")).toContain("provider_release_allowed = false");
+    expect(queries.join("\n")).toContain("insert into live_safety_provider_actions");
+  });
+
+  it("does not apply a duplicate live-safety provider event twice", async () => {
+    const queries: string[] = [];
+    const transaction = vi.fn((strings: TemplateStringsArray) => {
+      const query = strings.join("?");
+      queries.push(query);
+      if (query.includes("from live_rooms room") && query.includes("expected_target")) {
+        return Promise.resolve([{
+          room_id: "room-1",
+          room_state: "live",
+          session_id: "session-1",
+          expected_target: "rtmp://moderation/exact",
+          acknowledged_at: null
+        }]);
+      }
+      if (query.includes("insert into live_safety_monitoring_events")) return Promise.resolve([]);
+      return Promise.resolve([]);
+    }) as unknown as PostgresTransaction;
+    const sql = { begin: vi.fn(async (work: (tx: PostgresTransaction) => Promise<unknown>) => work(transaction)) } as unknown as PostgresSql;
+
+    await expect(createLiveStatusRepositoryMethods(sql).recordLiveSafetyEvent!({
+      provider: "livepeer",
+      providerEventId: "duplicate-connected",
+      providerStreamId: "stream-1",
+      eventKind: "target_connected",
+      normalizedSignal: "healthy",
+      moderationTargetReference: "rtmp://moderation/exact",
+      payloadHash: "a".repeat(64),
+      signatureHash: "b".repeat(64),
+      observedAt: new Date("2026-08-23T12:00:00.000Z")
+    })).resolves.toBe(false);
+
+    expect(queries.join("\n")).not.toContain("set state = 'target_connected'");
+    expect(queries.join("\n")).not.toContain("insert into live_safety_provider_actions");
+  });
+
+  it("records a healthy heartbeat and evaluates the database release predicate", async () => {
+    const queries: string[] = [];
+    const transaction = vi.fn((strings: TemplateStringsArray) => {
+      const query = strings.join("?");
+      queries.push(query);
+      if (query.includes("from live_rooms room") && query.includes("expected_target")) {
+        return Promise.resolve([{
+          room_id: "room-1",
+          room_state: "live",
+          session_id: "session-1",
+          expected_target: "rtmp://moderation/exact",
+          acknowledged_at: new Date("2026-08-23T11:59:55.000Z")
+        }]);
+      }
+      if (query.includes("insert into live_safety_monitoring_events")) return Promise.resolve([{ id: "event-heartbeat" }]);
+      return Promise.resolve([]);
+    }) as unknown as PostgresTransaction;
+    const sql = { begin: vi.fn(async (work: (tx: PostgresTransaction) => Promise<unknown>) => work(transaction)) } as unknown as PostgresSql;
+
+    await expect(createLiveStatusRepositoryMethods(sql).recordLiveSafetyEvent!({
+      provider: "livepeer",
+      providerEventId: "healthy-heartbeat",
+      providerStreamId: "stream-1",
+      eventKind: "heartbeat",
+      normalizedSignal: "healthy",
+      moderationTargetReference: "rtmp://moderation/exact",
+      payloadHash: "a".repeat(64),
+      signatureHash: "b".repeat(64),
+      observedAt: new Date("2026-08-23T12:00:00.000Z")
+    })).resolves.toBe(true);
+
+    expect(queries.join("\n")).toContain("set state = 'monitoring'");
+    expect(queries.join("\n")).toContain("heartbeat_expires_at");
+    expect(queries.join("\n")).toContain("private.live_safety_release_ready");
+    expect(queries.join("\n")).toContain("provider_release_allowed = true");
+  });
+
+  it("denies local delivery and queues suspension for a normalized severe signal", async () => {
+    const queries: string[] = [];
+    const values: unknown[] = [];
+    const transaction = vi.fn((strings: TemplateStringsArray, ...queryValues: unknown[]) => {
+      const query = strings.join("?");
+      queries.push(query);
+      values.push(...queryValues);
+      if (query.includes("from live_rooms room") && query.includes("expected_target")) {
+        return Promise.resolve([{
+          room_id: "room-1",
+          room_state: "live",
+          session_id: "session-1",
+          expected_target: "moderation-target",
+          acknowledged_at: new Date("2026-08-23T11:59:55.000Z")
+        }]);
+      }
+      if (query.includes("insert into live_safety_monitoring_events")) return Promise.resolve([{ id: "event-adverse" }]);
+      return Promise.resolve([]);
+    }) as unknown as PostgresTransaction;
+    const sql = { begin: vi.fn(async (work: (tx: PostgresTransaction) => Promise<unknown>) => work(transaction)) } as unknown as PostgresSql;
+
+    await expect(createLiveStatusRepositoryMethods(sql).recordLiveSafetyEvent!({
+      provider: "moderation_provider",
+      providerEventId: "adverse-1",
+      providerStreamId: "stream-1",
+      eventKind: "adverse_signal",
+      normalizedSignal: "apparent_minor_sexual_context",
+      moderationTargetReference: "moderation-target",
+      payloadHash: "a".repeat(64),
+      signatureHash: "b".repeat(64),
+      observedAt: new Date("2026-08-23T12:00:00.000Z")
+    })).resolves.toBe(true);
+
+    expect(values).toContain("live_monitoring_apparent_minor_sexual_context");
+    expect(queries.join("\n")).toContain("provider_release_allowed = false");
+    expect(queries.join("\n")).toContain("state = 'suspended'");
+    expect(queries.join("\n")).toContain("insert into live_safety_provider_actions");
+  });
+
   it("ignores an older replay-ready delivery instead of replacing the current replay", async () => {
     const queries: string[] = [];
     const transaction = vi.fn((strings: TemplateStringsArray) => {

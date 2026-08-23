@@ -123,11 +123,26 @@ export function createEventOpsRepository(
           replay_window_hours,
           (playback_url is not null) as has_playback_url,
           (host_stream_key is not null) as has_host_stream_key,
+          safety_session.state as monitoring_state,
+          coalesce(
+            safety_session.state = 'monitoring'
+            and safety_session.heartbeat_expires_at > now()
+            and safety_session.held_at is null,
+            false
+          ) as monitoring_healthy,
+          safety_session.heartbeat_expires_at as monitoring_heartbeat_expires_at,
+          safety_session.hold_reason_code as monitoring_hold_reason_code,
+          exists (
+            select 1 from live_safety_provider_actions provider_action
+            where provider_action.room_id = live_rooms.id
+              and provider_action.state in ('queued', 'processing', 'retry', 'dead_letter')
+          ) as pending_provider_action,
           starts_at,
           ended_at,
           created_at,
           updated_at
         from live_rooms
+        left join live_safety_sessions safety_session on safety_session.room_id = live_rooms.id
         where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
         order by created_at desc
         limit ${pageSize + 1}

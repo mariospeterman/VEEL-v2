@@ -398,9 +398,13 @@ test("selects a requested conversation and keeps the inbox within the viewport",
 
   await expect(page.getByRole("heading", { name: "Production notes" })).toBeVisible();
   await expect(page.getByRole("article").getByText("Second thread message", { exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: /Production notes/ })).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("link", { name: /Studio team/ })).not.toHaveAttribute("aria-current", "page");
-  await expect(page.getByText("Message request", { exact: true })).toBeVisible();
+  if ((page.viewportSize()?.width ?? 0) >= 1024) {
+    await expect(page.getByRole("button", { name: /Production notes/ })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("button", { name: /Studio team/ })).not.toHaveAttribute("aria-current", "page");
+  } else {
+    await expect(page.getByRole("button", { name: "Back", exact: true })).toBeVisible();
+  }
+  await expect(page.getByText("Message request", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Accept", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Conversation safety" })).toBeVisible();
   await page.getByRole("button", { name: "Report", exact: true }).click();
@@ -873,6 +877,14 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
     return;
   }
 
+  if (
+    method === "GET" &&
+    /^\/v1\/messages\/conversations\/[0-9a-f-]+\/commercial-interactions$/.test(url.pathname)
+  ) {
+    sendJson(response, 200, { mediaOffers: [], creatorRequests: [] });
+    return;
+  }
+
   const conversationActionMatch = url.pathname.match(
     /^\/v1\/messages\/conversations\/([0-9a-f-]+)\/(request|read)$/
   );
@@ -1218,6 +1230,10 @@ function message(conversationId: string, body: string) {
     body,
     deliveryState: "visible",
     paymentIntentId: null,
+    replyToMessageId: null,
+    sharedContentItemId: null,
+    attachments: [],
+    reactions: [],
     createdAt: "2026-08-11T10:00:00.000Z"
   };
 }

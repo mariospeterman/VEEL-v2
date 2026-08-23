@@ -266,7 +266,8 @@ Viewers never receive stream keys or ingest URLs.
 Messages support:
 
 - normal messages
-- paid messages
+- creator media offers for already-approved content
+- two-phase structured creator requests: propose terms, creator accepts or counters, then payment may begin
 - tips
 - attachments
 - block/report

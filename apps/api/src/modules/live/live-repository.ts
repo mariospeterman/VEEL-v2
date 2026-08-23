@@ -84,6 +84,9 @@ function createUnavailableLiveRepository(): LiveRepository {
     async recordLiveProviderWebhook() {
       throw new LiveRepositoryConfigurationError();
     },
+    async recordLiveSafetyEvent() {
+      throw new LiveRepositoryConfigurationError();
+    },
     async updateRoomStatus() {
       throw new LiveRepositoryConfigurationError();
     },

@@ -132,7 +132,7 @@ Money object
 ## Payment And Entitlement Flow
 
 ```text
-1. User taps Tip / Support / Unlock / Subscribe / Live Pass / Event Access Pass / Paid message
+1. User taps Tip / Support / Unlock / Subscribe / Live Pass / Event Access Pass / Media offer / Accepted creator request
 2. Frontend asks API for payment intent
 3. API computes:
    - product type

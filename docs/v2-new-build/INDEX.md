@@ -22,7 +22,7 @@ Non-goals:
 
 This folder is the canonical WeVid engineering pack. Technical `veel` identifiers remain where compatibility requires them; public product language is WeVid.
 
-Next planned production slice: **Convergence 04 — Lifecycle correctness, login/onboarding separation, and analytics surfaces**. Stable merged status is in
+Next planned production slice: **Convergence 05 — Realtime, messaging, and live safety**. Stable merged status is in
 `current-implementation-status.md` and `production-status.json`; transient branch and pull-request
 truth comes from GitHub's single `wevid-active-slice` label.
 

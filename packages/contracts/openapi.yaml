@@ -692,6 +692,23 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/realtime/telemetry:
+    post:
+      operationId: recordRealtimeConnectionEvent
+      tags: [Realtime]
+      summary: Record bounded connection-health telemetry for a scoped private channel
+      x-idempotency-policy: append-only-bounded-health-signal
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/RealtimeConnectionEvent"
+      responses:
+        "204": { description: Connection event recorded }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/notifications/{notificationId}/read:
     patch:
       operationId: markNotificationRead
@@ -1571,6 +1588,22 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/messages/conversations/{conversationId}/mute:
+    patch:
+      operationId: updateConversationMute
+      tags: [Messages]
+      summary: Mute or unmute notifications for the authenticated participant
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/UpdateConversationMute"
+      responses:
+        "200": { $ref: "#/components/responses/Conversation" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /v1/messages/conversations/{conversationId}/messages:
     get:
       operationId: listConversationMessages
@@ -1587,7 +1620,7 @@ paths:
     post:
       operationId: createConversationMessage
       tags: [Messages]
-      summary: Send a conversation message or paid-message delivery
+      summary: Send a consent-bound conversation message
       parameters:
         - $ref: "#/components/parameters/ConversationId"
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
@@ -1602,18 +1635,30 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
-  /v1/messages/conversations/{conversationId}/paid-message-intents:
+  /v1/messages/conversations/{conversationId}/commercial-interactions:
+    get:
+      operationId: listConversationCommercialInteractions
+      tags: [Messages, Payments]
+      summary: List creator media offers and structured creator requests for an accepted conversation
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      responses:
+        "200": { $ref: "#/components/responses/ConversationCommercialInteractions" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/messages/conversations/{conversationId}/media-offers:
     post:
-      operationId: createPaidMessageIntent
-      tags: [Messages]
-      summary: Create paid-message intent and store backend-owned delivery draft
+      operationId: createCreatorMediaOffer
+      tags: [Messages, Payments]
+      summary: Offer already-approved creator media inside an accepted conversation
       parameters:
         - $ref: "#/components/parameters/ConversationId"
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
-      requestBody:
-        $ref: "#/components/requestBodies/CreatePaidMessageIntent"
+      requestBody: { $ref: "#/components/requestBodies/CreateCreatorMediaOffer" }
       responses:
-        "201": { $ref: "#/components/responses/PaidMessageIntent" }
+        "201": { $ref: "#/components/responses/CreatorMediaOffer" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -1621,6 +1666,121 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/messages/conversations/{conversationId}/media-offers/{offerId}:
+    patch:
+      operationId: updateCreatorMediaOffer
+      tags: [Messages, Payments]
+      summary: Decline or withdraw a creator media offer
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+        - { name: offerId, in: path, required: true, schema: { type: string, format: uuid } }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody: { $ref: "#/components/requestBodies/UpdateCreatorMediaOffer" }
+      responses:
+        "200": { $ref: "#/components/responses/CreatorMediaOffer" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /v1/messages/conversations/{conversationId}/media-offers/{offerId}/payment-intents:
+    post:
+      operationId: createCreatorMediaOfferPaymentIntent
+      tags: [Messages, Payments]
+      summary: Create the buyer payment intent for an eligible media offer
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+        - { name: offerId, in: path, required: true, schema: { type: string, format: uuid } }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "201": { $ref: "#/components/responses/PaymentIntent" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/messages/conversations/{conversationId}/creator-requests:
+    post:
+      operationId: createStructuredCreatorRequest
+      tags: [Messages, Payments]
+      summary: Propose a structured creator request without payment
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody: { $ref: "#/components/requestBodies/CreateStructuredCreatorRequest" }
+      responses:
+        "201": { $ref: "#/components/responses/StructuredCreatorRequest" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/messages/conversations/{conversationId}/creator-requests/{requestId}:
+    patch:
+      operationId: updateStructuredCreatorRequest
+      tags: [Messages, Payments]
+      summary: Apply a role- and state-authorized request lifecycle action
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+        - { name: requestId, in: path, required: true, schema: { type: string, format: uuid } }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody: { $ref: "#/components/requestBodies/UpdateStructuredCreatorRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/StructuredCreatorRequest" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /v1/messages/conversations/{conversationId}/creator-requests/{requestId}/payment-intents:
+    post:
+      operationId: createStructuredCreatorRequestPaymentIntent
+      tags: [Messages, Payments]
+      summary: Create a payment intent only after creator acceptance
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+        - { name: requestId, in: path, required: true, schema: { type: string, format: uuid } }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "201": { $ref: "#/components/responses/PaymentIntent" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/messages/conversations/{conversationId}/messages/{messageId}/reactions/{reactionKey}:
+    put:
+      operationId: addMessageReaction
+      tags: [Messages]
+      summary: Add an allowed reaction to a visible conversation message
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+        - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: reactionKey, in: path, required: true, schema: { type: string, enum: [like, love, laugh, support] } }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: removeMessageReaction
+      tags: [Messages]
+      summary: Remove the authenticated participant's reaction
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+        - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: reactionKey, in: path, required: true, schema: { type: string, enum: [like, love, laugh, support] } }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /v1/payments/intents:
     post:
       operationId: createPaymentIntent
@@ -2454,7 +2614,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [subscription_collections, notification_deliveries, payment_confirmation_emails, provider_event_replays, media_moderation, analytics_projections]
+            enum: [subscription_collections, notification_deliveries, payment_confirmation_emails, provider_event_replays, media_moderation, analytics_projections, live_safety]
         - name: jobId
           in: path
           required: true
@@ -3162,6 +3322,7 @@ components:
     HideFeedTopic: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/HideFeedTopicRequest" } } } }
     UpdateNotificationPreferences: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateNotificationPreferencesRequest" } } } }
     RegisterNotificationDevice: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RegisterNotificationDeviceRequest" } } } }
+    RealtimeConnectionEvent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RealtimeConnectionEventRequest" } } } }
     CreateUpload: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateUploadRequest" } } } }
     CreateLiveRoom: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateLiveRoomRequest" } } } }
     RevealLiveHostConnection: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RevealLiveHostConnectionRequest" } } } }
@@ -3172,7 +3333,11 @@ components:
     CreateMessage: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateMessageRequest" } } } }
     CreateDirectConversation: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateDirectConversationRequest" } } } }
     RespondToMessageRequest: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RespondToMessageRequest" } } } }
-    CreatePaidMessageIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreatePaidMessageIntentRequest" } } } }
+    UpdateConversationMute: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateConversationMuteRequest" } } } }
+    CreateCreatorMediaOffer: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateCreatorMediaOfferRequest" } } } }
+    UpdateCreatorMediaOffer: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateCreatorMediaOfferRequest" } } } }
+    CreateStructuredCreatorRequest: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateStructuredCreatorRequestRequest" } } } }
+    UpdateStructuredCreatorRequest: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateStructuredCreatorRequestRequest" } } } }
     UpdateCreatorOnboarding: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateCreatorOnboardingRequest" } } } }
     CreatePaymentIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreatePaymentIntentRequest" }, examples: { support: { value: { productType: support, targetId: "00000000-0000-4000-8000-000000000001", amountMinor: 500000 } } } } } }
     AcceptPaymentIntentTerms: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AcceptPaymentIntentTermsRequest" } } } }
@@ -3299,7 +3464,9 @@ components:
     ConversationReadState: { description: Participant read cursor state, content: { application/json: { schema: { $ref: "#/components/schemas/ConversationReadState" } } } }
     MessagePage: { description: Messages, content: { application/json: { schema: { $ref: "#/components/schemas/MessagePage" } } } }
     Message: { description: Message, content: { application/json: { schema: { $ref: "#/components/schemas/Message" } } } }
-    PaidMessageIntent: { description: Paid message intent, content: { application/json: { schema: { $ref: "#/components/schemas/PaidMessageIntent" } } } }
+    ConversationCommercialInteractions: { description: Consent-bound commercial interactions, content: { application/json: { schema: { $ref: "#/components/schemas/ConversationCommercialInteractions" } } } }
+    CreatorMediaOffer: { description: Creator media offer, content: { application/json: { schema: { $ref: "#/components/schemas/CreatorMediaOffer" } } } }
+    StructuredCreatorRequest: { description: Structured creator request, content: { application/json: { schema: { $ref: "#/components/schemas/StructuredCreatorRequest" } } } }
     PaymentIntent: { description: Payment intent, content: { application/json: { schema: { $ref: "#/components/schemas/PaymentIntent" } } } }
     TransactionRequest: { description: Transaction request, content: { application/json: { schema: { $ref: "#/components/schemas/TransactionRequest" } } } }
     TransactionRequestPost: { description: Unsigned transaction request response, content: { application/json: { schema: { $ref: "#/components/schemas/TransactionRequestPostResponse" } } } }
@@ -4186,10 +4353,21 @@ components:
         updatedAt: { type: string, format: date-time, nullable: true }
     RealtimeAccessToken:
       type: object
-      required: [token, expiresAt]
+      required: [token, expiresAt, accountTopic]
       properties:
         token: { type: string, minLength: 1, readOnly: true }
         expiresAt: { type: string, format: date-time }
+        accountTopic: { type: string, pattern: '^account:[0-9a-f-]{36}$', readOnly: true }
+    RealtimeConnectionEventRequest:
+      type: object
+      additionalProperties: false
+      required: [topicKind, state, reasonCode, attempt, occurredAt]
+      properties:
+        topicKind: { type: string, enum: [account, conversation, live] }
+        state: { type: string, enum: [connected, reconnecting, failed, disconnected] }
+        reasonCode: { type: string, enum: [subscribed, channel_error, timed_out, closed, token_unavailable, cleanup] }
+        attempt: { type: integer, minimum: 0, maximum: 10 }
+        occurredAt: { type: string, format: date-time }
     UpdateNotificationPreferencesRequest:
       type: object
       properties:
@@ -4854,7 +5032,7 @@ components:
         blockedUserId: { type: string, format: uuid }
     Conversation:
       type: object
-      required: [id, type, title, unreadCount, counterpart, requestState, requestRole, canSend]
+      required: [id, type, title, unreadCount, counterpart, requestState, requestRole, canSend, muted]
       properties:
         id: { type: string, format: uuid }
         type: { type: string, enum: [direct, match, paid] }
@@ -4864,6 +5042,7 @@ components:
         requestState: { type: string, enum: [not_required, pending, accepted, declined] }
         requestRole: { type: string, enum: [none, initiator, recipient] }
         canSend: { type: boolean }
+        muted: { type: boolean }
         lastMessage: { $ref: "#/components/schemas/MessagePreview" }
     CreateDirectConversationRequest:
       type: object
@@ -4875,6 +5054,12 @@ components:
       required: [action]
       properties:
         action: { type: string, enum: [accept, decline] }
+    UpdateConversationMuteRequest:
+      type: object
+      additionalProperties: false
+      required: [muted]
+      properties:
+        muted: { type: boolean }
     ConversationReadState:
       type: object
       required: [conversationId, unreadCount, readAt]
@@ -4887,15 +5072,108 @@ components:
       required: [body]
       properties:
         body: { type: string, minLength: 1, maxLength: 4000 }
-        paidMessageIntentId: { type: string, format: uuid, nullable: true }
-    CreatePaidMessageIntentRequest:
+        replyToMessageId: { type: string, format: uuid, nullable: true }
+        sharedContentItemId: { type: string, format: uuid, nullable: true }
+        attachmentContentItemIds:
+          type: array
+          maxItems: 4
+          uniqueItems: true
+          items: { type: string, format: uuid }
+    CreateCreatorMediaOfferRequest:
       type: object
-      required: [body]
+      additionalProperties: false
+      required: [contentItemId, title, amountMinor, currency, expiresAt]
       properties:
-        body: { type: string, minLength: 1, maxLength: 4000 }
+        contentItemId: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, minLength: 1, maxLength: 1000, nullable: true }
+        amountMinor: { type: integer, minimum: 1, maximum: 9007199254740991 }
+        currency: { $ref: "#/components/schemas/Currency" }
+        expiresAt: { type: string, format: date-time }
+    UpdateCreatorMediaOfferRequest:
+      type: object
+      additionalProperties: false
+      required: [action]
+      properties:
+        action: { type: string, enum: [decline, withdraw] }
+    CreatorMediaOffer:
+      type: object
+      required: [id, conversationId, creatorUserId, buyerUserId, contentItemId, contentRevision, title, amountMinor, currency, state, expiresAt, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        conversationId: { type: string, format: uuid }
+        creatorUserId: { type: string, format: uuid }
+        buyerUserId: { type: string, format: uuid }
+        contentItemId: { type: string, format: uuid }
+        contentRevision: { type: integer, minimum: 1 }
+        title: { type: string }
+        description: { type: string, nullable: true }
+        amountMinor: { type: integer }
+        currency: { $ref: "#/components/schemas/Currency" }
+        state: { type: string, enum: [offered, accepted, declined, withdrawn, expired, purchased, remediation] }
+        paymentIntentId: { type: string, format: uuid, nullable: true }
+        expiresAt: { type: string, format: date-time }
+        purchasedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CreateStructuredCreatorRequestRequest:
+      type: object
+      additionalProperties: false
+      required: [creatorUserId, deliverable, permittedCategory, currency, clarificationRule, cancellationRule, expiresAt]
+      properties:
+        creatorUserId: { type: string, format: uuid }
+        deliverable: { type: string, minLength: 3, maxLength: 1000 }
+        permittedCategory: { type: string, enum: [photo, video, audio, written, other_safe] }
+        proposedAmountMinor: { type: integer, minimum: 1, maximum: 9007199254740991, nullable: true }
+        currency: { $ref: "#/components/schemas/Currency" }
+        expectedDeliveryDays: { type: integer, minimum: 1, maximum: 90, nullable: true }
+        clarificationRule: { type: string, minLength: 3, maxLength: 500 }
+        cancellationRule: { type: string, minLength: 3, maxLength: 500 }
+        expiresAt: { type: string, format: date-time }
+    UpdateStructuredCreatorRequestRequest:
+      type: object
+      additionalProperties: false
+      required: [action]
+      properties:
+        action: { type: string, enum: [accept, decline, propose_terms, accept_terms, mark_delivered, request_remediation, complete, cancel] }
+        agreedAmountMinor: { type: integer, minimum: 1, maximum: 9007199254740991, nullable: true }
+        expectedDeliveryDays: { type: integer, minimum: 1, maximum: 90, nullable: true }
+        clarificationRule: { type: string, minLength: 3, maxLength: 500, nullable: true }
+        cancellationRule: { type: string, minLength: 3, maxLength: 500, nullable: true }
+    StructuredCreatorRequest:
+      type: object
+      required: [id, conversationId, requesterUserId, creatorUserId, deliverable, permittedCategory, currency, clarificationRule, cancellationRule, state, expiresAt, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        conversationId: { type: string, format: uuid }
+        requesterUserId: { type: string, format: uuid }
+        creatorUserId: { type: string, format: uuid }
+        deliverable: { type: string }
+        permittedCategory: { type: string, enum: [photo, video, audio, written, other_safe] }
+        proposedAmountMinor: { type: integer, nullable: true }
+        agreedAmountMinor: { type: integer, nullable: true }
+        currency: { $ref: "#/components/schemas/Currency" }
+        expectedDeliveryDays: { type: integer, nullable: true }
+        clarificationRule: { type: string }
+        cancellationRule: { type: string }
+        state: { type: string, enum: [proposed, terms_proposed, accepted, declined, payment_pending, active, delivered, remediation, completed, cancelled, expired] }
+        paymentIntentId: { type: string, format: uuid, nullable: true }
+        expiresAt: { type: string, format: date-time }
+        acceptedAt: { type: string, format: date-time, nullable: true }
+        activatedAt: { type: string, format: date-time, nullable: true }
+        deliveredAt: { type: string, format: date-time, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ConversationCommercialInteractions:
+      type: object
+      required: [mediaOffers, creatorRequests]
+      properties:
+        mediaOffers: { type: array, items: { $ref: "#/components/schemas/CreatorMediaOffer" } }
+        creatorRequests: { type: array, items: { $ref: "#/components/schemas/StructuredCreatorRequest" } }
     Message:
       type: object
-      required: [id, conversationId, sender, body, deliveryState, createdAt]
+      required: [id, conversationId, sender, body, deliveryState, reactions, createdAt]
       properties:
         id: { type: string, format: uuid }
         conversationId: { type: string, format: uuid }
@@ -4903,6 +5181,27 @@ components:
         body: { type: string }
         deliveryState: { type: string, enum: [visible, pending_payment] }
         paymentIntentId: { type: string, format: uuid, nullable: true }
+        replyToMessageId: { type: string, format: uuid, nullable: true }
+        sharedContentItemId: { type: string, format: uuid, nullable: true }
+        attachments:
+          type: array
+          maxItems: 4
+          items:
+            type: object
+            additionalProperties: false
+            required: [contentItemId, contentRevision]
+            properties:
+              contentItemId: { type: string, format: uuid }
+              contentRevision: { type: integer, minimum: 1 }
+        reactions:
+          type: array
+          items:
+            type: object
+            required: [key, count, reacted]
+            properties:
+              key: { type: string, enum: [like, love, laugh, support] }
+              count: { type: integer, minimum: 1 }
+              reacted: { type: boolean }
         createdAt: { type: string, format: date-time }
     MessagePreview:
       type: object
@@ -4917,14 +5216,6 @@ components:
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/Message" } }
         nextCursor: { type: string, nullable: true }
-    PaidMessageIntent:
-      type: object
-      required: [state, conversationId]
-      properties:
-        state: { type: string, enum: [payment_required, already_delivered] }
-        conversationId: { type: string, format: uuid }
-        paymentIntent: { $ref: "#/components/schemas/PaymentIntent" }
-        message: { $ref: "#/components/schemas/Message" }
     CreatePaymentIntentRequest:
       type: object
       required: [productType, targetId]
@@ -5914,7 +6205,7 @@ components:
           items: { $ref: "#/components/schemas/OrganizationNotice" }
     AdminOpsSummary:
       type: object
-      required: [providerHealth, queueHealth, workerQueues, openReports, paymentCounts, unlockCounts, providerEventCounts, subscriptionCounts, subscriptionProviderReadiness, organizationCounts, managedCreatorCounts, enterpriseAllocationCounts]
+      required: [providerHealth, queueHealth, workerQueues, openReports, paymentCounts, unlockCounts, providerEventCounts, subscriptionCounts, subscriptionProviderReadiness, organizationCounts, managedCreatorCounts, enterpriseAllocationCounts, creatorMediaOfferCounts, structuredCreatorRequestCounts]
       properties:
         providerHealth: { type: string, enum: [ok, degraded, down] }
         queueHealth: { type: string, enum: [ok, degraded, down] }
@@ -5930,13 +6221,15 @@ components:
         organizationCounts: { $ref: "#/components/schemas/AdminStateCounts" }
         managedCreatorCounts: { $ref: "#/components/schemas/AdminStateCounts" }
         enterpriseAllocationCounts: { $ref: "#/components/schemas/AdminStateCounts" }
+        creatorMediaOfferCounts: { $ref: "#/components/schemas/AdminStateCounts" }
+        structuredCreatorRequestCounts: { $ref: "#/components/schemas/AdminStateCounts" }
     AdminWorkerQueueHealth:
       type: object
       required: [name, pendingCount, processingCount, failedCount, deadLetterCount, oldestPendingAt]
       properties:
         name:
           type: string
-          enum: [subscription_collections, notification_deliveries, payment_confirmation_emails, provider_event_replays, media_moderation, analytics_projections]
+          enum: [subscription_collections, notification_deliveries, payment_confirmation_emails, provider_event_replays, media_moderation, analytics_projections, live_safety]
         pendingCount: { type: integer }
         processingCount: { type: integer }
         failedCount: { type: integer }
@@ -6145,7 +6438,7 @@ components:
         socialMoneyBoundary: { type: string, enum: [money_never_buys_people_visibility_matches_or_social_priority] }
     AdminLiveRoom:
       type: object
-      required: [id, creatorUserId, title, provider, providerState, state, accessMode, eventPriceMinor, currency, membersOnlyChat, membersIncludedInPaidEvent, replayWindowHours, hasPlaybackUrl, hasHostStreamKey, createdAt]
+      required: [id, creatorUserId, title, provider, providerState, state, accessMode, eventPriceMinor, currency, membersOnlyChat, membersIncludedInPaidEvent, replayWindowHours, hasPlaybackUrl, hasHostStreamKey, monitoringState, monitoringHealthy, pendingProviderAction, createdAt]
       properties:
         id: { type: string, format: uuid }
         creatorUserId: { type: string, format: uuid }
@@ -6163,6 +6456,11 @@ components:
         replayWindowHours: { type: integer }
         hasPlaybackUrl: { type: boolean }
         hasHostStreamKey: { type: boolean }
+        monitoringState: { type: string, enum: [monitoring_pending, target_connected, monitoring, held, suspended, ended], nullable: true }
+        monitoringHealthy: { type: boolean }
+        monitoringHeartbeatExpiresAt: { type: string, format: date-time, nullable: true }
+        monitoringHoldReasonCode: { type: string, nullable: true }
+        pendingProviderAction: { type: boolean }
         startsAt: { type: string, format: date-time, nullable: true }
         endedAt: { type: string, format: date-time, nullable: true }
         createdAt: { type: string, format: date-time }

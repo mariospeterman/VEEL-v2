@@ -118,7 +118,7 @@ Allowed:
 Not allowed:
 
 - Veel holding user private keys
-- app-controlled payment signing for support, unlocks, memberships, Event Access, paid messages, or live passes
+- app-controlled payment signing for support, unlocks, memberships, Event Access, creator media offers, accepted structured requests, or live passes
 - frontend deciding payment success
 - provider wallet state granting access without backend settlement verification
 - custodial internal balance as launch default
@@ -253,7 +253,7 @@ Rules:
 - Veel does not use wallet funding providers as merchant-of-record product billing
 - paid actions still require backend payment intent and confirmed transaction validation
 - `POST /v1/wallets/onramp-sessions` is implemented as a wallet-funding boundary. The default provider is disabled; when `ONRAMP_PROVIDER=coinbase` and CDP API key envs are present, the API creates a Coinbase hosted onramp session for the selected Veel wallet address and stores a hashed provider reference plus the user-visible launch URL for support/accountability.
-- The onramp table is RLS-protected and owner/staff-readable. It does not link to entitlements, passes, paid-message delivery, subscriptions, unlocks, commissions, or payment settlement.
+- The onramp table is RLS-protected and owner/staff-readable. It does not link to entitlements, passes, creator-request delivery, subscriptions, unlocks, commissions, or payment settlement.
 
 ## When To Create The Embedded Wallet
 
@@ -267,7 +267,7 @@ Wallet-required actions:
 
 - unlock paid content
 - support
-- paid message
+- approved media offer or accepted structured creator request
 - Profile Membership
 - live pass
 - Event Access Pass

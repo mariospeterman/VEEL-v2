@@ -27,7 +27,7 @@ Veel reduces custody and payment-processor dependency by using user-approved Sol
 - Never route product funds as `user wallet -> Veel wallet -> creator wallet`.
 - Use direct settlement: `user wallet -> creator wallet` and `user wallet -> Veel fee wallet` in the same backend-composed transaction where a split is required.
 - Never create `Veel Credits`, `Veel Balance`, `Creator Balance`, `Pending Payouts`, or withdrawal-request flows.
-- Never grant access, renewal, tickets, paid-message delivery, commission, or revenue state from wallet UI success alone.
+- Never grant access, renewal, tickets, creator-request activation, commission, or revenue state from wallet UI success alone.
 - Store only entitlements, purchases, receipts, chain transaction references, immutable ledger/audit projections, tax/compliance metadata where required, and provider reconciliation evidence.
 - Creator-facing money screens must be labelled and implemented as confirmed earnings/revenue records, not withdrawable balances.
 
@@ -101,7 +101,7 @@ Veel may use agents to assist users, creators, and admins, but agents must not s
 
 Agent rules:
 
-- No autonomous wallet signing, delegated allowance setup, renewal collection, refund, cancellation, Event Access issuance, paid-message send, or entitlement mutation.
+- No autonomous wallet signing, delegated allowance setup, renewal collection, refund, cancellation, Event Access issuance, creator-request activation, or entitlement mutation.
 - Any AI-suggested money action must require explicit user/admin confirmation and backend policy validation.
 - AI tools receive redacted financial and identity data by default.
 - All AI tool calls that inspect or propose money, age/KYC, moderation, or admin changes are audited.
