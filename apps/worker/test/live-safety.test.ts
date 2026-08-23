@@ -77,9 +77,28 @@ describe("live safety watchdog", () => {
 
     expect(queries).toHaveLength(4);
     expect(queries[0]).toContain("state = 'held'");
+    expect(queries[0]).toContain("join live_rooms room");
+    expect(queries[0]).toContain("room.state = 'live'");
     expect(queries[1]).toContain("provider_release_allowed = false");
     expect(queries[2]).toContain("state = 'suspended'");
     expect(queries[3]).toContain("insert into live_safety_provider_actions");
+  });
+
+  it("does not hold or suspend a room that became terminal during health polling", async () => {
+    const queries: string[] = [];
+    const transaction = (async (strings: TemplateStringsArray) => {
+      queries.push(strings.join("?"));
+      return [];
+    }) as unknown as postgres.TransactionSql;
+
+    await holdUnhealthyLiveSafetySession(transaction, {
+      id: "session-ended",
+      leaseToken: "lease-ended",
+      completedAt: new Date("2026-08-23T12:00:00.000Z")
+    });
+
+    expect(queries).toHaveLength(1);
+    expect(queries[0]).toContain("room.state = 'live'");
   });
 
   it("releases the canonical safety case only through the backend predicate", async () => {

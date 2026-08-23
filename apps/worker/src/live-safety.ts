@@ -369,16 +369,18 @@ export async function holdUnhealthyLiveSafetySession(
 ): Promise<void> {
   const held = await transaction<{ room_id: string; reason_code: string }[]>`
     with target as (
-      select room_id,
+      select session.room_id,
         case
-          when state = 'monitoring' then 'live_monitoring_heartbeat_expired'
+          when session.state = 'monitoring' then 'live_monitoring_heartbeat_expired'
           else 'live_monitoring_not_connected'
         end as reason_code
-      from live_safety_sessions
-      where id = ${input.id}
-        and lease_token = ${input.leaseToken}
-        and state in ('target_connected', 'monitoring')
-      for update
+      from live_safety_sessions session
+      join live_rooms room on room.id = session.room_id
+      where session.id = ${input.id}
+        and session.lease_token = ${input.leaseToken}
+        and session.state in ('target_connected', 'monitoring')
+        and room.state = 'live'
+      for update of session, room
     )
     update live_safety_sessions session
     set state = 'held', hold_reason_code = target.reason_code, held_at = ${input.completedAt},
