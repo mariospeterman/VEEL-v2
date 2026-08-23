@@ -185,16 +185,26 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
     },
     async completeHealthCheck(input) {
       if (input.healthy) {
-        await sql`
-          update live_safety_sessions
-          set state = 'monitoring', last_heartbeat_at = ${input.observedAt},
-              heartbeat_expires_at = ${input.observedAt} + interval '90 seconds',
-              next_check_at = ${input.observedAt} + interval '30 seconds',
-              lease_token = null, lease_expires_at = null, updated_at = ${input.observedAt}
-          where id = ${input.id}
-            and lease_token = ${input.leaseToken}
-            and state in ('target_connected', 'monitoring')
-        `;
+        await sql.begin(async (transaction) => {
+          const updated = await transaction<{ room_id: string }[]>`
+            update live_safety_sessions
+            set state = 'monitoring', last_heartbeat_at = ${input.observedAt},
+                heartbeat_expires_at = ${input.observedAt} + interval '90 seconds',
+                next_check_at = ${input.observedAt} + interval '30 seconds',
+                lease_token = null, lease_expires_at = null, updated_at = ${input.observedAt}
+            where id = ${input.id}
+              and lease_token = ${input.leaseToken}
+              and state in ('target_connected', 'monitoring')
+            returning room_id
+          `;
+          const roomId = updated[0]?.room_id;
+          if (roomId) {
+            await releaseHealthyLiveSafetyCase(transaction, {
+              roomId,
+              observedAt: input.observedAt
+            });
+          }
+        });
         return;
       }
       await sql`
@@ -325,6 +335,21 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
       await sql.end({ timeout: 5 });
     }
   };
+}
+
+export async function releaseHealthyLiveSafetyCase(
+  transaction: postgres.TransactionSql,
+  input: { roomId: string; observedAt: Date }
+): Promise<void> {
+  await transaction`
+    update media_safety_cases safety
+    set state = 'approved', decision_source = 'automated',
+        reason_code = 'live_monitoring_healthy', provider_release_allowed = true,
+        decided_at = ${input.observedAt}, updated_at = ${input.observedAt}
+    where safety.live_room_id = ${input.roomId}
+      and safety.state <> 'superseded'
+      and private.live_safety_release_ready(${input.roomId})
+  `;
 }
 
 function createUnavailableLiveSafetyRepository(): LiveSafetyRepository {

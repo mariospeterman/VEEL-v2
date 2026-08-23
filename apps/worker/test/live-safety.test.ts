@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+import type postgres from "postgres";
 import {
   liveSafetyHoldEligibleStates,
   processLiveSafety,
+  releaseHealthyLiveSafetyCase,
   type LiveSafetyHealthCheck,
   type LiveSafetyProviderAction,
   type LiveSafetyRepository
@@ -30,6 +32,23 @@ function repositoryWith(
 }
 
 describe("live safety watchdog", () => {
+  it("releases the canonical safety case only through the backend predicate", async () => {
+    const queries: string[] = [];
+    const transaction = (async (strings: TemplateStringsArray) => {
+      queries.push(strings.join("?"));
+      return [];
+    }) as unknown as postgres.TransactionSql;
+
+    await releaseHealthyLiveSafetyCase(transaction, {
+      roomId: "room-1",
+      observedAt: new Date("2026-08-23T12:00:00.000Z")
+    });
+
+    expect(queries[0]).toContain("update media_safety_cases safety");
+    expect(queries[0]).toContain("provider_release_allowed = true");
+    expect(queries[0]).toContain("private.live_safety_release_ready");
+  });
+
   it("does not hold target-connected sessions deferred beyond the polling batch limit", () => {
     expect(liveSafetyHoldEligibleStates).not.toContain("target_connected");
     expect(liveSafetyHoldEligibleStates).toEqual(["monitoring_pending", "monitoring"]);
