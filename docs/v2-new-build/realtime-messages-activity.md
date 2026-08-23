@@ -3,7 +3,7 @@
 Status: accepted
 Release state: CODE_COMPLETE_PROVIDER_BLOCKED
 Scope: realtime, messages, notifications, activity
-Last updated: 2026-08-15
+Last updated: 2026-08-23
 Source of truth: yes
 
 Owns:
@@ -24,6 +24,39 @@ Non-goals:
 ## Realtime Decision
 
 Use Supabase Realtime selectively. Do not build a custom websocket server unless Supabase cannot satisfy a specific requirement.
+
+## Convergence 05 Behavior Lock
+
+Convergence 05 replaces the current broad account-level Postgres Changes subscription and
+`router.refresh()` with private scoped Broadcast topics. The account topic is derived from the
+canonical WeVid user ID; conversation and live topics are authorized from current membership,
+block/request, access, and live-safety facts. Realtime carries only a safe resource kind, opaque
+resource ID, event key, and monotonically increasing topic version. Every connect and reconnect
+invalidates the corresponding typed API query before events are consumed, so missed events recover
+from canonical API state rather than replaying private rows.
+
+The browser may send typing and presence only as ephemeral hints on a topic it is currently allowed
+to join. Those hints are bounded, schema-checked, never persisted as business truth, and never grant
+message, payment, access, moderation, or live authority. Token refresh updates the active Realtime
+connection; expiry, authorization change, channel error, timeout, or closure tears down the scoped
+channel and retries with bounded backoff. Connection-state telemetry contains enums and counters only,
+not message bodies, provider tokens, wallet material, or full topic values.
+
+Message requests permit one bounded introduction until the recipient accepts. No read receipt,
+paid surface, offer, reply continuation, attachment, or ephemeral presence may bypass a pending or
+declined request, a block, a mute, or current messaging settings. Historical `paid_message` records
+remain readable, but the new-product UI is replaced by accepted-conversation creator media offers
+and a two-phase structured creator request. Payment buys only the defined media entitlement or
+accepted deliverable; it never buys inbox entry, reply priority, attention, romantic/sexual access,
+or offline access.
+
+Creator SFW attestation creates a monitoring-pending room and private host preview only. Public
+playback and chat require the exact room, provider stream, moderation target, signed provider
+acknowledgement, and fresh monitoring heartbeat to converge in one backend-owned release predicate.
+Heartbeat loss, target disconnect, severe normalized safety evidence, replayed/forged callbacks, or
+provider inconsistency first denies local playback and chat, then queues provider suspension and
+restricted operations follow-up. Provider suspension failure cannot reopen local delivery. Adult live
+remains disabled and every replay re-enters the ordinary quarantined VOD revision workflow.
 
 ## Realtime Channels
 
