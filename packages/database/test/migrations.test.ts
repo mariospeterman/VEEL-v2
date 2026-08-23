@@ -1130,4 +1130,50 @@ describe("database migrations", () => {
     expect(downSql).toContain("drop column if exists recipient_kyc_policy_version");
     expect(downSql).toContain("default_feed_mode in ('recommended', 'following', 'nsfw', 'sfw')");
   });
+
+  it("converges ordered multi-format content and transactional polls", () => {
+    const sql = readMigration("0109_universal_composer_authority.sql");
+    const downSql = readMigration("0109_universal_composer_authority.down.sql");
+
+    expect(sql).toContain("'carousel', 'text', 'poll'");
+    expect(sql).toContain("add constraint media_assets_content_position_uidx");
+    expect(sql).toContain("deferrable initially immediate");
+    expect(sql).toContain("position between 0 and 9");
+    expect(sql).toContain("create function private.assign_media_asset_position");
+    expect(sql).toContain("where id = new.content_item_id\n  for update");
+    expect(sql).toContain("select coalesce(max(asset.position) + 1, 0)");
+    expect(sql).toContain("origin_classification in (");
+    expect(sql).toContain("source_lineage_reference !~* '(prompt|api[_ -]?key|credential)");
+    expect(sql).toContain("create table content_polls");
+    expect(sql).toContain("create table content_poll_options");
+    expect(sql).toContain("create table content_poll_votes");
+    expect(sql).toContain("primary key (content_item_id, voter_user_id)");
+    expect(sql).toContain("unique (voter_user_id, idempotency_key)");
+    expect(sql).toContain("poll_options_locked_after_first_vote");
+    expect(sql).toContain("create function private.clear_poll_children_for_parent_delete");
+    expect(sql).toContain("delete from content_poll_votes");
+    expect(sql).toContain("delete from content_poll_options");
+    expect(sql).toContain("create trigger content_poll_votes_sync_counts");
+    expect(sql).toContain("create function private.content_composition_provider_ready");
+    expect(sql).toContain("asset.required_for_release is true");
+    expect(sql).toContain("create function private.content_composition_safety_ready");
+    expect(sql).toContain("create or replace function private.content_safety_release_ready");
+    expect(sql).toContain("select private.content_composition_safety_ready(p_content_item_id)");
+    expect(sql).toContain("private.content_safety_automated_asset_evidence_ready(content.id, asset.id)");
+    expect(sql).toContain("poll_requires_two_to_four_options");
+    expect(sql).toContain("v_publish_state not in ('draft', 'unpublished')");
+    expect(sql).toContain("text_body_required");
+    expect(sql).toContain("update of media_type, publish_state, body_text");
+    expect(sql).toContain("alter table content_poll_votes enable row level security");
+    expect(sql).not.toMatch(/creator_balance|withdrawal_queue|payout_queue|escrow|private_key|seed_phrase|mnemonic/i);
+    expect(downSql).toContain("drop table if exists content_poll_votes");
+    expect(downSql).toContain("drop function if exists private.clear_poll_children_for_parent_delete");
+    expect(downSql).toContain("drop function if exists private.assign_media_asset_position");
+    expect(downSql).toContain("drop function if exists private.content_composition_safety_ready");
+    expect(downSql).toContain("private.content_safety_automated_evidence_ready(ci.id)");
+    expect(downSql.indexOf("drop function if exists private.content_composition_safety_ready"))
+      .toBeLessThan(downSql.indexOf("drop column if exists required_for_release"));
+    expect(downSql).toContain("drop column if exists origin_classification");
+    expect(downSql).toContain("drop column if exists body_text");
+  });
 });

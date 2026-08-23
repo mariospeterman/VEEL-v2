@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: provider ownership, boundaries, integrations
-Last updated: 2026-08-15
+Last updated: 2026-08-20
 Source of truth: yes for v2 provider relations
 
 Owns:
@@ -34,6 +34,7 @@ This map defines which provider does which job and what WeVid owns. It exists to
 | Solana RPC | transaction state | finality/amount/reference validation | browser-safe devnet RPC only if needed | confirmed transaction |
 | Helius | payment/access evidence | normalize/verify event, dedupe, audit | none | signed/authorized webhook or API response |
 | Bunny Stream/CDN/TUS | VOD upload/transcode/playback | content state, access policy, signed/safe playback | safe upload/playback data | provider webhook/status |
+| Bunny Storage + Optimizer | private original-image storage and on-demand responsive derivatives | narrow server-streamed upload, MIME/dimension/decompression/checksum/orientation validation, metadata stripping, opaque paths, quarantine/release and signed frontend-safe projection | WeVid upload progress and released optimized URLs only; no Storage `AccessKey` | `candidate`, fail-closed until exact staging upload/Shield/sanitization/Optimizer/delete/recovery/rotation proof |
 | Livepeer | live streaming/replay infra | room policy, host/viewer split, pass access | playback-safe viewer resource | provider webhook/status |
 | Didit/Yoti/EUDI/Scytales | reusable/light age assurance | session creation, minimal result storage | provider redirect/widget/link only | signed notification/result |
 | Persona/Didit | light document age fallback and cost-control KYC/KYB candidate | inquiry/session mapping, minimal state | provider redirect/widget only | signed webhook/result |

@@ -33,14 +33,8 @@ export function createContentPublishRepositoryMethods(
               ci.state,
               ci.publish_state,
               ci.moderation_state,
-              private.content_safety_release_ready(ci.id) as safety_ready,
-              exists (
-                select 1
-                from media_assets ma
-                where ma.content_item_id = ci.id
-                  and ma.provider_playable = true
-                  and ma.ready_at is not null
-              ) as provider_ready
+              private.content_composition_safety_ready(ci.id) as safety_ready,
+              private.content_composition_provider_ready(ci.id) as provider_ready
             from content_items ci
             join actor on actor.id = ci.creator_user_id
             where ci.id = ${input.contentId}
@@ -61,7 +55,7 @@ export function createContentPublishRepositoryMethods(
               updated_at = now()
             from current_content cc
             where ci.id = cc.id
-              and cc.state = 'ready'
+              and (cc.state = 'ready' or ci.media_type in ('text', 'poll'))
               and cc.provider_ready = true
               and cc.publish_state in ('draft', 'unpublished', 'submitted_for_review')
               and cc.moderation_state <> 'blocked'
@@ -134,13 +128,7 @@ export function createContentPublishRepositoryMethods(
             ci.state,
             ci.publish_state,
             ci.moderation_state,
-            exists (
-              select 1
-              from media_assets ma
-              where ma.content_item_id = ci.id
-                and ma.provider_playable = true
-                and ma.ready_at is not null
-            ) as provider_ready
+            private.content_composition_provider_ready(ci.id) as provider_ready
           from content_items ci
           join users u on u.id = ci.creator_user_id
           where ci.id = ${input.contentId}

@@ -102,6 +102,12 @@ export const serverEnvSchema = z.object({
   BUNNY_STREAM_EMBED_TOKEN_KEY: optionalStringSchema,
   BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(900),
   BUNNY_STREAM_WEBHOOK_READONLY_KEY: optionalStringSchema,
+  BUNNY_STORAGE_IMAGE_UPLOAD_ENABLED: booleanSchema(false),
+  BUNNY_STORAGE_ACCESS_KEY: optionalStringSchema,
+  BUNNY_STORAGE_ZONE_NAME: optionalStringSchema,
+  BUNNY_STORAGE_API_ENDPOINT: z.string().url().default("https://storage.bunnycdn.com"),
+  BUNNY_STORAGE_PULL_ZONE_URL: optionalUrlSchema,
+  BUNNY_STORAGE_PULL_ZONE_TOKEN_KEY: optionalStringSchema,
   BUNNY_SHIELD_API_KEY: optionalStringSchema,
   BUNNY_SHIELD_ZONE_ID: optionalStringSchema,
   BUNNY_SHIELD_UPLOAD_COVERAGE: z

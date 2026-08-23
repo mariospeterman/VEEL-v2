@@ -863,6 +863,26 @@ export interface paths {
         patch: operations["updateContent"];
         trace?: never;
     };
+    "/v1/content/{contentId}/poll-votes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cast or replace the signed-in viewer's poll vote
+         * @description The backend validates content eligibility and poll state, updates counters transactionally, and preserves lifetime idempotency receipts.
+         */
+        post: operations["voteOnContentPoll"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/content/{contentId}/publish": {
         parameters: {
             query?: never;
@@ -1102,6 +1122,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/content/{contentId}/image-assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sanitize and store one private image asset for an owned draft
+         * @description The API validates and removes metadata before a server-only Bunny Storage upload. Exact retries reuse one durable reservation; release remains blocked pending provider and safety evidence.
+         */
+        post: operations["uploadContentImageAsset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/media/uploads": {
         parameters: {
             query?: never;
@@ -1117,6 +1157,27 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/media/assets/{mediaAssetId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove an asset from an owned draft and durably schedule provider cleanup
+         * @description The canonical composition is updated transactionally before provider deletion. Provider failure remains a retryable audited cleanup state and cannot restore the asset to the composition.
+         */
+        delete: operations["retireContentMediaAsset"];
+        options?: never;
+        head?: never;
+        /** Update accessibility and provenance fields on an owned draft asset */
+        patch: operations["updateContentMediaAsset"];
         trace?: never;
     };
     "/v1/media/assets/{mediaAssetId}/sync": {
@@ -3855,8 +3916,12 @@ export interface components {
             id: string;
             creator: components["schemas"]["User"];
             /** @enum {string} */
-            mediaType: "bit" | "clip" | "image" | "vod" | "live_replay";
+            mediaType: "bit" | "clip" | "image" | "vod" | "live_replay" | "carousel" | "text" | "poll";
             caption?: string | null;
+            bodyText?: string | null;
+            compositionRevision?: number;
+            mediaAssets?: components["schemas"]["ContentMediaAsset"][];
+            poll?: components["schemas"]["ContentPoll"] | null;
             /** Format: uri */
             posterUrl?: string | null;
             playback?: components["schemas"]["PlaybackResource"];
@@ -3874,6 +3939,94 @@ export interface components {
             following: boolean;
             followerCount: number;
             followingCount: number;
+        };
+        ContentMediaAsset: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "image" | "video";
+            position: number;
+            /** @enum {string} */
+            provider: "bunny" | "livepeer";
+            providerState: string;
+            playback?: components["schemas"]["PlaybackResource"];
+            /** Format: uri */
+            posterUrl?: string | null;
+            /** @enum {string|null} */
+            mimeType?: "image/jpeg" | "image/png" | "image/webp" | "image/avif" | "video/mp4" | "video/quicktime" | "video/webm" | null;
+            widthPixels?: number | null;
+            heightPixels?: number | null;
+            durationMs?: number | null;
+            altText?: string | null;
+            requiredForRelease: boolean;
+            isCover: boolean;
+            focalPointX?: number | null;
+            focalPointY?: number | null;
+            /** @enum {string} */
+            originClassification: "human_created" | "ai_assisted" | "ai_generated" | "materially_ai_manipulated";
+            /** @enum {string} */
+            visibleLabelState?: "none" | "ai_assisted" | "ai_generated" | "manipulated";
+        };
+        ImageAssetUploadResult: {
+            /** Format: uuid */
+            mediaAssetId: string;
+            /** @enum {string} */
+            kind: "image";
+            /** @enum {string} */
+            mimeType: "image/jpeg" | "image/png" | "image/webp";
+            widthPixels: number;
+            heightPixels: number;
+            /** @enum {string} */
+            releaseState: "awaiting_safety_evidence";
+        };
+        UpdateContentMediaAssetRequest: {
+            expectedCompositionRevision: number;
+            altText?: string | null;
+            /** @enum {string} */
+            originClassification?: "human_created" | "ai_assisted" | "ai_generated" | "materially_ai_manipulated";
+        } | unknown | unknown;
+        ContentMediaAssetMutationResult: {
+            compositionRevision: number;
+            asset: components["schemas"]["ContentMediaAsset"];
+        };
+        RetireContentMediaAssetRequest: {
+            expectedCompositionRevision: number;
+            reason: string;
+        };
+        RetireContentMediaAssetResult: {
+            /** Format: uuid */
+            mediaAssetId: string;
+            compositionRevision: number;
+            /** @enum {string} */
+            cleanupState: "pending" | "retry" | "completed";
+        };
+        ContentPollOption: {
+            /** Format: uuid */
+            id: string;
+            position: number;
+            text: string;
+            voteCount: number;
+        };
+        ContentPoll: {
+            question: string;
+            options: components["schemas"]["ContentPollOption"][];
+            /** @enum {string} */
+            state: "open" | "closed" | "cancelled";
+            totalVoteCount: number;
+            /** Format: date-time */
+            closesAt: string | null;
+            /** Format: uuid */
+            viewerOptionId: string | null;
+        };
+        ContentPollDraft: {
+            question: string;
+            options: string[];
+            /** Format: date-time */
+            closesAt?: string | null;
+        };
+        VoteOnContentPollRequest: {
+            /** Format: uuid */
+            optionId: string;
         };
         RecordFeedImpressionRequest: {
             /** Format: uuid */
@@ -4006,8 +4159,10 @@ export interface components {
         };
         CreateContentRequest: {
             /** @enum {string} */
-            mediaType: "bit" | "clip" | "image" | "vod" | "live_replay";
+            mediaType: "bit" | "clip" | "image" | "vod" | "live_replay" | "carousel" | "text" | "poll";
             caption?: string;
+            bodyText?: string;
+            poll?: components["schemas"]["ContentPollDraft"];
             /** @enum {string} */
             visibility: "public" | "followers" | "subscribers" | "private";
             /** @enum {string} */
@@ -4019,6 +4174,9 @@ export interface components {
         };
         UpdateContentRequest: {
             caption?: string;
+            bodyText?: string;
+            expectedCompositionRevision?: number;
+            assetOrder?: string[];
             /** @enum {string} */
             visibility?: "public" | "followers" | "subscribers" | "private";
             /** @enum {string} */
@@ -4039,7 +4197,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            mediaType: "bit" | "clip" | "image" | "vod" | "live_replay";
+            mediaType: "bit" | "clip" | "image" | "vod" | "live_replay" | "carousel" | "text" | "poll";
             caption?: string | null;
             /** Format: uri */
             posterUrl?: string | null;
@@ -5566,6 +5724,9 @@ export interface components {
             /** Format: uuid */
             contentItemId: string;
             /** @enum {string} */
+            assetKind: "image" | "video";
+            position: number | null;
+            /** @enum {string} */
             provider: "bunny" | "livepeer";
             providerAssetId: string;
             providerState: string;
@@ -5575,6 +5736,11 @@ export interface components {
             readyAt?: string | null;
             /** Format: date-time */
             providerCheckedAt?: string | null;
+            /** Format: date-time */
+            retiredAt: string | null;
+            /** @enum {string} */
+            providerCleanupState: "not_required" | "pending" | "retry" | "completed";
+            providerCleanupErrorCode: string | null;
             /** Format: date-time */
             createdAt: string;
         };
@@ -6324,6 +6490,15 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["ContentItem"];
+            };
+        };
+        /** @description Current poll state */
+        ContentPoll: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ContentPoll"];
             };
         };
         /** @description Owner-visible publication workspace */
@@ -7520,6 +7695,11 @@ export interface components {
         CreateContent: {
             content: {
                 "application/json": components["schemas"]["CreateContentRequest"];
+            };
+        };
+        VoteOnContentPoll: {
+            content: {
+                "application/json": components["schemas"]["VoteOnContentPollRequest"];
             };
         };
         UpdateContent: {
@@ -8795,6 +8975,30 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    voteOnContentPoll: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                contentId: components["parameters"]["ContentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["VoteOnContentPoll"];
+        responses: {
+            200: components["responses"]["ContentPoll"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     publishContent: {
         parameters: {
             query?: never;
@@ -9244,6 +9448,45 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    uploadContentImageAsset: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                contentId: components["parameters"]["ContentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "image/jpeg": string;
+                "image/png": string;
+                "image/webp": string;
+            };
+        };
+        responses: {
+            /** @description Private sanitized image stored; public release still awaits safety evidence */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageAssetUploadResult"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["ValidationFailed"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     createMediaUpload: {
         parameters: {
             query?: never;
@@ -9262,6 +9505,83 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    retireContentMediaAsset: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                mediaAssetId: components["parameters"]["MediaAssetId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetireContentMediaAssetRequest"];
+            };
+        };
+        responses: {
+            /** @description Asset retired and provider cleanup completed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetireContentMediaAssetResult"];
+                };
+            };
+            /** @description Asset retired; provider cleanup is durably pending retry */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetireContentMediaAssetResult"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    updateContentMediaAsset: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                mediaAssetId: components["parameters"]["MediaAssetId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateContentMediaAssetRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated asset and authoritative composition revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentMediaAssetMutationResult"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };

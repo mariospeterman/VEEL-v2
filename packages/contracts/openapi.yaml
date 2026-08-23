@@ -744,6 +744,26 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/content/{contentId}/poll-votes:
+    post:
+      operationId: voteOnContentPoll
+      tags: [Content]
+      summary: Cast or replace the signed-in viewer's poll vote
+      description: The backend validates content eligibility and poll state, updates counters transactionally, and preserves lifetime idempotency receipts.
+      parameters:
+        - $ref: "#/components/parameters/ContentId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/VoteOnContentPoll"
+      responses:
+        "200": { $ref: "#/components/responses/ContentPoll" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/content/{contentId}/publish:
     post:
       operationId: publishContent
@@ -1069,6 +1089,38 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "409": { $ref: "#/components/responses/Conflict" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/content/{contentId}/image-assets:
+    post:
+      operationId: uploadContentImageAsset
+      tags: [Content, Media]
+      summary: Sanitize and store one private image asset for an owned draft
+      description: The API validates and removes metadata before a server-only Bunny Storage upload. Exact retries reuse one durable reservation; release remains blocked pending provider and safety evidence.
+      parameters:
+        - $ref: "#/components/parameters/ContentId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema: { type: string, format: binary }
+          image/png:
+            schema: { type: string, format: binary }
+          image/webp:
+            schema: { type: string, format: binary }
+      responses:
+        "201":
+          description: Private sanitized image stored; public release still awaits safety evidence
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImageAssetUploadResult" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "413": { $ref: "#/components/responses/ValidationFailed" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/media/uploads:
     post:
       operationId: createMediaUpload
@@ -1085,6 +1137,59 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/media/assets/{mediaAssetId}:
+    patch:
+      operationId: updateContentMediaAsset
+      tags: [Media]
+      summary: Update accessibility and provenance fields on an owned draft asset
+      parameters:
+        - $ref: "#/components/parameters/MediaAssetId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateContentMediaAssetRequest" }
+      responses:
+        "200":
+          description: Updated asset and authoritative composition revision
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContentMediaAssetMutationResult" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      operationId: retireContentMediaAsset
+      tags: [Media]
+      summary: Remove an asset from an owned draft and durably schedule provider cleanup
+      description: The canonical composition is updated transactionally before provider deletion. Provider failure remains a retryable audited cleanup state and cannot restore the asset to the composition.
+      parameters:
+        - $ref: "#/components/parameters/MediaAssetId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RetireContentMediaAssetRequest" }
+      responses:
+        "200":
+          description: Asset retired and provider cleanup completed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RetireContentMediaAssetResult" }
+        "202":
+          description: Asset retired; provider cleanup is durably pending retry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RetireContentMediaAssetResult" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/media/assets/{mediaAssetId}/sync:
     post:
@@ -2966,6 +3071,7 @@ components:
     RecordFeedImpression: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RecordFeedImpressionRequest" } } } }
     UploadProfileAvatar: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UploadProfileAvatarRequest" } } } }
     CreateContent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateContentRequest" } } } }
+    VoteOnContentPoll: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/VoteOnContentPollRequest" } } } }
     UpdateContent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateContentRequest" } } } }
     PublishContent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PublishContentRequest" } } } }
     CreateMediaModerationAppeal: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateMediaModerationAppealRequest" } } } }
@@ -3087,6 +3193,7 @@ components:
     NotificationDevice: { description: Notification device, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationDevice" } } } }
     RealtimeAccessToken: { description: Short-lived user-scoped Realtime access token, content: { application/json: { schema: { $ref: "#/components/schemas/RealtimeAccessToken" } } } }
     ContentItem: { description: Content item, content: { application/json: { schema: { $ref: "#/components/schemas/ContentItem" } } } }
+    ContentPoll: { description: Current poll state, content: { application/json: { schema: { $ref: "#/components/schemas/ContentPoll" } } } }
     CreatorMediaPage: { description: Owner-visible publication workspace, content: { application/json: { schema: { $ref: "#/components/schemas/CreatorMediaPage" } } } }
     MediaModerationAppeal: { description: Creator moderation appeal, content: { application/json: { schema: { $ref: "#/components/schemas/MediaModerationAppeal" } } } }
     UploadSession: { description: Safe upload session, content: { application/json: { schema: { $ref: "#/components/schemas/UploadSession" } } } }
@@ -3806,8 +3913,18 @@ components:
       properties:
         id: { type: string, format: uuid }
         creator: { $ref: "#/components/schemas/User" }
-        mediaType: { type: string, enum: [bit, clip, image, vod, live_replay] }
+        mediaType: { type: string, enum: [bit, clip, image, vod, live_replay, carousel, text, poll] }
         caption: { type: string, nullable: true }
+        bodyText: { type: string, minLength: 1, maxLength: 10000, nullable: true }
+        compositionRevision: { type: integer, minimum: 1 }
+        mediaAssets:
+          type: array
+          maxItems: 10
+          items: { $ref: "#/components/schemas/ContentMediaAsset" }
+        poll:
+          allOf:
+            - $ref: "#/components/schemas/ContentPoll"
+          nullable: true
         posterUrl: { type: string, format: uri, nullable: true }
         playback: { $ref: "#/components/schemas/PlaybackResource" }
         accessState: { type: string, enum: [free, teaser, locked, unlocked, subscribed, pass_required] }
@@ -3824,6 +3941,111 @@ components:
         following: { type: boolean }
         followerCount: { type: integer, minimum: 0 }
         followingCount: { type: integer, minimum: 0 }
+    ContentMediaAsset:
+      type: object
+      required: [id, kind, position, provider, providerState, requiredForRelease, isCover, originClassification]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [image, video] }
+        position: { type: integer, minimum: 0, maximum: 9 }
+        provider: { type: string, enum: [bunny, livepeer] }
+        providerState: { type: string }
+        playback: { $ref: "#/components/schemas/PlaybackResource" }
+        posterUrl: { type: string, format: uri, nullable: true }
+        mimeType: { type: string, enum: [image/jpeg, image/png, image/webp, image/avif, video/mp4, video/quicktime, video/webm], nullable: true }
+        widthPixels: { type: integer, minimum: 1, maximum: 16384, nullable: true }
+        heightPixels: { type: integer, minimum: 1, maximum: 16384, nullable: true }
+        durationMs: { type: integer, minimum: 0, nullable: true }
+        altText: { type: string, minLength: 1, maxLength: 1000, nullable: true }
+        requiredForRelease: { type: boolean }
+        isCover: { type: boolean }
+        focalPointX: { type: number, minimum: 0, maximum: 1, nullable: true }
+        focalPointY: { type: number, minimum: 0, maximum: 1, nullable: true }
+        originClassification: { type: string, enum: [human_created, ai_assisted, ai_generated, materially_ai_manipulated] }
+        visibleLabelState: { type: string, enum: [none, ai_assisted, ai_generated, manipulated] }
+    ImageAssetUploadResult:
+      type: object
+      required: [mediaAssetId, kind, mimeType, widthPixels, heightPixels, releaseState]
+      properties:
+        mediaAssetId: { type: string, format: uuid }
+        kind: { type: string, enum: [image] }
+        mimeType: { type: string, enum: [image/jpeg, image/png, image/webp] }
+        widthPixels: { type: integer, minimum: 1, maximum: 16384 }
+        heightPixels: { type: integer, minimum: 1, maximum: 16384 }
+        releaseState: { type: string, enum: [awaiting_safety_evidence] }
+    UpdateContentMediaAssetRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedCompositionRevision]
+      properties:
+        expectedCompositionRevision: { type: integer, minimum: 1 }
+        altText: { type: string, minLength: 1, maxLength: 1000, nullable: true }
+        originClassification:
+          type: string
+          enum: [human_created, ai_assisted, ai_generated, materially_ai_manipulated]
+      anyOf:
+        - required: [altText]
+        - required: [originClassification]
+    ContentMediaAssetMutationResult:
+      type: object
+      required: [compositionRevision, asset]
+      properties:
+        compositionRevision: { type: integer, minimum: 1 }
+        asset: { $ref: "#/components/schemas/ContentMediaAsset" }
+    RetireContentMediaAssetRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedCompositionRevision, reason]
+      properties:
+        expectedCompositionRevision: { type: integer, minimum: 1 }
+        reason: { type: string, minLength: 1, maxLength: 240 }
+    RetireContentMediaAssetResult:
+      type: object
+      additionalProperties: false
+      required: [mediaAssetId, compositionRevision, cleanupState]
+      properties:
+        mediaAssetId: { type: string, format: uuid }
+        compositionRevision: { type: integer, minimum: 1 }
+        cleanupState: { type: string, enum: [pending, retry, completed] }
+    ContentPollOption:
+      type: object
+      required: [id, position, text, voteCount]
+      properties:
+        id: { type: string, format: uuid }
+        position: { type: integer, minimum: 0, maximum: 3 }
+        text: { type: string, minLength: 1, maxLength: 200 }
+        voteCount: { type: integer, minimum: 0 }
+    ContentPoll:
+      type: object
+      required: [question, options, state, totalVoteCount, closesAt, viewerOptionId]
+      properties:
+        question: { type: string, minLength: 1, maxLength: 500 }
+        options:
+          type: array
+          minItems: 2
+          maxItems: 4
+          items: { $ref: "#/components/schemas/ContentPollOption" }
+        state: { type: string, enum: [open, closed, cancelled] }
+        totalVoteCount: { type: integer, minimum: 0 }
+        closesAt: { type: string, format: date-time, nullable: true }
+        viewerOptionId: { type: string, format: uuid, nullable: true }
+    ContentPollDraft:
+      type: object
+      required: [question, options]
+      properties:
+        question: { type: string, minLength: 1, maxLength: 500 }
+        options:
+          type: array
+          minItems: 2
+          maxItems: 4
+          items: { type: string, minLength: 1, maxLength: 200 }
+        closesAt: { type: string, format: date-time, nullable: true }
+    VoteOnContentPollRequest:
+      type: object
+      additionalProperties: false
+      required: [optionId]
+      properties:
+        optionId: { type: string, format: uuid }
     RecordFeedImpressionRequest:
       type: object
       required: [contentId]
@@ -3976,8 +4198,10 @@ components:
       type: object
       required: [mediaType, visibility, nsfwLabel, representationMode, contentSafetyPolicyAccepted]
       properties:
-        mediaType: { type: string, enum: [bit, clip, image, vod, live_replay] }
+        mediaType: { type: string, enum: [bit, clip, image, vod, live_replay, carousel, text, poll] }
         caption: { type: string }
+        bodyText: { type: string, minLength: 1, maxLength: 10000 }
+        poll: { $ref: "#/components/schemas/ContentPollDraft" }
         visibility: { type: string, enum: [public, followers, subscribers, private] }
         nsfwLabel: { type: string, enum: [none, adult, explicit] }
         representationMode: { type: string, enum: [no_real_person, self_only, declared_performers] }
@@ -3987,6 +4211,14 @@ components:
       type: object
       properties:
         caption: { type: string }
+        bodyText: { type: string, minLength: 1, maxLength: 10000 }
+        expectedCompositionRevision: { type: integer, minimum: 1 }
+        assetOrder:
+          type: array
+          minItems: 1
+          maxItems: 10
+          uniqueItems: true
+          items: { type: string, format: uuid }
         visibility: { type: string, enum: [public, followers, subscribers, private] }
         nsfwLabel: { type: string, enum: [none, adult, explicit] }
         representationMode: { type: string, enum: [no_real_person, self_only, declared_performers] }
@@ -4005,7 +4237,7 @@ components:
       required: [id, mediaType, visibility, publicationState, reviewState, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
-        mediaType: { type: string, enum: [bit, clip, image, vod, live_replay] }
+        mediaType: { type: string, enum: [bit, clip, image, vod, live_replay, carousel, text, poll] }
         caption: { type: string, nullable: true }
         posterUrl: { type: string, format: uri, nullable: true }
         visibility: { type: string, enum: [public, followers, subscribers, private] }
@@ -5585,10 +5817,12 @@ components:
         reason: { type: string, minLength: 1, maxLength: 1000 }
     AdminMediaAsset:
       type: object
-      required: [id, contentItemId, provider, providerAssetId, providerState, providerPlayable, hasPlaybackUrl, createdAt]
+      required: [id, contentItemId, assetKind, position, provider, providerAssetId, providerState, providerPlayable, hasPlaybackUrl, retiredAt, providerCleanupState, providerCleanupErrorCode, createdAt]
       properties:
         id: { type: string, format: uuid }
         contentItemId: { type: string, format: uuid }
+        assetKind: { type: string, enum: [image, video] }
+        position: { type: integer, minimum: 0, maximum: 9, nullable: true }
         provider: { type: string, enum: [bunny, livepeer] }
         providerAssetId: { type: string }
         providerState: { type: string }
@@ -5596,6 +5830,9 @@ components:
         hasPlaybackUrl: { type: boolean }
         readyAt: { type: string, format: date-time, nullable: true }
         providerCheckedAt: { type: string, format: date-time, nullable: true }
+        retiredAt: { type: string, format: date-time, nullable: true }
+        providerCleanupState: { type: string, enum: [not_required, pending, retry, completed] }
+        providerCleanupErrorCode: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
     AdminAgeCheck:
       type: object

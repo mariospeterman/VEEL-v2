@@ -1,5 +1,10 @@
 import type { ContentItem, Entitlement } from "./types.js";
 
+export type ContentMediaAssetProjection = NonNullable<ContentItem["mediaAssets"]>[number] & {
+  playbackUrl?: string | null;
+  providerPlayable?: boolean | null;
+};
+
 export interface FeedRow {
   id: string;
   media_type: ContentItem["mediaType"];
@@ -34,6 +39,10 @@ export interface ContentRow {
   id: string;
   media_type: ContentItem["mediaType"];
   caption: string | null;
+  body_text?: string | null;
+  asset_revision?: number;
+  media_assets?: ContentMediaAssetProjection[] | null;
+  poll?: ContentItem["poll"];
   nsfw_label: NonNullable<ContentItem["nsfwLabel"]>;
   creator_id: string;
   handle: string | null;
@@ -45,6 +54,7 @@ export interface ContentRow {
   comment_count?: string | number;
   share_count?: string | number;
   viewer_following_creator?: boolean;
+  viewer_is_creator?: boolean;
 }
 
 export interface ContentDetailRow extends ContentRow {

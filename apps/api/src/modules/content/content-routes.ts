@@ -3,6 +3,7 @@ import { registerContentCoreRoutes } from "./content-core-routes.js";
 import type { RegisterContentRoutesOptions } from "./content-route-shared.js";
 import { registerContentUploadRoutes } from "./content-upload-routes.js";
 import { registerContentWebhookRoutes } from "./content-webhook-routes.js";
+import { registerContentPollRoutes } from "./content-poll-routes.js";
 
 export async function registerContentRoutes(
   app: FastifyInstance,
@@ -10,5 +11,6 @@ export async function registerContentRoutes(
 ): Promise<void> {
   await registerContentWebhookRoutes(app, options);
   await registerContentCoreRoutes(app, options);
+  await registerContentPollRoutes(app, options);
   await registerContentUploadRoutes(app, options);
 }

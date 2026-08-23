@@ -1,6 +1,6 @@
 import { appShellNavItems } from "@veel/ui";
 import { getContentItem, type ContentItem } from "@/api-client";
-import { ProviderPlayback } from "../../provider-playback";
+import { ContentRenderer } from "../content-renderer";
 import { ErrorState } from "../../ui";
 import { ContentUnlockPanel } from "./content-unlock-panel";
 import { ContentEngagementPanel } from "./content-engagement-panel";
@@ -55,7 +55,7 @@ export default async function ContentPage({
 function MediaStage({ item }: { item: ContentItem }) {
   return (
     <section className="media-pane relative overflow-hidden rounded border border-(--line) bg-[#0f1217]">
-      <ProviderPlayback playback={item.playback} posterUrl={item.posterUrl} title="WeVid content playback" />
+      <ContentRenderer item={item} title={`${item.creator.displayName} post`} />
       <div className="absolute left-4 top-4 rounded bg-(--background)/85 px-2 py-1 text-xs font-medium">
         {item.mediaType.toUpperCase()}
       </div>

@@ -6,6 +6,8 @@ export function toContentItem(
   posterUrl: string | null,
   accessState: ContentItem["accessState"] = "free"
 ): ContentItem {
+  const fullCompositionAllowed = ["free", "unlocked", "subscribed"].includes(accessState);
+
   return {
     id: row.id,
     creator: {
@@ -17,7 +19,34 @@ export function toContentItem(
     },
     mediaType: row.media_type,
     caption: row.caption,
-    posterUrl,
+    ...(row.body_text !== undefined
+      ? { bodyText: fullCompositionAllowed ? row.body_text : null }
+      : {}),
+    ...(row.asset_revision !== undefined ? { compositionRevision: Number(row.asset_revision) } : {}),
+    ...(Array.isArray(row.media_assets)
+      ? {
+          mediaAssets: row.media_assets.map((asset) => {
+            const { playbackUrl, providerPlayable, ...publicAsset } = asset;
+            return {
+              ...publicAsset,
+              posterUrl: fullCompositionAllowed ? (asset.posterUrl ?? null) : null,
+              ...(asset.kind === "video"
+                ? {
+                    playback: playbackForRow({
+                      playback_url: playbackUrl ?? null,
+                      provider: asset.provider,
+                      provider_playable: providerPlayable ?? false
+                    }, accessState)
+                  }
+                : {})
+            };
+          })
+        }
+      : {}),
+    ...(row.poll !== undefined
+      ? { poll: fullCompositionAllowed ? normalizeContentPoll(row.poll) : null }
+      : {}),
+    posterUrl: fullCompositionAllowed || accessState === "teaser" ? posterUrl : null,
     playback: playbackForRow(row as Partial<PlaybackProjectionRow>, accessState),
     accessState,
     nsfwLabel: row.nsfw_label,
@@ -34,12 +63,23 @@ export function toContentItem(
   };
 }
 
+export function normalizeContentPoll(
+  poll: Exclude<ContentItem["poll"], undefined>
+): Exclude<ContentItem["poll"], undefined> {
+  if (!poll) return poll;
+  return {
+    ...poll,
+    closesAt: poll.closesAt ? new Date(poll.closesAt).toISOString() : null
+  };
+}
+
 export function accessStateForRule(row: {
   access_type: string | null;
   product_type: string | null;
   entitlement_id?: string | null;
+  viewer_is_creator?: boolean;
 }): ContentItem["accessState"] {
-  if (row.entitlement_id) {
+  if (row.viewer_is_creator || row.entitlement_id) {
     return "unlocked";
   }
 

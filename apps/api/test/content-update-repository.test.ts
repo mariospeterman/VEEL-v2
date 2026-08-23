@@ -11,6 +11,9 @@ describe("content update repository", () => {
       const query = strings.join("?");
       queries.push(query);
       queryCalls.push({ query, values: queryValues });
+      if (query.includes("select id from users where supabase_user_id")) {
+        return Promise.resolve([{ id: "00000000-0000-4000-8000-000000000001" }]);
+      }
       if (query.includes("with actor as")) {
         return Promise.resolve([{
           id: "00000000-0000-4000-8000-000000000040",
@@ -37,6 +40,7 @@ describe("content update repository", () => {
       contentId: "00000000-0000-4000-8000-000000000040",
       idempotencyKey: "published-safety-edit-1",
       captionProvided: false,
+      bodyTextProvided: false,
       nsfwLabel: "adult",
       contentSafetyPolicyAccepted: true,
       teaserStartMsProvided: false,

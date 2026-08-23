@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: implementation status, known gaps, and next hardening priorities
-Last updated: 2026-08-20
+Last updated: 2026-08-22
 Source of truth: yes
 
 Owns:
@@ -30,22 +30,29 @@ Non-goals:
 - Blockchain is payment truth. Entitlements are access truth. Compliance ledger is reporting truth. Accounting export/integration is bookkeeping truth.
 - WeVid remains noncustodial: no internal credits, balances, escrow, withdrawals, payout queues, or server-held user private keys.
 
-## Active Production Slice
+## Merged Baseline And Next Planned Slice
 
-Exactly one write/integration slice may be active. An open pull request carrying the
-`wevid-active-slice` label is the concurrency mutex.
+Protected `main` owns stable merged truth only. Live branch, pull-request, head-SHA, CI, and review
+state come from the one open pull request carrying `wevid-active-slice`; they are intentionally not
+copied into this document. The machine-readable companion is `production-status.json`.
 
 | Field | Current value |
 | --- | --- |
-| Merged baseline | `main` at `5889b39` (green baseline through PR #85) |
-| Active slice | Convergence 01 — policy and eligibility |
-| Branch | `codex/converge-01-policy-eligibility` |
-| Pull request | Draft PR #86 |
-| State | `ACTIVE` |
-| Slice blockers | No code blocker; provider/staging gates remain external and unchanged. |
-| Next unfinished slice | Convergence 02 — Universal composer |
+| Latest merged baseline | `b5e190480032c38db485138206cb09e296d7053a` |
+| Latest merged slice | Convergence 01 — policy and eligibility |
+| Latest merged migration | `packages/database/migrations/0108_policy_content_eligibility_convergence.sql` |
+| Latest merged evidence | `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`, `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN` |
+| Known launch blockers | `STAGING_PROVEN`, `PROVIDER_APPROVED`, `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED` remain outstanding. |
+| Next planned slice | Convergence 02 — Universal composer |
 
-Convergence 01 now has one deterministic recipient-KYC policy resolver for global mode, active
+Next planned production slice: **Convergence 02 — Universal composer**.
+
+Readiness vocabulary is fixed to `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`,
+`REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN`, `STAGING_PROVEN`, `PROVIDER_APPROVED`,
+`LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED`. “Accepted” describes a
+design decision; it never means implemented, tested, approved, enabled, or launch-ready.
+
+Merged Convergence 01 has one deterministic recipient-KYC policy resolver for global mode, active
 account override, product, normalized jurisdiction, and active risk evidence; `risk_based` remains
 non-universal, global `required` cannot be weakened by an exemption, and every decision includes its
 reason, version, and effective/expiry evidence. Creator capability/onboarding/dashboard, one-time
@@ -59,7 +66,10 @@ before contextual adult-publisher verification, while final publication rechecks
 capability and never forces creator KYC or earnings. Migration `0108` rollback/reapply, 479 unit tests,
 five real-Postgres journeys, production build/typecheck/lint/docs/deploy checks, and 25 desktop plus 25
 mobile Chromium journeys are green locally. Firefox and clean-runner coverage remain protected-PR CI
-gates. No provider API behavior changed; provider/staging gates remain unchanged.
+gates. No provider API behavior changed; provider/staging gates remain unchanged. PR #86 merged as
+`b5e1904`; exact-main CI `32399020903`, database `32399021003`, security `32399020923`, and release
+artifact `32400011806` are green. Staging convergence `32400705957` verified the immutable artifact,
+then failed closed at the recorded shared staging/provider/operations/legal configuration gate.
 
 PR #85 merged at `5889b39`. Exact-main CI run `32352695267`, database-migration run `32352695320`,
 security run `32352695299`, and immutable release-artifact run `32353578799` are green. Staging run

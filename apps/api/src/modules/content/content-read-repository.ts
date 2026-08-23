@@ -13,16 +13,21 @@ export function createContentReadRepositoryMethods(
           ci.id,
           ci.media_type,
           ci.caption,
+          ci.body_text,
+          ci.asset_revision,
           ci.nsfw_label,
           u.id as creator_id,
           p.handle,
           p.display_name,
           p.avatar_url,
+          viewer.id = u.id as viewer_is_creator,
           ma.poster_url,
           ma.playback_url,
           ma.provider,
           ma.provider_state,
           ma.provider_playable,
+          universal_assets.media_assets,
+          poll_projection.poll,
           car.access_type,
           car.product_type,
           eg.id as entitlement_id,
@@ -72,6 +77,7 @@ export function createContentReadRepositoryMethods(
           select poster_url, playback_url, provider, provider_state, provider_playable
           from media_assets
           where content_item_id = ci.id
+            and retired_at is null
             and (ci.release_media_asset_id is null or id = ci.release_media_asset_id)
           order by (id = ci.release_media_asset_id) desc, created_at asc
           limit 1
@@ -99,6 +105,66 @@ export function createContentReadRepositoryMethods(
           order by granted_at desc
           limit 1
         ) eg on true
+        left join lateral (
+          select coalesce(jsonb_agg(
+            jsonb_build_object(
+              'id', asset.id,
+              'kind', asset.asset_kind,
+              'position', asset.position,
+              'provider', asset.provider,
+              'providerState', asset.provider_state,
+              'playbackUrl', asset.playback_url,
+              'providerPlayable', asset.provider_playable,
+              'posterUrl', asset.poster_url,
+              'mimeType', asset.mime_type,
+              'widthPixels', asset.width_pixels,
+              'heightPixels', asset.height_pixels,
+              'durationMs', asset.duration_ms,
+              'altText', asset.alt_text,
+              'requiredForRelease', asset.required_for_release,
+              'isCover', asset.is_cover,
+              'focalPointX', asset.focal_point_x,
+              'focalPointY', asset.focal_point_y,
+              'originClassification', asset.origin_classification,
+              'visibleLabelState', asset.visible_label_state
+            )
+            order by asset.position
+          ), '[]'::jsonb) as media_assets
+          from media_assets asset
+          where asset.content_item_id = ci.id
+            and asset.retired_at is null
+        ) universal_assets on true
+        left join lateral (
+          select jsonb_build_object(
+            'question', poll.question,
+            'options', coalesce((
+              select jsonb_agg(
+                jsonb_build_object(
+                  'id', option.id,
+                  'position', option.position,
+                  'text', option.option_text,
+                  'voteCount', option.vote_count
+                )
+                order by option.position
+              )
+              from content_poll_options option
+              where option.content_item_id = poll.content_item_id
+            ), '[]'::jsonb),
+            'state', poll.state,
+            'totalVoteCount', coalesce((
+              select sum(option.vote_count)
+              from content_poll_options option
+              where option.content_item_id = poll.content_item_id
+            ), 0),
+            'closesAt', poll.closes_at,
+            'viewerOptionId', viewer_vote.option_id
+          ) as poll
+          from content_polls poll
+          left join content_poll_votes viewer_vote
+            on viewer_vote.content_item_id = poll.content_item_id
+            and viewer_vote.voter_user_id = viewer.id
+          where poll.content_item_id = ci.id
+        ) poll_projection on true
         where ci.id = ${input.contentId}
           and (
             exists (

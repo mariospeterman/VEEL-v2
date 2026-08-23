@@ -42,22 +42,8 @@ interface BunnyVideoPlayDataResponse {
   };
 }
 
-type BunnyStreamProviderConfig = Partial<Pick<
-  ServerEnv,
-  | "BUNNY_STREAM_API_KEY"
-  | "BUNNY_STREAM_EMBED_TOKEN_KEY"
-  | "BUNNY_STREAM_LIBRARY_ID"
-  | "BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS"
->>;
+type BunnyStreamProviderConfig = Partial<ServerEnv>;
 
-export function createBunnyStreamUploadAdapter(
-  env: ServerEnv,
-  fetchImpl?: typeof fetch
-): MediaUploadProviderAdapter;
-export function createBunnyStreamUploadAdapter(
-  env: BunnyStreamProviderConfig,
-  fetchImpl?: typeof fetch
-): MediaUploadProviderAdapter;
 export function createBunnyStreamUploadAdapter(
   env: BunnyStreamProviderConfig,
   fetchImpl: typeof fetch = fetch
@@ -66,6 +52,84 @@ export function createBunnyStreamUploadAdapter(
     provider: "bunny",
     isConfigured() {
       return Boolean(env.BUNNY_STREAM_API_KEY && env.BUNNY_STREAM_LIBRARY_ID);
+    },
+    isImageUploadConfigured() {
+      return Boolean(
+        env.BUNNY_STORAGE_IMAGE_UPLOAD_ENABLED &&
+        env.BUNNY_STORAGE_ACCESS_KEY &&
+        env.BUNNY_STORAGE_ZONE_NAME &&
+        env.BUNNY_STORAGE_API_ENDPOINT &&
+        env.BUNNY_STORAGE_PULL_ZONE_URL &&
+        env.BUNNY_STORAGE_PULL_ZONE_TOKEN_KEY
+      );
+    },
+    createImageObjectReference(input) {
+      return `images/${input.contentId}/${input.mediaAssetId}.${input.extension}`;
+    },
+    async uploadImageObject(input) {
+      const accessKey = env.BUNNY_STORAGE_ACCESS_KEY;
+      const zoneName = env.BUNNY_STORAGE_ZONE_NAME;
+      const endpoint = env.BUNNY_STORAGE_API_ENDPOINT;
+
+      if (!env.BUNNY_STORAGE_IMAGE_UPLOAD_ENABLED || !accessKey || !zoneName || !endpoint) {
+        throw new MediaUploadProviderConfigurationError();
+      }
+
+      const uploadUrl = new URL(
+        `${encodeURIComponent(zoneName)}/${encodedObjectPath(input.providerAssetId)}`,
+        withTrailingSlash(endpoint)
+      );
+      const response = await fetchImpl(uploadUrl, {
+        method: "PUT",
+        headers: {
+          AccessKey: accessKey,
+          Checksum: input.checksumSha256.toUpperCase(),
+          "Content-Type": input.mimeType
+        },
+        body: input.body.buffer.slice(
+          input.body.byteOffset,
+          input.body.byteOffset + input.body.byteLength
+        ) as ArrayBuffer
+      });
+
+      if (response.status !== 201) {
+        throw new MediaUploadProviderError();
+      }
+    },
+    async deleteProviderAsset(input) {
+      if (input.assetKind === "image") {
+        const accessKey = env.BUNNY_STORAGE_ACCESS_KEY;
+        const zoneName = env.BUNNY_STORAGE_ZONE_NAME;
+        const endpoint = env.BUNNY_STORAGE_API_ENDPOINT;
+        if (!env.BUNNY_STORAGE_IMAGE_UPLOAD_ENABLED || !accessKey || !zoneName || !endpoint) {
+          throw new MediaUploadProviderConfigurationError();
+        }
+        const deleteUrl = new URL(
+          `${encodeURIComponent(zoneName)}/${encodedObjectPath(input.providerAssetId)}`,
+          withTrailingSlash(endpoint)
+        );
+        const response = await fetchImpl(deleteUrl, {
+          method: "DELETE",
+          headers: { AccessKey: accessKey }
+        });
+        if (response.status !== 200 && response.status !== 404) {
+          throw new MediaUploadProviderError();
+        }
+        return;
+      }
+
+      const apiKey = env.BUNNY_STREAM_API_KEY;
+      const libraryId = env.BUNNY_STREAM_LIBRARY_ID;
+      if (!apiKey || !libraryId) {
+        throw new MediaUploadProviderConfigurationError();
+      }
+      const response = await fetchImpl(
+        `https://video.bunnycdn.com/library/${encodeURIComponent(libraryId)}/videos/${encodeURIComponent(input.providerAssetId)}`,
+        { method: "DELETE", headers: { AccessKey: apiKey } }
+      );
+      if (response.status !== 200 && response.status !== 404) {
+        throw new MediaUploadProviderError();
+      }
     },
     async createUploadSession(
       input: CreateMediaUploadProviderSessionInput
@@ -178,4 +242,12 @@ export function createBunnyStreamUploadAdapter(
       };
     }
   };
+}
+
+function withTrailingSlash(value: string): string {
+  return value.endsWith("/") ? value : `${value}/`;
+}
+
+function encodedObjectPath(value: string): string {
+  return value.split("/").map(encodeURIComponent).join("/");
 }

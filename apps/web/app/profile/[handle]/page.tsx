@@ -5,6 +5,7 @@ import { CreatorSupportPanel } from "./creator-support-panel";
 import { ProfileFollowPanel } from "./profile-follow-panel";
 import { ProfileMessageButton } from "./profile-message-button";
 import { SubscriptionAuthorizationPanel } from "../../subscriptions/subscription-authorization-panel";
+import { ContentRenderer } from "../../content/content-renderer";
 
 export default async function PublicCreatorProfilePage({
   params
@@ -102,11 +103,12 @@ function ProfileView({ followState, profile }: { followState: FollowState | null
           {profile.recentContent.map((item) => (
             <article className="overflow-hidden rounded border border-(--line) bg-(--panel)" key={item.id}>
               <div className="aspect-[4/5] bg-[#111827]">
-                {item.posterUrl ? <img alt="" className="h-full w-full object-cover" src={item.posterUrl} /> : null}
+                <ContentRenderer active={false} item={item} title={`${item.creator.displayName} post`} />
               </div>
               <div className="p-4">
-                <p className="font-medium">{item.caption}</p>
+                <p className="font-medium">{item.caption || (item.mediaType === "text" ? "Text post" : item.mediaType === "poll" ? "Poll" : "Post")}</p>
                 <p className="mt-1 text-sm text-(--muted)">{item.accessState}</p>
+                <a className="mt-3 inline-flex text-sm font-semibold underline underline-offset-4" href={`/content/${item.id}`}>Open post</a>
               </div>
             </article>
           ))}

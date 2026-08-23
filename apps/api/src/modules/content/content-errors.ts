@@ -19,6 +19,39 @@ export class ContentEventDraftConflictError extends Error {
   }
 }
 
+export class ContentCompositionConflictError extends Error {
+  constructor(readonly reason: "revision_conflict" | "composition_locked" | "idempotency_conflict") {
+    super(reason);
+    this.name = "ContentCompositionConflictError";
+  }
+}
+
+export class ContentImageUploadConflictError extends Error {
+  constructor(
+    readonly reason:
+      | "draft_locked"
+      | "format_invalid"
+      | "idempotency_conflict"
+      | "receipt_invalid"
+  ) {
+    super(reason);
+    this.name = "ContentImageUploadConflictError";
+  }
+}
+
+export class ContentAssetRetirementConflictError extends Error {
+  constructor(
+    readonly reason:
+      | "revision_conflict"
+      | "composition_locked"
+      | "idempotency_conflict"
+      | "asset_already_retired"
+  ) {
+    super(reason);
+    this.name = "ContentAssetRetirementConflictError";
+  }
+}
+
 export class ContentDraftIdempotencyConflictError extends Error {
   constructor() {
     super("content_draft_idempotency_conflict");
@@ -30,6 +63,13 @@ export class ContentDraftQuotaExceededError extends Error {
   constructor() {
     super("content_draft_quota_exceeded");
     this.name = "ContentDraftQuotaExceededError";
+  }
+}
+
+export class ContentPollVoteConflictError extends Error {
+  constructor(readonly reason: "idempotency_conflict" | "poll_closed") {
+    super(reason);
+    this.name = "ContentPollVoteConflictError";
   }
 }
 

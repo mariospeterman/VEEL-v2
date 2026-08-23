@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  authenticatedBinaryMutation,
   authenticatedEmptyMutation,
   authenticatedGet,
   authenticatedMutation,
@@ -12,6 +13,7 @@ export type {
   AccessPassIntent,
   AgeSession,
   ContentItem,
+  ContentPoll,
   ContentUnlockIntent,
   BlockState,
   Comment,
@@ -74,11 +76,17 @@ export type {
   TransactionRequestPostResponse,
   AcceptPaymentIntentTermsRequest,
   UpdateContentRequest,
+  VoteOnContentPollRequest,
   UpdateProfileRequest,
   UpdateCreatorOnboardingRequest,
   UpsertCreatorMembershipOfferRequest,
   UploadProfileAvatarRequest,
   UploadSession,
+  ImageAssetUploadResult,
+  UpdateContentMediaAssetRequest,
+  ContentMediaAssetMutationResult,
+  RetireContentMediaAssetRequest,
+  RetireContentMediaAssetResult,
   VerificationSession,
   User,
   CreatorOnboarding,
@@ -107,6 +115,7 @@ import type {
   AccessPassIntent,
   AgeSession,
   ContentItem,
+  ContentPoll,
   ContentUnlockIntent,
   BlockState,
   Comment,
@@ -169,11 +178,17 @@ import type {
   TransactionRequestPostResponse,
   AcceptPaymentIntentTermsRequest,
   UpdateContentRequest,
+  VoteOnContentPollRequest,
   UpdateProfileRequest,
   UpdateCreatorOnboardingRequest,
   UpsertCreatorMembershipOfferRequest,
   UploadProfileAvatarRequest,
   UploadSession,
+  ImageAssetUploadResult,
+  UpdateContentMediaAssetRequest,
+  ContentMediaAssetMutationResult,
+  RetireContentMediaAssetRequest,
+  RetireContentMediaAssetResult,
   VerificationSession,
   User,
   CreatorOnboarding,
@@ -306,6 +321,19 @@ export async function publishContent(
   );
 }
 
+export async function voteOnContentPoll(
+  contentId: string,
+  body: VoteOnContentPollRequest,
+  idempotencyKey: string
+): Promise<ContentPoll> {
+  return authenticatedMutation<ContentPoll>(
+    `/v1/content/${encodeURIComponent(contentId)}/poll-votes`,
+    "POST",
+    body,
+    idempotencyKey
+  );
+}
+
 export async function createContentModerationAppeal(
   contentId: string,
   reason: string
@@ -323,8 +351,49 @@ export async function getMyContentPage(cursor: string): Promise<CreatorMediaPage
   );
 }
 
-export async function createMediaUpload(body: CreateUploadRequest): Promise<UploadSession> {
-  return authenticatedMutation<UploadSession>("/v1/media/uploads", "POST", body);
+export async function createMediaUpload(
+  body: CreateUploadRequest,
+  idempotencyKey?: string
+): Promise<UploadSession> {
+  return authenticatedMutation<UploadSession>("/v1/media/uploads", "POST", body, idempotencyKey);
+}
+
+export async function uploadContentImageAsset(
+  contentId: string,
+  file: File,
+  idempotencyKey?: string
+): Promise<ImageAssetUploadResult> {
+  return authenticatedBinaryMutation<ImageAssetUploadResult>(
+    `/v1/content/${encodeURIComponent(contentId)}/image-assets`,
+    file,
+    idempotencyKey
+  );
+}
+
+export async function updateContentMediaAsset(
+  mediaAssetId: string,
+  body: UpdateContentMediaAssetRequest,
+  idempotencyKey?: string
+): Promise<ContentMediaAssetMutationResult> {
+  return authenticatedMutation<ContentMediaAssetMutationResult>(
+    `/v1/media/assets/${encodeURIComponent(mediaAssetId)}`,
+    "PATCH",
+    body,
+    idempotencyKey
+  );
+}
+
+export async function retireContentMediaAsset(
+  mediaAssetId: string,
+  body: RetireContentMediaAssetRequest,
+  idempotencyKey?: string
+): Promise<RetireContentMediaAssetResult> {
+  return authenticatedMutation<RetireContentMediaAssetResult>(
+    `/v1/media/assets/${encodeURIComponent(mediaAssetId)}`,
+    "DELETE",
+    body,
+    idempotencyKey
+  );
 }
 
 export async function syncMediaAsset(mediaAssetId: string): Promise<void> {

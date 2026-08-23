@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "latestMergedBaseline": "b5e190480032c38db485138206cb09e296d7053a",
+  "latestMergedSlice": "Convergence 01 — policy and eligibility",
+  "latestMergedMigration": "packages/database/migrations/0108_policy_content_eligibility_convergence.sql",
+  "nextPlannedSlice": "Convergence 02 — Universal composer",
+  "nextPlannedBranch": "codex/converge-02-universal-composer",
+  "latestMergedEvidenceStates": [
+    "DESIGNED",
+    "CODE_COMPLETE",
+    "UNIT_TESTED",
+    "REAL_POSTGRES_PROVEN",
+    "BROWSER_PROVEN"
+  ],
+  "outstandingLaunchGates": [
+    "STAGING_PROVEN",
+    "PROVIDER_APPROVED",
+    "LEGAL_APPROVED",
+    "OPERATIONS_APPROVED",
+    "LAUNCH_ENABLED"
+  ]
+}

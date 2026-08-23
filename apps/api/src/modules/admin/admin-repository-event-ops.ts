@@ -140,6 +140,8 @@ export function createEventOpsRepository(
         select
           id,
           content_item_id,
+          asset_kind,
+          position,
           provider,
           provider_asset_id,
           provider_state,
@@ -147,6 +149,9 @@ export function createEventOpsRepository(
           (playback_url is not null) as has_playback_url,
           ready_at,
           provider_checked_at,
+          retired_at,
+          provider_cleanup_state,
+          provider_cleanup_error_code,
           created_at
         from media_assets
         where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)

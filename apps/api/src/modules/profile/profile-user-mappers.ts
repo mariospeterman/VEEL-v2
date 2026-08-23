@@ -1,6 +1,10 @@
 import type { components } from "@veel/contracts";
 import type { CreatorProfileResource, UserResource } from "./types.js";
 import type { CreatorContentRow, CreatorProfileRow, ProfileRow } from "./profile-repository-rows.js";
+import {
+  accessStateForRule,
+  toContentItem as toCanonicalContentItem
+} from "../content/content-repository-mappers.js";
 
 export function toUserResource(row: ProfileRow): UserResource {
   return {
@@ -82,31 +86,5 @@ function toProfileLinks(value: unknown): components["schemas"]["ProfileLink"][] 
 }
 
 export function toContentItem(row: CreatorContentRow): components["schemas"]["ContentItem"] {
-  return {
-    id: row.id,
-    creator: {
-      id: row.creator_id,
-      handle: row.handle ?? "",
-      displayName: row.display_name ?? "",
-      avatarUrl: row.avatar_url,
-      badges: []
-    },
-    mediaType: row.media_type,
-    caption: row.caption,
-    posterUrl: row.poster_url,
-    playback: {
-      state: "not_ready",
-      url: null,
-      provider: "none"
-    },
-    accessState: "free",
-    nsfwLabel: row.nsfw_label,
-    engagement: {
-      liked: false,
-      saved: false,
-      likeCount: 0,
-      commentCount: 0,
-      shareCount: 0
-    }
-  };
+  return toCanonicalContentItem(row, row.poster_url, accessStateForRule(row));
 }

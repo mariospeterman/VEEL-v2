@@ -2,8 +2,10 @@ import { createHash, createHmac, randomUUID } from "node:crypto";
 import { TextEncoder } from "node:util";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
+import sharp from "sharp";
 import { describe, expect, it, vi } from "vitest";
 import { buildApi } from "../src/app";
+import type { MediaUploadProviderAdapter } from "../src/modules/content/types";
 import type { AgeProviderWaterfall } from "../src/modules/age/types";
 import { createPostgresAdminRepository } from "../src/modules/admin/admin-repository";
 import type {
@@ -101,6 +103,29 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     const ageProviderWaterfall = createIntegrationAgeWaterfall(providerReference);
     const walletAuthRepository = createPostgresWalletAuthRepository(sql);
     const settlementInputs: PaymentSettlementInput[] = [];
+    const storedImageUploads: Array<{ providerAssetId: string; body: Buffer; checksumSha256: string }> = [];
+    const deletedProviderAssets: Array<{ providerAssetId: string; assetKind: "image" | "video" }> = [];
+    const mediaUploadProvider: MediaUploadProviderAdapter = {
+      provider: "bunny",
+      isConfigured: () => false,
+      async createUploadSession() {
+        throw new Error("This journey does not create a video upload session.");
+      },
+      isImageUploadConfigured: () => true,
+      createImageObjectReference(input) {
+        return `images/${input.contentId}/${input.mediaAssetId}.${input.extension}`;
+      },
+      async uploadImageObject(input) {
+        storedImageUploads.push({
+          providerAssetId: input.providerAssetId,
+          body: Buffer.from(input.body),
+          checksumSha256: input.checksumSha256
+        });
+      },
+      async deleteProviderAsset(input) {
+        deletedProviderAssets.push(input);
+      }
+    };
     const settlementVerifier: PaymentSettlementVerifier = {
       async verifyTransfer(input) {
         settlementInputs.push(input);
@@ -157,6 +182,10 @@ describeIntegration("authenticated API happy path against Postgres", () => {
 
     const liveRepository = createPostgresLiveRepository(sql);
     const app = await buildApi({
+      // This suite proves one intentionally exhaustive cross-product journey.
+      // Dedicated route tests own rate-limit thresholds, so the shared loopback
+      // address must not exhaust the production global budget mid-journey.
+      rateLimitStore: IntegrationJourneyRateLimitStore,
       authVerifier: {
         async verifyToken(token) {
           return (
@@ -172,6 +201,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         }
       },
       ageProviderWaterfall,
+      mediaUploadProvider,
       settlementVerifier,
       subscriptionAuthorizationVerifier,
       subscriptionAuthorizationTransactionBuilder: async ({ context }) => {
@@ -312,6 +342,21 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(unchangedPublishedSafetyRows[0]?.publish_state).toBe("published");
       expect(unchangedPublishedSafetyRows[0]?.moderation_state).toBe("approved");
       expect(unchangedPublishedSafetyRows[0]?.published_at).toBeInstanceOf(Date);
+
+      const creatorPaidContentDetail = await app.inject({
+        method: "GET",
+        url: `/v1/content/${seededContentId}`,
+        headers: creatorAuthenticatedHeaders(`creator-paid-content-detail-${runId}`)
+      });
+      expect(creatorPaidContentDetail.statusCode, creatorPaidContentDetail.body).toBe(200);
+      expect(creatorPaidContentDetail.json()).toMatchObject({
+        id: seededContentId,
+        accessState: "unlocked",
+        mediaAssets: [{
+          id: seededMediaAssetId,
+          posterUrl: "https://media.example.test/integration-poster.jpg"
+        }]
+      });
 
       const walletKeypair = nacl.sign.keyPair();
       const walletAddress = bs58.encode(walletKeypair.publicKey);
@@ -944,9 +989,17 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         rankingVersion: "deterministic_v1"
       });
       const staleFollowingPage = followingFeedResponse.json<{
-        items: Array<{ id: string; creator: { id: string }; viewerFollowingCreator: boolean }>;
+        items: Array<{
+          id: string;
+          creator: { id: string };
+          viewerFollowingCreator: boolean;
+          mediaAssets?: Array<{ id: string; position: number; posterUrl: string | null }>;
+        }>;
         nextCursor: string | null;
       }>();
+      expect(staleFollowingPage.items.find((item) => item.id === seededContentId)).toMatchObject({
+        mediaAssets: [{ id: seededMediaAssetId, position: 0, posterUrl: null }]
+      });
       expect(staleFollowingPage.nextCursor).toEqual(expect.any(String));
       await sql`
         update content_engagement_counters
@@ -1399,7 +1452,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         url: "/v1/content",
         headers: authenticatedHeaders(`content-create-${runId}`),
         payload: {
-          mediaType: "image",
+          mediaType: "vod",
           visibility: "public",
           nsfwLabel: "none",
           representationMode: "self_only",
@@ -1410,11 +1463,573 @@ describeIntegration("authenticated API happy path against Postgres", () => {
 
       expect(createContentResponse.statusCode, createContentResponse.body).toBe(201);
       expect(createContentResponse.json()).toMatchObject({
-        mediaType: "image",
+        mediaType: "vod",
         accessState: "free",
         caption: `Integration draft ${runId}`
       });
       const sfwContentId = createContentResponse.json().id as string;
+
+      const textDraftResponse = await app.inject({
+        method: "POST",
+        url: "/v1/content",
+        headers: authenticatedHeaders(`text-content-create-${runId}`),
+        payload: {
+          mediaType: "text",
+          visibility: "public",
+          nsfwLabel: "none",
+          representationMode: "self_only",
+          contentSafetyPolicyAccepted: true,
+          bodyText: `  Structured text ${runId}  `
+        }
+      });
+      expect(textDraftResponse.statusCode, textDraftResponse.body).toBe(201);
+      expect(textDraftResponse.json()).toMatchObject({
+        mediaType: "text",
+        bodyText: `Structured text ${runId}`
+      });
+
+      const pollClosesAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      const pollDraftResponse = await app.inject({
+        method: "POST",
+        url: "/v1/content",
+        headers: authenticatedHeaders(`poll-content-create-${runId}`),
+        payload: {
+          mediaType: "poll",
+          visibility: "public",
+          nsfwLabel: "none",
+          representationMode: "self_only",
+          contentSafetyPolicyAccepted: true,
+          poll: {
+            question: "  Which format next?  ",
+            options: ["  Photos  ", "Video", "Text"],
+            closesAt: pollClosesAt
+          }
+        }
+      });
+      expect(pollDraftResponse.statusCode, pollDraftResponse.body).toBe(201);
+      expect(pollDraftResponse.json()).toMatchObject({
+        mediaType: "poll",
+        poll: {
+          question: "Which format next?",
+          state: "open",
+          totalVoteCount: 0,
+          closesAt: pollClosesAt,
+          viewerOptionId: null,
+          options: [
+            expect.objectContaining({ position: 0, text: "Photos", voteCount: 0 }),
+            expect.objectContaining({ position: 1, text: "Video", voteCount: 0 }),
+            expect.objectContaining({ position: 2, text: "Text", voteCount: 0 })
+          ]
+        }
+      });
+
+      const textDetailResponse = await app.inject({
+        method: "GET",
+        url: `/v1/content/${textDraftResponse.json().id as string}`,
+        headers: authenticatedHeaders(`text-content-detail-${runId}`)
+      });
+      expect(textDetailResponse.statusCode, textDetailResponse.body).toBe(200);
+      expect(textDetailResponse.json()).toMatchObject({
+        id: textDraftResponse.json().id,
+        mediaType: "text",
+        bodyText: `Structured text ${runId}`,
+        compositionRevision: 1
+      });
+
+      const textAutosaveKey = `text-content-autosave-${runId}`;
+      const textAutosaveResponse = await app.inject({
+        method: "PATCH",
+        url: `/v1/content/${textDraftResponse.json().id as string}`,
+        headers: authenticatedHeaders(textAutosaveKey),
+        payload: {
+          bodyText: `  Revised structured text ${runId}  `,
+          expectedCompositionRevision: 1
+        }
+      });
+      expect(textAutosaveResponse.statusCode, textAutosaveResponse.body).toBe(200);
+      expect(textAutosaveResponse.json()).toMatchObject({
+        bodyText: `Revised structured text ${runId}`,
+        compositionRevision: 2
+      });
+
+      const textAutosaveReplay = await app.inject({
+        method: "PATCH",
+        url: `/v1/content/${textDraftResponse.json().id as string}`,
+        headers: authenticatedHeaders(textAutosaveKey),
+        payload: {
+          bodyText: `  Revised structured text ${runId}  `,
+          expectedCompositionRevision: 1
+        }
+      });
+      expect(textAutosaveReplay.statusCode, textAutosaveReplay.body).toBe(200);
+      expect(textAutosaveReplay.json()).toMatchObject({ compositionRevision: 2 });
+
+      const changedTextAutosaveReplay = await app.inject({
+        method: "PATCH",
+        url: `/v1/content/${textDraftResponse.json().id as string}`,
+        headers: authenticatedHeaders(textAutosaveKey),
+        payload: { bodyText: "Changed key reuse", expectedCompositionRevision: 2 }
+      });
+      expect(changedTextAutosaveReplay.statusCode, changedTextAutosaveReplay.body).toBe(409);
+
+      const staleTextAutosave = await app.inject({
+        method: "PATCH",
+        url: `/v1/content/${textDraftResponse.json().id as string}`,
+        headers: authenticatedHeaders(`text-content-stale-${runId}`),
+        payload: { bodyText: "Stale overwrite", expectedCompositionRevision: 1 }
+      });
+      expect(staleTextAutosave.statusCode, staleTextAutosave.body).toBe(409);
+
+      const pollDetailResponse = await app.inject({
+        method: "GET",
+        url: `/v1/content/${pollDraftResponse.json().id as string}`,
+        headers: authenticatedHeaders(`poll-content-detail-${runId}`)
+      });
+      expect(pollDetailResponse.statusCode, pollDetailResponse.body).toBe(200);
+      expect(pollDetailResponse.json()).toMatchObject({
+        id: pollDraftResponse.json().id,
+        mediaType: "poll",
+        poll: {
+          question: "Which format next?",
+          totalVoteCount: 0,
+          viewerOptionId: null,
+          options: [
+            expect.objectContaining({ position: 0, text: "Photos", voteCount: 0 }),
+            expect.objectContaining({ position: 1, text: "Video", voteCount: 0 }),
+            expect.objectContaining({ position: 2, text: "Text", voteCount: 0 })
+          ]
+        }
+      });
+
+      const pollContentId = pollDraftResponse.json().id as string;
+      const pollOptions = pollDraftResponse.json().poll.options as Array<{ id: string }>;
+      const firstPollOptionId = pollOptions[0]?.id;
+      const secondPollOptionId = pollOptions[1]?.id;
+      const thirdPollOptionId = pollOptions[2]?.id;
+      if (!firstPollOptionId || !secondPollOptionId || !thirdPollOptionId) {
+        throw new Error("Integration poll options were not created");
+      }
+      await sql`
+        update profiles
+        set visibility = 'public', updated_at = now()
+        where user_id = ${buyerSupabaseUserId}
+      `;
+      await sql`
+        update media_safety_cases
+        set
+          state = 'approved',
+          decision_source = 'staff',
+          reason_code = 'integration_fixture_approved',
+          provider_release_allowed = true,
+          decided_at = now(),
+          updated_at = now()
+        where content_item_id = ${pollContentId}
+      `;
+      const pollReleaseReadiness = await sql<{ ready: boolean }[]>`
+        select private.content_safety_release_ready(${pollContentId}) as ready
+      `;
+      expect(pollReleaseReadiness[0]?.ready).toBe(true);
+      await sql`
+        update content_items
+        set
+          state = 'ready',
+          moderation_state = 'approved',
+          publish_state = 'published',
+          published_at = now(),
+          updated_at = now()
+        where id = ${pollContentId}
+      `;
+
+      const publicPollProfile = await app.inject({
+        method: "GET",
+        url: `/v1/profiles/${buyerHandle}`
+      });
+      expect(publicPollProfile.statusCode, publicPollProfile.body).toBe(200);
+      expect(publicPollProfile.json().recentContent).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: pollContentId,
+          mediaType: "poll",
+          accessState: "free",
+          poll: expect.objectContaining({
+            question: "Which format next?",
+            options: expect.arrayContaining([
+              expect.objectContaining({ id: firstPollOptionId, text: "Photos", voteCount: 0 })
+            ])
+          })
+        })
+      ]));
+
+      const firstPollVoteKey = `poll-vote-first-${runId}`;
+      const firstPollVote = await app.inject({
+        method: "POST",
+        url: `/v1/content/${pollContentId}/poll-votes`,
+        headers: authenticatedHeaders(firstPollVoteKey),
+        payload: { optionId: firstPollOptionId }
+      });
+      expect(firstPollVote.statusCode, firstPollVote.body).toBe(200);
+      expect(firstPollVote.json()).toMatchObject({
+        totalVoteCount: 1,
+        viewerOptionId: firstPollOptionId,
+        options: expect.arrayContaining([
+          expect.objectContaining({ id: firstPollOptionId, voteCount: 1 })
+        ])
+      });
+
+      const replayedPollVote = await app.inject({
+        method: "POST",
+        url: `/v1/content/${pollContentId}/poll-votes`,
+        headers: authenticatedHeaders(firstPollVoteKey),
+        payload: { optionId: firstPollOptionId }
+      });
+      expect(replayedPollVote.statusCode, replayedPollVote.body).toBe(200);
+      expect(replayedPollVote.json()).toEqual(firstPollVote.json());
+
+      const conflictingPollVote = await app.inject({
+        method: "POST",
+        url: `/v1/content/${pollContentId}/poll-votes`,
+        headers: authenticatedHeaders(firstPollVoteKey),
+        payload: { optionId: secondPollOptionId }
+      });
+      expect(conflictingPollVote.statusCode, conflictingPollVote.body).toBe(409);
+
+      const changedPollVote = await app.inject({
+        method: "POST",
+        url: `/v1/content/${pollContentId}/poll-votes`,
+        headers: authenticatedHeaders(`poll-vote-change-${runId}`),
+        payload: { optionId: secondPollOptionId }
+      });
+      expect(changedPollVote.statusCode, changedPollVote.body).toBe(200);
+      expect(changedPollVote.json()).toMatchObject({
+        totalVoteCount: 1,
+        viewerOptionId: secondPollOptionId,
+        options: expect.arrayContaining([
+          expect.objectContaining({ id: firstPollOptionId, voteCount: 0 }),
+          expect.objectContaining({ id: secondPollOptionId, voteCount: 1 })
+        ])
+      });
+
+      const invalidPollVote = await app.inject({
+        method: "POST",
+        url: `/v1/content/${pollContentId}/poll-votes`,
+        headers: authenticatedHeaders(`poll-vote-invalid-${runId}`),
+        payload: { optionId: randomUUID() }
+      });
+      expect(invalidPollVote.statusCode, invalidPollVote.body).toBe(404);
+
+      await sql`update profiles set visibility = 'private', updated_at = now() where user_id = ${buyerSupabaseUserId}`;
+      const ineligiblePollVote = await app.inject({
+        method: "POST",
+        url: `/v1/content/${pollContentId}/poll-votes`,
+        headers: authenticatedHeaders(`poll-vote-ineligible-${runId}`),
+        payload: { optionId: firstPollOptionId }
+      });
+      expect(ineligiblePollVote.statusCode, ineligiblePollVote.body).toBe(404);
+      await sql`update profiles set visibility = 'public', updated_at = now() where user_id = ${buyerSupabaseUserId}`;
+
+      await sql`update content_polls set state = 'closed', updated_at = now() where content_item_id = ${pollContentId}`;
+      const closedPollVote = await app.inject({
+        method: "POST",
+        url: `/v1/content/${pollContentId}/poll-votes`,
+        headers: authenticatedHeaders(`poll-vote-closed-${runId}`),
+        payload: { optionId: firstPollOptionId }
+      });
+      expect(closedPollVote.statusCode, closedPollVote.body).toBe(409);
+      await sql`update content_polls set state = 'open', updated_at = now() where content_item_id = ${pollContentId}`;
+
+      const concurrentPollVotes = await Promise.all([
+        app.inject({
+          method: "POST",
+          url: `/v1/content/${pollContentId}/poll-votes`,
+          headers: authenticatedHeaders(`poll-vote-concurrent-a-${runId}`),
+          payload: { optionId: firstPollOptionId }
+        }),
+        app.inject({
+          method: "POST",
+          url: `/v1/content/${pollContentId}/poll-votes`,
+          headers: authenticatedHeaders(`poll-vote-concurrent-b-${runId}`),
+          payload: { optionId: thirdPollOptionId }
+        })
+      ]);
+      expect(concurrentPollVotes.map((response) => response.statusCode)).toEqual([200, 200]);
+      const persistedPollVotes = await sql<{ total_votes: string; counted_votes: string }[]>`
+        select
+          (select count(*)::text from content_poll_votes where content_item_id = ${pollContentId}) as total_votes,
+          (select coalesce(sum(vote_count), 0)::text from content_poll_options where content_item_id = ${pollContentId}) as counted_votes
+      `;
+      expect(persistedPollVotes[0]).toEqual({ total_votes: "1", counted_votes: "1" });
+
+      const universalDraftRows = await sql<{
+        media_type: string;
+        body_text: string | null;
+        poll_option_count: number;
+      }[]>`
+        select
+          content.media_type,
+          content.body_text,
+          (
+            select count(*)::integer
+            from content_poll_options option
+            where option.content_item_id = content.id
+          ) as poll_option_count
+        from content_items content
+        where content.id in (${textDraftResponse.json().id as string}, ${pollDraftResponse.json().id as string})
+        order by content.media_type
+      `;
+      expect(universalDraftRows).toEqual([
+        { media_type: "poll", body_text: null, poll_option_count: 3 },
+        { media_type: "text", body_text: `Revised structured text ${runId}`, poll_option_count: 0 }
+      ]);
+
+      const imageDraftResponse = await app.inject({
+        method: "POST",
+        url: "/v1/content",
+        headers: authenticatedHeaders(`image-content-create-${runId}`),
+        payload: {
+          mediaType: "image",
+          visibility: "public",
+          nsfwLabel: "none",
+          representationMode: "self_only",
+          contentSafetyPolicyAccepted: true,
+          caption: `Sanitized image ${runId}`
+        }
+      });
+      expect(imageDraftResponse.statusCode, imageDraftResponse.body).toBe(201);
+      const imageContentId = imageDraftResponse.json().id as string;
+      const sourceImage = await sharp({
+        create: {
+          width: 9,
+          height: 6,
+          channels: 3,
+          background: { r: 25, g: 80, b: 140 }
+        }
+      }).jpeg().withMetadata({ orientation: 6 }).toBuffer();
+      const imageUploadKey = `image-asset-upload-${runId}`;
+      const imageUploadResponse = await app.inject({
+        method: "POST",
+        url: `/v1/content/${imageContentId}/image-assets`,
+        headers: {
+          ...authenticatedHeaders(imageUploadKey),
+          "content-type": "image/jpeg"
+        },
+        payload: sourceImage
+      });
+      expect(imageUploadResponse.statusCode, imageUploadResponse.body).toBe(201);
+      expect(imageUploadResponse.json()).toMatchObject({
+        kind: "image",
+        mimeType: "image/jpeg",
+        widthPixels: 6,
+        heightPixels: 9,
+        releaseState: "awaiting_safety_evidence"
+      });
+      const imageMediaAssetId = imageUploadResponse.json().mediaAssetId as string;
+      expect(storedImageUploads).toHaveLength(1);
+      const storedImageMetadata = await sharp(storedImageUploads[0]!.body).metadata();
+      expect(storedImageMetadata.exif).toBeUndefined();
+      expect(storedImageMetadata.orientation).toBeUndefined();
+      expect(storedImageUploads[0]!.checksumSha256).toBe(
+        createHash("sha256").update(storedImageUploads[0]!.body).digest("hex")
+      );
+
+      const replayedImageUpload = await app.inject({
+        method: "POST",
+        url: `/v1/content/${imageContentId}/image-assets`,
+        headers: {
+          ...authenticatedHeaders(imageUploadKey),
+          "content-type": "image/jpeg"
+        },
+        payload: sourceImage
+      });
+      expect(replayedImageUpload.statusCode, replayedImageUpload.body).toBe(201);
+      expect(replayedImageUpload.json().mediaAssetId).toBe(imageMediaAssetId);
+      expect(storedImageUploads).toHaveLength(1);
+
+      const changedSourceImage = await sharp({
+        create: {
+          width: 3,
+          height: 3,
+          channels: 3,
+          background: { r: 180, g: 20, b: 20 }
+        }
+      }).jpeg().toBuffer();
+      const conflictingImageUpload = await app.inject({
+        method: "POST",
+        url: `/v1/content/${imageContentId}/image-assets`,
+        headers: {
+          ...authenticatedHeaders(imageUploadKey),
+          "content-type": "image/jpeg"
+        },
+        payload: changedSourceImage
+      });
+      expect(conflictingImageUpload.statusCode, conflictingImageUpload.body).toBe(409);
+      const persistedImageAssets = await sql<{
+        id: string;
+        provider_state: string;
+        provider_playable: boolean;
+        mime_type: string;
+        width_pixels: number;
+        height_pixels: number;
+        checksum_sha256: string;
+      }[]>`
+        select id, provider_state, provider_playable, mime_type,
+          width_pixels, height_pixels, checksum_sha256
+        from media_assets
+        where content_item_id = ${imageContentId}
+      `;
+      expect(persistedImageAssets).toEqual([
+        {
+          id: imageMediaAssetId,
+          provider_state: "stored_private",
+          provider_playable: false,
+          mime_type: "image/jpeg",
+          width_pixels: 6,
+          height_pixels: 9,
+          checksum_sha256: storedImageUploads[0]!.checksumSha256
+        }
+      ]);
+
+      const imageAssetUpdateKey = `image-asset-update-${runId}`;
+      const imageAssetUpdate = await app.inject({
+        method: "PATCH",
+        url: `/v1/media/assets/${imageMediaAssetId}`,
+        headers: authenticatedHeaders(imageAssetUpdateKey),
+        payload: {
+          expectedCompositionRevision: 2,
+          altText: "A blue and red integration fixture",
+          originClassification: "human_created"
+        }
+      });
+      expect(imageAssetUpdate.statusCode, imageAssetUpdate.body).toBe(200);
+      expect(imageAssetUpdate.json()).toMatchObject({
+        compositionRevision: 3,
+        asset: {
+          id: imageMediaAssetId,
+          altText: "A blue and red integration fixture",
+          originClassification: "human_created"
+        }
+      });
+      const replayedImageAssetUpdate = await app.inject({
+        method: "PATCH",
+        url: `/v1/media/assets/${imageMediaAssetId}`,
+        headers: authenticatedHeaders(imageAssetUpdateKey),
+        payload: {
+          expectedCompositionRevision: 2,
+          altText: "A blue and red integration fixture",
+          originClassification: "human_created"
+        }
+      });
+      expect(replayedImageAssetUpdate.statusCode, replayedImageAssetUpdate.body).toBe(200);
+      expect(replayedImageAssetUpdate.json()).toEqual(imageAssetUpdate.json());
+      const conflictingImageAssetUpdate = await app.inject({
+        method: "PATCH",
+        url: `/v1/media/assets/${imageMediaAssetId}`,
+        headers: authenticatedHeaders(imageAssetUpdateKey),
+        payload: {
+          expectedCompositionRevision: 2,
+          altText: "Changed text"
+        }
+      });
+      expect(conflictingImageAssetUpdate.statusCode, conflictingImageAssetUpdate.body).toBe(409);
+
+      const imageAssetRemovalKey = `image-asset-removal-${runId}`;
+      const imageAssetRemovalRequest = {
+        method: "DELETE" as const,
+        url: `/v1/media/assets/${imageMediaAssetId}`,
+        headers: authenticatedHeaders(imageAssetRemovalKey),
+        payload: {
+          expectedCompositionRevision: 3,
+          reason: "creator_removed"
+        }
+      };
+      const imageAssetRemoval = await app.inject(imageAssetRemovalRequest);
+      expect(imageAssetRemoval.statusCode, imageAssetRemoval.body).toBe(200);
+      expect(imageAssetRemoval.json()).toEqual({
+        mediaAssetId: imageMediaAssetId,
+        compositionRevision: 4,
+        cleanupState: "completed"
+      });
+      expect(deletedProviderAssets).toEqual([{
+        providerAssetId: storedImageUploads[0]!.providerAssetId,
+        assetKind: "image"
+      }]);
+      const replayedImageAssetRemoval = await app.inject(imageAssetRemovalRequest);
+      expect(replayedImageAssetRemoval.statusCode, replayedImageAssetRemoval.body).toBe(200);
+      expect(replayedImageAssetRemoval.json()).toEqual(imageAssetRemoval.json());
+      expect(deletedProviderAssets).toHaveLength(1);
+      const retiredImageEvidence = await sql<{
+        position: number | null;
+        retired: boolean;
+        cleanup_state: string;
+        asset_revision: number;
+        content_state: string;
+        audit_count: number;
+      }[]>`
+        select
+          asset.position,
+          asset.retired_at is not null as retired,
+          asset.provider_cleanup_state as cleanup_state,
+          content.asset_revision::integer,
+          content.state as content_state,
+          (
+            select count(*)::integer
+            from audit_events audit
+            where audit.subject_id = content.id
+              and audit.action = 'content_media_asset_retired'
+          ) as audit_count
+        from media_assets asset
+        join content_items content on content.id = asset.content_item_id
+        where asset.id = ${imageMediaAssetId}
+      `;
+      expect(retiredImageEvidence).toEqual([{
+        position: null,
+        retired: true,
+        cleanup_state: "completed",
+        asset_revision: 4,
+        content_state: "draft",
+        audit_count: 1
+      }]);
+      const retiredImageDetail = await app.inject({
+        method: "GET",
+        url: `/v1/content/${imageContentId}`,
+        headers: authenticatedHeaders(`image-after-removal-${runId}`)
+      });
+      expect(retiredImageDetail.statusCode, retiredImageDetail.body).toBe(200);
+      expect(retiredImageDetail.json().mediaAssets).toEqual([]);
+
+      const carouselContentId = randomUUID();
+      const firstCarouselAssetId = randomUUID();
+      const secondCarouselAssetId = randomUUID();
+      await sql.begin(async (transaction) => {
+        await transaction`
+          insert into content_items (id, creator_user_id, media_type, visibility, nsfw_label)
+          values (${carouselContentId}, ${buyerSupabaseUserId}, 'carousel', 'private', 'none')
+        `;
+        await transaction`
+          insert into media_assets (id, content_item_id, provider, provider_asset_id, provider_state, asset_kind, position)
+          values
+            (${firstCarouselAssetId}, ${carouselContentId}, 'bunny', ${`carousel-first-${runId}`}, 'pending', 'image', 0),
+            (${secondCarouselAssetId}, ${carouselContentId}, 'bunny', ${`carousel-second-${runId}`}, 'pending', 'image', 1)
+        `;
+      });
+      const reorderResponse = await app.inject({
+        method: "PATCH",
+        url: `/v1/content/${carouselContentId}`,
+        headers: authenticatedHeaders(`carousel-reorder-${runId}`),
+        payload: {
+          assetOrder: [secondCarouselAssetId, firstCarouselAssetId],
+          expectedCompositionRevision: 3
+        }
+      });
+      expect(reorderResponse.statusCode, reorderResponse.body).toBe(200);
+      expect(reorderResponse.json()).toMatchObject({ compositionRevision: 4 });
+      const reorderedAssets = await sql<{ id: string; position: number }[]>`
+        select id, position from media_assets
+        where content_item_id = ${carouselContentId}
+        order by position
+      `;
+      expect(reorderedAssets).toEqual([
+        { id: secondCarouselAssetId, position: 0 },
+        { id: firstCarouselAssetId, position: 1 }
+      ]);
 
       const contentCreateReceipt = await sql<{ expires_at: string }[]>`
         select receipt.expires_at::text as expires_at
@@ -1431,7 +2046,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         url: "/v1/content",
         headers: authenticatedHeaders(`content-create-${runId}`),
         payload: {
-          mediaType: "image",
+          mediaType: "vod",
           visibility: "public",
           nsfwLabel: "none",
           representationMode: "self_only",
@@ -1447,7 +2062,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         url: "/v1/content",
         headers: authenticatedHeaders(`content-create-${runId}`),
         payload: {
-          mediaType: "image",
+          mediaType: "vod",
           visibility: "public",
           nsfwLabel: "none",
           representationMode: "self_only",
@@ -1503,6 +2118,29 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           true, now(), now()
         )
       `;
+      const universalMediaDetailResponse = await app.inject({
+        method: "GET",
+        url: `/v1/content/${sfwContentId}`,
+        headers: authenticatedHeaders(`universal-media-detail-${runId}`)
+      });
+      expect(universalMediaDetailResponse.statusCode, universalMediaDetailResponse.body).toBe(200);
+      expect(universalMediaDetailResponse.json()).toMatchObject({
+        id: sfwContentId,
+        accessState: "unlocked",
+        mediaAssets: [
+          {
+            id: sfwMediaAssetId,
+            kind: "video",
+            position: 0,
+            provider: "bunny",
+            providerState: "ready",
+            requiredForRelease: true,
+            isCover: false,
+            originClassification: "human_created",
+            visibleLabelState: "none"
+          }
+        ]
+      });
       await sql`
         update media_safety_cases
         set
@@ -1615,6 +2253,13 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         },
         idempotencyKey: `sfw-appeal-split-evidence-${runId}`
       })).rejects.toThrow("Required automated safety checks are incomplete");
+
+      await sql`
+        update media_assets
+        set required_for_release = false
+        where id = ${alternateMediaAssetId}
+          and content_item_id = ${sfwContentId}
+      `;
 
       const evidenceHash = "a".repeat(64);
       await sql`
@@ -4708,6 +5353,21 @@ describeIntegration("authenticated API happy path against Postgres", () => {
   }, 30_000);
 });
 
+class IntegrationJourneyRateLimitStore {
+  constructor(_options: unknown) {}
+
+  incr(
+    _key: string,
+    callback: (error: Error | null, result?: { current: number; ttl: number }) => void
+  ) {
+    callback(null, { current: 1, ttl: 60_000 });
+  }
+
+  child() {
+    return this;
+  }
+}
+
 function integrationDatabaseUrl(): string {
   const databaseUrl =
     process.env.API_INTEGRATION_DATABASE_URL ??
@@ -4920,7 +5580,7 @@ async function seedCreatorPaidContent(
     values (
       ${input.contentId},
       ${input.creatorUserId},
-      'image',
+      'vod',
       'ready',
       'submitted_for_review',
       null,

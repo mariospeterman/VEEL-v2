@@ -1,6 +1,15 @@
 import { parseServerEnv } from "@veel/config";
 import { createCanonicalProviderReplayRuntime } from "@veel/api/provider-event-replay-runtime";
+import { createBunnyStreamUploadAdapter } from "@veel/api/media-upload-provider";
 import { pathToFileURL } from "node:url";
+import {
+  createAdapterMediaAssetCleanupProvider,
+  createPostgresMediaAssetCleanupRepository,
+  processMediaAssetCleanups,
+  type MediaAssetCleanupProvider,
+  type MediaAssetCleanupRepository,
+  type ProcessMediaAssetCleanupsResult
+} from "./media-asset-cleanup.js";
 import {
   createFailClosedMediaModerationAdapter,
   createPostgresMediaModerationRepository,
@@ -57,7 +66,8 @@ export const buildWorkerRuntime = () => {
       "notification-deliveries",
       "payment-confirmation-emails",
       "provider-event-replays",
-      "media-moderation"
+      "media-moderation",
+      "media-asset-cleanups"
     ],
     schedules: [
       {
@@ -84,6 +94,11 @@ export const buildWorkerRuntime = () => {
         name: "media-moderation",
         cadence: "every_minute",
         sourceIndex: "media_moderation_jobs_lease_idx"
+      },
+      {
+        name: "media-asset-cleanups",
+        cadence: "every_minute",
+        sourceIndex: "media_assets_provider_cleanup_idx"
       }
     ]
   };
@@ -257,7 +272,34 @@ export async function runMediaModerationTick(input: {
   }
 }
 
+export async function runMediaAssetCleanupTick(input: {
+  repository?: MediaAssetCleanupRepository;
+  provider?: MediaAssetCleanupProvider;
+  now?: Date;
+  limit?: number;
+} = {}): Promise<ProcessMediaAssetCleanupsResult> {
+  const config = parseServerEnv(process.env);
+  const repository = input.repository ?? createPostgresMediaAssetCleanupRepository(config.DATABASE_URL);
+  const provider = input.provider ?? createAdapterMediaAssetCleanupProvider(
+    createBunnyStreamUploadAdapter(config)
+  );
+
+  try {
+    return await processMediaAssetCleanups({
+      repository,
+      provider,
+      ...(input.now ? { now: input.now } : {}),
+      ...(input.limit ? { limit: input.limit } : {})
+    });
+  } finally {
+    if (!input.repository) {
+      await repository.close?.();
+    }
+  }
+}
+
 export interface ScheduledWorkerTickResult {
+  mediaAssetCleanups: "completed" | "failed";
   mediaModeration: "completed" | "failed";
   notificationDeliveries: "completed" | "failed";
   paymentConfirmationEmails: "completed" | "failed";
@@ -271,6 +313,7 @@ export interface WorkerLogger {
 }
 
 export interface WorkerTickRunners {
+  mediaAssetCleanups(): Promise<unknown>;
   mediaModeration(): Promise<unknown>;
   notificationDeliveries(): Promise<unknown>;
   paymentConfirmationEmails(): Promise<unknown>;
@@ -294,6 +337,7 @@ export async function runScheduledWorkerTick(input: {
   const config = parseServerEnv(process.env);
   const logger = input.logger ?? defaultWorkerLogger;
   const runners = input.runners ?? {
+    mediaAssetCleanups: () => runMediaAssetCleanupTick({ limit: config.WORKER_BATCH_LIMIT }),
     mediaModeration: () => runMediaModerationTick({ limit: config.WORKER_BATCH_LIMIT }),
     notificationDeliveries: () => runNotificationDeliveryTick({ limit: config.WORKER_BATCH_LIMIT }),
     paymentConfirmationEmails: () => runPaymentConfirmationEmailTick({ limit: config.WORKER_BATCH_LIMIT }),
@@ -301,6 +345,7 @@ export async function runScheduledWorkerTick(input: {
     subscriptionCollections: () => runSubscriptionCollectionTick({ limit: config.WORKER_BATCH_LIMIT })
   };
   const tasks = [
+    ["mediaAssetCleanups", runners.mediaAssetCleanups],
     ["mediaModeration", runners.mediaModeration],
     ["notificationDeliveries", runners.notificationDeliveries],
     ["paymentConfirmationEmails", runners.paymentConfirmationEmails],
@@ -346,6 +391,7 @@ export function startWorkerProcess(input: {
     if (activeTick) return activeTick;
     if (stopping) {
       return Promise.resolve<ScheduledWorkerTickResult>({
+        mediaAssetCleanups: "completed",
         mediaModeration: "completed",
         notificationDeliveries: "completed",
         paymentConfirmationEmails: "completed",

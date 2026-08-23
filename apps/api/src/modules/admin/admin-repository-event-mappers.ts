@@ -78,6 +78,8 @@ export interface LiveRoomRow {
 export interface MediaAssetRow {
   id: string;
   content_item_id: string;
+  asset_kind: AdminMediaAsset["assetKind"];
+  position: number | null;
   provider: AdminMediaAsset["provider"];
   provider_asset_id: string;
   provider_state: string;
@@ -85,6 +87,9 @@ export interface MediaAssetRow {
   has_playback_url: boolean;
   ready_at: Date | null;
   provider_checked_at: Date | null;
+  retired_at: Date | null;
+  provider_cleanup_state: AdminMediaAsset["providerCleanupState"];
+  provider_cleanup_error_code: string | null;
   created_at: Date;
 }
 
@@ -174,6 +179,8 @@ export function toMediaAsset(row: MediaAssetRow): AdminMediaAsset {
   return {
     id: row.id,
     contentItemId: row.content_item_id,
+    assetKind: row.asset_kind,
+    position: row.position,
     provider: row.provider,
     providerAssetId: row.provider_asset_id,
     providerState: row.provider_state,
@@ -181,6 +188,9 @@ export function toMediaAsset(row: MediaAssetRow): AdminMediaAsset {
     hasPlaybackUrl: row.has_playback_url,
     readyAt: row.ready_at?.toISOString() ?? null,
     providerCheckedAt: row.provider_checked_at?.toISOString() ?? null,
+    retiredAt: row.retired_at?.toISOString() ?? null,
+    providerCleanupState: row.provider_cleanup_state,
+    providerCleanupErrorCode: row.provider_cleanup_error_code,
     createdAt: row.created_at.toISOString()
   };
 }

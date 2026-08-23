@@ -96,8 +96,10 @@ export function MediaProviderRow({ asset }: { asset: AdminMediaAsset }) {
         </span>
       </div>
       <div className="mt-3 grid gap-2">
+        <Fact label="Composition" value={asset.retiredAt ? `${asset.assetKind} · retired` : `${asset.assetKind} · position ${asset.position}`} />
         <Fact label="Playable" value={asset.providerPlayable ? "yes" : "no"} />
         <Fact label="Playback URL" value={asset.hasPlaybackUrl ? "present" : "none"} />
+        <Fact label="Provider cleanup" value={asset.providerCleanupErrorCode ? `${asset.providerCleanupState} · ${asset.providerCleanupErrorCode}` : asset.providerCleanupState} />
         <Fact label="Checked" value={timestampLabel(asset.providerCheckedAt ?? null)} />
       </div>
     </article>

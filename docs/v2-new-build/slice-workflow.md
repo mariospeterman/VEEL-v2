@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: build process, repo strategy, gstack usage
-Last updated: 2026-06-12
+Last updated: 2026-08-22
 Source of truth: yes
 
 Owns:
@@ -122,9 +122,11 @@ architecture or product requirements; it routes each run through `AGENTS.md`,
 `current-implementation-status.md`, `build-plan.md`, and this document.
 
 Only one write/integration slice may be active. Before creating a branch, fetch protected
-`main`, inspect open pull requests, and treat an open pull request carrying the
-`wevid-active-slice` label as a mutex. Dependency or security analysis may run separately
-only when it does not modify the active branch or lockfile.
+`main` and query open pull requests carrying `wevid-active-slice`. Exactly one means resume that
+pull request and validate its branch against the planned-slice contract. Zero means select the next
+planned slice from `production-status.json`. More than one is status corruption: stop all writes
+until the mutex is repaired. Dependency or security analysis may run separately only when it does
+not modify the active branch or lockfile.
 
 Track the active slice with this state machine:
 
@@ -142,7 +144,7 @@ with the next independent slice after merge.
 
 Every slice starts from the newest green `main`, uses one short-lived branch and one pull
 request, and merges only through protected `main`. After squash merge, verify main-branch
-CI, delete the branch, update the active-state block, and continue. Local and pull-request
+CI, delete the branch, advance the stable merged-status fragment and next planned slice, and continue. Local and pull-request
 preview evidence may merge fail-closed work; production receives only an explicitly approved
 immutable artifact already proven in staging. Staging and production are environments, not
 permanent branches.
@@ -154,14 +156,16 @@ from repository files alone:
 
 1. Mission and hard boundaries from `AGENTS.md`.
 2. Canonical architecture owners from `AGENTS.md` and `app-architecture.md`.
-3. Exact merged baseline, active slice, branch, pull request, state, and blockers from
-   `current-implementation-status.md`.
-4. First unfinished unblocked slice from the active-state block and `build-plan.md`.
+3. Exact merged baseline, latest merged slice/migration/evidence, blockers, and next planned slice
+   from `current-implementation-status.md` and `production-status.json`.
+4. Live active branch, pull request, head SHA, CI, and review state from GitHub's single
+   `wevid-active-slice` label; repository docs never mirror this transient truth.
 5. Required contract, migration, backend, browser, provider-boundary, ops, docs, and
    security evidence from `AGENTS.md` and this workflow.
 6. Human/provider release gates from `current-implementation-status.md`.
 
-`pnpm docs:check` executes structural assertions for this router and active-state block.
+`pnpm docs:check` executes structural and drift assertions for this router, stable status fragment,
+migration tree, canonical next-slice agreement, and—when GitHub credentials are available—the mutex.
 
 ## Real API Integration Gate
 

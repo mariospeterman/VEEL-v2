@@ -2,10 +2,19 @@ import { createHash, randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import { withPostgresTransaction } from "../../shared/postgres.js";
 import {
+  ContentAssetRetirementConflictError,
+  ContentImageUploadConflictError
+} from "./content-errors.js";
+import {
   captureProviderObservationCutoff,
   providerEventReplayDecision
 } from "../../shared/provider-event-order.js";
-import type { ContentItem, ContentRepository } from "./types.js";
+import type {
+  ContentItem,
+  ContentRepository,
+  MediaAssetMutationResult,
+  RetiredMediaAssetResult
+} from "./types.js";
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 type JsonObject = { [key: string]: JsonValue };
@@ -13,13 +22,18 @@ type JsonObject = { [key: string]: JsonValue };
 type ContentMediaRepositoryMethods = Required<Pick<
   ContentRepository,
   | "captureProviderObservationCutoff"
+  | "completeImageAssetUpload"
+  | "completeMediaAssetCleanup"
   | "createMediaAsset"
   | "findMediaAssetByProviderAsset"
   | "findOwnedContentForUpload"
   | "findOwnedMediaAssetForSync"
   | "recordMediaProviderWebhook"
+  | "reserveImageAssetUpload"
+  | "retireOwnedMediaAsset"
   | "updateMediaAssetFromWebhook"
   | "updateMediaAssetPlayback"
+  | "updateOwnedMediaAsset"
 >>;
 
 export function createContentMediaRepositoryMethods(
@@ -98,6 +112,510 @@ export function createContentMediaRepositoryMethods(
 
       return rows[0] ? { id: rows[0].id } : undefined;
     },
+    async reserveImageAssetUpload(input) {
+      return withPostgresTransaction(sql, async (transaction) => {
+        const actorRows = await transaction<{ id: string }[]>`
+          select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
+        `;
+        const actor = actorRows[0];
+        if (!actor) throw new ContentImageUploadConflictError("draft_locked");
+
+        const drafts = await transaction<{ id: string; media_type: string }[]>`
+          select id, media_type
+          from content_items
+          where id = ${input.contentId}
+            and creator_user_id = ${actor.id}
+            and state <> 'deleted'
+            and publish_state in ('draft', 'unpublished')
+          for update
+        `;
+        const draft = drafts[0];
+        if (!draft) throw new ContentImageUploadConflictError("draft_locked");
+        if (!['image', 'carousel'].includes(draft.media_type)) {
+          throw new ContentImageUploadConflictError("format_invalid");
+        }
+
+        const receiptKey = `content:image-upload:${actor.id}:${input.idempotencyKey}`;
+        await transaction`
+          insert into idempotency_keys (key, actor_user_id, scope, request_hash, expires_at)
+          values (${receiptKey}, ${actor.id}, 'content.image-upload', ${input.requestHash}, 'infinity'::timestamptz)
+          on conflict (key) do nothing
+        `;
+        const receipts = await transaction<{
+          request_hash: string;
+          response_body: { mediaAssetId?: string; providerAssetId?: string } | null;
+        }[]>`
+          select request_hash, response_body
+          from idempotency_keys
+          where key = ${receiptKey}
+          for update
+        `;
+        const receipt = receipts[0];
+        if (!receipt || receipt.request_hash !== input.requestHash) {
+          throw new ContentImageUploadConflictError("idempotency_conflict");
+        }
+
+        if (receipt.response_body?.mediaAssetId && receipt.response_body.providerAssetId) {
+          const existing = await transaction<{ provider_state: string }[]>`
+            select provider_state
+            from media_assets
+            where id = ${receipt.response_body.mediaAssetId}
+              and content_item_id = ${input.contentId}
+              and provider_asset_id = ${receipt.response_body.providerAssetId}
+              and retired_at is null
+            limit 1
+          `;
+          if (!existing[0]) throw new ContentImageUploadConflictError("receipt_invalid");
+          return {
+            mediaAssetId: receipt.response_body.mediaAssetId,
+            providerAssetId: receipt.response_body.providerAssetId,
+            completed: existing[0].provider_state === "stored_private"
+          };
+        }
+
+        await transaction`
+          insert into media_assets (
+            id,
+            content_item_id,
+            provider,
+            provider_asset_id,
+            provider_state,
+            provider_playable,
+            asset_kind,
+            mime_type,
+            width_pixels,
+            height_pixels,
+            checksum_sha256,
+            required_for_release
+          )
+          values (
+            ${input.mediaAssetId},
+            ${input.contentId},
+            'bunny',
+            ${input.providerAssetId},
+            'uploading_private',
+            false,
+            'image',
+            ${input.mimeType},
+            ${input.widthPixels},
+            ${input.heightPixels},
+            ${input.checksumSha256},
+            true
+          )
+        `;
+
+        await transaction`
+          insert into media_moderation_jobs (
+            media_safety_case_id,
+            media_asset_id,
+            stage,
+            state,
+            idempotency_key
+          )
+          select
+            safety.id,
+            ${input.mediaAssetId},
+            'provider_scan_reconciliation',
+            'queued',
+            ${`media-safety:asset:${input.mediaAssetId}:provider-scan-v1`}
+          from media_safety_cases safety
+          where safety.content_item_id = ${input.contentId}
+            and safety.state <> 'superseded'
+          on conflict (idempotency_key) do nothing
+        `;
+
+        await transaction`
+          update media_safety_cases
+          set
+            state = 'preprocessing',
+            reason_code = 'awaiting_provider_scan_reconciliation',
+            provider_release_allowed = false,
+            updated_at = now()
+          where content_item_id = ${input.contentId}
+            and state in ('quarantined', 'preprocessing')
+        `;
+
+        await transaction`
+          update idempotency_keys
+          set response_status = 202,
+              response_body = ${transaction.json({
+                mediaAssetId: input.mediaAssetId,
+                providerAssetId: input.providerAssetId
+              })}::jsonb
+          where key = ${receiptKey}
+        `;
+
+        return {
+          mediaAssetId: input.mediaAssetId,
+          providerAssetId: input.providerAssetId,
+          completed: false
+        };
+      });
+    },
+    async completeImageAssetUpload(input) {
+      const rows = await sql<{ id: string }[]>`
+        update media_assets
+        set
+          provider_state = 'stored_private',
+          provider_playable = false,
+          provider_checked_at = now()
+        where id = ${input.mediaAssetId}
+          and provider = 'bunny'
+          and provider_asset_id = ${input.providerAssetId}
+          and asset_kind = 'image'
+          and retired_at is null
+          and provider_state in ('uploading_private', 'stored_private')
+        returning id
+      `;
+      if (!rows[0]) throw new ContentImageUploadConflictError("receipt_invalid");
+    },
+    async updateOwnedMediaAsset(input) {
+      return withPostgresTransaction(sql, async (transaction) => {
+        const actorRows = await transaction<{ id: string }[]>`
+          select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
+        `;
+        const actor = actorRows[0];
+        if (!actor) return null;
+
+        const receiptKey = `content:asset-update:${actor.id}:${input.idempotencyKey}`;
+        await transaction`
+          insert into idempotency_keys (key, actor_user_id, scope, request_hash, expires_at)
+          values (${receiptKey}, ${actor.id}, 'content.asset-update', ${input.requestHash}, 'infinity'::timestamptz)
+          on conflict (key) do nothing
+        `;
+        const receipts = await transaction<{
+          request_hash: string;
+          response_body: MediaAssetMutationResult | null;
+        }[]>`
+          select request_hash, response_body
+          from idempotency_keys
+          where key = ${receiptKey}
+          for update
+        `;
+        const receipt = receipts[0];
+        if (!receipt || receipt.request_hash !== input.requestHash) {
+          throw new ContentImageUploadConflictError("idempotency_conflict");
+        }
+        if (receipt.response_body?.asset?.id) return receipt.response_body;
+
+        const draftRows = await transaction<{
+          content_item_id: string;
+          asset_revision: number;
+        }[]>`
+          select content.id as content_item_id, content.asset_revision
+          from media_assets asset
+          join content_items content on content.id = asset.content_item_id
+          where asset.id = ${input.mediaAssetId}
+            and content.creator_user_id = ${actor.id}
+            and content.state <> 'deleted'
+            and content.publish_state in ('draft', 'unpublished')
+            and asset.retired_at is null
+          for update of content, asset
+        `;
+        const draft = draftRows[0];
+        if (!draft) return null;
+        if (Number(draft.asset_revision) !== input.expectedCompositionRevision) {
+          throw new ContentImageUploadConflictError("draft_locked");
+        }
+
+        const assets = await transaction<{
+          id: string;
+          asset_kind: "image" | "video";
+          position: number;
+          provider: "bunny" | "livepeer";
+          provider_state: string;
+          poster_url: string | null;
+          mime_type: NonNullable<MediaAssetMutationResult["asset"]["mimeType"]> | null;
+          width_pixels: number | null;
+          height_pixels: number | null;
+          duration_ms: number | null;
+          alt_text: string | null;
+          required_for_release: boolean;
+          is_cover: boolean;
+          focal_point_x: number | null;
+          focal_point_y: number | null;
+          origin_classification: NonNullable<MediaAssetMutationResult["asset"]["originClassification"]>;
+          visible_label_state: NonNullable<MediaAssetMutationResult["asset"]["visibleLabelState"]>;
+        }[]>`
+          update media_assets
+          set
+            alt_text = case when ${input.altTextProvided} then ${input.altText ?? null} else alt_text end,
+            origin_classification = coalesce(
+              ${input.originClassification ?? null},
+              origin_classification
+            )
+          where id = ${input.mediaAssetId}
+            and content_item_id = ${draft.content_item_id}
+            and retired_at is null
+          returning id, asset_kind, position, provider, provider_state, poster_url, mime_type,
+            width_pixels, height_pixels, duration_ms, alt_text, required_for_release, is_cover,
+            focal_point_x::float8 as focal_point_x, focal_point_y::float8 as focal_point_y,
+            origin_classification, visible_label_state
+        `;
+        const asset = assets[0];
+        if (!asset) return null;
+        const revisions = await transaction<{ asset_revision: number }[]>`
+          select asset_revision from content_items where id = ${draft.content_item_id}
+        `;
+        const result: MediaAssetMutationResult = {
+          compositionRevision: Number(revisions[0]?.asset_revision ?? draft.asset_revision + 1),
+          asset: {
+            id: asset.id,
+            kind: asset.asset_kind,
+            position: Number(asset.position),
+            provider: asset.provider,
+            providerState: asset.provider_state,
+            posterUrl: asset.poster_url,
+            mimeType: asset.mime_type,
+            widthPixels: asset.width_pixels,
+            heightPixels: asset.height_pixels,
+            durationMs: asset.duration_ms,
+            altText: asset.alt_text,
+            requiredForRelease: asset.required_for_release,
+            isCover: asset.is_cover,
+            focalPointX: asset.focal_point_x,
+            focalPointY: asset.focal_point_y,
+            originClassification: asset.origin_classification,
+            visibleLabelState: asset.visible_label_state
+          }
+        };
+        await transaction`
+          update idempotency_keys
+          set response_status = 200,
+              response_body = ${transaction.json(JSON.parse(JSON.stringify(result)) as JsonObject)}::jsonb
+          where key = ${receiptKey}
+        `;
+        return result;
+      });
+    },
+    async retireOwnedMediaAsset(input) {
+      return withPostgresTransaction(sql, async (transaction) => {
+        const actorRows = await transaction<{ id: string }[]>`
+          select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
+        `;
+        const actor = actorRows[0];
+        if (!actor) return null;
+
+        const receiptKey = `content:asset-retire:${actor.id}:${input.idempotencyKey}`;
+        await transaction`
+          insert into idempotency_keys (key, actor_user_id, scope, request_hash, expires_at)
+          values (${receiptKey}, ${actor.id}, 'content.asset-retire', ${input.requestHash}, 'infinity'::timestamptz)
+          on conflict (key) do nothing
+        `;
+        const receipts = await transaction<{
+          request_hash: string;
+          response_body: RetiredMediaAssetResult | null;
+        }[]>`
+          select request_hash, response_body
+          from idempotency_keys
+          where key = ${receiptKey}
+          for update
+        `;
+        const receipt = receipts[0];
+        if (!receipt || receipt.request_hash !== input.requestHash) {
+          throw new ContentAssetRetirementConflictError("idempotency_conflict");
+        }
+        if (receipt.response_body?.mediaAssetId) {
+          const cleanup = await transaction<{ provider_cleanup_state: RetiredMediaAssetResult["cleanupState"] }[]>`
+            select provider_cleanup_state
+            from media_assets
+            where id = ${receipt.response_body.mediaAssetId}
+              and retired_at is not null
+            limit 1
+          `;
+          if (!cleanup[0]) {
+            throw new ContentAssetRetirementConflictError("asset_already_retired");
+          }
+          return { ...receipt.response_body, cleanupState: cleanup[0].provider_cleanup_state };
+        }
+
+        const assets = await transaction<{
+          id: string;
+          content_item_id: string;
+          asset_kind: "image" | "video";
+          position: number | null;
+          provider: "bunny" | "livepeer";
+          provider_asset_id: string;
+          retired_at: Date | null;
+          publish_state: string;
+          asset_revision: number;
+          release_media_asset_id: string | null;
+        }[]>`
+          select
+            asset.id,
+            asset.content_item_id,
+            asset.asset_kind,
+            asset.position,
+            asset.provider,
+            asset.provider_asset_id,
+            asset.retired_at,
+            content.publish_state,
+            content.asset_revision,
+            content.release_media_asset_id
+          from media_assets asset
+          join content_items content on content.id = asset.content_item_id
+          where asset.id = ${input.mediaAssetId}
+            and content.creator_user_id = ${actor.id}
+            and content.state <> 'deleted'
+          for update of content, asset
+        `;
+        const asset = assets[0];
+        if (!asset) return null;
+        if (asset.retired_at) {
+          throw new ContentAssetRetirementConflictError("asset_already_retired");
+        }
+        if (
+          !["draft", "unpublished"].includes(asset.publish_state) ||
+          asset.release_media_asset_id
+        ) {
+          throw new ContentAssetRetirementConflictError("composition_locked");
+        }
+        if (Number(asset.asset_revision) !== input.expectedCompositionRevision) {
+          throw new ContentAssetRetirementConflictError("revision_conflict");
+        }
+
+        await transaction`set constraints media_assets_content_position_uidx deferred`;
+        await transaction`
+          update media_assets
+          set
+            position = null,
+            required_for_release = false,
+            is_cover = false,
+            retired_at = now(),
+            retired_by_user_id = ${actor.id},
+            retirement_reason = ${input.reason},
+            provider_cleanup_state = 'pending',
+            provider_cleanup_error_code = null,
+            provider_cleanup_attempt_count = 0,
+            provider_cleanup_next_attempt_at = now(),
+            provider_cleanup_lease_token = null,
+            provider_cleanup_leased_until = null
+          where id = ${asset.id}
+            and retired_at is null
+        `;
+        await transaction`
+          update media_assets
+          set position = position - 1
+          where content_item_id = ${asset.content_item_id}
+            and retired_at is null
+            and position > ${asset.position}
+        `;
+        await transaction`
+          update media_moderation_jobs
+          set
+            state = 'dead_letter',
+            lease_token = null,
+            leased_at = null,
+            lease_expires_at = null,
+            last_failure_code = 'asset_retired',
+            updated_at = now()
+          where media_asset_id = ${asset.id}
+            and state in ('queued', 'processing', 'retry', 'review_required')
+        `;
+        await transaction`
+          update content_items
+          set
+            asset_revision = ${input.expectedCompositionRevision + 1},
+            state = (case
+              when not exists (
+                select 1 from media_assets remaining
+                where remaining.content_item_id = content_items.id
+                  and remaining.retired_at is null
+              ) then 'draft'
+              when private.content_composition_provider_ready(content_items.id) then 'ready'
+              else 'processing'
+            end)::content_state,
+            updated_at = now()
+          where id = ${asset.content_item_id}
+        `;
+
+        const result: RetiredMediaAssetResult = {
+          contentId: asset.content_item_id,
+          mediaAssetId: asset.id,
+          compositionRevision: input.expectedCompositionRevision + 1,
+          cleanupState: "pending",
+          provider: asset.provider,
+          providerAssetId: asset.provider_asset_id,
+          assetKind: asset.asset_kind
+        };
+        await transaction`
+          insert into audit_events (
+            id, actor_user_id, subject_type, subject_id, action, idempotency_key, metadata
+          )
+          values (
+            ${randomUUID()},
+            ${actor.id},
+            'content',
+            ${asset.content_item_id},
+            'content_media_asset_retired',
+            ${receiptKey},
+            ${transaction.json({
+              mediaAssetId: asset.id,
+              assetKind: asset.asset_kind,
+              provider: asset.provider,
+              reason: input.reason
+            })}::jsonb
+          )
+          on conflict (actor_user_id, action, idempotency_key) where actor_user_id is not null and idempotency_key is not null
+          do nothing
+        `;
+        await transaction`
+          update idempotency_keys
+          set response_status = 202,
+              response_body = ${transaction.json(JSON.parse(JSON.stringify(result)) as JsonObject)}::jsonb
+          where key = ${receiptKey}
+        `;
+        return result;
+      });
+    },
+    async completeMediaAssetCleanup(input) {
+      await withPostgresTransaction(sql, async (transaction) => {
+        const rows = await transaction<{ actor_user_id: string; content_item_id: string }[]>`
+          select content.creator_user_id as actor_user_id, asset.content_item_id
+          from media_assets asset
+          join content_items content on content.id = asset.content_item_id
+          join users actor on actor.id = content.creator_user_id
+          where asset.id = ${input.mediaAssetId}
+            and actor.supabase_user_id = ${input.supabaseUserId}
+            and asset.retired_at is not null
+          limit 1
+          for update of asset
+        `;
+        const current = rows[0];
+        if (!current) return;
+        await transaction`
+          update media_assets
+          set
+            provider_cleanup_state = ${input.succeeded ? "completed" : "retry"},
+            provider_cleanup_error_code = ${input.succeeded ? null : input.errorCode ?? "provider_delete_failed"},
+            provider_cleanup_attempt_count = provider_cleanup_attempt_count + ${input.succeeded ? 0 : 1},
+            provider_cleanup_next_attempt_at = case
+              when ${input.succeeded} then null
+              else now() + make_interval(secs => least(3600, 60 * power(2, provider_cleanup_attempt_count)::integer))
+            end,
+            provider_cleanup_lease_token = null,
+            provider_cleanup_leased_until = null
+          where id = ${input.mediaAssetId}
+            and retired_at is not null
+        `;
+        await transaction`
+          insert into audit_events (
+            id, actor_user_id, subject_type, subject_id, action, idempotency_key, metadata
+          )
+          values (
+            ${randomUUID()},
+            ${current.actor_user_id},
+            'content',
+            ${current.content_item_id},
+            ${input.succeeded ? "content_media_asset_cleanup_completed" : "content_media_asset_cleanup_retry"},
+            ${`content:asset-cleanup:${input.idempotencyKey}:${input.succeeded ? "completed" : "retry"}`},
+            ${transaction.json({ mediaAssetId: input.mediaAssetId, errorCode: input.errorCode ?? null })}::jsonb
+          )
+          on conflict (actor_user_id, action, idempotency_key) where actor_user_id is not null and idempotency_key is not null
+          do nothing
+        `;
+      });
+    },
     async findMediaAssetByProviderAsset(input) {
       const rows = await sql<{ id: string }[]>`
         select id
@@ -154,6 +672,7 @@ export function createContentMediaRepositoryMethods(
         join users u on u.id = ci.creator_user_id
         where ma.id = ${input.mediaAssetId}
           and ma.provider = 'bunny'
+          and ma.retired_at is null
           and u.supabase_user_id = ${input.supabaseUserId}
         limit 1
       `;
@@ -188,6 +707,7 @@ export function createContentMediaRepositoryMethods(
             ready_at = case when ${input.providerPlayable} then coalesce(ready_at, now()) else ready_at end,
             provider_checked_at = ${input.providerObservationCutoff}
           where id = ${input.mediaAssetId}
+            and retired_at is null
             and (provider_checked_at is null or provider_checked_at <= ${input.providerObservationCutoff})
             and not exists (
               select 1
@@ -231,6 +751,7 @@ export function createContentMediaRepositoryMethods(
               on safety.content_item_id = asset.content_item_id
               and safety.state <> 'superseded'
             where asset.id = ${input.mediaAssetId}
+              and asset.retired_at is null
             on conflict (provider, provider_event_id) do nothing
           `;
         }
@@ -243,6 +764,7 @@ export function createContentMediaRepositoryMethods(
           from media_assets ma
           where ma.content_item_id = ci.id
             and ma.id = ${input.mediaAssetId}
+            and ma.retired_at is null
         `;
       });
     },
@@ -294,8 +816,8 @@ export function createContentMediaRepositoryMethods(
     },
     async updateMediaAssetFromWebhook(input) {
       const rows = await withPostgresTransaction(sql, async (transaction) => {
-        const currentRows = await transaction<{ id: string; provider_checked_at: Date | null }[]>`
-          select id, provider_checked_at
+        const currentRows = await transaction<{ id: string; provider_checked_at: Date | null; retired_at: Date | null }[]>`
+          select id, provider_checked_at, retired_at
           from media_assets
           where provider = ${input.provider}
             and provider_asset_id = ${input.providerAssetId}
@@ -306,6 +828,16 @@ export function createContentMediaRepositoryMethods(
 
         if (!current) {
           return [] as { id: string }[];
+        }
+
+        if (current.retired_at) {
+          await transaction`
+            update provider_events
+            set normalized_state = 'ignored_retired', processed_at = now()
+            where provider = ${input.provider}
+              and provider_event_id = ${input.providerEventId}
+          `;
+          return [{ id: current.id }];
         }
 
         const replayDecision = await providerEventReplayDecision(
@@ -339,6 +871,7 @@ export function createContentMediaRepositoryMethods(
             provider_playable = ${input.providerPlayable},
             ready_at = case when ${input.providerPlayable} then coalesce(ready_at, now()) else ready_at end
           where id = ${current.id}
+            and retired_at is null
           returning id
         `;
 
@@ -376,6 +909,7 @@ export function createContentMediaRepositoryMethods(
               on safety.content_item_id = asset.content_item_id
               and safety.state <> 'superseded'
             where asset.id = ${current.id}
+              and asset.retired_at is null
             on conflict (provider, provider_event_id) do nothing
           `;
         }
@@ -389,6 +923,7 @@ export function createContentMediaRepositoryMethods(
           where ma.content_item_id = ci.id
             and ma.provider = ${input.provider}
             and ma.provider_asset_id = ${input.providerAssetId}
+            and ma.retired_at is null
         `;
 
         await transaction`

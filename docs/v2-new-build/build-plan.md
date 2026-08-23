@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: canonical implementation and production-completion order
-Last updated: 2026-08-20
+Last updated: 2026-08-22
 Source of truth: yes
 
 Owns:
@@ -44,6 +44,11 @@ Do not bulk-copy external implementation code. Any outside repository is histori
 
 The historical milestones below remain useful implementation context. New production work follows this ordered slice program one reviewed slice at a time. Only one write/integration slice may be active; after its protected merge and main-branch verification, continue to the next unblocked slice unless a defined human gate requires owner action.
 
+The launch denominator is frozen. The ordered loop is Convergence 01 through 08, followed by one
+release-convergence pass over staging, provider, legal, operations, recovery, security, performance,
+accessibility, browser, and immutable-artifact evidence. Anything outside that denominator is
+`DEFERRED` unless it closes a proven security, correctness, accessibility, or release blocker.
+
 | Slice | Goal | Current state |
 | --- | --- | --- |
 | 00 | Baseline, governance, and truth lock | Merged through PR #35 at `b441532`; required main checks passed |
@@ -58,8 +63,8 @@ The historical milestones below remain useful implementation context. New produc
 | 09 | Enterprise managed creators | `CODE_COMPLETE_PROVIDER_BLOCKED` and merged through PR #50 at `0627737`; contracts, reversible migration, authorization and durable idempotency, normalized KYB/entitlement and bilateral agreement gates, exact allocation/reporting, operations UI, 185 focused tests, four real-Postgres journeys, protected CI, and desktop/mobile browser proof are green. Real KYB callbacks, approved Enterprise commercial evidence, and Solana devnet allocation settlement remain pre-production gates. |
 | 10 | Frontend system, accessibility, cross-browser, and PWA completion | `CODE_COMPLETE_PROVIDER_BLOCKED` on PR #51; the direct wallet-first entry, deferred wallet/payment runtimes, unified app shell, accessibility repairs, installable privacy-safe PWA, desktop/mobile Chromium, and Firefox evidence are green. Linux CI WebKit must pass before merge; real wallet extensions, Privy target domains/devices, push delivery, installed iOS PWA, screen-reader/zoom, and staging Web Vitals remain pre-production evidence gates. |
 | 11 | Actual deployment, observability, recovery, and legal launch | `CODE_COMPLETE_PROVIDER_BLOCKED`: release operations merged through PRs #52–#55, and merge `4860133` produced verified immutable images/manifest in run `32043723824`. Convergence run `32044089602` verified the artifact and failed closed before deployment on absent shared staging, provider, operations, legal, and hosting configuration. Those inputs plus final counsel and explicit production approval remain external pre-production gates. |
-| Convergence 01 | policy and eligibility | Active on draft PR #86: deterministic recipient KYC policy, one indexed content-eligibility authority, independent viewer preference/ranking mode, and resumable Adult/Explicit drafts are locally green; protected PR CI/review remains |
-| Convergence 02 | Universal composer | Pending Convergence 01: one draft lifecycle and renderer family for photo, video, carousel, mixed media, text, and polls |
+| Convergence 01 | policy and eligibility | Merged through PR #86 at `b5e1904`: deterministic recipient KYC policy, one indexed content-eligibility authority, independent viewer preference/ranking mode, resumable Adult/Explicit drafts, exact-main CI/database/security, and immutable artifact evidence are green; staging remains fail-closed on recorded external gates |
+| Convergence 02 | Universal composer | Next planned after Convergence 01: one draft lifecycle and renderer family for photo, video, carousel, mixed media, text, and polls; live PR state comes only from GitHub's `wevid-active-slice` mutex |
 | Convergence 03 | Analytics Core | Pending Convergence 02: one versioned metric registry, typed projections, deterministic reconciliation, explicit freshness/privacy, and one authorized query service |
 | Convergence 04 | Analytics surfaces | Pending Convergence 03: user, creator, Enterprise, admin, export, and later MCP surfaces consume identical authorized metric objects |
 | Convergence 05 | Scalable realtime | Pending Convergence 04: private scoped Broadcast transports minimal invalidations; canonical APIs remain truth and reconnect gaps recover safely |
@@ -79,8 +84,9 @@ not create parallel policy, eligibility, composer, renderer, analytics, realtime
 WeVid Core owns deterministic analytics and the scoped data/action bridge, but hosts no LLM or model-key
 gateway. The optional WeVid Agency remains a separate, user-owned add-on and publication stays human-controlled.
 
-The next unfinished slice is **Convergence 01 — policy and eligibility** on
-`codex/converge-01-policy-eligibility`.
+Next planned production slice: **Convergence 02 — Universal composer**.
+Its branch contract is `codex/converge-02-universal-composer`; GitHub, not this document, owns
+whether that branch currently has the one active pull request.
 
 Each completed slice requires the actual UI-to-database/provider path, authorization and runtime validation, focused unit and real-Postgres integration proof, browser proof, operational recovery, canonical docs updates, and redacted provider staging evidence when a provider is involved. Mocks prove application logic only.
 

@@ -33,6 +33,8 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
         "BUNNY_STREAM_API_KEY",
         "BUNNY_STREAM_EMBED_TOKEN_KEY",
         "BUNNY_STREAM_WEBHOOK_READONLY_KEY",
+        "BUNNY_STORAGE_ACCESS_KEY",
+        "BUNNY_STORAGE_PULL_ZONE_TOKEN_KEY",
         "LIVEPEER_API_KEY",
         "LIVEPEER_WEBHOOK_SECRET",
         "LIVEPEER_ACCESS_CONTROL_PRIVATE_KEY",

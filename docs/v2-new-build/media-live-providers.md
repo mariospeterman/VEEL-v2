@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Bunny, Livepeer, media, live
-Last updated: 2026-08-15
+Last updated: 2026-08-20
 Source of truth: yes
 
 Owns:
@@ -22,7 +22,7 @@ Non-goals:
 
 Current implementation state:
 
-- `POST /v1/content` creates a server-owned content draft for app-ready users.
+- `POST /v1/content` creates one server-owned content draft for app-ready users across video, image, carousel, text, and poll formats. Initial plain text and poll definitions are validated, normalized, and stored in the same transaction as the canonical `content_items` row; incomplete text/poll drafts remain private and fail closed at submission until their required shape is complete.
 - Content draft creation persists a non-expiring server-only receipt keyed by actor, action, and `Idempotency-Key`. An exact replay returns the original draft, changed-input reuse fails with `409`, and retries never consume draft quota twice.
 - Adult/explicit draft creation requires a first-party representation declaration and explicit policy acceptance. `self_only` reuses the creator's valid Didit-backed adult-publisher identity and records one scoped consent; MCP cannot accept this declaration for the creator.
 - `POST /v1/content` enforces a backend-owned draft quota before inserting content. The default policy is 20 drafts per rolling 24 hours, and an active `safety.content_creation_abuse_policy` admin software-policy flag can tighten or relax the draft count/window without giving the browser, money, tiers, Mutuals, recommendations, messages, or moderation priority any control.
@@ -64,10 +64,18 @@ Official references checked:
 - Livepeer terminate stream: https://docs.livepeer.org/api-reference/stream/terminate
 - Livepeer OBS ingest: https://docs.livepeer.org/developers/guides/stream-via-obs
 - Livepeer asset upload reference: https://docs.livepeer.org/api-reference/asset/upload
+- Bunny Storage API reference: https://bunny.net/docs/api-reference/storage/index
+- Bunny Storage upload-file reference: https://bunny.net/docs/api-reference/storage/manage-files/upload-file
+- Bunny Optimizer Dynamic Images: https://bunny.net/docs/optimizer/dynamic-images/overview
+- Bunny Optimizer limits: https://bunny.net/docs/optimizer/limits
+- Bunny Shield upload scanning: https://bunny.net/docs/shield/upload-scanning
 
 ## Provider Split
 
 - Bunny Stream owns VOD upload/resumability, storage, encoding, delivery, and provider playback. Bunny Shield is used only on upload paths with staging-proven coverage.
+- Bunny Storage plus Optimizer is the candidate image boundary: the API streams sanitized originals to opaque private paths with the server-only Storage `AccessKey`, while Optimizer produces responsive derivatives after release. The path stays fail-closed until exact staging evidence exists.
+- Private image ingestion is additionally feature-gated by `BUNNY_STORAGE_IMAGE_UPLOAD_ENABLED=false`. Configuration requires the zone-scoped `BUNNY_STORAGE_ACCESS_KEY`, `BUNNY_STORAGE_ZONE_NAME`, regional `BUNNY_STORAGE_API_ENDPOINT`, `BUNNY_STORAGE_PULL_ZONE_URL`, and server-only `BUNNY_STORAGE_PULL_ZONE_TOKEN_KEY`. Upload completion records `stored_private` with `provider_playable=false`; it is not release evidence.
+- Creator removal retires the canonical draft asset before idempotent Bunny Storage/Stream deletion. Provider outages remain an audited, lease-based worker retry with bounded backoff and never restore the asset to the active composition.
 - Livepeer owns live ingest, transcoding, recording, and provider playback.
 - WeVid backend owns drafts/quarantine, performer and consent requirements, moderation/release, room/access/monetisation policy, entitlement/playback authorization, report and suspend/end orchestration, and replay release.
 - Frontend uses official provider player/component boundaries wrapped in WeVid layout primitives.

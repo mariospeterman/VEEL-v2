@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 
 const required = [
   "docs/v2-new-build/INDEX.md",
@@ -11,6 +12,7 @@ const required = [
   "docs/v2-new-build/app-architecture.md",
   "docs/v2-new-build/stack-decision.md",
   "docs/v2-new-build/current-implementation-status.md",
+  "docs/v2-new-build/production-status.json",
   "docs/v2-new-build/slice-workflow.md",
   "docs/v2-new-build/adr/0001-fastify-supabase-decision.md",
   "docs/v2-new-build/adr/0002-provider-decisions-2026.md",
@@ -62,19 +64,22 @@ const implementationStatus = readFileSync(
   "utf8",
 );
 const sliceWorkflow = readFileSync("docs/v2-new-build/slice-workflow.md", "utf8");
+const index = readFileSync("docs/v2-new-build/INDEX.md", "utf8");
+const productionStatus = JSON.parse(
+  readFileSync("docs/v2-new-build/production-status.json", "utf8"),
+);
 
 const walkTestRequirements = [
   ["AGENTS production-loop skill", agentsRouter, "$wevid-production-loop"],
   ["AGENTS current-state route", agentsRouter, "docs/v2-new-build/current-implementation-status.md"],
   ["AGENTS build-plan route", agentsRouter, "docs/v2-new-build/build-plan.md"],
   ["AGENTS slice-workflow route", agentsRouter, "docs/v2-new-build/slice-workflow.md"],
-  ["status merged baseline", implementationStatus, "| Merged baseline |"],
-  ["status active slice", implementationStatus, "| Active slice |"],
-  ["status branch", implementationStatus, "| Branch |"],
-  ["status pull request", implementationStatus, "| Pull request |"],
-  ["status state", implementationStatus, "| State |"],
-  ["status blockers", implementationStatus, "| Slice blockers |"],
-  ["status next slice", implementationStatus, "| Next unfinished slice |"],
+  ["status merged baseline", implementationStatus, "| Latest merged baseline |"],
+  ["status merged slice", implementationStatus, "| Latest merged slice |"],
+  ["status merged migration", implementationStatus, "| Latest merged migration |"],
+  ["status merged evidence", implementationStatus, "| Latest merged evidence |"],
+  ["status blockers", implementationStatus, "| Known launch blockers |"],
+  ["status next slice", implementationStatus, "| Next planned slice |"],
   ["status provider-blocked state", implementationStatus, "CODE_COMPLETE_PROVIDER_BLOCKED"],
   ["workflow walk test", sliceWorkflow, "### Five-Minute Walk Test"],
   ["workflow active mutex", sliceWorkflow, "wevid-active-slice"],
@@ -88,48 +93,6 @@ for (const [label, source, expected] of walkTestRequirements) {
   }
 }
 
-const activeStateMatches = [
-  ...implementationStatus.matchAll(/^\| State \| `([^`]+)` \|$/gm),
-];
-const allowedActiveStates = new Set([
-  "PLANNED",
-  "ACTIVE",
-  "CODE_COMPLETE",
-  "LOCAL_GREEN",
-  "CI_GREEN",
-  "PROVIDER_PROVEN",
-  "CODE_COMPLETE_PROVIDER_BLOCKED",
-  "REVIEW_GREEN",
-  "MERGE_READY",
-  "MERGED",
-]);
-if (activeStateMatches.length !== 1 || !allowedActiveStates.has(activeStateMatches[0]?.[1])) {
-  console.error("Production walk test failed: expected exactly one valid active-slice state.");
-  process.exit(1);
-}
-
-const activeStateFields = [
-  "Merged baseline",
-  "Active slice",
-  "Branch",
-  "Pull request",
-  "State",
-  "Slice blockers",
-  "Next unfinished slice",
-];
-const activeStateValues = new Map();
-for (const field of activeStateFields) {
-  const escapedField = field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const matches = [
-    ...implementationStatus.matchAll(new RegExp(`^\\| ${escapedField} \\| (.+) \\|$`, "gm")),
-  ];
-  if (matches.length !== 1 || !matches[0]?.[1]?.trim()) {
-    console.error(`Production walk test failed: expected one nonempty ${field} value.`);
-    process.exit(1);
-  }
-  activeStateValues.set(field, matches[0][1].trim());
-}
-
 const canonicalSlices = new Set(
   [
     ...buildPlan.matchAll(
@@ -139,12 +102,111 @@ const canonicalSlices = new Set(
     `${sliceId.startsWith("Convergence ") ? sliceId : `Launch ${sliceId}`} — ${goal.trim()}`,
   ),
 );
-const nextSlice = activeStateValues.get("Next unfinished slice");
-if (!nextSlice || !canonicalSlices.has(nextSlice)) {
+const nextSlice = productionStatus.nextPlannedSlice;
+if (typeof nextSlice !== "string" || !canonicalSlices.has(nextSlice)) {
   console.error(
-    `Production walk test failed: next unfinished slice is not in build-plan.md (${nextSlice ?? "missing"}).`,
+    `Production walk test failed: next planned slice is not in build-plan.md (${nextSlice ?? "missing"}).`,
   );
   process.exit(1);
+}
+
+const nextSliceMarker = `Next planned production slice: **${nextSlice}**.`;
+for (const [label, source] of [
+  ["INDEX.md", index],
+  ["build-plan.md", buildPlan],
+  ["current-implementation-status.md", implementationStatus],
+]) {
+  if (!source.includes(nextSliceMarker)) {
+    console.error(`Production status drift: ${label} does not agree on ${nextSlice}.`);
+    process.exit(1);
+  }
+}
+
+if (/^\| (?:Active slice|Branch|Pull request|State) \|/m.test(implementationStatus) || /Active on (?:draft )?PR #\d+/i.test(buildPlan)) {
+  console.error("Production status drift: protected-main docs contain transient active-PR truth.");
+  process.exit(1);
+}
+
+const readinessVocabulary = new Set([
+  "DESIGNED",
+  "CODE_COMPLETE",
+  "UNIT_TESTED",
+  "REAL_POSTGRES_PROVEN",
+  "BROWSER_PROVEN",
+  "STAGING_PROVEN",
+  "PROVIDER_APPROVED",
+  "LEGAL_APPROVED",
+  "OPERATIONS_APPROVED",
+  "LAUNCH_ENABLED",
+]);
+for (const state of [
+  ...(productionStatus.latestMergedEvidenceStates ?? []),
+  ...(productionStatus.outstandingLaunchGates ?? []),
+]) {
+  if (!readinessVocabulary.has(state)) {
+    console.error(`Production status drift: unsupported readiness state ${state}.`);
+    process.exit(1);
+  }
+}
+
+if (!/^[0-9a-f]{40}$/.test(productionStatus.latestMergedBaseline ?? "")) {
+  console.error("Production status drift: latestMergedBaseline must be a full commit SHA.");
+  process.exit(1);
+}
+
+try {
+  execFileSync("git", ["merge-base", "--is-ancestor", productionStatus.latestMergedBaseline, "HEAD"]);
+} catch {
+  console.error("Production status drift: recorded merged baseline is not an ancestor of HEAD.");
+  process.exit(1);
+}
+
+const baselineMigrations = execFileSync(
+  "git",
+  ["ls-tree", "-r", "--name-only", productionStatus.latestMergedBaseline, "packages/database/migrations"],
+  { encoding: "utf8" },
+)
+  .trim()
+  .split("\n")
+  .filter((path) => /^packages\/database\/migrations\/\d{4}_.+\.sql$/.test(path) && !path.endsWith(".down.sql"))
+  .sort();
+const latestBaselineMigration = baselineMigrations.at(-1);
+if (latestBaselineMigration !== productionStatus.latestMergedMigration) {
+  console.error(
+    `Production status drift: recorded latest migration ${productionStatus.latestMergedMigration} differs from baseline tree ${latestBaselineMigration ?? "missing"}.`,
+  );
+  process.exit(1);
+}
+
+if (process.env.GITHUB_TOKEN && process.env.GITHUB_REPOSITORY) {
+  const response = await fetch(
+    `https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/pulls?state=open&per_page=100`,
+    {
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+    },
+  );
+  if (!response.ok) {
+    console.error(`Production status drift: GitHub mutex query failed (${response.status}).`);
+    process.exit(1);
+  }
+  const activePullRequests = (await response.json()).filter((pullRequest) =>
+    pullRequest.labels?.some((label) => label.name === "wevid-active-slice"),
+  );
+  if (activePullRequests.length > 1) {
+    console.error("Production status drift: more than one open PR carries wevid-active-slice.");
+    process.exit(1);
+  }
+  const activePullRequest = activePullRequests[0];
+  if (activePullRequest && activePullRequest.head?.ref !== productionStatus.nextPlannedBranch) {
+    console.error(
+      `Production status drift: active branch ${activePullRequest.head?.ref ?? "missing"} does not match planned branch ${productionStatus.nextPlannedBranch}.`,
+    );
+    process.exit(1);
+  }
 }
 
 const normalizePath = (path) =>

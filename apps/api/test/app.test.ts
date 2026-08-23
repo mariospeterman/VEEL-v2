@@ -2,6 +2,7 @@ import { createHash, createHmac } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
+import sharp from "sharp";
 import { buildApi } from "../src/app";
 import { AdminRepositoryStateConflictError } from "../src/modules/admin/admin-repository";
 import type { AdminRepository } from "../src/modules/admin/types";
@@ -12,8 +13,10 @@ import { ContentDraftQuotaExceededError } from "../src/modules/content/content-r
 import type {
   ContentItem,
   ContentRepository,
+  CompleteImageAssetUploadInput,
   CreateMediaAssetInput,
-  MediaUploadProviderAdapter
+  MediaUploadProviderAdapter,
+  ReserveImageAssetUploadInput
 } from "../src/modules/content/types";
 import type {
   AgeProviderWaterfall,
@@ -3093,6 +3096,86 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("replaces stored Bunny feed playback URLs with backend-signed resources", async () => {
+    const storedPlaybackUrl =
+      "https://vz-example.b-cdn.net/11111111-1111-4111-8111-111111111111/playlist.m3u8";
+    const signedPlaybackUrl =
+      "https://iframe.mediadelivery.net/embed/123/11111111-1111-4111-8111-111111111111?token=signed&expires=1770000900";
+    const feedItem: ContentItem = {
+      ...homeFeedItem,
+      creator: {
+        ...homeFeedItem.creator,
+        id: "00000000-0000-4000-8000-000000000011"
+      },
+      mediaType: "vod",
+      accessState: "unlocked",
+      playback: {
+        state: "full",
+        url: storedPlaybackUrl,
+        provider: "bunny"
+      }
+    };
+    const contentRepository: ContentRepository = {
+      async createDraft() { throw new Error("not implemented"); },
+      async createMediaAsset() { throw new Error("not implemented"); },
+      async findContentDetail() { throw new Error("not implemented"); },
+      async findContentUnlockOffer() { throw new Error("not implemented"); },
+      async findOwnedContentForUpload() { throw new Error("not implemented"); },
+      async listHomeFeed() {
+        return {
+          items: [feedItem],
+          nextCursor: null,
+          mode: "recommended",
+          surface: "home",
+          rankingVersion: "deterministic_v1",
+          generatedAt: "2026-06-05T12:00:00.000Z"
+        };
+      }
+    };
+    const mediaUploadProvider: MediaUploadProviderAdapter = {
+      provider: "bunny",
+      isConfigured: () => true,
+      async createUploadSession() { throw new Error("not implemented"); },
+      createPlaybackResource(input) {
+        expect(input.providerAssetId).toBe("11111111-1111-4111-8111-111111111111");
+        return {
+          state: "full",
+          url: signedPlaybackUrl,
+          provider: "bunny",
+          resourceType: "embed",
+          expiresAt: "2026-02-02T10:15:00.000Z"
+        };
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository,
+      mediaUploadProvider
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/content/feed",
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).not.toContain(storedPlaybackUrl);
+    expect(response.json().items[0].playback).toEqual({
+      state: "full",
+      url: signedPlaybackUrl,
+      provider: "bunny",
+      resourceType: "embed",
+      expiresAt: "2026-02-02T10:15:00.000Z"
+    });
+
+    await app.close();
+  });
+
   it("requires a first-page refresh when mutable feed ranking inputs changed", async () => {
     const contentRepository: ContentRepository = {
       async createDraft() { throw new Error("not implemented"); },
@@ -3298,6 +3381,100 @@ describe("buildApi", () => {
       resourceType: "embed",
       expiresAt: "2026-02-02T10:15:00.000Z"
     });
+
+    await app.close();
+  });
+
+  it("signs every ordered Bunny video in a mixed carousel without exposing stored URLs", async () => {
+    const firstProviderAssetId = "11111111-1111-4111-8111-111111111111";
+    const secondProviderAssetId = "22222222-2222-4222-8222-222222222222";
+    const storedUrl = (providerAssetId: string) =>
+      `https://vz-example.b-cdn.net/${providerAssetId}/playlist.m3u8`;
+    const signedUrl = (providerAssetId: string) =>
+      `https://iframe.mediadelivery.net/embed/123/${providerAssetId}?token=signed`;
+    const carousel: ContentItem = {
+      ...homeFeedItem,
+      mediaType: "carousel",
+      accessState: "unlocked",
+      playback: {
+        state: "full",
+        url: storedUrl(firstProviderAssetId),
+        provider: "bunny"
+      },
+      mediaAssets: [
+        {
+          id: "10000000-0000-4000-8000-000000000001",
+          kind: "video",
+          position: 0,
+          provider: "bunny",
+          providerState: "ready",
+          playback: { state: "full", url: storedUrl(firstProviderAssetId), provider: "bunny" },
+          posterUrl: "https://media.example.test/first.jpg",
+          requiredForRelease: true,
+          isCover: true,
+          originClassification: "human_created"
+        },
+        {
+          id: "10000000-0000-4000-8000-000000000002",
+          kind: "image",
+          position: 1,
+          provider: "bunny",
+          providerState: "ready",
+          posterUrl: "https://media.example.test/photo.jpg",
+          requiredForRelease: true,
+          isCover: false,
+          originClassification: "human_created"
+        },
+        {
+          id: "10000000-0000-4000-8000-000000000003",
+          kind: "video",
+          position: 2,
+          provider: "bunny",
+          providerState: "ready",
+          playback: { state: "full", url: storedUrl(secondProviderAssetId), provider: "bunny" },
+          posterUrl: "https://media.example.test/second.jpg",
+          requiredForRelease: true,
+          isCover: false,
+          originClassification: "human_created"
+        }
+      ]
+    };
+    const signedProviderAssetIds: string[] = [];
+    const mediaUploadProvider: MediaUploadProviderAdapter = {
+      provider: "bunny",
+      isConfigured: () => true,
+      async createUploadSession() { throw new Error("not implemented"); },
+      createPlaybackResource({ providerAssetId }) {
+        signedProviderAssetIds.push(providerAssetId);
+        return {
+          state: "full",
+          url: signedUrl(providerAssetId),
+          provider: "bunny",
+          resourceType: "embed"
+        };
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository: contentRepositoryWithDetail(carousel),
+      mediaUploadProvider
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/content/${carousel.id}`,
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).not.toContain("vz-example.b-cdn.net");
+    expect(signedProviderAssetIds).toEqual([firstProviderAssetId, secondProviderAssetId]);
+    expect(response.json().mediaAssets.map((asset: { playback?: { url: string } }) => asset.playback?.url ?? null))
+      .toEqual([signedUrl(firstProviderAssetId), null, signedUrl(secondProviderAssetId)]);
 
     await app.close();
   });
@@ -3817,6 +3994,156 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("validates universal text and poll draft inputs before repository mutation", async () => {
+    let createCalls = 0;
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        createCalls += 1;
+        return homeFeedItem;
+      },
+      async createMediaAsset() {
+        throw new Error("not implemented");
+      },
+      async findContentDetail() {
+        throw new Error("not implemented");
+      },
+      async findContentUnlockOffer() {
+        throw new Error("not implemented");
+      },
+      async findOwnedContentForUpload() {
+        throw new Error("not implemented");
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      verificationRepository: verificationRepositoryStub(),
+      contentRepository
+    });
+    await app.ready();
+
+    const duplicatePollOptions = await app.inject({
+      method: "POST",
+      url: "/v1/content",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "poll-duplicate-options"
+      },
+      payload: {
+        mediaType: "poll",
+        visibility: "public",
+        nsfwLabel: "none",
+        representationMode: "no_real_person",
+        contentSafetyPolicyAccepted: true,
+        poll: {
+          question: "Choose one",
+          options: ["Photo", " photo "]
+        }
+      }
+    });
+    expect(duplicatePollOptions.statusCode).toBe(400);
+    expect(duplicatePollOptions.json()).toMatchObject({
+      code: "validation_failed",
+      message: "poll options must be unique"
+    });
+
+    const bodyOnImage = await app.inject({
+      method: "POST",
+      url: "/v1/content",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "image-with-body"
+      },
+      payload: {
+        mediaType: "image",
+        visibility: "public",
+        nsfwLabel: "none",
+        representationMode: "no_real_person",
+        contentSafetyPolicyAccepted: true,
+        bodyText: "This belongs to a text post"
+      }
+    });
+    expect(bodyOnImage.statusCode).toBe(400);
+    expect(bodyOnImage.json()).toMatchObject({
+      code: "validation_failed",
+      message: "bodyText is only valid for text content"
+    });
+    expect(createCalls).toBe(0);
+
+    await app.close();
+  });
+
+  it("casts an authenticated poll vote through the backend authority", async () => {
+    const optionId = "00000000-0000-4000-8000-000000000021";
+    const contentId = "00000000-0000-4000-8000-000000000020";
+    let receivedInput: unknown;
+    const contentRepository: ContentRepository = {
+      async createDraft() { throw new Error("not implemented"); },
+      async createMediaAsset() { throw new Error("not implemented"); },
+      async findContentDetail() { throw new Error("not implemented"); },
+      async findContentUnlockOffer() { throw new Error("not implemented"); },
+      async findOwnedContentForUpload() { throw new Error("not implemented"); },
+      async listHomeFeed() { throw new Error("not implemented"); },
+      async voteOnPoll(input) {
+        receivedInput = input;
+        return {
+          question: "Choose one",
+          options: [
+            { id: optionId, position: 0, text: "Photo", voteCount: 1 },
+            { id: "00000000-0000-4000-8000-000000000022", position: 1, text: "Video", voteCount: 0 }
+          ],
+          state: "open",
+          totalVoteCount: 1,
+          closesAt: null,
+          viewerOptionId: optionId
+        };
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({ async onFind() {
+        return { id: "00000000-0000-4000-8000-000000000010", state: "active", handle: "maki", displayName: "Maki", avatarUrl: null };
+      } }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      verificationRepository: verificationRepositoryStub(),
+      contentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/content/${contentId}/poll-votes`,
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "poll-vote-0001" },
+      payload: { optionId }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(200);
+    expect(response.json()).toMatchObject({ totalVoteCount: 1, viewerOptionId: optionId });
+    expect(receivedInput).toMatchObject({
+      appUserId: "00000000-0000-4000-8000-000000000010",
+      contentId,
+      optionId,
+      idempotencyKey: "poll-vote-0001"
+    });
+    await app.close();
+  });
+
   it("blocks content draft creation when the daily server quota is reached", async () => {
     const contentRepository: ContentRepository = {
       async createDraft(input) {
@@ -3995,6 +4322,11 @@ describe("buildApi", () => {
           idempotencyKey: "content-update-1",
           caption: "updated #studio",
           captionProvided: true,
+          bodyText: undefined,
+          bodyTextProvided: false,
+          expectedCompositionRevision: undefined,
+          assetOrder: undefined,
+          requestHash: undefined,
           visibility: "followers",
           nsfwLabel: "adult",
           representationMode: "self_only",
@@ -4062,6 +4394,75 @@ describe("buildApi", () => {
       nsfwLabel: "adult"
     });
 
+    await app.close();
+  });
+
+  it("autosaves text drafts with an optimistic composition revision", async () => {
+    const updateOwnedContent = vi.fn(async () => ({
+      ...homeFeedItem,
+      mediaType: "text" as const,
+      bodyText: "Revised text",
+      compositionRevision: 2
+    }));
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({ async onFind() {
+        return { id: "00000000-0000-4000-8000-000000000010", state: "active", handle: "maki", displayName: "Maki", avatarUrl: null };
+      } }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      verificationRepository: verificationRepositoryStub(),
+      contentRepository: { ...contentRepositoryWithDetail(homeFeedItem), updateOwnedContent }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "text-autosave-0001" },
+      payload: { bodyText: " Revised text ", expectedCompositionRevision: 1 }
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json()).toMatchObject({ bodyText: "Revised text", compositionRevision: 2 });
+    expect(updateOwnedContent).toHaveBeenCalledWith(expect.objectContaining({
+      bodyText: "Revised text",
+      bodyTextProvided: true,
+      expectedCompositionRevision: 1,
+      requestHash: expect.stringMatching(/^[0-9a-f]{64}$/)
+    }));
+    await app.close();
+  });
+
+  it("persists a complete canonical asset order with optimistic concurrency", async () => {
+    const firstId = "00000000-0000-4000-8000-000000000051";
+    const secondId = "00000000-0000-4000-8000-000000000052";
+    const updateOwnedContent = vi.fn(async () => ({ ...homeFeedItem, compositionRevision: 4 }));
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({ async onFind() {
+        return { id: "00000000-0000-4000-8000-000000000010", state: "active", handle: "maki", displayName: "Maki", avatarUrl: null };
+      } }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      verificationRepository: verificationRepositoryStub(),
+      contentRepository: { ...contentRepositoryWithDetail(homeFeedItem), updateOwnedContent }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "asset-reorder-0001" },
+      payload: { assetOrder: [secondId, firstId], expectedCompositionRevision: 3 }
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(updateOwnedContent).toHaveBeenCalledWith(expect.objectContaining({
+      assetOrder: [secondId, firstId],
+      expectedCompositionRevision: 3,
+      requestHash: expect.stringMatching(/^[0-9a-f]{64}$/)
+    }));
     await app.close();
   });
 
@@ -4311,6 +4712,11 @@ describe("buildApi", () => {
           idempotencyKey: "content-update-event-2",
           caption: undefined,
           captionProvided: false,
+          bodyText: undefined,
+          bodyTextProvided: false,
+          expectedCompositionRevision: undefined,
+          assetOrder: undefined,
+          requestHash: undefined,
           visibility: undefined,
           nsfwLabel: undefined,
           representationMode: undefined,
@@ -4558,7 +4964,7 @@ describe("buildApi", () => {
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({
       code: "conflict",
-      message: "Content cannot be published until provider media is ready"
+      message: "Content cannot be published until every required asset is ready"
     });
 
     await app.close();
@@ -4680,6 +5086,364 @@ describe("buildApi", () => {
       }
     ]);
 
+    await app.close();
+  });
+
+  it("rejects a video session for a non-media draft before calling Bunny", async () => {
+    let providerCalled = false;
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        throw new Error("not implemented");
+      },
+      async createMediaAsset() {
+        throw new Error("A rejected format must not create a media asset");
+      },
+      async findContentDetail() {
+        throw new Error("not implemented");
+      },
+      async findContentUnlockOffer() {
+        throw new Error("not implemented");
+      },
+      async findOwnedContentForUpload() {
+        return {
+          id: "00000000-0000-4000-8000-000000000040",
+          mediaType: "text",
+          caption: "text only",
+          nsfwLabel: "none"
+        };
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      }
+    };
+    const mediaUploadProvider: MediaUploadProviderAdapter = {
+      provider: "bunny",
+      isConfigured() {
+        providerCalled = true;
+        return true;
+      },
+      async createUploadSession() {
+        providerCalled = true;
+        throw new Error("Bunny must not be called for a text draft");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      verificationRepository: creatorVerifiedVerificationRepository(),
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository,
+      mediaUploadProvider
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/media/uploads",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "media-upload-invalid-format"
+      },
+      payload: {
+        contentId: "00000000-0000-4000-8000-000000000040",
+        fileName: "studio.mp4",
+        mimeType: "video/mp4"
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      code: "conflict",
+      message: "This draft does not accept video assets"
+    });
+    expect(providerCalled).toBe(false);
+    await app.close();
+  });
+
+  it("sanitizes and durably reserves an image before private provider upload", async () => {
+    const source = await sharp({
+      create: {
+        width: 7,
+        height: 4,
+        channels: 3,
+        background: { r: 120, g: 30, b: 60 }
+      }
+    }).jpeg().withMetadata({ orientation: 6 }).toBuffer();
+    let reservationInput: ReserveImageAssetUploadInput | null = null;
+    let completionInput: CompleteImageAssetUploadInput | null = null;
+    let providerInput: {
+      providerAssetId: string;
+      body: Buffer;
+      mimeType: "image/jpeg" | "image/png" | "image/webp";
+      checksumSha256: string;
+    } | null = null;
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        throw new Error("not implemented");
+      },
+      async createMediaAsset() {
+        throw new Error("video upload should not be used");
+      },
+      async reserveImageAssetUpload(input) {
+        reservationInput = input;
+        return {
+          mediaAssetId: input.mediaAssetId,
+          providerAssetId: input.providerAssetId,
+          completed: false
+        };
+      },
+      async completeImageAssetUpload(input) {
+        completionInput = input;
+      },
+      async findContentDetail() {
+        throw new Error("not implemented");
+      },
+      async findContentUnlockOffer() {
+        throw new Error("not implemented");
+      },
+      async findOwnedContentForUpload() {
+        return {
+          id: "00000000-0000-4000-8000-000000000040",
+          mediaType: "image",
+          caption: null,
+          nsfwLabel: "none"
+        };
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      }
+    };
+    const mediaUploadProvider: MediaUploadProviderAdapter = {
+      provider: "bunny",
+      isConfigured() {
+        return false;
+      },
+      async createUploadSession() {
+        throw new Error("video upload should not be used");
+      },
+      isImageUploadConfigured() {
+        return true;
+      },
+      createImageObjectReference(input) {
+        return `images/${input.contentId}/${input.mediaAssetId}.${input.extension}`;
+      },
+      async uploadImageObject(input) {
+        providerInput = input;
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      verificationRepository: creatorVerifiedVerificationRepository(),
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository,
+      mediaUploadProvider
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040/image-assets",
+      headers: {
+        authorization: "Bearer valid-token",
+        "content-type": "image/jpeg",
+        "idempotency-key": "image-upload-1"
+      },
+      payload: source
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      kind: "image",
+      mimeType: "image/jpeg",
+      widthPixels: 4,
+      heightPixels: 7,
+      releaseState: "awaiting_safety_evidence"
+    });
+    expect(reservationInput).toMatchObject({
+      contentId: "00000000-0000-4000-8000-000000000040",
+      idempotencyKey: "image-upload-1",
+      mimeType: "image/jpeg",
+      widthPixels: 4,
+      heightPixels: 7
+    });
+    const reserved = reservationInput as unknown as ReserveImageAssetUploadInput;
+    const uploaded = providerInput as unknown as {
+      providerAssetId: string;
+      body: Buffer;
+      mimeType: "image/jpeg" | "image/png" | "image/webp";
+      checksumSha256: string;
+    };
+    expect(uploaded).toMatchObject({
+      providerAssetId: reserved.providerAssetId,
+      mimeType: "image/jpeg",
+      checksumSha256: reserved.checksumSha256
+    });
+    expect(completionInput).toEqual({
+      mediaAssetId: reserved.mediaAssetId,
+      providerAssetId: reserved.providerAssetId
+    });
+    const storedMetadata = await sharp(uploaded.body).metadata();
+    expect(storedMetadata.exif).toBeUndefined();
+    expect(storedMetadata.orientation).toBeUndefined();
+
+    await app.close();
+  });
+
+  it("retires a draft asset before deleting the provider object and returns authoritative cleanup state", async () => {
+    const calls: string[] = [];
+    const contentRepository: ContentRepository = {
+      async createDraft() { throw new Error("not implemented"); },
+      async createMediaAsset() { throw new Error("not implemented"); },
+      async findContentDetail() { throw new Error("not implemented"); },
+      async findContentUnlockOffer() { throw new Error("not implemented"); },
+      async findOwnedContentForUpload() { throw new Error("not implemented"); },
+      async listHomeFeed() { throw new Error("not implemented"); },
+      async retireOwnedMediaAsset(input) {
+        calls.push(`retire:${input.expectedCompositionRevision}:${input.reason}`);
+        return {
+          contentId: "00000000-0000-4000-8000-000000000040",
+          mediaAssetId: input.mediaAssetId,
+          compositionRevision: 4,
+          cleanupState: "pending",
+          provider: "bunny",
+          providerAssetId: "images/content/asset.webp",
+          assetKind: "image"
+        };
+      },
+      async completeMediaAssetCleanup(input) {
+        calls.push(`cleanup:${input.succeeded}`);
+      }
+    };
+    const mediaUploadProvider: MediaUploadProviderAdapter = {
+      provider: "bunny",
+      isConfigured() { return true; },
+      async createUploadSession() { throw new Error("not implemented"); },
+      async deleteProviderAsset(input) {
+        calls.push(`provider-delete:${input.assetKind}:${input.providerAssetId}`);
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      verificationRepository: creatorVerifiedVerificationRepository(),
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository,
+      mediaUploadProvider
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "DELETE",
+      url: "/v1/media/assets/00000000-0000-4000-8000-000000000041",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "asset-remove-1"
+      },
+      payload: { expectedCompositionRevision: 3, reason: "creator_removed" }
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json()).toEqual({
+      mediaAssetId: "00000000-0000-4000-8000-000000000041",
+      compositionRevision: 4,
+      cleanupState: "completed"
+    });
+    expect(calls).toEqual([
+      "retire:3:creator_removed",
+      "provider-delete:image:images/content/asset.webp",
+      "cleanup:true"
+    ]);
+    await app.close();
+  });
+
+  it("keeps provider cleanup durably retryable without restoring a retired asset", async () => {
+    let cleanupSucceeded: boolean | null = null;
+    const contentRepository: ContentRepository = {
+      async createDraft() { throw new Error("not implemented"); },
+      async createMediaAsset() { throw new Error("not implemented"); },
+      async findContentDetail() { throw new Error("not implemented"); },
+      async findContentUnlockOffer() { throw new Error("not implemented"); },
+      async findOwnedContentForUpload() { throw new Error("not implemented"); },
+      async listHomeFeed() { throw new Error("not implemented"); },
+      async retireOwnedMediaAsset(input) {
+        return {
+          contentId: "00000000-0000-4000-8000-000000000040",
+          mediaAssetId: input.mediaAssetId,
+          compositionRevision: 4,
+          cleanupState: "pending",
+          provider: "bunny",
+          providerAssetId: "images/content/asset.webp",
+          assetKind: "image"
+        };
+      },
+      async completeMediaAssetCleanup(input) {
+        cleanupSucceeded = input.succeeded;
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return { id: "00000000-0000-4000-8000-000000000010", state: "active", handle: "maki", displayName: "Maki", avatarUrl: null };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      verificationRepository: creatorVerifiedVerificationRepository(),
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository,
+      mediaUploadProvider: {
+        provider: "bunny",
+        isConfigured() { return true; },
+        async createUploadSession() { throw new Error("not implemented"); },
+        async deleteProviderAsset() { throw new Error("provider outage"); }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "DELETE",
+      url: "/v1/media/assets/00000000-0000-4000-8000-000000000041",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "asset-remove-retry-1" },
+      payload: { expectedCompositionRevision: 3, reason: "creator_removed" }
+    });
+
+    expect(response.statusCode, response.body).toBe(202);
+    expect(response.json()).toMatchObject({ cleanupState: "retry", compositionRevision: 4 });
+    expect(cleanupSucceeded).toBe(false);
     await app.close();
   });
 
@@ -12484,6 +13248,8 @@ const fakeAdminRepository: AdminRepository = {
         {
           id: "00000000-0000-4000-8000-000000000070",
           contentItemId: "00000000-0000-4000-8000-000000000040",
+          assetKind: "video",
+          position: 0,
           provider: "bunny",
           providerAssetId: "bunny-video-1",
           providerState: "ready",
@@ -12491,6 +13257,9 @@ const fakeAdminRepository: AdminRepository = {
           hasPlaybackUrl: true,
           readyAt: "2026-06-06T15:00:00.000Z",
           providerCheckedAt: "2026-06-06T15:01:00.000Z",
+          retiredAt: null,
+          providerCleanupState: "not_required",
+          providerCleanupErrorCode: null,
           createdAt: "2026-06-06T14:00:00.000Z"
         }
       ],

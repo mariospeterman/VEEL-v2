@@ -11,6 +11,7 @@ export type FeedSurface = "home" | "bits";
 export type UploadSession = components["schemas"]["UploadSession"];
 export type UpdateContentRequest = components["schemas"]["UpdateContentRequest"];
 export type PublishContentRequest = components["schemas"]["PublishContentRequest"];
+export type VoteOnContentPollRequest = components["schemas"]["VoteOnContentPollRequest"];
 export type CreatorMediaPage = components["schemas"]["CreatorMediaPage"];
 export type MediaModerationAppeal = components["schemas"]["MediaModerationAppeal"];
 export type CreateMediaModerationAppealRequest =
@@ -28,6 +29,11 @@ export interface ContentRepository {
   captureProviderObservationCutoff?(): Promise<Date>;
   createDraft(input: CreateContentDraftInput): Promise<ContentItem>;
   createMediaAsset(input: CreateMediaAssetInput): Promise<{ id: string } | void>;
+  reserveImageAssetUpload?(input: ReserveImageAssetUploadInput): Promise<ReservedImageAssetUpload>;
+  completeImageAssetUpload?(input: CompleteImageAssetUploadInput): Promise<void>;
+  updateOwnedMediaAsset?(input: UpdateOwnedMediaAssetInput): Promise<MediaAssetMutationResult | null>;
+  retireOwnedMediaAsset?(input: RetireOwnedMediaAssetInput): Promise<RetiredMediaAssetResult | null>;
+  completeMediaAssetCleanup?(input: CompleteMediaAssetCleanupInput): Promise<void>;
   countContentDraftsCreatedSince?(input: CountContentQuotaInput): Promise<number>;
   countMediaAssetsCreatedSince?(input: CountContentQuotaInput): Promise<number>;
   getContentCreationAbusePolicy?(): Promise<ContentCreationAbusePolicy | null>;
@@ -45,7 +51,16 @@ export interface ContentRepository {
   updateMediaAssetPlayback?(input: UpdateMediaAssetPlaybackInput): Promise<void>;
   updateOwnedContent?(input: UpdateOwnedContentInput): Promise<ContentItem | null>;
   publishOwnedContent?(input: PublishOwnedContentInput): Promise<ContentItem | null>;
+  voteOnPoll?(input: VoteOnContentPollInput): Promise<NonNullable<ContentItem["poll"]> | null>;
   close?(): Promise<void>;
+}
+
+export interface VoteOnContentPollInput {
+  appUserId: string;
+  contentId: string;
+  optionId: string;
+  idempotencyKey: string;
+  requestHash: string;
 }
 
 export interface ListOwnedContentInput {
@@ -67,6 +82,8 @@ export interface CreateContentDraftInput {
   requestHash: string;
   mediaType: ContentItem["mediaType"];
   caption?: string | null | undefined;
+  bodyText?: string | null | undefined;
+  poll?: components["schemas"]["ContentPollDraft"] | undefined;
   visibility: string;
   nsfwLabel: NonNullable<ContentItem["nsfwLabel"]>;
   representationMode: "not_declared" | NonNullable<CreateContentRequest["representationMode"]>;
@@ -92,6 +109,11 @@ export interface UpdateOwnedContentInput {
   idempotencyKey: string;
   caption?: string | null | undefined;
   captionProvided: boolean;
+  bodyText?: string | undefined;
+  bodyTextProvided: boolean;
+  expectedCompositionRevision?: number | undefined;
+  assetOrder?: string[] | undefined;
+  requestHash?: string | undefined;
   visibility?: string | undefined;
   nsfwLabel?: NonNullable<ContentItem["nsfwLabel"]> | undefined;
   representationMode?: NonNullable<UpdateContentRequest["representationMode"]> | undefined;
@@ -133,7 +155,7 @@ export interface FindOwnedMediaAssetForSyncInput {
 }
 
 export interface FindMediaAssetByProviderAssetInput {
-  provider: "bunny";
+  provider: "bunny" | "livepeer";
   providerAssetId: string;
 }
 
@@ -164,6 +186,77 @@ export interface CreateMediaAssetInput {
   provider: "bunny";
   providerAssetId: string;
   providerState: string;
+}
+
+export interface ReserveImageAssetUploadInput {
+  supabaseUserId: string;
+  contentId: string;
+  mediaAssetId: string;
+  idempotencyKey: string;
+  requestHash: string;
+  providerAssetId: string;
+  mimeType: "image/jpeg" | "image/png" | "image/webp";
+  widthPixels: number;
+  heightPixels: number;
+  checksumSha256: string;
+}
+
+export interface ReservedImageAssetUpload {
+  mediaAssetId: string;
+  providerAssetId: string;
+  completed: boolean;
+}
+
+export interface CompleteImageAssetUploadInput {
+  mediaAssetId: string;
+  providerAssetId: string;
+}
+
+export interface UpdateOwnedMediaAssetInput {
+  supabaseUserId: string;
+  mediaAssetId: string;
+  idempotencyKey: string;
+  requestHash: string;
+  expectedCompositionRevision: number;
+  altText?: string | null;
+  altTextProvided: boolean;
+  originClassification?:
+    | "human_created"
+    | "ai_assisted"
+    | "ai_generated"
+    | "materially_ai_manipulated";
+}
+
+export interface MediaAssetMutationResult {
+  compositionRevision: number;
+  asset: NonNullable<ContentItem["mediaAssets"]>[number];
+}
+
+export interface RetireOwnedMediaAssetInput {
+  supabaseUserId: string;
+  mediaAssetId: string;
+  idempotencyKey: string;
+  requestHash: string;
+  expectedCompositionRevision: number;
+  reason: string;
+}
+
+export interface RetiredMediaAssetResult {
+  contentId: string;
+  mediaAssetId: string;
+  compositionRevision: number;
+  cleanupState: "pending" | "retry" | "completed";
+  provider: "bunny" | "livepeer";
+  providerAssetId: string;
+  assetKind: "image" | "video";
+}
+
+export interface CompleteMediaAssetCleanupInput {
+  supabaseUserId: string;
+  mediaAssetId: string;
+  idempotencyKey: string;
+  succeeded: boolean;
+  errorCode?: string;
 }
 
 export interface UpdateMediaAssetPlaybackInput {
@@ -214,6 +307,22 @@ export interface MediaUploadProviderAdapter {
   createUploadSession(
     input: CreateMediaUploadProviderSessionInput
   ): Promise<MediaUploadProviderSession>;
+  isImageUploadConfigured?(): boolean;
+  createImageObjectReference?(input: {
+    contentId: string;
+    mediaAssetId: string;
+    extension: "jpg" | "png" | "webp";
+  }): string;
+  uploadImageObject?(input: {
+    providerAssetId: string;
+    body: Buffer;
+    mimeType: "image/jpeg" | "image/png" | "image/webp";
+    checksumSha256: string;
+  }): Promise<void>;
+  deleteProviderAsset?(input: {
+    providerAssetId: string;
+    assetKind: "image" | "video";
+  }): Promise<void>;
   createPlaybackResource?(
     input: CreateMediaPlaybackResourceInput
   ): NonNullable<ContentItem["playback"]>;
