@@ -4,6 +4,25 @@
 alter table conversation_members
   add column muted_at timestamptz;
 
+alter table direct_message_requests
+  drop constraint direct_message_requests_requester_message_count_check;
+
+-- Preserve historical introductions while enforcing the launch policy for all future writes.
+update direct_message_requests
+set requester_message_count = 1
+where requester_message_count > 1;
+
+alter table direct_message_requests
+  add constraint direct_message_requests_requester_message_count_check
+  check (requester_message_count between 0 and 1);
+
+alter table message_action_receipts
+  drop constraint message_action_receipts_action_check,
+  add constraint message_action_receipts_action_check check (action in (
+    'conversation.create', 'conversation.request.respond', 'conversation.read', 'conversation.mute',
+    'media_offer.create', 'media_offer.update', 'creator_request.create', 'creator_request.update'
+  ));
+
 alter table messages
   add column reply_to_message_id uuid references messages(id) on delete set null,
   add column shared_content_item_id uuid references content_items(id) on delete set null;
@@ -27,18 +46,32 @@ create table message_reactions (
 create index message_reactions_user_idx
   on message_reactions (user_id, created_at desc);
 
+create table message_attachments (
+  message_id uuid not null references messages(id) on delete cascade,
+  content_item_id uuid not null references content_items(id) on delete restrict,
+  content_revision bigint not null check (content_revision > 0),
+  position smallint not null check (position between 0 and 3),
+  created_at timestamptz not null default now(),
+  primary key (message_id, content_item_id),
+  unique (message_id, position)
+);
+
+create index message_attachments_content_idx
+  on message_attachments (content_item_id, content_revision);
+
 create table creator_media_offers (
   id uuid primary key default gen_random_uuid(),
   conversation_id uuid not null references conversations(id) on delete cascade,
   creator_user_id uuid not null references users(id) on delete cascade,
   buyer_user_id uuid not null references users(id) on delete cascade,
   content_item_id uuid not null references content_items(id) on delete restrict,
+  content_revision bigint not null check (content_revision > 0),
   title text not null check (char_length(title) between 1 and 120),
   description text check (description is null or char_length(description) between 1 and 1000),
   amount_minor bigint not null check (amount_minor > 0 and amount_minor <= 9007199254740991),
   currency text not null check (currency in ('SOL', 'USDC')),
   state text not null default 'offered' check (state in (
-    'offered', 'accepted', 'declined', 'withdrawn', 'expired', 'purchased'
+    'offered', 'accepted', 'declined', 'withdrawn', 'expired', 'purchased', 'remediation'
   )),
   payment_intent_id uuid unique references payment_intents(id) on delete set null,
   idempotency_key text not null,
@@ -183,13 +216,14 @@ create index live_safety_provider_actions_due_idx
   where state in ('queued', 'processing', 'retry');
 
 alter table message_reactions enable row level security;
+alter table message_attachments enable row level security;
 alter table creator_media_offers enable row level security;
 alter table structured_creator_requests enable row level security;
 alter table live_safety_sessions enable row level security;
 alter table live_safety_monitoring_events enable row level security;
 alter table live_safety_provider_actions enable row level security;
 
-grant select on table message_reactions, creator_media_offers, structured_creator_requests to authenticated;
+grant select on table message_reactions, message_attachments, creator_media_offers, structured_creator_requests to authenticated;
 revoke all on table live_safety_sessions, live_safety_monitoring_events, live_safety_provider_actions from anon, authenticated;
 
 create policy message_reactions_select_participant
@@ -200,6 +234,19 @@ create policy message_reactions_select_participant
       select 1
       from messages message
       where message.id = message_reactions.message_id
+        and message.delivery_state = 'visible'
+        and (select private.is_current_conversation_member(message.conversation_id))
+    )
+  );
+
+create policy message_attachments_select_participant
+  on message_attachments for select to authenticated
+  using (
+    (select private.has_protected_app_access())
+    and exists (
+      select 1
+      from messages message
+      where message.id = message_attachments.message_id
         and message.delivery_state = 'visible'
         and (select private.is_current_conversation_member(message.conversation_id))
     )
@@ -528,7 +575,7 @@ declare
   target_id uuid;
   member record;
 begin
-  if tg_table_name = 'message_reactions' then
+  if tg_table_name in ('message_reactions', 'message_attachments') then
     select conversation_id into target_conversation_id
     from messages
     where id = (row_data ->> 'message_id')::uuid;
@@ -613,6 +660,10 @@ create trigger message_reactions_broadcast_invalidation
 after insert or update or delete on message_reactions
 for each row execute function private.broadcast_conversation_projection_change();
 
+create trigger message_attachments_broadcast_invalidation
+after insert or update or delete on message_attachments
+for each row execute function private.broadcast_conversation_projection_change();
+
 create trigger creator_media_offers_broadcast_invalidation
 after insert or update or delete on creator_media_offers
 for each row execute function private.broadcast_conversation_projection_change();
@@ -663,3 +714,5 @@ comment on table live_safety_sessions is
   'Backend-owned continuous monitoring predicate; creator attestation alone never releases viewers.';
 comment on table structured_creator_requests is
   'Two-phase creator consent before any payment intent or delivery workspace activation.';
+comment on column creator_media_offers.content_revision is
+  'Approved content revision presented when the creator made the offer; payment fails closed if it changes.';

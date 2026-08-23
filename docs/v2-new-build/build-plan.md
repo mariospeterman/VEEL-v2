@@ -372,7 +372,7 @@ Build each slice end-to-end before starting the next:
 8. Referral attribution and commission.
 9. Bunny VOD upload/status/playback.
 10. Livepeer room/pass/chat/replay.
-11. Messages and paid messages.
+11. Consent-bound messages, approved creator media offers, and two-phase structured creator requests.
 12. User activity and wallet transactions.
 13. Creator profile and creator monetisation dashboard.
 14. Admin payments/unlocks/provider ops.

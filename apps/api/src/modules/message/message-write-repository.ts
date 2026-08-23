@@ -326,15 +326,33 @@ export async function createMessage(sql: postgres.Sql, input: CreateMessageInput
       context
     );
 
-    const existing = await transaction<{ id: string; conversation_id: string; body: string }[]>`
-      select id, conversation_id, body
-      from messages
-      where sender_user_id = ${context.actor_id}
-        and idempotency_key = ${input.idempotencyKey}
+    const existing = await transaction<{
+      id: string;
+      conversation_id: string;
+      body: string;
+      reply_to_message_id: string | null;
+      shared_content_item_id: string | null;
+      attachment_content_item_ids: string[];
+    }[]>`
+      select m.id, m.conversation_id, m.body, m.reply_to_message_id, m.shared_content_item_id,
+        coalesce((
+          select array_agg(a.content_item_id::text order by a.position)
+          from message_attachments a where a.message_id = m.id
+        ), array[]::text[]) as attachment_content_item_ids
+      from messages m
+      where m.sender_user_id = ${context.actor_id}
+        and m.idempotency_key = ${input.idempotencyKey}
       limit 1
     `;
     if (existing[0]) {
-      if (existing[0].conversation_id !== input.conversationId || existing[0].body !== input.body) {
+      const requestedAttachmentIds = input.attachmentContentItemIds ?? [];
+      if (
+        existing[0].conversation_id !== input.conversationId ||
+        existing[0].body !== input.body ||
+        existing[0].reply_to_message_id !== (input.replyToMessageId ?? null) ||
+        existing[0].shared_content_item_id !== (input.sharedContentItemId ?? null) ||
+        existing[0].attachment_content_item_ids.join(",") !== requestedAttachmentIds.join(",")
+      ) {
         throw new MessageIdempotencyConflictError();
       }
       return readMessage(transaction, existing[0].id, context.actor_id);
@@ -373,6 +391,22 @@ export async function createMessage(sql: postgres.Sql, input: CreateMessageInput
       `;
       if (!shareable[0]) throw new MessageRequestForbiddenError();
     }
+    const attachmentIds = [...new Set(input.attachmentContentItemIds ?? [])];
+    if (attachmentIds.length > 4) throw new MessageRequestForbiddenError();
+    if (attachmentIds.length > 0) {
+      const approvedAttachments = await transaction<{ id: string }[]>`
+        select id
+        from content_items
+        where id in ${transaction(attachmentIds)}
+          and creator_user_id = ${context.actor_id}
+          and state = 'ready'
+          and publish_state = 'published'
+          and moderation_state = 'approved'
+      `;
+      if (approvedAttachments.length !== attachmentIds.length) {
+        throw new MessageRequestForbiddenError();
+      }
+    }
 
     const messageId = randomUUID();
     await transaction`
@@ -384,6 +418,14 @@ export async function createMessage(sql: postgres.Sql, input: CreateMessageInput
         ${input.idempotencyKey}, ${input.replyToMessageId ?? null}, ${input.sharedContentItemId ?? null}
       )
     `;
+    for (const [position, contentItemId] of attachmentIds.entries()) {
+      await transaction`
+        insert into message_attachments (message_id, content_item_id, content_revision, position)
+        select ${messageId}, id, asset_revision, ${position}
+        from content_items
+        where id = ${contentItemId}
+      `;
+    }
     if (context.request_state === "pending") {
       await transaction`
         update direct_message_requests

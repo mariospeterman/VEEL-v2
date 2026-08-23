@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import type { Conversation, Message } from "@/api-client";
@@ -9,17 +9,20 @@ import {
   getConversationsForMutation,
   updateMessageReaction
 } from "@/api-mutations";
-import { useScopedRealtimeInvalidation } from "@/realtime-provider";
+import { useConversationEphemeral, useScopedRealtimeInvalidation } from "@/realtime-provider";
 import { Card, EmptyState, StatusPill } from "../ui";
 import { ConversationStateActions } from "./conversation-state-actions";
 import { MessageComposer } from "./message-composer";
+import { CommercialInteractionsPanel } from "./commercial-interactions-panel";
 
 export function MessagesWorkspace(input: {
   initialConversations: Conversation[];
   initialConversationId: string | null;
   initialMessages: Message[];
+  initialMessagesAvailable: boolean;
 }) {
   const router = useRouter();
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
   const conversations = useQuery({
     queryKey: ["messages", "conversations"],
     queryFn: getConversationsForMutation,
@@ -32,12 +35,16 @@ export function MessagesWorkspace(input: {
     queryKey: ["messages", "conversation", selected?.id],
     queryFn: () => getConversationMessagesForMutation(selected?.id ?? ""),
     enabled: Boolean(selected),
-    initialData: selected?.id === input.initialConversationId ? { items: input.initialMessages } : undefined
+    retry: 1,
+    initialData: selected?.id === input.initialConversationId && input.initialMessagesAvailable
+      ? { items: input.initialMessages }
+      : undefined
   });
   const scopedKeys = useMemo(
     () => selected ? [
       ["messages", "conversations"],
-      ["messages", "conversation", selected.id]
+      ["messages", "conversation", selected.id],
+      ["messages", "conversation", selected.id, "commercial"]
     ] : [],
     [selected?.id]
   );
@@ -46,6 +53,9 @@ export function MessagesWorkspace(input: {
     topicKind: "conversation",
     queryKeys: scopedKeys
   });
+  const ephemeral = useConversationEphemeral(
+    selected?.requestState === "accepted" ? `conversation:${selected.id}` : null
+  );
 
   const selectConversation = (conversationId: string | null) => {
     router.replace(conversationId
@@ -89,21 +99,22 @@ export function MessagesWorkspace(input: {
               <div className="min-w-0">
                 <h2 className="truncate text-lg font-semibold tracking-normal">{selected.title}</h2>
                 <p className="text-sm text-(--muted)">
-                  {selected.requestState === "pending" ? "Message request" : selected.muted ? "Notifications muted" : "Active conversation"}
+                  {selected.requestState === "pending" ? "Message request" : ephemeral.peerTyping ? "Typing…" : selected.muted ? "Notifications muted" : ephemeral.peerOnline ? "Online now" : "Active conversation"}
                 </p>
               </div>
             </div>
-            <ConversationStateActions conversation={selected} messagesVisible={!messages.isError} />
+            <ConversationStateActions conversation={selected} messagesVisible={messages.isSuccess} />
+            <CommercialInteractionsPanel conversation={selected} />
             <div aria-live="polite" className="grid max-h-[52vh] min-h-56 gap-3 overflow-y-auto p-4">
               {messages.isLoading ? <p className="text-sm text-(--muted)">Loading messages…</p> : null}
-              {messages.isError ? <p className="text-sm text-(--danger)">Conversation is temporarily unavailable.</p> : null}
+              {messages.isError ? <EmptyState title="Conversation unavailable">Messages could not be loaded. Try again before treating the thread as read.</EmptyState> : null}
               {messages.data?.items.length ? messages.data.items.map((message) => (
-                <MessageBubble conversationId={selected.id} key={message.id} message={message} />
-              )) : !messages.isLoading ? (
+                <MessageBubble conversationId={selected.id} key={message.id} message={message} onReply={setReplyTo} />
+              )) : !messages.isLoading && !messages.isError ? (
                 <EmptyState title="No visible messages yet">Send a respectful introduction to begin.</EmptyState>
               ) : null}
             </div>
-            <MessageComposer conversation={selected} />
+            <MessageComposer conversation={selected} onClearReply={() => setReplyTo(null)} onTyping={ephemeral.sendTyping} replyTo={replyTo} />
           </>
         ) : (
           <div className="p-4"><EmptyState title="Select a conversation">Choose a conversation from your inbox.</EmptyState></div>
@@ -113,7 +124,7 @@ export function MessagesWorkspace(input: {
   );
 }
 
-function MessageBubble({ conversationId, message }: { conversationId: string; message: Message }) {
+function MessageBubble({ conversationId, message, onReply }: { conversationId: string; message: Message; onReply: (message: Message) => void }) {
   const queryClient = useQueryClient();
   const toggleReaction = async (key: "like" | "love" | "laugh" | "support") => {
     const reacted = message.reactions.some((reaction) => reaction.key === key && reaction.reacted);
@@ -134,8 +145,18 @@ function MessageBubble({ conversationId, message }: { conversationId: string; me
       </div>
       {message.replyToMessageId ? <p className="mt-2 border-l-2 border-(--line) pl-2 text-xs text-(--muted)">Reply</p> : null}
       <p className="mt-2 whitespace-pre-wrap text-sm leading-6">{message.body}</p>
-      {message.sharedContentItemId ? <p className="mt-2 text-xs text-(--accent)">Shared WeVid content</p> : null}
+      {message.sharedContentItemId ? <a className="mt-2 block text-xs text-(--accent) underline" href={`/content/${encodeURIComponent(message.sharedContentItemId)}`}>Shared WeVid content</a> : null}
+      {message.attachments?.length ? (
+        <div className="mt-2 flex flex-wrap gap-1" aria-label="Safe media attachments">
+          {message.attachments.map((attachment) => (
+            <a className="text-xs text-(--accent) underline" href={`/content/${encodeURIComponent(attachment.contentItemId)}`} key={`${attachment.contentItemId}:${attachment.contentRevision}`}>
+              Approved attachment · revision {attachment.contentRevision}
+            </a>
+          ))}
+        </div>
+      ) : null}
       <div className="mt-2 flex flex-wrap gap-1" aria-label="Message reactions">
+        <button className="rounded-full border border-(--line) px-2 py-1 text-xs" onClick={() => onReply(message)} type="button">Reply</button>
         {(["like", "love", "laugh", "support"] as const).map((key) => {
           const reaction = message.reactions.find((item) => item.key === key);
           return (

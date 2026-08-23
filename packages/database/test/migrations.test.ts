@@ -23,11 +23,23 @@ describe("database migrations", () => {
     expect(sql).toContain("create table realtime_topic_versions");
     expect(sql).toContain("private.realtime_topic_can_receive");
     expect(sql).toContain("private.realtime_topic_can_send");
+    expect(sql).toContain("target_topic = 'account:' || (select private.current_app_user_id())::text");
+    expect(sql).toContain("own_member.conversation_id = target_conversation_id");
+    expect(sql).toContain("own_member.user_id = (select private.current_app_user_id())");
+    expect(sql).toContain("request.conversation_id = resource_id and request.state = 'accepted'");
+    expect(sql).toContain("target_extension not in ('broadcast', 'presence')");
+    expect(sql).toContain("create policy wevid_scoped_receive");
+    expect(sql).toContain("create policy wevid_scoped_send");
     expect(sql).toContain("realtime.send($1, $2, $3, true)");
     expect(sql).toContain("alter publication supabase_realtime drop table messages");
     expect(sql).toContain("create table message_reactions");
+    expect(sql).toContain("check (requester_message_count between 0 and 1)");
+    expect(sql).toContain("create table message_attachments");
+    expect(sql).toContain("content_revision bigint not null");
     expect(sql).toContain("create table creator_media_offers");
+    expect(sql).toContain("comment on column creator_media_offers.content_revision");
     expect(sql).toContain("create table structured_creator_requests");
+    expect(sql).toContain("'creator_request.update'");
     expect(sql).not.toMatch(/raw_payload|private_key|seed_phrase|mnemonic|stream_key/i);
     expect(downSql).toContain("0112 rollback requires retained Convergence 05 traffic");
     expect(downSql).toContain("Keep upgraded live safety cases fail closed");
@@ -346,7 +358,7 @@ describe("database migrations", () => {
     expect(sql).not.toMatch(/api_key|private_key|raw_payload|payment_proof|service_role/i);
   });
 
-  it("adds messages and paid-message delivery tables with RLS and settlement gating", () => {
+  it("retains historical paid-message settlement tables with RLS and settlement gating", () => {
     const sql = readMigration("0015_messages_paid_messages.sql");
 
     expect(sql).toContain("create table conversations");

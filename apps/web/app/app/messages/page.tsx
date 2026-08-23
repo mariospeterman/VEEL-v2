@@ -28,6 +28,7 @@ export default async function MessagesPage({
         initialConversationId={selected?.id ?? null}
         initialConversations={conversations}
         initialMessages={messages}
+        initialMessagesAvailable={messagesResult?.ok ?? true}
       />
     </AppShell>
   );

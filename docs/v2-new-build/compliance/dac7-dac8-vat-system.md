@@ -133,7 +133,7 @@ VAT collected from users is output tax to remit. Input VAT recovery applies only
 | --- | ---: | --- | --- | --- |
 | Support | Creator | software + settlement verification + platform fee | user receipt naming creator; platform fee statement to creator | do not assume non-taxable donation; tax status determined by product config/jurisdiction |
 | Unlock | Creator | access entitlement software | user access receipt naming creator | creator sale unless deemed-supplier config says Veel |
-| Paid message / paid media request | Creator | messaging/access tooling | receipt naming creator; no Mutuals priority | creator sale/service; strict safety rules |
+| Creator media offer / accepted structured deliverable | Creator | messaging/access tooling | receipt naming creator; no Mutuals priority or personal-access promise | creator sale/service; strict safety rules |
 | Live Pass | Creator | live access entitlement software | access receipt naming creator | digital/live access; destination rules may apply |
 | Event Access Pass - physical | Creator/event owner | event page + access/check-in software | access receipt naming event owner | event-location VAT rules may apply |
 | Event Access Pass - virtual/streamed | Creator/event owner | virtual access software | access receipt naming event owner | customer-country VAT may apply for B2C virtual access |

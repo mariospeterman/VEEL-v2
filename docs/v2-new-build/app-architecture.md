@@ -246,8 +246,8 @@ Live room
   -> Replay asset
 
 Messages
-  -> Normal or paid message
-  -> Realtime update
+  -> Consent-bound chat, approved media offer, or structured creator request
+  -> Private realtime invalidation
 ```
 
 Mermaid source for GitHub or Mermaid-enabled previews:
@@ -266,7 +266,7 @@ flowchart LR
   Feed --> Live["Live Room"]
   Live --> Pass["Live Pass"]
   Feed --> Messages["Messages"]
-  Messages --> PaidMsg["Paid Message/Tip"]
+  Messages --> Commercial["Media Offer / Accepted Creator Request"]
   Feed --> Profile["Creator Profile"]
 ```
 

@@ -44,7 +44,8 @@ not message bodies, provider tokens, wallet material, or full topic values.
 
 Message requests permit one bounded introduction until the recipient accepts. No read receipt,
 paid surface, offer, reply continuation, attachment, or ephemeral presence may bypass a pending or
-declined request, a block, a mute, or current messaging settings. Historical `paid_message` records
+declined request, a block, or current messaging settings. Mute remains a local notification/read
+control, not a covert sender-visible access decision. Historical `paid_message` records
 remain readable, but the new-product UI is replaced by accepted-conversation creator media offers
 and a two-phase structured creator request. Payment buys only the defined media entitlement or
 accepted deliverable; it never buys inbox entry, reply priority, attention, romantic/sexual access,
@@ -57,6 +58,12 @@ Heartbeat loss, target disconnect, severe normalized safety evidence, replayed/f
 provider inconsistency first denies local playback and chat, then queues provider suspension and
 restricted operations follow-up. Provider suspension failure cannot reopen local delivery. Adult live
 remains disabled and every replay re-enters the ordinary quarantined VOD revision workflow.
+
+The repository accepts only the closed normalized severe-signal vocabulary recorded in migration
+`0112`. No public or generic moderation webhook is exposed: a launch-approved moderation adapter must
+authenticate and normalize its documented provider payload before calling that boundary. Until that
+adapter and real staging evidence exist, missing heartbeats hold the room and this capability remains
+provider-blocked rather than fabricating safety evidence.
 
 ## Realtime Channels
 
@@ -106,17 +113,7 @@ sequenceDiagram
   API->>DB: Update participant state
 ```
 
-## Paid Message Flow
-
-Paid messages require:
-
-- payment intent
-- wallet approval
-- confirmed settlement
-- message delivery after backend confirmation
-- idempotent delivery
-
-Frontend may draft the body, but backend decides when the paid message becomes visible.
+## Consent-Safe Messaging And Creator Commercial Interaction
 
 Current implementation slice:
 
@@ -124,14 +121,17 @@ Current implementation slice:
 - `GET /v1/messages/conversations/:id/messages` returns participant-visible message rows.
 - `POST /v1/messages/conversations/:id/messages` writes normal messages through Fastify.
 - `POST /v1/messages/conversations` creates or reuses one direct conversation per unordered user pair.
-- A non-Mutual/non-reciprocal-follow sender gets a pending request and may send at most two regular messages. The recipient must explicitly accept before either participant can continue normal messaging; decline closes regular messaging. Active Mutuals or reciprocal follows start accepted, and a pending request is promoted transactionally if that trusted relationship becomes active later. Paid messages bypass the two-message request ceiling but never bypass a block or declined request.
+- A non-Mutual/non-reciprocal-follow sender gets a pending request and may send exactly one bounded introduction. The recipient must explicitly accept before either participant can continue normal messaging; decline closes messaging. Active Mutuals or reciprocal follows start accepted, and a pending request is promoted transactionally if that trusted relationship becomes active later. There is no payment bypass.
 - `PATCH /v1/messages/conversations/:id/request` is recipient-only and allows exactly one terminal transition from pending to accepted or declined. Conversation creation, request response, and read-cursor commands persist the original response body, replay it exactly for the same request, and reject changed-input key reuse. `PATCH /v1/messages/conversations/:id/read` advances only that participant's read cursor and the web does not mark a thread read until its visible message projection loaded successfully.
-- Blocks in either direction deny regular sends and paid-message intent creation. Paid settlement acquires the same ordered conversation/member/user/request locks as safety mutations, then rechecks the conversation, both-direction block state, and declined-request state. Any newly ineligible delivery is cancelled, audited, and paired with a sender-visible payment remediation notification rather than exposing the message or leaving delivery silently pending.
-- `POST /v1/messages/conversations/:id/paid-message-intents` stores the paid-message body server-side and creates a server-priced `paid_message` payment intent.
-- Confirmed backend settlement inserts the paid message, recipient notification, and audit event transactionally when the safety relationship remains eligible.
+- Replies, reactions, safe internal shares, and up to four creator-owned attachments are accepted only after conversation consent. Attachments reference an already-approved `content_items.content_revision`; messaging never creates an alternate upload or moderation path.
+- Typing and presence use private ephemeral Realtime messages only. The reconnect path refetches canonical queries, optimistic sends reconcile by backend ID, and a bounded 25-item device queue retries offline sends with the original idempotency key.
+- The former paid-message creation endpoint is removed. Historical `paid_message` payment and delivery records remain readable and settle through the compatibility handler, but no new API or UI creates that product.
+- An approved-media creator offer can be created only by the media owner in an accepted conversation. Buyer payment uses the existing `content_unlock` settlement and canonical entitlement authority; the offer becomes purchased only after verified settlement.
+- A structured creator request is proposed without payment. Only the named creator can accept, decline, or propose terms; only the requester can accept revised terms. The payment-intent route returns a conflict until creator acceptance. Verified settlement rechecks the active accepted conversation and both-direction blocks before activating delivery. A changed relationship enters remediation instead of exposing a deliverable.
+- The delivery workspace records active, delivered, remediation, and completed states. Payment buys the exact agreed deliverable only—not a reply, personal attention, romantic/sexual access, offline access, or social priority.
 - New public message tables have RLS enabled. Baseline read policies are participant-scoped before direct Postgres Changes exposure.
 - Migration `0095` refuses malformed legacy direct threads (anything other than exactly two members or more than one thread for an unordered pair) instead of guessing. Its down migration refuses to erase live request decisions or durable action receipts; application rollback must leave the additive schema in place after Launch 05 receives traffic.
-- `/messages` reads the participant inbox and selected conversation through the typed web API helper. It does not render local conversation or paid-message fixtures.
+- `/messages` reads the participant inbox, selected thread, and commercial workspace through typed API helpers. It does not render local conversation or payment fixtures.
 - Every selected conversation exposes user-report and block actions next to the request state; the browser submits only typed safety commands while the backend rechecks the relationship for every regular or paid delivery.
 - Public creator profiles expose one `Message` action for authenticated ready users; the API, not the profile UI, decides whether the result is accepted or a request.
 
@@ -198,7 +198,7 @@ Messages:
 Notifications:
 
 - are backend-derived projections from existing business events
-- may inform the user about engagement, messages, paid-message delivery, access/pass state, Membership renewal/cancel/grace state, wallet action required, age/KYC action required, creator/studio setup tasks, safety/admin decisions, provider incidents, and account issues
+- may inform the user about engagement, messages, media-offer or structured-request state, access/pass state, Membership renewal/cancel/grace state, wallet action required, age/KYC action required, creator/studio setup tasks, safety/admin decisions, provider incidents, and account issues
 - never grant access, confirm payment, create revenue, change settlement state, create Mutuals, raise ranking, or override backend access truth
 - must be user-owned rows under RLS before direct Realtime exposure
 - must support explicit preference controls and device revocation
@@ -230,7 +230,7 @@ Convergence 05 remains provider-blocked until staging proves the imported ES256 
 - serialize direct-pair creation and request actions with ordered database locks
 - enforce the one-introduction request ceiling transactionally under concurrency
 - prove that concurrent pending-request sends produce exactly one message and all later attempts are rejected
-- rate limit paid message attempts
+- rate limit creator offers, structured requests, and payment-intent attempts
 - report/block visible everywhere
 - media attachments virus/moderation scan
-- paid message refund/reversal policy documented before scale
+- creator-request cancellation/remediation and media-offer refund policy documented before scale

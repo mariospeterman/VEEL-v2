@@ -178,7 +178,7 @@ Notifications must be useful, sparse, and opt-out aware.
 Allowed launch notifications:
 
 - message received
-- paid message request/action needed
+- creator media-offer or structured-request action needed
 - live room starting for followed creators
 - payment completed/failed/retry needed
 - Event Access Pass receipt/check-in reminder

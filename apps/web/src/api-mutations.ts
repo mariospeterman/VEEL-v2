@@ -39,7 +39,12 @@ export type {
   CreateVerificationSessionRequest,
   CreateContentRequest,
   CreateMessageRequest,
-  CreatePaidMessageIntentRequest,
+  ConversationCommercialInteractions,
+  CreateCreatorMediaOfferRequest,
+  CreateStructuredCreatorRequestRequest,
+  CreatorMediaOffer,
+  StructuredCreatorRequest,
+  UpdateStructuredCreatorRequestRequest,
   CreatePaymentIntentRequest,
   CreateRefundDisputeRequest,
   CreateSubscriptionIntentRequest,
@@ -66,7 +71,6 @@ export type {
   Message,
   MediaModerationAppeal,
   CreatorMediaPage,
-  PaidMessageIntent,
   PaymentIntent,
   PublishContentRequest,
   ProfileAvatarUpload,
@@ -144,7 +148,12 @@ import type {
   CreateVerificationSessionRequest,
   CreateContentRequest,
   CreateMessageRequest,
-  CreatePaidMessageIntentRequest,
+  ConversationCommercialInteractions,
+  CreateCreatorMediaOfferRequest,
+  CreateStructuredCreatorRequestRequest,
+  CreatorMediaOffer,
+  StructuredCreatorRequest,
+  UpdateStructuredCreatorRequestRequest,
   CreatePaymentIntentRequest,
   CreateRefundDisputeRequest,
   CreateSubscriptionIntentRequest,
@@ -171,7 +180,6 @@ import type {
   Message,
   MediaModerationAppeal,
   CreatorMediaPage,
-  PaidMessageIntent,
   PaymentIntent,
   PublishContentRequest,
   ProfileAvatarUpload,
@@ -681,6 +689,86 @@ export async function getConversationMessagesForMutation(conversationId: string)
   );
 }
 
+export async function getConversationCommercialInteractions(
+  conversationId: string
+): Promise<ConversationCommercialInteractions> {
+  return authenticatedGet<ConversationCommercialInteractions>(
+    `/v1/messages/conversations/${encodeURIComponent(conversationId)}/commercial-interactions`
+  );
+}
+
+export async function createCreatorMediaOffer(
+  conversationId: string,
+  body: CreateCreatorMediaOfferRequest
+): Promise<CreatorMediaOffer> {
+  return authenticatedMutation<CreatorMediaOffer>(
+    `/v1/messages/conversations/${encodeURIComponent(conversationId)}/media-offers`,
+    "POST",
+    body
+  );
+}
+
+export async function updateCreatorMediaOffer(
+  conversationId: string,
+  offerId: string,
+  action: "decline" | "withdraw"
+): Promise<CreatorMediaOffer> {
+  return authenticatedMutation<CreatorMediaOffer>(
+    `/v1/messages/conversations/${encodeURIComponent(conversationId)}/media-offers/${encodeURIComponent(offerId)}`,
+    "PATCH",
+    { action }
+  );
+}
+
+export async function createCreatorMediaOfferPaymentIntent(
+  conversationId: string,
+  offerId: string,
+  idempotencyKey?: string
+): Promise<PaymentIntent> {
+  return authenticatedMutation<PaymentIntent>(
+    `/v1/messages/conversations/${encodeURIComponent(conversationId)}/media-offers/${encodeURIComponent(offerId)}/payment-intents`,
+    "POST",
+    {},
+    idempotencyKey
+  );
+}
+
+export async function createStructuredCreatorRequest(
+  conversationId: string,
+  body: CreateStructuredCreatorRequestRequest
+): Promise<StructuredCreatorRequest> {
+  return authenticatedMutation<StructuredCreatorRequest>(
+    `/v1/messages/conversations/${encodeURIComponent(conversationId)}/creator-requests`,
+    "POST",
+    body
+  );
+}
+
+export async function updateStructuredCreatorRequest(
+  conversationId: string,
+  requestId: string,
+  body: UpdateStructuredCreatorRequestRequest
+): Promise<StructuredCreatorRequest> {
+  return authenticatedMutation<StructuredCreatorRequest>(
+    `/v1/messages/conversations/${encodeURIComponent(conversationId)}/creator-requests/${encodeURIComponent(requestId)}`,
+    "PATCH",
+    body
+  );
+}
+
+export async function createStructuredCreatorRequestPaymentIntent(
+  conversationId: string,
+  requestId: string,
+  idempotencyKey?: string
+): Promise<PaymentIntent> {
+  return authenticatedMutation<PaymentIntent>(
+    `/v1/messages/conversations/${encodeURIComponent(conversationId)}/creator-requests/${encodeURIComponent(requestId)}/payment-intents`,
+    "POST",
+    {},
+    idempotencyKey
+  );
+}
+
 export async function createDirectConversation(
   body: CreateDirectConversationRequest
 ): Promise<Conversation> {
@@ -754,19 +842,6 @@ export async function registerNotificationDevice(
   body: RegisterNotificationDeviceRequest
 ): Promise<NotificationDevice> {
   return authenticatedMutation<NotificationDevice>("/v1/notifications/devices", "POST", body);
-}
-
-export async function createPaidMessageIntent(
-  conversationId: string,
-  body: CreatePaidMessageIntentRequest,
-  idempotencyKey?: string
-): Promise<PaidMessageIntent> {
-  return authenticatedMutation<PaidMessageIntent>(
-    `/v1/messages/conversations/${encodeURIComponent(conversationId)}/paid-message-intents`,
-    "POST",
-    body,
-    idempotencyKey
-  );
 }
 
 export async function createPaymentIntent(

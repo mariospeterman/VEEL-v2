@@ -47,7 +47,7 @@ Operational tables, caches, notifications, admin projections, receipts, exports,
 
 Veel earns through:
 
-- platform fee on content unlocks, paid messages, paid live events, Event Access Passes, and support
+- platform fee on content unlocks, creator media offers, accepted structured deliverables, paid live events, Event Access Passes, and support
 - Profile Membership platform fee
 - platform plans: Free, Plus, Ultra, Studio, and Enterprise
 - optional referral commission sourced only from Veel platform commission net of refunds and tax
@@ -57,7 +57,7 @@ Creators earn through:
 
 - paid clips, premium posts, VOD, and replay content unlocks
 - support
-- paid messages
+- creator media offers and accepted structured deliverables
 - Profile Memberships
 - paid live events
 - Event Access Passes
@@ -112,7 +112,7 @@ Hard custody rules:
 Creators own monetisation pricing for creator products:
 
 - content unlocks
-- paid messages
+- creator media offers and structured creator requests
 - support presets where creator offers presets
 - one paid-event price and replay window for a paid live room
 - Event Access Passes
@@ -135,8 +135,8 @@ Implemented one-time payment policy stores one constrained override per product 
 
 Examples:
 
-- Admin sets minimum paid message price to `0.01 SOL` or USDC equivalent.
-- Creator sets a paid message price above that minimum.
+- Admin sets minimum creator media-offer and structured-request prices to `0.01 SOL` or USDC equivalent.
+- Creator sets an exact media-offer price or accepts/counters a structured-request price above that minimum.
 - Admin sets the paid-live-event minimum and replay-window limits.
 - Creator sets one event price and a disclosed replay window within those guardrails.
 - Admin sets minimum Event Access price; creator sets actual pass price and capacity within policy.
@@ -157,7 +157,7 @@ Onramp sessions are funding flows, not payment settlement flows. A card/onramp p
 Implemented wallet funding boundary:
 
 - `POST /v1/wallets/onramp-sessions` creates a provider funding session only for a wallet owned by the authenticated user.
-- The provider launch URL may be returned to the user, but no access, entitlement, paid-message delivery, ticket, subscription, commission, or revenue state changes from that response.
+- The provider launch URL may be returned to the user, but no access, entitlement, creator-delivery workspace, ticket, subscription, commission, or revenue state changes from that response.
 - Coinbase CDP is the current provider boundary when configured. It is used only for destination-wallet funding; Solana Pay/payment-intent settlement remains the product payment path.
 
 Native SOL and SPL token modes must share a common intent/split/settlement model. Do not create separate payment systems.
@@ -168,7 +168,7 @@ Native SOL and SPL token modes must share a common intent/split/settlement model
 | --- | --- | --- | --- | --- |
 | Content unlock | One-time price | Creator share | Platform fee | Content access grant |
 | Support | Preset/custom amount or campaign amount | Creator share | Platform fee | No access grant unless explicitly attached |
-| Paid message | Message price | Creator share | Platform fee | Message delivery/open entitlement |
+| Creator media offer / accepted structured request | Exact offer or accepted deliverable price | Creator share | Platform fee | Exact content entitlement or defined delivery workspace; never attention or access to a person |
 | Profile Membership | Recurring plan price | Creator share | Platform fee | Creator-specific access plan |
 | Plus | 8.99 USDC/month | No creator share unless bundled | Platform revenue | Regular-user platform entitlement |
 | Ultra | 17.99 USDC/month | No creator share unless bundled | Platform revenue | High-usage viewing entitlement |
@@ -472,7 +472,7 @@ audit_required
 - duplicate signature rejection
 - tip settlement without access grant
 - content unlock settlement with access grant
-- paid message settlement with message entitlement
+- creator media-offer settlement with exact content entitlement and structured-request settlement with delivery-workspace activation
 - paid-live-event settlement with room and replay-window access
 - Event Access Pass settlement with backend Access Pass entitlement
 - creator subscription create/renew/cancel/fail/recover

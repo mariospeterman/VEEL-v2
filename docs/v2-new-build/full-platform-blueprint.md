@@ -33,7 +33,7 @@ Veel v2 is an 18+ creator PWA/dApp for:
 - VOD/media upload and playback
 - paid unlocks and premium content
 - direct support
-- paid messages
+- creator media offers and accepted structured creator requests
 - Creator Memberships
 - live passes
 - Event Access and Passes
@@ -160,7 +160,7 @@ Frontend never computes final access, final commission, final pass state, final 
 | Support | `business-monetisation.md`, `payments-and-monetisation.md` | payments, creator earnings records, referrals | support sheet | Solana Pay/RPC, Helius/RPC evidence |
 | Referrals/commissions | `business-monetisation.md`, `engagement-strategy.md` | referrals, commissions | share/invite, activity | Solana evidence |
 | Memberships | `business-monetisation.md`, `payments-and-monetisation.md`, `noncustodial-money-compliance.md` | memberships, renewals | membership sheet/profile | Auto-renewing Solana Subscriptions/Allowances; manual Solana Pay recovery only |
-| Paid messages | `business-monetisation.md`, `realtime-messages-activity.md` | messages, payments, access | messages/quick chat | Solana evidence |
+| Creator commercial interactions | `business-monetisation.md`, `realtime-messages-activity.md` | media offers, structured requests, payments, entitlements | messages/commercial workspace | Solana evidence after exact offer or creator-accepted terms |
 | Engagement | `engagement-strategy.md` | likes, comments, saves, shares, follows | cards, viewer, profile | none |
 | Messages/activity/realtime | `realtime-messages-activity.md`, `auth-supabase-realtime.md` | conversations, activity, notifications | messages, quick chat, activity | Supabase Realtime |
 | Profile/creator dashboard | `frontend/component-map.md`, `business-monetisation.md`, `profile-activity-ranking.md` | profile, badges, rankings, creator settings, activity | profile, activity, creator dashboard | KYC provider |

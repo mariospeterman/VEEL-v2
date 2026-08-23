@@ -1,25 +1,29 @@
 "use client";
 
 import { useQueryClient, type QueryKey } from "@tanstack/react-query";
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { createRealtimeAccessToken, recordRealtimeConnectionEvent } from "@/api-mutations";
+import {
+  acceptRealtimeVersion,
+  parseRealtimeInvalidation,
+  shouldRecoverRealtimeGap,
+  type RealtimeInvalidation
+} from "@/realtime-protocol";
 import { createSupabaseRealtimeClient } from "@/supabase/client";
 
 type RealtimeClient = ReturnType<typeof createSupabaseRealtimeClient>;
 type TopicKind = "account" | "conversation" | "live";
 
-interface InvalidationPayload {
-  event: string;
-  resourceKind: string;
-  resourceId: string;
-  version: number;
+interface RealtimeContextValue {
+  client: RealtimeClient;
+  userId: string;
 }
 
-const RealtimeContext = createContext<RealtimeClient | null>(null);
+const RealtimeContext = createContext<RealtimeContextValue | null>(null);
 
 export function RealtimeProvider({ children }: Readonly<{ children: React.ReactNode }>) {
   const queryClient = useQueryClient();
-  const [client, setClient] = useState<RealtimeClient | null>(null);
+  const [connection, setConnection] = useState<RealtimeContextValue | null>(null);
   const versions = useRef(new Map<string, number>());
 
   useEffect(() => {
@@ -56,7 +60,7 @@ export function RealtimeProvider({ children }: Readonly<{ children: React.ReactN
       if (activeChannel) void activeClient?.removeChannel(activeChannel);
       activeChannel = null;
       activeClient = null;
-      setClient(null);
+      setConnection(null);
     };
 
     const schedule = () => {
@@ -76,11 +80,11 @@ export function RealtimeProvider({ children }: Readonly<{ children: React.ReactN
         if (cancelled) return;
         activeClient = createSupabaseRealtimeClient(async () => (await issueToken()).token);
         await activeClient.realtime.setAuth(issued.token);
-        setClient(activeClient);
+        setConnection({ client: activeClient, userId: issued.accountTopic.slice("account:".length) });
         activeChannel = activeClient.channel(issued.accountTopic, { config: { private: true } });
         activeChannel.on("broadcast", { event: "projection_changed" }, ({ payload }) => {
-          const invalidation = parseInvalidation(payload);
-          if (!invalidation || !acceptVersion(versions.current, issued.accountTopic, invalidation.version)) return;
+          const invalidation = parseRealtimeInvalidation(payload);
+          if (!invalidation || !acceptRealtimeVersion(versions.current, issued.accountTopic, invalidation.version)) return;
           invalidateAccountProjection(queryClient, invalidation);
         });
         activeChannel.subscribe((status) => {
@@ -122,7 +126,7 @@ export function RealtimeProvider({ children }: Readonly<{ children: React.ReactN
     };
   }, [queryClient]);
 
-  return <RealtimeContext.Provider value={client}>{children}</RealtimeContext.Provider>;
+  return <RealtimeContext.Provider value={connection}>{children}</RealtimeContext.Provider>;
 }
 
 export function useScopedRealtimeInvalidation(input: {
@@ -130,7 +134,7 @@ export function useScopedRealtimeInvalidation(input: {
   topicKind: Exclude<TopicKind, "account">;
   queryKeys: QueryKey[];
 }) {
-  const client = useContext(RealtimeContext);
+  const client = useContext(RealtimeContext)?.client ?? null;
   const queryClient = useQueryClient();
   const versions = useRef(new Map<string, number>());
 
@@ -139,12 +143,12 @@ export function useScopedRealtimeInvalidation(input: {
     const topic = input.topic;
     const channel = client.channel(topic, { config: { private: true } });
     channel.on("broadcast", { event: "projection_changed" }, ({ payload }) => {
-      const invalidation = parseInvalidation(payload);
-      if (!invalidation || !acceptVersion(versions.current, topic, invalidation.version)) return;
+      const invalidation = parseRealtimeInvalidation(payload);
+      if (!invalidation || !acceptRealtimeVersion(versions.current, topic, invalidation.version)) return;
       for (const queryKey of input.queryKeys) void queryClient.invalidateQueries({ queryKey });
     });
     channel.subscribe((status) => {
-      if (status === "SUBSCRIBED") {
+      if (shouldRecoverRealtimeGap(status)) {
         for (const queryKey of input.queryKeys) void queryClient.invalidateQueries({ queryKey });
       }
       if (["SUBSCRIBED", "CHANNEL_ERROR", "TIMED_OUT", "CLOSED"].includes(status)) {
@@ -161,28 +165,69 @@ export function useScopedRealtimeInvalidation(input: {
   }, [client, input.queryKeys, input.topic, input.topicKind, queryClient]);
 }
 
-function parseInvalidation(value: unknown): InvalidationPayload | null {
-  if (!value || typeof value !== "object") return null;
-  const payload = value as Partial<InvalidationPayload>;
-  return typeof payload.event === "string" &&
-    typeof payload.resourceKind === "string" &&
-    typeof payload.resourceId === "string" &&
-    Number.isSafeInteger(payload.version) && (payload.version ?? 0) > 0
-    ? payload as InvalidationPayload
-    : null;
-}
+export function useConversationEphemeral(topic: string | null) {
+  const realtime = useContext(RealtimeContext);
+  const client = realtime?.client ?? null;
+  const userId = realtime?.userId ?? null;
+  const channelRef = useRef<ReturnType<RealtimeClient["channel"]> | null>(null);
+  const lastTypingAt = useRef(0);
+  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [peerTyping, setPeerTyping] = useState(false);
+  const [peerOnline, setPeerOnline] = useState(false);
 
-function acceptVersion(versions: Map<string, number>, topic: string, version: number) {
-  if (version <= (versions.get(topic) ?? 0)) return false;
-  versions.set(topic, version);
-  return true;
+  useEffect(() => {
+    if (!client || !topic || !userId) return;
+    const channel = client.channel(topic, {
+      config: { private: true, broadcast: { self: false }, presence: { key: userId } }
+    });
+    channelRef.current = channel;
+    channel.on("broadcast", { event: "typing" }, ({ payload }) => {
+      if (!payload || typeof payload !== "object") return;
+      const value = payload as { active?: unknown; expiresAt?: unknown };
+      if (typeof value.active !== "boolean" || typeof value.expiresAt !== "number" || value.expiresAt < Date.now()) return;
+      setPeerTyping(value.active);
+      if (value.active) setTimeout(() => setPeerTyping(false), Math.min(3_000, value.expiresAt - Date.now()));
+    });
+    channel.on("presence", { event: "sync" }, () => {
+      setPeerOnline(Object.keys(channel.presenceState()).length > 1);
+    });
+    channel.subscribe((status) => {
+      if (status === "SUBSCRIBED") void channel.track({ onlineAt: new Date().toISOString() });
+      if (status === "CLOSED" || status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        setPeerOnline(false);
+        setPeerTyping(false);
+      }
+    });
+    return () => {
+      channelRef.current = null;
+      if (typingTimer.current) clearTimeout(typingTimer.current);
+      void client.removeChannel(channel);
+    };
+  }, [client, topic, userId]);
+
+  const sendTyping = useCallback((active: boolean) => {
+    const channel = channelRef.current;
+    if (!channel) return;
+    const now = Date.now();
+    if (active && now - lastTypingAt.current < 1_500) return;
+    lastTypingAt.current = now;
+    void channel.send({
+      type: "broadcast",
+      event: "typing",
+      payload: { active, expiresAt: active ? now + 2_500 : now + 500 }
+    });
+    if (typingTimer.current) clearTimeout(typingTimer.current);
+    if (active) typingTimer.current = setTimeout(() => sendTyping(false), 2_000);
+  }, []);
+
+  return { peerTyping, peerOnline, sendTyping };
 }
 
 function invalidateAccountProjection(
   queryClient: ReturnType<typeof useQueryClient>,
-  payload: InvalidationPayload
+  payload: RealtimeInvalidation
 ) {
-  if (["messages", "conversation_members", "direct_message_requests", "message_reactions", "creator_media_offers", "structured_creator_requests", "conversation"].includes(payload.resourceKind)) {
+  if (["messages", "conversation_members", "direct_message_requests", "message_reactions", "message_attachments", "creator_media_offers", "structured_creator_requests", "conversation"].includes(payload.resourceKind)) {
     void queryClient.invalidateQueries({ queryKey: ["messages"] });
   } else if (payload.resourceKind === "notifications") {
     void queryClient.invalidateQueries({ queryKey: ["notifications"] });

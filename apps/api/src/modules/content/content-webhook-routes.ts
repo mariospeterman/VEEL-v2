@@ -94,6 +94,7 @@ export async function registerContentWebhookRoutes(
           }
           if (normalized.livepeerSafety && options.liveRepository.recordLiveSafetyEvent) {
             appliedLiveEvent = await options.liveRepository.recordLiveSafetyEvent({
+              provider: "livepeer",
               providerEventId: normalized.providerEventId,
               providerStreamId: normalized.livepeerSafety.providerStreamId,
               eventKind: normalized.livepeerSafety.eventKind,

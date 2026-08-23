@@ -32,6 +32,7 @@ export interface MessageRow {
   payment_intent_id: string | null;
   reply_to_message_id: string | null;
   shared_content_item_id: string | null;
+  attachments: NonNullable<Message["attachments"]>;
   reactions: Message["reactions"];
   created_at: Date;
   sender_id: string;
@@ -50,6 +51,16 @@ export function messageSelectSql(sql: postgres.ISql, viewerUserId: string | null
       m.payment_intent_id,
       m.reply_to_message_id,
       m.shared_content_item_id,
+      coalesce((
+        select jsonb_agg(
+          jsonb_build_object(
+            'contentItemId', attachment.content_item_id,
+            'contentRevision', attachment.content_revision
+          ) order by attachment.position
+        )
+        from message_attachments attachment
+        where attachment.message_id = m.id
+      ), '[]'::jsonb) as attachments,
       m.created_at,
       u.id as sender_id,
       p.handle as sender_handle,
@@ -134,6 +145,7 @@ export function toMessage(row: MessageRow): Message {
     paymentIntentId: row.payment_intent_id,
     replyToMessageId: row.reply_to_message_id,
     sharedContentItemId: row.shared_content_item_id,
+    attachments: row.attachments,
     reactions: row.reactions,
     createdAt: row.created_at.toISOString()
   };

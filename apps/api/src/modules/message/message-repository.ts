@@ -2,6 +2,17 @@ import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.j
 import { MessageRepositoryConfigurationError } from "./message-errors.js";
 import { listConversations, listMessages } from "./message-read-repository.js";
 import {
+  bindCreatorMediaOfferPaymentIntent,
+  bindStructuredCreatorRequestPaymentIntent,
+  createCreatorMediaOffer,
+  createStructuredCreatorRequest,
+  findCreatorMediaOfferPaymentAuthority,
+  findStructuredCreatorRequestPaymentAuthority,
+  listCommercialInteractions,
+  updateCreatorMediaOffer,
+  updateStructuredCreatorRequest
+} from "./message-commercial-repository.js";
+import {
   createDirectConversation,
   createMessage,
   findConversationPrice,
@@ -48,6 +59,15 @@ export function createPostgresMessageRepository(database?: string | PostgresSql)
       async updateMessageReaction() {
         throw new MessageRepositoryConfigurationError();
       },
+      async listCommercialInteractions() { throw new MessageRepositoryConfigurationError(); },
+      async createCreatorMediaOffer() { throw new MessageRepositoryConfigurationError(); },
+      async updateCreatorMediaOffer() { throw new MessageRepositoryConfigurationError(); },
+      async findCreatorMediaOfferPaymentAuthority() { throw new MessageRepositoryConfigurationError(); },
+      async bindCreatorMediaOfferPaymentIntent() { throw new MessageRepositoryConfigurationError(); },
+      async createStructuredCreatorRequest() { throw new MessageRepositoryConfigurationError(); },
+      async updateStructuredCreatorRequest() { throw new MessageRepositoryConfigurationError(); },
+      async findStructuredCreatorRequestPaymentAuthority() { throw new MessageRepositoryConfigurationError(); },
+      async bindStructuredCreatorRequestPaymentIntent() { throw new MessageRepositoryConfigurationError(); },
       async findConversationPrice() {
         throw new MessageRepositoryConfigurationError();
       },
@@ -84,6 +104,15 @@ export function createPostgresMessageRepository(database?: string | PostgresSql)
     async updateMessageReaction(input) {
       return updateMessageReaction(sql, input);
     },
+    async listCommercialInteractions(input) { return listCommercialInteractions(sql, input); },
+    async createCreatorMediaOffer(input) { return createCreatorMediaOffer(sql, input); },
+    async updateCreatorMediaOffer(input) { return updateCreatorMediaOffer(sql, input); },
+    async findCreatorMediaOfferPaymentAuthority(input) { return findCreatorMediaOfferPaymentAuthority(sql, input); },
+    async bindCreatorMediaOfferPaymentIntent(input) { return bindCreatorMediaOfferPaymentIntent(sql, input); },
+    async createStructuredCreatorRequest(input) { return createStructuredCreatorRequest(sql, input); },
+    async updateStructuredCreatorRequest(input) { return updateStructuredCreatorRequest(sql, input); },
+    async findStructuredCreatorRequestPaymentAuthority(input) { return findStructuredCreatorRequestPaymentAuthority(sql, input); },
+    async bindStructuredCreatorRequestPaymentIntent(input) { return bindStructuredCreatorRequestPaymentIntent(sql, input); },
     async findConversationPrice(input) {
       return findConversationPrice(sql, input);
     },

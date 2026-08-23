@@ -64,7 +64,7 @@ Rules:
 | Report | `reports` | Server success state | Admin queue | Safety | Requires audit and moderation queue. |
 | Tip/Support | `payment_intents`, `settlements`, `activity` | Submitted only | User payment event | Financial | Confirmed backend settlement for balances. |
 | Unlock | `payment_intents`, `entitlements` | Pending only | User payment/access event | Access | Backend-confirmed entitlement only. |
-| Paid message | `payment_intents`, `messages` | Pending only | Message after confirm | Financial/message delivery | Message visible after confirmed payment. |
+| Media offer / structured request | `payment_intents`, `creator_media_offers`, `structured_creator_requests`, `entitlements` | Pending only | Offer/request state after confirm | Financial/access or delivery workspace | Exact entitlement or accepted delivery workspace activates after confirmed settlement; no paid chat message. |
 | Live pass | `payment_intents`, `live_access_grants` | Pending only | Room access update | Access | Pass controls playback/chat. |
 | Event interest | `event_interests` | Yes | Optional | None | Purchase still explicit. |
 | Event Access Pass purchase | `payment_intents`, `event_access_passes` | Pending only | Event Access event | Access | Backend QR/receipt after confirm. |

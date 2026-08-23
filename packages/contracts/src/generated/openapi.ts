@@ -1618,7 +1618,7 @@ export interface paths {
         /** List participant-visible conversation messages */
         get: operations["listConversationMessages"];
         put?: never;
-        /** Send a conversation message or paid-message delivery */
+        /** Send a consent-bound conversation message */
         post: operations["createConversationMessage"];
         delete?: never;
         options?: never;
@@ -1626,7 +1626,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/messages/conversations/{conversationId}/paid-message-intents": {
+    "/v1/messages/conversations/{conversationId}/commercial-interactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List creator media offers and structured creator requests for an accepted conversation */
+        get: operations["listConversationCommercialInteractions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/messages/conversations/{conversationId}/media-offers": {
         parameters: {
             query?: never;
             header?: never;
@@ -1635,8 +1652,93 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create paid-message intent and store backend-owned delivery draft */
-        post: operations["createPaidMessageIntent"];
+        /** Offer already-approved creator media inside an accepted conversation */
+        post: operations["createCreatorMediaOffer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/messages/conversations/{conversationId}/media-offers/{offerId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Decline or withdraw a creator media offer */
+        patch: operations["updateCreatorMediaOffer"];
+        trace?: never;
+    };
+    "/v1/messages/conversations/{conversationId}/media-offers/{offerId}/payment-intents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create the buyer payment intent for an eligible media offer */
+        post: operations["createCreatorMediaOfferPaymentIntent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/messages/conversations/{conversationId}/creator-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Propose a structured creator request without payment */
+        post: operations["createStructuredCreatorRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/messages/conversations/{conversationId}/creator-requests/{requestId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Apply a role- and state-authorized request lifecycle action */
+        patch: operations["updateStructuredCreatorRequest"];
+        trace?: never;
+    };
+    "/v1/messages/conversations/{conversationId}/creator-requests/{requestId}/payment-intents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a payment intent only after creator acceptance */
+        post: operations["createStructuredCreatorRequestPaymentIntent"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4811,9 +4913,113 @@ export interface components {
             replyToMessageId?: string | null;
             /** Format: uuid */
             sharedContentItemId?: string | null;
+            attachmentContentItemIds?: string[];
         };
-        CreatePaidMessageIntentRequest: {
-            body: string;
+        CreateCreatorMediaOfferRequest: {
+            /** Format: uuid */
+            contentItemId: string;
+            title: string;
+            description?: string | null;
+            amountMinor: number;
+            currency: components["schemas"]["Currency"];
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        UpdateCreatorMediaOfferRequest: {
+            /** @enum {string} */
+            action: "decline" | "withdraw";
+        };
+        CreatorMediaOffer: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            conversationId: string;
+            /** Format: uuid */
+            creatorUserId: string;
+            /** Format: uuid */
+            buyerUserId: string;
+            /** Format: uuid */
+            contentItemId: string;
+            contentRevision: number;
+            title: string;
+            description?: string | null;
+            amountMinor: number;
+            currency: components["schemas"]["Currency"];
+            /** @enum {string} */
+            state: "offered" | "accepted" | "declined" | "withdrawn" | "expired" | "purchased" | "remediation";
+            /** Format: uuid */
+            paymentIntentId?: string | null;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            purchasedAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateStructuredCreatorRequestRequest: {
+            /** Format: uuid */
+            creatorUserId: string;
+            deliverable: string;
+            /** @enum {string} */
+            permittedCategory: "photo" | "video" | "audio" | "written" | "other_safe";
+            proposedAmountMinor?: number | null;
+            currency: components["schemas"]["Currency"];
+            expectedDeliveryDays?: number | null;
+            clarificationRule: string;
+            cancellationRule: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        UpdateStructuredCreatorRequestRequest: {
+            /** @enum {string} */
+            action: "accept" | "decline" | "propose_terms" | "accept_terms" | "mark_delivered" | "request_remediation" | "complete" | "cancel";
+            agreedAmountMinor?: number | null;
+            expectedDeliveryDays?: number | null;
+            clarificationRule?: string | null;
+            cancellationRule?: string | null;
+        };
+        StructuredCreatorRequest: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            conversationId: string;
+            /** Format: uuid */
+            requesterUserId: string;
+            /** Format: uuid */
+            creatorUserId: string;
+            deliverable: string;
+            /** @enum {string} */
+            permittedCategory: "photo" | "video" | "audio" | "written" | "other_safe";
+            proposedAmountMinor?: number | null;
+            agreedAmountMinor?: number | null;
+            currency: components["schemas"]["Currency"];
+            expectedDeliveryDays?: number | null;
+            clarificationRule: string;
+            cancellationRule: string;
+            /** @enum {string} */
+            state: "proposed" | "terms_proposed" | "accepted" | "declined" | "payment_pending" | "active" | "delivered" | "remediation" | "completed" | "cancelled" | "expired";
+            /** Format: uuid */
+            paymentIntentId?: string | null;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            acceptedAt?: string | null;
+            /** Format: date-time */
+            activatedAt?: string | null;
+            /** Format: date-time */
+            deliveredAt?: string | null;
+            /** Format: date-time */
+            completedAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ConversationCommercialInteractions: {
+            mediaOffers: components["schemas"]["CreatorMediaOffer"][];
+            creatorRequests: components["schemas"]["StructuredCreatorRequest"][];
         };
         Message: {
             /** Format: uuid */
@@ -4830,6 +5036,11 @@ export interface components {
             replyToMessageId?: string | null;
             /** Format: uuid */
             sharedContentItemId?: string | null;
+            attachments?: {
+                /** Format: uuid */
+                contentItemId: string;
+                contentRevision: number;
+            }[];
             reactions: {
                 /** @enum {string} */
                 key: "like" | "love" | "laugh" | "support";
@@ -4848,14 +5059,6 @@ export interface components {
         MessagePage: {
             items: components["schemas"]["Message"][];
             nextCursor?: string | null;
-        };
-        PaidMessageIntent: {
-            /** @enum {string} */
-            state: "payment_required" | "already_delivered";
-            /** Format: uuid */
-            conversationId: string;
-            paymentIntent?: components["schemas"]["PaymentIntent"];
-            message?: components["schemas"]["Message"];
         };
         CreatePaymentIntentRequest: {
             /** @enum {string} */
@@ -5771,10 +5974,12 @@ export interface components {
             organizationCounts: components["schemas"]["AdminStateCounts"];
             managedCreatorCounts: components["schemas"]["AdminStateCounts"];
             enterpriseAllocationCounts: components["schemas"]["AdminStateCounts"];
+            creatorMediaOfferCounts: components["schemas"]["AdminStateCounts"];
+            structuredCreatorRequestCounts: components["schemas"]["AdminStateCounts"];
         };
         AdminWorkerQueueHealth: {
             /** @enum {string} */
-            name: "subscription_collections" | "notification_deliveries" | "payment_confirmation_emails" | "provider_event_replays" | "media_moderation" | "analytics_projections";
+            name: "subscription_collections" | "notification_deliveries" | "payment_confirmation_emails" | "provider_event_replays" | "media_moderation" | "analytics_projections" | "live_safety";
             pendingCount: number;
             processingCount: number;
             failedCount: number;
@@ -7047,13 +7252,31 @@ export interface components {
                 "application/json": components["schemas"]["Message"];
             };
         };
-        /** @description Paid message intent */
-        PaidMessageIntent: {
+        /** @description Consent-bound commercial interactions */
+        ConversationCommercialInteractions: {
             headers: {
                 [name: string]: unknown;
             };
             content: {
-                "application/json": components["schemas"]["PaidMessageIntent"];
+                "application/json": components["schemas"]["ConversationCommercialInteractions"];
+            };
+        };
+        /** @description Creator media offer */
+        CreatorMediaOffer: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["CreatorMediaOffer"];
+            };
+        };
+        /** @description Structured creator request */
+        StructuredCreatorRequest: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["StructuredCreatorRequest"];
             };
         };
         /** @description Payment intent */
@@ -8145,9 +8368,24 @@ export interface components {
                 "application/json": components["schemas"]["UpdateConversationMuteRequest"];
             };
         };
-        CreatePaidMessageIntent: {
+        CreateCreatorMediaOffer: {
             content: {
-                "application/json": components["schemas"]["CreatePaidMessageIntentRequest"];
+                "application/json": components["schemas"]["CreateCreatorMediaOfferRequest"];
+            };
+        };
+        UpdateCreatorMediaOffer: {
+            content: {
+                "application/json": components["schemas"]["UpdateCreatorMediaOfferRequest"];
+            };
+        };
+        CreateStructuredCreatorRequest: {
+            content: {
+                "application/json": components["schemas"]["CreateStructuredCreatorRequestRequest"];
+            };
+        };
+        UpdateStructuredCreatorRequest: {
+            content: {
+                "application/json": components["schemas"]["UpdateStructuredCreatorRequestRequest"];
             };
         };
         UpdateCreatorOnboarding: {
@@ -10565,7 +10803,25 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
-    createPaidMessageIntent: {
+    listConversationCommercialInteractions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ConversationCommercialInteractions"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createCreatorMediaOffer: {
         parameters: {
             query?: never;
             header: {
@@ -10577,15 +10833,133 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["CreatePaidMessageIntent"];
+        requestBody: components["requestBodies"]["CreateCreatorMediaOffer"];
         responses: {
-            201: components["responses"]["PaidMessageIntent"];
+            201: components["responses"]["CreatorMediaOffer"];
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    updateCreatorMediaOffer: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                offerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["UpdateCreatorMediaOffer"];
+        responses: {
+            200: components["responses"]["CreatorMediaOffer"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    createCreatorMediaOfferPaymentIntent: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                offerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: components["responses"]["PaymentIntent"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createStructuredCreatorRequest: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["CreateStructuredCreatorRequest"];
+        responses: {
+            201: components["responses"]["StructuredCreatorRequest"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    updateStructuredCreatorRequest: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                requestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["UpdateStructuredCreatorRequest"];
+        responses: {
+            200: components["responses"]["StructuredCreatorRequest"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    createStructuredCreatorRequestPaymentIntent: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                requestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: components["responses"]["PaymentIntent"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -11801,7 +12175,7 @@ export interface operations {
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
-                queueName: "subscription_collections" | "notification_deliveries" | "payment_confirmation_emails" | "provider_event_replays" | "media_moderation" | "analytics_projections";
+                queueName: "subscription_collections" | "notification_deliveries" | "payment_confirmation_emails" | "provider_event_replays" | "media_moderation" | "analytics_projections" | "live_safety";
                 jobId: string;
             };
             cookie?: never;

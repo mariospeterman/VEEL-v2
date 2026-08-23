@@ -151,7 +151,7 @@ Wallet approval is required for wallet actions:
 
 - content unlock
 - tip/support
-- paid message
+- approved media offer or creator-accepted structured request
 - creator subscription
 - live pass
 - Event Access Pass

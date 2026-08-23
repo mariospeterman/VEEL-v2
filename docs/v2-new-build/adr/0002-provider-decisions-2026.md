@@ -33,7 +33,7 @@ This ADR turns the v2 blueprint into concrete provider defaults for the first im
 | Payment evidence | Helius scoped to money/access evidence, with RPC fallback | Cost-aware, not a broad firehose. |
 | Platform plans | Solana Subscriptions/Allowances auto-renewal; manual Solana Pay recovery fallback only | Keeps plans recurring, noncustodial, revocable, and avoids merchant checkout, custodial balances, and provider-operated product billing. |
 | Profile Memberships | Keep as `Join @handle` fan access, not a replacement for discovery/unlocks | Supports creator recurring revenue without killing free discovery. |
-| Creator pricing | Creator sets content unlock, paid message, live pass, Event Access Pass, and Profile Membership prices within admin/env guardrails | Preserves creator ownership while preventing abuse, too-low pricing, and compliance issues. |
+| Creator pricing | Creator sets content unlock, media-offer, structured-deliverable, live pass, Event Access Pass, and Profile Membership prices within admin/env guardrails | Preserves creator ownership while preventing abuse, too-low pricing, and compliance issues. |
 | VOD | Bunny Stream/CDN/TUS | Direct uploads and playback provider infrastructure. |
 | Live/replay | Livepeer with JWT playback access from day one for paid streams/replays | Provider-owned live infra and provider-enforced protected playback. |
 | Age assurance | One configured reusable/light primary and at most one documented fallback behind the provider-neutral waterfall | Server policy chooses the lowest-friction approved path; no ordinary provider chooser and no raw identity data in core DB. |
@@ -218,7 +218,7 @@ Use Solana transaction-request architecture for:
 
 - support
 - content unlocks
-- paid messages
+- creator media offers and accepted structured requests
 - live passes
 - Event Access Passes
 
@@ -285,7 +285,7 @@ Subscriber benefits should be simple and conversion-friendly:
 - subscriber-only posts or full clips where creator chooses
 - discounted unlocks or included monthly unlock allowance if creator config allows it
 - live pass discount or subscriber live chat access where creator enables it
-- clearly labeled member-only paid-message access if creator enables it; no paid message priority ranking
+- clearly labeled member-only media offers if creator enables them; no payment-based message or social priority
 
 Do not hide all good creator content behind memberships. The product needs free Bits/teasers and public profile content for discovery. Memberships should reward recurring fans, not make the platform feel locked by default.
 
@@ -459,7 +459,7 @@ Admin must measure and operate:
 - reports/blocks/safety actions
 - media provider state
 - live room state
-- messages/paid messages
+- messages, creator media offers, and structured creator requests
 - payments/unlocks/support
 - memberships/platform plans
 - referrals/commissions

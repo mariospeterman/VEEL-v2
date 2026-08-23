@@ -165,7 +165,7 @@ export function createLiveStatusRepositoryMethods(
             live_safety_session_id, provider, provider_event_id, event_kind,
             normalized_signal, payload_hash, signature_hash, observed_at
           ) values (
-            ${target.session_id}, 'livepeer', ${input.providerEventId}, ${eventKind},
+            ${target.session_id}, ${input.provider}, ${input.providerEventId}, ${eventKind},
             ${normalizedSignal}, ${input.payloadHash}, ${input.signatureHash}, ${input.observedAt}
           )
           on conflict (provider, provider_event_id) do nothing
@@ -197,10 +197,12 @@ export function createLiveStatusRepositoryMethods(
                 updated_at = now()
             where id = ${target.session_id}
           `;
-        } else if (eventKind === "target_disconnected" || eventKind === "provider_inconsistent") {
+        } else if (eventKind === "target_disconnected" || eventKind === "provider_inconsistent" || eventKind === "adverse_signal") {
           const reasonCode = eventKind === "target_disconnected"
             ? "live_monitoring_disconnected"
-            : "live_monitoring_inconsistent";
+            : eventKind === "provider_inconsistent"
+              ? "live_monitoring_inconsistent"
+              : `live_monitoring_${normalizedSignal}`;
           await transaction`
             update live_safety_sessions
             set state = 'held', hold_reason_code = ${reasonCode}, held_at = now(),
@@ -237,11 +239,13 @@ export function createLiveStatusRepositoryMethods(
             and safety.state <> 'superseded'
             and private.live_safety_release_ready(${target.room_id})
         `;
-        await transaction`
-          update provider_events
-          set processed_at = coalesce(processed_at, now())
-          where provider = 'livepeer' and provider_event_id = ${input.providerEventId}
-        `;
+        if (input.provider === "livepeer") {
+          await transaction`
+            update provider_events
+            set processed_at = coalesce(processed_at, now())
+            where provider = 'livepeer' and provider_event_id = ${input.providerEventId}
+          `;
+        }
         return true;
       });
     },

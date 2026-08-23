@@ -128,10 +128,11 @@ export interface RecordLiveProviderWebhookInput {
 }
 
 export interface RecordLiveSafetyEventInput {
+  provider: "livepeer" | "moderation_provider";
   providerEventId: string;
   providerStreamId: string;
-  eventKind: "target_connected" | "heartbeat" | "target_disconnected" | "provider_inconsistent";
-  normalizedSignal: "healthy" | "disconnected" | "inconsistent";
+  eventKind: "target_connected" | "heartbeat" | "target_disconnected" | "adverse_signal" | "provider_inconsistent";
+  normalizedSignal: "healthy" | "known_illegal_hash" | "apparent_minor_sexual_context" | "severe_sexual_violence" | "severe_graphic_violence" | "disconnected" | "inconsistent";
   payloadHash: string;
   signatureHash: string | null;
   observedAt: Date;

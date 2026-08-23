@@ -8,7 +8,6 @@ import type { SessionRepository, ApplicationSessionVerifier } from "../session/t
 import type { WalletRepository } from "../wallet/types.js";
 import type {
   CreateMessageRequest,
-  CreatePaidMessageIntentRequest,
   MessageRepository
 } from "./types.js";
 
@@ -84,7 +83,7 @@ export function requiredIdempotencyKey(request: FastifyRequest): string | null {
 }
 
 export function validateMessageBody(
-  body: Partial<CreateMessageRequest | CreatePaidMessageIntentRequest> | undefined
+  body: Partial<CreateMessageRequest> | undefined
 ): string | null {
   if (!body || typeof body !== "object") {
     return "Request body is required";
