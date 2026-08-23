@@ -4,7 +4,7 @@
   "latestMergedSlice": "Convergence 05 — Realtime, messaging, and live safety",
   "latestMergedMigration": "packages/database/migrations/0112_realtime_messaging_live_safety.sql",
   "nextPlannedSlice": "Convergence 06 — Consumer social experience",
-  "nextPlannedBranch": "codex/converge-06-consumer-social-experience",
+  "nextPlannedBranch": "codex/converge-05-review-repairs",
   "latestMergedEvidenceStates": [
     "DESIGNED",
     "CODE_COMPLETE",
