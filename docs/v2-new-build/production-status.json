@@ -4,7 +4,7 @@
   "latestMergedSlice": "Convergence 04 — Lifecycle correctness and analytics surfaces",
   "latestMergedMigration": "packages/database/migrations/0111_auth_lifecycle_purpose.sql",
   "nextPlannedSlice": "Convergence 05 — Realtime, messaging, and live safety",
-  "nextPlannedBranch": "codex/converge-05-scalable-realtime",
+  "nextPlannedBranch": "codex/converge-05-realtime-messaging-live-safety",
   "latestMergedEvidenceStates": [
     "DESIGNED",
     "CODE_COMPLETE",
