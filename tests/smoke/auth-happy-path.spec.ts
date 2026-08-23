@@ -17,15 +17,6 @@ const pollOptionIds = [
 ] as const;
 const paymentIntentId = "00000000-0000-4000-8000-000000000050";
 
-function tusCorsHeaders() {
-  return {
-    "Access-Control-Allow-Headers": "AuthorizationExpire,AuthorizationSignature,Content-Type,Tus-Resumable,Upload-Length,Upload-Metadata,Upload-Offset",
-    "Access-Control-Allow-Methods": "HEAD,OPTIONS,PATCH,POST",
-    "Access-Control-Allow-Origin": e2eOrigin,
-    "Access-Control-Expose-Headers": "Location,Upload-Offset,Tus-Resumable"
-  };
-}
-
 let apiServer: Server;
 const requests: Array<{ method: string; path: string; authorization: string | undefined; idempotencyKey: string | undefined }> = [];
 
@@ -118,42 +109,6 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   await page.getByRole("button", { name: /Photos or video/ }).click();
   await expect(page.getByRole("heading", { name: "Add photos or videos" })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.cookie.includes("veel_e2e_access_token="))).toBe(true);
-
-  await page.route("https://bunny.example.test/**", async (route) => {
-    const method = route.request().method();
-    if (method === "OPTIONS") {
-      await route.fulfill({ status: 204, headers: tusCorsHeaders() });
-      return;
-    }
-    if (method === "POST") {
-      await route.fulfill({
-        status: 201,
-        headers: {
-          "Access-Control-Allow-Origin": e2eOrigin,
-          "Access-Control-Expose-Headers": "Location,Upload-Offset,Tus-Resumable",
-          Location: "https://bunny.example.test/tus/studio-session/upload-1",
-          "Tus-Resumable": "1.0.0"
-        }
-      });
-      return;
-    }
-    if (method === "PATCH") {
-      await route.fulfill({
-        status: 204,
-        headers: {
-          "Access-Control-Allow-Origin": e2eOrigin,
-          "Access-Control-Expose-Headers": "Upload-Offset,Tus-Resumable",
-          "Upload-Offset": "10",
-          "Tus-Resumable": "1.0.0"
-        }
-      });
-      return;
-    }
-    await route.fulfill({
-      status: 200,
-      headers: { ...tusCorsHeaders(), "Upload-Offset": "0", "Tus-Resumable": "1.0.0" }
-    });
-  });
 
   const fileInput = page.locator('input[type="file"]');
   await fileInput.setInputFiles({
@@ -326,42 +281,6 @@ test("creates one ordered mixed-media carousel without a second format chooser",
   await expect(page.getByRole("button", { name: /^Photos One image/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Video Resumable/ })).toHaveCount(0);
 
-  await page.route("https://bunny.example.test/**", async (route) => {
-    const method = route.request().method();
-    if (method === "OPTIONS") {
-      await route.fulfill({ status: 204, headers: tusCorsHeaders() });
-      return;
-    }
-    if (method === "POST") {
-      await route.fulfill({
-        status: 201,
-        headers: {
-          "Access-Control-Allow-Origin": e2eOrigin,
-          "Access-Control-Expose-Headers": "Location,Upload-Offset,Tus-Resumable",
-          Location: "https://bunny.example.test/tus/mixed-carousel/upload-1",
-          "Tus-Resumable": "1.0.0"
-        }
-      });
-      return;
-    }
-    if (method === "PATCH") {
-      await route.fulfill({
-        status: 204,
-        headers: {
-          "Access-Control-Allow-Origin": e2eOrigin,
-          "Access-Control-Expose-Headers": "Upload-Offset,Tus-Resumable",
-          "Upload-Offset": "10",
-          "Tus-Resumable": "1.0.0"
-        }
-      });
-      return;
-    }
-    await route.fulfill({
-      status: 200,
-      headers: { ...tusCorsHeaders(), "Upload-Offset": "0", "Tus-Resumable": "1.0.0" }
-    });
-  });
-
   await page.locator('input[type="file"]').setInputFiles([
     {
       name: "mixed-photo.png",
@@ -468,6 +387,12 @@ async function gotoUntilVisible(page: Page, path: string, readyLocator: () => Lo
 async function handleApiRequest(request: IncomingMessage, response: ServerResponse) {
   const method = request.method ?? "GET";
   const url = new URL(request.url ?? "/", "http://127.0.0.1:4000");
+
+  if (url.pathname.startsWith("/tus/")) {
+    await handleTusRequest(request, response, method, url);
+    return;
+  }
+
   setCorsHeaders(response);
 
   if (method === "OPTIONS") {
@@ -735,7 +660,7 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
 
   if (method === "POST" && url.pathname === "/v1/media/uploads") {
     sendJson(response, 201, {
-      uploadUrl: "https://bunny.example.test/tus/studio-session",
+      uploadUrl: "http://127.0.0.1:4000/tus/studio-session",
       provider: "bunny",
       mediaAssetId,
       headers: {
@@ -807,11 +732,61 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
   sendJson(response, 404, { message: `Unhandled test route: ${method} ${url.pathname}` });
 }
 
+async function handleTusRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+  method: string,
+  url: URL
+) {
+  setTusCorsHeaders(response);
+  if (method === "OPTIONS") {
+    response.writeHead(204);
+    response.end();
+    return;
+  }
+  if (method === "POST" && url.pathname === "/tus/studio-session") {
+    await readRawBody(request);
+    response.writeHead(201, {
+      Location: "http://127.0.0.1:4000/tus/studio-session/upload-1",
+      "Tus-Resumable": "1.0.0"
+    });
+    response.end();
+    return;
+  }
+  if (method === "PATCH" && url.pathname === "/tus/studio-session/upload-1") {
+    const body = await readRawBody(request);
+    const offset = Number(request.headers["upload-offset"] ?? 0) + body.length;
+    response.writeHead(204, { "Tus-Resumable": "1.0.0", "Upload-Offset": String(offset) });
+    response.end();
+    return;
+  }
+  if (method === "HEAD" && url.pathname === "/tus/studio-session/upload-1") {
+    response.writeHead(200, {
+      "Tus-Resumable": "1.0.0",
+      "Upload-Length": "10",
+      "Upload-Offset": "0"
+    });
+    response.end();
+    return;
+  }
+  sendJson(response, 404, { message: `Unhandled TUS test route: ${method} ${url.pathname}` });
+}
+
 function setCorsHeaders(response: ServerResponse) {
   response.setHeader("Access-Control-Allow-Origin", e2eOrigin);
   response.setHeader("Access-Control-Allow-Credentials", "true");
   response.setHeader("Access-Control-Allow-Headers", "authorization,content-type,idempotency-key,accept");
   response.setHeader("Access-Control-Allow-Methods", "DELETE,GET,POST,PATCH,OPTIONS");
+}
+
+function setTusCorsHeaders(response: ServerResponse) {
+  response.setHeader("Access-Control-Allow-Origin", e2eOrigin);
+  response.setHeader(
+    "Access-Control-Allow-Headers",
+    "authorizationexpire,authorizationsignature,content-type,tus-resumable,upload-length,upload-metadata,upload-offset"
+  );
+  response.setHeader("Access-Control-Allow-Methods", "HEAD,OPTIONS,PATCH,POST");
+  response.setHeader("Access-Control-Expose-Headers", "Location,Upload-Length,Upload-Offset,Tus-Resumable");
 }
 
 function sendJson(response: ServerResponse, status: number, body: unknown) {
