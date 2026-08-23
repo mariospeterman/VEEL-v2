@@ -74,7 +74,8 @@ describe("live safety watchdog", () => {
     expect(queries[0]).toContain("then 'monitoring' else 'ended'");
     expect(queries[0]).toContain("last_heartbeat_at = case");
     expect(queries[0]).toContain("lease_token = null");
-    expect(queries[0]).toContain("for update of session, room");
+    expect(queries[0]).toContain("from live_rooms room");
+    expect(queries[0]).toContain("for update of room, session");
   });
 
   it("atomically revokes access and queues suspension for an unhealthy leased session", async () => {
@@ -101,9 +102,9 @@ describe("live safety watchdog", () => {
 
     expect(queries).toHaveLength(4);
     expect(queries[0]).toContain("else 'held'");
-    expect(queries[0]).toContain("join live_rooms room");
     expect(queries[0]).toContain("room.state in ('live', 'ended', 'replay_ready')");
-    expect(queries[0]).toContain("for update of session, room");
+    expect(queries[0]).toContain("from live_rooms room");
+    expect(queries[0]).toContain("for update of room, session");
     expect(queries[1]).toContain("state = 'suspended'");
     expect(queries[1]).toContain("state = 'live'");
     expect(queries[2]).toContain("provider_release_allowed = false");

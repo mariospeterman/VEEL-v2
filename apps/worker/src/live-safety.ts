@@ -251,8 +251,8 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
               when session.state = 'monitoring' then 'live_monitoring_heartbeat_expired'
               else 'live_monitoring_not_connected'
             end as reason_code
-          from live_safety_sessions session
-          join live_rooms room on room.id = session.room_id
+          from live_rooms room
+          join live_safety_sessions session on session.room_id = room.id
           where session.state in ${transaction([...liveSafetyHoldEligibleStates])}
             and session.next_check_at <= ${input.now}
             and not (session.id = any(${input.excludeSessionIds ?? []}::uuid[]))
@@ -265,7 +265,7 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
             )
           order by session.next_check_at, session.created_at
           limit ${input.limit}
-          for update of session, room skip locked
+          for update of room, session skip locked
         `;
 
         for (const target of due) {
@@ -351,13 +351,13 @@ export async function completeHealthyLiveSafetySession(
   const updated = await transaction<{ room_id: string; room_state: string }[]>`
     with target as (
       select session.room_id, room.state as room_state
-      from live_safety_sessions session
-      join live_rooms room on room.id = session.room_id
+      from live_rooms room
+      join live_safety_sessions session on session.room_id = room.id
       where session.id = ${input.id}
         and session.lease_token = ${input.leaseToken}
         and session.state in ('target_connected', 'monitoring')
         and room.state in ('live', 'ended', 'replay_ready')
-      for update of session, room
+      for update of room, session
     )
     update live_safety_sessions session
     set state = case when target.room_state = 'live' then 'monitoring' else 'ended' end,
@@ -399,13 +399,13 @@ export async function holdUnhealthyLiveSafetySession(
           when session.state = 'monitoring' then 'live_monitoring_heartbeat_expired'
           else 'live_monitoring_not_connected'
         end as reason_code
-      from live_safety_sessions session
-      join live_rooms room on room.id = session.room_id
+      from live_rooms room
+      join live_safety_sessions session on session.room_id = room.id
       where session.id = ${input.id}
         and session.lease_token = ${input.leaseToken}
         and session.state in ('target_connected', 'monitoring')
         and room.state in ('live', 'ended', 'replay_ready')
-      for update of session, room
+      for update of room, session
     )
     update live_safety_sessions session
     set state = case
