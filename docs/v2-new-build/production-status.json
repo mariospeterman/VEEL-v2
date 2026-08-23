@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "latestMergedBaseline": "96f334cb999203cadae41a6c31dd99ea000e0c50",
-  "latestMergedSlice": "Convergence 03 — Analytics Core",
-  "latestMergedMigration": "packages/database/migrations/0110_analytics_core.sql",
-  "nextPlannedSlice": "Convergence 04 — Lifecycle correctness, login/onboarding separation, and analytics surfaces",
-  "nextPlannedBranch": "codex/converge-04-lifecycle-analytics-surfaces",
+  "latestMergedBaseline": "c517c3e401fdf3d2a14b000fdb1b87602645a7f5",
+  "latestMergedSlice": "Convergence 04 — Lifecycle correctness and analytics surfaces",
+  "latestMergedMigration": "packages/database/migrations/0111_auth_lifecycle_purpose.sql",
+  "nextPlannedSlice": "Convergence 05 — Realtime, messaging, and live safety",
+  "nextPlannedBranch": "codex/converge-05-scalable-realtime",
   "latestMergedEvidenceStates": [
     "DESIGNED",
     "CODE_COMPLETE",
