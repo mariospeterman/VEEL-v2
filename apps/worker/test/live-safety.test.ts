@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type postgres from "postgres";
 import {
+  holdUnhealthyLiveSafetySession,
   liveSafetyHoldEligibleStates,
   liveSafetyProviderConcurrency,
   processLiveSafety,
@@ -54,6 +55,33 @@ function repositoryWith(
 }
 
 describe("live safety watchdog", () => {
+  it("atomically revokes access and queues suspension for an unhealthy leased session", async () => {
+    const queries: string[] = [];
+    const transaction = (async (strings: TemplateStringsArray) => {
+      const query = strings.join("?");
+      queries.push(query);
+      if (query.includes("update live_safety_sessions session")) {
+        return [{
+          room_id: "room-1",
+          reason_code: "live_monitoring_heartbeat_expired"
+        }];
+      }
+      return [];
+    }) as unknown as postgres.TransactionSql;
+
+    await holdUnhealthyLiveSafetySession(transaction, {
+      id: "session-1",
+      leaseToken: "lease-1",
+      completedAt: new Date("2026-08-23T12:00:00.000Z")
+    });
+
+    expect(queries).toHaveLength(4);
+    expect(queries[0]).toContain("state = 'held'");
+    expect(queries[1]).toContain("provider_release_allowed = false");
+    expect(queries[2]).toContain("state = 'suspended'");
+    expect(queries[3]).toContain("insert into live_safety_provider_actions");
+  });
+
   it("releases the canonical safety case only through the backend predicate", async () => {
     const queries: string[] = [];
     const transaction = (async (strings: TemplateStringsArray) => {

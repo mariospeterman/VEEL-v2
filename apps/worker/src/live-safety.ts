@@ -258,19 +258,7 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
         });
         return;
       }
-      await sql`
-        update live_safety_sessions
-        set state = 'monitoring',
-            heartbeat_expires_at = case
-              when last_heartbeat_at is null then null
-              else ${input.completedAt}
-            end,
-            next_check_at = ${input.completedAt}, lease_token = null,
-            lease_expires_at = null, updated_at = ${input.completedAt}
-        where id = ${input.id}
-          and lease_token = ${input.leaseToken}
-          and state in ('target_connected', 'monitoring')
-      `;
+      await sql.begin((transaction) => holdUnhealthyLiveSafetySession(transaction, input));
     },
     async holdDueSessions(input) {
       return sql.begin(async (transaction) => {
@@ -306,25 +294,11 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
                 last_heartbeat_at = null, heartbeat_expires_at = null, updated_at = ${input.now}
             where id = ${target.session_id}
           `;
-          await transaction`
-            update media_safety_cases
-            set state = 'review_required', reason_code = ${target.reason_code},
-                provider_release_allowed = false, decided_at = null, updated_at = ${input.now}
-            where live_room_id = ${target.room_id} and state <> 'superseded'
-          `;
-          await transaction`
-            update live_rooms
-            set state_before_suspension = 'live', state = 'suspended',
-                provider_state = 'suspension_pending', playback_url = null,
-                suspended_at = coalesce(suspended_at, ${input.now}),
-                suspension_reason = ${target.reason_code}, updated_at = ${input.now}
-            where id = ${target.room_id}
-          `;
-          await transaction`
-            insert into live_safety_provider_actions (room_id, action, reason_code)
-            values (${target.room_id}, 'suspend', ${target.reason_code})
-            on conflict (room_id, action) where state in ('queued', 'processing', 'retry') do nothing
-          `;
+          await persistLiveSafetyHold(transaction, {
+            roomId: target.room_id,
+            reasonCode: target.reason_code,
+            heldAt: input.now
+          });
         }
         return due.length;
       });
@@ -387,6 +361,65 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
       await sql.end({ timeout: 5 });
     }
   };
+}
+
+export async function holdUnhealthyLiveSafetySession(
+  transaction: postgres.TransactionSql,
+  input: { id: string; leaseToken: string; completedAt: Date }
+): Promise<void> {
+  const held = await transaction<{ room_id: string; reason_code: string }[]>`
+    with target as (
+      select room_id,
+        case
+          when state = 'monitoring' then 'live_monitoring_heartbeat_expired'
+          else 'live_monitoring_not_connected'
+        end as reason_code
+      from live_safety_sessions
+      where id = ${input.id}
+        and lease_token = ${input.leaseToken}
+        and state in ('target_connected', 'monitoring')
+      for update
+    )
+    update live_safety_sessions session
+    set state = 'held', hold_reason_code = target.reason_code, held_at = ${input.completedAt},
+        last_heartbeat_at = null, heartbeat_expires_at = null, next_check_at = ${input.completedAt},
+        lease_token = null, lease_expires_at = null, updated_at = ${input.completedAt}
+    from target
+    where session.id = ${input.id}
+    returning target.room_id, target.reason_code
+  `;
+  const target = held[0];
+  if (!target) return;
+  await persistLiveSafetyHold(transaction, {
+    roomId: target.room_id,
+    reasonCode: target.reason_code,
+    heldAt: input.completedAt
+  });
+}
+
+async function persistLiveSafetyHold(
+  transaction: postgres.TransactionSql,
+  input: { roomId: string; reasonCode: string; heldAt: Date }
+): Promise<void> {
+  await transaction`
+    update media_safety_cases
+    set state = 'review_required', reason_code = ${input.reasonCode},
+        provider_release_allowed = false, decided_at = null, updated_at = ${input.heldAt}
+    where live_room_id = ${input.roomId} and state <> 'superseded'
+  `;
+  await transaction`
+    update live_rooms
+    set state_before_suspension = 'live', state = 'suspended',
+        provider_state = 'suspension_pending', playback_url = null,
+        suspended_at = coalesce(suspended_at, ${input.heldAt}),
+        suspension_reason = ${input.reasonCode}, updated_at = ${input.heldAt}
+    where id = ${input.roomId}
+  `;
+  await transaction`
+    insert into live_safety_provider_actions (room_id, action, reason_code)
+    values (${input.roomId}, 'suspend', ${input.reasonCode})
+    on conflict (room_id, action) where state in ('queued', 'processing', 'retry') do nothing
+  `;
 }
 
 export async function releaseHealthyLiveSafetyCase(
