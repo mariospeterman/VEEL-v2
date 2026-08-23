@@ -19,6 +19,15 @@ export class WalletAuthChallengeInvalidError extends Error {
   }
 }
 
+export class WalletAuthAccountNotFoundError extends Error {
+  constructor() {
+    super("WALLET_AUTH_ACCOUNT_NOT_FOUND");
+    this.name = "WalletAuthAccountNotFoundError";
+  }
+}
+
+export type WalletAuthPurpose = "login" | "onboarding";
+
 export class WalletRecoveryLinkConflictError extends Error {
   constructor() {
     super("WALLET_RECOVERY_LINK_CONFLICT");
@@ -37,6 +46,7 @@ export interface WalletAuthChallenge {
   id: string;
   chain: WalletChain;
   provider: WalletProvider;
+  purpose: WalletAuthPurpose;
   address: string;
   message: string;
   expiresAt: Date;
@@ -75,6 +85,7 @@ export interface WalletAuthRepository {
 export interface CreateWalletAuthChallengeInput {
   chain: WalletChain;
   provider: WalletProvider;
+  purpose: WalletAuthPurpose;
   address: string;
   message: string;
   nonceHash: string;
@@ -87,6 +98,7 @@ export interface FindWalletAuthChallengeInput {
 
 export interface CreateWalletAuthSessionInput {
   challengeId: string;
+  purpose: WalletAuthPurpose;
   expiresAt: Date;
 }
 
@@ -126,6 +138,7 @@ interface WalletAuthChallengeRow {
   id: string;
   chain: WalletChain;
   provider: WalletProvider;
+  purpose: WalletAuthPurpose;
   address: string;
   message: string;
   expires_at: Date;
@@ -155,29 +168,51 @@ export function createPostgresWalletAuthRepository(
 
   return {
     async createChallenge(input) {
-      const rows = await sql<WalletAuthChallengeRow[]>`
-        insert into wallet_auth_challenges (
-          id,
-          chain,
-          provider,
-          address,
-          message,
-          nonce_hash,
-          expires_at
-        )
-        values (
-          ${randomUUID()},
-          ${input.chain},
-          ${input.provider},
-          ${input.address},
-          ${input.message},
-          ${input.nonceHash},
-          ${input.expiresAt}
-        )
-        returning id, chain, provider, address, message, expires_at, consumed_at
-      `;
+      const row = await sql.begin(async (tx): Promise<WalletAuthChallengeRow | null> => {
+        const challengeRows = await tx<WalletAuthChallengeRow[]>`
+          insert into wallet_auth_challenges (
+            id,
+            chain,
+            provider,
+            purpose,
+            address,
+            message,
+            nonce_hash,
+            expires_at
+          )
+          values (
+            ${randomUUID()},
+            ${input.chain},
+            ${input.provider},
+            ${input.purpose},
+            ${input.address},
+            ${input.message},
+            ${input.nonceHash},
+            ${input.expiresAt}
+          )
+          returning id, chain, provider, purpose, address, message, expires_at, consumed_at
+        `;
+        const challenge = challengeRows[0];
+        if (!challenge) return null;
 
-      const row = rows[0];
+        await tx`
+          insert into audit_events (
+            id, actor_user_id, subject_type, subject_id, action, metadata
+          )
+          values (
+            ${randomUUID()}, null, 'wallet_auth_challenge', ${challenge.id},
+            'auth.wallet_challenge_created',
+            ${tx.json({
+              addressHash: hashWalletAddress(challenge.chain, challenge.address),
+              chain: challenge.chain,
+              provider: challenge.provider,
+              purpose: challenge.purpose
+            })}
+          )
+        `;
+
+        return challenge;
+      });
 
       if (!row) {
         throw new WalletAuthRepositoryConfigurationError();
@@ -187,7 +222,7 @@ export function createPostgresWalletAuthRepository(
     },
     async findChallenge(input) {
       const rows = await sql<WalletAuthChallengeRow[]>`
-        select id, chain, provider, address, message, expires_at, consumed_at
+        select id, chain, provider, purpose, address, message, expires_at, consumed_at
         from wallet_auth_challenges
         where id = ${input.challengeId}
         limit 1
@@ -198,18 +233,19 @@ export function createPostgresWalletAuthRepository(
     async createSessionFromChallenge(input) {
       const token = newSessionToken();
 
-      const rows = await sql.begin(async (tx) => {
+      const result = await sql.begin(async (tx) => {
         const challengeRows = await tx<WalletAuthChallengeRow[]>`
           update wallet_auth_challenges
           set consumed_at = now()
           where id = ${input.challengeId}
             and consumed_at is null
-          returning id, chain, provider, address, message, expires_at, consumed_at
+            and purpose = ${input.purpose}
+          returning id, chain, provider, purpose, address, message, expires_at, consumed_at
         `;
         const challenge = challengeRows[0];
 
         if (!challenge || challenge.expires_at <= new Date()) {
-          return [];
+          return { kind: "invalid" as const };
         }
 
         await tx`select pg_advisory_xact_lock(hashtextextended(${`${challenge.chain}:${challenge.address}`}, 0))`;
@@ -230,6 +266,26 @@ export function createPostgresWalletAuthRepository(
           limit 1
         `;
         const existingWallet = existingWalletRows[0];
+
+        if (!existingWallet && challenge.purpose === "login") {
+          await tx`
+            insert into audit_events (
+              id, actor_user_id, subject_type, subject_id, action, metadata
+            )
+            values (
+              ${randomUUID()}, null, 'wallet_auth_challenge', ${challenge.id},
+              'auth.wallet_account_not_found',
+              ${tx.json({
+                addressHash: hashWalletAddress(challenge.chain, challenge.address),
+                chain: challenge.chain,
+                provider: challenge.provider,
+                purpose: challenge.purpose
+              })}
+            )
+          `;
+
+          return { kind: "account_not_found" as const };
+        }
 
         const wallet: WalletAuthWalletRow = existingWallet ?? (await createWalletUser(tx, challenge));
 
@@ -258,27 +314,30 @@ export function createPostgresWalletAuthRepository(
             ${wallet.user_id},
             'wallet',
             ${wallet.id},
-            'wallet.session_created',
+            ${challenge.purpose === "login" ? "auth.wallet_login_completed" : "auth.wallet_onboarding_completed"},
             ${tx.json({
               chain: wallet.chain,
-              provider: wallet.provider
+              provider: wallet.provider,
+              purpose: challenge.purpose
             })}
           )
         `;
 
-        return [wallet];
+        return { kind: "session" as const, wallet };
       });
 
-      const wallet = rows[0];
-
-      if (!wallet) {
+      if (result.kind === "invalid") {
         throw new WalletAuthChallengeInvalidError();
+      }
+
+      if (result.kind === "account_not_found") {
+        throw new WalletAuthAccountNotFoundError();
       }
 
       return {
         accessToken: token,
         expiresAt: input.expiresAt,
-        wallet: toWalletResource(wallet)
+        wallet: toWalletResource(result.wallet)
       };
     },
     async verifySessionToken(token) {
@@ -593,11 +652,16 @@ function toChallenge(row: WalletAuthChallengeRow): WalletAuthChallenge {
     id: row.id,
     chain: row.chain,
     provider: row.provider,
+    purpose: row.purpose,
     address: row.address,
     message: row.message,
     expiresAt: row.expires_at,
     consumedAt: row.consumed_at
   };
+}
+
+function hashWalletAddress(chain: WalletChain, address: string): string {
+  return createHash("sha256").update(`${chain}:${address}`).digest("hex");
 }
 
 export function hashToken(token: string): string {

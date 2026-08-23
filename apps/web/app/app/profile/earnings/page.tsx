@@ -1,19 +1,50 @@
-import { getMyCreatorDashboard, getMyCreatorMembershipOffer, getMyCreatorOnboarding, getWallets } from "@/api-client";
+import { getMyCreatorDashboard, getMyCreatorMembershipOffer, getMyCreatorOnboarding, getWallets, queryAnalytics, type AnalyticsQueryRequest } from "@/api-client";
 import { requireAppAccess } from "@/supabase/route-guard";
 import { AppShell } from "../../../app-shell";
 import { Card, ErrorState, Fact, PageHeader, StatusPill } from "../../../ui";
 import { EarningsSetupForm } from "./earnings-setup-form";
 import { MembershipOfferForm } from "./membership-offer-form";
+import { AnalyticsSummary, analyticsWindow } from "../../analytics-summary";
 
 export const dynamic = "force-dynamic";
 
 export default async function EarningsSetupPage() {
   await requireAppAccess("/app/profile/earnings");
-  const [dashboard, onboarding, wallets, membershipOffer] = await Promise.all([
+  const window = analyticsWindow(30);
+  const comparisonWindow = analyticsWindow(30, 30);
+  const creatorBaseQuery: AnalyticsQueryRequest = {
+    scope: { type: "creator" },
+    metricKeys: [
+      "creator.content.qualified_views", "creator.content.watch_seconds", "creator.content.completion_rate",
+      "creator.engagement.saves", "creator.engagement.shares", "creator.social.profile_opens",
+      "creator.social.follow_conversion"
+    ],
+    window,
+    comparisonWindow,
+    granularity: "total",
+    timezone: "UTC"
+  };
+  const creatorCommerceQuery = (currency: "SOL" | "USDC"): AnalyticsQueryRequest => ({
+    scope: { type: "creator" },
+    metricKeys: [
+      "creator.commerce.offer_impressions", "creator.commerce.confirmed_purchases",
+      "creator.commerce.unlock_conversion", "creator.commerce.confirmed_gross_minor",
+      "creator.commerce.earnings_minor", "creator.membership.starts", "creator.membership.cancellations"
+    ],
+    window,
+    comparisonWindow,
+    granularity: "total",
+    timezone: "UTC",
+    dimensions: { currency }
+  });
+  const [dashboard, onboarding, wallets, membershipOffer, creatorAnalytics, solAnalytics, usdcAnalytics] = await Promise.all([
     getMyCreatorDashboard(),
     getMyCreatorOnboarding(),
     getWallets(),
-    getMyCreatorMembershipOffer()
+    getMyCreatorMembershipOffer(),
+    queryAnalytics(creatorBaseQuery),
+    queryAnalytics(creatorCommerceQuery("SOL")),
+    queryAnalytics(creatorCommerceQuery("USDC"))
   ]);
 
   return (
@@ -23,6 +54,12 @@ export default async function EarningsSetupPage() {
           Set one noncustodial recipient wallet and complete only the checks currently required
           for creator-paid products.
         </PageHeader>
+
+        <AnalyticsSummary
+          description="Privacy-safe performance and confirmed commerce for the last 30 days, compared with the preceding 30 days. No viewer identities or private messages are analyzed."
+          queries={[creatorAnalytics, solAnalytics, usdcAnalytics]}
+          title="Creator analytics"
+        />
 
         {onboarding.ok ? (
           <Card className="p-4">
@@ -61,12 +98,19 @@ export default async function EarningsSetupPage() {
 
         {dashboard.ok ? (
           <Card className="p-4">
-            <h2 className="text-sm font-semibold">Current authority</h2>
+            <h2 className="text-sm font-semibold">Current authority and product mix</h2>
             <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
               <Fact label="Earning state" value={dashboard.data.readiness.earningState} />
               <Fact label="Identity check" value={dashboard.data.readiness.kycState} />
               <Fact label="Tax profile" value={dashboard.data.readiness.taxProfileState} />
               <Fact label="Recipient wallet" value={dashboard.data.readiness.recipientWalletState} />
+              {dashboard.data.products.map((product) => (
+                <Fact
+                  key={`${product.productType}-${product.currency}`}
+                  label={`${product.productType} · ${product.currency}`}
+                  value={`${product.confirmedPaymentCount} confirmed · ${product.enabled ? "enabled" : "disabled"}`}
+                />
+              ))}
             </div>
           </Card>
         ) : null}

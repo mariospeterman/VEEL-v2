@@ -85,7 +85,7 @@ WeVid Core owns deterministic analytics and the scoped data/action bridge, but h
 gateway. The optional WeVid Agency remains a separate, user-owned add-on and publication stays human-controlled.
 
 Next planned production slice: **Convergence 04 — Lifecycle correctness, login/onboarding separation, and analytics surfaces**.
-Its branch contract is `codex/converge-03-analytics-core`; GitHub, not this document, owns
+Its branch contract is `codex/converge-04-lifecycle-analytics-surfaces`; GitHub, not this document, owns
 whether that branch currently has the one active pull request.
 
 Each completed slice requires the actual UI-to-database/provider path, authorization and runtime validation, focused unit and real-Postgres integration proof, browser proof, operational recovery, canonical docs updates, and redacted provider staging evidence when a provider is involved. Mocks prove application logic only.

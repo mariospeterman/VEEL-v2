@@ -23,6 +23,38 @@ describe("Analytics Core", () => {
     }
   });
 
+  it("records only typed, bounded onboarding events and safely deduplicates retries", async () => {
+    const recorded: Array<{ journeyId: string; eventKey: string; idempotencyKey: string }> = [];
+    const app = await analyticsApp(repositoryFixture({
+      async recordOnboardingEvent(input) { recorded.push(input); }
+    }));
+    const journeyId = "00000000-0000-4000-8000-000000000010";
+    const payload = {
+      journeyId,
+      eventKey: "login_opened",
+      idempotencyKey: "login-opened",
+      occurredAt: new Date().toISOString()
+    };
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/analytics/onboarding-events",
+      headers: { "idempotency-key": payload.idempotencyKey },
+      payload
+    });
+    expect(response.statusCode).toBe(202);
+    expect(recorded).toMatchObject([{ journeyId, eventKey: "login_opened", idempotencyKey: "login-opened" }]);
+
+    const unknown = await app.inject({
+      method: "POST",
+      url: "/v1/analytics/onboarding-events",
+      headers: { "idempotency-key": payload.idempotencyKey },
+      payload: { ...payload, eventKey: "email_captured" }
+    });
+    expect(unknown.statusCode).toBe(400);
+    expect(recorded).toHaveLength(1);
+    await app.close();
+  });
+
   it("suppresses a small audience without leaking numerator or denominator", async () => {
     const suppressions: string[] = [];
     const app = await analyticsApp(repositoryFixture({
@@ -368,6 +400,7 @@ async function analyticsApp(repository: AnalyticsRepository, admin = false) {
 
 function repositoryFixture(overrides: Partial<AnalyticsRepository> = {}): AnalyticsRepository {
   return {
+    async recordOnboardingEvent() {},
     async authorizeScope(_actorUserId, scope): Promise<AnalyticsScope> {
       return scope.type === "creator"
         ? { type: "creator", creatorUserId: scope.creatorUserId ?? actorUserId }

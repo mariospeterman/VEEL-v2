@@ -95,6 +95,25 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/analytics/onboarding-events:
+    post:
+      operationId: recordOnboardingAnalyticsEvent
+      tags: [Analytics]
+      security: []
+      summary: Record one privacy-minimized event from the closed onboarding journey vocabulary
+      x-idempotency-policy: journey-and-event-key-deduplication
+      parameters:
+        - { $ref: "#/components/parameters/RequiredIdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OnboardingAnalyticsEventRequest" }
+      responses:
+        "202": { description: Event accepted or already recorded }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/admin/analytics/health:
     get:
       operationId: getAdminAnalyticsHealth
@@ -147,7 +166,7 @@ paths:
       operationId: createWalletAuthChallenge
       tags: [Auth]
       security: []
-      summary: Create a wallet-first login challenge
+      summary: Create a purpose-bound wallet authentication challenge
       x-idempotency-policy: single-use-auth-proof
       requestBody:
         $ref: "#/components/requestBodies/CreateWalletAuthChallenge"
@@ -161,13 +180,14 @@ paths:
       operationId: createWalletAuthSession
       tags: [Auth]
       security: []
-      summary: Verify a wallet challenge and create a WeVid session
+      summary: Verify a purpose-bound wallet challenge and create a WeVid session
       x-idempotency-policy: single-use-auth-proof
       requestBody:
         $ref: "#/components/requestBodies/CreateWalletAuthSession"
       responses:
         "201": { $ref: "#/components/responses/WalletAuthSession" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
+        "404": { $ref: "#/components/responses/AccountNotFound" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/auth/wallet/logout:
@@ -3218,6 +3238,7 @@ components:
     HealthStatus: { description: Sanitized service health status, content: { application/json: { schema: { $ref: "#/components/schemas/HealthStatus" } } } }
     WebhookReceipt: { description: Webhook accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookReceipt" } } } }
     Unauthorized: { description: Unauthorized, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+    AccountNotFound: { description: No WeVid account is linked to the authenticated method, content: { application/json: { schema: { $ref: "#/components/schemas/AccountNotFoundError" } } } }
     Forbidden: { description: Forbidden, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     NotFound: { description: Not found, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     ValidationFailed: { description: Validation failed, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
@@ -3421,6 +3442,18 @@ components:
         - platform.onboarding.completed
         - platform.onboarding.step_events
         - platform.onboarding.completion_rate
+    OnboardingAnalyticsEventKey:
+      type: string
+      enum: [landing_viewed, login_opened, onboarding_opened, auth_method_selected, wallet_runtime_ready, wallet_authentication_completed, wallet_ownership_verified, profile_step_viewed, profile_step_completed, age_step_started, age_step_completed, age_step_failed, protected_app_entered, onboarding_abandoned, returning_login_completed, account_not_found]
+    OnboardingAnalyticsEventRequest:
+      type: object
+      additionalProperties: false
+      required: [journeyId, eventKey, idempotencyKey, occurredAt]
+      properties:
+        journeyId: { type: string, format: uuid }
+        eventKey: { $ref: "#/components/schemas/OnboardingAnalyticsEventKey" }
+        idempotencyKey: { type: string, pattern: "^[A-Za-z0-9_.:-]{1,80}$" }
+        occurredAt: { type: string, format: date-time }
     AnalyticsWindow:
       type: object
       additionalProperties: false
@@ -3758,25 +3791,30 @@ components:
     WalletProvider:
       type: string
       enum: [embedded_privy, phantom, solflare, wallet_adapter]
+    WalletAuthPurpose:
+      type: string
+      enum: [login, onboarding]
     ExternalWalletProvider:
       type: string
       enum: [phantom, solflare, wallet_adapter]
     CreateWalletAuthChallengeRequest:
       type: object
       additionalProperties: false
-      required: [chain, address, provider]
+      required: [chain, address, provider, purpose]
       properties:
         chain: { type: string, enum: [solana_devnet, solana_mainnet] }
         address: { type: string, minLength: 32, maxLength: 64 }
         provider: { $ref: "#/components/schemas/WalletProvider" }
+        purpose: { $ref: "#/components/schemas/WalletAuthPurpose" }
     WalletAuthChallenge:
       type: object
-      required: [id, chain, address, provider, message, expiresAt]
+      required: [id, chain, address, provider, purpose, message, expiresAt]
       properties:
         id: { type: string, format: uuid }
         chain: { type: string, enum: [solana_devnet, solana_mainnet] }
         address: { type: string }
         provider: { $ref: "#/components/schemas/WalletProvider" }
+        purpose: { $ref: "#/components/schemas/WalletAuthPurpose" }
         message: { type: string }
         expiresAt: { type: string, format: date-time }
     WalletAuthProof:
@@ -3791,12 +3829,20 @@ components:
     CreateWalletAuthSessionRequest:
       type: object
       additionalProperties: false
-      required: [provider, address, chain, proof]
+      required: [provider, address, chain, purpose, proof]
       properties:
         provider: { $ref: "#/components/schemas/WalletProvider" }
         address: { type: string }
         chain: { type: string, enum: [solana_devnet, solana_mainnet] }
+        purpose: { $ref: "#/components/schemas/WalletAuthPurpose" }
         proof: { $ref: "#/components/schemas/WalletAuthProof" }
+    AccountNotFoundError:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code: { type: string, enum: [account_not_found] }
+        message: { type: string }
     WalletAuthSession:
       type: object
       required: [expiresAt, wallet]

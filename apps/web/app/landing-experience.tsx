@@ -1,8 +1,9 @@
 "use client";
 
-import { Expand, ExternalLink, KeyRound, LogIn, MoreVertical, X } from "lucide-react";
+import { Expand, ExternalLink, LogIn, MoreVertical, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { WebAuthState } from "@/supabase/auth-state";
+import { recordOnboardingEvent } from "@/analytics/onboarding-analytics";
 import { LandingAuthSurface } from "./landing-auth-surface";
 import { landingFrames, storyNavFrames } from "./landing-content";
 import type { LandingEntryState } from "./landing-entry";
@@ -47,6 +48,7 @@ export function LandingExperience({
 
   useEffect(() => {
     document.documentElement.dataset.theme = "dark";
+    recordOnboardingEvent("landing_viewed");
 
     const targetIndex = initialAuthIndex;
 
@@ -68,6 +70,11 @@ export function LandingExperience({
       shellRef.current?.scrollTo({ top: 0 });
     });
   }, [initialAuthIndex]);
+
+  useEffect(() => {
+    if (activeAuth === "login") recordOnboardingEvent("login_opened");
+    if (activeAuth === "onboard") recordOnboardingEvent("onboarding_opened");
+  }, [activeAuth]);
 
   useEffect(() => {
     const shell = shellRef.current;
@@ -221,22 +228,11 @@ export function LandingExperience({
 
             <div className="landing-header-actions">
               <button
-                aria-label="Log in"
+                aria-label="Continue to WeVid"
                 className="landing-icon-button"
                 onClick={(event) => {
                   event.preventDefault();
                   scrollToFrame(landingFrames.findIndex((frame) => frame.id === "login"), "auto");
-                }}
-                type="button"
-              >
-                <KeyRound aria-hidden="true" size={18} />
-              </button>
-              <button
-                aria-label="Start onboarding"
-                className="landing-icon-button"
-                onClick={(event) => {
-                  event.preventDefault();
-                  scrollToFrame(landingFrames.findIndex((frame) => frame.id === "onboarding"), "auto");
                 }}
                 type="button"
               >
@@ -257,20 +253,10 @@ export function LandingExperience({
           <div className="landing-mobile-menu" data-open={mobileMenuOpen ? "true" : undefined}>
             <div className="landing-mobile-action-row" aria-label="Quick actions">
               <button
-                aria-label="Log in"
+                aria-label="Continue to WeVid"
                 onClick={() => {
                   setMobileMenuOpen(false);
                   scrollToFrame(landingFrames.findIndex((frame) => frame.id === "login"), "auto");
-                }}
-                type="button"
-              >
-                <KeyRound aria-hidden="true" size={15} />
-              </button>
-              <button
-                aria-label="Start onboarding"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  scrollToFrame(landingFrames.findIndex((frame) => frame.id === "onboarding"), "auto");
                 }}
                 type="button"
               >
@@ -329,18 +315,10 @@ export function LandingExperience({
                 <button
                   className="landing-button"
                   data-tone="primary"
-                  onClick={() => scrollToFrame(landingFrames.findIndex((frame) => frame.id === "onboarding"), "auto")}
-                  type="button"
-                >
-                  {activeFrame.primary}
-                </button>
-                <button
-                  className="landing-button"
-                  data-tone="ghost"
                   onClick={() => scrollToFrame(landingFrames.findIndex((frame) => frame.id === "login"), "auto")}
                   type="button"
                 >
-                  {activeFrame.secondary}
+                  {activeFrame.primary}
                 </button>
               </div>
             ) : null}

@@ -1,4 +1,4 @@
-import { getJson } from "./api-client-transport";
+import { getJson, postJson } from "./api-client-transport";
 import type {
   AiCapabilities,
   AdminAgeCheck,
@@ -19,6 +19,8 @@ import type {
   AdminOrganizationMember,
   AdminOpsSummary,
   AnalyticsProjectionHealth,
+  AnalyticsQueryRequest,
+  AnalyticsQueryResponse,
   AdminPage,
   AdminPartnerCampaign,
   AdminPaymentIntent,
@@ -256,6 +258,10 @@ export async function getAdminOpsSummary(): Promise<ApiResult<AdminOpsSummary>> 
 
 export async function getAdminAnalyticsHealth(): Promise<ApiResult<AnalyticsProjectionHealth>> {
   return getJson<AnalyticsProjectionHealth>("/v1/admin/analytics/health");
+}
+
+export async function queryAnalytics(body: AnalyticsQueryRequest): Promise<ApiResult<AnalyticsQueryResponse>> {
+  return postJson<AnalyticsQueryResponse>("/v1/analytics/query", body, `analytics-query-${crypto.randomUUID()}`);
 }
 
 export async function getAdminNotificationHealth(): Promise<ApiResult<AdminNotificationHealth>> {

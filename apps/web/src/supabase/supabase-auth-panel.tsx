@@ -3,14 +3,16 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { safeMutationMessage } from "@/api-errors";
 import { ProviderLogo } from "@/brand/provider-logo";
+import { recoveryIdentityMayBeCreated } from "@/wallet/auth-purpose-policy";
 import { createSupabaseBrowserClient } from "./client";
 import { getSupabaseAuthConfig, type SupabaseAuthProvider } from "./supabase-auth-config";
 
 interface SupabaseAuthPanelProps {
   next?: string;
+  mode?: "link" | "recovery";
 }
 
-export function SupabaseAuthPanel({ next = "/app/home" }: SupabaseAuthPanelProps) {
+export function SupabaseAuthPanel({ mode = "link", next = "/app/home" }: SupabaseAuthPanelProps) {
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState<"email" | SupabaseAuthProvider["provider"] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -65,7 +67,7 @@ export function SupabaseAuthPanel({ next = "/app/home" }: SupabaseAuthPanelProps
       email: normalizedEmail,
       options: {
         emailRedirectTo: supabaseRedirectTo(next),
-        shouldCreateUser: true
+        shouldCreateUser: recoveryIdentityMayBeCreated(mode)
       }
     });
 
@@ -76,7 +78,7 @@ export function SupabaseAuthPanel({ next = "/app/home" }: SupabaseAuthPanelProps
       return;
     }
 
-    setMessage("Check your email to add recovery access.");
+    setMessage(mode === "link" ? "Check your email to add recovery access." : "Check your email to continue account recovery.");
   }
 
   async function startOAuthSignIn(provider: SupabaseAuthProvider["provider"]) {
@@ -124,7 +126,7 @@ export function SupabaseAuthPanel({ next = "/app/home" }: SupabaseAuthPanelProps
           </label>
           <button className="landing-provider-link" disabled={submitting !== null} type="submit">
             <ProviderLogo label="Email" name="email" />
-            <span>{submitting === "email" ? "Sending" : "Send recovery link"}</span>
+            <span>{submitting === "email" ? "Sending" : mode === "link" ? "Add recovery email" : "Send recovery link"}</span>
           </button>
         </form>
       ) : null}
@@ -139,7 +141,7 @@ export function SupabaseAuthPanel({ next = "/app/home" }: SupabaseAuthPanelProps
               type="button"
             >
               <ProviderLogo label={provider.label} name={provider.logo} />
-              <span>{submitting === provider.provider ? "Opening" : `Add ${provider.label} recovery`}</span>
+              <span>{submitting === provider.provider ? "Opening" : mode === "link" ? `Add ${provider.label} recovery` : `Continue with ${provider.label}`}</span>
             </button>
           ))}
         </div>

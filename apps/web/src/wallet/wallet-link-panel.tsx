@@ -14,7 +14,7 @@ import {
 import { ProviderLogo } from "@/brand/provider-logo";
 import { safeMutationMessage } from "@/api-errors";
 import type { WebAuthState } from "@/supabase/auth-state";
-import { bytesToBase64, createBackendWalletSession, walletChain } from "./backend-wallet-auth";
+import { bytesToBase64, createBackendWalletSession, walletChain, type WalletAuthPurpose } from "./backend-wallet-auth";
 
 type ExternalWalletProvider = LinkWalletRequest["provider"];
 
@@ -23,16 +23,18 @@ interface WalletLinkPanelProps {
   autoStart?: boolean;
   compact?: boolean;
   loginSimple?: boolean;
+  authPurpose?: WalletAuthPurpose;
+  onAccountNotFound?: (() => void) | undefined;
   onLinked?: ((address: string) => void) | undefined;
   reloadOnSession?: boolean;
 }
 
-export function WalletLinkPanel({ autoStart = false, authState, compact = false, loginSimple = false, onLinked, reloadOnSession = true }: WalletLinkPanelProps) {
+export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "login", compact = false, loginSimple = false, onAccountNotFound, onLinked, reloadOnSession = true }: WalletLinkPanelProps) {
   const { connect, connected, connecting, disconnect, publicKey, signMessage, wallet, wallets } = useWallet();
   const { setVisible: setWalletModalVisible } = useWalletModal();
   const [mounted, setMounted] = useState(false);
   const [awaitingWallet, setAwaitingWallet] = useState(false);
-  const [state, setState] = useState<"idle" | "linking" | "linked" | "error">("idle");
+  const [state, setState] = useState<"idle" | "linking" | "linked" | "account_not_found" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [linkedAddress, setLinkedAddress] = useState<string | null>(null);
   const primaryButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -146,13 +148,14 @@ export function WalletLinkPanel({ autoStart = false, authState, compact = false,
         await createBackendWalletSession({
           address,
           provider: walletProvider,
+          purpose: authPurpose,
           signMessage: (message) => signMessage(new TextEncoder().encode(message))
         });
 
         setLinkedAddress(address);
         setState("linked");
         setAwaitingWallet(false);
-        setMessage("Wallet session created. Continue with profile and age verification.");
+        setMessage(authPurpose === "login" ? "Welcome back." : "Wallet verified. Continue with your profile.");
         onLinked?.(address);
         if (reloadOnSession) {
           await redirectAfterWalletSession();
@@ -186,6 +189,11 @@ export function WalletLinkPanel({ autoStart = false, authState, compact = false,
       onLinked?.(address);
     } catch (error) {
       setAwaitingWallet(false);
+      if (error instanceof ApiMutationError && error.status === 404 && authPurpose === "login") {
+        setState("account_not_found");
+        setMessage("No WeVid account was found for this wallet. Start onboarding with this wallet to continue.");
+        return;
+      }
       setState("error");
       setMessage(walletMutationMessage(error));
     }
@@ -237,7 +245,7 @@ export function WalletLinkPanel({ autoStart = false, authState, compact = false,
         <>
           <div className="auth-provider-button-grid auth-provider-button-grid-wallets" aria-label="Wallet login providers">
             <button
-              aria-label={connected && publicKey ? "Continue with connected wallet" : "Connect wallet"}
+              aria-label={connected && publicKey ? "Continue with connected wallet" : authPurpose === "login" ? "Use an existing wallet" : "Use an external wallet"}
               className="auth-provider-button"
               disabled={state === "linking" || connecting}
               onClick={startWalletFlow}
@@ -246,7 +254,7 @@ export function WalletLinkPanel({ autoStart = false, authState, compact = false,
             >
               <ProviderLogo label="Connect wallet" name="wallet" />
               <span>
-                <strong>{connected && publicKey ? "Continue" : "Connect wallet"}</strong>
+                <strong>{connected && publicKey ? "Continue" : authPurpose === "login" ? "Use an existing wallet" : "Use an external wallet"}</strong>
                 <small>{state === "linking" || connecting ? "Waiting" : connected && publicKey ? shortWalletAddress(publicKey.toString()) : "Choose wallet"}</small>
               </span>
             </button>
@@ -300,6 +308,11 @@ export function WalletLinkPanel({ autoStart = false, authState, compact = false,
         >
           {message}
         </p>
+      ) : null}
+      {state === "account_not_found" && onAccountNotFound ? (
+        <button className="landing-inline-link" onClick={onAccountNotFound} type="button">
+          Start onboarding
+        </button>
       ) : null}
     </section>
   );

@@ -7,7 +7,7 @@ import { AdminRepositoryConfigurationError } from "../admin/admin-repository.js"
 import { readIdempotentMutationRequest } from "../../shared/idempotency.js";
 import { AnalyticsIdempotencyConflictError, AnalyticsQueryValidationError, AnalyticsRepositoryConfigurationError } from "./analytics-errors.js";
 import { AnalyticsQueryService, validateProjectionWindow } from "./analytics-service.js";
-import type { AnalyticsQueryRequest, AnalyticsRepository, AnalyticsWindow } from "./types.js";
+import type { AnalyticsQueryRequest, AnalyticsRepository, AnalyticsWindow, OnboardingAnalyticsEventInput } from "./types.js";
 
 interface RegisterAnalyticsRoutesOptions {
   authVerifier: ApplicationSessionVerifier;
@@ -17,6 +17,45 @@ interface RegisterAnalyticsRoutesOptions {
 
 export async function registerAnalyticsRoutes(app: FastifyInstance, options: RegisterAnalyticsRoutesOptions): Promise<void> {
   const service = new AnalyticsQueryService(options.analyticsRepository);
+
+  app.post(
+    "/v1/analytics/onboarding-events",
+    {
+      schema: contractRouteSchema("recordOnboardingAnalyticsEvent"),
+      config: { rateLimit: { max: 60, timeWindow: "1 minute" } }
+    },
+    async (request, reply) => {
+      const body = request.body as {
+        journeyId: string;
+        eventKey: OnboardingAnalyticsEventInput["eventKey"];
+        idempotencyKey: string;
+        occurredAt: string;
+      };
+      const occurredAt = new Date(body.occurredAt);
+      const now = Date.now();
+      if (request.headers["idempotency-key"] !== body.idempotencyKey
+        || !Number.isFinite(occurredAt.getTime())
+        || occurredAt.getTime() < now - 7 * 24 * 60 * 60 * 1000
+        || occurredAt.getTime() > now + 5 * 60 * 1000) {
+        return reply.code(400).send({ code: "validation_failed", message: "Event time is outside the accepted window" });
+      }
+      try {
+        await options.analyticsRepository.recordOnboardingEvent({
+          journeyId: body.journeyId,
+          eventKey: body.eventKey,
+          source: "browser",
+          idempotencyKey: body.idempotencyKey,
+          occurredAt
+        });
+        return reply.code(202).send();
+      } catch (error) {
+        if (error instanceof AnalyticsRepositoryConfigurationError) {
+          return reply.code(503).send({ code: "service_unavailable", message: "Analytics storage is not configured" });
+        }
+        throw error;
+      }
+    }
+  );
 
   app.post(
     "/v1/analytics/query",

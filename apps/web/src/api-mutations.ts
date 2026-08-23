@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  anonymousEmptyMutation,
   authenticatedBinaryMutation,
   authenticatedEmptyMutation,
   authenticatedGet,
@@ -10,6 +11,7 @@ import {
 } from "./api-mutation-transport";
 export { ApiMutationError } from "./api-mutation-types";
 export type {
+  OnboardingAnalyticsEventRequest,
   AccessPassIntent,
   AgeSession,
   ContentItem,
@@ -112,6 +114,7 @@ export type {
   ManagedCreatorTerminationRequest
 } from "./api-mutation-types";
 import type {
+  OnboardingAnalyticsEventRequest,
   AccessPassIntent,
   AgeSession,
   ContentItem,
@@ -260,6 +263,16 @@ export async function createWalletAuthSession(
   body: CreateWalletAuthSessionRequest
 ): Promise<WalletAuthSession> {
   return publicMutation<WalletAuthSession>("/v1/auth/wallet/sessions", "POST", body);
+}
+
+export async function recordOnboardingAnalyticsEvent(
+  body: OnboardingAnalyticsEventRequest
+): Promise<void> {
+  return anonymousEmptyMutation(
+    "/v1/analytics/onboarding-events",
+    body,
+    body.idempotencyKey
+  );
 }
 
 export async function revokeWalletAuthSession(): Promise<void> {

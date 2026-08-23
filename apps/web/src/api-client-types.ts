@@ -81,6 +81,8 @@ export type VerificationRecordSummary = {
 };
 export type AdminOpsSummary = components["schemas"]["AdminOpsSummary"];
 export type AnalyticsProjectionHealth = components["schemas"]["AnalyticsProjectionHealth"];
+export type AnalyticsQueryRequest = components["schemas"]["AnalyticsQueryRequest"];
+export type AnalyticsQueryResponse = components["schemas"]["AnalyticsQueryResponse"];
 export type AnalyticsProjectionJobRequest = components["schemas"]["AnalyticsProjectionJobRequest"];
 export type AnalyticsProjectionJobReceipt = components["schemas"]["AnalyticsProjectionJobReceipt"];
 export type AdminNotificationHealth = components["schemas"]["AdminNotificationHealth"];

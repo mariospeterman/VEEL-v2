@@ -107,6 +107,29 @@ export async function publicMutation<T>(
   return (await response.json()) as T;
 }
 
+export async function anonymousEmptyMutation(
+  path: string,
+  body: unknown,
+  idempotencyKey: string
+): Promise<void> {
+  const env = readPublicWebEnv();
+  const response = await mutationFetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
+    body: JSON.stringify(body),
+    cache: "no-store",
+    credentials: "omit",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      "idempotency-key": idempotencyKey
+    },
+    method: "POST"
+  });
+
+  if (!response.ok) {
+    throw new ApiMutationError(await errorMessage(response), response.status);
+  }
+}
+
 export async function publicCapabilityMutation<T>(url: string, body: unknown): Promise<T> {
   const capabilityUrl = new URL(url);
   const safeLocalhost =

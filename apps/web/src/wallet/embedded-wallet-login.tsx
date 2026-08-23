@@ -11,14 +11,20 @@ import { ApiMutationError } from "@/api-mutations";
 import { safeMutationMessage } from "@/api-errors";
 import { ProviderLogo } from "@/brand/provider-logo";
 import { createBackendWalletSession } from "./backend-wallet-auth";
+import type { WalletAuthPurpose } from "./backend-wallet-auth";
+import { recordOnboardingEvent } from "@/analytics/onboarding-analytics";
 
 export function EmbeddedWalletLoginButton({
   label,
+  onAccountNotFound,
   onLinked,
+  purpose,
   autoStart = false,
   secondary = false
 }: {
   label: string;
+  purpose: WalletAuthPurpose;
+  onAccountNotFound?: (() => void) | undefined;
   onLinked?: ((address: string) => void) | undefined;
   autoStart?: boolean;
   secondary?: boolean;
@@ -36,7 +42,7 @@ export function EmbeddedWalletLoginButton({
   const { createWallet } = useCreateWallet();
   const { ready: walletsReady, wallets } = usePrivySolanaWallets();
   const { signMessage } = usePrivySolanaSignMessage();
-  const [state, setState] = useState<"idle" | "working" | "error">("idle");
+  const [state, setState] = useState<"idle" | "working" | "account_not_found" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [walletProvisioned, setWalletProvisioned] = useState(false);
   const autoStarted = useRef(false);
@@ -50,6 +56,14 @@ export function EmbeddedWalletLoginButton({
         const wallet = wallets.find((candidate) => candidate.standardWallet.name === "Privy");
 
         if (!wallet) {
+          if (purpose === "login") {
+            recordOnboardingEvent("account_not_found");
+            setFlowRequested(false);
+            setState("account_not_found");
+            setMessage("No existing WeVid wallet was found for this account. Start onboarding to create one.");
+            return;
+          }
+
           if (!walletProvisioned) {
             await createWallet();
             setWalletProvisioned(true);
@@ -61,6 +75,7 @@ export function EmbeddedWalletLoginButton({
         await createBackendWalletSession({
           address: wallet.address,
           provider: "embedded_privy",
+          purpose,
           signMessage: async (challenge) => {
             const result = await signMessage({
               message: new TextEncoder().encode(challenge),
@@ -78,15 +93,22 @@ export function EmbeddedWalletLoginButton({
         }
       } catch (error) {
         setFlowRequested(false);
+        if (error instanceof ApiMutationError && error.status === 404 && purpose === "login") {
+          recordOnboardingEvent("account_not_found");
+          setState("account_not_found");
+          setMessage("No WeVid account was found for this sign-in. Start onboarding to continue.");
+          return;
+        }
         setState("error");
         setMessage(safeMutationMessage(error, "Account sign-in"));
       } finally {
         flowRunning.current = false;
       }
     })();
-  }, [authenticated, createWallet, flowRequested, onLinked, ready, signMessage, walletProvisioned, wallets, walletsReady]);
+  }, [authenticated, createWallet, flowRequested, onLinked, purpose, ready, signMessage, walletProvisioned, wallets, walletsReady]);
 
   const start = useCallback(() => {
+    recordOnboardingEvent("auth_method_selected", `embedded-${purpose}`);
     setState("working");
     setMessage(null);
     setWalletProvisioned(false);
@@ -110,7 +132,8 @@ export function EmbeddedWalletLoginButton({
   }, [autoStart, ready, start, walletsReady]);
 
   return (
-    <EmbeddedButtonFrame
+    <>
+      <EmbeddedButtonFrame
       disabled={state === "working"}
       label={label}
       logo="privy"
@@ -119,7 +142,13 @@ export function EmbeddedWalletLoginButton({
       secondary={secondary}
       status={state === "working" ? "Opening" : "Connect and sign"}
       tone={state === "error" ? "error" : "muted"}
-    />
+      />
+      {state === "account_not_found" && onAccountNotFound ? (
+        <button className="landing-inline-link" onClick={onAccountNotFound} type="button">
+          Start onboarding
+        </button>
+      ) : null}
+    </>
   );
 }
 

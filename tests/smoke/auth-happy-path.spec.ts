@@ -78,6 +78,7 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
 
   await page.goto("/app/profile/earnings");
   await expect(page.getByRole("heading", { name: "Enable earnings" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Creator analytics" })).toBeVisible();
   await expect(page.getByLabel("Recipient wallet")).toHaveValue(wallet().id);
   await expect(page.getByRole("checkbox", { name: /Support/ })).toBeChecked();
   await expect(page.getByRole("checkbox", { name: /Content unlocks/ })).toBeChecked();
@@ -171,6 +172,7 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
 
   await page.goto("/app/activity");
   await expect(page.getByRole("heading", { name: "Payments" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your last 30 days" })).toBeVisible();
   await expect(page.getByText("VEEL-0000000000004000")).toBeVisible();
   await expect(page.getByText("sent", { exact: true })).toHaveCount(2);
   await expect(page.getByText("ended after access")).toBeVisible();
@@ -465,6 +467,48 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
       latestReconciliationState: "matched",
       latestReconciliationVariance: 0,
       suppressionCountToday: 2
+    });
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/v1/analytics/query") {
+    const metricKeys = Array.isArray(body?.metricKeys)
+      ? body.metricKeys.filter((key): key is string => typeof key === "string")
+      : [];
+    const dimensions = body && typeof body.dimensions === "object" && body.dimensions ? body.dimensions : {};
+    sendJson(response, 200, {
+      scope: body?.scope,
+      window: body?.window,
+      comparisonWindow: body?.comparisonWindow ?? null,
+      granularity: body?.granularity ?? "total",
+      timezone: "UTC",
+      dataThrough: "2026-08-23T12:00:00.000Z",
+      generatedAt: "2026-08-23T12:00:15.000Z",
+      freshness: "fresh",
+      metrics: metricKeys.map((metricKey) => ({
+        metricKey,
+        definitionVersion: 1,
+        label: analyticsLabel(metricKey),
+        unit: metricKey.includes("_minor")
+          ? "minor_units"
+          : metricKey.includes("rate") || metricKey.includes("conversion")
+            ? "ratio"
+            : metricKey.includes("seconds")
+              ? "seconds"
+              : "count",
+        dimensions,
+        points: [{
+          bucketDate: null,
+          value: metricKey.includes("rate") || metricKey.includes("conversion") ? 0.5 : "12",
+          numerator: null,
+          denominator: null,
+          sampleSize: "12",
+          privacyDecision: "released"
+        }],
+        comparisonValue: null,
+        deltaPercent: null
+      })),
+      insights: []
     });
     return;
   }
@@ -1262,4 +1306,12 @@ function paymentCommercialPolicy() {
     updatedBySupabaseUserId: "00000000-0000-4000-8000-000000000001",
     updatedAt: "2026-08-16T14:00:00.000Z"
   };
+}
+
+function analyticsLabel(metricKey: string) {
+  return metricKey
+    .split(".")
+    .at(-1)!
+    .replaceAll("_", " ")
+    .replace(/^./, (character) => character.toUpperCase());
 }

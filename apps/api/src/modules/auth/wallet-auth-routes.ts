@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { components } from "@veel/contracts";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { mutationRateLimit } from "../../shared/rate-limits.js";
+import { contractRouteSchema } from "../../shared/openapi-route-schema.js";
 import {
   extractBearerToken,
   extractCookieToken,
@@ -17,11 +18,12 @@ import type {
   RecoveryIdentityVerifier
 } from "../session/types.js";
 import {
-  buildWalletLinkMessage,
+  buildWalletAuthMessage,
   hashNonce,
   verifySolanaMessageSignature
 } from "../wallet/wallet-route-utils.js";
 import {
+  WalletAuthAccountNotFoundError,
   WalletAuthChallengeInvalidError,
   WalletAuthRepositoryConfigurationError,
   WalletRecoveryCredentialRequiredError,
@@ -45,16 +47,20 @@ export async function registerWalletAuthRoutes(
   app: FastifyInstance,
   options: RegisterWalletAuthRoutesOptions
 ): Promise<void> {
-  app.post<{ Body: CreateWalletAuthChallengeRequest }>("/v1/auth/wallet/challenges", mutationRateLimit("walletMutation", "createWalletAuthChallenge"), async (request, reply) => {
+  app.post<{ Body: CreateWalletAuthChallengeRequest }>("/v1/auth/wallet/challenges", {
+    ...mutationRateLimit("walletMutation", "createWalletAuthChallenge"),
+    schema: contractRouteSchema("createWalletAuthChallenge")
+  }, async (request, reply) => {
     const challengeBody = request.body;
     const nonce = randomBytes(18).toString("base64url");
     const issuedAt = new Date();
     const expiresAt = new Date(issuedAt.getTime() + walletAuthChallengeTtlMs);
-    const message = buildWalletLinkMessage({
+    const message = buildWalletAuthMessage({
       domain: new URL(app.config.WEB_URL).host,
       uri: app.config.WEB_URL,
       address: challengeBody.address,
       chain: challengeBody.chain,
+      purpose: challengeBody.purpose,
       nonce,
       issuedAt,
       expiresAt
@@ -64,6 +70,7 @@ export async function registerWalletAuthRoutes(
       const challenge = await options.walletAuthRepository.createChallenge({
         chain: challengeBody.chain,
         provider: challengeBody.provider,
+        purpose: challengeBody.purpose,
         address: challengeBody.address,
         message,
         nonceHash: hashNonce(nonce),
@@ -88,7 +95,10 @@ export async function registerWalletAuthRoutes(
     }
   });
 
-  app.post<{ Body: CreateWalletAuthSessionRequest }>("/v1/auth/wallet/sessions", mutationRateLimit("walletMutation", "createWalletAuthSession"), async (request, reply) => {
+  app.post<{ Body: CreateWalletAuthSessionRequest }>("/v1/auth/wallet/sessions", {
+    ...mutationRateLimit("walletMutation", "createWalletAuthSession"),
+    schema: contractRouteSchema("createWalletAuthSession")
+  }, async (request, reply) => {
     const sessionBody = request.body;
 
     try {
@@ -104,6 +114,7 @@ export async function registerWalletAuthRoutes(
         challenge.address !== sessionBody.address ||
         challenge.chain !== sessionBody.chain ||
         challenge.provider !== sessionBody.provider ||
+        challenge.purpose !== sessionBody.purpose ||
         challenge.message !== sessionBody.proof.message
       ) {
         return reply
@@ -124,6 +135,7 @@ export async function registerWalletAuthRoutes(
 
       const session = await options.walletAuthRepository.createSessionFromChallenge({
         challengeId: challenge.id,
+        purpose: sessionBody.purpose,
         expiresAt: new Date(Date.now() + app.config.WALLET_AUTH_SESSION_TTL_SECONDS * 1000)
       });
 
@@ -137,6 +149,13 @@ export async function registerWalletAuthRoutes(
         wallet: session.wallet
       });
     } catch (error) {
+      if (error instanceof WalletAuthAccountNotFoundError) {
+        return reply.code(404).send({
+          code: "account_not_found",
+          message: "No WeVid account is linked to this authentication method"
+        });
+      }
+
       if (error instanceof WalletAuthRepositoryConfigurationError) {
         request.log.warn({ error }, "Wallet auth repository is not configured");
         return reply.code(503).send({

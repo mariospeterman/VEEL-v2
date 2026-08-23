@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: auth, DB, realtime
-Last updated: 2026-08-15
+Last updated: 2026-08-23
 Source of truth: yes
 
 Owns:
@@ -88,6 +88,8 @@ erDiagram
 
 ## Auth Flow
 
+The user-facing public entry is one `Continue to WeVid` action, while the backend keeps login and onboarding cryptographically distinct. The required purpose is stored with the challenge, included in the exact signed message, checked at session creation, and consumed once. Login never creates identity state; `account_not_found` is the explicit handoff into onboarding.
+
 1. Account + Wallet: the user chooses a mainstream Privy method or an external wallet, receives/uses a Solana wallet, signs one domain-bound backend challenge, and receives the canonical WeVid session.
 2. Minimal Profile: the user claims a unique handle; display name and avatar are optional or safely prefilled. The profile stays provisional, non-discoverable, unable to publish/message/receive money, and excluded from search/feeds until age succeeds.
 3. Age Verification: a provider returns normalized over-threshold evidence; protected access then opens. Age does not grant KYC, earning, adult-publisher, performer, KYB, Enterprise, or paid-product capability.
@@ -110,6 +112,7 @@ Implemented boundary:
 - Wallet login creates or restores an app-owned session. The browser receives the opaque token only as an HttpOnly cookie and the database stores only its SHA-256 hash. `GET /v1/session` and token verification are read-only and never bootstrap a user.
 - Supabase Auth remains recovery/account-management only. The browser renders email/social recovery providers only when Supabase browser config exists and the matching `NEXT_PUBLIC_SUPABASE_AUTH_*_ENABLED` flag is set for a provider that is also enabled in the Supabase Auth dashboard.
 - Recovery callbacks exchange a verified Supabase credential at `POST /v1/auth/recovery/exchange`, receive a new or current-session-replacement HttpOnly application cookie, and then resolve `/v1/session`. A recovery identity without an existing mapping fails closed and never creates a WeVid user.
+- Recovery email OTP requests set `shouldCreateUser=false`. Account-management linking may request a new Supabase recovery identity only after a recently authenticated WeVid session has created the one-use link intent.
 - `POST /v1/auth/recovery/link-intents` requires a recent application session and sets a 10-minute HttpOnly, SameSite=Lax link-intent cookie so the external recovery callback can return it. Production cookies are Secure and may use the configured shared parent domain. Exchange consumes the intent atomically. `POST /v1/auth/recovery/unlink` also requires recent authentication and rotates the session.
 - New logins create independent device/application sessions. Rotation revokes only the exact source session and preserves its authentication freshness and absolute expiry. `POST /v1/auth/wallet/logout` revokes only the current hashed application session; `POST /v1/auth/sessions/logout-all` separately requires recent authentication, revokes every active session, and audits the action. Provider SDK logout and optional Supabase local sign-out remain frontend orchestration steps around this backend authority.
 - Recovery linking fails with `409` if that Supabase identity already belongs to a different WeVid account. The API never silently merges two users, profiles, wallets, age records, verification records, payments, or organization memberships.
@@ -290,7 +293,7 @@ Rules:
 - No protected app entry without age verification.
 - No protected app entry without a wallet path.
 - Landing login and onboarding render the external `Connect wallet` action immediately. They never render Supabase login or separate email/social/passkey buttons.
-- Supabase Auth is optional recovery in Settings only. It is not an entry, signup, or onboarding authority.
+- Supabase Auth is optional account recovery, exposed through an explicit landing recovery route and in Settings. It is not the ordinary login, signup, or onboarding authority.
 - No hard viewer/creator/studio fork during default onboarding. Creator and Studio/Enterprise shortcut intent is contextual and optional.
 - No double age verification per media item after the app-level age gate, unless a future jurisdiction/product rule explicitly requires it.
 - KYC/KYB remains separate from age verification and is only required for creator, earning, business, tax/compliance, and risk workflows by default.

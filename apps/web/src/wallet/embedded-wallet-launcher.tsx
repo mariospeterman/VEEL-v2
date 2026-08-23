@@ -2,16 +2,21 @@
 
 import { useState, type ComponentType } from "react";
 import { ProviderLogo } from "@/brand/provider-logo";
+import type { WalletAuthPurpose } from "./backend-wallet-auth";
 
 interface EmbeddedWalletRuntimeProps {
   label: string;
+  purpose: WalletAuthPurpose;
+  onAccountNotFound?: (() => void) | undefined;
   onLinked?: ((address: string) => void) | undefined;
   secondary: boolean;
 }
 
 export function EmbeddedWalletLauncher({
   label,
+  onAccountNotFound,
   onLinked,
+  purpose,
   secondary = false
 }: EmbeddedWalletRuntimeProps) {
   const [runtime, setRuntime] = useState<ComponentType<EmbeddedWalletRuntimeProps> | null>(null);
@@ -30,7 +35,7 @@ export function EmbeddedWalletLauncher({
 
   if (runtime) {
     const Runtime = runtime;
-    return <Runtime label={label} onLinked={onLinked} secondary={secondary} />;
+    return <Runtime label={label} onAccountNotFound={onAccountNotFound} onLinked={onLinked} purpose={purpose} secondary={secondary} />;
   }
 
   return (
@@ -44,7 +49,7 @@ export function EmbeddedWalletLauncher({
         <ProviderLogo label={label} name="privy" />
         <span>
           <strong>{label}</strong>
-          <small>{state === "loading" ? "Opening" : "One secure setup"}</small>
+          <small>{state === "loading" ? "Opening" : purpose === "login" ? "Existing account" : "One secure setup"}</small>
         </span>
       </button>
       {state === "error" ? (
