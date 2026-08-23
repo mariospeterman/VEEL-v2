@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildWorkerRuntime,
+  runAnalyticsProjectionTick,
   runMediaAssetCleanupTick,
   runMediaModerationTick,
   runScheduledWorkerTick,
@@ -52,6 +53,11 @@ import type {
   SubscriptionCollectionProvider,
   SubscriptionCollectionRepository
 } from "../src/subscription-collections";
+import type {
+  AnalyticsProjectionJob,
+  AnalyticsProjectionOutcome,
+  AnalyticsProjectionRepository
+} from "../src/analytics-projections";
 
 const webPushMock = vi.hoisted(() => ({
   sendNotification: vi.fn()
@@ -72,6 +78,7 @@ describe("buildWorkerRuntime", () => {
     expect(runtime).toMatchObject({
       name: "veel-worker",
       queues: [
+        "analytics-projections",
         "subscription-collections",
         "notification-deliveries",
         "payment-confirmation-emails",
@@ -80,6 +87,11 @@ describe("buildWorkerRuntime", () => {
         "media-asset-cleanups"
       ],
       schedules: [
+        {
+          name: "analytics-projections",
+          cadence: "every_minute",
+          sourceIndex: "analytics_projection_jobs_lease_idx"
+        },
         {
           name: "subscription-collections",
           cadence: "every_minute",
@@ -122,6 +134,9 @@ describe("runScheduledWorkerTick", () => {
 
     const result = await runScheduledWorkerTick({
       runners: {
+        async analyticsProjections() {
+          calls.push("analytics");
+        },
         async mediaAssetCleanups() {
           calls.push("asset-cleanups");
         },
@@ -151,6 +166,7 @@ describe("runScheduledWorkerTick", () => {
     });
 
     expect(calls.sort()).toEqual([
+      "analytics",
       "asset-cleanups",
       "email",
       "moderation",
@@ -159,6 +175,7 @@ describe("runScheduledWorkerTick", () => {
       "subscriptions"
     ]);
     expect(result).toEqual({
+      analyticsProjections: "completed",
       mediaAssetCleanups: "completed",
       mediaModeration: "completed",
       notificationDeliveries: "completed",
@@ -172,6 +189,100 @@ describe("runScheduledWorkerTick", () => {
         errorName: "Error"
       }
     ]);
+  });
+});
+
+describe("runAnalyticsProjectionTick", () => {
+  const job: AnalyticsProjectionJob = {
+    id: "00000000-0000-4000-8000-000000000201",
+    projectionKey: "analytics_core",
+    definitionVersion: 1,
+    windowStartsOn: "2026-08-22",
+    windowEndsOn: "2026-08-23",
+    reason: "late_fact",
+    attemptCount: 1,
+    maxAttempts: 5,
+    leaseToken: "00000000-0000-4000-8000-000000000202"
+  };
+
+  function repositoryFixture(overrides: Partial<AnalyticsProjectionRepository> = {}): AnalyticsProjectionRepository & { outcomes: AnalyticsProjectionOutcome[] } {
+    const outcomes: AnalyticsProjectionOutcome[] = [];
+    return {
+      outcomes,
+      async enqueueIncremental() {},
+      async leaseJobs() { return [job]; },
+      async projectWindow() {
+        return {
+          sourceRowCount: 4,
+          projectedRowCount: 4,
+          varianceCount: 0,
+          projectedTableRowCount: 3,
+          dataThrough: new Date("2026-08-23T23:59:59.999Z"),
+          details: { sourceImpressions: 4, projectedImpressions: 4 }
+        };
+      },
+      async recordOutcome(input) { outcomes.push(input.outcome); },
+      ...overrides
+    };
+  }
+
+  it("records deterministic projection and reconciliation evidence", async () => {
+    const repository = repositoryFixture();
+    await expect(runAnalyticsProjectionTick({
+      repository,
+      now: new Date("2026-08-23T14:00:00.000Z")
+    })).resolves.toEqual({
+      leased: 1,
+      completed: 1,
+      retrying: 0,
+      deadLettered: 0,
+      mismatched: 0
+    });
+    expect(repository.outcomes).toEqual([expect.objectContaining({ state: "completed" })]);
+  });
+
+  it("surfaces source-to-projection variance instead of treating it as matched", async () => {
+    const repository = repositoryFixture({
+      async projectWindow() {
+        return {
+          sourceRowCount: 5,
+          projectedRowCount: 4,
+          varianceCount: -1,
+          projectedTableRowCount: 3,
+          dataThrough: new Date("2026-08-23T23:59:59.999Z"),
+          details: { sourceImpressions: 5, projectedImpressions: 4 }
+        };
+      }
+    });
+
+    await expect(runAnalyticsProjectionTick({ repository })).resolves.toMatchObject({
+      completed: 1,
+      mismatched: 1
+    });
+    expect(repository.outcomes).toEqual([
+      expect.objectContaining({
+        state: "completed",
+        evidence: expect.objectContaining({ varianceCount: -1 })
+      })
+    ]);
+  });
+
+  it("keeps a failed batch retryable and redacts the implementation error", async () => {
+    const repository = repositoryFixture({
+      async projectWindow() { throw new Error("raw database credentials and query"); }
+    });
+    await expect(runAnalyticsProjectionTick({ repository })).resolves.toMatchObject({ retrying: 1 });
+    expect(repository.outcomes).toEqual([{ state: "retry", errorCode: "analytics_projection_failed" }]);
+  });
+
+  it("dead-letters an exhausted batch without rewriting unexplained variance", async () => {
+    const exhausted = { ...job, attemptCount: 5, maxAttempts: 5 };
+    const repository = repositoryFixture({
+      async leaseJobs() { return [exhausted]; },
+      async projectWindow() { throw new Error("projection failed"); }
+    });
+    await expect(runAnalyticsProjectionTick({ repository })).resolves.toMatchObject({ deadLettered: 1 });
+    expect(repository.outcomes).toEqual([{ state: "dead_letter", errorCode: "analytics_projection_failed" }]);
   });
 });
 

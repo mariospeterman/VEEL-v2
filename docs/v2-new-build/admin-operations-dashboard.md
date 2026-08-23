@@ -132,6 +132,7 @@ The admin landing dashboard should show:
 - provider status summary
 - incident banner when provider or deploy health is degraded
 - notification projection, device health, and delivery queue health, including dead-letter count, are visible through `GET /v1/admin/notifications/health`; the worker can send browser push through server-only VAPID Web Push configuration, and production ops must verify real VAPID delivery across target browsers before user-facing delivery claims
+- Analytics Core projection health is visible through `GET /v1/admin/analytics/health`, including version, watermark/data-through lag, queued/leased/retry/dead-letter counts, latest reconciliation state and variance, and aggregate suppression count. The dashboard exposes no raw audience identity or canonical provider payload.
 - deeper Studio/Enterprise organization health and contract status after later organization slices land
 - `PATCH /v1/admin/organizations/{organizationId}/kyb` updates KYB review state server-side, derives active/pending organization state, requires `Idempotency-Key`, and writes an `audit_events` record with reason and before/after state
 - `GET /v1/admin/organizations/{organizationId}/members` and `PATCH /v1/admin/organizations/{organizationId}/members/{membershipId}` expose the admin organization member governance workflow. Member mutations are role/state changes only, require `Idempotency-Key`, preserve at least one active owner, and write `audit_events`; they never create balances, payout queues, payment truth, recommendation priority, Mutuals preference, or preferential social treatment.
@@ -362,6 +363,8 @@ Every admin mutation must include:
 - support role cannot access raw private message content by default
 - finance role can inspect settlement and split records
 - ops role can view provider health but not mutate money state
+- analytics health requires staff authorization; an unconfigured admin repository fails closed
+- analytics queue recovery uses the existing audited worker-recovery command and cannot edit facts, metric definitions, projection rows, or watermarks directly
 
 Current Mutuals ops implementation:
 

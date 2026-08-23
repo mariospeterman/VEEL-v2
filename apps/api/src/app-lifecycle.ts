@@ -8,6 +8,7 @@ type ClosableDependency = {
 const repositoryKeys = [
   "sessionRepository",
   "ageRepository",
+  "analyticsRepository",
   "profileRepository",
   "walletRepository",
   "walletAuthRepository",

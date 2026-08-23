@@ -1,6 +1,7 @@
 import type { AdminPageData } from "./admin-data";
 import {
   AgeKycProviderPanel,
+  AnalyticsHealthPanel,
   AiOperationsPanel,
   AuditEventRow,
   ComplianceRow,
@@ -176,6 +177,7 @@ export function AdminPrimaryColumn({
 }
 
 export function AdminSecondaryColumn({
+  analyticsHealth,
   ageChecks,
   aiSessions,
   aiToolCalls,
@@ -191,6 +193,10 @@ export function AdminSecondaryColumn({
 }: AdminPageData) {
   return (
     <div className="grid content-start gap-4">
+      <Panel title="Analytics projection health">
+        <AnalyticsHealthPanel analyticsHealth={analyticsHealth} />
+      </Panel>
+
       <Panel title="Notification health">
         <NotificationHealthPanel notificationHealth={notificationHealth} />
       </Panel>

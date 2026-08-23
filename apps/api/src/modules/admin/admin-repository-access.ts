@@ -166,6 +166,15 @@ export function createAccessRepository(
             count(*) filter (where state = 'dead_letter') as dead_letter_count,
             min(next_attempt_at) filter (where state in ('queued', 'retry')) as oldest_pending_at
           from media_moderation_jobs
+          union all
+          select
+            'analytics_projections'::text as name,
+            count(*) filter (where state in ('queued', 'retry')) as pending_count,
+            count(*) filter (where state = 'leased') as processing_count,
+            count(*) filter (where state = 'retry') as failed_count,
+            count(*) filter (where state = 'dead_letter') as dead_letter_count,
+            min(next_attempt_at) filter (where state in ('queued', 'retry')) as oldest_pending_at
+          from analytics_projection_jobs
         `
       ]);
 
@@ -223,7 +232,8 @@ export function createAccessRepository(
       const run = async (
         table: string,
         queuedState: string,
-        stateType: "text" | "notification_delivery_state" = "text"
+        stateType: "text" | "notification_delivery_state" = "text",
+        failureColumn = "failure_code"
       ) => {
         const queuedStateSql = stateType === "notification_delivery_state"
           ? sql`${queuedState}::notification_delivery_state`
@@ -280,7 +290,7 @@ export function createAccessRepository(
               lease_token = null,
               leased_until = null,
               next_attempt_at = now(),
-              failure_code = null
+              ${sql(failureColumn)} = null
             where id in (select id from target)
               and exists (select 1 from request_insert)
             returning id
@@ -327,6 +337,8 @@ export function createAccessRepository(
           return run("provider_event_replay_requests", "queued");
         case "media_moderation":
           return run("media_moderation_jobs", "queued");
+        case "analytics_projections":
+          return run("analytics_projection_jobs", "queued", "text", "last_error_code");
       }
     },
     async listUsers(input) {

@@ -15,6 +15,7 @@ import {
   updateAdminRefundDispute,
   updateAdminSupportCase,
   updateAdminSupportPolicy,
+  enqueueAdminAnalyticsJob,
   type AdminDataRequestActionRequest,
   type AdminLiveRoomSuspensionRequest,
   type AdminModerationActionRequest,
@@ -26,8 +27,21 @@ import {
   type AdminRefundDisputeActionRequest,
   type AdminSupportCaseActionRequest,
   type AdminSupportPolicyActionRequest,
+  type AnalyticsProjectionJobRequest,
   type ApiResult
 } from "@/api-client";
+
+export async function enqueueAnalyticsProjectionJobAction(formData: FormData): Promise<void> {
+  const body: AnalyticsProjectionJobRequest = {
+    jobType: enumField(formData, "jobType", ["backfill", "reconciliation"]),
+    window: {
+      startDate: stringField(formData, "startDate"),
+      endDate: stringField(formData, "endDate")
+    },
+    reason: stringField(formData, "reason")
+  };
+  actionResult(await enqueueAdminAnalyticsJob(body, randomUUID()));
+}
 
 export async function provisionOrganizationAction(formData: FormData): Promise<void> {
   const body: AdminOrganizationProvisionRequest = {

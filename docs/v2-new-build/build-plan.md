@@ -64,8 +64,8 @@ accessibility, browser, and immutable-artifact evidence. Anything outside that d
 | 10 | Frontend system, accessibility, cross-browser, and PWA completion | `CODE_COMPLETE_PROVIDER_BLOCKED` on PR #51; the direct wallet-first entry, deferred wallet/payment runtimes, unified app shell, accessibility repairs, installable privacy-safe PWA, desktop/mobile Chromium, and Firefox evidence are green. Linux CI WebKit must pass before merge; real wallet extensions, Privy target domains/devices, push delivery, installed iOS PWA, screen-reader/zoom, and staging Web Vitals remain pre-production evidence gates. |
 | 11 | Actual deployment, observability, recovery, and legal launch | `CODE_COMPLETE_PROVIDER_BLOCKED`: release operations merged through PRs #52–#55, and merge `4860133` produced verified immutable images/manifest in run `32043723824`. Convergence run `32044089602` verified the artifact and failed closed before deployment on absent shared staging, provider, operations, legal, and hosting configuration. Those inputs plus final counsel and explicit production approval remain external pre-production gates. |
 | Convergence 01 | policy and eligibility | Merged through PR #86 at `b5e1904`: deterministic recipient KYC policy, one indexed content-eligibility authority, independent viewer preference/ranking mode, resumable Adult/Explicit drafts, exact-main CI/database/security, and immutable artifact evidence are green; staging remains fail-closed on recorded external gates |
-| Convergence 02 | Universal composer | Next planned after Convergence 01: one draft lifecycle and renderer family for photo, video, carousel, mixed media, text, and polls; live PR state comes only from GitHub's `wevid-active-slice` mutex |
-| Convergence 03 | Analytics Core | Pending Convergence 02: one versioned metric registry, typed projections, deterministic reconciliation, explicit freshness/privacy, and one authorized query service |
+| Convergence 02 | Universal composer | Merged through PR #87 at `692bf49`: one canonical photo/video/mixed-media/text/poll draft lifecycle, ordered assets, transactional polls, all-required-assets release authority, shared renderers, durable provider cleanup, exact-main CI/database/security, and immutable artifact evidence are green; Bunny image staging remains fail-closed on recorded provider gates |
+| Convergence 03 | Analytics Core | Next planned after Convergence 02: one versioned metric registry, typed projections, deterministic reconciliation, explicit freshness/privacy, and one authorized query service; live PR state comes only from GitHub's `wevid-active-slice` mutex |
 | Convergence 04 | Analytics surfaces | Pending Convergence 03: user, creator, Enterprise, admin, export, and later MCP surfaces consume identical authorized metric objects |
 | Convergence 05 | Scalable realtime | Pending Convergence 04: private scoped Broadcast transports minimal invalidations; canonical APIs remain truth and reconnect gaps recover safely |
 | Convergence 06 | Consumer social experience | Pending Convergence 05: one accessible action rail, comments sheet, replies, comment likes, mentions, internal shares, hashtags, polls, and responsive UX |
@@ -84,8 +84,8 @@ not create parallel policy, eligibility, composer, renderer, analytics, realtime
 WeVid Core owns deterministic analytics and the scoped data/action bridge, but hosts no LLM or model-key
 gateway. The optional WeVid Agency remains a separate, user-owned add-on and publication stays human-controlled.
 
-Next planned production slice: **Convergence 02 — Universal composer**.
-Its branch contract is `codex/converge-02-universal-composer`; GitHub, not this document, owns
+Next planned production slice: **Convergence 03 — Analytics Core**.
+Its branch contract is `codex/converge-03-analytics-core`; GitHub, not this document, owns
 whether that branch currently has the one active pull request.
 
 Each completed slice requires the actual UI-to-database/provider path, authorization and runtime validation, focused unit and real-Postgres integration proof, browser proof, operational recovery, canonical docs updates, and redacted provider staging evidence when a provider is involved. Mocks prove application logic only.

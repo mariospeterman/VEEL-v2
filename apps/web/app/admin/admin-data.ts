@@ -1,5 +1,6 @@
 import {
   getAdminAgeChecks,
+  getAdminAnalyticsHealth,
   getAdminAiSessions,
   getAdminAiToolCalls,
   getAdminAuditEvents,
@@ -40,6 +41,7 @@ const previewOrganizationId = "00000000-0000-4000-8000-000000000140";
 
 export async function getAdminPageData() {
   const [
+    analyticsHealth,
     summary,
     payments,
     paymentCommercialPolicies,
@@ -76,6 +78,7 @@ export async function getAdminPageData() {
     mutualsSafety,
     featureFlags
   ] = await Promise.all([
+    getAdminAnalyticsHealth(),
     getAdminOpsSummary(),
     getAdminPaymentIntents(),
     getAdminPaymentCommercialPolicies(),
@@ -114,6 +117,7 @@ export async function getAdminPageData() {
   ]);
 
   return {
+    analyticsHealth,
     accessPasses,
     ageChecks,
     aiSessions,

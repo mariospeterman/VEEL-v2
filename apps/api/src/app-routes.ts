@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { registerAnalyticsRoutes } from "./modules/analytics/analytics-routes.js";
 import type { ApiDependencies } from "./app-dependencies.js";
 import { registerAdminRoutes } from "./modules/admin/admin-routes.js";
 import { registerActivityRoutes } from "./modules/activity/activity-routes.js";
@@ -39,6 +40,7 @@ export async function registerApiRoutes(
     sessionRepository,
     ageRepository,
     ageProviderWaterfall,
+    analyticsRepository,
     profileRepository,
     walletRepository,
     contentRepository,
@@ -97,6 +99,11 @@ export async function registerApiRoutes(
     sessionRepository,
     ageProviderWaterfall,
     ageRepository
+  });
+  await registerAnalyticsRoutes(app, {
+    authVerifier,
+    analyticsRepository,
+    adminRepository
   });
   await registerVerificationRoutes(app, {
     authVerifier,

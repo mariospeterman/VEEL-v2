@@ -43,7 +43,8 @@ export interface WorkerQueueHealthRow {
     | "notification_deliveries"
     | "payment_confirmation_emails"
     | "provider_event_replays"
-    | "media_moderation";
+    | "media_moderation"
+    | "analytics_projections";
   pending_count: string | number;
   processing_count: string | number;
   failed_count: string | number;

@@ -9,6 +9,25 @@ const migrationsDir = join(packageRoot, "migrations");
 const readMigration = (fileName: string) => readFileSync(join(migrationsDir, fileName), "utf8");
 
 describe("database migrations", () => {
+  it("adds typed server-only Analytics Core projections with bounded recovery", () => {
+    const sql = readMigration("0110_analytics_core.sql");
+    const downSql = readMigration("0110_analytics_core.down.sql");
+
+    expect(sql).toContain("create table analytics_creator_daily");
+    expect(sql).toContain("create table analytics_creator_content_daily");
+    expect(sql).toContain("create table analytics_creator_product_daily");
+    expect(sql).toContain("create table analytics_organization_creator_daily");
+    expect(sql).toContain("create table analytics_projection_jobs");
+    expect(sql).toContain("create table analytics_projection_watermarks");
+    expect(sql).toContain("create table analytics_reconciliation_runs");
+    expect(sql).toContain("analytics_projection_jobs_lease_idx");
+    expect(sql).toContain("check ((state = 'leased') = (leased_until is not null and lease_token is not null))");
+    expect(sql).toContain("currency text not null check (currency in ('SOL', 'USDC'))");
+    expect(sql).toContain("revoke all on table analytics_creator_content_daily from public, anon, authenticated");
+    expect(sql).not.toMatch(/viewer_user_id|\bemail\s+(text|citext)|wallet_address\s+text|message_body|raw_payload\s+jsonb|private_key/i);
+    expect(downSql).toContain("drop table if exists analytics_projection_jobs");
+  });
+
   it("locks recurring memberships to exact noncustodial authority and replay-safe actions", () => {
     const sql = readMigration("0098_recurring_membership_authority.sql");
 

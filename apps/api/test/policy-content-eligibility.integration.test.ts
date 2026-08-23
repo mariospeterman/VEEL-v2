@@ -10,8 +10,9 @@ const describeIntegration = enabled ? describe : describe.skip;
 
 describeIntegration("canonical policy and content eligibility against Postgres", () => {
   it("resolves risk-based KYC and applies one viewer-relative content gate", async () => {
-    const databaseUrl = process.env.API_INTEGRATION_DATABASE_URL;
-    if (!databaseUrl || !/^postgres(?:ql)?:\/\/(?:postgres(?::[^@]*)?@)?(?:127\.0\.0\.1|localhost):/u.test(databaseUrl)) {
+    const databaseUrl = process.env.API_INTEGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
+    const databaseHost = safeDatabaseHost(databaseUrl);
+    if (!databaseUrl || !["127.0.0.1", "localhost"].includes(databaseHost)) {
       throw new Error("A loopback API_INTEGRATION_DATABASE_URL is required");
     }
 
@@ -595,3 +596,11 @@ describeIntegration("canonical policy and content eligibility against Postgres",
     }
   });
 });
+
+function safeDatabaseHost(databaseUrl: string | undefined): string {
+  try {
+    return databaseUrl ? new URL(databaseUrl).hostname : "";
+  } catch {
+    return "";
+  }
+}

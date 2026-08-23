@@ -344,6 +344,19 @@ test("shows and updates audited payment commercial policy overrides", async ({ p
   await expect(page.getByText("Overrides apply only to new quotes.")).toBeVisible();
   await expect(page.getByText("support · SOL")).toBeVisible();
   await expect(page.getByText("Revision 3")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Analytics projection health" })).toBeVisible();
+  await expect(page.getByText("matched", { exact: true })).toBeVisible();
+
+  const analyticsForm = page.getByRole("button", { name: "Queue projection job" }).locator("..");
+  await analyticsForm.getByLabel("Start date").fill("2026-08-01");
+  await analyticsForm.getByLabel("End date").fill("2026-08-07");
+  await analyticsForm.getByLabel("Audit reason").fill("Rebuild bounded analytics facts");
+  await analyticsForm.getByRole("button", { name: "Queue projection job" }).click();
+  await expect.poll(() => requests.some((request) =>
+    request.method === "POST" &&
+    request.path === "/v1/admin/analytics/jobs" &&
+    Boolean(request.idempotencyKey)
+  )).toBe(true);
 
   const policyForm = page.getByRole("button", { name: "Save policy" }).locator("..");
   await policyForm.getByLabel("Minimum atomic amount").fill("2000000");
@@ -435,6 +448,35 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
 
   if (method === "GET" && url.pathname === "/v1/admin/payments/commercial-policies") {
     sendJson(response, 200, { items: [paymentCommercialPolicy()], nextCursor: null });
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/v1/admin/analytics/health") {
+    sendJson(response, 200, {
+      projectionKey: "analytics_core",
+      definitionVersion: 1,
+      state: "healthy",
+      dataThrough: "2026-08-23T12:00:00.000Z",
+      lagSeconds: 15,
+      queuedJobCount: 0,
+      leasedJobCount: 0,
+      retryJobCount: 0,
+      deadLetterJobCount: 0,
+      latestReconciliationState: "matched",
+      latestReconciliationVariance: 0,
+      suppressionCountToday: 2
+    });
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/v1/admin/analytics/jobs") {
+    sendJson(response, 202, {
+      id: "00000000-0000-4000-8000-000000000099",
+      jobType: body?.jobType ?? "backfill",
+      state: "queued",
+      window: body?.window ?? { startDate: "2026-08-01", endDate: "2026-08-07" },
+      createdAt: "2026-08-23T12:00:00.000Z"
+    });
     return;
   }
 

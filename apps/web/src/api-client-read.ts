@@ -18,6 +18,7 @@ import type {
   AdminOrganization,
   AdminOrganizationMember,
   AdminOpsSummary,
+  AnalyticsProjectionHealth,
   AdminPage,
   AdminPartnerCampaign,
   AdminPaymentIntent,
@@ -251,6 +252,10 @@ export async function getVerificationStatus(): Promise<ApiResult<VerificationSta
 
 export async function getAdminOpsSummary(): Promise<ApiResult<AdminOpsSummary>> {
   return getJson<AdminOpsSummary>("/v1/admin/ops/summary");
+}
+
+export async function getAdminAnalyticsHealth(): Promise<ApiResult<AnalyticsProjectionHealth>> {
+  return getJson<AnalyticsProjectionHealth>("/v1/admin/analytics/health");
 }
 
 export async function getAdminNotificationHealth(): Promise<ApiResult<AdminNotificationHealth>> {
