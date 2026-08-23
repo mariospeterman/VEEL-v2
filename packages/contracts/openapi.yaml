@@ -109,6 +109,31 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/admin/analytics/jobs:
+    post:
+      operationId: enqueueAdminAnalyticsJob
+      tags: [Admin, Analytics]
+      summary: Enqueue an audited bounded analytics backfill or reconciliation job
+      parameters:
+        - { $ref: "#/components/parameters/RequiredIdempotencyKey" }
+      x-idempotency-policy: exact-key-and-request-hash-replay
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnalyticsProjectionJobRequest" }
+      responses:
+        "202":
+          description: Existing or newly queued bounded analytics job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnalyticsProjectionJobReceipt" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/session:
     get:
       operationId: getSession
@@ -2409,7 +2434,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [subscription_collections, notification_deliveries, payment_confirmation_emails, provider_event_replays, media_moderation]
+            enum: [subscription_collections, notification_deliveries, payment_confirmation_emails, provider_event_replays, media_moderation, analytics_projections]
         - name: jobId
           in: path
           required: true
@@ -3344,6 +3369,17 @@ components:
     AnalyticsMetricKey:
       type: string
       enum:
+        - viewer.feed.impressions
+        - viewer.content.qualified_views
+        - viewer.content.watch_seconds
+        - viewer.content.completion_rate
+        - viewer.content.early_skips
+        - viewer.content.replays
+        - viewer.engagement.saves
+        - viewer.engagement.shares
+        - viewer.safety.hides
+        - viewer.safety.reports
+        - viewer.lifecycle.return_sessions
         - creator.content.published
         - creator.content.impressions
         - creator.content.qualified_views
@@ -3357,13 +3393,34 @@ components:
         - creator.engagement.saves
         - creator.engagement.shares
         - creator.social.follower_starts
+        - creator.social.profile_opens
+        - creator.social.follow_after_view
+        - creator.social.follow_conversion
         - creator.commerce.confirmed_purchases
         - creator.commerce.confirmed_gross_minor
         - creator.commerce.earnings_minor
         - creator.commerce.platform_fee_minor
+        - creator.commerce.offer_impressions
+        - creator.commerce.unlock_conversion
+        - creator.membership.starts
+        - creator.membership.cancellations
         - organization.commerce.confirmed_allocations
         - organization.commerce.creator_net_minor
         - organization.commerce.management_minor
+        - platform.commerce.confirmed_purchases
+        - platform.commerce.confirmed_gross_minor
+        - platform.commerce.platform_fee_minor
+        - platform.commerce.referral_minor
+        - platform.commerce.management_minor
+        - platform.operations.moderation_jobs
+        - platform.operations.moderation_decision_seconds
+        - platform.operations.provider_failures
+        - platform.operations.worker_retries
+        - platform.operations.worker_dead_letters
+        - platform.lifecycle.retained_users
+        - platform.onboarding.completed
+        - platform.onboarding.step_events
+        - platform.onboarding.completion_rate
     AnalyticsWindow:
       type: object
       additionalProperties: false
@@ -3378,6 +3435,13 @@ components:
       properties:
         type: { type: string, const: creator }
         creatorUserId: { type: string, format: uuid }
+    AnalyticsViewerScope:
+      type: object
+      additionalProperties: false
+      required: [type]
+      properties:
+        type: { type: string, const: viewer }
+        userId: { type: string, format: uuid }
     AnalyticsOrganizationScope:
       type: object
       additionalProperties: false
@@ -3386,6 +3450,13 @@ components:
         type: { type: string, const: organization }
         organizationId: { type: string, format: uuid }
         creatorUserId: { type: string, format: uuid }
+    AnalyticsPlatformScope:
+      type: object
+      additionalProperties: false
+      required: [type, purposeCode]
+      properties:
+        type: { type: string, const: platform }
+        purposeCode: { type: string, pattern: "^[-A-Za-z0-9_.:]{3,80}$" }
     AnalyticsDimensions:
       type: object
       additionalProperties: false
@@ -3395,15 +3466,31 @@ components:
         currency: { type: string, enum: [SOL, USDC] }
         productType: { type: string, maxLength: 80 }
         creatorUserId: { type: string, format: uuid }
+        onboardingEvent:
+          type: string
+          enum: [landing_viewed, login_opened, onboarding_opened, auth_method_selected, wallet_runtime_ready, wallet_authentication_completed, wallet_ownership_verified, profile_step_viewed, profile_step_completed, age_step_started, age_step_completed, age_step_failed, protected_app_entered, onboarding_abandoned, returning_login_completed, account_not_found]
+        cohortStartDate: { type: string, format: date }
+    AnalyticsScope:
+      type: object
+      additionalProperties: false
+      required: [type]
+      properties:
+        type: { type: string, enum: [viewer, creator, organization, platform] }
+        userId: { type: string, format: uuid }
+        creatorUserId: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        purposeCode: { type: string, pattern: "^[-A-Za-z0-9_.:]{3,80}$" }
+      allOf:
+        - if: { type: object, properties: { type: { const: organization } }, required: [type] }
+          then: { type: object, required: [organizationId] }
+        - if: { type: object, properties: { type: { const: platform } }, required: [type] }
+          then: { type: object, required: [purposeCode] }
     AnalyticsQueryRequest:
       type: object
       additionalProperties: false
       required: [scope, metricKeys, window, granularity, timezone]
       properties:
-        scope:
-          oneOf:
-            - { $ref: "#/components/schemas/AnalyticsCreatorScope" }
-            - { $ref: "#/components/schemas/AnalyticsOrganizationScope" }
+        scope: { $ref: "#/components/schemas/AnalyticsScope" }
         metricKeys:
           type: array
           minItems: 1
@@ -3415,16 +3502,30 @@ components:
         granularity: { type: string, enum: [day, total] }
         timezone: { type: string, enum: [UTC] }
         dimensions: { $ref: "#/components/schemas/AnalyticsDimensions" }
+    AnalyticsScalar:
+      description: Ratios are JSON numbers; lossless counts, seconds, and native minor units are decimal strings.
+      oneOf:
+        - { type: number }
+        - { type: string, pattern: "^[0-9]+$" }
     AnalyticsMetricPoint:
       type: object
       additionalProperties: false
       required: [bucketDate, value, numerator, denominator, sampleSize, privacyDecision]
       properties:
         bucketDate: { type: string, format: date, nullable: true }
-        value: { type: number, nullable: true }
-        numerator: { type: number, nullable: true }
-        denominator: { type: number, nullable: true }
-        sampleSize: { type: integer, minimum: 0 }
+        value:
+          oneOf:
+            - { $ref: "#/components/schemas/AnalyticsScalar" }
+            - { type: "null" }
+        numerator:
+          oneOf:
+            - { type: string, pattern: "^[0-9]+$" }
+            - { type: "null" }
+        denominator:
+          oneOf:
+            - { type: string, pattern: "^[0-9]+$" }
+            - { type: "null" }
+        sampleSize: { type: string, pattern: "^[0-9]+$" }
         privacyDecision: { type: string, enum: [released, suppressed_minimum_cohort] }
     AnalyticsMetricResult:
       type: object
@@ -3439,7 +3540,10 @@ components:
         points:
           type: array
           items: { $ref: "#/components/schemas/AnalyticsMetricPoint" }
-        comparisonValue: { type: number, nullable: true }
+        comparisonValue:
+          oneOf:
+            - { $ref: "#/components/schemas/AnalyticsScalar" }
+            - { type: "null" }
         deltaPercent: { type: number, nullable: true }
     AnalyticsInsight:
       type: object
@@ -3460,10 +3564,7 @@ components:
       additionalProperties: false
       required: [scope, window, comparisonWindow, granularity, timezone, dataThrough, generatedAt, freshness, metrics, insights]
       properties:
-        scope:
-          oneOf:
-            - { $ref: "#/components/schemas/AnalyticsCreatorScope" }
-            - { $ref: "#/components/schemas/AnalyticsOrganizationScope" }
+        scope: { $ref: "#/components/schemas/AnalyticsScope" }
         window: { $ref: "#/components/schemas/AnalyticsWindow" }
         comparisonWindow:
           oneOf:
@@ -3497,6 +3598,24 @@ components:
         latestReconciliationState: { type: string, enum: [matched, mismatch, failed], nullable: true }
         latestReconciliationVariance: { type: integer, nullable: true }
         suppressionCountToday: { type: integer, minimum: 0 }
+    AnalyticsProjectionJobRequest:
+      type: object
+      additionalProperties: false
+      required: [jobType, window, reason]
+      properties:
+        jobType: { type: string, enum: [backfill, reconciliation] }
+        window: { $ref: "#/components/schemas/AnalyticsWindow" }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+    AnalyticsProjectionJobReceipt:
+      type: object
+      additionalProperties: false
+      required: [id, jobType, state, window, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        jobType: { type: string, enum: [backfill, reconciliation] }
+        state: { type: string, enum: [queued, leased, retry, completed, dead_letter] }
+        window: { $ref: "#/components/schemas/AnalyticsWindow" }
+        createdAt: { type: string, format: date-time }
     RecordWebVitalRequest:
       type: object
       additionalProperties: false

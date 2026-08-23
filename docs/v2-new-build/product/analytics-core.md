@@ -23,10 +23,12 @@ Launch scope:
 - one backend metric registry, typed daily projections and watermarks, deterministic backfill/reconciliation, one structured query service, and the minimum operations surface required before Analytics surfaces
 
 Implemented boundary:
-- migration `0110_analytics_core.sql` owns creator, creator-content, creator-product, and organization-creator daily projections plus versioned jobs, watermarks, reconciliation evidence, and privacy-suppression counters
+- migration `0110_analytics_core.sql` owns viewer, creator, creator-content, creator-product, organization-creator, platform-commerce, platform-operations, retention-cohort, and onboarding-funnel daily projections plus bounded typed profile-open, offer-impression, and onboarding-journey facts; versioned jobs, watermarks, reconciliation evidence, and privacy-suppression counters remain server-only
 - `POST /v1/analytics/query` accepts only registered v1 metric keys, a maximum of 20 unique metrics, bounded windows up to 366 days, `day` or `total` granularity, explicit UTC, and allowlisted dimensions
-- audience-derived results require a conservative cohort of at least five; suppressed values also suppress numerator and denominator, and native-value metrics require explicit `SOL` or `USDC` without conversion
+- viewer results are self-only, creator results are self-only, Enterprise results recheck active membership/entitlement/agreement authority, and platform results require active staff plus a bounded purpose code
+- audience-derived results require a conservative cohort of at least five; suppressed values also suppress numerator and denominator, native-value metrics require explicit `SOL` or `USDC` without conversion, and every count/seconds/minor-unit scalar is serialized as a lossless decimal string
 - the existing worker runtime recomputes bounded two-day UTC windows transactionally so duplicate and late facts converge; retries, dead letters, parity evidence, and watermarks are exposed through `GET /v1/admin/analytics/health`
+- staff can enqueue an audited, idempotent, maximum-366-day backfill or reconciliation through `POST /v1/admin/analytics/jobs`; the admin browser surface exposes both health and this bounded command without permitting direct projection edits
 
 Non-goals:
 - a warehouse, generic analytics event bus, EAV metric store, browser formulas, raw SQL/export, individual audience lists, private-message analysis, hosted LLM, or guaranteed-performance claims
@@ -133,19 +135,9 @@ conversion version. Refunds and reversals are explicit; no analytic result is a 
 ## Typed Projections And Worker
 
 Initial projections are typed and indexed rather than one generic `metric_name/dimension_json/value`
-table. The schema audit may select only the projection families justified by callers, drawn from:
-
-- creator-content daily;
-- creator daily;
-- user-usage daily;
-- organization-creator daily;
-- organization daily;
-- tier daily;
-- platform daily;
-- metric watermarks and reconciliation runs.
-
-Convergence 03 selects four of those families: creator daily, creator-content daily,
-creator-product daily, and organization-creator daily. Public, anonymous, and authenticated database
+table. Convergence 03 selects only the families required by its registry: viewer daily, creator daily,
+creator-content daily, creator-product daily, organization-creator daily, platform-commerce daily,
+platform-operations daily, retention cohort daily, and onboarding-funnel daily. Public, anonymous, and authenticated database
 roles receive no direct table privileges; RLS remains enabled as defense in depth and consumers use
 the authorized API rather than PostgREST projection access.
 
@@ -153,8 +145,9 @@ The existing worker runtime owns bounded leased batches, incremental watermarks,
 late-arriving facts, retry/dead-letter behavior, deterministic backfill, and source reconciliation.
 The initial schedule replaces each selected two-day UTC window in one transaction, records a
 versioned reconciliation run, and advances the watermark only after the recomputation commits. A queue
-lease may be retried or recovered by an audited admin action, but an admin state change never edits
-projection values or canonical facts.
+lease may be retried or recovered by an audited admin action, while a bounded staff command can enqueue
+a backfill or reconciliation with exact idempotency-key/request-hash replay semantics. Neither path edits
+projection values or canonical facts directly.
 Reconciliation reports discrepancies and alerts; it never silently rewrites unexplained differences.
 Hourly rollups require measured near-realtime value. A warehouse requires measured OLTP pressure,
 rollup duration, query latency, volume, or retention/cost evidence and is not a launch authority.

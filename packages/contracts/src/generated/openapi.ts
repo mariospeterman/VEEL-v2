@@ -89,6 +89,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/analytics/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enqueue an audited bounded analytics backfill or reconciliation job */
+        post: operations["enqueueAdminAnalyticsJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/session": {
         parameters: {
             query?: never;
@@ -3412,7 +3429,7 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /** @enum {string} */
-        AnalyticsMetricKey: "creator.content.published" | "creator.content.impressions" | "creator.content.qualified_views" | "creator.content.watch_seconds" | "creator.content.completed_views" | "creator.content.completion_rate" | "creator.content.early_skips" | "creator.content.replays" | "creator.engagement.likes" | "creator.engagement.comments" | "creator.engagement.saves" | "creator.engagement.shares" | "creator.social.follower_starts" | "creator.commerce.confirmed_purchases" | "creator.commerce.confirmed_gross_minor" | "creator.commerce.earnings_minor" | "creator.commerce.platform_fee_minor" | "organization.commerce.confirmed_allocations" | "organization.commerce.creator_net_minor" | "organization.commerce.management_minor";
+        AnalyticsMetricKey: "viewer.feed.impressions" | "viewer.content.qualified_views" | "viewer.content.watch_seconds" | "viewer.content.completion_rate" | "viewer.content.early_skips" | "viewer.content.replays" | "viewer.engagement.saves" | "viewer.engagement.shares" | "viewer.safety.hides" | "viewer.safety.reports" | "viewer.lifecycle.return_sessions" | "creator.content.published" | "creator.content.impressions" | "creator.content.qualified_views" | "creator.content.watch_seconds" | "creator.content.completed_views" | "creator.content.completion_rate" | "creator.content.early_skips" | "creator.content.replays" | "creator.engagement.likes" | "creator.engagement.comments" | "creator.engagement.saves" | "creator.engagement.shares" | "creator.social.follower_starts" | "creator.social.profile_opens" | "creator.social.follow_after_view" | "creator.social.follow_conversion" | "creator.commerce.confirmed_purchases" | "creator.commerce.confirmed_gross_minor" | "creator.commerce.earnings_minor" | "creator.commerce.platform_fee_minor" | "creator.commerce.offer_impressions" | "creator.commerce.unlock_conversion" | "creator.membership.starts" | "creator.membership.cancellations" | "organization.commerce.confirmed_allocations" | "organization.commerce.creator_net_minor" | "organization.commerce.management_minor" | "platform.commerce.confirmed_purchases" | "platform.commerce.confirmed_gross_minor" | "platform.commerce.platform_fee_minor" | "platform.commerce.referral_minor" | "platform.commerce.management_minor" | "platform.operations.moderation_jobs" | "platform.operations.moderation_decision_seconds" | "platform.operations.provider_failures" | "platform.operations.worker_retries" | "platform.operations.worker_dead_letters" | "platform.lifecycle.retained_users" | "platform.onboarding.completed" | "platform.onboarding.step_events" | "platform.onboarding.completion_rate";
         AnalyticsWindow: {
             /** Format: date */
             startDate: string;
@@ -3425,6 +3442,12 @@ export interface components {
             /** Format: uuid */
             creatorUserId?: string;
         };
+        AnalyticsViewerScope: {
+            /** @constant */
+            type: "viewer";
+            /** Format: uuid */
+            userId?: string;
+        };
         AnalyticsOrganizationScope: {
             /** @constant */
             type: "organization";
@@ -3432,6 +3455,11 @@ export interface components {
             organizationId: string;
             /** Format: uuid */
             creatorUserId?: string;
+        };
+        AnalyticsPlatformScope: {
+            /** @constant */
+            type: "platform";
+            purposeCode: string;
         };
         AnalyticsDimensions: {
             /** Format: uuid */
@@ -3443,9 +3471,24 @@ export interface components {
             productType?: string;
             /** Format: uuid */
             creatorUserId?: string;
+            /** @enum {string} */
+            onboardingEvent?: "landing_viewed" | "login_opened" | "onboarding_opened" | "auth_method_selected" | "wallet_runtime_ready" | "wallet_authentication_completed" | "wallet_ownership_verified" | "profile_step_viewed" | "profile_step_completed" | "age_step_started" | "age_step_completed" | "age_step_failed" | "protected_app_entered" | "onboarding_abandoned" | "returning_login_completed" | "account_not_found";
+            /** Format: date */
+            cohortStartDate?: string;
         };
+        AnalyticsScope: {
+            /** @enum {string} */
+            type: "viewer" | "creator" | "organization" | "platform";
+            /** Format: uuid */
+            userId?: string;
+            /** Format: uuid */
+            creatorUserId?: string;
+            /** Format: uuid */
+            organizationId?: string;
+            purposeCode?: string;
+        } & (unknown & unknown);
         AnalyticsQueryRequest: {
-            scope: components["schemas"]["AnalyticsCreatorScope"] | components["schemas"]["AnalyticsOrganizationScope"];
+            scope: components["schemas"]["AnalyticsScope"];
             metricKeys: components["schemas"]["AnalyticsMetricKey"][];
             window: components["schemas"]["AnalyticsWindow"];
             comparisonWindow?: components["schemas"]["AnalyticsWindow"];
@@ -3455,13 +3498,15 @@ export interface components {
             timezone: "UTC";
             dimensions?: components["schemas"]["AnalyticsDimensions"];
         };
+        /** @description Ratios are JSON numbers; lossless counts, seconds, and native minor units are decimal strings. */
+        AnalyticsScalar: number | string;
         AnalyticsMetricPoint: {
             /** Format: date */
             bucketDate: string | null;
-            value: number | null;
-            numerator: number | null;
-            denominator: number | null;
-            sampleSize: number;
+            value: components["schemas"]["AnalyticsScalar"] | null;
+            numerator: string | null;
+            denominator: string | null;
+            sampleSize: string;
             /** @enum {string} */
             privacyDecision: "released" | "suppressed_minimum_cohort";
         };
@@ -3473,7 +3518,7 @@ export interface components {
             unit: "count" | "seconds" | "ratio" | "minor_units";
             dimensions: components["schemas"]["AnalyticsDimensions"];
             points: components["schemas"]["AnalyticsMetricPoint"][];
-            comparisonValue: number | null;
+            comparisonValue: components["schemas"]["AnalyticsScalar"] | null;
             deltaPercent: number | null;
         };
         AnalyticsInsight: {
@@ -3491,7 +3536,7 @@ export interface components {
             expiresAt: string;
         };
         AnalyticsQueryResponse: {
-            scope: components["schemas"]["AnalyticsCreatorScope"] | components["schemas"]["AnalyticsOrganizationScope"];
+            scope: components["schemas"]["AnalyticsScope"];
             window: components["schemas"]["AnalyticsWindow"];
             comparisonWindow: components["schemas"]["AnalyticsWindow"] | null;
             /** @enum {string} */
@@ -3524,6 +3569,23 @@ export interface components {
             latestReconciliationState: "matched" | "mismatch" | "failed" | null;
             latestReconciliationVariance: number | null;
             suppressionCountToday: number;
+        };
+        AnalyticsProjectionJobRequest: {
+            /** @enum {string} */
+            jobType: "backfill" | "reconciliation";
+            window: components["schemas"]["AnalyticsWindow"];
+            reason: string;
+        };
+        AnalyticsProjectionJobReceipt: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            jobType: "backfill" | "reconciliation";
+            /** @enum {string} */
+            state: "queued" | "leased" | "retry" | "completed" | "dead_letter";
+            window: components["schemas"]["AnalyticsWindow"];
+            /** Format: date-time */
+            createdAt: string;
         };
         RecordWebVitalRequest: {
             /** @enum {string} */
@@ -8249,6 +8311,39 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    enqueueAdminAnalyticsJob: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalyticsProjectionJobRequest"];
+            };
+        };
+        responses: {
+            /** @description Existing or newly queued bounded analytics job */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsProjectionJobReceipt"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     getSession: {
         parameters: {
             query?: never;
@@ -11443,7 +11538,7 @@ export interface operations {
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
             };
             path: {
-                queueName: "subscription_collections" | "notification_deliveries" | "payment_confirmation_emails" | "provider_event_replays" | "media_moderation";
+                queueName: "subscription_collections" | "notification_deliveries" | "payment_confirmation_emails" | "provider_event_replays" | "media_moderation" | "analytics_projections";
                 jobId: string;
             };
             cookie?: never;

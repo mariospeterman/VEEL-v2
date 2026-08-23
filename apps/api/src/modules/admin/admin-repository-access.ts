@@ -166,6 +166,15 @@ export function createAccessRepository(
             count(*) filter (where state = 'dead_letter') as dead_letter_count,
             min(next_attempt_at) filter (where state in ('queued', 'retry')) as oldest_pending_at
           from media_moderation_jobs
+          union all
+          select
+            'analytics_projections'::text as name,
+            count(*) filter (where state in ('queued', 'retry')) as pending_count,
+            count(*) filter (where state = 'leased') as processing_count,
+            count(*) filter (where state = 'retry') as failed_count,
+            count(*) filter (where state = 'dead_letter') as dead_letter_count,
+            min(next_attempt_at) filter (where state in ('queued', 'retry')) as oldest_pending_at
+          from analytics_projection_jobs
         `
       ]);
 

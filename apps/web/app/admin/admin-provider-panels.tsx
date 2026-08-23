@@ -27,6 +27,7 @@ import {
   MediaProviderRow,
   ProviderEventRow
 } from "./admin-rows";
+import { enqueueAnalyticsProjectionJobAction } from "./actions";
 
 export function ProviderEventsPanel({
   providerEvents
@@ -209,11 +210,36 @@ export function AnalyticsHealthPanel({
       <Fact label="Data through" value={timestampLabel(health.dataThrough)} />
       <Fact label="Lag" value={health.lagSeconds === null ? "Unavailable" : `${health.lagSeconds}s`} />
       <Fact label="Queued batches" value={health.queuedJobCount.toString()} />
+      <Fact label="Leased batches" value={health.leasedJobCount.toString()} />
       <Fact label="Retrying batches" value={health.retryJobCount.toString()} />
       <Fact label="Dead letters" value={health.deadLetterJobCount.toString()} />
       <Fact label="Reconciliation" value={health.latestReconciliationState ?? "No run"} />
       <Fact label="Variance" value={health.latestReconciliationVariance?.toString() ?? "Unavailable"} />
       <Fact label="Suppressed today" value={health.suppressionCountToday.toString()} />
+      <form action={enqueueAnalyticsProjectionJobAction} className="grid gap-2 border-t border-(--line) pt-3 sm:col-span-2 xl:col-span-1">
+        <label className="grid gap-1 text-xs text-(--muted)">
+          <span>Projection action</span>
+          <select className="min-h-10 rounded border border-(--line) bg-(--panel) px-2 text-(--foreground)" defaultValue="backfill" name="jobType">
+            <option value="backfill">Backfill</option>
+            <option value="reconciliation">Reconcile</option>
+          </select>
+        </label>
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+          <label className="grid gap-1 text-xs text-(--muted)">
+            <span>Start date</span>
+            <input className="min-h-10 rounded border border-(--line) bg-(--panel) px-3 text-(--foreground)" name="startDate" required type="date" />
+          </label>
+          <label className="grid gap-1 text-xs text-(--muted)">
+            <span>End date</span>
+            <input className="min-h-10 rounded border border-(--line) bg-(--panel) px-3 text-(--foreground)" name="endDate" required type="date" />
+          </label>
+        </div>
+        <label className="grid gap-1 text-xs text-(--muted)">
+          <span>Audit reason</span>
+          <input className="min-h-10 rounded border border-(--line) bg-(--panel) px-3 text-(--foreground)" maxLength={500} minLength={3} name="reason" required />
+        </label>
+        <button className="min-h-10 rounded border border-(--line) px-3 font-semibold" type="submit">Queue projection job</button>
+      </form>
     </div>
   );
 }

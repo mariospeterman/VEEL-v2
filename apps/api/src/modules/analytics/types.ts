@@ -1,6 +1,8 @@
 export type AnalyticsScope =
+  | { type: "viewer"; userId?: string }
   | { type: "creator"; creatorUserId?: string }
-  | { type: "organization"; organizationId: string; creatorUserId?: string };
+  | { type: "organization"; organizationId: string; creatorUserId?: string }
+  | { type: "platform"; purposeCode: string };
 
 export type AnalyticsGranularity = "day" | "total";
 
@@ -10,7 +12,11 @@ export interface AnalyticsDimensions {
   mediaType?: string;
   currency?: "SOL" | "USDC";
   productType?: string;
+  onboardingEvent?: string;
+  cohortStartDate?: string;
 }
+
+export type AnalyticsScalar = string | number;
 
 export interface AnalyticsWindow {
   startDate: string;
@@ -29,18 +35,18 @@ export interface AnalyticsQueryRequest {
 
 export interface AnalyticsRawPoint {
   bucketDate: string | null;
-  value: number;
-  numerator: number | null;
-  denominator: number | null;
-  sampleSize: number;
+  value: AnalyticsScalar;
+  numerator: string | null;
+  denominator: string | null;
+  sampleSize: string;
 }
 
 export interface AnalyticsMetricPoint {
   bucketDate: string | null;
-  value: number | null;
-  numerator: number | null;
-  denominator: number | null;
-  sampleSize: number;
+  value: AnalyticsScalar | null;
+  numerator: string | null;
+  denominator: string | null;
+  sampleSize: string;
   privacyDecision: "released" | "suppressed_minimum_cohort";
 }
 
@@ -51,7 +57,7 @@ export interface AnalyticsMetricResult {
   unit: "count" | "seconds" | "ratio" | "minor_units";
   dimensions: AnalyticsDimensions;
   points: AnalyticsMetricPoint[];
-  comparisonValue: number | null;
+  comparisonValue: AnalyticsScalar | null;
   deltaPercent: number | null;
 }
 
@@ -95,6 +101,14 @@ export interface AnalyticsProjectionHealth {
   suppressionCountToday: number;
 }
 
+export interface AnalyticsProjectionJobReceipt {
+  id: string;
+  jobType: "backfill" | "reconciliation";
+  state: "queued" | "leased" | "retry" | "completed" | "dead_letter";
+  window: AnalyticsWindow;
+  createdAt: string;
+}
+
 export interface AnalyticsRepository {
   authorizeScope(actorUserId: string, scope: AnalyticsScope): Promise<AnalyticsScope | null>;
   queryMetric(input: {
@@ -107,5 +121,13 @@ export interface AnalyticsRepository {
   getWatermark(): Promise<{ definitionVersion: number; dataThrough: Date; state: string } | null>;
   recordSuppression(input: { metricKey: string; scopeType: AnalyticsScope["type"] }): Promise<void>;
   getProjectionHealth(now?: Date): Promise<AnalyticsProjectionHealth>;
+  enqueueProjectionJob(input: {
+    actorUserId: string;
+    jobType: "backfill" | "reconciliation";
+    window: AnalyticsWindow;
+    reason: string;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<AnalyticsProjectionJobReceipt>;
   close?(): Promise<void>;
 }

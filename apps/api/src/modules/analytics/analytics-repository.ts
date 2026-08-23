@@ -1,6 +1,6 @@
 import type postgres from "postgres";
 import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
-import { AnalyticsRepositoryConfigurationError } from "./analytics-errors.js";
+import { AnalyticsIdempotencyConflictError, AnalyticsRepositoryConfigurationError } from "./analytics-errors.js";
 import { analyticsProjectionKey, getMetricDefinition } from "./metric-registry.js";
 import type {
   AnalyticsDimensions,
@@ -30,7 +30,8 @@ export function createPostgresAnalyticsRepository(database?: string | PostgresSq
       queryMetric: fail,
       getWatermark: fail,
       recordSuppression: fail,
-      getProjectionHealth: fail
+      getProjectionHealth: fail,
+      enqueueProjectionJob: fail
     };
   }
 
@@ -38,9 +39,23 @@ export function createPostgresAnalyticsRepository(database?: string | PostgresSq
 
   return {
     async authorizeScope(actorUserId, scope) {
+      if (scope.type === "viewer") {
+        const userId = scope.userId ?? actorUserId;
+        return userId === actorUserId ? { type: "viewer", userId } : null;
+      }
       if (scope.type === "creator") {
         const creatorUserId = scope.creatorUserId ?? actorUserId;
         return creatorUserId === actorUserId ? { type: "creator", creatorUserId } : null;
+      }
+
+      if (scope.type === "platform") {
+        const rows = await sql<{ allowed: boolean }[]>`
+          select exists (
+            select 1 from staff_memberships
+            where user_id = ${actorUserId}::uuid and state = 'active'
+          ) as allowed
+        `;
+        return rows[0]?.allowed ? scope : null;
       }
 
       const rows = await sql<{ allowed: boolean }[]>`
@@ -71,15 +86,25 @@ export function createPostgresAnalyticsRepository(database?: string | PostgresSq
       const definition = getMetricDefinition(input.metricKey);
       if (!definition) return [];
 
-      const rows = definition.source === "creator_daily"
-        ? await queryCreatorDaily(sql, input.window, input.granularity, input.scope, definition.valueColumn as string)
+      const rows = definition.source === "viewer_daily"
+        ? await queryViewerDaily(sql, input.window, input.granularity, input.scope, definition)
+        : definition.source === "creator_daily"
+        ? await queryCreatorDaily(sql, input.window, input.granularity, input.scope, definition)
         : definition.source === "creator_content_daily"
           ? await queryCreatorContentDaily(sql, input.window, input.granularity, input.scope, input.dimensions, definition)
           : definition.source === "creator_product_daily"
-            ? await queryCreatorProductDaily(sql, input.window, input.granularity, input.scope, input.dimensions, definition.valueColumn as string)
-            : await queryOrganizationCreatorDaily(sql, input.window, input.granularity, input.scope, input.dimensions, definition.valueColumn as string);
+            ? await queryCreatorProductDaily(sql, input.window, input.granularity, input.scope, input.dimensions, definition)
+            : definition.source === "organization_creator_daily"
+              ? await queryOrganizationCreatorDaily(sql, input.window, input.granularity, input.scope, input.dimensions, definition.valueColumn as string)
+              : definition.source === "platform_commerce_daily"
+                ? await queryPlatformCommerceDaily(sql, input.window, input.granularity, input.scope, input.dimensions, definition.valueColumn as string)
+                : definition.source === "platform_operations_daily"
+                  ? await queryPlatformOperationsDaily(sql, input.window, input.granularity, input.scope, definition.valueColumn as string)
+                  : definition.source === "retention_daily"
+                    ? await queryRetentionDaily(sql, input.window, input.granularity, input.scope, input.dimensions)
+                    : await queryOnboardingDaily(sql, input.window, input.granularity, input.scope, input.dimensions, definition);
 
-      return rows.map(toRawPoint);
+      return rows.map((row) => toRawPoint(row, definition.unit));
     },
 
     async getWatermark() {
@@ -149,9 +174,94 @@ export function createPostgresAnalyticsRepository(database?: string | PostgresSq
       return toProjectionHealth(rows[0], now);
     },
 
+    async enqueueProjectionJob(input) {
+      return sql.begin(async (transaction) => {
+        await transaction`
+          select pg_advisory_xact_lock(
+            hashtextextended(${`${analyticsProjectionKey}:${input.idempotencyKey}`}, 0)
+          )
+        `;
+        const existingRows = await transaction<{
+          id: string;
+          reason: "backfill" | "reconciliation";
+          state: "queued" | "leased" | "retry" | "completed" | "dead_letter";
+          window_starts_on: string;
+          window_ends_on: string;
+          request_hash: string | null;
+          created_at: Date;
+        }[]>`
+          select id, reason, state, window_starts_on::text, window_ends_on::text,
+            request_hash, created_at
+          from analytics_projection_jobs
+          where projection_key = ${analyticsProjectionKey}
+            and idempotency_key = ${input.idempotencyKey}
+          limit 1
+        `;
+        const existing = existingRows[0];
+        if (existing) {
+          if (existing.request_hash !== input.requestHash) throw new AnalyticsIdempotencyConflictError();
+          return toProjectionJobReceipt(existing);
+        }
+
+        const rows = await transaction<{
+          id: string;
+          reason: "backfill" | "reconciliation";
+          state: "queued" | "leased" | "retry" | "completed" | "dead_letter";
+          window_starts_on: string;
+          window_ends_on: string;
+          request_hash: string | null;
+          created_at: Date;
+        }[]>`
+          insert into analytics_projection_jobs (
+            projection_key, definition_version, window_starts_on, window_ends_on,
+            reason, idempotency_key, request_hash, next_attempt_at
+          ) values (
+            ${analyticsProjectionKey}, 1, ${input.window.startDate}::date, ${input.window.endDate}::date,
+            ${input.jobType}, ${input.idempotencyKey}, ${input.requestHash}, now()
+          )
+          returning id, reason, state, window_starts_on::text, window_ends_on::text,
+            request_hash, created_at
+        `;
+        const job = rows[0];
+        if (!job) throw new AnalyticsRepositoryConfigurationError();
+        await transaction`
+          insert into audit_events (
+            id, actor_user_id, subject_type, subject_id, action, metadata
+          ) values (
+            gen_random_uuid(), ${input.actorUserId}::uuid, 'analytics_projection_job', ${job.id}::uuid,
+            'analytics_projection_job_enqueued',
+            ${transaction.json({
+              jobType: input.jobType,
+              window: input.window,
+              reason: input.reason,
+              definitionVersion: 1
+            } as unknown as postgres.JSONValue)}
+          )
+        `;
+        return toProjectionJobReceipt(job);
+      });
+    },
+
     async close() {
       if (ownsClient) await sql.end({ timeout: 5 });
     }
+  };
+}
+
+function toProjectionJobReceipt(row: {
+  id: string;
+  reason: "backfill" | "reconciliation";
+  state: "queued" | "leased" | "retry" | "completed" | "dead_letter";
+  window_starts_on: string;
+  window_ends_on: string;
+  created_at: Date;
+}) {
+  return {
+    id: row.id,
+    jobType: row.reason,
+    state: row.state,
+    window: { startDate: row.window_starts_on, endDate: row.window_ends_on },
+    createdAt: row.created_at.toISOString()
   };
 }
 
@@ -160,13 +270,21 @@ async function queryCreatorDaily(
   window: AnalyticsWindow,
   granularity: AnalyticsGranularity,
   scope: AnalyticsScope,
-  column: string
+  definition: NonNullable<ReturnType<typeof getMetricDefinition>>
 ): Promise<MetricRow[]> {
   if (scope.type !== "creator" || !scope.creatorUserId) return [];
+  const numerator = definition.numeratorColumn ?? definition.valueColumn as string;
+  const denominator = definition.denominatorColumn ?? null;
+  const sampleColumn = denominator ?? numerator;
   if (granularity === "day") {
     return sql<MetricRow[]>`
-      select bucket_date::text, sum(${sql(column)}) as value, null::bigint as numerator,
-             null::bigint as denominator, sum(${sql(column)}) as sample_size
+      select bucket_date::text,
+        case when ${denominator}::text is null then sum(${sql(numerator)})
+             when sum(${sql(denominator ?? numerator)}) = 0 then 0
+             else sum(${sql(numerator)})::numeric / sum(${sql(denominator ?? numerator)}) end as value,
+        ${denominator ? sql`sum(${sql(numerator)})` : sql`null::bigint`} as numerator,
+        ${denominator ? sql`sum(${sql(denominator)})` : sql`null::bigint`} as denominator,
+        sum(${sql(sampleColumn)}) as sample_size
       from analytics_creator_daily
       where creator_user_id = ${scope.creatorUserId}::uuid
         and bucket_date between ${window.startDate}::date and ${window.endDate}::date
@@ -174,12 +292,42 @@ async function queryCreatorDaily(
     `;
   }
   return sql<MetricRow[]>`
-    select null::text as bucket_date, coalesce(sum(${sql(column)}), 0) as value,
-           null::bigint as numerator, null::bigint as denominator,
-           coalesce(sum(${sql(column)}), 0) as sample_size
+    select null::text as bucket_date,
+      case when ${denominator}::text is null then coalesce(sum(${sql(numerator)}), 0)
+           when coalesce(sum(${sql(denominator ?? numerator)}), 0) = 0 then 0
+           else sum(${sql(numerator)})::numeric / sum(${sql(denominator ?? numerator)}) end as value,
+      ${denominator ? sql`coalesce(sum(${sql(numerator)}), 0)` : sql`null::bigint`} as numerator,
+      ${denominator ? sql`coalesce(sum(${sql(denominator)}), 0)` : sql`null::bigint`} as denominator,
+      coalesce(sum(${sql(sampleColumn)}), 0) as sample_size
     from analytics_creator_daily
     where creator_user_id = ${scope.creatorUserId}::uuid
       and bucket_date between ${window.startDate}::date and ${window.endDate}::date
+  `;
+}
+
+async function queryViewerDaily(
+  sql: postgres.Sql,
+  window: AnalyticsWindow,
+  granularity: AnalyticsGranularity,
+  scope: AnalyticsScope,
+  definition: NonNullable<ReturnType<typeof getMetricDefinition>>
+): Promise<MetricRow[]> {
+  if (scope.type !== "viewer" || !scope.userId) return [];
+  const numerator = definition.numeratorColumn ?? definition.valueColumn as string;
+  const denominator = definition.denominatorColumn ?? null;
+  const bucket = granularity === "day" ? sql`bucket_date` : sql`null::date`;
+  return sql<MetricRow[]>`
+    select ${granularity === "day" ? sql`bucket_date::text` : sql`null::text`} as bucket_date,
+      case when ${denominator}::text is null then coalesce(sum(${sql(numerator)}), 0)
+           when coalesce(sum(${sql(denominator ?? numerator)}), 0) = 0 then 0
+           else sum(${sql(numerator)})::numeric / sum(${sql(denominator ?? numerator)}) end as value,
+      ${denominator ? sql`coalesce(sum(${sql(numerator)}), 0)` : sql`null::bigint`} as numerator,
+      ${denominator ? sql`coalesce(sum(${sql(denominator)}), 0)` : sql`null::bigint`} as denominator,
+      coalesce(sum(${sql(denominator ?? numerator)}), 0) as sample_size
+    from analytics_viewer_daily
+    where user_id = ${scope.userId}::uuid
+      and bucket_date between ${window.startDate}::date and ${window.endDate}::date
+    ${granularity === "day" ? sql`group by ${bucket} order by ${bucket}` : sql``}
   `;
 }
 
@@ -235,15 +383,22 @@ async function queryCreatorProductDaily(
   granularity: AnalyticsGranularity,
   scope: AnalyticsScope,
   dimensions: AnalyticsDimensions,
-  column: string
+  definition: NonNullable<ReturnType<typeof getMetricDefinition>>
 ): Promise<MetricRow[]> {
   if (scope.type !== "creator" || !scope.creatorUserId || !dimensions.currency) return [];
   const productType = dimensions.productType ?? null;
+  const numerator = definition.numeratorColumn ?? definition.valueColumn as string;
+  const denominator = definition.denominatorColumn ?? null;
+  const sampleColumn = denominator ?? (definition.unit === "minor_units" ? "confirmed_purchase_count" : numerator);
   const group = granularity === "day" ? sql`bucket_date` : sql`null::date`;
   return sql<MetricRow[]>`
     select ${granularity === "day" ? sql`bucket_date::text` : sql`null::text`} as bucket_date,
-      coalesce(sum(${sql(column)}), 0) as value, null::bigint as numerator,
-      null::bigint as denominator, coalesce(sum(confirmed_purchase_count), 0) as sample_size
+      case when ${denominator}::text is null then coalesce(sum(${sql(numerator)}), 0)
+           when coalesce(sum(${sql(denominator ?? numerator)}), 0) = 0 then 0
+           else sum(${sql(numerator)})::numeric / sum(${sql(denominator ?? numerator)}) end as value,
+      ${denominator ? sql`coalesce(sum(${sql(numerator)}), 0)` : sql`null::bigint`} as numerator,
+      ${denominator ? sql`coalesce(sum(${sql(denominator)}), 0)` : sql`null::bigint`} as denominator,
+      coalesce(sum(${sql(sampleColumn)}), 0) as sample_size
     from analytics_creator_product_daily
     where creator_user_id = ${scope.creatorUserId}::uuid
       and bucket_date between ${window.startDate}::date and ${window.endDate}::date
@@ -288,13 +443,108 @@ async function queryOrganizationCreatorDaily(
   `;
 }
 
-function toRawPoint(row: MetricRow): AnalyticsRawPoint {
+async function queryPlatformCommerceDaily(
+  sql: postgres.Sql,
+  window: AnalyticsWindow,
+  granularity: AnalyticsGranularity,
+  scope: AnalyticsScope,
+  dimensions: AnalyticsDimensions,
+  column: string
+): Promise<MetricRow[]> {
+  if (scope.type !== "platform" || !dimensions.currency) return [];
+  const bucket = granularity === "day" ? sql`bucket_date` : sql`null::date`;
+  const sampleColumn = column === "confirmed_purchase_count" ? column : "confirmed_purchase_count";
+  return sql<MetricRow[]>`
+    select ${granularity === "day" ? sql`bucket_date::text` : sql`null::text`} as bucket_date,
+      coalesce(sum(${sql(column)}), 0) as value, null::bigint as numerator,
+      null::bigint as denominator, coalesce(sum(${sql(sampleColumn)}), 0) as sample_size
+    from analytics_platform_commerce_daily
+    where currency = ${dimensions.currency}
+      and bucket_date between ${window.startDate}::date and ${window.endDate}::date
+    ${granularity === "day" ? sql`group by ${bucket} order by ${bucket}` : sql``}
+  `;
+}
+
+async function queryPlatformOperationsDaily(
+  sql: postgres.Sql,
+  window: AnalyticsWindow,
+  granularity: AnalyticsGranularity,
+  scope: AnalyticsScope,
+  column: string
+): Promise<MetricRow[]> {
+  if (scope.type !== "platform") return [];
+  const bucket = granularity === "day" ? sql`bucket_date` : sql`null::date`;
+  return sql<MetricRow[]>`
+    select ${granularity === "day" ? sql`bucket_date::text` : sql`null::text`} as bucket_date,
+      coalesce(sum(${sql(column)}), 0) as value, null::bigint as numerator,
+      null::bigint as denominator, coalesce(sum(${sql(column)}), 0) as sample_size
+    from analytics_platform_operations_daily
+    where bucket_date between ${window.startDate}::date and ${window.endDate}::date
+    ${granularity === "day" ? sql`group by ${bucket} order by ${bucket}` : sql``}
+  `;
+}
+
+async function queryRetentionDaily(
+  sql: postgres.Sql,
+  window: AnalyticsWindow,
+  granularity: AnalyticsGranularity,
+  scope: AnalyticsScope,
+  dimensions: AnalyticsDimensions
+): Promise<MetricRow[]> {
+  if (scope.type !== "platform" || !dimensions.cohortStartDate) return [];
+  const bucket = granularity === "day" ? sql`activity_date` : sql`null::date`;
+  return sql<MetricRow[]>`
+    select ${granularity === "day" ? sql`activity_date::text` : sql`null::text`} as bucket_date,
+      coalesce(sum(active_user_count), 0) as value, null::bigint as numerator,
+      null::bigint as denominator, coalesce(sum(active_user_count), 0) as sample_size
+    from analytics_retention_daily
+    where cohort_date = ${dimensions.cohortStartDate}::date
+      and activity_date between ${window.startDate}::date and ${window.endDate}::date
+    ${granularity === "day" ? sql`group by ${bucket} order by ${bucket}` : sql``}
+  `;
+}
+
+async function queryOnboardingDaily(
+  sql: postgres.Sql,
+  window: AnalyticsWindow,
+  granularity: AnalyticsGranularity,
+  scope: AnalyticsScope,
+  dimensions: AnalyticsDimensions,
+  definition: NonNullable<ReturnType<typeof getMetricDefinition>>
+): Promise<MetricRow[]> {
+  if (scope.type !== "platform") return [];
+  const requestedEvent = definition.numeratorEvent ?? dimensions.onboardingEvent ?? null;
+  const denominatorEvent = definition.denominatorEvent ?? null;
+  if (!requestedEvent) return [];
+  const bucket = granularity === "day" ? sql`bucket_date` : sql`null::date`;
+  return sql<MetricRow[]>`
+    select ${granularity === "day" ? sql`bucket_date::text` : sql`null::text`} as bucket_date,
+      case when ${denominatorEvent}::text is null
+             then coalesce(sum(distinct_journey_count) filter (where event_key = ${requestedEvent}), 0)
+           when coalesce(sum(distinct_journey_count) filter (where event_key = ${denominatorEvent}), 0) = 0 then 0
+           else coalesce(sum(distinct_journey_count) filter (where event_key = ${requestedEvent}), 0)::numeric
+             / sum(distinct_journey_count) filter (where event_key = ${denominatorEvent}) end as value,
+      ${denominatorEvent
+        ? sql`coalesce(sum(distinct_journey_count) filter (where event_key = ${requestedEvent}), 0)`
+        : sql`null::bigint`} as numerator,
+      ${denominatorEvent
+        ? sql`coalesce(sum(distinct_journey_count) filter (where event_key = ${denominatorEvent}), 0)`
+        : sql`null::bigint`} as denominator,
+      coalesce(sum(distinct_journey_count) filter (where event_key = ${denominatorEvent ?? requestedEvent}), 0) as sample_size
+    from analytics_onboarding_daily
+    where bucket_date between ${window.startDate}::date and ${window.endDate}::date
+      and event_key in (${requestedEvent}, ${denominatorEvent ?? requestedEvent})
+    ${granularity === "day" ? sql`group by ${bucket} order by ${bucket}` : sql``}
+  `;
+}
+
+function toRawPoint(row: MetricRow, unit: "count" | "seconds" | "ratio" | "minor_units"): AnalyticsRawPoint {
   return {
     bucketDate: row.bucket_date,
-    value: Number(row.value),
-    numerator: row.numerator === null ? null : Number(row.numerator),
-    denominator: row.denominator === null ? null : Number(row.denominator),
-    sampleSize: Number(row.sample_size)
+    value: unit === "ratio" ? Number(row.value) : String(row.value),
+    numerator: row.numerator === null ? null : String(row.numerator),
+    denominator: row.denominator === null ? null : String(row.denominator),
+    sampleSize: String(row.sample_size)
   };
 }
 

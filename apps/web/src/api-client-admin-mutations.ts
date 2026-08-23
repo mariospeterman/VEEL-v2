@@ -20,8 +20,17 @@ import type {
   AdminSupportCaseActionRequest,
   AdminSupportPolicy,
   AdminSupportPolicyActionRequest,
+  AnalyticsProjectionJobReceipt,
+  AnalyticsProjectionJobRequest,
   ApiResult
 } from "./api-client-types";
+
+export async function enqueueAdminAnalyticsJob(
+  body: AnalyticsProjectionJobRequest,
+  idempotencyKey: string
+): Promise<ApiResult<AnalyticsProjectionJobReceipt>> {
+  return postJson<AnalyticsProjectionJobReceipt>("/v1/admin/analytics/jobs", body, idempotencyKey);
+}
 
 export async function provisionAdminOrganization(
   body: AdminOrganizationProvisionRequest,

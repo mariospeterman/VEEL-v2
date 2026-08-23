@@ -241,6 +241,32 @@ describe("runAnalyticsProjectionTick", () => {
     expect(repository.outcomes).toEqual([expect.objectContaining({ state: "completed" })]);
   });
 
+  it("surfaces source-to-projection variance instead of treating it as matched", async () => {
+    const repository = repositoryFixture({
+      async projectWindow() {
+        return {
+          sourceRowCount: 5,
+          projectedRowCount: 4,
+          varianceCount: -1,
+          projectedTableRowCount: 3,
+          dataThrough: new Date("2026-08-23T23:59:59.999Z"),
+          details: { sourceImpressions: 5, projectedImpressions: 4 }
+        };
+      }
+    });
+
+    await expect(runAnalyticsProjectionTick({ repository })).resolves.toMatchObject({
+      completed: 1,
+      mismatched: 1
+    });
+    expect(repository.outcomes).toEqual([
+      expect.objectContaining({
+        state: "completed",
+        evidence: expect.objectContaining({ varianceCount: -1 })
+      })
+    ]);
+  });
+
   it("keeps a failed batch retryable and redacts the implementation error", async () => {
     const repository = repositoryFixture({
       async projectWindow() { throw new Error("raw database credentials and query"); }

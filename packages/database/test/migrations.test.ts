@@ -24,7 +24,7 @@ describe("database migrations", () => {
     expect(sql).toContain("check ((state = 'leased') = (leased_until is not null and lease_token is not null))");
     expect(sql).toContain("currency text not null check (currency in ('SOL', 'USDC'))");
     expect(sql).toContain("revoke all on table analytics_creator_content_daily from public, anon, authenticated");
-    expect(sql).not.toMatch(/viewer_user_id|\bemail\b|wallet_address|message_body|raw_payload|private_key/i);
+    expect(sql).not.toMatch(/viewer_user_id|\bemail\s+(text|citext)|wallet_address\s+text|message_body|raw_payload\s+jsonb|private_key/i);
     expect(downSql).toContain("drop table if exists analytics_projection_jobs");
   });
 

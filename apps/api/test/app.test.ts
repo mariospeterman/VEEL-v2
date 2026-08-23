@@ -9334,6 +9334,18 @@ describe("buildApi", () => {
 
     expect(deadLetterRetryResponse.statusCode).toBe(202);
 
+    const analyticsProjectionRetryResponse = await app.inject({
+      method: "POST",
+      url: "/v1/admin/worker-queues/analytics_projections/jobs/00000000-0000-4000-8000-0000000000b1/retry",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "analytics-projection-dead-letter-retry-key"
+      },
+      payload: { reason: "retry after correcting the analytics projection failure" }
+    });
+
+    expect(analyticsProjectionRetryResponse.statusCode).toBe(202);
+
     await app.close();
   });
 
