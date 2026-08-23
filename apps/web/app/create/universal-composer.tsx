@@ -14,7 +14,7 @@ import {
   nsfwLabels,
   representationModes,
   visibilityValues
-} from "./create-workspace-state";
+} from "./composer-options";
 import { Select } from "./create-workspace-fields";
 
 type ComposerFormat = "media" | "text" | "poll";

@@ -240,6 +240,12 @@ export async function registerContentUploadRoutes(
           message: "Content draft was not found"
         });
       }
+      if (!["bit", "clip", "vod", "live_replay", "carousel"].includes(content.mediaType)) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: "This draft does not accept video assets"
+        });
+      }
 
       const creatorAccess = await verifyCreatorCapability(
         access.supabaseUserId,

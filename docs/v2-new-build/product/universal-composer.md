@@ -158,6 +158,15 @@ label is derived from canonical provenance and moderation policy, not browser co
 
 ## Renderer Family
 
+The Create surface uses one media selection step. A single image becomes an `image` draft, a single
+video retains an explicit Bit/Clip/Long video choice, and any two-to-ten image/video selection
+becomes one `carousel` draft. Images continue through the private server-streamed Storage boundary;
+videos continue through the resumable Bunny Stream TUS boundary. The UI can pause/resume the active
+video transfer, describes every ordered item, and never changes a saved draft's format merely because
+an item is added or removed. Replacement therefore remains a canonical retire-then-add operation of
+the same saved format, while a mixed composition must be selected before its carousel draft is made.
+Video-session creation rejects non-video/non-carousel drafts before any provider call.
+
 One content renderer family is reused by Home, Bits, detail, profiles, and share previews:
 
 - image renderer;

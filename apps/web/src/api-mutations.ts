@@ -351,8 +351,11 @@ export async function getMyContentPage(cursor: string): Promise<CreatorMediaPage
   );
 }
 
-export async function createMediaUpload(body: CreateUploadRequest): Promise<UploadSession> {
-  return authenticatedMutation<UploadSession>("/v1/media/uploads", "POST", body);
+export async function createMediaUpload(
+  body: CreateUploadRequest,
+  idempotencyKey?: string
+): Promise<UploadSession> {
+  return authenticatedMutation<UploadSession>("/v1/media/uploads", "POST", body, idempotencyKey);
 }
 
 export async function uploadContentImageAsset(

@@ -5089,6 +5089,88 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("rejects a video session for a non-media draft before calling Bunny", async () => {
+    let providerCalled = false;
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        throw new Error("not implemented");
+      },
+      async createMediaAsset() {
+        throw new Error("A rejected format must not create a media asset");
+      },
+      async findContentDetail() {
+        throw new Error("not implemented");
+      },
+      async findContentUnlockOffer() {
+        throw new Error("not implemented");
+      },
+      async findOwnedContentForUpload() {
+        return {
+          id: "00000000-0000-4000-8000-000000000040",
+          mediaType: "text",
+          caption: "text only",
+          nsfwLabel: "none"
+        };
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      }
+    };
+    const mediaUploadProvider: MediaUploadProviderAdapter = {
+      provider: "bunny",
+      isConfigured() {
+        providerCalled = true;
+        return true;
+      },
+      async createUploadSession() {
+        providerCalled = true;
+        throw new Error("Bunny must not be called for a text draft");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      verificationRepository: creatorVerifiedVerificationRepository(),
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository,
+      mediaUploadProvider
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/media/uploads",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "media-upload-invalid-format"
+      },
+      payload: {
+        contentId: "00000000-0000-4000-8000-000000000040",
+        fileName: "studio.mp4",
+        mimeType: "video/mp4"
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      code: "conflict",
+      message: "This draft does not accept video assets"
+    });
+    expect(providerCalled).toBe(false);
+    await app.close();
+  });
+
   it("sanitizes and durably reserves an image before private provider upload", async () => {
     const source = await sharp({
       create: {

@@ -107,8 +107,7 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   await expect(page.getByRole("heading", { name: "Share something" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Start with OBS" })).toBeVisible();
   await page.getByRole("button", { name: /Photos or video/ }).click();
-  await page.getByRole("button", { name: /^Video/ }).click();
-  await expect(page.getByRole("heading", { name: "Choose your video" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Add photos or videos" })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.cookie.includes("veel_e2e_access_token="))).toBe(true);
 
   await page.route("https://bunny.example.test/**", async (route) => {
@@ -149,10 +148,9 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   await expect(page.locator("video")).toBeVisible();
   await page.getByLabel("Content rating").selectOption("adult");
   await page.getByLabel("Caption").fill("Behind the scenes from today's studio shoot.");
-  await page.getByLabel(/every person shown is 18\+ and consented/).check();
+  await page.getByLabel(/every identifiable person is 18\+ and consented/).check();
   await page.reload();
   await page.getByRole("button", { name: /Photos or video/ }).click();
-  await page.getByRole("button", { name: /^Video/ }).click();
   await page.locator('input[type="file"]').setInputFiles({
     name: "studio-session.mp4",
     mimeType: "video/mp4",
@@ -160,21 +158,22 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   });
   await expect(page.getByLabel("Caption")).toHaveValue("Behind the scenes from today's studio shoot.");
   await expect(page.getByLabel("Content rating")).toHaveValue("adult");
-  await expect(page.getByLabel(/every person shown is 18\+ and consented/)).not.toBeChecked();
-  await page.getByLabel(/every person shown is 18\+ and consented/).check();
-  await page.getByRole("button", { name: "Upload video" }).click();
-  await expect(page.getByText("Preview ready")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByLabel(/every identifiable person is 18\+ and consented/)).not.toBeChecked();
+  await page.getByLabel("Description").fill("Studio video preview");
+  await page.getByLabel(/every identifiable person is 18\+ and consented/).check();
+  await page.getByRole("button", { name: "Upload media" }).click();
+  await expect(page.getByText("Stored privately", { exact: true })).toBeVisible({ timeout: 15_000 });
   await page.getByLabel("Content rating").selectOption("explicit");
-  await expect(page.getByLabel(/every person shown is 18\+ and consented/)).not.toBeChecked();
-  await page.getByLabel(/every person shown is 18\+ and consented/).check();
+  await expect(page.getByLabel(/every identifiable person is 18\+ and consented/)).not.toBeChecked();
+  await page.getByLabel(/every identifiable person is 18\+ and consented/).check();
   const metadataUpdate = page.waitForRequest((request) =>
     request.method() === "PATCH" &&
     new URL(request.url()).pathname === `/v1/content/${draftContentId}` &&
     request.postDataJSON()?.nsfwLabel === "explicit"
   );
-  await page.getByRole("button", { name: "Submit for review" }).click();
+  await page.getByRole("button", { name: "Review and submit" }).click();
   await metadataUpdate;
-  await expect(page.getByText("Submitted. It remains private while review completes.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Submitted for review" })).toBeVisible();
   await expect(page.getByText(/Bunny|TUS|provider/i)).toHaveCount(0);
   const createLayout = await page.evaluate(() => ({
     clientWidth: document.documentElement.clientWidth,
@@ -264,17 +263,16 @@ test("creates text and poll posts through the canonical composer", async ({ page
 test("builds an accessible private photo draft and explains its fail-closed review gate", async ({ page }) => {
   await gotoUntilVisible(page, "/app/create", () => page.getByRole("heading", { name: "Share something" }));
   await page.getByRole("button", { name: /Photos or video/ }).click();
-  await page.getByRole("button", { name: /^Photos One image/ }).click();
-  await expect(page.getByRole("heading", { name: "Choose your photos" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Add photos or videos" })).toBeVisible();
 
   await page.locator('input[type="file"]').setInputFiles({
     name: "sanitized-fixture.png",
     mimeType: "image/png",
     buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64")
   });
-  await page.getByLabel("Alt text").fill("A small red test image");
+  await page.getByLabel("Description").fill("A small red test image");
   await page.getByLabel("Caption").fill("A private photo draft");
-  await page.getByLabel(/I have the right to share these photos/).check();
+  await page.getByLabel(/I have the right to share this media/).check();
 
   const imageUpload = page.waitForRequest((request) =>
     request.method() === "POST" &&
@@ -286,7 +284,7 @@ test("builds an accessible private photo draft and explains its fail-closed revi
     new URL(request.url()).pathname === `/v1/media/assets/${imageMediaAssetId}` &&
     request.postDataJSON()?.altText === "A small red test image"
   );
-  await page.getByRole("button", { name: "Upload photos" }).click();
+  await page.getByRole("button", { name: "Upload media" }).click();
   await imageUpload;
   await assetUpdate;
   await expect(page.getByText("Stored privately", { exact: true })).toBeVisible();
@@ -300,9 +298,76 @@ test("builds an accessible private photo draft and explains its fail-closed revi
   );
   await page.getByRole("button", { name: "Remove" }).click();
   await assetRemoval;
-  await expect(page.getByRole("status")).toHaveText("Photo removed.");
+  await expect(page.getByRole("status")).toHaveText("Media removed.");
   await expect(page.getByText("Stored privately", { exact: true })).toHaveCount(0);
   await expect(page.getByText(/BUNNY_STORAGE|provider_asset|stored_private/i)).toHaveCount(0);
+});
+
+test("creates one ordered mixed-media carousel without a second format chooser", async ({ page }) => {
+  await gotoUntilVisible(page, "/app/create", () => page.getByRole("heading", { name: "Share something" }));
+  await page.getByRole("button", { name: /Photos or video/ }).click();
+  await expect(page.getByRole("heading", { name: "Add photos or videos" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Photos One image/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Video Resumable/ })).toHaveCount(0);
+
+  await page.route("https://bunny.example.test/**", async (route) => {
+    if (route.request().method() === "POST") {
+      await route.fulfill({
+        status: 201,
+        headers: {
+          "Access-Control-Allow-Origin": e2eOrigin,
+          "Access-Control-Expose-Headers": "Location,Upload-Offset,Tus-Resumable",
+          Location: "https://bunny.example.test/tus/mixed-carousel/upload-1",
+          "Tus-Resumable": "1.0.0"
+        }
+      });
+      return;
+    }
+    if (route.request().method() === "PATCH") {
+      await route.fulfill({
+        status: 204,
+        headers: {
+          "Access-Control-Allow-Origin": e2eOrigin,
+          "Access-Control-Expose-Headers": "Upload-Offset,Tus-Resumable",
+          "Upload-Offset": "10",
+          "Tus-Resumable": "1.0.0"
+        }
+      });
+      return;
+    }
+    await route.fulfill({ status: 200, headers: { "Upload-Offset": "0", "Tus-Resumable": "1.0.0" } });
+  });
+
+  await page.locator('input[type="file"]').setInputFiles([
+    {
+      name: "mixed-photo.png",
+      mimeType: "image/png",
+      buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64")
+    },
+    { name: "mixed-video.mp4", mimeType: "video/mp4", buffer: Buffer.from("mock-video") }
+  ]);
+  await expect(page.getByText("Photo 1", { exact: true })).toBeVisible();
+  await expect(page.getByText("Video 2", { exact: true })).toBeVisible();
+  await page.getByLabel("Description").nth(0).fill("A red test image");
+  await page.getByLabel("Description").nth(1).fill("A studio test video");
+  await page.getByLabel(/I have the right to share this media/).check();
+
+  const carouselCreate = page.waitForRequest((request) =>
+    request.method() === "POST" &&
+    new URL(request.url()).pathname === "/v1/content" &&
+    request.postDataJSON()?.mediaType === "carousel"
+  );
+  const imageUpload = page.waitForRequest((request) =>
+    request.method() === "POST" &&
+    new URL(request.url()).pathname === `/v1/content/${imageDraftContentId}/image-assets`
+  );
+  const videoUpload = page.waitForRequest((request) =>
+    request.method() === "POST" && new URL(request.url()).pathname === "/v1/media/uploads"
+  );
+  await page.getByRole("button", { name: "Upload media" }).click();
+  await Promise.all([carouselCreate, imageUpload, videoUpload]);
+  await expect(page.getByText("Stored privately", { exact: true })).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "Review and submit" })).toBeEnabled();
 });
 
 test("renders canonical text and poll posts and accepts backend-confirmed votes", async ({ page }) => {
@@ -656,6 +721,14 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
 
   if (method === "POST" && url.pathname === `/v1/media/assets/${mediaAssetId}/sync`) {
     sendJson(response, 202, {});
+    return;
+  }
+
+  if (method === "PATCH" && url.pathname === `/v1/media/assets/${mediaAssetId}`) {
+    sendJson(response, 200, {
+      compositionRevision: 3,
+      asset: contentItem({ id: draftContentId, accessState: "free", playbackState: "full" }).mediaAssets[0]
+    });
     return;
   }
 
