@@ -202,9 +202,14 @@ if (process.env.GITHUB_TOKEN && process.env.GITHUB_REPOSITORY) {
   }
   const activePullRequest = activePullRequests[0];
   const activeBranch = activePullRequest?.head?.ref;
-  const isScopedReviewRepair = /^codex\/converge-\d{2}(?:-[a-z0-9]+)*-repairs?$/.test(
-    activeBranch ?? "",
-  );
+  const latestMergedConvergence = /^Convergence (\d{2})\b/.exec(
+    productionStatus.latestMergedSlice ?? "",
+  )?.[1];
+  const isScopedReviewRepair = latestMergedConvergence
+    ? new RegExp(
+        `^codex/converge-${latestMergedConvergence}-(?:[a-z0-9]+-)+repairs?$`,
+      ).test(activeBranch ?? "")
+    : false;
   if (activePullRequest && activeBranch !== productionStatus.nextPlannedBranch && !isScopedReviewRepair) {
     console.error(
       `Production status drift: active branch ${activeBranch ?? "missing"} does not match planned branch ${productionStatus.nextPlannedBranch}.`,
