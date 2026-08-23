@@ -17,6 +17,15 @@ const pollOptionIds = [
 ] as const;
 const paymentIntentId = "00000000-0000-4000-8000-000000000050";
 
+function tusCorsHeaders() {
+  return {
+    "Access-Control-Allow-Headers": "Content-Type,Tus-Resumable,Upload-Length,Upload-Metadata,Upload-Offset",
+    "Access-Control-Allow-Methods": "HEAD,OPTIONS,PATCH,POST",
+    "Access-Control-Allow-Origin": e2eOrigin,
+    "Access-Control-Expose-Headers": "Location,Upload-Offset,Tus-Resumable"
+  };
+}
+
 let apiServer: Server;
 const requests: Array<{ method: string; path: string; authorization: string | undefined; idempotencyKey: string | undefined }> = [];
 
@@ -112,6 +121,10 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
 
   await page.route("https://bunny.example.test/**", async (route) => {
     const method = route.request().method();
+    if (method === "OPTIONS") {
+      await route.fulfill({ status: 204, headers: tusCorsHeaders() });
+      return;
+    }
     if (method === "POST") {
       await route.fulfill({
         status: 201,
@@ -136,7 +149,10 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
       });
       return;
     }
-    await route.fulfill({ status: 200, headers: { "Upload-Offset": "0", "Tus-Resumable": "1.0.0" } });
+    await route.fulfill({
+      status: 200,
+      headers: { ...tusCorsHeaders(), "Upload-Offset": "0", "Tus-Resumable": "1.0.0" }
+    });
   });
 
   const fileInput = page.locator('input[type="file"]');
@@ -311,7 +327,12 @@ test("creates one ordered mixed-media carousel without a second format chooser",
   await expect(page.getByRole("button", { name: /^Video Resumable/ })).toHaveCount(0);
 
   await page.route("https://bunny.example.test/**", async (route) => {
-    if (route.request().method() === "POST") {
+    const method = route.request().method();
+    if (method === "OPTIONS") {
+      await route.fulfill({ status: 204, headers: tusCorsHeaders() });
+      return;
+    }
+    if (method === "POST") {
       await route.fulfill({
         status: 201,
         headers: {
@@ -323,7 +344,7 @@ test("creates one ordered mixed-media carousel without a second format chooser",
       });
       return;
     }
-    if (route.request().method() === "PATCH") {
+    if (method === "PATCH") {
       await route.fulfill({
         status: 204,
         headers: {
@@ -335,7 +356,10 @@ test("creates one ordered mixed-media carousel without a second format chooser",
       });
       return;
     }
-    await route.fulfill({ status: 200, headers: { "Upload-Offset": "0", "Tus-Resumable": "1.0.0" } });
+    await route.fulfill({
+      status: 200,
+      headers: { ...tusCorsHeaders(), "Upload-Offset": "0", "Tus-Resumable": "1.0.0" }
+    });
   });
 
   await page.locator('input[type="file"]').setInputFiles([
