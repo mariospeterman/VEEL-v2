@@ -71,6 +71,39 @@ domain genuinely lacks it and must carry idempotency, actor/subject, event and i
 version, privacy class, and bounded typed metadata. Audit events do not become a universal analytics
 event store.
 
+## Existing Calculation Inventory
+
+The Convergence 03 repository audit classifies the existing calculations before schema or consumer
+replacement. `KEEP_DIRECT` means the value is current domain or operational state and must not be
+copied into Analytics Core. `ANALYTICS_CORE` means the current ad-hoc aggregate becomes a registry
+metric and typed projection. `FACT_SOURCE` means the existing durable record remains canonical input
+without becoming a public metric by itself.
+
+| Current owner / consumer | Current calculation and source | Classification | Target owner and migration rule |
+| --- | --- | --- | --- |
+| Creator dashboard readiness | Current profile, creator settings, recipient wallet, age/KYC and tax state; backend computes a five-check readiness percentage | `KEEP_DIRECT` | Profile/readiness policy stays authoritative. The percentage remains a presentation of current readiness state, not a trend metric. |
+| Creator dashboard earnings | Posted `creator_earning` and related `platform_fee` ledger sums, referral commission sum, and distinct confirmed-payment count; currently returned as one hard-coded SOL group | `ANALYTICS_CORE` | Registry-backed creator revenue/payment metrics replace the ad-hoc aggregate. Results group by native currency and explicit ledger state; SOL and USDC are never combined. |
+| Creator product summaries | Confirmed PaymentIntent count and amount grouped by normalized product type | `ANALYTICS_CORE` | Registry-backed purchase count and confirmed gross amount by product type/currency. Existing enablement flags stay direct creator-settings state. |
+| Creator recent activity | Latest PaymentIntent rows and receipt/confirmation state | `KEEP_DIRECT` | Activity repository remains the current transaction/read authority; Analytics Core must not become a payment-history API. |
+| Managed-creator reporting | Confirmed allocation count and creator-side, creator-net and management sums grouped by currency | `ANALYTICS_CORE` | Organization-creator daily projection consumes confirmed allocation facts. Authorization continues to require the canonical active relationship, membership, entitlement, agreement permission and creator consent. |
+| Content engagement counters | Transactional like/comment/share counters used by renderers and deterministic feed ranking | `KEEP_DIRECT` + `FACT_SOURCE` | Counter projection stays the low-latency content/read-model authority. Daily analytics derive from reaction/comment/share facts and reconcile to counters; analytics never feeds ranking. |
+| Feed impression intake | Bounded idempotent impression receipts and viewer-content impression state | `FACT_SOURCE` | Impression facts feed creator-content daily projections. Viewer identities are never exposed through analytics, and ranking continues to use its own bounded viewer state. |
+| Playback usage | Credited heartbeat seconds, playback sessions and monthly platform-usage windows used to enforce tier allowance | `KEEP_DIRECT` + `FACT_SOURCE` | Subscription/platform access keeps synchronous allowance authority. Analytics consumes credited heartbeats/session facts for watch-time and usage trends without changing allowance state. |
+| Publication and access state | Current content publication, entitlement, subscription, Event Access Pass and live-room state | `KEEP_DIRECT` + `FACT_SOURCE` | Domain repositories remain current-state authority; analytics derives bounded counts/trends only. |
+| Web Vitals and OpenTelemetry | Privacy-minimized browser performance histograms plus API/worker traces and queue/provider diagnostics | `KEEP_DIRECT` | Observability remains operational telemetry, not user/creator product analytics and not a cohort/audience source. |
+| Admin operations dashboards | Current queues, retries, dead letters, provider health and support/payment state | `KEEP_DIRECT` | Existing admin repositories remain operational truth. Analytics ops adds only projection watermark, reconciliation, version and suppression health. |
+| MCP creator metrics tool | Currently aliases the creator monetisation dashboard response | `ANALYTICS_CORE_CONSUMER` | The tool must consume the same authorized structured metric objects as web surfaces; it cannot keep a parallel formula or broaden scope. MCP protocol expansion remains Convergence 07. |
+| Web profile and Studio surfaces | Format backend amounts/counts and render readiness/allocation values; no independent aggregate query exists | `ANALYTICS_CORE_CONSUMER` | Convergence 04 replaces aggregate cards with generated-client Analytics Core results. Formatting remains presentation-only; no numerator, denominator, comparison or currency formula moves to the browser. |
+
+Inventory drift rules:
+
+- current payment, entitlement, allowance, readiness, queue and provider-status lookups stay direct;
+- historical totals, rates, trends, comparisons and cohorts use only `AnalyticsQueryService`;
+- source facts are deduplicated by their existing canonical keys before projection;
+- no migration may delete an ad-hoc calculation until parity is proven against the same bounded source
+  window, currency and authorization scope;
+- no frontend or MCP consumer may infer a suppressed numerator, denominator or audience identity.
+
 ## Metric Registry
 
 One typed backend registry defines each metric with:
