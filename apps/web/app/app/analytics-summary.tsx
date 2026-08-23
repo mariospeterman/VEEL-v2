@@ -44,7 +44,7 @@ export function AnalyticsSummary({
         })}
       </div>
       <div className="mt-4 grid gap-1 border-t border-(--line) pt-3 text-xs text-(--muted)">
-        <p>Data through {freshest?.dataThrough ? new Date(freshest.dataThrough).toLocaleString() : "not yet available"} · UTC · metric definition v{metrics[0]?.definitionVersion ?? 1}</p>
+        <p>Data through {freshest?.dataThrough ? new Date(freshest.dataThrough).toLocaleString("en-US", { timeZone: "UTC" }) : "not yet available"} · UTC · metric definition v{metrics[0]?.definitionVersion ?? 1}</p>
         <p>Small audiences are hidden automatically. Confirmed earnings are historical ledger facts, never a wallet balance.</p>
       </div>
       {results.flatMap((result) => result.insights).slice(0, 2).map((insight) => (

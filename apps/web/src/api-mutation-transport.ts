@@ -117,6 +117,7 @@ export async function anonymousEmptyMutation(
     body: JSON.stringify(body),
     cache: "no-store",
     credentials: "omit",
+    keepalive: true,
     headers: {
       accept: "application/json",
       "content-type": "application/json",

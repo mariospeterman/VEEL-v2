@@ -15,6 +15,7 @@ import { ProviderLogo } from "@/brand/provider-logo";
 import { safeMutationMessage } from "@/api-errors";
 import type { WebAuthState } from "@/supabase/auth-state";
 import { bytesToBase64, createBackendWalletSession, walletChain, type WalletAuthPurpose } from "./backend-wallet-auth";
+import { recordOnboardingEvent } from "@/analytics/onboarding-analytics";
 
 type ExternalWalletProvider = LinkWalletRequest["provider"];
 
@@ -74,6 +75,7 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
   }, [awaitingWallet, connected, connecting, publicKey, state, wallet]);
 
   function startWalletFlow() {
+    recordOnboardingEvent("auth_method_selected", `external-${authPurpose}`);
     setMessage(null);
     setAwaitingWallet(true);
 

@@ -24,6 +24,11 @@ const journeyStorageKey = "wevid:onboarding-journey";
 const emittedStorageKey = "wevid:onboarding-events";
 let memoryJourneyId: string | null = null;
 
+export {
+  consumeExpectedOnboardingJourneyExit,
+  markOnboardingJourneyHandoff
+} from "./onboarding-journey-handoff";
+
 export function recordOnboardingEvent(eventKey: OnboardingAnalyticsEventKey, occurrence = "once"): void {
   if (typeof window === "undefined") return;
   const journeyId = onboardingJourneyId();

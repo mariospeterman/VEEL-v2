@@ -13,7 +13,11 @@ import type { WebAuthState } from "@/supabase/auth-state";
 import { ProviderLogo } from "@/brand/provider-logo";
 import { SupabaseAuthPanel } from "@/supabase/supabase-auth-panel";
 import type { WalletAuthPurpose } from "@/wallet/backend-wallet-auth";
-import { recordOnboardingEvent } from "@/analytics/onboarding-analytics";
+import {
+  consumeExpectedOnboardingJourneyExit,
+  markOnboardingJourneyHandoff,
+  recordOnboardingEvent
+} from "@/analytics/onboarding-analytics";
 
 type LandingWalletRuntimeProps = {
   autoStart?: boolean;
@@ -67,7 +71,9 @@ export function LandingAuthSurface({
 
   useEffect(() => {
     const recordAbandonment = () => {
-      if (authMode === "onboard") recordOnboardingEvent("onboarding_abandoned");
+      if (authMode === "onboard" && !consumeExpectedOnboardingJourneyExit()) {
+        recordOnboardingEvent("onboarding_abandoned");
+      }
     };
     window.addEventListener("pagehide", recordAbandonment);
     return () => window.removeEventListener("pagehide", recordAbandonment);
@@ -202,7 +208,6 @@ function LandingWalletList({ authState, onAccountNotFound, onLinked, purpose }: 
             className="auth-provider-button"
             disabled={autoStart}
             onClick={() => {
-              recordOnboardingEvent("auth_method_selected", purpose);
               setAutoStart(true);
             }}
             type="button"
@@ -283,6 +288,7 @@ function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
 
     if (session.appAccessState.allowed) {
       recordOnboardingEvent("protected_app_entered");
+      markOnboardingJourneyHandoff();
       window.location.assign("/app/home");
       return;
     }
@@ -376,6 +382,7 @@ function OnboardingAgeStep() {
           if (session.appAccessState.allowed) {
             recordOnboardingEvent("age_step_completed");
             recordOnboardingEvent("protected_app_entered");
+            markOnboardingJourneyHandoff();
             window.location.assign(resolveSafeNextPath());
             return;
           }
@@ -422,6 +429,7 @@ function OnboardingAgeStep() {
     try {
       const session = await createAgeSession({ providerPreference: "reusable_first" });
       setMessage("Opening the secure age check. WeVid stores only the signed result.");
+      markOnboardingJourneyHandoff();
       window.location.assign(session.launchUrl);
     } catch (reason) {
       recordOnboardingEvent("age_step_failed", Date.now().toString(36));
@@ -429,6 +437,9 @@ function OnboardingAgeStep() {
       setError(nextError);
 
       if (reason instanceof ApiMutationError && reason.status === 409 && reason.message.toLowerCase().includes("verified")) {
+        recordOnboardingEvent("age_step_completed");
+        recordOnboardingEvent("protected_app_entered");
+        markOnboardingJourneyHandoff();
         window.location.assign(resolveSafeNextPath());
       }
     } finally {
@@ -448,16 +459,19 @@ function OnboardingAgeStep() {
       if (session.appAccessState.allowed) {
         recordOnboardingEvent("age_step_completed");
         recordOnboardingEvent("protected_app_entered");
+        markOnboardingJourneyHandoff();
         window.location.assign(resolveSafeNextPath());
         return;
       }
 
       if (reason === "identity_required") {
+        markOnboardingJourneyHandoff();
         window.location.assign("/?mode=onboarding&step=profile&next=%2Fapp%2Fhome");
         return;
       }
 
       if (reason === "wallet_required") {
+        markOnboardingJourneyHandoff();
         window.location.assign("/?mode=onboarding&step=wallet&next=%2Fapp%2Fhome");
         return;
       }

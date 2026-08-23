@@ -14,6 +14,7 @@ describe("database migrations", () => {
     const downSql = readMigration("0111_auth_lifecycle_purpose.down.sql");
 
     expect(sql).toContain("add column purpose text");
+    expect(sql).toContain("consumed_at = coalesce(consumed_at, now())");
     expect(sql).toContain("purpose in ('login', 'onboarding')");
     expect(sql).toContain("alter column purpose set not null");
     expect(sql).toContain("wallet_auth_challenges_purpose_address_created_idx");

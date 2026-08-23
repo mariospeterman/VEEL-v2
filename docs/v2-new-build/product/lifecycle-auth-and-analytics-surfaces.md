@@ -28,7 +28,8 @@ The purpose is stored with the challenge, included in the signed message, requir
 submission, compared before signature verification, single-use, expiry-bounded, and audited. A
 purpose mismatch and replay fail without identity writes. Login never creates or links a user,
 profile, wallet, or provider identity. Onboarding is idempotent for the same wallet under a database
-advisory lock.
+advisory lock. Migration consumes every legacy challenge because its signed message did not bind a
+purpose; no pre-migration signature can be reclassified as onboarding.
 
 Recovery remains a separate lookup-only exchange over an already-linked recovery identity. It never
 matches by email, creates a user or wallet, or merges accounts. Existing recent-authentication rules
@@ -81,6 +82,8 @@ wallet runtime ready, provider authentication completed, wallet ownership verifi
 step transitions, protected app entered, abandonment, returning login completion, and
 `account_not_found`. They must never store email addresses, provider tokens, wallet signatures,
 identity documents, or raw age-provider payloads.
+Controlled provider handoffs and successful protected-app navigation are not abandonment events,
+and each method selection is emitted once per journey step.
 
 ## Acceptance
 

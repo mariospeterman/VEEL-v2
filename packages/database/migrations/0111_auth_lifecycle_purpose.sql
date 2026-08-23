@@ -1,12 +1,13 @@
 -- Convergence 04: bind wallet authentication to an immutable login or onboarding purpose.
--- Existing unconsumed challenges predate purpose-bound signed messages and are intentionally
--- invalidated by the application message check after this migration.
+-- Existing challenges predate purpose-bound signed messages and are intentionally consumed
+-- during migration so no legacy signature can be reclassified as onboarding.
 
 alter table wallet_auth_challenges
   add column purpose text;
 
 update wallet_auth_challenges
-set purpose = 'onboarding'
+set purpose = 'onboarding',
+    consumed_at = coalesce(consumed_at, now())
 where purpose is null;
 
 alter table wallet_auth_challenges

@@ -31,7 +31,6 @@ export async function createBackendWalletSession({
     provider,
     purpose
   });
-  recordOnboardingEvent("auth_method_selected", provider);
   const signature = await signMessage(challenge.message);
   const session = await createWalletAuthSession({
     address,
