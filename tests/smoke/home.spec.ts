@@ -292,6 +292,34 @@ test("renders ordered mixed carousel assets with visible and keyboard controls",
 
   await carousel.getByRole("button", { name: "Previous media" }).click();
   await expect(carousel.getByText("2 of 3", { exact: true })).toBeVisible();
+
+  await carousel.dispatchEvent("pointerdown", {
+    button: 0,
+    clientX: 300,
+    pointerId: 1,
+    pointerType: "touch"
+  });
+  await carousel.dispatchEvent("pointerup", {
+    button: 0,
+    clientX: 120,
+    pointerId: 1,
+    pointerType: "touch"
+  });
+  await expect(carousel.getByText("3 of 3", { exact: true })).toBeVisible();
+
+  await carousel.dispatchEvent("pointerdown", {
+    button: 0,
+    clientX: 120,
+    pointerId: 2,
+    pointerType: "mouse"
+  });
+  await carousel.dispatchEvent("pointerup", {
+    button: 0,
+    clientX: 300,
+    pointerId: 2,
+    pointerType: "mouse"
+  });
+  await expect(carousel.getByText("2 of 3", { exact: true })).toBeVisible();
 });
 
 test("requires confirmation before logging out every device", async ({ context, page }) => {

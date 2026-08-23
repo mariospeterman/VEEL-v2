@@ -1,7 +1,10 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useId, useMemo, useRef, useState } from "react";
+import type {
+  KeyboardEvent as ReactKeyboardEvent,
+  PointerEvent as ReactPointerEvent
+} from "react";
 import type { ContentItem } from "@/api-client";
 import { ApiMutationError, voteOnContentPoll } from "@/api-mutations";
 import { createMutationIdempotencyKey } from "@/api-mutation-transport";
@@ -50,6 +53,7 @@ function CarouselRenderer({ active, item, title }: ContentRendererProps & { acti
   const assets = useMemo(() => orderedAssets(item), [item]);
   const [index, setIndex] = useState(0);
   const statusId = useId();
+  const pointerStartX = useRef<number | null>(null);
   const asset = assets[index];
 
   if (!asset) return <ContentState title="Post unavailable" detail="This carousel is not available right now." />;
@@ -64,16 +68,34 @@ function CarouselRenderer({ active, item, title }: ContentRendererProps & { acti
     move(event.key === "ArrowLeft" ? -1 : 1);
   }
 
+  function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    pointerStartX.current = event.clientX;
+  }
+
+  function onPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    const startX = pointerStartX.current;
+    pointerStartX.current = null;
+    if (startX === null) return;
+    const distance = event.clientX - startX;
+    if (Math.abs(distance) < 48) return;
+    move(distance > 0 ? -1 : 1);
+  }
+
   return (
     <div
       aria-describedby={statusId}
       aria-label="Media carousel"
-      className="relative h-full min-h-64 w-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
+      className="relative h-full min-h-64 w-full touch-pan-y outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
       onKeyDown={onKeyDown}
+      onPointerCancel={() => { pointerStartX.current = null; }}
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
       role="group"
       tabIndex={0}
     >
       <CarouselAsset active={active} asset={asset} item={item} title={`${title}, item ${index + 1}`} />
+      <AdjacentImagePreload assets={assets} index={index} />
       {assets.length > 1 ? (
         <>
           <button aria-label="Previous media" className="absolute left-3 top-1/2 min-h-11 min-w-11 -translate-y-1/2 rounded-full bg-black/70 px-3 text-white" onClick={() => move(-1)} type="button">←</button>
@@ -83,6 +105,27 @@ function CarouselRenderer({ active, item, title }: ContentRendererProps & { acti
       <p className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/70 px-3 py-1 text-xs font-semibold text-white" id={statusId} aria-live="polite">
         {index + 1} of {assets.length}
       </p>
+    </div>
+  );
+}
+
+function AdjacentImagePreload({ assets, index }: {
+  assets: NonNullable<ContentItem["mediaAssets"]>;
+  index: number;
+}) {
+  if (assets.length < 2) return null;
+  const adjacentIndexes = new Set([
+    (index - 1 + assets.length) % assets.length,
+    (index + 1) % assets.length
+  ]);
+  return (
+    <div aria-hidden="true" className="pointer-events-none absolute size-0 overflow-hidden">
+      {[...adjacentIndexes].map((adjacentIndex) => {
+        const adjacent = assets[adjacentIndex];
+        return adjacent?.kind === "image" && adjacent.posterUrl
+          ? <img alt="" key={adjacent.id} loading="lazy" src={adjacent.posterUrl} />
+          : null;
+      })}
     </div>
   );
 }
