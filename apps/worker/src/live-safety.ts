@@ -33,7 +33,11 @@ export interface LiveSafetyRepository {
     limit: number;
     excludeSessionIds?: string[];
   }): Promise<number>;
-  claimProviderActions(input: { now: Date; limit: number }): Promise<LiveSafetyProviderAction[]>;
+  claimProviderActions(input: {
+    now: Date;
+    limit: number;
+    excludeActionIds?: string[];
+  }): Promise<LiveSafetyProviderAction[]>;
   completeProviderAction(input: { id: string; leaseToken: string; now: Date }): Promise<void>;
   retryProviderAction(input: {
     id: string;
@@ -74,10 +78,16 @@ export async function processLiveSafety(input: {
   let retried = 0;
   let deadLettered = 0;
   let claimed = 0;
+  const claimedActionIds: string[] = [];
 
-  const processProviderActions = async (actionNow: Date) => {
-    const actions = await input.repository.claimProviderActions({ now: actionNow, limit });
+  const processProviderActions = async (actionNow: Date, excludeActionIds: string[] = []) => {
+    const actions = await input.repository.claimProviderActions({
+      now: actionNow,
+      limit,
+      excludeActionIds
+    });
     claimed += actions.length;
+    claimedActionIds.push(...actions.map((action) => action.id));
     for (const action of actions) {
       try {
         await input.provider.suspend({ providerStreamId: action.providerStreamId });
@@ -106,7 +116,8 @@ export async function processLiveSafety(input: {
 
   // Existing local denials must reach the provider before any potentially slow health batch.
   await processProviderActions(now);
-  const healthChecks = await input.repository.claimHealthChecks({ now, limit });
+  const healthClaimAt = input.now ?? new Date();
+  const healthChecks = await input.repository.claimHealthChecks({ now: healthClaimAt, limit });
   let healthConfirmed = 0;
   let healthFailed = 0;
   const confirmedSessionIds: string[] = [];
@@ -144,7 +155,8 @@ export async function processLiveSafety(input: {
     excludeSessionIds: confirmedSessionIds
   });
   // Pick up suspension work created by this hold pass without waiting for the next worker tick.
-  await processProviderActions(holdAt);
+  // Excluding this tick's earlier claims preserves their configured retry deadlines.
+  await processProviderActions(holdAt, claimedActionIds);
 
   return {
     healthChecked: healthChecks.length,
@@ -307,6 +319,7 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
           where action.state in ('queued', 'retry', 'processing')
             and action.next_attempt_at <= ${input.now}
             and (action.lease_expires_at is null or action.lease_expires_at <= ${input.now})
+            and not (action.id = any(${input.excludeActionIds ?? []}::uuid[]))
             and room.provider_stream_id is not null
           order by action.next_attempt_at, action.created_at
           limit ${input.limit}

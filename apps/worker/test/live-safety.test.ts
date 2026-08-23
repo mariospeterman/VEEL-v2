@@ -18,6 +18,7 @@ function repositoryWith(
   const retried: Array<{ id: string; deadLetter: boolean }> = [];
   const healthResults: Array<{ id: string; healthy: boolean }> = [];
   const holdInputs: Array<{ excludeSessionIds?: string[] }> = [];
+  const actionClaimInputs: Array<{ excludeActionIds?: string[] }> = [];
   let actionClaimCount = 0;
   const repository: LiveSafetyRepository = {
     async claimHealthChecks() { return healthChecks; },
@@ -26,14 +27,15 @@ function repositoryWith(
       holdInputs.push({ excludeSessionIds: input.excludeSessionIds });
       return 2;
     },
-    async claimProviderActions() {
+    async claimProviderActions(input) {
+      actionClaimInputs.push({ excludeActionIds: input.excludeActionIds });
       actionClaimCount += 1;
       return actionClaimCount === 1 ? actions : [];
     },
     async completeProviderAction(input) { completed.push(input.id); },
     async retryProviderAction(input) { retried.push({ id: input.id, deadLetter: input.deadLetter }); }
   };
-  return { repository, completed, retried, healthResults, holdInputs };
+  return { repository, completed, retried, healthResults, holdInputs, actionClaimInputs };
 }
 
 describe("live safety watchdog", () => {
@@ -122,6 +124,37 @@ describe("live safety watchdog", () => {
     expect(events).toEqual(["suspend", "health"]);
   });
 
+  it("starts health leases after the initial suspension batch completes", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-23T12:00:00.000Z"));
+    try {
+      const claimedAt: string[] = [];
+      const state = repositoryWith([{
+        id: "action-slow",
+        roomId: "room-slow",
+        providerStreamId: "stream-slow",
+        leaseToken: "lease-slow",
+        attemptCount: 1
+      }]);
+      state.repository.claimHealthChecks = async (input) => {
+        claimedAt.push(input.now.toISOString());
+        return [];
+      };
+
+      await processLiveSafety({
+        repository: state.repository,
+        provider: {
+          async suspend() { vi.advanceTimersByTime(150_000); },
+          async checkHealth() { return { healthy: true }; }
+        }
+      });
+
+      expect(claimedAt).toEqual(["2026-08-23T12:02:30.000Z"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps local denial durable while provider suspension retries", async () => {
     const state = repositoryWith([{
       id: "action-2",
@@ -140,6 +173,10 @@ describe("live safety watchdog", () => {
     });
 
     expect(state.retried).toEqual([{ id: "action-2", deadLetter: true }]);
+    expect(state.actionClaimInputs).toEqual([
+      { excludeActionIds: [] },
+      { excludeActionIds: ["action-2"] }
+    ]);
     expect(result.deadLettered).toBe(1);
   });
 
