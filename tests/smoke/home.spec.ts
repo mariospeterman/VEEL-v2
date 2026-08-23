@@ -873,6 +873,14 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
     return;
   }
 
+  if (
+    method === "GET" &&
+    /^\/v1\/messages\/conversations\/[0-9a-f-]+\/commercial-interactions$/.test(url.pathname)
+  ) {
+    sendJson(response, 200, { mediaOffers: [], creatorRequests: [] });
+    return;
+  }
+
   const conversationActionMatch = url.pathname.match(
     /^\/v1\/messages\/conversations\/([0-9a-f-]+)\/(request|read)$/
   );

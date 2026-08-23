@@ -6152,14 +6152,51 @@ async function seedCreatorLiveRoom(
     values (
       ${input.liveRoomId},
       'none',
-      'approved',
+      'quarantined',
       'automated',
-      'creator_sfw_attestation',
+      'live_monitoring_pending',
       'sfw-live-v1',
-      true,
+      false,
       ${sql.json({ attestation: "this_live_stream_is_sfw" })},
-      now()
+      null
     )
+  `;
+  await sql`
+    insert into live_safety_sessions (
+      room_id,
+      media_safety_case_id,
+      moderation_target_reference,
+      state,
+      acknowledgement_event_id,
+      acknowledged_at,
+      last_heartbeat_at,
+      heartbeat_expires_at,
+      next_check_at
+    )
+    select
+      ${input.liveRoomId},
+      safety.id,
+      ${`moderation-target-${input.shortRunId}`},
+      'monitoring',
+      ${`target-connected-${input.shortRunId}`},
+      now(),
+      now(),
+      now() + interval '5 minutes',
+      now() + interval '1 minute'
+    from media_safety_cases safety
+    where safety.live_room_id = ${input.liveRoomId}
+      and safety.state <> 'superseded'
+  `;
+  await sql`
+    update media_safety_cases
+    set
+      state = 'approved',
+      reason_code = 'live_monitoring_healthy',
+      provider_release_allowed = true,
+      decided_at = now(),
+      updated_at = now()
+    where live_room_id = ${input.liveRoomId}
+      and state <> 'superseded'
   `;
 }
 
