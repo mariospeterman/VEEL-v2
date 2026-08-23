@@ -37,10 +37,12 @@ import type {
   CreateDirectConversationRequest,
   CreateMessageRequest,
   CreatePaidMessageIntentRequest,
-  RespondToMessageRequest
+  RespondToMessageRequest,
+  UpdateConversationMuteRequest
 } from "./types.js";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const reactionKeys = new Set(["like", "love", "laugh", "support"] as const);
 
 export async function registerMessageRoutes(
   app: FastifyInstance,
@@ -155,6 +157,32 @@ export async function registerMessageRoutes(
     }
   });
 
+  app.patch("/v1/messages/conversations/:conversationId/mute", mutationRateLimit("messageMutation"), async (request, reply) => {
+    const access = await verifyMessageReadyAccess(request, options);
+    if (!access.ok) return reply.code(access.statusCode).send(access.body);
+    const idempotencyKey = requiredIdempotencyKey(request);
+    const conversationId = (request.params as { conversationId?: string }).conversationId ?? "";
+    const body = request.body as Partial<UpdateConversationMuteRequest> | undefined;
+    if (!idempotencyKey || !uuidPattern.test(conversationId) || typeof body?.muted !== "boolean") {
+      return reply.code(400).send(validationResponse("A valid conversation, muted flag, and Idempotency-Key are required"));
+    }
+    try {
+      const conversation = await options.messageRepository.updateConversationMute({
+        supabaseUserId: access.supabaseUserId,
+        conversationId,
+        muted: body.muted,
+        idempotencyKey,
+        requestHash: hashMessageActionRequest({ conversationId, muted: body.muted })
+      });
+      if (!conversation) return reply.code(404).send(notFoundResponse("Conversation was not found"));
+      return reply.code(200).send(conversation);
+    } catch (error) {
+      const handled = messageMutationErrorReply(request, reply, error);
+      if (handled) return handled;
+      throw error;
+    }
+  });
+
   app.get("/v1/messages/conversations/:conversationId/messages", async (request, reply) => {
     const access = await verifyMessageReadyAccess(request, options);
 
@@ -204,10 +232,11 @@ export async function registerMessageRoutes(
       return reply.code(400).send(validationResponse(validationError));
     }
 
-    if (body?.paidMessageIntentId) {
-      return reply
-        .code(400)
-        .send(validationResponse("Use paid-message-intents for paid message delivery"));
+    if (
+      (body?.replyToMessageId != null && !uuidPattern.test(body.replyToMessageId)) ||
+      (body?.sharedContentItemId != null && !uuidPattern.test(body.sharedContentItemId))
+    ) {
+      return reply.code(400).send(validationResponse("Reply and shared content references must be valid UUIDs"));
     }
 
     const conversationId = (request.params as { conversationId?: string }).conversationId ?? "";
@@ -217,7 +246,9 @@ export async function registerMessageRoutes(
         supabaseUserId: access.supabaseUserId,
         conversationId,
         body: body?.body?.trim() ?? "",
-        idempotencyKey
+        idempotencyKey,
+        replyToMessageId: body?.replyToMessageId ?? null,
+        sharedContentItemId: body?.sharedContentItemId ?? null
       });
 
       if (!message) {
@@ -232,6 +263,46 @@ export async function registerMessageRoutes(
       throw error;
     }
   });
+
+  const updateReaction = (reacted: boolean) => async (request: FastifyRequest, reply: FastifyReply) => {
+    const access = await verifyMessageReadyAccess(request, options);
+    if (!access.ok) return reply.code(access.statusCode).send(access.body);
+    const idempotencyKey = requiredIdempotencyKey(request);
+    const params = request.params as { conversationId?: string; messageId?: string; reactionKey?: string };
+    if (
+      !idempotencyKey ||
+      !uuidPattern.test(params.conversationId ?? "") ||
+      !uuidPattern.test(params.messageId ?? "") ||
+      !reactionKeys.has(params.reactionKey as "like" | "love" | "laugh" | "support")
+    ) {
+      return reply.code(400).send(validationResponse("A valid message reaction request is required"));
+    }
+    try {
+      const message = await options.messageRepository.updateMessageReaction({
+        supabaseUserId: access.supabaseUserId,
+        conversationId: params.conversationId as string,
+        messageId: params.messageId as string,
+        reactionKey: params.reactionKey as "like" | "love" | "laugh" | "support",
+        reacted
+      });
+      if (!message) return reply.code(404).send(notFoundResponse("Message was not found"));
+      return reply.code(200).send(message);
+    } catch (error) {
+      const handled = messageMutationErrorReply(request, reply, error);
+      if (handled) return handled;
+      throw error;
+    }
+  };
+  app.put(
+    "/v1/messages/conversations/:conversationId/messages/:messageId/reactions/:reactionKey",
+    mutationRateLimit("messageMutation"),
+    updateReaction(true)
+  );
+  app.delete(
+    "/v1/messages/conversations/:conversationId/messages/:messageId/reactions/:reactionKey",
+    mutationRateLimit("messageMutation"),
+    updateReaction(false)
+  );
 
   app.post("/v1/messages/conversations/:conversationId/paid-message-intents", mutationRateLimit("paymentMutation"), async (request, reply) => {
     const access = await verifyMessageReadyAccess(request, options);

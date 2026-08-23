@@ -6163,6 +6163,9 @@ describe("buildApi", () => {
       async onRecordLiveProviderWebhook() {
         return false;
       },
+      async onRecordLiveSafetyEvent() {
+        return false;
+      },
       async onUpdateRoomFromWebhook(input) {
         appliedEvents.push(input);
         return true;
@@ -12141,6 +12144,7 @@ function fakeLiveRepository(
     onFailControl: LiveRepository["failControl"];
     onRecordLivePassPurchaseRequest: LiveRepository["recordLivePassPurchaseRequest"];
     onRecordLiveProviderWebhook: NonNullable<LiveRepository["recordLiveProviderWebhook"]>;
+    onRecordLiveSafetyEvent: NonNullable<LiveRepository["recordLiveSafetyEvent"]>;
     onUpdateRoomStatus: LiveRepository["updateRoomStatus"];
     onUpdateRoomFromWebhook: NonNullable<LiveRepository["updateRoomFromWebhook"]>;
     onListChatMessages: LiveRepository["listChatMessages"];
@@ -12196,6 +12200,9 @@ function fakeLiveRepository(
     async recordLiveProviderWebhook(input) {
       return overrides.onRecordLiveProviderWebhook?.(input) ?? true;
     },
+    async recordLiveSafetyEvent(input) {
+      return overrides.onRecordLiveSafetyEvent?.(input) ?? true;
+    },
     async updateRoomStatus(input) {
       await overrides.onUpdateRoomStatus?.(input);
     },
@@ -12231,6 +12238,9 @@ function messageFixture(overrides: Partial<Message> = {}): Message {
     body: overrides.body ?? "Visible message",
     deliveryState: overrides.deliveryState ?? "visible",
     paymentIntentId: overrides.paymentIntentId ?? null,
+    replyToMessageId: overrides.replyToMessageId ?? null,
+    sharedContentItemId: overrides.sharedContentItemId ?? null,
+    reactions: overrides.reactions ?? [],
     createdAt: overrides.createdAt ?? "2026-06-04T23:45:00.000Z"
   };
 }
@@ -12502,6 +12512,8 @@ function fakeMessageRepository(
     onCreateDirectConversation: MessageRepository["createDirectConversation"];
     onRespondToMessageRequest: MessageRepository["respondToMessageRequest"];
     onMarkConversationRead: MessageRepository["markConversationRead"];
+    onUpdateConversationMute: MessageRepository["updateConversationMute"];
+    onUpdateMessageReaction: MessageRepository["updateMessageReaction"];
     onCreateMessage: MessageRepository["createMessage"];
     onFindConversationPrice: MessageRepository["findConversationPrice"];
     onRecordPaidMessageDraft: MessageRepository["recordPaidMessageDraft"];
@@ -12521,6 +12533,7 @@ function fakeMessageRepository(
               requestState: "accepted",
               requestRole: "initiator",
               canSend: true,
+              muted: false,
               lastMessage: {
                 body: "Visible message",
                 sender: homeFeedItem.creator,
@@ -12550,7 +12563,8 @@ function fakeMessageRepository(
         counterpart: homeFeedItem.creator,
         requestState: "pending",
         requestRole: "initiator",
-        canSend: true
+        canSend: true,
+        muted: false
       };
     },
     async respondToMessageRequest(input) {
@@ -12562,7 +12576,8 @@ function fakeMessageRepository(
         counterpart: homeFeedItem.creator,
         requestState: input.action === "accept" ? "accepted" : "declined",
         requestRole: "recipient",
-        canSend: input.action === "accept"
+        canSend: input.action === "accept",
+        muted: false
       };
     },
     async markConversationRead(input) {
@@ -12571,6 +12586,26 @@ function fakeMessageRepository(
         unreadCount: 0,
         readAt: "2026-06-04T23:50:00.000Z"
       };
+    },
+    async updateConversationMute(input) {
+      return overrides.onUpdateConversationMute?.(input) ?? {
+        id: input.conversationId,
+        type: "direct",
+        title: "Maki",
+        unreadCount: 0,
+        counterpart: homeFeedItem.creator,
+        requestState: "accepted",
+        requestRole: "initiator",
+        canSend: true,
+        muted: input.muted
+      };
+    },
+    async updateMessageReaction(input) {
+      return overrides.onUpdateMessageReaction?.(input) ?? messageFixture({
+        id: input.messageId,
+        conversationId: input.conversationId,
+        reactions: input.reacted ? [{ key: input.reactionKey, count: 1, reacted: true }] : []
+      });
     },
     async findConversationPrice(input) {
       return (

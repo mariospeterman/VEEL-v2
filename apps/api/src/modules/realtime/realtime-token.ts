@@ -37,7 +37,8 @@ export function createRealtimeTokenIssuer(config: ServerEnv): RealtimeTokenIssue
 
       return {
         token,
-        expiresAt: new Date(expiresAtSeconds * 1000).toISOString()
+        expiresAt: new Date(expiresAtSeconds * 1000).toISOString(),
+        accountTopic: `account:${input.userId}`
       };
     }
   };

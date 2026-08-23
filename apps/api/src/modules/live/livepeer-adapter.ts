@@ -107,7 +107,8 @@ export function createLivepeerProviderAdapter(
         providerState: payload.isActive ? "active" : "created",
         hostIngestUrl: `${livepeerRtmpIngestBaseUrl}/${payload.streamKey}`,
         hostStreamKey: payload.streamKey,
-        playbackUrl: playbackUrlFromPlaybackId(payload.playbackId)
+        playbackUrl: playbackUrlFromPlaybackId(payload.playbackId),
+        moderationTargetReference: env.LIVEPEER_MODERATION_MULTISTREAM_TARGET_ID ?? ""
       } satisfies CreatedLiveProviderRoom;
     },
     async getRoomStatus(input) {

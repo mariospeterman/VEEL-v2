@@ -61,6 +61,10 @@ export function LiveProviderRow({ room }: { room: AdminLiveRoom }) {
       </div>
       <div className="mt-3 grid gap-2">
         <Fact label="Provider" value={room.providerState} />
+        <Fact label="Monitoring" value={room.monitoringState ?? "not created"} />
+        <Fact label="Monitoring health" value={room.monitoringHealthy ? "healthy" : "fail closed"} />
+        <Fact label="Provider suspension" value={room.pendingProviderAction ? "pending/requires ops" : "clear"} />
+        {room.monitoringHoldReasonCode ? <Fact label="Hold reason" value={room.monitoringHoldReasonCode} /> : null}
         <Fact label="Playback URL" value={room.hasPlaybackUrl ? "present" : "none"} />
         <Fact label="Stream key" value={room.hasHostStreamKey ? "redacted" : "none"} />
       </div>

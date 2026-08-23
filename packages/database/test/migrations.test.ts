@@ -9,6 +9,30 @@ const migrationsDir = join(packageRoot, "migrations");
 const readMigration = (fileName: string) => readFileSync(join(migrationsDir, fileName), "utf8");
 
 describe("database migrations", () => {
+  it("scopes realtime transport and fails live release closed until monitoring is healthy", () => {
+    const sql = readMigration("0112_realtime_messaging_live_safety.sql");
+    const downSql = readMigration("0112_realtime_messaging_live_safety.down.sql");
+
+    expect(sql).toContain("create table live_safety_sessions");
+    expect(sql).toContain("create table live_safety_monitoring_events");
+    expect(sql).toContain("create table live_safety_provider_actions");
+    expect(sql).toContain("private.live_safety_release_ready");
+    expect(sql).toContain("live_monitoring_pending");
+    expect(sql).toContain("provider_release_allowed = false");
+    expect(sql).toContain("media_safety_cases_live_release_guard");
+    expect(sql).toContain("create table realtime_topic_versions");
+    expect(sql).toContain("private.realtime_topic_can_receive");
+    expect(sql).toContain("private.realtime_topic_can_send");
+    expect(sql).toContain("realtime.send($1, $2, $3, true)");
+    expect(sql).toContain("alter publication supabase_realtime drop table messages");
+    expect(sql).toContain("create table message_reactions");
+    expect(sql).toContain("create table creator_media_offers");
+    expect(sql).toContain("create table structured_creator_requests");
+    expect(sql).not.toMatch(/raw_payload|private_key|seed_phrase|mnemonic|stream_key/i);
+    expect(downSql).toContain("0112 rollback requires retained Convergence 05 traffic");
+    expect(downSql).toContain("Keep upgraded live safety cases fail closed");
+  });
+
   it("binds wallet authentication challenges to login or onboarding purpose", () => {
     const sql = readMigration("0111_auth_lifecycle_purpose.sql");
     const downSql = readMigration("0111_auth_lifecycle_purpose.down.sql");

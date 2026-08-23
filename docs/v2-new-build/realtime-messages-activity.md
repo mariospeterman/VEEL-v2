@@ -62,10 +62,10 @@ remains disabled and every replay re-enters the ordinary quarantined VOD revisio
 
 | Use case | Mechanism | Notes |
 | --- | --- | --- |
-| Direct messages | Postgres Changes or Broadcast after backend write | Participants only through RLS. |
+| Direct messages | Private Broadcast invalidation after backend write | Participants only through `realtime.messages` RLS; canonical API refetch owns displayed truth. |
 | Typing indicators | Presence/Broadcast | Ephemeral, no DB write required. |
 | Online state | Presence | No business truth. |
-| Notifications | Postgres Changes on notification projection | User-owned rows only. |
+| Notifications | Private account-topic Broadcast invalidation | Minimal versioned event; user-owned API projection only. |
 | Live viewer count | Presence plus backend heartbeat aggregate | Avoid precise billing from presence alone. |
 | Live room status | Backend write + realtime projection | Backend remains source. |
 | Payment status | Backend event to user channel or polling | Do not expose internal settlements directly. |
@@ -80,8 +80,8 @@ remains disabled and every replay re-enters the ordinary quarantined VOD revisio
 - Settings includes browser service-worker enrollment. Enrollment is gated by `GET /v1/notifications/push-config`, browser Push API support, browser permission, and the canonical WeVid application session.
 - Settings exposes backend-owned category and push preferences as explicit switches. The app notification inbox lists only the authenticated user's projection and marks rows read through idempotent Fastify mutations.
 - The worker includes a server-only VAPID Web Push send-provider boundary. It uses encrypted browser subscription material, sends sanitized notification payloads, retries transient push failures, and revokes devices when push services return expired subscription responses.
-- Supabase Realtime publication DDL includes only `notifications`, `messages`, `conversation_members`, and `direct_message_requests` as participant-owned projection tables. Browser realtime wiring invalidates typed API caches and refreshes server-owned projections; it does not compute payment, access, messaging, notification, or social truth from realtime payloads.
-- Wallet-first and recovery sessions converge before Realtime: `POST /v1/realtime/token` verifies the opaque canonical application session and the same active-profile, current-age-verification, and wallet-readiness predicate as protected messaging before minting a short-lived ES256 custom JWT. Its `sub` is the canonical WeVid user UUID and its server-only `wevid_session=true` claim selects the canonical RLS identity path. The private imported JWK remains API-only. Missing signing configuration returns `503` and leaves server refresh as the safe fallback.
+- Migration `0112` removes private notification/message/member/request/chat rows from the logical-replication publication and emits only versioned private Broadcast invalidations through backend-owned database triggers. Browser wiring invalidates exact typed API caches; it never treats the event payload as payment, access, messaging, notification, live-safety, or social truth.
+- Wallet-first and recovery sessions converge before Realtime: `POST /v1/realtime/token` verifies the opaque canonical application session and the same active-profile, current-age-verification, and wallet-readiness predicate as protected messaging before minting a short-lived ES256 custom JWT. Its `sub` is the canonical WeVid user UUID, its server-only `wevid_session=true` claim selects the canonical RLS identity path, and the response exposes only that user's private `account:{userId}` topic. The private imported JWK remains API-only. Missing signing configuration returns `503` and leaves canonical API refetch as the safe fallback. `POST /v1/realtime/telemetry` records only bounded topic-kind/state/reason/attempt health signals; it never accepts a topic identifier, event payload, or message content.
 - Migration `0095` rechecks protected-app readiness inside the RLS projection boundary, so an expired/revoked age decision or removed wallet immediately denies already-issued Realtime tokens. Participant message RLS exposes only `delivery_state = visible`; hidden or pending-payment message bodies never enter browser Postgres Changes. Staff and moderator access stays behind audited backend/admin projections rather than broad client RLS.
 - Browser roles retain `SELECT` only. Migration `0095` makes the required Realtime projection grants explicit for new Supabase projects and removes direct mutation privileges and policies from notifications, preferences, and devices; validation, authorization, idempotency, and audit boundaries remain in Fastify.
 - The browser retries initial Realtime token failures with bounded exponential backoff and reconnects after channel errors, timeouts, or closure. Typed API reads and server rendering remain the fallback and source of displayed truth.
@@ -213,21 +213,23 @@ Activity:
 
 ## Provider Verification And Staging Gate
 
-Implementation follows the current official Supabase custom-JWT and Postgres Changes boundaries:
+Implementation was rechecked on 2026-08-23 against the current official Supabase custom-JWT and private Broadcast boundaries:
 
 - Custom JWT client and claim requirements: `https://supabase.com/docs/guides/auth/jwts`
 - Imported asymmetric signing keys: `https://supabase.com/docs/guides/auth/signing-keys`
-- Realtime Postgres Changes, filters, and RLS behavior: `https://supabase.com/docs/guides/realtime/postgres-changes`
+- Realtime Authorization and `realtime.messages` RLS: `https://supabase.com/docs/guides/realtime/authorization`
+- Private Broadcast and database-trigger delivery: `https://supabase.com/docs/guides/realtime/broadcast`
+- Broadcast-from-database `realtime.send`: `https://supabase.com/docs/guides/realtime/subscribing-to-database-changes`
 - JavaScript Realtime token refresh behavior: `https://supabase.com/docs/reference/javascript/setauth`
 
-Launch 05 remains `CODE_COMPLETE_PROVIDER_BLOCKED` until staging proves the imported ES256 key and `kid`, canonical-session token mint/refresh, four approved table subscriptions under real RLS claims, cross-user and expired-access denial, reconnect behavior, and real VAPID delivery/revocation across target browsers. Because Postgres Changes authorizes each change against subscribers, staging must also establish and record a bounded concurrent-connection/event-rate ceiling; if that ceiling is below launch demand, replace the four global Postgres Changes subscriptions with private per-user Broadcast invalidations before production. Provider proof is a pre-production gate, not a second authentication authority.
+Convergence 05 remains provider-blocked until staging proves the imported ES256 key and `kid`, canonical-session token mint/refresh on the active socket, private account/conversation/live topic RLS, cross-user and expired-access denial, reconnect gap recovery through canonical API refetch, connection telemetry, and real VAPID delivery/revocation across target browsers. Staging must also establish and record a bounded concurrent-connection/event-rate ceiling. Provider proof is a pre-production gate, not a second authentication authority.
 
 ## Anti-Abuse
 
 - rate limit messages
 - serialize direct-pair creation and request actions with ordered database locks
-- enforce two-message request ceilings transactionally under concurrency
-- prove that three concurrent pending-request sends produce exactly two messages and one rejection
+- enforce the one-introduction request ceiling transactionally under concurrency
+- prove that concurrent pending-request sends produce exactly one message and all later attempts are rejected
 - rate limit paid message attempts
 - report/block visible everywhere
 - media attachments virus/moderation scan

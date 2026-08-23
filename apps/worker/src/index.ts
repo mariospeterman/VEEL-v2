@@ -1,7 +1,15 @@
 import { parseServerEnv } from "@veel/config";
 import { createCanonicalProviderReplayRuntime } from "@veel/api/provider-event-replay-runtime";
 import { createBunnyStreamUploadAdapter } from "@veel/api/media-upload-provider";
+import { createLivepeerProviderAdapter } from "@veel/api/live-provider";
 import { pathToFileURL } from "node:url";
+import {
+  createPostgresLiveSafetyRepository,
+  processLiveSafety,
+  type LiveSafetyProvider,
+  type LiveSafetyRepository,
+  type ProcessLiveSafetyResult
+} from "./live-safety.js";
 import {
   createPostgresAnalyticsProjectionRepository,
   processAnalyticsProjections,
@@ -73,6 +81,7 @@ export const buildWorkerRuntime = () => {
       "notification-deliveries",
       "payment-confirmation-emails",
       "provider-event-replays",
+      "live-safety",
       "media-moderation",
       "media-asset-cleanups"
     ],
@@ -101,6 +110,11 @@ export const buildWorkerRuntime = () => {
         name: "provider-event-replays",
         cadence: "every_minute",
         sourceIndex: "provider_event_replay_requests_state_created_idx"
+      },
+      {
+        name: "live-safety",
+        cadence: "every_minute",
+        sourceIndex: "live_safety_provider_actions_due_idx"
       },
       {
         name: "media-moderation",
@@ -305,6 +319,33 @@ export async function runMediaModerationTick(input: {
   }
 }
 
+export async function runLiveSafetyTick(input: {
+  repository?: LiveSafetyRepository;
+  provider?: LiveSafetyProvider;
+  now?: Date;
+  limit?: number;
+} = {}): Promise<ProcessLiveSafetyResult> {
+  const config = parseServerEnv(process.env);
+  const repository = input.repository ?? createPostgresLiveSafetyRepository(config.DATABASE_URL);
+  const livepeer = createLivepeerProviderAdapter(config);
+  const provider = input.provider ?? {
+    async suspend({ providerStreamId }) {
+      if (!livepeer.isConfigured()) throw new Error("LIVEPEER_NOT_CONFIGURED");
+      await livepeer.setRoomSuspended({ providerStreamId, suspended: true });
+    }
+  };
+  try {
+    return await processLiveSafety({
+      repository,
+      provider,
+      ...(input.now ? { now: input.now } : {}),
+      ...(input.limit ? { limit: input.limit } : {})
+    });
+  } finally {
+    if (!input.repository) await repository.close?.();
+  }
+}
+
 export async function runMediaAssetCleanupTick(input: {
   repository?: MediaAssetCleanupRepository;
   provider?: MediaAssetCleanupProvider;
@@ -333,6 +374,7 @@ export async function runMediaAssetCleanupTick(input: {
 
 export interface ScheduledWorkerTickResult {
   analyticsProjections: "completed" | "failed";
+  liveSafety: "completed" | "failed";
   mediaAssetCleanups: "completed" | "failed";
   mediaModeration: "completed" | "failed";
   notificationDeliveries: "completed" | "failed";
@@ -348,6 +390,7 @@ export interface WorkerLogger {
 
 export interface WorkerTickRunners {
   analyticsProjections(): Promise<unknown>;
+  liveSafety(): Promise<unknown>;
   mediaAssetCleanups(): Promise<unknown>;
   mediaModeration(): Promise<unknown>;
   notificationDeliveries(): Promise<unknown>;
@@ -373,6 +416,7 @@ export async function runScheduledWorkerTick(input: {
   const logger = input.logger ?? defaultWorkerLogger;
   const runners = input.runners ?? {
     analyticsProjections: () => runAnalyticsProjectionTick({ limit: config.WORKER_BATCH_LIMIT }),
+    liveSafety: () => runLiveSafetyTick({ limit: config.WORKER_BATCH_LIMIT }),
     mediaAssetCleanups: () => runMediaAssetCleanupTick({ limit: config.WORKER_BATCH_LIMIT }),
     mediaModeration: () => runMediaModerationTick({ limit: config.WORKER_BATCH_LIMIT }),
     notificationDeliveries: () => runNotificationDeliveryTick({ limit: config.WORKER_BATCH_LIMIT }),
@@ -382,6 +426,7 @@ export async function runScheduledWorkerTick(input: {
   };
   const tasks = [
     ["analyticsProjections", runners.analyticsProjections],
+    ["liveSafety", runners.liveSafety],
     ["mediaAssetCleanups", runners.mediaAssetCleanups],
     ["mediaModeration", runners.mediaModeration],
     ["notificationDeliveries", runners.notificationDeliveries],
@@ -429,6 +474,7 @@ export function startWorkerProcess(input: {
     if (stopping) {
       return Promise.resolve<ScheduledWorkerTickResult>({
         analyticsProjections: "completed",
+        liveSafety: "completed",
         mediaAssetCleanups: "completed",
         mediaModeration: "completed",
         notificationDeliveries: "completed",

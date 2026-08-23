@@ -9,6 +9,8 @@ export type PaidMessageIntent = components["schemas"]["PaidMessageIntent"];
 export type ConversationReadState = components["schemas"]["ConversationReadState"];
 export type CreateDirectConversationRequest = components["schemas"]["CreateDirectConversationRequest"];
 export type RespondToMessageRequest = components["schemas"]["RespondToMessageRequest"];
+export type UpdateConversationMuteRequest = components["schemas"]["UpdateConversationMuteRequest"];
+export type MessageReactionKey = components["schemas"]["Message"]["reactions"][number]["key"];
 
 export interface ListConversationsInput {
   supabaseUserId: string;
@@ -22,6 +24,20 @@ export interface ConversationInput {
 export interface CreateMessageInput extends ConversationInput {
   body: string;
   idempotencyKey: string;
+  replyToMessageId?: string | null;
+  sharedContentItemId?: string | null;
+}
+
+export interface UpdateConversationMuteInput extends ConversationInput {
+  muted: boolean;
+  idempotencyKey: string;
+  requestHash: string;
+}
+
+export interface UpdateMessageReactionInput extends ConversationInput {
+  messageId: string;
+  reactionKey: MessageReactionKey;
+  reacted: boolean;
 }
 
 export interface CreateDirectConversationInput {
@@ -62,6 +78,8 @@ export interface MessageRepository {
   createDirectConversation(input: CreateDirectConversationInput): Promise<Conversation | null>;
   respondToMessageRequest(input: RespondToMessageRequestInput): Promise<Conversation | null>;
   markConversationRead(input: MarkConversationReadInput): Promise<ConversationReadState | null>;
+  updateConversationMute(input: UpdateConversationMuteInput): Promise<Conversation | null>;
+  updateMessageReaction(input: UpdateMessageReactionInput): Promise<Message | null>;
   createMessage(input: CreateMessageInput): Promise<Message | null>;
   findConversationPrice(input: ConversationInput): Promise<ConversationPrice | null>;
   recordPaidMessageDraft(input: CreatePaidMessageDraftInput): Promise<void>;

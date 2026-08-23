@@ -83,6 +83,7 @@ describe("buildWorkerRuntime", () => {
         "notification-deliveries",
         "payment-confirmation-emails",
         "provider-event-replays",
+        "live-safety",
         "media-moderation",
         "media-asset-cleanups"
       ],
@@ -113,6 +114,11 @@ describe("buildWorkerRuntime", () => {
           sourceIndex: "provider_event_replay_requests_state_created_idx"
         },
         {
+          name: "live-safety",
+          cadence: "every_minute",
+          sourceIndex: "live_safety_provider_actions_due_idx"
+        },
+        {
           name: "media-moderation",
           cadence: "every_minute",
           sourceIndex: "media_moderation_jobs_lease_idx"
@@ -136,6 +142,9 @@ describe("runScheduledWorkerTick", () => {
       runners: {
         async analyticsProjections() {
           calls.push("analytics");
+        },
+        async liveSafety() {
+          calls.push("live-safety");
         },
         async mediaAssetCleanups() {
           calls.push("asset-cleanups");
@@ -169,6 +178,7 @@ describe("runScheduledWorkerTick", () => {
       "analytics",
       "asset-cleanups",
       "email",
+      "live-safety",
       "moderation",
       "notifications",
       "provider-replays",
@@ -176,6 +186,7 @@ describe("runScheduledWorkerTick", () => {
     ]);
     expect(result).toEqual({
       analyticsProjections: "completed",
+      liveSafety: "completed",
       mediaAssetCleanups: "completed",
       mediaModeration: "completed",
       notificationDeliveries: "completed",

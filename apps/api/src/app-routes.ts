@@ -73,7 +73,8 @@ export async function registerApiRoutes(
     verificationProviderWaterfall,
     walletAuthRepository,
     onrampProvider,
-    realtimeTokenIssuer
+    realtimeTokenIssuer,
+    postgresClient
   } = dependencies;
 
   await registerWalletAuthRoutes(app, {
@@ -86,7 +87,8 @@ export async function registerApiRoutes(
     sessionRepository,
     ageRepository,
     walletRepository,
-    realtimeTokenIssuer
+    realtimeTokenIssuer,
+    ...(postgresClient ? { postgresClient } : {})
   });
   await registerSessionRoutes(app, {
     authVerifier,

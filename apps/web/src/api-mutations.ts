@@ -49,10 +49,12 @@ export type {
   CreateWalletAuthSessionRequest,
   ApplicationSessionExpiry,
   RealtimeAccessToken,
+  RealtimeConnectionEventRequest,
   Conversation,
   ConversationReadState,
   CreateDirectConversationRequest,
   RespondToMessageRequest,
+  UpdateConversationMuteRequest,
   Notification,
   NotificationPreferences,
   UpdateNotificationPreferencesRequest,
@@ -152,10 +154,12 @@ import type {
   CreateWalletAuthSessionRequest,
   ApplicationSessionExpiry,
   RealtimeAccessToken,
+  RealtimeConnectionEventRequest,
   Conversation,
   ConversationReadState,
   CreateDirectConversationRequest,
   RespondToMessageRequest,
+  UpdateConversationMuteRequest,
   Notification,
   NotificationPreferences,
   UpdateNotificationPreferencesRequest,
@@ -285,6 +289,12 @@ export async function revokeAllApplicationSessions(): Promise<void> {
 
 export async function createRealtimeAccessToken(): Promise<RealtimeAccessToken> {
   return authenticatedMutation<RealtimeAccessToken>("/v1/realtime/token", "POST", {});
+}
+
+export async function recordRealtimeConnectionEvent(
+  body: RealtimeConnectionEventRequest
+): Promise<void> {
+  return authenticatedEmptyMutation("/v1/realtime/telemetry", "POST", body);
 }
 
 export async function createRecoveryLinkIntent(): Promise<ApplicationSessionExpiry> {
@@ -661,6 +671,16 @@ export async function createMessage(
   );
 }
 
+export async function getConversationsForMutation(): Promise<{ items: Conversation[] }> {
+  return authenticatedGet<{ items: Conversation[] }>("/v1/messages/conversations");
+}
+
+export async function getConversationMessagesForMutation(conversationId: string): Promise<{ items: Message[] }> {
+  return authenticatedGet<{ items: Message[] }>(
+    `/v1/messages/conversations/${encodeURIComponent(conversationId)}/messages`
+  );
+}
+
 export async function createDirectConversation(
   body: CreateDirectConversationRequest
 ): Promise<Conversation> {
@@ -684,6 +704,30 @@ export async function markConversationRead(
   return authenticatedMutation<ConversationReadState>(
     `/v1/messages/conversations/${encodeURIComponent(conversationId)}/read`,
     "PATCH",
+    {}
+  );
+}
+
+export async function updateConversationMute(
+  conversationId: string,
+  body: UpdateConversationMuteRequest
+): Promise<Conversation> {
+  return authenticatedMutation<Conversation>(
+    `/v1/messages/conversations/${encodeURIComponent(conversationId)}/mute`,
+    "PATCH",
+    body
+  );
+}
+
+export async function updateMessageReaction(
+  conversationId: string,
+  messageId: string,
+  reactionKey: "like" | "love" | "laugh" | "support",
+  reacted: boolean
+): Promise<Message> {
+  return authenticatedMutation<Message>(
+    `/v1/messages/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/reactions/${reactionKey}`,
+    reacted ? "PUT" : "DELETE",
     {}
   );
 }

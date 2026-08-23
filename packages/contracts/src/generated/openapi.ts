@@ -790,6 +790,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/realtime/telemetry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record bounded connection-health telemetry for a scoped private channel */
+        post: operations["recordRealtimeConnectionEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/notifications/{notificationId}/read": {
         parameters: {
             query?: never;
@@ -1574,6 +1591,23 @@ export interface paths {
         patch: operations["markConversationRead"];
         trace?: never;
     };
+    "/v1/messages/conversations/{conversationId}/mute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Mute or unmute notifications for the authenticated participant */
+        patch: operations["updateConversationMute"];
+        trace?: never;
+    };
     "/v1/messages/conversations/{conversationId}/messages": {
         parameters: {
             query?: never;
@@ -1604,6 +1638,24 @@ export interface paths {
         /** Create paid-message intent and store backend-owned delivery draft */
         post: operations["createPaidMessageIntent"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/messages/conversations/{conversationId}/messages/{messageId}/reactions/{reactionKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Add an allowed reaction to a visible conversation message */
+        put: operations["addMessageReaction"];
+        post?: never;
+        /** Remove the authenticated participant's reaction */
+        delete: operations["removeMessageReaction"];
         options?: never;
         head?: never;
         patch?: never;
@@ -4083,6 +4135,18 @@ export interface components {
             readonly token: string;
             /** Format: date-time */
             expiresAt: string;
+            readonly accountTopic: string;
+        };
+        RealtimeConnectionEventRequest: {
+            /** @enum {string} */
+            topicKind: "account" | "conversation" | "live";
+            /** @enum {string} */
+            state: "connected" | "reconnecting" | "failed" | "disconnected";
+            /** @enum {string} */
+            reasonCode: "subscribed" | "channel_error" | "timed_out" | "closed" | "token_unavailable" | "cleanup";
+            attempt: number;
+            /** Format: date-time */
+            occurredAt: string;
         };
         UpdateNotificationPreferencesRequest: {
             messagesEnabled?: boolean;
@@ -4719,6 +4783,7 @@ export interface components {
             /** @enum {string} */
             requestRole: "none" | "initiator" | "recipient";
             canSend: boolean;
+            muted: boolean;
             lastMessage?: components["schemas"]["MessagePreview"];
         };
         CreateDirectConversationRequest: {
@@ -4728,6 +4793,9 @@ export interface components {
         RespondToMessageRequest: {
             /** @enum {string} */
             action: "accept" | "decline";
+        };
+        UpdateConversationMuteRequest: {
+            muted: boolean;
         };
         ConversationReadState: {
             /** Format: uuid */
@@ -4740,7 +4808,9 @@ export interface components {
         CreateMessageRequest: {
             body: string;
             /** Format: uuid */
-            paidMessageIntentId?: string | null;
+            replyToMessageId?: string | null;
+            /** Format: uuid */
+            sharedContentItemId?: string | null;
         };
         CreatePaidMessageIntentRequest: {
             body: string;
@@ -4756,6 +4826,16 @@ export interface components {
             deliveryState: "visible" | "pending_payment";
             /** Format: uuid */
             paymentIntentId?: string | null;
+            /** Format: uuid */
+            replyToMessageId?: string | null;
+            /** Format: uuid */
+            sharedContentItemId?: string | null;
+            reactions: {
+                /** @enum {string} */
+                key: "like" | "love" | "laugh" | "support";
+                count: number;
+                reacted: boolean;
+            }[];
             /** Format: date-time */
             createdAt: string;
         };
@@ -5952,6 +6032,13 @@ export interface components {
             replayWindowHours: number;
             hasPlaybackUrl: boolean;
             hasHostStreamKey: boolean;
+            /** @enum {string|null} */
+            monitoringState: "monitoring_pending" | "target_connected" | "monitoring" | "held" | "suspended" | "ended" | null;
+            monitoringHealthy: boolean;
+            /** Format: date-time */
+            monitoringHeartbeatExpiresAt?: string | null;
+            monitoringHoldReasonCode?: string | null;
+            pendingProviderAction: boolean;
             /** Format: date-time */
             startsAt?: string | null;
             /** Format: date-time */
@@ -7998,6 +8085,11 @@ export interface components {
                 "application/json": components["schemas"]["RegisterNotificationDeviceRequest"];
             };
         };
+        RealtimeConnectionEvent: {
+            content: {
+                "application/json": components["schemas"]["RealtimeConnectionEventRequest"];
+            };
+        };
         CreateUpload: {
             content: {
                 "application/json": components["schemas"]["CreateUploadRequest"];
@@ -8046,6 +8138,11 @@ export interface components {
         RespondToMessageRequest: {
             content: {
                 "application/json": components["schemas"]["RespondToMessageRequest"];
+            };
+        };
+        UpdateConversationMute: {
+            content: {
+                "application/json": components["schemas"]["UpdateConversationMuteRequest"];
             };
         };
         CreatePaidMessageIntent: {
@@ -9152,6 +9249,32 @@ export interface operations {
         requestBody?: never;
         responses: {
             201: components["responses"]["RealtimeAccessToken"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    recordRealtimeConnectionEvent: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["RealtimeConnectionEvent"];
+        responses: {
+            /** @description Connection event recorded */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
@@ -10379,6 +10502,27 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    updateConversationMute: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["UpdateConversationMute"];
+        responses: {
+            200: components["responses"]["Conversation"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     listConversationMessages: {
         parameters: {
             query?: never;
@@ -10443,6 +10587,50 @@ export interface operations {
             409: components["responses"]["Conflict"];
             429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    addMessageReaction: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                messageId: string;
+                reactionKey: "like" | "love" | "laugh" | "support";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Message"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    removeMessageReaction: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                messageId: string;
+                reactionKey: "like" | "love" | "laugh" | "support";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Message"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     createPaymentIntent: {

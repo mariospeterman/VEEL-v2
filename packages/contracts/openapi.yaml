@@ -692,6 +692,23 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/realtime/telemetry:
+    post:
+      operationId: recordRealtimeConnectionEvent
+      tags: [Realtime]
+      summary: Record bounded connection-health telemetry for a scoped private channel
+      x-idempotency-policy: append-only-bounded-health-signal
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/RealtimeConnectionEvent"
+      responses:
+        "204": { description: Connection event recorded }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/notifications/{notificationId}/read:
     patch:
       operationId: markNotificationRead
@@ -1571,6 +1588,22 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/messages/conversations/{conversationId}/mute:
+    patch:
+      operationId: updateConversationMute
+      tags: [Messages]
+      summary: Mute or unmute notifications for the authenticated participant
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/UpdateConversationMute"
+      responses:
+        "200": { $ref: "#/components/responses/Conversation" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /v1/messages/conversations/{conversationId}/messages:
     get:
       operationId: listConversationMessages
@@ -1621,6 +1654,35 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/messages/conversations/{conversationId}/messages/{messageId}/reactions/{reactionKey}:
+    put:
+      operationId: addMessageReaction
+      tags: [Messages]
+      summary: Add an allowed reaction to a visible conversation message
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+        - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: reactionKey, in: path, required: true, schema: { type: string, enum: [like, love, laugh, support] } }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: removeMessageReaction
+      tags: [Messages]
+      summary: Remove the authenticated participant's reaction
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+        - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: reactionKey, in: path, required: true, schema: { type: string, enum: [like, love, laugh, support] } }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /v1/payments/intents:
     post:
       operationId: createPaymentIntent
@@ -3162,6 +3224,7 @@ components:
     HideFeedTopic: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/HideFeedTopicRequest" } } } }
     UpdateNotificationPreferences: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateNotificationPreferencesRequest" } } } }
     RegisterNotificationDevice: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RegisterNotificationDeviceRequest" } } } }
+    RealtimeConnectionEvent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RealtimeConnectionEventRequest" } } } }
     CreateUpload: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateUploadRequest" } } } }
     CreateLiveRoom: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateLiveRoomRequest" } } } }
     RevealLiveHostConnection: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RevealLiveHostConnectionRequest" } } } }
@@ -3172,6 +3235,7 @@ components:
     CreateMessage: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateMessageRequest" } } } }
     CreateDirectConversation: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateDirectConversationRequest" } } } }
     RespondToMessageRequest: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RespondToMessageRequest" } } } }
+    UpdateConversationMute: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateConversationMuteRequest" } } } }
     CreatePaidMessageIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreatePaidMessageIntentRequest" } } } }
     UpdateCreatorOnboarding: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateCreatorOnboardingRequest" } } } }
     CreatePaymentIntent: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreatePaymentIntentRequest" }, examples: { support: { value: { productType: support, targetId: "00000000-0000-4000-8000-000000000001", amountMinor: 500000 } } } } } }
@@ -4186,10 +4250,21 @@ components:
         updatedAt: { type: string, format: date-time, nullable: true }
     RealtimeAccessToken:
       type: object
-      required: [token, expiresAt]
+      required: [token, expiresAt, accountTopic]
       properties:
         token: { type: string, minLength: 1, readOnly: true }
         expiresAt: { type: string, format: date-time }
+        accountTopic: { type: string, pattern: '^account:[0-9a-f-]{36}$', readOnly: true }
+    RealtimeConnectionEventRequest:
+      type: object
+      additionalProperties: false
+      required: [topicKind, state, reasonCode, attempt, occurredAt]
+      properties:
+        topicKind: { type: string, enum: [account, conversation, live] }
+        state: { type: string, enum: [connected, reconnecting, failed, disconnected] }
+        reasonCode: { type: string, enum: [subscribed, channel_error, timed_out, closed, token_unavailable, cleanup] }
+        attempt: { type: integer, minimum: 0, maximum: 10 }
+        occurredAt: { type: string, format: date-time }
     UpdateNotificationPreferencesRequest:
       type: object
       properties:
@@ -4854,7 +4929,7 @@ components:
         blockedUserId: { type: string, format: uuid }
     Conversation:
       type: object
-      required: [id, type, title, unreadCount, counterpart, requestState, requestRole, canSend]
+      required: [id, type, title, unreadCount, counterpart, requestState, requestRole, canSend, muted]
       properties:
         id: { type: string, format: uuid }
         type: { type: string, enum: [direct, match, paid] }
@@ -4864,6 +4939,7 @@ components:
         requestState: { type: string, enum: [not_required, pending, accepted, declined] }
         requestRole: { type: string, enum: [none, initiator, recipient] }
         canSend: { type: boolean }
+        muted: { type: boolean }
         lastMessage: { $ref: "#/components/schemas/MessagePreview" }
     CreateDirectConversationRequest:
       type: object
@@ -4875,6 +4951,12 @@ components:
       required: [action]
       properties:
         action: { type: string, enum: [accept, decline] }
+    UpdateConversationMuteRequest:
+      type: object
+      additionalProperties: false
+      required: [muted]
+      properties:
+        muted: { type: boolean }
     ConversationReadState:
       type: object
       required: [conversationId, unreadCount, readAt]
@@ -4887,7 +4969,8 @@ components:
       required: [body]
       properties:
         body: { type: string, minLength: 1, maxLength: 4000 }
-        paidMessageIntentId: { type: string, format: uuid, nullable: true }
+        replyToMessageId: { type: string, format: uuid, nullable: true }
+        sharedContentItemId: { type: string, format: uuid, nullable: true }
     CreatePaidMessageIntentRequest:
       type: object
       required: [body]
@@ -4895,7 +4978,7 @@ components:
         body: { type: string, minLength: 1, maxLength: 4000 }
     Message:
       type: object
-      required: [id, conversationId, sender, body, deliveryState, createdAt]
+      required: [id, conversationId, sender, body, deliveryState, reactions, createdAt]
       properties:
         id: { type: string, format: uuid }
         conversationId: { type: string, format: uuid }
@@ -4903,6 +4986,17 @@ components:
         body: { type: string }
         deliveryState: { type: string, enum: [visible, pending_payment] }
         paymentIntentId: { type: string, format: uuid, nullable: true }
+        replyToMessageId: { type: string, format: uuid, nullable: true }
+        sharedContentItemId: { type: string, format: uuid, nullable: true }
+        reactions:
+          type: array
+          items:
+            type: object
+            required: [key, count, reacted]
+            properties:
+              key: { type: string, enum: [like, love, laugh, support] }
+              count: { type: integer, minimum: 1 }
+              reacted: { type: boolean }
         createdAt: { type: string, format: date-time }
     MessagePreview:
       type: object
@@ -6145,7 +6239,7 @@ components:
         socialMoneyBoundary: { type: string, enum: [money_never_buys_people_visibility_matches_or_social_priority] }
     AdminLiveRoom:
       type: object
-      required: [id, creatorUserId, title, provider, providerState, state, accessMode, eventPriceMinor, currency, membersOnlyChat, membersIncludedInPaidEvent, replayWindowHours, hasPlaybackUrl, hasHostStreamKey, createdAt]
+      required: [id, creatorUserId, title, provider, providerState, state, accessMode, eventPriceMinor, currency, membersOnlyChat, membersIncludedInPaidEvent, replayWindowHours, hasPlaybackUrl, hasHostStreamKey, monitoringState, monitoringHealthy, pendingProviderAction, createdAt]
       properties:
         id: { type: string, format: uuid }
         creatorUserId: { type: string, format: uuid }
@@ -6163,6 +6257,11 @@ components:
         replayWindowHours: { type: integer }
         hasPlaybackUrl: { type: boolean }
         hasHostStreamKey: { type: boolean }
+        monitoringState: { type: string, enum: [monitoring_pending, target_connected, monitoring, held, suspended, ended], nullable: true }
+        monitoringHealthy: { type: boolean }
+        monitoringHeartbeatExpiresAt: { type: string, format: date-time, nullable: true }
+        monitoringHoldReasonCode: { type: string, nullable: true }
+        pendingProviderAction: { type: boolean }
         startsAt: { type: string, format: date-time, nullable: true }
         endedAt: { type: string, format: date-time, nullable: true }
         createdAt: { type: string, format: date-time }

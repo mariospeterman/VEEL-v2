@@ -12,7 +12,7 @@ type JsonObject = { [key: string]: JsonValue };
 
 export function createLiveStatusRepositoryMethods(
   sql: postgres.Sql
-): Pick<LiveRepository, "captureProviderObservationCutoff" | "recordLiveProviderWebhook" | "updateRoomFromWebhook" | "updateRoomStatus"> {
+): Pick<LiveRepository, "captureProviderObservationCutoff" | "recordLiveProviderWebhook" | "recordLiveSafetyEvent" | "updateRoomFromWebhook" | "updateRoomStatus"> {
   return {
     async captureProviderObservationCutoff() {
       return captureProviderObservationCutoff(sql);
@@ -127,6 +127,122 @@ export function createLiveStatusRepositoryMethods(
         `;
 
         return events[0]?.processed_at === null;
+      });
+    },
+    async recordLiveSafetyEvent(input) {
+      return sql.begin(async (transaction) => {
+        const rows = await transaction<{
+          room_id: string;
+          room_state: string;
+          session_id: string;
+          expected_target: string | null;
+          acknowledged_at: Date | null;
+        }[]>`
+          select
+            room.id as room_id,
+            room.state as room_state,
+            session.id as session_id,
+            session.moderation_target_reference as expected_target,
+            session.acknowledged_at
+          from live_rooms room
+          join live_safety_sessions session on session.room_id = room.id
+          where room.provider_stream_id = ${input.providerStreamId}
+          limit 1
+          for update of room, session
+        `;
+        const target = rows[0];
+        if (!target) return false;
+
+        const targetMismatch = input.eventKind === "target_connected" && (
+          !input.moderationTargetReference ||
+          !target.expected_target ||
+          input.moderationTargetReference !== target.expected_target
+        );
+        const eventKind = targetMismatch ? "provider_inconsistent" : input.eventKind;
+        const normalizedSignal = targetMismatch ? "inconsistent" : input.normalizedSignal;
+        const inserted = await transaction<{ id: string }[]>`
+          insert into live_safety_monitoring_events (
+            live_safety_session_id, provider, provider_event_id, event_kind,
+            normalized_signal, payload_hash, signature_hash, observed_at
+          ) values (
+            ${target.session_id}, 'livepeer', ${input.providerEventId}, ${eventKind},
+            ${normalizedSignal}, ${input.payloadHash}, ${input.signatureHash}, ${input.observedAt}
+          )
+          on conflict (provider, provider_event_id) do nothing
+          returning id
+        `;
+        if (!inserted[0]) return false;
+
+        if (eventKind === "target_connected") {
+          await transaction`
+            update live_safety_sessions
+            set state = 'target_connected',
+                acknowledgement_event_id = ${input.providerEventId},
+                acknowledged_at = ${input.observedAt},
+                hold_reason_code = null,
+                held_at = null,
+                next_check_at = now() + interval '30 seconds',
+                updated_at = now()
+            where id = ${target.session_id}
+          `;
+        } else if (eventKind === "heartbeat" && target.acknowledged_at) {
+          await transaction`
+            update live_safety_sessions
+            set state = 'monitoring',
+                last_heartbeat_at = ${input.observedAt},
+                heartbeat_expires_at = ${input.observedAt} + interval '90 seconds',
+                hold_reason_code = null,
+                held_at = null,
+                next_check_at = now() + interval '30 seconds',
+                updated_at = now()
+            where id = ${target.session_id}
+          `;
+        } else if (eventKind === "target_disconnected" || eventKind === "provider_inconsistent") {
+          const reasonCode = eventKind === "target_disconnected"
+            ? "live_monitoring_disconnected"
+            : "live_monitoring_inconsistent";
+          await transaction`
+            update live_safety_sessions
+            set state = 'held', hold_reason_code = ${reasonCode}, held_at = now(),
+                heartbeat_expires_at = null, last_heartbeat_at = null,
+                next_check_at = now(), updated_at = now()
+            where id = ${target.session_id}
+          `;
+          await transaction`
+            update media_safety_cases
+            set state = 'review_required', reason_code = ${reasonCode},
+                provider_release_allowed = false, decided_at = null, updated_at = now()
+            where live_room_id = ${target.room_id} and state <> 'superseded'
+          `;
+          await transaction`
+            update live_rooms
+            set state_before_suspension = case when state = 'live' then 'live' else coalesce(state_before_suspension, 'waiting') end,
+                state = 'suspended', provider_state = 'suspension_pending', playback_url = null,
+                suspended_at = coalesce(suspended_at, now()), suspension_reason = ${reasonCode}, updated_at = now()
+            where id = ${target.room_id} and state not in ('ended', 'replay_ready')
+          `;
+          await transaction`
+            insert into live_safety_provider_actions (room_id, action, reason_code)
+            values (${target.room_id}, 'suspend', ${reasonCode})
+            on conflict (room_id, action) where state in ('queued', 'processing', 'retry') do nothing
+          `;
+        }
+
+        await transaction`
+          update media_safety_cases safety
+          set state = 'approved', decision_source = 'automated',
+              reason_code = 'live_monitoring_healthy', provider_release_allowed = true,
+              decided_at = now(), updated_at = now()
+          where safety.live_room_id = ${target.room_id}
+            and safety.state <> 'superseded'
+            and private.live_safety_release_ready(${target.room_id})
+        `;
+        await transaction`
+          update provider_events
+          set processed_at = coalesce(processed_at, now())
+          where provider = 'livepeer' and provider_event_id = ${input.providerEventId}
+        `;
+        return true;
       });
     },
     async updateRoomFromWebhook(input) {

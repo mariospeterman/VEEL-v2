@@ -1,81 +1,72 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { Conversation } from "@/api-client";
 import {
-  ApiMutationError,
   createMessage,
-  createPaidMessageIntent,
   type Message
 } from "@/api-mutations";
 import { safeMutationMessage } from "@/api-errors";
 import { createMutationIdempotencyKey } from "@/api-mutation-transport";
-import { PaymentHandoffPanel } from "@/payment-handoff-panel";
 
 interface MessageComposerProps {
   conversation: Conversation;
 }
 
 export function MessageComposer({ conversation }: MessageComposerProps) {
+  const queryClient = useQueryClient();
   const [body, setBody] = useState("");
-  const [state, setState] = useState<"idle" | "sending" | "payment" | "ready" | "error">("idle");
+  const [state, setState] = useState<"idle" | "sending" | "ready" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [sentMessage, setSentMessage] = useState<Message | null>(null);
   const messageAttempt = useRef<{ body: string; idempotencyKey: string } | null>(null);
   const trimmedBody = body.trim();
-  const isBusy = state === "sending" || state === "payment";
+  const isBusy = state === "sending";
 
   async function sendVisibleMessage() {
     if (!trimmedBody) return;
     resetResult("sending");
+    const optimisticId = `optimistic-${Date.now()}`;
+    const optimistic: Message = {
+      id: optimisticId,
+      conversationId: conversation.id,
+      sender: { id: "current-user", handle: "you", displayName: "You", avatarUrl: null, badges: [] },
+      body: trimmedBody,
+      deliveryState: "visible",
+      paymentIntentId: null,
+      replyToMessageId: null,
+      sharedContentItemId: null,
+      reactions: [],
+      createdAt: new Date().toISOString()
+    };
+    const queryKey = ["messages", "conversation", conversation.id] as const;
+    queryClient.setQueryData<{ items: Message[] }>(queryKey, (current) => ({
+      items: [...(current?.items ?? []), optimistic]
+    }));
 
     try {
       const idempotencyKey = idempotencyKeyForBody(messageAttempt, trimmedBody);
       const created = await createMessage(conversation.id, { body: trimmedBody }, idempotencyKey);
       messageAttempt.current = null;
       setSentMessage(created);
+      queryClient.setQueryData<{ items: Message[] }>(queryKey, (current) => ({
+        items: (current?.items ?? []).map((item) => item.id === optimisticId ? created : item)
+      }));
+      void queryClient.invalidateQueries({ queryKey: ["messages", "conversations"] });
       setBody("");
       setState("ready");
       setMessage("Message was accepted by the backend conversation policy.");
     } catch (error) {
+      queryClient.setQueryData<{ items: Message[] }>(queryKey, (current) => ({
+        items: (current?.items ?? []).filter((item) => item.id !== optimisticId)
+      }));
       setState("error");
       setMessage(errorMessage(error));
     }
   }
 
-  async function startPaidMessage(checkoutIdempotencyKey: string) {
-    if (!trimmedBody) return null;
-    resetResult("payment");
-
-    try {
-      const result = await createPaidMessageIntent(
-        conversation.id,
-        { body: trimmedBody },
-        checkoutIdempotencyKey
-      );
-
-      if (result.state === "already_delivered") {
-        setSentMessage(result.message ?? null);
-        setBody("");
-        setState("ready");
-        setMessage("Paid message delivery is already reflected by the backend projection.");
-        return null;
-      }
-
-      if (!result.paymentIntent) {
-        throw new ApiMutationError("Paid message requires payment but no payment intent was returned.");
-      }
-
-      setState("idle");
-      return result.paymentIntent;
-    } catch (error) {
-      setState("error");
-      setMessage(errorMessage(error));
-      throw error;
-    }
-  }
-
-  function resetResult(nextState: "sending" | "payment") {
+  function resetResult(nextState: "sending") {
     setState(nextState);
     setMessage(null);
     setSentMessage(null);
@@ -107,20 +98,6 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
           {state === "sending" ? "Sending" : "Send"}
         </button>
       </div>
-      <div className="mt-3">
-        <PaymentHandoffPanel
-          createIntent={startPaidMessage}
-          ctaLabel="Send as paid message"
-          disabled={
-            isBusy || !trimmedBody || conversation.requestState === "declined" ||
-            (conversation.requestState === "pending" && conversation.requestRole === "recipient")
-          }
-          idleCopy="Paid delivery uses the same review, consent, wallet approval, and backend settlement flow as other one-time products."
-          pendingLabel="Preparing paid message"
-          readyCopy="Paid message delivery is reflected by the backend conversation projection."
-        />
-      </div>
-
       {sentMessage ? (
         <p className="mt-3 rounded border border-(--line) bg-(--background) px-3 py-2 text-sm text-(--muted)">
           Latest backend delivery state: {sentMessage.deliveryState}

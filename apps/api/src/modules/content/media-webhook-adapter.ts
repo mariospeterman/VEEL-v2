@@ -32,11 +32,19 @@ export interface NormalizedMediaWebhook {
   providerState: string;
   providerPlayable: boolean;
   signatureHash: string | null;
+  payloadHash?: string;
   livepeerStream?: {
     providerStreamId: string;
     providerPlaybackId: string | null;
     roomState: "waiting" | "live" | "ended" | "replay_ready";
     playbackUrl: string | null;
+  };
+  livepeerSafety?: {
+    providerStreamId: string;
+    eventKind: "target_connected" | "heartbeat" | "target_disconnected" | "provider_inconsistent";
+    normalizedSignal: "healthy" | "disconnected" | "inconsistent";
+    moderationTargetReference: string | null;
+    observedAt: Date;
   };
 }
 
@@ -141,20 +149,30 @@ function normalizeLivepeerWebhook(input: {
   const body = objectBody(input.body);
   const eventType = stringValue(body.event);
   const eventObject = objectValue(body.event_object) ?? objectValue(body.eventObject);
-  const providerStreamId = stringValue(eventObject?.id) ?? stringValue(eventObject?.streamId);
+  const streamObject = objectValue(eventObject?.stream);
+  const providerStreamId =
+    stringValue(streamObject?.id) ??
+    stringValue(eventObject?.streamId) ??
+    stringValue(eventObject?.id);
 
   if (!eventType || !eventObject || !providerStreamId) {
     throw new MediaWebhookValidationError("Livepeer webhook is missing event or stream id");
   }
 
   const mapped = mapLivepeerStreamEvent(eventType);
-  if (!mapped) {
+  const safety = mapLivepeerSafetyEvent(eventType);
+  if (!mapped && !safety) {
     throw new MediaWebhookValidationError("Unsupported Livepeer live event type");
   }
   if (String(body.timestamp ?? "") !== String(parsedSignature.timestamp)) {
     throw new MediaWebhookSignatureError("livepeer");
   }
   const providerPlaybackId = stringValue(eventObject.playbackId) ?? stringValue(eventObject.playback_id);
+  const targetObject = objectValue(eventObject.target);
+  const moderationTargetReference =
+    stringValue(targetObject?.id) ??
+    stringValue(eventObject.targetId) ??
+    stringValue(eventObject.target_id);
 
   return {
     provider: "livepeer",
@@ -168,15 +186,26 @@ function normalizeLivepeerWebhook(input: {
       .join(":"),
     providerAssetId: providerStreamId,
     eventType,
-    providerState: mapped.providerState,
-    providerPlayable: mapped.roomState === "live",
+    providerState: mapped?.providerState ?? (safety?.normalizedSignal === "healthy" ? "monitoring" : "monitoring_failed"),
+    providerPlayable: mapped?.roomState === "live",
     signatureHash: sha256Hex(parsedSignature.v1.join(",")),
-    livepeerStream: {
-      providerStreamId,
-      providerPlaybackId,
-      roomState: mapped.roomState,
-      playbackUrl: playbackUrlFromLivepeerPlaybackId(providerPlaybackId)
-    }
+    payloadHash: sha256Hex(input.rawBody.toString("utf8")),
+    ...(mapped ? {
+      livepeerStream: {
+        providerStreamId,
+        providerPlaybackId,
+        roomState: mapped.roomState,
+        playbackUrl: playbackUrlFromLivepeerPlaybackId(providerPlaybackId)
+      }
+    } : {}),
+    ...(safety ? {
+      livepeerSafety: {
+        providerStreamId,
+        ...safety,
+        moderationTargetReference,
+        observedAt: new Date(parsedSignature.timestamp * 1000)
+      }
+    } : {})
   };
 }
 
@@ -228,6 +257,25 @@ function mapLivepeerStreamEvent(eventType: string): {
     return { providerState: "idle", roomState: "ended" };
   }
 
+  return null;
+}
+
+function mapLivepeerSafetyEvent(eventType: string): {
+  eventKind: "target_connected" | "heartbeat" | "target_disconnected" | "provider_inconsistent";
+  normalizedSignal: "healthy" | "disconnected" | "inconsistent";
+} | null {
+  if (eventType === "multistream.connected") {
+    return { eventKind: "target_connected", normalizedSignal: "healthy" };
+  }
+  if (eventType === "stream.started") {
+    return { eventKind: "heartbeat", normalizedSignal: "healthy" };
+  }
+  if (eventType === "multistream.disconnected") {
+    return { eventKind: "target_disconnected", normalizedSignal: "disconnected" };
+  }
+  if (eventType === "multistream.error") {
+    return { eventKind: "provider_inconsistent", normalizedSignal: "inconsistent" };
+  }
   return null;
 }
 

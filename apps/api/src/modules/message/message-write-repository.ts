@@ -20,7 +20,9 @@ import type {
   CreateMessageInput,
   CreatePaidMessageDraftInput,
   MarkConversationReadInput,
-  RespondToMessageRequestInput
+  RespondToMessageRequestInput,
+  UpdateConversationMuteInput,
+  UpdateMessageReactionInput
 } from "./types.js";
 
 interface ConversationContextRow {
@@ -230,6 +232,9 @@ export async function markConversationRead(
   return sql.begin(async (transaction) => {
     const context = await lockConversationContext(transaction, input);
     if (!context) return null;
+    if (context.request_state && context.request_state !== "accepted") {
+      throw new MessageRequestForbiddenError();
+    }
     const replay = await readMessageActionReceipt<ConversationReadState>(
       transaction,
       context.actor_id,
@@ -268,6 +273,43 @@ export async function markConversationRead(
   });
 }
 
+export async function updateConversationMute(
+  sql: postgres.Sql,
+  input: UpdateConversationMuteInput
+) {
+  return sql.begin(async (transaction) => {
+    const context = await lockConversationContext(transaction, input);
+    if (!context) return null;
+    const replay = await readMessageActionReceipt<Conversation>(
+      transaction,
+      context.actor_id,
+      input.idempotencyKey
+    );
+    if (replay) {
+      assertReceiptMatches(replay, "conversation.mute", input.requestHash);
+      return replay.response_body;
+    }
+    await transaction`
+      update conversation_members
+      set muted_at = ${input.muted ? new Date() : null}
+      where conversation_id = ${input.conversationId}
+        and user_id = ${context.actor_id}
+    `;
+    const response = await readConversationByUserId(transaction, context.actor_id, input.conversationId);
+    if (!response) return null;
+    await recordMessageAction(
+      transaction,
+      context.actor_id,
+      input.idempotencyKey,
+      "conversation.mute",
+      input.requestHash,
+      input.conversationId,
+      response
+    );
+    return response;
+  });
+}
+
 export async function createMessage(sql: postgres.Sql, input: CreateMessageInput) {
   return sql.begin(async (transaction) => {
     const context = await lockConversationContext(transaction, input);
@@ -295,7 +337,7 @@ export async function createMessage(sql: postgres.Sql, input: CreateMessageInput
       if (existing[0].conversation_id !== input.conversationId || existing[0].body !== input.body) {
         throw new MessageIdempotencyConflictError();
       }
-      return readMessage(transaction, existing[0].id);
+      return readMessage(transaction, existing[0].id, context.actor_id);
     }
 
     if (context.request_state === "declined") {
@@ -305,15 +347,42 @@ export async function createMessage(sql: postgres.Sql, input: CreateMessageInput
       if (context.initiator_user_id !== context.actor_id) {
         throw new MessageRequestForbiddenError();
       }
-      if (Number(context.requester_message_count) >= 2) {
+      if (Number(context.requester_message_count) >= 1) {
         throw new MessageRequestLimitError();
       }
     }
 
+    if (input.replyToMessageId) {
+      const referenced = await transaction<{ id: string }[]>`
+        select id from messages
+        where id = ${input.replyToMessageId}
+          and conversation_id = ${input.conversationId}
+          and delivery_state = 'visible'
+        limit 1
+      `;
+      if (!referenced[0]) throw new MessageRequestForbiddenError();
+    }
+    if (input.sharedContentItemId) {
+      const shareable = await transaction<{ id: string }[]>`
+        select id from content_items
+        where id = ${input.sharedContentItemId}
+          and state = 'ready'
+          and publish_state = 'published'
+          and moderation_state = 'approved'
+        limit 1
+      `;
+      if (!shareable[0]) throw new MessageRequestForbiddenError();
+    }
+
     const messageId = randomUUID();
     await transaction`
-      insert into messages (id, conversation_id, sender_user_id, body, idempotency_key)
-      values (${messageId}, ${input.conversationId}, ${context.actor_id}, ${input.body}, ${input.idempotencyKey})
+      insert into messages (
+        id, conversation_id, sender_user_id, body, idempotency_key,
+        reply_to_message_id, shared_content_item_id
+      ) values (
+        ${messageId}, ${input.conversationId}, ${context.actor_id}, ${input.body},
+        ${input.idempotencyKey}, ${input.replyToMessageId ?? null}, ${input.sharedContentItemId ?? null}
+      )
     `;
     if (context.request_state === "pending") {
       await transaction`
@@ -346,13 +415,46 @@ export async function createMessage(sql: postgres.Sql, input: CreateMessageInput
       ) on conflict do nothing
     `;
 
-    return readMessage(transaction, messageId);
+    return readMessage(transaction, messageId, context.actor_id);
   });
 }
 
-async function readMessage(sql: postgres.ISql, messageId: string) {
+export async function updateMessageReaction(
+  sql: postgres.Sql,
+  input: UpdateMessageReactionInput
+) {
+  return sql.begin(async (transaction) => {
+    const context = await lockConversationContext(transaction, input);
+    if (!context || (context.request_state && context.request_state !== "accepted")) return null;
+    const message = await transaction<{ id: string }[]>`
+      select id from messages
+      where id = ${input.messageId}
+        and conversation_id = ${input.conversationId}
+        and delivery_state = 'visible'
+      for update
+    `;
+    if (!message[0]) return null;
+    if (input.reacted) {
+      await transaction`
+        insert into message_reactions (message_id, user_id, reaction_key)
+        values (${input.messageId}, ${context.actor_id}, ${input.reactionKey})
+        on conflict do nothing
+      `;
+    } else {
+      await transaction`
+        delete from message_reactions
+        where message_id = ${input.messageId}
+          and user_id = ${context.actor_id}
+          and reaction_key = ${input.reactionKey}
+      `;
+    }
+    return readMessage(transaction, input.messageId, context.actor_id);
+  });
+}
+
+async function readMessage(sql: postgres.ISql, messageId: string, viewerUserId: string) {
   const rows = await sql<MessageRow[]>`
-    ${messageSelectSql(sql)}
+    ${messageSelectSql(sql, viewerUserId)}
     where m.id = ${messageId}
   `;
   return rows[0] ? toMessage(rows[0]) : null;
@@ -545,7 +647,7 @@ export async function findConversationPrice(sql: postgres.Sql, input: Conversati
       where (b.blocker_user_id = actor.id and b.blocked_user_id = recipient.user_id)
          or (b.blocker_user_id = recipient.user_id and b.blocked_user_id = actor.id)
     )
-      and coalesce(request.state, 'accepted') <> 'declined'
+      and coalesce(request.state, 'accepted') = 'accepted'
     limit 1
   `;
   const row = rows[0];
@@ -570,7 +672,7 @@ export async function recordPaidMessageDraft(
       throw new MessageRequestForbiddenError();
     }
     await assertNotBlocked(transaction, context.actor_id, context.other_user_id);
-    if (context.request_state === "declined") {
+    if (context.request_state && context.request_state !== "accepted") {
       throw new MessageRequestForbiddenError();
     }
 

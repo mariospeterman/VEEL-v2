@@ -7,7 +7,9 @@ import {
   findConversationPrice,
   markConversationRead,
   recordPaidMessageDraft,
-  respondToMessageRequest
+  respondToMessageRequest,
+  updateConversationMute,
+  updateMessageReaction
 } from "./message-write-repository.js";
 import type { MessageRepository } from "./types.js";
 
@@ -40,6 +42,12 @@ export function createPostgresMessageRepository(database?: string | PostgresSql)
       async markConversationRead() {
         throw new MessageRepositoryConfigurationError();
       },
+      async updateConversationMute() {
+        throw new MessageRepositoryConfigurationError();
+      },
+      async updateMessageReaction() {
+        throw new MessageRepositoryConfigurationError();
+      },
       async findConversationPrice() {
         throw new MessageRepositoryConfigurationError();
       },
@@ -69,6 +77,12 @@ export function createPostgresMessageRepository(database?: string | PostgresSql)
     },
     async markConversationRead(input) {
       return markConversationRead(sql, input);
+    },
+    async updateConversationMute(input) {
+      return updateConversationMute(sql, input);
+    },
+    async updateMessageReaction(input) {
+      return updateMessageReaction(sql, input);
     },
     async findConversationPrice(input) {
       return findConversationPrice(sql, input);
