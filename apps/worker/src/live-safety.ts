@@ -26,7 +26,11 @@ export interface LiveSafetyRepository {
     observedAt: Date;
     healthy: boolean;
   }): Promise<void>;
-  holdDueSessions(input: { now: Date; limit: number }): Promise<number>;
+  holdDueSessions(input: {
+    now: Date;
+    limit: number;
+    excludeSessionIds?: string[];
+  }): Promise<number>;
   claimProviderActions(input: { now: Date; limit: number }): Promise<LiveSafetyProviderAction[]>;
   completeProviderAction(input: { id: string; leaseToken: string; now: Date }): Promise<void>;
   retryProviderAction(input: {
@@ -67,6 +71,7 @@ export async function processLiveSafety(input: {
   const healthChecks = await input.repository.claimHealthChecks({ now, limit });
   let healthConfirmed = 0;
   let healthFailed = 0;
+  const confirmedSessionIds: string[] = [];
   for (const check of healthChecks) {
     const observedAt = input.now ?? new Date();
     let healthy = false;
@@ -84,11 +89,19 @@ export async function processLiveSafety(input: {
       observedAt,
       healthy
     });
-    if (healthy) healthConfirmed += 1;
-    else healthFailed += 1;
+    if (healthy) {
+      healthConfirmed += 1;
+      confirmedSessionIds.push(check.id);
+    } else {
+      healthFailed += 1;
+    }
   }
   const holdAt = input.now ?? new Date();
-  const held = await input.repository.holdDueSessions({ now: holdAt, limit });
+  const held = await input.repository.holdDueSessions({
+    now: holdAt,
+    limit,
+    excludeSessionIds: confirmedSessionIds
+  });
   const actions = await input.repository.claimProviderActions({ now: holdAt, limit });
   let completed = 0;
   let retried = 0;
@@ -212,6 +225,7 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
           join live_rooms room on room.id = session.room_id
           where session.state in ${transaction([...liveSafetyHoldEligibleStates])}
             and session.next_check_at <= ${input.now}
+            and not (session.id = any(${input.excludeSessionIds ?? []}::uuid[]))
             and (session.lease_expires_at is null or session.lease_expires_at <= ${input.now})
             and room.state = 'live'
             and (

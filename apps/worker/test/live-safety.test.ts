@@ -14,15 +14,19 @@ function repositoryWith(
   const completed: string[] = [];
   const retried: Array<{ id: string; deadLetter: boolean }> = [];
   const healthResults: Array<{ id: string; healthy: boolean }> = [];
+  const holdInputs: Array<{ excludeSessionIds?: string[] }> = [];
   const repository: LiveSafetyRepository = {
     async claimHealthChecks() { return healthChecks; },
     async completeHealthCheck(input) { healthResults.push({ id: input.id, healthy: input.healthy }); },
-    async holdDueSessions() { return 2; },
+    async holdDueSessions(input) {
+      holdInputs.push({ excludeSessionIds: input.excludeSessionIds });
+      return 2;
+    },
     async claimProviderActions() { return actions; },
     async completeProviderAction(input) { completed.push(input.id); },
     async retryProviderAction(input) { retried.push({ id: input.id, deadLetter: input.deadLetter }); }
   };
-  return { repository, completed, retried, healthResults };
+  return { repository, completed, retried, healthResults, holdInputs };
 }
 
 describe("live safety watchdog", () => {
@@ -166,6 +170,47 @@ describe("live safety watchdog", () => {
         "2026-08-23T12:00:00.000Z",
         "2026-08-23T12:00:31.000Z"
       ]);
+      expect(state.holdInputs).toEqual([{
+        excludeSessionIds: ["session-1", "session-2"]
+      }]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not let a long batch invalidate health confirmed in the same tick", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-23T12:00:00.000Z"));
+    try {
+      const state = repositoryWith([], [
+        {
+          id: "healthy-session",
+          roomId: "room-1",
+          providerStreamId: "healthy-stream",
+          leaseToken: "health-lease-1"
+        },
+        {
+          id: "failed-session",
+          roomId: "room-2",
+          providerStreamId: "failed-stream",
+          leaseToken: "health-lease-2"
+        }
+      ]);
+      await processLiveSafety({
+        repository: state.repository,
+        provider: {
+          async checkHealth(input) {
+            if (input.providerStreamId === "healthy-stream") return { healthy: true };
+            vi.advanceTimersByTime(100_000);
+            return { healthy: false };
+          },
+          async suspend() {}
+        }
+      });
+
+      expect(state.holdInputs).toEqual([{
+        excludeSessionIds: ["healthy-session"]
+      }]);
     } finally {
       vi.useRealTimers();
     }
