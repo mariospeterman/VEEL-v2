@@ -36,6 +36,7 @@ export async function settleCreatorMediaOffer(
     left join direct_message_requests direct_request on direct_request.conversation_id = offer.conversation_id
     where intent.id = ${input.paymentIntentId}
       and intent.product_type = 'content_unlock'
+      and offer.payment_intent_id = intent.id
     limit 1
     for update of offer, conversation, content
   `;
@@ -90,6 +91,7 @@ export async function settleStructuredCreatorRequest(
     select request.id, request.conversation_id, request.creator_user_id, request.state,
       request.requester_user_id = ${input.userId}
       and request.state in ('accepted', 'payment_pending', 'active')
+      and request.expires_at > now()
       and conversation.state = 'active'
       and coalesce(direct_request.state, 'accepted') = 'accepted'
       and not exists (
@@ -103,7 +105,7 @@ export async function settleStructuredCreatorRequest(
     left join direct_message_requests direct_request on direct_request.conversation_id = request.conversation_id
     where intent.id = ${input.paymentIntentId}
       and intent.product_type = 'paid_message'
-      and (request.payment_intent_id is null or request.payment_intent_id = intent.id)
+      and request.payment_intent_id = intent.id
     limit 1
     for update of request, conversation
   `;

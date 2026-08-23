@@ -145,6 +145,7 @@ export async function updateCreatorMediaOffer(
         and conversation_id = ${input.conversationId}
         and state = 'offered'
         and payment_intent_id is null
+        and expires_at > now()
         and (
           (${input.action} = 'decline' and buyer_user_id = ${context.actor_id})
           or (${input.action} = 'withdraw' and creator_user_id = ${context.actor_id})
@@ -286,6 +287,12 @@ export async function updateStructuredCreatorRequest(
     `;
     const existing = existingRows[0];
     if (!existing) return null;
+    if (
+      existing.expires_at.getTime() <= Date.now() &&
+      ["proposed", "terms_proposed", "accepted", "payment_pending"].includes(existing.state)
+    ) {
+      throw new MessageRequestForbiddenError();
+    }
     const transition = resolveRequestTransition(existing, context.actor_id, input);
     const rows = await transaction<CreatorRequestRow[]>`
       update structured_creator_requests
@@ -437,6 +444,9 @@ function resolveRequestTransition(
 }
 
 function toMediaOffer(row: MediaOfferRow): CreatorMediaOffer {
+  const state = row.expires_at.getTime() <= Date.now() && ["offered", "accepted"].includes(row.state)
+    ? "expired"
+    : row.state;
   return {
     id: row.id,
     conversationId: row.conversation_id,
@@ -448,7 +458,7 @@ function toMediaOffer(row: MediaOfferRow): CreatorMediaOffer {
     description: row.description,
     amountMinor: Number(row.amount_minor),
     currency: row.currency,
-    state: row.state,
+    state,
     paymentIntentId: row.payment_intent_id,
     expiresAt: row.expires_at.toISOString(),
     purchasedAt: row.purchased_at?.toISOString() ?? null,
@@ -458,6 +468,10 @@ function toMediaOffer(row: MediaOfferRow): CreatorMediaOffer {
 }
 
 function toCreatorRequest(row: CreatorRequestRow): StructuredCreatorRequest {
+  const state = row.expires_at.getTime() <= Date.now() &&
+    ["proposed", "terms_proposed", "accepted", "payment_pending"].includes(row.state)
+    ? "expired"
+    : row.state;
   return {
     id: row.id,
     conversationId: row.conversation_id,
@@ -471,7 +485,7 @@ function toCreatorRequest(row: CreatorRequestRow): StructuredCreatorRequest {
     expectedDeliveryDays: row.expected_delivery_days,
     clarificationRule: row.clarification_rule,
     cancellationRule: row.cancellation_rule,
-    state: row.state,
+    state,
     paymentIntentId: row.payment_intent_id,
     expiresAt: row.expires_at.toISOString(),
     acceptedAt: row.accepted_at?.toISOString() ?? null,

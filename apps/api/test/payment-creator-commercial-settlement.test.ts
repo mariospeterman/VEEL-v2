@@ -16,6 +16,8 @@ describe("structured creator request settlement", () => {
 
     expect(queries.join("\n")).toContain("set state = 'active'");
     expect(queries.join("\n")).not.toContain("set state = 'remediation'");
+    expect(queries[0]).toContain("request.payment_intent_id = intent.id");
+    expect(queries[0]).toContain("request.expires_at > now()");
     expect(values).toContain("creator_request.activated_after_settlement");
   });
 
@@ -57,6 +59,7 @@ describe("creator media offer settlement", () => {
     })).resolves.toEqual({ kind: "purchased", contentItemId: "content-1" });
     expect(queries.join("\n")).toContain("set state = 'purchased'");
     expect(queries.join("\n")).not.toContain("set state = 'remediation'");
+    expect(queries[0]).toContain("offer.payment_intent_id = intent.id");
   });
 
   it("withholds entitlement and records remediation after a consent change", async () => {
