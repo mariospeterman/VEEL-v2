@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "latestMergedBaseline": "b5e190480032c38db485138206cb09e296d7053a",
-  "latestMergedSlice": "Convergence 01 — policy and eligibility",
-  "latestMergedMigration": "packages/database/migrations/0108_policy_content_eligibility_convergence.sql",
-  "nextPlannedSlice": "Convergence 02 — Universal composer",
-  "nextPlannedBranch": "codex/converge-02-universal-composer",
+  "latestMergedBaseline": "692bf49cd56405d6dd1693d183b17119ac7519f0",
+  "latestMergedSlice": "Convergence 02 — Universal composer",
+  "latestMergedMigration": "packages/database/migrations/0109_universal_composer_authority.sql",
+  "nextPlannedSlice": "Convergence 03 — Analytics Core",
+  "nextPlannedBranch": "codex/converge-03-analytics-core",
   "latestMergedEvidenceStates": [
     "DESIGNED",
     "CODE_COMPLETE",

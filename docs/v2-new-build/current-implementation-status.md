@@ -38,19 +38,31 @@ copied into this document. The machine-readable companion is `production-status.
 
 | Field | Current value |
 | --- | --- |
-| Latest merged baseline | `b5e190480032c38db485138206cb09e296d7053a` |
-| Latest merged slice | Convergence 01 — policy and eligibility |
-| Latest merged migration | `packages/database/migrations/0108_policy_content_eligibility_convergence.sql` |
+| Latest merged baseline | `692bf49cd56405d6dd1693d183b17119ac7519f0` |
+| Latest merged slice | Convergence 02 — Universal composer |
+| Latest merged migration | `packages/database/migrations/0109_universal_composer_authority.sql` |
 | Latest merged evidence | `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`, `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN` |
 | Known launch blockers | `STAGING_PROVEN`, `PROVIDER_APPROVED`, `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED` remain outstanding. |
-| Next planned slice | Convergence 02 — Universal composer |
+| Next planned slice | Convergence 03 — Analytics Core |
 
-Next planned production slice: **Convergence 02 — Universal composer**.
+Next planned production slice: **Convergence 03 — Analytics Core**.
 
 Readiness vocabulary is fixed to `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`,
 `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN`, `STAGING_PROVEN`, `PROVIDER_APPROVED`,
 `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED`. “Accepted” describes a
 design decision; it never means implemented, tested, approved, enabled, or launch-ready.
+
+Merged Convergence 02 now has one canonical creator draft lifecycle and renderer family for image,
+video, mixed carousel, structured text, and polls. Migration `0109` owns ordered bounded assets,
+optimistic composition revisions, transactional vote counters, immutable voted options, all-required-
+assets release evidence, retirement, provider-cleanup recovery, and RLS. The browser uses one media
+selector and the existing private image and resumable-video authorities; Home, Bits, detail, and
+profile consume the same signed renderer projection. PR #87 merged as `692bf49`; exact-main CI
+`32634046395`, database `32634046397`, security `32634046383`, and immutable artifact
+`32634542564` are green. Staging convergence `32634920979` verified the artifact and failed closed
+at the recorded shared provider, legal, operations, and environment configuration gate. Bunny image
+production enablement remains `CODE_COMPLETE_PROVIDER_BLOCKED` pending exact private-upload, Shield,
+sanitization, signed-delivery, deletion/recovery, and rotation proof.
 
 Merged Convergence 01 has one deterministic recipient-KYC policy resolver for global mode, active
 account override, product, normalized jurisdiction, and active risk evidence; `risk_based` remains
