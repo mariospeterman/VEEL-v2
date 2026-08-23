@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "latestMergedBaseline": "692bf49cd56405d6dd1693d183b17119ac7519f0",
-  "latestMergedSlice": "Convergence 02 — Universal composer",
-  "latestMergedMigration": "packages/database/migrations/0109_universal_composer_authority.sql",
-  "nextPlannedSlice": "Convergence 03 — Analytics Core",
-  "nextPlannedBranch": "codex/converge-03-analytics-core",
+  "latestMergedBaseline": "96f334cb999203cadae41a6c31dd99ea000e0c50",
+  "latestMergedSlice": "Convergence 03 — Analytics Core",
+  "latestMergedMigration": "packages/database/migrations/0110_analytics_core.sql",
+  "nextPlannedSlice": "Convergence 04 — Lifecycle correctness, login/onboarding separation, and analytics surfaces",
+  "nextPlannedBranch": "codex/converge-04-lifecycle-analytics-surfaces",
   "latestMergedEvidenceStates": [
     "DESIGNED",
     "CODE_COMPLETE",
