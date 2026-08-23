@@ -29,7 +29,7 @@ export interface LiveSafetyRepository {
   completeHealthCheck(input: {
     id: string;
     leaseToken: string;
-    observedAt: Date;
+    completedAt: Date;
     healthy: boolean;
   }): Promise<void>;
   holdDueSessions(input: {
@@ -159,7 +159,7 @@ export async function processLiveSafety(input: {
       await input.repository.completeHealthCheck({
         id: check.id,
         leaseToken: check.leaseToken,
-        observedAt,
+        completedAt: input.now ?? new Date(),
         healthy
       });
       if (healthy) {
@@ -239,10 +239,10 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
         await sql.begin(async (transaction) => {
           const updated = await transaction<{ room_id: string }[]>`
             update live_safety_sessions
-            set state = 'monitoring', last_heartbeat_at = ${input.observedAt},
-                heartbeat_expires_at = ${input.observedAt} + interval '90 seconds',
-                next_check_at = ${input.observedAt} + interval '30 seconds',
-                lease_token = null, lease_expires_at = null, updated_at = ${input.observedAt}
+            set state = 'monitoring', last_heartbeat_at = ${input.completedAt},
+                heartbeat_expires_at = ${input.completedAt} + interval '90 seconds',
+                next_check_at = ${input.completedAt} + interval '30 seconds',
+                lease_token = null, lease_expires_at = null, updated_at = ${input.completedAt}
             where id = ${input.id}
               and lease_token = ${input.leaseToken}
               and state in ('target_connected', 'monitoring')
@@ -252,7 +252,7 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
           if (roomId) {
             await releaseHealthyLiveSafetyCase(transaction, {
               roomId,
-              observedAt: input.observedAt
+              observedAt: input.completedAt
             });
           }
         });
@@ -263,10 +263,10 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
         set state = 'monitoring',
             heartbeat_expires_at = case
               when last_heartbeat_at is null then null
-              else ${input.observedAt}
+              else ${input.completedAt}
             end,
-            next_check_at = ${input.observedAt}, lease_token = null,
-            lease_expires_at = null, updated_at = ${input.observedAt}
+            next_check_at = ${input.completedAt}, lease_token = null,
+            lease_expires_at = null, updated_at = ${input.completedAt}
         where id = ${input.id}
           and lease_token = ${input.leaseToken}
           and state in ('target_connected', 'monitoring')

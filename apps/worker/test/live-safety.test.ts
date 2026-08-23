@@ -241,6 +241,38 @@ describe("live safety watchdog", () => {
     expect(result.healthFailed).toBe(1);
   });
 
+  it("schedules healthy monitoring from provider completion rather than request start", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-23T12:00:00.000Z"));
+    try {
+      const completedAt: string[] = [];
+      const state = repositoryWith([], [{
+        id: "session-slow-health",
+        roomId: "room-slow-health",
+        providerStreamId: "stream-slow-health",
+        leaseToken: "health-lease-slow"
+      }]);
+      state.repository.completeHealthCheck = async (input) => {
+        completedAt.push(input.completedAt.toISOString());
+      };
+
+      await processLiveSafety({
+        repository: state.repository,
+        provider: {
+          async checkHealth() {
+            vi.advanceTimersByTime(60_000);
+            return { healthy: true };
+          },
+          async suspend() {}
+        }
+      });
+
+      expect(completedAt).toEqual(["2026-08-23T12:01:00.000Z"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("timestamps each sequential provider health request when it starts", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-23T12:00:00.000Z"));
