@@ -53,7 +53,9 @@ or offline access.
 
 Creator SFW attestation creates a monitoring-pending room and private host preview only. Public
 playback and chat require the exact room, provider stream, moderation target, signed provider
-acknowledgement, and fresh monitoring heartbeat to converge in one backend-owned release predicate.
+acknowledgement, and a fresh recurring server-side Livepeer stream-health observation to converge in
+one backend-owned release predicate. The one-time `stream.started` event is lifecycle state only and
+never refreshes monitoring health.
 Heartbeat loss, target disconnect, severe normalized safety evidence, replayed/forged callbacks, or
 provider inconsistency first denies local playback and chat, then queues provider suspension and
 restricted operations follow-up. Provider suspension failure cannot reopen local delivery. Adult live

@@ -148,6 +148,41 @@ describe("Livepeer provider adapter", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(1, "https://livepeer.studio/api/stream/stream-1", expect.objectContaining({ method: "PATCH" }));
     expect(fetchMock).toHaveBeenNthCalledWith(2, "https://livepeer.studio/api/stream/stream-1/terminate", expect.objectContaining({ method: "DELETE" }));
   });
+
+  it("requires active, healthy, recent provider state for recurring safety proof", async () => {
+    const observedAt = new Date("2026-08-23T12:00:00.000Z");
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      id: "stream-1",
+      isActive: true,
+      isHealthy: true,
+      lastSeen: observedAt.getTime() - 10_000
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    const adapter = createLivepeerProviderAdapter(livepeerEnv(), fetchMock);
+
+    await expect(adapter.getRoomHealth?.({ providerStreamId: "stream-1", observedAt })).resolves.toEqual({
+      providerStreamId: "stream-1",
+      healthy: true,
+      reason: "healthy",
+      observedAt
+    });
+  });
+
+  it("rejects stale provider observations as safety proof", async () => {
+    const observedAt = new Date("2026-08-23T12:00:00.000Z");
+    const adapter = createLivepeerProviderAdapter(livepeerEnv(), vi.fn(async () =>
+      new Response(JSON.stringify({
+        id: "stream-1",
+        isActive: true,
+        isHealthy: true,
+        lastSeen: observedAt.getTime() - 120_000
+      }), { status: 200, headers: { "content-type": "application/json" } })
+    ));
+
+    await expect(adapter.getRoomHealth?.({ providerStreamId: "stream-1", observedAt })).resolves.toMatchObject({
+      healthy: false,
+      reason: "stale"
+    });
+  });
 });
 
 function livepeerEnv(overrides: Record<string, string> = {}) {

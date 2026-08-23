@@ -57,6 +57,27 @@ describe("Livepeer safety webhook normalization", () => {
       env: environment()
     })).toThrow(MediaWebhookSignatureError);
   });
+
+  it("treats stream.started as lifecycle state, never as recurring safety proof", () => {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const rawBody = Buffer.from(JSON.stringify({
+      webhookId: "webhook-started",
+      timestamp: String(timestamp),
+      event: "stream.started",
+      event_object: { stream: { id: "stream-1" }, playbackId: "playback-1" }
+    }));
+
+    const normalized = normalizeMediaWebhook({
+      provider: "livepeer",
+      body: JSON.parse(rawBody.toString("utf8")),
+      rawBody,
+      headers: { "livepeer-signature": signature(rawBody, timestamp) },
+      env: environment()
+    });
+
+    expect(normalized.livepeerStream?.roomState).toBe("live");
+    expect(normalized.livepeerSafety).toBeUndefined();
+  });
 });
 
 function signature(rawBody: Buffer, timestamp: number) {

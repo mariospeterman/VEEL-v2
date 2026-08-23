@@ -9,7 +9,21 @@ export interface LiveSafetyProviderAction {
   attemptCount: number;
 }
 
+export interface LiveSafetyHealthCheck {
+  id: string;
+  roomId: string;
+  providerStreamId: string;
+  leaseToken: string;
+}
+
 export interface LiveSafetyRepository {
+  claimHealthChecks(input: { now: Date; limit: number }): Promise<LiveSafetyHealthCheck[]>;
+  completeHealthCheck(input: {
+    id: string;
+    leaseToken: string;
+    observedAt: Date;
+    healthy: boolean;
+  }): Promise<void>;
   holdDueSessions(input: { now: Date; limit: number }): Promise<number>;
   claimProviderActions(input: { now: Date; limit: number }): Promise<LiveSafetyProviderAction[]>;
   completeProviderAction(input: { id: string; leaseToken: string; now: Date }): Promise<void>;
@@ -25,10 +39,14 @@ export interface LiveSafetyRepository {
 }
 
 export interface LiveSafetyProvider {
+  checkHealth(input: { providerStreamId: string; observedAt: Date }): Promise<{ healthy: boolean }>;
   suspend(input: { providerStreamId: string }): Promise<void>;
 }
 
 export interface ProcessLiveSafetyResult {
+  healthChecked: number;
+  healthConfirmed: number;
+  healthFailed: number;
   held: number;
   claimed: number;
   completed: number;
@@ -44,6 +62,28 @@ export async function processLiveSafety(input: {
 }): Promise<ProcessLiveSafetyResult> {
   const now = input.now ?? new Date();
   const limit = input.limit ?? 25;
+  const healthChecks = await input.repository.claimHealthChecks({ now, limit });
+  let healthConfirmed = 0;
+  let healthFailed = 0;
+  for (const check of healthChecks) {
+    let healthy = false;
+    try {
+      healthy = (await input.provider.checkHealth({
+        providerStreamId: check.providerStreamId,
+        observedAt: now
+      })).healthy;
+    } catch {
+      // Provider uncertainty is deliberately fail-closed at the existing session authority.
+    }
+    await input.repository.completeHealthCheck({
+      id: check.id,
+      leaseToken: check.leaseToken,
+      observedAt: now,
+      healthy
+    });
+    if (healthy) healthConfirmed += 1;
+    else healthFailed += 1;
+  }
   const held = await input.repository.holdDueSessions({ now, limit });
   const actions = await input.repository.claimProviderActions({ now, limit });
   let completed = 0;
@@ -75,7 +115,16 @@ export async function processLiveSafety(input: {
     }
   }
 
-  return { held, claimed: actions.length, completed, retried, deadLettered };
+  return {
+    healthChecked: healthChecks.length,
+    healthConfirmed,
+    healthFailed,
+    held,
+    claimed: actions.length,
+    completed,
+    retried,
+    deadLettered
+  };
 }
 
 export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSafetyRepository {
@@ -83,6 +132,67 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
   const sql = postgres(databaseUrl, { max: 4, idle_timeout: 20, connect_timeout: 10 });
 
   return {
+    async claimHealthChecks(input) {
+      const leaseToken = randomUUID();
+      const rows = await sql<{
+        id: string;
+        room_id: string;
+        provider_stream_id: string;
+      }[]>`
+        with candidates as (
+          select session.id
+          from live_safety_sessions session
+          join live_rooms room on room.id = session.room_id
+          where session.state in ('target_connected', 'monitoring')
+            and session.next_check_at <= ${input.now}
+            and (session.lease_expires_at is null or session.lease_expires_at <= ${input.now})
+            and room.state = 'live'
+            and room.provider_stream_id is not null
+          order by session.next_check_at, session.created_at
+          limit ${input.limit}
+          for update of session skip locked
+        )
+        update live_safety_sessions session
+        set lease_token = ${leaseToken}, lease_expires_at = ${input.now} + interval '2 minutes',
+            updated_at = ${input.now}
+        from candidates, live_rooms room
+        where session.id = candidates.id and room.id = session.room_id
+        returning session.id, session.room_id, room.provider_stream_id
+      `;
+      return rows.map((row) => ({
+        id: row.id,
+        roomId: row.room_id,
+        providerStreamId: row.provider_stream_id,
+        leaseToken
+      }));
+    },
+    async completeHealthCheck(input) {
+      if (input.healthy) {
+        await sql`
+          update live_safety_sessions
+          set state = 'monitoring', last_heartbeat_at = ${input.observedAt},
+              heartbeat_expires_at = ${input.observedAt} + interval '90 seconds',
+              next_check_at = ${input.observedAt} + interval '30 seconds',
+              lease_token = null, lease_expires_at = null, updated_at = ${input.observedAt}
+          where id = ${input.id}
+            and lease_token = ${input.leaseToken}
+            and state in ('target_connected', 'monitoring')
+        `;
+        return;
+      }
+      await sql`
+        update live_safety_sessions
+        set heartbeat_expires_at = case
+              when last_heartbeat_at is null then null
+              else ${input.observedAt}
+            end,
+            next_check_at = ${input.observedAt}, lease_token = null,
+            lease_expires_at = null, updated_at = ${input.observedAt}
+        where id = ${input.id}
+          and lease_token = ${input.leaseToken}
+          and state in ('target_connected', 'monitoring')
+      `;
+    },
     async holdDueSessions(input) {
       return sql.begin(async (transaction) => {
         const due = await transaction<{ session_id: string; room_id: string; reason_code: string }[]>`
@@ -97,6 +207,7 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
           join live_rooms room on room.id = session.room_id
           where session.state in ('monitoring_pending', 'target_connected', 'monitoring')
             and session.next_check_at <= ${input.now}
+            and (session.lease_expires_at is null or session.lease_expires_at <= ${input.now})
             and room.state = 'live'
             and (
               session.state <> 'monitoring'
@@ -200,6 +311,8 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
 function createUnavailableLiveSafetyRepository(): LiveSafetyRepository {
   const unavailable = async (): Promise<never> => { throw new Error("DATABASE_URL_NOT_CONFIGURED"); };
   return {
+    claimHealthChecks: unavailable,
+    completeHealthCheck: unavailable,
     holdDueSessions: unavailable,
     claimProviderActions: unavailable,
     completeProviderAction: unavailable,

@@ -446,6 +446,13 @@ export async function createMessage(sql: postgres.Sql, input: CreateMessageInput
         'message', ${messageId}, 'message:' || ${messageId}
       from profiles sender_profile
       where sender_profile.user_id = ${context.actor_id}
+        and exists (
+          select 1
+          from conversation_members recipient_member
+          where recipient_member.conversation_id = ${input.conversationId}
+            and recipient_member.user_id = ${context.other_user_id}
+            and recipient_member.muted_at is null
+        )
       on conflict (user_id, idempotency_key) do nothing
     `;
     await transaction`
