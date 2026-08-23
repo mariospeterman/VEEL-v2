@@ -19,7 +19,7 @@ const paymentIntentId = "00000000-0000-4000-8000-000000000050";
 
 function tusCorsHeaders() {
   return {
-    "Access-Control-Allow-Headers": "Content-Type,Tus-Resumable,Upload-Length,Upload-Metadata,Upload-Offset",
+    "Access-Control-Allow-Headers": "AuthorizationExpire,AuthorizationSignature,Content-Type,Tus-Resumable,Upload-Length,Upload-Metadata,Upload-Offset",
     "Access-Control-Allow-Methods": "HEAD,OPTIONS,PATCH,POST",
     "Access-Control-Allow-Origin": e2eOrigin,
     "Access-Control-Expose-Headers": "Location,Upload-Offset,Tus-Resumable"
