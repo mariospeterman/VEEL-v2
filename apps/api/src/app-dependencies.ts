@@ -1,5 +1,7 @@
 import type { FastifyRateLimitStoreCtor } from "@fastify/rate-limit";
 import type { FastifyInstance } from "fastify";
+import { createPostgresAnalyticsRepository } from "./modules/analytics/analytics-repository.js";
+import type { AnalyticsRepository } from "./modules/analytics/types.js";
 import { createPostgresAdminRepository } from "./modules/admin/admin-repository.js";
 import type { AdminRepository } from "./modules/admin/types.js";
 import { createPostgresActivityRepository } from "./modules/activity/activity-repository.js";
@@ -94,6 +96,7 @@ export interface BuildApiOptions {
   sessionRepository?: SessionRepository;
   ageRepository?: AgeRepository;
   ageProviderWaterfall?: AgeProviderWaterfall;
+  analyticsRepository?: AnalyticsRepository;
   contentRepository?: ContentRepository;
   mutualsRepository?: MutualsRepository;
   discoverRepository?: DiscoverRepository;
@@ -137,6 +140,7 @@ export interface ApiDependencies {
   sessionRepository: SessionRepository;
   ageRepository: AgeRepository;
   ageProviderWaterfall: AgeProviderWaterfall;
+  analyticsRepository: AnalyticsRepository;
   profileRepository: ProfileRepository;
   contentRepository: ContentRepository;
   mutualsRepository: MutualsRepository;
@@ -194,6 +198,8 @@ export function createApiDependencies(
       options.sessionRepository ?? createPostgresSessionRepository(postgresClient),
     ageRepository: options.ageRepository ?? createPostgresAgeRepository(postgresClient),
     ageProviderWaterfall: options.ageProviderWaterfall ?? createAgeProviderWaterfall(app.config),
+    analyticsRepository:
+      options.analyticsRepository ?? createPostgresAnalyticsRepository(postgresClient),
     profileRepository:
       options.profileRepository ?? createPostgresProfileRepository(postgresClient),
     contentRepository:

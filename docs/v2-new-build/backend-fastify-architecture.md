@@ -151,6 +151,13 @@ Workers process:
 - notification fanout
 - delayed entitlement expiry
 - stale upload cleanup
+- versioned Analytics Core projection recomputation and source-parity reconciliation
+
+Analytics Core uses the existing worker process and Postgres queue authority. It leases a bounded
+UTC window, transactionally replaces typed daily projection rows from canonical facts, records
+matched/mismatch reconciliation evidence, and advances a versioned watermark only after commit.
+Late facts are covered by the two-day incremental lookback; retry, dead-letter, and audited recovery
+remain queue operations and never become a second metric or domain-fact authority.
 
 Provider-event recovery leases only sanitized normalized replay payloads from Postgres. Every normalized delivery receives a database-owned monotonic sequence. Bunny and Livepeer reapply those payloads through the same canonical repositories used by live webhook handling only when the replayed delivery is still the newest non-rejected event for that asset or stream; a delivery already classified `ignored_stale` is not authoritative evidence that can suppress another recovery item.
 

@@ -444,11 +444,15 @@ for (const [, path, block] of pathBlocks) {
     const hasBestEffortObservationPolicy = methodBlock.includes(
       "x-idempotency-policy: best-effort-observation-no-business-state"
     );
+    const hasReadOnlyQueryPolicy = methodBlock.includes(
+      "x-idempotency-policy: read-only-structured-query"
+    );
     if (
       !hasRequiredIdempotencyKey &&
       !hasCheckoutCapabilityPolicy &&
       !hasSingleUseAuthProofPolicy &&
       !hasBestEffortObservationPolicy &&
+      !hasReadOnlyQueryPolicy &&
       !path.includes("/webhooks/")
     ) {
       criticalMethodsMissingRequiredIdempotency.push(`${methodMatch[1].toUpperCase()} ${path}`);

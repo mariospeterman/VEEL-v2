@@ -9,7 +9,8 @@ const workerQueueNames = new Set<AdminWorkerQueueName>([
   "notification_deliveries",
   "payment_confirmation_emails",
   "provider_event_replays",
-  "media_moderation"
+  "media_moderation",
+  "analytics_projections"
 ]);
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 

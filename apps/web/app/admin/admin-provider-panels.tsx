@@ -7,6 +7,7 @@ import type {
   AdminMediaAsset,
   AdminMutualsSafety,
   AdminNotificationHealth,
+  AnalyticsProjectionHealth,
   AdminPage,
   AdminProviderEvent,
   ApiResult
@@ -187,6 +188,32 @@ export function NotificationHealthPanel({
       <Fact label="Latest notification" value={timestampLabel(notificationHealth.data.latestNotificationAt)} />
       <Fact label="Latest device seen" value={timestampLabel(notificationHealth.data.latestDeviceSeenAt)} />
       <Fact label="Latest delivery" value={timestampLabel(notificationHealth.data.latestDeliveryAt)} />
+    </div>
+  );
+}
+
+export function AnalyticsHealthPanel({
+  analyticsHealth
+}: {
+  analyticsHealth: ApiResult<AnalyticsProjectionHealth>;
+}) {
+  if (!analyticsHealth.ok) {
+    return <UnavailableState result={analyticsHealth} />;
+  }
+
+  const health = analyticsHealth.data;
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+      <Fact label="State" value={health.state} />
+      <Fact label="Definition" value={`v${health.definitionVersion}`} />
+      <Fact label="Data through" value={timestampLabel(health.dataThrough)} />
+      <Fact label="Lag" value={health.lagSeconds === null ? "Unavailable" : `${health.lagSeconds}s`} />
+      <Fact label="Queued batches" value={health.queuedJobCount.toString()} />
+      <Fact label="Retrying batches" value={health.retryJobCount.toString()} />
+      <Fact label="Dead letters" value={health.deadLetterJobCount.toString()} />
+      <Fact label="Reconciliation" value={health.latestReconciliationState ?? "No run"} />
+      <Fact label="Variance" value={health.latestReconciliationVariance?.toString() ?? "Unavailable"} />
+      <Fact label="Suppressed today" value={health.suppressionCountToday.toString()} />
     </div>
   );
 }

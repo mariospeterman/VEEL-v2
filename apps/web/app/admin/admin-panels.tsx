@@ -14,6 +14,7 @@ export {
   LiveMediaProviderPanel,
   AgeKycProviderPanel,
   AiOperationsPanel,
+  AnalyticsHealthPanel,
   NotificationHealthPanel,
   ProviderEventsPanel
 } from "./admin-provider-panels";

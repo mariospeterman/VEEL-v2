@@ -80,6 +80,7 @@ export type VerificationRecordSummary = {
   reusable: boolean;
 };
 export type AdminOpsSummary = components["schemas"]["AdminOpsSummary"];
+export type AnalyticsProjectionHealth = components["schemas"]["AnalyticsProjectionHealth"];
 export type AdminNotificationHealth = components["schemas"]["AdminNotificationHealth"];
 export type AdminMutualsSafety = components["schemas"]["AdminMutualsSafety"];
 export type AuditEvent = components["schemas"]["AuditEvent"];

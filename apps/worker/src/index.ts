@@ -3,6 +3,12 @@ import { createCanonicalProviderReplayRuntime } from "@veel/api/provider-event-r
 import { createBunnyStreamUploadAdapter } from "@veel/api/media-upload-provider";
 import { pathToFileURL } from "node:url";
 import {
+  createPostgresAnalyticsProjectionRepository,
+  processAnalyticsProjections,
+  type AnalyticsProjectionRepository,
+  type ProcessAnalyticsProjectionsResult
+} from "./analytics-projections.js";
+import {
   createAdapterMediaAssetCleanupProvider,
   createPostgresMediaAssetCleanupRepository,
   processMediaAssetCleanups,
@@ -62,6 +68,7 @@ export const buildWorkerRuntime = () => {
     name: "veel-worker",
     environment: config.NODE_ENV,
     queues: [
+      "analytics-projections",
       "subscription-collections",
       "notification-deliveries",
       "payment-confirmation-emails",
@@ -70,6 +77,11 @@ export const buildWorkerRuntime = () => {
       "media-asset-cleanups"
     ],
     schedules: [
+      {
+        name: "analytics-projections",
+        cadence: "every_minute",
+        sourceIndex: "analytics_projection_jobs_lease_idx"
+      },
       {
         name: "subscription-collections",
         cadence: "every_minute",
@@ -138,6 +150,27 @@ export async function runNotificationDeliveryTick(input: {
     if (!input.repository) {
       await repository.close?.();
     }
+  }
+}
+
+export async function runAnalyticsProjectionTick(input: {
+  repository?: AnalyticsProjectionRepository;
+  now?: Date;
+  limit?: number;
+} = {}): Promise<ProcessAnalyticsProjectionsResult> {
+  const config = parseServerEnv(process.env);
+  if (!input.repository && !config.DATABASE_URL) {
+    throw new Error("DATABASE_URL_NOT_CONFIGURED");
+  }
+  const repository = input.repository ?? createPostgresAnalyticsProjectionRepository(config.DATABASE_URL as string);
+  try {
+    return await processAnalyticsProjections({
+      repository,
+      ...(input.now ? { now: input.now } : {}),
+      ...(input.limit ? { limit: input.limit } : {})
+    });
+  } finally {
+    if (!input.repository) await repository.close?.();
   }
 }
 
@@ -299,6 +332,7 @@ export async function runMediaAssetCleanupTick(input: {
 }
 
 export interface ScheduledWorkerTickResult {
+  analyticsProjections: "completed" | "failed";
   mediaAssetCleanups: "completed" | "failed";
   mediaModeration: "completed" | "failed";
   notificationDeliveries: "completed" | "failed";
@@ -313,6 +347,7 @@ export interface WorkerLogger {
 }
 
 export interface WorkerTickRunners {
+  analyticsProjections(): Promise<unknown>;
   mediaAssetCleanups(): Promise<unknown>;
   mediaModeration(): Promise<unknown>;
   notificationDeliveries(): Promise<unknown>;
@@ -337,6 +372,7 @@ export async function runScheduledWorkerTick(input: {
   const config = parseServerEnv(process.env);
   const logger = input.logger ?? defaultWorkerLogger;
   const runners = input.runners ?? {
+    analyticsProjections: () => runAnalyticsProjectionTick({ limit: config.WORKER_BATCH_LIMIT }),
     mediaAssetCleanups: () => runMediaAssetCleanupTick({ limit: config.WORKER_BATCH_LIMIT }),
     mediaModeration: () => runMediaModerationTick({ limit: config.WORKER_BATCH_LIMIT }),
     notificationDeliveries: () => runNotificationDeliveryTick({ limit: config.WORKER_BATCH_LIMIT }),
@@ -345,6 +381,7 @@ export async function runScheduledWorkerTick(input: {
     subscriptionCollections: () => runSubscriptionCollectionTick({ limit: config.WORKER_BATCH_LIMIT })
   };
   const tasks = [
+    ["analyticsProjections", runners.analyticsProjections],
     ["mediaAssetCleanups", runners.mediaAssetCleanups],
     ["mediaModeration", runners.mediaModeration],
     ["notificationDeliveries", runners.notificationDeliveries],
@@ -391,6 +428,7 @@ export function startWorkerProcess(input: {
     if (activeTick) return activeTick;
     if (stopping) {
       return Promise.resolve<ScheduledWorkerTickResult>({
+        analyticsProjections: "completed",
         mediaAssetCleanups: "completed",
         mediaModeration: "completed",
         notificationDeliveries: "completed",
