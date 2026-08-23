@@ -403,19 +403,21 @@ async function persistLiveSafetyHold(
   transaction: postgres.TransactionSql,
   input: { roomId: string; reasonCode: string; heldAt: Date }
 ): Promise<void> {
-  await transaction`
-    update media_safety_cases
-    set state = 'review_required', reason_code = ${input.reasonCode},
-        provider_release_allowed = false, decided_at = null, updated_at = ${input.heldAt}
-    where live_room_id = ${input.roomId} and state <> 'superseded'
-  `;
-  await transaction`
+  const suspended = await transaction<{ id: string }[]>`
     update live_rooms
     set state_before_suspension = 'live', state = 'suspended',
         provider_state = 'suspension_pending', playback_url = null,
         suspended_at = coalesce(suspended_at, ${input.heldAt}),
         suspension_reason = ${input.reasonCode}, updated_at = ${input.heldAt}
-    where id = ${input.roomId}
+    where id = ${input.roomId} and state = 'live'
+    returning id
+  `;
+  if (!suspended[0]) return;
+  await transaction`
+    update media_safety_cases
+    set state = 'review_required', reason_code = ${input.reasonCode},
+        provider_release_allowed = false, decided_at = null, updated_at = ${input.heldAt}
+    where live_room_id = ${input.roomId} and state <> 'superseded'
   `;
   await transaction`
     insert into live_safety_provider_actions (room_id, action, reason_code)

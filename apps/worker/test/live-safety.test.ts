@@ -66,6 +66,7 @@ describe("live safety watchdog", () => {
           reason_code: "live_monitoring_heartbeat_expired"
         }];
       }
+      if (query.includes("update live_rooms")) return [{ id: "room-1" }];
       return [];
     }) as unknown as postgres.TransactionSql;
 
@@ -79,8 +80,10 @@ describe("live safety watchdog", () => {
     expect(queries[0]).toContain("state = 'held'");
     expect(queries[0]).toContain("join live_rooms room");
     expect(queries[0]).toContain("room.state = 'live'");
-    expect(queries[1]).toContain("provider_release_allowed = false");
-    expect(queries[2]).toContain("state = 'suspended'");
+    expect(queries[0]).toContain("for update of session, room");
+    expect(queries[1]).toContain("state = 'suspended'");
+    expect(queries[1]).toContain("state = 'live'");
+    expect(queries[2]).toContain("provider_release_allowed = false");
     expect(queries[3]).toContain("insert into live_safety_provider_actions");
   });
 
