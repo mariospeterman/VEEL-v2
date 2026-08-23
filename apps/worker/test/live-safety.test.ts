@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type postgres from "postgres";
 import {
+  completeHealthyLiveSafetySession,
   holdUnhealthyLiveSafetySession,
   liveSafetyHoldEligibleStates,
   liveSafetyProviderConcurrency,
@@ -55,6 +56,27 @@ function repositoryWith(
 }
 
 describe("live safety watchdog", () => {
+  it("terminalizes a healthy leased session when its room ended during provider polling", async () => {
+    const queries: string[] = [];
+    const transaction = (async (strings: TemplateStringsArray) => {
+      const query = strings.join("?");
+      queries.push(query);
+      return [{ room_id: "room-ended", room_state: "ended" }];
+    }) as unknown as postgres.TransactionSql;
+
+    await completeHealthyLiveSafetySession(transaction, {
+      id: "session-ended",
+      leaseToken: "lease-ended",
+      completedAt: new Date("2026-08-23T12:00:00.000Z")
+    });
+
+    expect(queries).toHaveLength(1);
+    expect(queries[0]).toContain("then 'monitoring' else 'ended'");
+    expect(queries[0]).toContain("last_heartbeat_at = case");
+    expect(queries[0]).toContain("lease_token = null");
+    expect(queries[0]).toContain("for update of session, room");
+  });
+
   it("atomically revokes access and queues suspension for an unhealthy leased session", async () => {
     const queries: string[] = [];
     const transaction = (async (strings: TemplateStringsArray) => {

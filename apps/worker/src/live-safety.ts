@@ -236,26 +236,7 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
     },
     async completeHealthCheck(input) {
       if (input.healthy) {
-        await sql.begin(async (transaction) => {
-          const updated = await transaction<{ room_id: string }[]>`
-            update live_safety_sessions
-            set state = 'monitoring', last_heartbeat_at = ${input.completedAt},
-                heartbeat_expires_at = ${input.completedAt} + interval '90 seconds',
-                next_check_at = ${input.completedAt} + interval '30 seconds',
-                lease_token = null, lease_expires_at = null, updated_at = ${input.completedAt}
-            where id = ${input.id}
-              and lease_token = ${input.leaseToken}
-              and state in ('target_connected', 'monitoring')
-            returning room_id
-          `;
-          const roomId = updated[0]?.room_id;
-          if (roomId) {
-            await releaseHealthyLiveSafetyCase(transaction, {
-              roomId,
-              observedAt: input.completedAt
-            });
-          }
-        });
+        await sql.begin((transaction) => completeHealthyLiveSafetySession(transaction, input));
         return;
       }
       await sql.begin((transaction) => holdUnhealthyLiveSafetySession(transaction, input));
@@ -361,6 +342,46 @@ export function createPostgresLiveSafetyRepository(databaseUrl?: string): LiveSa
       await sql.end({ timeout: 5 });
     }
   };
+}
+
+export async function completeHealthyLiveSafetySession(
+  transaction: postgres.TransactionSql,
+  input: { id: string; leaseToken: string; completedAt: Date }
+): Promise<void> {
+  const updated = await transaction<{ room_id: string; room_state: string }[]>`
+    with target as (
+      select session.room_id, room.state as room_state
+      from live_safety_sessions session
+      join live_rooms room on room.id = session.room_id
+      where session.id = ${input.id}
+        and session.lease_token = ${input.leaseToken}
+        and session.state in ('target_connected', 'monitoring')
+        and room.state in ('live', 'ended', 'replay_ready')
+      for update of session, room
+    )
+    update live_safety_sessions session
+    set state = case when target.room_state = 'live' then 'monitoring' else 'ended' end,
+        last_heartbeat_at = case when target.room_state = 'live' then ${input.completedAt} else null end,
+        heartbeat_expires_at = case
+          when target.room_state = 'live' then ${input.completedAt} + interval '90 seconds'
+          else null
+        end,
+        next_check_at = case
+          when target.room_state = 'live' then ${input.completedAt} + interval '30 seconds'
+          else ${input.completedAt}
+        end,
+        hold_reason_code = null, held_at = null,
+        lease_token = null, lease_expires_at = null, updated_at = ${input.completedAt}
+    from target
+    where session.id = ${input.id}
+    returning target.room_id, target.room_state
+  `;
+  const target = updated[0];
+  if (!target || target.room_state !== "live") return;
+  await releaseHealthyLiveSafetyCase(transaction, {
+    roomId: target.room_id,
+    observedAt: input.completedAt
+  });
 }
 
 export async function holdUnhealthyLiveSafetySession(
