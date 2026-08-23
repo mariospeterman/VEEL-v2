@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 
 export const liveSafetyHoldEligibleStates = ["monitoring_pending", "monitoring"] as const;
+export const liveSafetyHealthConcurrency = 5;
+const liveSafetyMaxBatchSize = 25;
 
 export interface LiveSafetyProviderAction {
   id: string;
@@ -67,34 +69,73 @@ export async function processLiveSafety(input: {
   limit?: number;
 }): Promise<ProcessLiveSafetyResult> {
   const now = input.now ?? new Date();
-  const limit = input.limit ?? 25;
+  const limit = Math.max(1, Math.min(input.limit ?? liveSafetyMaxBatchSize, liveSafetyMaxBatchSize));
+  let completed = 0;
+  let retried = 0;
+  let deadLettered = 0;
+  let claimed = 0;
+
+  const processProviderActions = async (actionNow: Date) => {
+    const actions = await input.repository.claimProviderActions({ now: actionNow, limit });
+    claimed += actions.length;
+    for (const action of actions) {
+      try {
+        await input.provider.suspend({ providerStreamId: action.providerStreamId });
+        await input.repository.completeProviderAction({
+          id: action.id,
+          leaseToken: action.leaseToken,
+          now: actionNow
+        });
+        completed += 1;
+      } catch (error) {
+        const deadLetter = action.attemptCount >= 10;
+        const delaySeconds = Math.min(3600, 2 ** Math.min(action.attemptCount, 10) * 15);
+        await input.repository.retryProviderAction({
+          id: action.id,
+          leaseToken: action.leaseToken,
+          now: actionNow,
+          retryAt: new Date(actionNow.getTime() + delaySeconds * 1000),
+          failureCode: error instanceof Error ? error.name.slice(0, 120) : "provider_failure",
+          deadLetter
+        });
+        if (deadLetter) deadLettered += 1;
+        else retried += 1;
+      }
+    }
+  };
+
+  // Existing local denials must reach the provider before any potentially slow health batch.
+  await processProviderActions(now);
   const healthChecks = await input.repository.claimHealthChecks({ now, limit });
   let healthConfirmed = 0;
   let healthFailed = 0;
   const confirmedSessionIds: string[] = [];
-  for (const check of healthChecks) {
-    const observedAt = input.now ?? new Date();
-    let healthy = false;
-    try {
-      healthy = (await input.provider.checkHealth({
-        providerStreamId: check.providerStreamId,
-        observedAt
-      })).healthy;
-    } catch {
-      // Provider uncertainty is deliberately fail-closed at the existing session authority.
-    }
-    await input.repository.completeHealthCheck({
-      id: check.id,
-      leaseToken: check.leaseToken,
-      observedAt,
-      healthy
-    });
-    if (healthy) {
-      healthConfirmed += 1;
-      confirmedSessionIds.push(check.id);
-    } else {
-      healthFailed += 1;
-    }
+  for (let offset = 0; offset < healthChecks.length; offset += liveSafetyHealthConcurrency) {
+    const batch = healthChecks.slice(offset, offset + liveSafetyHealthConcurrency);
+    await Promise.all(batch.map(async (check) => {
+      const observedAt = input.now ?? new Date();
+      let healthy = false;
+      try {
+        healthy = (await input.provider.checkHealth({
+          providerStreamId: check.providerStreamId,
+          observedAt
+        })).healthy;
+      } catch {
+        // Provider uncertainty is deliberately fail-closed at the existing session authority.
+      }
+      await input.repository.completeHealthCheck({
+        id: check.id,
+        leaseToken: check.leaseToken,
+        observedAt,
+        healthy
+      });
+      if (healthy) {
+        healthConfirmed += 1;
+        confirmedSessionIds.push(check.id);
+      } else {
+        healthFailed += 1;
+      }
+    }));
   }
   const holdAt = input.now ?? new Date();
   const held = await input.repository.holdDueSessions({
@@ -102,42 +143,15 @@ export async function processLiveSafety(input: {
     limit,
     excludeSessionIds: confirmedSessionIds
   });
-  const actions = await input.repository.claimProviderActions({ now: holdAt, limit });
-  let completed = 0;
-  let retried = 0;
-  let deadLettered = 0;
-
-  for (const action of actions) {
-    try {
-      await input.provider.suspend({ providerStreamId: action.providerStreamId });
-      await input.repository.completeProviderAction({
-        id: action.id,
-        leaseToken: action.leaseToken,
-        now: holdAt
-      });
-      completed += 1;
-    } catch (error) {
-      const deadLetter = action.attemptCount >= 10;
-      const delaySeconds = Math.min(3600, 2 ** Math.min(action.attemptCount, 10) * 15);
-      await input.repository.retryProviderAction({
-        id: action.id,
-        leaseToken: action.leaseToken,
-        now: holdAt,
-        retryAt: new Date(holdAt.getTime() + delaySeconds * 1000),
-        failureCode: error instanceof Error ? error.name.slice(0, 120) : "provider_failure",
-        deadLetter
-      });
-      if (deadLetter) deadLettered += 1;
-      else retried += 1;
-    }
-  }
+  // Pick up suspension work created by this hold pass without waiting for the next worker tick.
+  await processProviderActions(holdAt);
 
   return {
     healthChecked: healthChecks.length,
     healthConfirmed,
     healthFailed,
     held,
-    claimed: actions.length,
+    claimed,
     completed,
     retried,
     deadLettered

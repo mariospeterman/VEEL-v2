@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type postgres from "postgres";
 import {
+  liveSafetyHealthConcurrency,
   liveSafetyHoldEligibleStates,
   processLiveSafety,
   releaseHealthyLiveSafetyCase,
@@ -17,6 +18,7 @@ function repositoryWith(
   const retried: Array<{ id: string; deadLetter: boolean }> = [];
   const healthResults: Array<{ id: string; healthy: boolean }> = [];
   const holdInputs: Array<{ excludeSessionIds?: string[] }> = [];
+  let actionClaimCount = 0;
   const repository: LiveSafetyRepository = {
     async claimHealthChecks() { return healthChecks; },
     async completeHealthCheck(input) { healthResults.push({ id: input.id, healthy: input.healthy }); },
@@ -24,7 +26,10 @@ function repositoryWith(
       holdInputs.push({ excludeSessionIds: input.excludeSessionIds });
       return 2;
     },
-    async claimProviderActions() { return actions; },
+    async claimProviderActions() {
+      actionClaimCount += 1;
+      return actionClaimCount === 1 ? actions : [];
+    },
     async completeProviderAction(input) { completed.push(input.id); },
     async retryProviderAction(input) { retried.push({ id: input.id, deadLetter: input.deadLetter }); }
   };
@@ -85,6 +90,36 @@ describe("live safety watchdog", () => {
       retried: 0,
       deadLettered: 0
     });
+  });
+
+  it("processes an already-queued suspension before starting provider health polling", async () => {
+    const events: string[] = [];
+    const state = repositoryWith([{
+      id: "action-urgent",
+      roomId: "room-urgent",
+      providerStreamId: "stream-urgent",
+      leaseToken: "lease-urgent",
+      attemptCount: 1
+    }], [{
+      id: "session-health",
+      roomId: "room-health",
+      providerStreamId: "stream-health",
+      leaseToken: "health-lease"
+    }]);
+
+    await processLiveSafety({
+      repository: state.repository,
+      provider: {
+        async suspend() { events.push("suspend"); },
+        async checkHealth() {
+          events.push("health");
+          return { healthy: true };
+        }
+      },
+      now: new Date("2026-08-23T12:00:00.000Z")
+    });
+
+    expect(events).toEqual(["suspend", "health"]);
   });
 
   it("keeps local denial durable while provider suspension retries", async () => {
@@ -233,5 +268,34 @@ describe("live safety watchdog", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("bounds concurrent health polling so a claimed batch stays inside its lease budget", async () => {
+    const healthChecks = Array.from({ length: 25 }, (_, index) => ({
+      id: `session-${index}`,
+      roomId: `room-${index}`,
+      providerStreamId: `stream-${index}`,
+      leaseToken: "health-lease"
+    }));
+    const state = repositoryWith([], healthChecks);
+    let active = 0;
+    let maxActive = 0;
+
+    await processLiveSafety({
+      repository: state.repository,
+      provider: {
+        async checkHealth() {
+          active += 1;
+          maxActive = Math.max(maxActive, active);
+          await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          active -= 1;
+          return { healthy: true };
+        },
+        async suspend() {}
+      }
+    });
+
+    expect(maxActive).toBe(liveSafetyHealthConcurrency);
+    expect(state.healthResults).toHaveLength(25);
   });
 });
