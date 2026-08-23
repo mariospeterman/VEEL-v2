@@ -38,7 +38,7 @@ copied into this document. The machine-readable companion is `production-status.
 
 | Field | Current value |
 | --- | --- |
-| Latest merged baseline | `730c6c3a2af1fa58a5fecc3f832e013e422e4335` |
+| Latest merged baseline | `7cdb6c9d785fe2303394ab067b0e2c477e35c43a` |
 | Latest merged slice | Convergence 05 — Realtime, messaging, and live safety |
 | Latest merged migration | `packages/database/migrations/0112_realtime_messaging_live_safety.sql` |
 | Latest merged evidence | `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`, `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN` |
@@ -52,16 +52,19 @@ Readiness vocabulary is fixed to `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`,
 `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED`. “Accepted” describes a
 design decision; it never means implemented, tested, approved, enabled, or launch-ready.
 
-Merged Convergence 05 now has one scoped private-realtime protocol for messages, presence, typing,
-notifications, and live invalidation; consent-bound direct messaging with one introduction; replies,
-reactions, revision-bound attachments, and a bounded offline queue; exact creator media offers and
-two-phase structured requests without paid access to people; and provider-evidence-driven live safety
-that denies playback locally before retrying provider suspension. Migration `0112` rollback/reapply,
-551 unit/integration tests, six clean-runner real-Postgres journeys, 172 Chromium/Firefox/WebKit
-browser checks, production build, and exact-main CI `32665010776`, database `32665010765`, and
-security `32665010773` are green. PR #90 merged as `730c6c3`. Adult live remains disabled, replay
-remains quarantined, and real provider/staging acceptance remains fail closed behind the recorded
-release gates.
+Merged Convergence 05 uses private scoped Supabase Broadcast only for bounded invalidation and
+ephemeral hints while canonical APIs remain truth. Messages enforce one consent-safe introduction,
+accepted-conversation replies/reactions/approved media offers, muted-recipient notification
+suppression, and two-phase structured creator requests; money never buys delivery, priority, or
+access to a person. SFW live begins private and monitoring-pending, requires the exact moderation
+target acknowledgement plus recurring provider health before public playback or chat, denies locally
+before bounded provider suspension retries, atomically holds unhealthy live rooms, and preserves and
+terminalizes ended/replay-ready races. Adult live stays disabled and replay remains quarantined.
+Migration `0112`, exact-main CI `32673213090`, database `32673213145`, and security `32673213086`
+are green on repair baseline `7cdb6c9`; immutable artifact run `32673730487` built and attested all
+three images. Staging run `32674141947` verified the exact manifest and attestations, then failed closed
+before deployment on absent shared core, provider, verification, operations, feature, and legal
+configuration. PR #90 established the slice and repair PR #91 closed the post-merge review findings.
 
 Merged Convergence 04 now has one purpose-bound wallet challenge/session authority that keeps
 returning-user login lookup-only, makes unknown identities return `account_not_found` without

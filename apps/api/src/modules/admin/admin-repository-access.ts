@@ -262,7 +262,8 @@ export function createAccessRepository(
         table: string,
         queuedState: string,
         stateType: "text" | "notification_delivery_state" = "text",
-        failureColumn = "failure_code"
+        failureColumn = "failure_code",
+        leaseExpiryColumn = "leased_until"
       ) => {
         const queuedStateSql = stateType === "notification_delivery_state"
           ? sql`${queuedState}::notification_delivery_state`
@@ -317,7 +318,7 @@ export function createAccessRepository(
               state = ${queuedStateSql},
               attempt_count = 0,
               lease_token = null,
-              leased_until = null,
+              ${sql(leaseExpiryColumn)} = null,
               next_attempt_at = now(),
               ${sql(failureColumn)} = null
             where id in (select id from target)
@@ -369,7 +370,13 @@ export function createAccessRepository(
         case "analytics_projections":
           return run("analytics_projection_jobs", "queued", "text", "last_error_code");
         case "live_safety":
-          return run("live_safety_provider_actions", "queued", "text", "last_failure_code");
+          return run(
+            "live_safety_provider_actions",
+            "queued",
+            "text",
+            "last_failure_code",
+            "lease_expires_at"
+          );
       }
     },
     async listUsers(input) {
