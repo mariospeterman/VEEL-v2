@@ -10,6 +10,20 @@ export function createContentPublishRepositoryMethods(
   return {
     async publishOwnedContent(input) {
       const result = await withPostgresTransaction(sql, async (transaction) => {
+        const lockedRows = await transaction<{ id: string }[]>`
+          select ci.id
+          from content_items ci
+          join users u on u.id = ci.creator_user_id
+          where ci.id = ${input.contentId}
+            and u.supabase_user_id = ${input.supabaseUserId}
+            and u.state = 'active'
+          for update
+        `;
+
+        if (!lockedRows[0]) {
+          return null;
+        }
+
         const rows = await transaction<
           (ContentRow & {
             content_state: string;
@@ -38,7 +52,6 @@ export function createContentPublishRepositoryMethods(
             from content_items ci
             join actor on actor.id = ci.creator_user_id
             where ci.id = ${input.contentId}
-            for update
           ),
           updated_content as (
             update content_items ci

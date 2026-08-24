@@ -10,6 +10,7 @@ describe("content publish repository", () => {
     const transaction = vi.fn((strings: TemplateStringsArray) => {
       const query = strings.join("?");
       queries.push(query);
+      if (query.includes("for update")) return Promise.resolve([{ id: "content-id" }]);
       if (query.includes("with actor as")) return Promise.resolve([]);
       return Promise.resolve([{
         state: "ready",
@@ -30,7 +31,12 @@ describe("content publish repository", () => {
     })).rejects.toBeInstanceOf(ContentPublishConflictError);
 
     const publishQuery = queries.find((query) => query.includes("with actor as"));
+    expect(queries.findIndex((query) => query.includes("for update"))).toBeLessThan(
+      queries.findIndex((query) => query.includes("private.content_safety_release_ready"))
+    );
+    expect(queries.filter((query) => query.includes("for update"))).toHaveLength(1);
     expect(publishQuery).toContain("private.content_safety_release_ready(ci.id) as safety_ready");
+    expect(publishQuery).not.toContain("for update");
     expect(publishQuery).not.toContain("private.content_composition_safety_ready(ci.id) as safety_ready");
   });
 });
