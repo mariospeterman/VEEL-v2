@@ -61,10 +61,11 @@ target acknowledgement plus recurring provider health before public playback or 
 before bounded provider suspension retries, atomically holds unhealthy live rooms, and preserves and
 terminalizes ended/replay-ready races. Adult live stays disabled and replay remains quarantined.
 Migration `0112`, exact-main CI `32675846607`, database `32675846612`, and security `32675846677`
-are green on final repair baseline `765d236`. PR #90 established the slice, PR #91 closed the
-unhealthy-session review findings, and PR #93 terminalized healthy observations that complete after
-the room ends. Provider and staging approval remain fail closed behind the recorded shared core,
-provider, verification, operations, feature, and legal configuration gates.
+are green on final repair baseline `765d236`; immutable artifact run `32676387730` built and attested
+all three images. Staging run `32676779920` verified the exact manifest and attestations, then failed
+closed before deployment on absent shared core, provider, verification, operations, feature, and
+legal configuration. PR #90 established the slice, PR #91 closed the unhealthy-session review
+findings, and PR #93 terminalized healthy observations that complete after the room ends.
 
 Merged Convergence 04 now has one purpose-bound wallet challenge/session authority that keeps
 returning-user login lookup-only, makes unknown identities return `account_not_found` without
