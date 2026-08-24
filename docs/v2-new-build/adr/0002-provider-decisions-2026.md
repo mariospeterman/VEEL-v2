@@ -87,7 +87,7 @@ Current provider gate:
 | Age/KYC fallback | Sumsub | candidate | Age/KYC/KYB levels, reusable verification support, webhook verification, creator KYC/KYB path. |
 | Age fallback | Veriff | candidate | Global age assurance, risk-based checks, webhook verification, privacy/security review. |
 | Documentary fallback | Persona | candidate | Procurement, privacy/security, data minimization, explicit legal basis for documentary fallback. |
-| VOD | Bunny Stream/CDN/TUS | candidate | TUS upload, signed/tokenized playback, webhook idempotency, provider outage state. |
+| VOD | Bunny Stream/CDN/TUS | candidate; `CODE_COMPLETE_PROVIDER_BLOCKED` for the C08 private MCP handoff | TUS upload, signed/tokenized playback, webhook idempotency, provider outage state. The private MCP path reuses canonical image sanitization and Bunny TUS behind a one-time capability; staging still must prove the exact provider account, Shield, upload, deletion/recovery, and rollback behavior before approval. |
 | Live/replay | Livepeer JWT | candidate; `CODE_COMPLETE_PROVIDER_BLOCKED` in Slice 07 | OBS ingest, one-response owner secret reveal, exact JWT subject/expiry, moderation source multistream, signed webhook timestamp/replay protection, suspend/terminate, separately quarantined replay, and no viewer secret exposure are code-complete. Staging must prove real ingest/playback, webhook delivery, moderation-target behavior, measured suspension/recovery, replay handoff/release, provider account acceptance, and rollback before `staging-approved`. |
 | Payment evidence | Helius | candidate | Devnet/staging webhook, scoped watched addresses/references, signature/replay validation, confirmed payment fixture. |
 | Onramp/funding | Embedded-wallet funding UI | candidate | User-controlled wallet funding, provider KYC handled by provider, no entitlement on funding completion. |
@@ -152,6 +152,24 @@ standard structured tool results, accurate tool annotations, minimized results, 
 2026 MCP release candidate is not adopted while it remains non-final and lacks the required
 supported-client staging proof. OpenAI-compatible remote usage remains unclaimed until the public
 HTTPS staging matrix in `mcp-staging-proof.md` passes.
+
+### MCP media handoff re-verification — 2026-08-24
+
+Convergence 08 was re-checked against the official Bunny TUS upload documentation and the C2PA 2.2
+specification. Bunny TUS authorization remains the documented SHA-256 signature over library id,
+server-only API key, expiry, and video id. The returned client header set is limited to signature,
+expiry, library id, and video id, and the provider-supported minimum one-hour expiry is used. The
+API key, create-video response, and provider identifiers remain outside MCP audit output. C2PA
+references are stored as bounded HTTPS/URN claims only; WeVid does not represent an unverified
+reference as a validated manifest or trust decision.
+
+Official anchors:
+
+- `https://docs.bunny.net/stream/tus-resumable-uploads`
+- `https://c2pa.org/specifications/specifications/2.2/specs/C2PA_Specification.html`
+
+This proof does not move Bunny beyond `candidate`. Real private storage, Stream/TUS, Shield,
+webhook, deletion/recovery, account-terms, and rollback evidence remains required in staging.
 
 ## GStack Autonomy Decision
 

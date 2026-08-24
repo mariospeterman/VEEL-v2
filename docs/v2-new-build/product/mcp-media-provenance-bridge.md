@@ -35,6 +35,14 @@ create two canonical assets. Provider calls occur outside database transactions,
 object that cannot be attached to the canonical asset is deleted or enters the existing durable
 cleanup path.
 
+Preparation requires a caller-generated UUID `requestId`; its normalized request is the logical
+idempotency input. A newly issued capability lives for ten minutes and is redeemed only at
+`POST /v1/mcp/media/uploads/{capabilityId}` with the same MCP bearer plus the separate one-time
+capability header. Image redemption accepts only the declared raw image MIME and bounded body.
+Video redemption is bodyless and returns a one-hour TUS handoff after the canonical asset row is
+attached. Exact preparation replay returns the original capability identity without minting or
+recovering the one-time capability value.
+
 Image bytes continue through the existing WeVid sanitization and private Bunny Storage boundary.
 Video bytes continue through the existing Bunny Stream TUS boundary. A redeemed video capability
 receives only the documented presigned upload endpoint and safe headers for the provider-supported
@@ -82,6 +90,9 @@ wallet, messaging, moderation, entitlement, age/KYC, or admin tool is registered
 - Upload quotas are backend-owned and apply before provider work; money, membership, and social state
   never increase capacity or priority.
 - Bunny/provider unavailability leaves the draft private and records only normalized failure state.
+- If immediate deletion of an unattached provider object fails, the reserved media id becomes a
+  retired, non-composition asset in the existing provider-cleanup queue. That compensation row does
+  not advance the creator-visible composition revision and exposes no provider id to the MCP client.
 - Provider webhook and explicit sync continue to update the canonical `media_assets` row; the bridge
   never manufactures provider readiness.
 - Capability secrets, upload signatures, private media URLs, opaque lineage references, and C2PA

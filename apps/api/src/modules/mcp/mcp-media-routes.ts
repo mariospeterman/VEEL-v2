@@ -102,13 +102,13 @@ export async function registerMcpMediaRoutes(
             mediaAssetId: claimed.mediaAssetId,
             extension: image.extension
           });
+          providerObject = { providerAssetId, assetKind: "image" };
           await options.mediaUploadProvider.uploadImageObject({
             providerAssetId,
             body: image.body,
             mimeType: image.mimeType,
             checksumSha256
           });
-          providerObject = { providerAssetId, assetKind: "image" };
           const result = await options.contentRepository.completeMcpMediaUploadCapability({
             capabilityId: claimed.id,
             connectionId: access.connection.id,

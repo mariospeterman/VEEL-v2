@@ -178,7 +178,10 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
 
     async claimMcpMediaUploadCapability(input) {
       return withPostgresTransaction(sql, async (transaction) => {
-        const rows = await transaction<CapabilityRow[]>`
+        const rows = await transaction<Array<CapabilityRow & {
+          expired: boolean;
+          lease_active: boolean;
+        }>>`
           select
             capability.id, capability.connection_id, capability.actor_user_id,
             capability.content_item_id, capability.reserved_media_asset_id,
@@ -186,7 +189,9 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
             capability.origin_classification, capability.source_kind,
             capability.source_lineage_reference, capability.workflow_provider_reference,
             capability.c2pa_reference, capability.state, capability.leased_until,
-            capability.expires_at, actor.supabase_user_id as actor_supabase_user_id,
+            capability.expires_at, capability.expires_at <= now() as expired,
+            capability.leased_until > now() as lease_active,
+            actor.supabase_user_id as actor_supabase_user_id,
             content.media_type, content.visibility, content.nsfw_label,
             content.state as content_state, content.publish_state
           from mcp_media_upload_capabilities capability
@@ -207,14 +212,10 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
         if (capability.state === "consumed") {
           throw new McpMediaCapabilityConflictError("consumed");
         }
-        if (capability.state === "revoked" || capability.expires_at.getTime() <= Date.now()) {
+        if (capability.state === "revoked" || capability.expired) {
           throw new McpMediaCapabilityConflictError("expired");
         }
-        if (
-          capability.state === "provisioning" &&
-          capability.leased_until &&
-          capability.leased_until.getTime() > Date.now()
-        ) {
+        if (capability.state === "provisioning" && capability.lease_active) {
           throw new McpMediaCapabilityConflictError("busy");
         }
         if (

@@ -8,6 +8,7 @@ import type { AgeRepository } from "../src/modules/age/types";
 import type { AnalyticsRepository } from "../src/modules/analytics/types";
 import type { ContentRepository, CreateContentDraftInput, MediaUploadProviderAdapter } from "../src/modules/content/types";
 import { ContentDraftPollCloseError, McpMediaCapabilityConflictError } from "../src/modules/content/content-errors";
+import { MediaUploadProviderError } from "../src/modules/content/media-upload-adapter";
 import type {
   McpConnection,
   McpRepository,
@@ -469,6 +470,64 @@ describe("external MCP connector foundation", () => {
     });
     expect(forbiddenOrigin.json().error.message).toContain("supported AI origin classification");
     expect(contentRepository.capabilityInputs).toHaveLength(1);
+    await app.close();
+  });
+
+  it("moves an ambiguously stored image into durable cleanup when immediate compensation fails", async () => {
+    const mcpRepository = new FakeMcpRepository();
+    const contentRepository = new FakeContentRepository();
+    const capabilityToken = "c".repeat(43);
+    contentRepository.capabilityInputs.push({
+      connectionId: "00000000-0000-4000-8000-000000000399",
+      supabaseUserId,
+      contentId: "00000000-0000-4000-8000-000000000099",
+      requestHash: "a".repeat(64),
+      tokenHash: createHash("sha256").update(capabilityToken).digest("hex"),
+      mediaKind: "image",
+      mimeType: "image/webp",
+      expiresAt: new Date(Date.now() + 60_000),
+      originClassification: "ai_generated",
+      sourceKind: "generated",
+      sourceLineageReference: null,
+      workflowProviderReference: null,
+      c2paReference: null
+    });
+    const mediaUploadProvider: MediaUploadProviderAdapter = {
+      provider: "bunny",
+      isConfigured: () => true,
+      async createUploadSession() { throw new Error("video upload was not expected"); },
+      isImageUploadConfigured: () => true,
+      createImageObjectReference: ({ contentId, mediaAssetId, extension }) =>
+        `images/${contentId}/${mediaAssetId}.${extension}`,
+      async uploadImageObject() { throw new MediaUploadProviderError(); },
+      async deleteProviderAsset() { throw new MediaUploadProviderError(); }
+    };
+    const app = await buildApi(testDependencies({ mcpRepository, contentRepository, mediaUploadProvider }));
+    await app.ready();
+    const mcpToken = await createCreatorToken(app, ["creator.drafts.write", "creator.media.label"]);
+    const sourceImage = await sharp({
+      create: { width: 3, height: 2, channels: 3, background: { r: 20, g: 40, b: 60 } }
+    }).webp().toBuffer();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/mcp/media/uploads/00000000-0000-4000-8000-000000000301",
+      headers: {
+        authorization: `Bearer ${mcpToken}`,
+        "x-wevid-media-capability": capabilityToken,
+        "content-type": "image/webp"
+      },
+      payload: sourceImage
+    });
+    expect(response.statusCode).toBe(503);
+    expect(response.body).not.toContain("images/");
+    expect(contentRepository.completionInputs).toHaveLength(0);
+    expect(contentRepository.releaseInputs).toHaveLength(0);
+    expect(contentRepository.cleanupInputs).toMatchObject([{
+      capabilityId: "00000000-0000-4000-8000-000000000301",
+      providerAssetId: "images/00000000-0000-4000-8000-000000000099/00000000-0000-4000-8000-000000000302.webp",
+      failureCode: "provider_delete_failed"
+    }]);
     await app.close();
   });
 
@@ -963,6 +1022,8 @@ class FakeContentRepository {
   readonly claimInputs: Parameters<NonNullable<ContentRepository["claimMcpMediaUploadCapability"]>>[0][] = [];
   readonly completionInputs: Parameters<NonNullable<ContentRepository["completeMcpMediaUploadCapability"]>>[0][] = [];
   readonly reviewInputs: Parameters<NonNullable<ContentRepository["reviewOwnedMediaAssetProvenance"]>>[0][] = [];
+  readonly releaseInputs: Parameters<NonNullable<ContentRepository["releaseMcpMediaUploadCapability"]>>[0][] = [];
+  readonly cleanupInputs: Parameters<NonNullable<ContentRepository["scheduleMcpMediaProviderCleanup"]>>[0][] = [];
   capabilityConsumed = false;
 
   async createDraft(input: CreateContentDraftInput) {
@@ -1088,8 +1149,12 @@ class FakeContentRepository {
     };
   }
 
-  async releaseMcpMediaUploadCapability() {}
-  async scheduleMcpMediaProviderCleanup() {}
+  async releaseMcpMediaUploadCapability(
+    input: Parameters<NonNullable<ContentRepository["releaseMcpMediaUploadCapability"]>>[0]
+  ) { this.releaseInputs.push(input); }
+  async scheduleMcpMediaProviderCleanup(
+    input: Parameters<NonNullable<ContentRepository["scheduleMcpMediaProviderCleanup"]>>[0]
+  ) { this.cleanupInputs.push(input); }
 
   async reviewOwnedMediaAssetProvenance(
     input: Parameters<NonNullable<ContentRepository["reviewOwnedMediaAssetProvenance"]>>[0]
