@@ -45,7 +45,7 @@ copied into this document. The machine-readable companion is `production-status.
 | Known launch blockers | `STAGING_PROVEN`, `PROVIDER_APPROVED`, `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED` remain outstanding. |
 | Next planned slice | None — external launch gates only |
 
-No further production code slice is planned; only external launch gates remain.
+Next planned production slice: **Convergence 09 — Release convergence pass**.
 
 Readiness vocabulary is fixed to `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`,
 `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN`, `STAGING_PROVEN`, `PROVIDER_APPROVED`,

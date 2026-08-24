@@ -3,8 +3,8 @@
   "latestMergedBaseline": "fe10413d8a28700b15cfdecde386e2807719d3d7",
   "latestMergedSlice": "Convergence 08 — MCP media and provenance bridge",
   "latestMergedMigration": "packages/database/migrations/0115_mcp_media_provenance_bridge.sql",
-  "nextPlannedSlice": null,
-  "nextPlannedBranch": null,
+  "nextPlannedSlice": "Convergence 09 — Release convergence pass",
+  "nextPlannedBranch": "codex/release-convergence-operator-rbac",
   "latestMergedEvidenceStates": [
     "DESIGNED",
     "CODE_COMPLETE",

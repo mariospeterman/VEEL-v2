@@ -71,6 +71,7 @@ accessibility, browser, and immutable-artifact evidence. Anything outside that d
 | Convergence 06 | Consumer social experience | Merged through PR #94 and bounded browser-smoke repair PR #96 at `1d2a91d`: one accessible action rail, comments sheet, replies, comment likes, mentions, internal shares, hashtags, polls, genuine search/discovery, privacy self-service, and responsive PWA UX; exact-main CI/database/security and immutable artifacts are green while provider staging remains fail closed on recorded external gates |
 | Convergence 07 | Remote MCP profile bridge | Merged through PR #97 and bounded poll-replay repair PR #98 at `6eed18b`: stateless OAuth profile/analytics/private-draft preparation, exact MCP 2025-11-25 transport behavior, minimized origin audit, real-Postgres/browser proof, and immutable artifacts are green; deployed client compatibility remains fail closed on shared staging configuration |
 | Convergence 08 | MCP media and provenance bridge | Merged through PR #99 at `fe10413`: hash-only short-lived private-draft media capabilities, capacity-safe canonical Bunny image/TUS handoff, quarantine/provider verification, asset-bound structured provenance, trusted first-party review, and no MCP publish endpoint; exact-head CI/database/security, real-Postgres, and browser proof are green while real provider/client staging remains fail closed on recorded external gates |
+| Convergence 09 | Release convergence pass | Ordered operator harness and RBAC, final product UX, and cloud/provider acceptance. The pass stays fail closed and may end only at `OPERATOR_READY_FOR_STAGING_CONFIGURATION` or `STAGING_PROVEN`; it never enables production launch. |
 | Separate add-on | `wevid-agency` | Only after the core bridge: a user-owned, separately authorized package for external AI, sourced research, local FFmpeg, and optional user-owned generation providers; it is not part of the WeVid API runtime and requires a separately authorized repository boundary |
 | Deferred post-core | WeVid-native Product Offers plus lightweight Orders/Fulfillment, adult live, expanded Mutuals, NFT/transferable passes, resale, custom contracts, and uncommitted advanced Enterprise work | Separately gated and disabled or absent; physical commerce reuses the Slice 06 payment boundary and requires seller/trader, product-safety, shipping/privacy, tax, refund, and operations approval before code |
 
@@ -84,7 +85,7 @@ not create parallel policy, eligibility, composer, renderer, analytics, realtime
 WeVid Core owns deterministic analytics and the scoped data/action bridge, but hosts no LLM or model-key
 gateway. The optional WeVid Agency remains a separate, user-owned add-on and publication stays human-controlled.
 
-No further production code slice is planned; only external launch gates remain. GitHub, not this
+Next planned production slice: **Convergence 09 — Release convergence pass**. GitHub, not this
 document, owns whether an explicitly authorized repair branch currently has the one active pull
 request.
 
