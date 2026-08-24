@@ -38,19 +38,32 @@ copied into this document. The machine-readable companion is `production-status.
 
 | Field | Current value |
 | --- | --- |
-| Latest merged baseline | `6eed18b087e405566815561455a6fa00651acc68` |
-| Latest merged slice | Convergence 07 — Remote MCP profile bridge |
-| Latest merged migration | `packages/database/migrations/0114_mcp_profile_bridge.sql` |
+| Latest merged baseline | `fe10413d8a28700b15cfdecde386e2807719d3d7` |
+| Latest merged slice | Convergence 08 — MCP media and provenance bridge |
+| Latest merged migration | `packages/database/migrations/0115_mcp_media_provenance_bridge.sql` |
 | Latest merged evidence | `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`, `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN` |
 | Known launch blockers | `STAGING_PROVEN`, `PROVIDER_APPROVED`, `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED` remain outstanding. |
-| Next planned slice | Convergence 08 — MCP media and provenance bridge |
+| Next planned slice | None — external launch gates only |
 
-Next planned production slice: **Convergence 08 — MCP media and provenance bridge**.
+No further production code slice is planned; only external launch gates remain.
 
 Readiness vocabulary is fixed to `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`,
 `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN`, `STAGING_PROVEN`, `PROVIDER_APPROVED`,
 `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED`. “Accepted” describes a
 design decision; it never means implemented, tested, approved, enabled, or launch-ready.
+
+Merged Convergence 08 adds two narrowly scoped MCP media tools: one prepares a private-draft Bunny
+image or resumable-video handoff and one reads canonical readiness. Capabilities are hash-only,
+short-lived, one-time, actor/draft/asset scoped, capacity-reserving, and re-authorized at redemption;
+provider completion is durable and compensating cleanup is recoverable. Structured provenance is
+bound to the exact asset, restricted to opaque WeVid/C2PA URNs or C2PA-controlled HTTPS hosts, and
+can reach publication only through the existing trusted first-party review and content authorities.
+There is no MCP publish endpoint, no provider payload exposure, and no bypass around quarantine,
+moderation, release evidence, or canonical access truth. Migration `0115` is reversible; PR #99
+merged at `fe10413` after exact-head CI `32728722910`, database `32728722893`, security
+`32728722879`, preview `32728722888`, real-Postgres concurrency/recovery proof, all-browser smoke,
+and a clean exact-commit review. Real Bunny/C2PA client compatibility and shared staging evidence
+remain fail closed behind the recorded external gates.
 
 Merged Convergence 07 provides one optional remote MCP bridge with OAuth authorization-code plus
 S256 PKCE, resource/audience-bound hash-only bearer tokens, exact Origin and protocol-version

@@ -22,9 +22,9 @@ Non-goals:
 
 This folder is the canonical WeVid engineering pack. Technical `veel` identifiers remain where compatibility requires them; public product language is WeVid.
 
-Next planned production slice: **Convergence 08 — MCP media and provenance bridge**. Stable merged status is in
-`current-implementation-status.md` and `production-status.json`; transient branch and pull-request
-truth comes from GitHub's single `wevid-active-slice` label.
+No further production code slice is planned; only external launch gates remain. Stable merged status
+is in `current-implementation-status.md` and `production-status.json`; transient branch and
+pull-request truth comes from GitHub's single `wevid-active-slice` label.
 
 ## What This Pack Is
 
