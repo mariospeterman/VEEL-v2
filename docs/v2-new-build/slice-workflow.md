@@ -128,6 +128,11 @@ planned slice from `production-status.json`. More than one is status corruption:
 until the mutex is repaired. Dependency or security analysis may run separately only when it does
 not modify the active branch or lockfile.
 
+A bounded post-review repair may temporarily hold the same mutex on a branch named
+`codex/converge-NN-<scope>-repair` or `codex/converge-NN-<scope>-repairs`. It must target the latest
+merged slice, contain only the reviewed repair and its evidence, and merge before the planned next
+slice is activated. The stable next-slice record does not move backward for that temporary branch.
+
 Track the active slice with this state machine:
 
 ```text
