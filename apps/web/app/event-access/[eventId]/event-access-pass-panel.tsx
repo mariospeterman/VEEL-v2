@@ -58,7 +58,7 @@ function EventAccessPassOption({
           <p className="mt-1 text-sm text-(--muted)">{accessPassType.remaining} remaining</p>
         </div>
         <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-medium text-(--accent-strong)">
-          {accessPassType.state}
+          {accessPassType.state === "active" ? "Available" : accessPassType.state === "sold_out" ? "Sold out" : "Unavailable"}
         </span>
       </div>
       <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
@@ -71,16 +71,16 @@ function EventAccessPassOption({
           }
         />
         <Fact label="Capacity" value={accessPassType.capacity.toString()} />
-        <Fact label="Access" value={event.accessRule} />
+        <Fact label="Entry" value={event.accessRule === "private_apply" ? "Creator approval" : "Confirmed pass"} />
       </div>
       <div className="mt-4 grid gap-3 border-t border-(--line) pt-4">
         <PaymentHandoffPanel
           createIntent={createAccessPassPayment}
           ctaLabel="Get Access Pass"
           disabled={accessPassType.state !== "active" || accessPassType.remaining <= 0}
-          idleCopy="Capacity is reserved briefly when the backend creates a paid pass checkout. Review and approve before it expires."
+          idleCopy="Your place is held briefly while you review and approve the pass purchase."
           pendingLabel="Reserving Access Pass"
-          readyCopy="The Access Pass request is reflected by the backend. Paid access is issued only after settlement verification."
+          readyCopy="Open the wallet request. Your pass appears after payment confirmation."
         />
       </div>
     </article>

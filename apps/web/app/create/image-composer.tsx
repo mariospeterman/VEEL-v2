@@ -312,7 +312,7 @@ export function MediaAssetComposer({
       setDraft({ ...draft, compositionRevision: removed.compositionRevision });
       setNotice(removed.cleanupState === "completed"
         ? "Media removed."
-        : "Media removed. Private provider cleanup is queued for retry.");
+        : "Media removed. We’ll finish clearing the private copy automatically.");
     } catch (caught) {
       setError(messageFor(caught));
     } finally {

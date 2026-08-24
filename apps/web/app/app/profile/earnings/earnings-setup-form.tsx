@@ -57,7 +57,7 @@ export function EarningsSetupForm({
       setTermsAccepted(false);
       setMessage(
         updated.canStartEarning
-          ? "Earnings are enabled. Payments still require backend settlement verification."
+          ? "Earnings are enabled. Purchases count only after payment confirmation."
           : "Saved. Complete the remaining required check shown above."
       );
     } catch (error) {

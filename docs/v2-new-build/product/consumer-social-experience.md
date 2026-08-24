@@ -1,6 +1,6 @@
 # Consumer Social Experience
 
-Status: draft
+Status: accepted
 Scope: Convergence 06
 Last updated: 2026-08-24
 Source of truth: product behavior for consumer social and PWA surfaces

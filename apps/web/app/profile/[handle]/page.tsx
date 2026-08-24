@@ -72,8 +72,7 @@ function ProfileView({ followState, profile }: { followState: FollowState | null
         <div className="grid grid-cols-2 gap-3 text-sm">
           <Stat label="Content" value={profile.stats.contentCount} />
           <Stat label="Live rooms" value={profile.stats.liveRoomCount} />
-          <Stat label="Payments" value={profile.stats.confirmedPaymentCount} />
-          {!followState ? <Stat label="Followers" value={profile.stats.followerCount} /> : null}
+          <Stat label="Followers" value={followState?.followerCount ?? profile.stats.followerCount} />
         </div>
         {followState ? <ProfileFollowPanel initialState={followState} /> : null}
         {followState ? <ProfileMessageButton userId={profile.user.id} /> : null}
@@ -94,9 +93,7 @@ function ProfileView({ followState, profile }: { followState: FollowState | null
       <section className="grid content-start gap-4">
         <div className="flex items-center justify-between gap-4 border-b border-(--line) pb-3">
           <h2 className="text-base font-semibold tracking-normal">Media</h2>
-          <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs text-(--accent-strong)">
-            support {profile.monetisation.supportEnabled ? "enabled" : "disabled"}
-          </span>
+          {profile.monetisation.supportEnabled ? <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs text-(--accent-strong)">Support available</span> : null}
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -107,7 +104,7 @@ function ProfileView({ followState, profile }: { followState: FollowState | null
               </div>
               <div className="p-4">
                 <p className="font-medium">{item.caption || (item.mediaType === "text" ? "Text post" : item.mediaType === "poll" ? "Poll" : "Post")}</p>
-                <p className="mt-1 text-sm text-(--muted)">{item.accessState}</p>
+                <p className="mt-1 text-sm text-(--muted)">{accessLabel(item.accessState)}</p>
                 <a className="mt-3 inline-flex text-sm font-semibold underline underline-offset-4" href={`/content/${item.id}`}>Open post</a>
               </div>
             </article>
@@ -116,6 +113,14 @@ function ProfileView({ followState, profile }: { followState: FollowState | null
       </section>
     </section>
   );
+}
+
+function accessLabel(state: CreatorProfile["recentContent"][number]["accessState"]) {
+  if (state === "free" || state === "unlocked") return "Ready to watch";
+  if (state === "subscribed") return "Included with membership";
+  if (state === "pass_required") return "Event Access required";
+  if (state === "teaser") return "Preview available";
+  return "Unlock to watch";
 }
 
 function Stat({ label, value }: { label: string; value: number }) {

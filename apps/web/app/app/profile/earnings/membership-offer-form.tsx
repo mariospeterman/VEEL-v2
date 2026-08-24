@@ -62,7 +62,7 @@ export function MembershipOfferForm({ initialOffer }: { initialOffer: Subscripti
           </p>
         </div>
         <StatusPill tone={offer?.providerState === "launch_approved" ? "good" : "warn"}>
-          {offer?.providerState === "launch_approved" ? "available" : offer ? "staging" : "draft"}
+          {offer?.providerState === "launch_approved" ? "available" : offer ? "coming soon" : "draft"}
         </StatusPill>
       </div>
       <label className="grid gap-1 text-sm">

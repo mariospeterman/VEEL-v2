@@ -93,7 +93,7 @@ export default async function SubscriptionsPage() {
                 ))
               ) : (
                 <EmptyState title="No joined memberships">
-                  Profile membership access appears here after backend-verified activation.
+                  Joined creator memberships will appear here after activation.
                 </EmptyState>
               )
             ) : (

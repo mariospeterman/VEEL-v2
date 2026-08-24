@@ -25,7 +25,7 @@ export function AgeSessionPanel({ authState }: AgeSessionPanelProps) {
       });
       setSession(providerSession);
       setState("ready");
-      setMessage("Provider session created. Continue with the provider; WeVid waits for the signed webhook.");
+      setMessage("Your secure age check is ready. Continue to complete it.");
       window.location.assign(providerSession.launchUrl);
     } catch (error) {
       setState("error");
@@ -35,10 +35,9 @@ export function AgeSessionPanel({ authState }: AgeSessionPanelProps) {
 
   return (
     <section className="rounded border border-(--line) bg-(--panel) p-4">
-      <p className="text-sm font-medium">Provider sessions</p>
+      <p className="text-sm font-medium">Age verification</p>
       <p className="mt-3 text-sm leading-6 text-(--muted)">
-        Session launch URLs are created by the backend only after an explicit user action. The page does not render
-        fixture provider links or treat redirects as verification.
+        Start a secure age check when you’re ready. WeVid unlocks age-restricted areas only after the check is confirmed.
       </p>
 
       <button
@@ -47,7 +46,7 @@ export function AgeSessionPanel({ authState }: AgeSessionPanelProps) {
         onClick={startAgeSession}
         type="button"
       >
-        {state === "starting" ? "Starting provider" : "Start age verification"}
+        {state === "starting" ? "Starting verification" : "Start age verification"}
       </button>
 
       {session ? (
@@ -55,7 +54,7 @@ export function AgeSessionPanel({ authState }: AgeSessionPanelProps) {
           className="mt-3 block truncate rounded border border-(--line) px-3 py-2 text-sm text-(--foreground)"
           href={session.launchUrl}
         >
-          Continue with {session.provider}
+          Continue age verification
         </a>
       ) : null}
 

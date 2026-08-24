@@ -34,11 +34,10 @@ export function SubscriptionCancelPanel({ subscription }: { subscription: Subscr
         {pending ? "Cancelling" : "Cancel renewal"}
       </button>
       <p className="text-sm leading-6 text-(--muted)">
-        Cancellation stops WeVid renewal state. Wallet-level delegation can still be revoked in the
-        wallet/provider UX; verified revocation closes access server-side.
+        Cancellation stops future WeVid renewals. You can also remove the payment permission from your wallet.
       </p>
       {current.id !== subscription.id || current.state !== subscription.state ? (
-        <p className="text-sm font-medium">Current state: {current.state}</p>
+        <p className="text-sm font-medium">{["cancelled", "expired", "revoked"].includes(current.state) ? "Renewal cancelled" : "Cancellation saved"}</p>
       ) : null}
       {error ? <p className="text-sm font-medium text-red-400">{error}</p> : null}
     </div>

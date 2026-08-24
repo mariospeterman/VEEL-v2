@@ -126,7 +126,7 @@ export function MessageComposer({ conversation, replyTo, onClearReply, onTyping 
       void queryClient.invalidateQueries({ queryKey: ["messages", "conversations"] });
       clearComposer();
       setState("ready");
-      setMessage("Message was accepted by the backend conversation policy.");
+      setMessage("Message sent.");
     } catch (error) {
       if (!navigator.onLine) {
         enqueue(queued);
@@ -198,9 +198,7 @@ export function MessageComposer({ conversation, replyTo, onClearReply, onTyping 
         </button>
       </div>
       {sentMessage ? (
-        <p className="mt-3 rounded border border-(--line) bg-(--background) px-3 py-2 text-sm text-(--muted)">
-          Latest backend delivery state: {sentMessage.deliveryState}
-        </p>
+        <p className="mt-3 rounded border border-(--line) bg-(--background) px-3 py-2 text-sm text-(--muted)">{sentMessage.deliveryState === "visible" ? "Delivered" : "Sending safely"}</p>
       ) : null}
 
       {message ? (

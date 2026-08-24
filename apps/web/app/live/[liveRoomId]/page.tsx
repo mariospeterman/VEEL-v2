@@ -61,16 +61,12 @@ function LiveStage({ room }: { room: LiveRoom }) {
       <ProviderPlayback playback={room.playback} title={`${room.title} live playback`} />
       <div className="absolute left-4 top-4 flex items-center gap-2">
         <span className="rounded bg-[#fee2e2] px-2 py-1 text-xs font-semibold uppercase text-[#991b1b]">
-          {room.state}
+          {roomStateLabel(room.state)}
         </span>
       </div>
       <div className="absolute inset-x-0 bottom-0 p-5">
         <p className="text-sm font-medium text-(--accent-text)">@{room.creator.handle}</p>
-        <h1 className="mt-2 max-w-3xl text-2xl font-semibold tracking-normal">Live room</h1>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-200">{room.title}</p>
-      </div>
-      <div className="absolute right-4 top-4 rounded bg-black/50 px-3 py-2 text-sm text-white">
-        {room.playback?.state ?? "not_ready"}
+        <h1 className="mt-2 max-w-3xl text-2xl font-semibold tracking-normal">{room.title}</h1>
       </div>
     </section>
   );
@@ -85,17 +81,15 @@ function LiveAccessPanel({ initialMessages, room }: { initialMessages: LiveChatP
             <p className="truncate text-sm font-semibold">{room.creator.displayName || `@${room.creator.handle}`}</p>
             <p className="text-sm text-(--muted)">@{room.creator.handle}</p>
           </div>
-          <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-medium uppercase text-(--accent-strong)">
-            {room.accessState}
-          </span>
+          <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-medium text-(--accent-strong)">{liveAccessLabel(room)}</span>
         </div>
 
         <div className="mt-5 grid gap-3 border-t border-(--line) pt-4">
-          <Fact label="Playback" value={room.playback?.state ?? "not_ready"} />
-          <Fact label="Access" value={room.accessMode} />
+          <Fact label="Watch" value={liveAccessLabel(room)} />
+          <Fact label="Audience" value={audienceLabel(room.accessMode)} />
           {room.accessMode === "paid_event" ? <Fact label="Preview" value={`${room.previewSecondsRemaining ?? 0}s remaining`} /> : null}
-          <Fact label="Chat" value={room.chat.accessState} />
-          <Fact label="Safety" value={room.safetyState} />
+          <Fact label="Chat" value={chatLabel(room)} />
+          {room.safetyState === "suspended" || room.safetyState === "rejected" || room.safetyState === "quarantined" ? <Fact label="Availability" value="Safety review in progress" /> : null}
         </div>
       </section>
 
@@ -104,6 +98,32 @@ function LiveAccessPanel({ initialMessages, room }: { initialMessages: LiveChatP
       <LiveInteractionPanel initialMessages={initialMessages} room={room} />
     </aside>
   );
+}
+
+function roomStateLabel(state: LiveRoom["state"]) {
+  if (state === "scheduled") return "Upcoming";
+  if (state === "waiting") return "Starting soon";
+  if (state === "live") return "Live";
+  if (state === "replay_ready") return "Replay";
+  if (state === "suspended") return "Paused";
+  return "Ended";
+}
+
+function liveAccessLabel(room: LiveRoom) {
+  if (room.accessState === "allowed") return "Ready to watch";
+  return room.accessState === "membership_required" ? "Membership required" : "Event Access required";
+}
+
+function audienceLabel(mode: LiveRoom["accessMode"]) {
+  if (mode === "public") return "Everyone";
+  if (mode === "profile_members") return "Members";
+  return "Event guests";
+}
+
+function chatLabel(room: LiveRoom) {
+  if (!room.chat.enabled || room.chat.accessState === "closed") return "Closed";
+  if (room.chat.accessState === "members_only") return "Members only";
+  return "Open";
 }
 
 function Fact({ label, value }: { label: string; value: string }) {

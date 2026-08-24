@@ -89,8 +89,8 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   await page.goto("/app/wallet");
   await expect(page.getByRole("heading", { name: "Funding and receipts" })).toBeVisible();
   await expect(page.getByText("Primary wallet")).toBeVisible();
-  await expect(page.getByText("backend settlement only")).toBeVisible();
-  await expect(page.getByText("Funding sessions do not unlock")).toBeVisible();
+  await expect(page.getByText("Access after confirmation")).toBeVisible();
+  await expect(page.getByText("Funding alone does not unlock")).toBeVisible();
 
   await page.goto("/age");
   await expect(page.getByRole("heading", { name: "Confirm you're 18+" })).toBeVisible();
@@ -154,7 +154,7 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   expect(createLayout.scrollWidth).toBe(createLayout.clientWidth);
 
   await page.goto(`/content/${contentId}`);
-  await expect(page.getByRole("heading", { name: "Media viewer" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Aria Moon’s post" })).toBeVisible();
   await expect(page.getByText("Locked media")).toBeVisible();
   await page.getByRole("button", { name: "Unlock content" }).click();
   await expect(page.getByText("The wallet approval is not payment proof.")).toBeVisible();

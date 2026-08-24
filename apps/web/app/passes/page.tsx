@@ -14,7 +14,7 @@ export default async function PassesPage() {
     <AppShell>
       <section className="grid gap-5">
         <PageHeader eyebrow="Passes" title="My Event Access">
-          Backend-issued passes and check-in state for events.
+          Keep your event entry passes and check-in details in one place.
         </PageHeader>
 
         {passesResult.ok ? (
@@ -31,8 +31,7 @@ function PassGrid({ passes }: { passes: EventAccessPassPage }) {
   if (passes.items.length === 0) {
     return (
       <EmptyState title="No passes yet">
-          Backend-issued Event Access passes and QR tokens will appear here after confirmed
-          settlement or creator approval.
+          Event Access passes will appear here after a confirmed purchase or creator approval.
       </EmptyState>
     );
   }

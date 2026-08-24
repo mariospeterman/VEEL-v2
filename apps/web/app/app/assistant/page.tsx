@@ -13,8 +13,7 @@ export default async function AssistantPage() {
   return (
     <AppShell>
       <PageHeader action={<StatusPill>No LLM keys</StatusPill>} eyebrow="AI / MCP" title="Scoped assistant access">
-        This is a profile/admin capability projection for MCP-connected clients, not a standalone chatbot.
-        External clients bring their own AI and every tool remains backend-authorized.
+        Connect an external assistant without giving it unrestricted account access. WeVid does not host a chatbot or store your model keys.
       </PageHeader>
 
       <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -25,7 +24,7 @@ export default async function AssistantPage() {
             <p className="text-sm font-medium text-(--muted)">Connection model</p>
             <h2 className="mt-1 text-lg font-semibold tracking-normal">Profile-scoped MCP</h2>
             <div className="mt-4 grid gap-2">
-              <Fact label="Read projection" value={capabilities.ok ? "ready" : "unavailable"} />
+              <Fact label="Account access" value={capabilities.ok ? "Ready" : "Unavailable"} />
               <Fact label="Manage connections" value="/app/settings#mcp" />
               <Fact label="Studio/Enterprise" value="profile tier gated" />
             </div>
@@ -58,7 +57,7 @@ function CapabilityList({ capabilities }: { capabilities: ApiResult<AiCapabiliti
             <div className="min-w-0">
               <p className="font-medium">{capability.scope}</p>
               <p className="mt-1 text-sm text-(--muted)">
-                {capability.allowedTools.length} backend-authorized tools
+                {capability.allowedTools.length} approved tools
               </p>
             </div>
             <StatusPill tone={capability.canStartSession ? "good" : "warn"}>

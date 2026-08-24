@@ -15,10 +15,9 @@ export function ContentUnlockPanel({ contentId, accessState }: ContentUnlockPane
     <section className="rounded border border-(--line) bg-(--panel) p-4" id="unlock">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold">Access</p>
-          <p className="mt-1 text-sm text-(--muted)">Backend entitlement required</p>
+          <p className="text-sm font-semibold">Watch this post</p>
+          <p className="mt-1 text-sm text-(--muted)">{accessSummary(accessState)}</p>
         </div>
-        <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-medium uppercase text-(--accent-strong)">{accessState}</span>
       </div>
       <div className="mt-5 border-t border-(--line) pt-4">
         {needsUnlock ? (
@@ -30,14 +29,21 @@ export function ContentUnlockPanel({ contentId, accessState }: ContentUnlockPane
               return result.paymentIntent;
             }}
             ctaLabel="Unlock content"
-            idleCopy="Review the exact price, accept the checkout terms, then approve in your wallet. Access changes only after backend settlement verification."
+            idleCopy="Review the exact price and terms, then approve in your wallet. Access appears after the payment is confirmed."
             pendingLabel="Preparing unlock"
-            readyCopy="Content access is confirmed by the backend entitlement projection."
+            readyCopy="Your confirmed access will appear here automatically."
           />
         ) : (
-          <p className="text-sm leading-6 text-(--muted)">Full access is already reflected by the backend projection.</p>
+          <p className="text-sm leading-6 text-(--muted)">{accessState === "pass_required" ? "This post is included with its related Event Access Pass." : "You already have access to the full post."}</p>
         )}
       </div>
     </section>
   );
+}
+
+function accessSummary(accessState: string) {
+  if (accessState === "locked" || accessState === "teaser") return "Unlock the full post with one wallet payment.";
+  if (accessState === "pass_required") return "A related Event Access Pass is required.";
+  if (accessState === "subscribed") return "Included with your membership.";
+  return "Full access is ready.";
 }
