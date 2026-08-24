@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "latestMergedBaseline": "6eed18b087e405566815561455a6fa00651acc68",
-  "latestMergedSlice": "Convergence 07 — Remote MCP profile bridge",
-  "latestMergedMigration": "packages/database/migrations/0114_mcp_profile_bridge.sql",
-  "nextPlannedSlice": "Convergence 08 — MCP media and provenance bridge",
-  "nextPlannedBranch": "codex/converge-08-mcp-media-provenance",
+  "latestMergedBaseline": "fe10413d8a28700b15cfdecde386e2807719d3d7",
+  "latestMergedSlice": "Convergence 08 — MCP media and provenance bridge",
+  "latestMergedMigration": "packages/database/migrations/0115_mcp_media_provenance_bridge.sql",
+  "nextPlannedSlice": null,
+  "nextPlannedBranch": null,
   "latestMergedEvidenceStates": [
     "DESIGNED",
     "CODE_COMPLETE",

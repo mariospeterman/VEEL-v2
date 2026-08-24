@@ -103,14 +103,16 @@ const canonicalSlices = new Set(
   ),
 );
 const nextSlice = productionStatus.nextPlannedSlice;
-if (typeof nextSlice !== "string" || !canonicalSlices.has(nextSlice)) {
+if (nextSlice !== null && (typeof nextSlice !== "string" || !canonicalSlices.has(nextSlice))) {
   console.error(
     `Production walk test failed: next planned slice is not in build-plan.md (${nextSlice ?? "missing"}).`,
   );
   process.exit(1);
 }
 
-const nextSliceMarker = `Next planned production slice: **${nextSlice}**.`;
+const nextSliceMarker = nextSlice
+  ? `Next planned production slice: **${nextSlice}**.`
+  : "No further production code slice is planned; only external launch gates remain.";
 for (const [label, source] of [
   ["INDEX.md", index],
   ["build-plan.md", buildPlan],
@@ -210,7 +212,12 @@ if (process.env.GITHUB_TOKEN && process.env.GITHUB_REPOSITORY) {
         `^codex/converge-${latestMergedConvergence}-(?:[a-z0-9]+-)+repairs?$`,
       ).test(activeBranch ?? "")
     : false;
-  if (activePullRequest && activeBranch !== productionStatus.nextPlannedBranch && !isScopedReviewRepair) {
+  if (
+    activePullRequest &&
+    !isScopedReviewRepair &&
+    (typeof productionStatus.nextPlannedBranch !== "string" ||
+      activeBranch !== productionStatus.nextPlannedBranch)
+  ) {
     console.error(
       `Production status drift: active branch ${activeBranch ?? "missing"} does not match planned branch ${productionStatus.nextPlannedBranch}.`,
     );
