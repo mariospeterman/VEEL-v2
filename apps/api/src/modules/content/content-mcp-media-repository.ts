@@ -210,7 +210,7 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
     },
 
     async claimMcpMediaUploadCapability(input) {
-      let auditActorUserId: string | null = null;
+      let capabilityFound = false;
       try {
         return await withPostgresTransaction(sql, async (transaction) => {
         const rows = await transaction<Array<CapabilityRow & {
@@ -254,7 +254,7 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
           for update of capability, content
         `;
         const capability = rows[0];
-        auditActorUserId = capability?.actor_user_id ?? null;
+        capabilityFound = Boolean(capability);
         if (!capability) throw new McpMediaCapabilityConflictError("not_found");
         if (
           capability.connection_id !== input.connectionId ||
@@ -358,14 +358,17 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
         });
       } catch (error) {
         if (error instanceof McpMediaCapabilityConflictError) {
+          const auditActors = await sql<{ actor_user_id: string }[]>`
+            select actor_user_id from mcp_connections where id = ${input.connectionId} limit 1
+          `;
           await sql`
             insert into audit_events (
               id, actor_user_id, subject_type, subject_id, action, idempotency_key, metadata
             ) values (
-              gen_random_uuid(), ${auditActorUserId}, 'mcp_media_capability',
+              gen_random_uuid(), ${auditActors[0]?.actor_user_id ?? null}, 'mcp_media_capability',
               ${input.capabilityId}, 'mcp_media_capability_redemption_denied',
               ${`${input.capabilityId}:${input.leaseToken}:denied`},
-              ${sql.json({ reason: error.reason, capabilityFound: auditActorUserId !== null })}::jsonb
+              ${sql.json({ reason: error.reason, capabilityFound })}::jsonb
             )
           `;
         }
