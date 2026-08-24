@@ -577,6 +577,32 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
           )
         `;
       }
+      const tenthAssetId = randomUUID();
+      let issueAfterTenthAttachment: Promise<unknown> | null = null;
+      await sql.begin(async (transaction) => {
+        await transaction`select id from content_items where id = ${capacityContentId} for update`;
+        issueAfterTenthAttachment = contentRepository.issueMcpMediaUploadCapability!({
+          ...capabilityInput,
+          contentId: capacityContentId!,
+          requestHash: "26".repeat(32),
+          tokenHash: "36".repeat(32),
+          c2paReference: null
+        });
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        await transaction`
+          insert into media_assets (
+            id, content_item_id, provider, provider_asset_id, provider_state,
+            provider_playable, ready_at, asset_kind, position, required_for_release
+          ) values (
+            ${tenthAssetId}, ${capacityContentId}, 'bunny',
+            ${`capacity-tenth-${randomUUID()}`}, 'stored_private',
+            true, now(), 'image', 9, true
+          )
+        `;
+      });
+      await expect(issueAfterTenthAttachment!).resolves.toBeNull();
+      await sql`delete from media_assets where id = ${tenthAssetId}`;
+
       const capacityTokens = ["14".repeat(32), "15".repeat(32)];
       const capacityRequests = ["24".repeat(32), "25".repeat(32)];
       const capacityCapabilities = await Promise.all(capacityTokens.map((token, index) =>

@@ -499,6 +499,7 @@ describe("external MCP connector foundation", () => {
     expect(contentRepository.capabilityInputs).toHaveLength(1);
     for (const [field, value] of [
       ["sourceLineageReference", "urn:wevid:access_token"],
+      ["sourceLineageReference", "https://example.test/access%255ftoken/SECRET"],
       ["workflowProviderReference", "client-secret"],
       ["c2paReference", "https://creator:password@example.test/claim"]
     ] as const) {
@@ -522,6 +523,45 @@ describe("external MCP connector foundation", () => {
       });
       expect(rejectedReference.json().error.message).toContain("cannot contain prompts or credentials");
     }
+    expect(contentRepository.capabilityInputs).toHaveLength(1);
+    await app.close();
+  });
+
+  it("returns a newly issued capability when ancillary MCP persistence fails", async () => {
+    const mcpRepository = new FakeMcpRepository();
+    const contentRepository = new FakeContentRepository();
+    const app = await buildApi(testDependencies({ mcpRepository, contentRepository }));
+    await app.ready();
+    const token = await createCreatorToken(app, ["creator.drafts.write", "creator.media.label"]);
+    mcpRepository.recordToolCall = async () => {
+      throw new Error("ancillary audit persistence unavailable");
+    };
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        jsonrpc: "2.0",
+        id: 37,
+        method: "tools/call",
+        params: {
+          name: "creator_prepare_private_media_upload",
+          arguments: {
+            requestId: randomUUID(),
+            contentId: "00000000-0000-4000-8000-000000000099",
+            mimeType: "image/webp",
+            provenance: { originClassification: "ai_generated", sourceKind: "generated" }
+          }
+        }
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().result.structuredContent.capability).toMatchObject({
+      status: "issued",
+      capabilityToken: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/)
+    });
     expect(contentRepository.capabilityInputs).toHaveLength(1);
     await app.close();
   });

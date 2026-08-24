@@ -608,6 +608,9 @@ function optionalStructuredProvenanceReference(
 ): string | null {
   const reference = optionalProvenanceReference(value, field, maxLength);
   if (!reference) return null;
+  if (reference.includes("%")) {
+    throw new McpToolValidationError(`${field} must be a credential-free HTTPS URL or URN`);
+  }
   if (/^urn:[a-z0-9][a-z0-9-]{0,31}:[A-Za-z0-9][A-Za-z0-9._~:/-]*$/i.test(reference)) {
     return reference;
   }
@@ -642,11 +645,17 @@ function optionalOpaqueProvenanceReference(
 }
 
 function safeDecodeReference(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
+  let decoded = value;
+  for (let depth = 0; depth < value.length; depth += 1) {
+    try {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) return decoded;
+      decoded = next;
+    } catch {
+      return decoded;
+    }
   }
+  return decoded;
 }
 
 function parsePoll(value: unknown): { question: string; options: string[]; closesAt?: string | null } {

@@ -26,7 +26,7 @@ describe("content publish repository", () => {
     await expect(repository.publishOwnedContent!({
       supabaseUserId: "00000000-0000-4000-8000-000000000001",
       contentId: "00000000-0000-4000-8000-000000000040",
-      idempotencyKey: "publish-provenance-gate-1"
+      idempotencyKey: "test"
     })).rejects.toBeInstanceOf(ContentPublishConflictError);
 
     const publishQuery = queries.find((query) => query.includes("with actor as"));

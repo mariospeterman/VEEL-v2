@@ -14,6 +14,7 @@ alter table media_assets
     source_lineage_reference is null
     or (
       char_length(source_lineage_reference) between 1 and 500
+      and source_lineage_reference !~ '%'
       and (
         source_lineage_reference ~ '^https://[^/?#@[:space:]]+(/[^?#[:space:]]*)?$'
         or source_lineage_reference ~* '^urn:[a-z0-9][a-z0-9-]{0,31}:[a-z0-9][a-z0-9._~:/-]*$'
@@ -33,6 +34,7 @@ alter table media_assets
     c2pa_reference is null
     or (
       char_length(c2pa_reference) between 1 and 500
+      and c2pa_reference !~ '%'
       and (
         c2pa_reference ~ '^https://[^/?#@[:space:]]+(/[^?#[:space:]]*)?$'
         or c2pa_reference ~* '^urn:[a-z0-9][a-z0-9-]{0,31}:[a-z0-9][a-z0-9._~:/-]*$'
@@ -109,6 +111,7 @@ create table mcp_media_upload_capabilities (
     source_lineage_reference is null
     or (
       char_length(source_lineage_reference) between 1 and 500
+      and source_lineage_reference !~ '%'
       and (
         source_lineage_reference ~ '^https://[^/?#@[:space:]]+(/[^?#[:space:]]*)?$'
         or source_lineage_reference ~* '^urn:[a-z0-9][a-z0-9-]{0,31}:[a-z0-9][a-z0-9._~:/-]*$'
@@ -128,6 +131,7 @@ create table mcp_media_upload_capabilities (
     c2pa_reference is null
     or (
       char_length(c2pa_reference) between 1 and 500
+      and c2pa_reference !~ '%'
       and (
         c2pa_reference ~ '^https://[^/?#@[:space:]]+(/[^?#[:space:]]*)?$'
         or c2pa_reference ~* '^urn:[a-z0-9][a-z0-9-]{0,31}:[a-z0-9][a-z0-9._~:/-]*$'

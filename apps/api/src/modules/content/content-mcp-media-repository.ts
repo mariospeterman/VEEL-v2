@@ -104,16 +104,10 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
         const drafts = await transaction<{
           actor_user_id: string;
           media_type: string;
-          asset_count: number;
         }[]>`
           select
             content.creator_user_id as actor_user_id,
-            content.media_type,
-            (
-              select count(*)::integer
-              from media_assets asset
-              where asset.content_item_id = content.id and asset.retired_at is null
-            ) as asset_count
+            content.media_type
           from content_items content
           join users actor on actor.id = content.creator_user_id
           join mcp_connections connection
@@ -130,7 +124,7 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
           for update of content
         `;
         const draft = drafts[0];
-        if (!draft || !acceptsMediaKind(draft.media_type, input.mediaKind) || draft.asset_count >= 10) {
+        if (!draft || !acceptsMediaKind(draft.media_type, input.mediaKind)) {
           return null;
         }
 
@@ -163,6 +157,14 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
             issued: false
           };
         }
+
+        const assetCounts = await transaction<{ asset_count: number }[]>`
+          select count(*)::integer as asset_count
+          from media_assets
+          where content_item_id = ${input.contentId}
+            and retired_at is null
+        `;
+        if ((assetCounts[0]?.asset_count ?? 10) >= 10) return null;
 
         const capabilityId = randomUUID();
         const mediaAssetId = randomUUID();

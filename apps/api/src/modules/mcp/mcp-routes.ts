@@ -569,21 +569,32 @@ async function handleToolCall(input: {
       analyticsRepository: input.options.analyticsRepository
     });
 
-    await Promise.all([
-      input.options.mcpRepository.touchConnection({ connectionId: input.connection.id }),
-      input.options.mcpRepository.recordToolCall({
-        connectionId: input.connection.id,
-        supabaseUserId: input.connection.supabaseUserId,
-        toolName: tool.name,
-        state: "allowed",
-        riskLevel: tool.riskLevel,
-        requiredScopes: tool.requiredScopes,
-        inputSummary: summarizeValue(parsed.arguments),
-        outputSummary: summarizeValue(result),
-        inputRedacted: redactedToolInput(parsed.arguments),
-        outputRedacted: redactedToolInput(result)
-      })
-    ]);
+    try {
+      await Promise.all([
+        input.options.mcpRepository.touchConnection({ connectionId: input.connection.id }),
+        input.options.mcpRepository.recordToolCall({
+          connectionId: input.connection.id,
+          supabaseUserId: input.connection.supabaseUserId,
+          toolName: tool.name,
+          state: "allowed",
+          riskLevel: tool.riskLevel,
+          requiredScopes: tool.requiredScopes,
+          inputSummary: summarizeValue(parsed.arguments),
+          outputSummary: summarizeValue(result),
+          inputRedacted: redactedToolInput(parsed.arguments),
+          outputRedacted: redactedToolInput(result)
+        })
+      ]);
+    } catch (persistenceError) {
+      if (!isFreshPrivateMediaCapabilityResult(tool.name, result)) throw persistenceError;
+      // Capability issuance already writes its durable audit event in the same
+      // transaction. Ancillary MCP activity persistence must not suppress the
+      // only response that contains this one-time secret.
+      input.request.log.warn(
+        { error: persistenceError, connectionId: input.connection.id },
+        "MCP capability issued despite ancillary activity persistence failure"
+      );
+    }
 
     return input.reply.send({
       jsonrpc: "2.0",
@@ -614,6 +625,19 @@ async function handleToolCall(input: {
     }
     return input.reply.send(jsonRpcError(input.id, -32603, message));
   }
+}
+
+function isFreshPrivateMediaCapabilityResult(toolName: string, result: unknown): boolean {
+  if (toolName !== "creator_prepare_private_media_upload" || !result || typeof result !== "object") {
+    return false;
+  }
+  const capability = (result as { capability?: unknown }).capability;
+  return Boolean(
+    capability &&
+    typeof capability === "object" &&
+    (capability as { status?: unknown }).status === "issued" &&
+    typeof (capability as { capabilityToken?: unknown }).capabilityToken === "string"
+  );
 }
 
 async function verifyMcpManagementAccess(
