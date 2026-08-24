@@ -166,9 +166,15 @@ export const mcpToolDefinitions: McpToolDefinition[] = [
             enum: ["ai_assisted", "ai_generated", "materially_ai_manipulated"]
           },
           sourceKind: { type: "string", enum: ["generated", "edited", "composited", "unknown"] },
-          sourceLineageReference: { type: ["string", "null"], maxLength: 500 },
-          workflowProviderReference: { type: ["string", "null"], maxLength: 120 },
-          c2paReference: { type: ["string", "null"], maxLength: 500 }
+          sourceLineageReference: {
+            type: ["string", "null"], maxLength: 500, pattern: "^(https://|urn:)"
+          },
+          workflowProviderReference: {
+            type: ["string", "null"], maxLength: 120, pattern: "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+          },
+          c2paReference: {
+            type: ["string", "null"], maxLength: 500, pattern: "^(https://|urn:)"
+          }
         },
         required: ["originClassification", "sourceKind"]
       }
@@ -550,29 +556,21 @@ function privateMediaCapabilityInput(value: unknown): {
   ) {
     throw new McpToolValidationError("A supported provenance sourceKind is required");
   }
-  const sourceLineageReference = optionalProvenanceReference(
+  const sourceLineageReference = optionalStructuredProvenanceReference(
     provenanceBody.sourceLineageReference,
     "sourceLineageReference",
     500
   );
-  const workflowProviderReference = optionalProvenanceReference(
+  const workflowProviderReference = optionalOpaqueProvenanceReference(
     provenanceBody.workflowProviderReference,
     "workflowProviderReference",
     120
   );
-  const c2paReference = optionalProvenanceReference(
+  const c2paReference = optionalStructuredProvenanceReference(
     provenanceBody.c2paReference,
     "c2paReference",
     500
   );
-  if (c2paReference && !c2paReference.startsWith("https://") && !c2paReference.startsWith("urn:")) {
-    throw new McpToolValidationError("c2paReference must be an HTTPS or URN reference");
-  }
-  for (const reference of [sourceLineageReference, workflowProviderReference]) {
-    if (reference && /(prompt|api[_ -]?key|credential)\s*[:=]/i.test(reference)) {
-      throw new McpToolValidationError("Provenance references cannot contain prompts or credentials");
-    }
-  }
   return {
     requestId,
     contentId,
@@ -592,7 +590,63 @@ function optionalProvenanceReference(value: unknown, field: string, maxLength: n
   if (typeof value !== "string" || !value.trim() || value.trim().length > maxLength) {
     throw new McpToolValidationError(`${field} must be a bounded string or null`);
   }
-  return value.trim();
+  const reference = value.trim();
+  const decoded = safeDecodeReference(reference);
+  if (
+    /(?:prompt|api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|password|passwd|credential|private[-_ ]?key|client[-_ ]?secret|authorization|bearer|cookie|session[-_ ]?id)/i.test(decoded) ||
+    /-----begin [^-]+ private key-----/i.test(decoded)
+  ) {
+    throw new McpToolValidationError("Provenance references cannot contain prompts or credentials");
+  }
+  return reference;
+}
+
+function optionalStructuredProvenanceReference(
+  value: unknown,
+  field: string,
+  maxLength: number
+): string | null {
+  const reference = optionalProvenanceReference(value, field, maxLength);
+  if (!reference) return null;
+  if (/^urn:[a-z0-9][a-z0-9-]{0,31}:[A-Za-z0-9][A-Za-z0-9._~:/-]*$/i.test(reference)) {
+    return reference;
+  }
+  try {
+    const url = new URL(reference);
+    if (
+      url.protocol === "https:" &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash
+    ) {
+      return reference;
+    }
+  } catch {
+    // The normalized validation error below is the public contract.
+  }
+  throw new McpToolValidationError(`${field} must be a credential-free HTTPS URL or URN`);
+}
+
+function optionalOpaqueProvenanceReference(
+  value: unknown,
+  field: string,
+  maxLength: number
+): string | null {
+  const reference = optionalProvenanceReference(value, field, maxLength);
+  if (!reference) return null;
+  if (!/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(reference)) {
+    throw new McpToolValidationError(`${field} must be an opaque provider identifier`);
+  }
+  return reference;
+}
+
+function safeDecodeReference(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function parsePoll(value: unknown): { question: string; options: string[]; closesAt?: string | null } {

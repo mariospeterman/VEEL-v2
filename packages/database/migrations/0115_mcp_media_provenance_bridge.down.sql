@@ -51,6 +51,8 @@ for each row execute function private.bump_content_asset_revision();
 alter table media_assets
   drop constraint if exists media_assets_c2pa_reference_check,
   drop constraint if exists media_assets_workflow_provider_reference_check,
+  drop constraint if exists media_assets_source_lineage_reference_check,
+  drop constraint if exists media_assets_assistant_origin_check,
   drop constraint if exists media_assets_source_kind_check,
   drop column if exists source_kind;
 

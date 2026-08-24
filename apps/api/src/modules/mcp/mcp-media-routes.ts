@@ -40,6 +40,7 @@ export async function registerMcpMediaRoutes(
       const capabilityToken = request.headers["x-wevid-media-capability"];
       if (
         typeof params.capabilityId !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(params.capabilityId) ||
         typeof capabilityToken !== "string" ||
         capabilityToken.length < 32 ||
         capabilityToken.length > 256

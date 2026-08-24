@@ -301,8 +301,9 @@ export function createContentMediaRepositoryMethods(
         const draftRows = await transaction<{
           content_item_id: string;
           asset_revision: number;
+          source_kind: string | null;
         }[]>`
-          select content.id as content_item_id, content.asset_revision
+          select content.id as content_item_id, content.asset_revision, asset.source_kind
           from media_assets asset
           join content_items content on content.id = asset.content_item_id
           where asset.id = ${input.mediaAssetId}
@@ -316,6 +317,9 @@ export function createContentMediaRepositoryMethods(
         if (!draft) return null;
         if (Number(draft.asset_revision) !== input.expectedCompositionRevision) {
           throw new ContentImageUploadConflictError("draft_locked");
+        }
+        if (draft.source_kind !== null && input.originClassification === "human_created") {
+          throw new ContentImageUploadConflictError("provenance_locked");
         }
 
         const assets = await transaction<{

@@ -316,6 +316,16 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
         compositionRevision: changedClaim!.compositionRevision + 1,
         asset: { provenanceReviewState: "confirmed", visibleLabelState: "ai_assisted" }
       });
+      await expect(contentRepository.updateOwnedMediaAsset!({
+        supabaseUserId: creatorId,
+        mediaAssetId: issued!.mediaAssetId,
+        expectedCompositionRevision: rereviewed!.compositionRevision,
+        idempotencyKey: `integration-human-origin-rejected-${randomUUID()}`,
+        requestHash: "4".repeat(64),
+        altText: null,
+        altTextProvided: false,
+        originClassification: "human_created"
+      })).rejects.toMatchObject({ reason: "provenance_locked" });
 
       const quotaDraft = await contentRepository.createDraft({
         ...createInput,

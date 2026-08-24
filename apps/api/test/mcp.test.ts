@@ -339,6 +339,20 @@ describe("external MCP connector foundation", () => {
       prepared.json().result.structuredContent.capability.capabilityToken
     );
 
+    const invalidCapabilityPath = await app.inject({
+      method: "POST",
+      url: "/v1/mcp/media/uploads/not-a-uuid",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "x-wevid-media-capability": prepared.json().result.structuredContent.capability.capabilityToken,
+        "content-type": "image/webp"
+      },
+      payload: Buffer.from("invalid-path-is-rejected-before-media-work")
+    });
+    expect(invalidCapabilityPath.statusCode).toBe(400);
+    expect(invalidCapabilityPath.json()).toMatchObject({ code: "validation_failed" });
+    expect(contentRepository.claimInputs).toHaveLength(0);
+
     const sourceImage = await sharp({
       create: { width: 7, height: 4, channels: 3, background: { r: 50, g: 120, b: 200 } }
     }).webp().toBuffer();
@@ -472,6 +486,32 @@ describe("external MCP connector foundation", () => {
       }
     });
     expect(forbiddenOrigin.json().error.message).toContain("supported AI origin classification");
+    expect(contentRepository.capabilityInputs).toHaveLength(1);
+    for (const [field, value] of [
+      ["sourceLineageReference", "urn:wevid:access_token"],
+      ["workflowProviderReference", "client-secret"],
+      ["c2paReference", "https://creator:password@example.test/claim"]
+    ] as const) {
+      const rejectedReference = await app.inject({
+        method: "POST",
+        url: "/mcp",
+        headers: { authorization: `Bearer ${token}` },
+        payload: {
+          jsonrpc: "2.0",
+          id: 36,
+          method: "tools/call",
+          params: {
+            name: "creator_prepare_private_media_upload",
+            arguments: {
+              ...args,
+              requestId: randomUUID(),
+              provenance: { ...args.provenance, [field]: value }
+            }
+          }
+        }
+      });
+      expect(rejectedReference.json().error.message).toContain("cannot contain prompts or credentials");
+    }
     expect(contentRepository.capabilityInputs).toHaveLength(1);
     await app.close();
   });

@@ -413,6 +413,8 @@ export async function registerContentUploadRoutes(
           message:
             error.reason === "idempotency_conflict"
               ? "Idempotency-Key was already used for different asset changes"
+              : error.reason === "provenance_locked"
+                ? "Assistant-origin media cannot be relabeled as human-created"
               : "The draft changed; refresh it before editing this asset"
         });
       }

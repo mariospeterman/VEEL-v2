@@ -7,15 +7,37 @@ alter table media_assets
   add constraint media_assets_source_kind_check check (
     source_kind is null or source_kind in ('generated', 'edited', 'composited', 'unknown')
   ),
+  add constraint media_assets_assistant_origin_check check (
+    source_kind is null or origin_classification <> 'human_created'
+  ),
+  add constraint media_assets_source_lineage_reference_check check (
+    source_lineage_reference is null
+    or (
+      char_length(source_lineage_reference) between 1 and 500
+      and (
+        source_lineage_reference ~ '^https://[^/?#@[:space:]]+(/[^?#[:space:]]*)?$'
+        or source_lineage_reference ~* '^urn:[a-z0-9][a-z0-9-]{0,31}:[a-z0-9][a-z0-9._~:/-]*$'
+      )
+      and source_lineage_reference !~* '(prompt|api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|password|passwd|credential|private[-_ ]?key|client[-_ ]?secr[e]t|authorization|bearer|cookie|session[-_ ]?id)'
+    )
+  ),
   add constraint media_assets_workflow_provider_reference_check check (
     workflow_provider_reference is null
-    or char_length(workflow_provider_reference) between 1 and 120
+    or (
+      char_length(workflow_provider_reference) between 1 and 120
+      and workflow_provider_reference ~ '^[A-Za-z0-9][A-Za-z0-9._/-]*$'
+      and workflow_provider_reference !~* '(prompt|api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|password|passwd|credential|private[-_ ]?key|client[-_ ]?secr[e]t|authorization|bearer|cookie|session[-_ ]?id)'
+    )
   ),
   add constraint media_assets_c2pa_reference_check check (
     c2pa_reference is null
     or (
       char_length(c2pa_reference) between 1 and 500
-      and (c2pa_reference ~ '^https://' or c2pa_reference ~ '^urn:')
+      and (
+        c2pa_reference ~ '^https://[^/?#@[:space:]]+(/[^?#[:space:]]*)?$'
+        or c2pa_reference ~* '^urn:[a-z0-9][a-z0-9-]{0,31}:[a-z0-9][a-z0-9._~:/-]*$'
+      )
+      and c2pa_reference !~* '(prompt|api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|password|passwd|credential|private[-_ ]?key|client[-_ ]?secr[e]t|authorization|bearer|cookie|session[-_ ]?id)'
     )
   );
 
@@ -87,18 +109,30 @@ create table mcp_media_upload_capabilities (
     source_lineage_reference is null
     or (
       char_length(source_lineage_reference) between 1 and 500
-      and source_lineage_reference !~* '(prompt|api[_ -]?key|credential)\s*[:=]'
+      and (
+        source_lineage_reference ~ '^https://[^/?#@[:space:]]+(/[^?#[:space:]]*)?$'
+        or source_lineage_reference ~* '^urn:[a-z0-9][a-z0-9-]{0,31}:[a-z0-9][a-z0-9._~:/-]*$'
+      )
+      and source_lineage_reference !~* '(prompt|api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|password|passwd|credential|private[-_ ]?key|client[-_ ]?secr[e]t|authorization|bearer|cookie|session[-_ ]?id)'
     )
   ),
   check (
     workflow_provider_reference is null
-    or char_length(workflow_provider_reference) between 1 and 120
+    or (
+      char_length(workflow_provider_reference) between 1 and 120
+      and workflow_provider_reference ~ '^[A-Za-z0-9][A-Za-z0-9._/-]*$'
+      and workflow_provider_reference !~* '(prompt|api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|password|passwd|credential|private[-_ ]?key|client[-_ ]?secr[e]t|authorization|bearer|cookie|session[-_ ]?id)'
+    )
   ),
   check (
     c2pa_reference is null
     or (
       char_length(c2pa_reference) between 1 and 500
-      and (c2pa_reference ~ '^https://' or c2pa_reference ~ '^urn:')
+      and (
+        c2pa_reference ~ '^https://[^/?#@[:space:]]+(/[^?#[:space:]]*)?$'
+        or c2pa_reference ~* '^urn:[a-z0-9][a-z0-9-]{0,31}:[a-z0-9][a-z0-9._~:/-]*$'
+      )
+      and c2pa_reference !~* '(prompt|api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|password|passwd|credential|private[-_ ]?key|client[-_ ]?secr[e]t|authorization|bearer|cookie|session[-_ ]?id)'
     )
   ),
   check (last_failure_code is null or char_length(last_failure_code) between 1 and 120)

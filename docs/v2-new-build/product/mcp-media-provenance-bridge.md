@@ -55,8 +55,11 @@ not readiness, safety approval, or publication evidence.
 MCP-originated assets must declare one of `ai_assisted`, `ai_generated`, or
 `materially_ai_manipulated`; an assistant cannot claim that an upload is human-created. The
 normalized record may include a bounded source kind, opaque lineage reference, workflow provider,
-and HTTPS/URN C2PA reference. References are claims, not validation results. Prompts, credentials,
-personal data, and raw generation-provider payloads are rejected and never persisted.
+and HTTPS/URN C2PA reference. References are claims, not validation results. Lineage and C2PA claims
+accept only credential-free HTTPS URLs without userinfo/query/fragment or bounded URNs; workflow
+references use opaque identifier characters only. Prompts, credential vocabulary, private-key
+material, personal data, and raw generation-provider payloads are rejected at the API and database
+boundaries and never persisted.
 
 Every MCP-originated asset begins with provenance review `pending`, a policy-derived visible label,
 and machine-readable marking `pending` only when a C2PA reference was supplied. Provider readiness,
