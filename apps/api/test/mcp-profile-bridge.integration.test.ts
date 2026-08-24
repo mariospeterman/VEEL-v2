@@ -379,6 +379,100 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
         failureCode: "integration_release"
       });
 
+      const sharedQuotaCapability = await contentRepository.issueMcpMediaUploadCapability!({
+        ...capabilityInput,
+        contentId,
+        requestHash: "9".repeat(64),
+        tokenHash: "9".repeat(64),
+        c2paReference: null
+      });
+      const sharedQuotaImageId = randomUUID();
+      const sharedQuotaResults = await Promise.allSettled([
+        contentRepository.claimMcpMediaUploadCapability!({
+          capabilityId: sharedQuotaCapability!.id,
+          connectionId: connection.id,
+          supabaseUserId: creatorId,
+          tokenHash: "9".repeat(64),
+          declaredMimeType: "image/webp",
+          quotaWindowStart: new Date(Date.now() - 86_400_000),
+          dailyMediaUploadQuota: 2,
+          leaseToken: randomUUID(),
+          leasedUntil: new Date(Date.now() + 60_000)
+        }),
+        contentRepository.reserveImageAssetUpload!({
+          supabaseUserId: creatorId,
+          contentId: quotaContentId,
+          mediaAssetId: sharedQuotaImageId,
+          idempotencyKey: `shared-quota-image-${randomUUID()}`,
+          requestHash: "2".repeat(64),
+          providerAssetId: `images/${quotaContentId}/${sharedQuotaImageId}.webp`,
+          mimeType: "image/webp",
+          widthPixels: 8,
+          heightPixels: 5,
+          checksumSha256: "2".repeat(64),
+          quotaWindowStart: new Date(Date.now() - 86_400_000),
+          dailyMediaUploadQuota: 2
+        })
+      ]);
+      expect(sharedQuotaResults.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      expect(sharedQuotaResults.find((result) => result.status === "rejected")).toMatchObject({
+        status: "rejected",
+        reason: expect.objectContaining({ reason: "quota_exceeded" })
+      });
+      if (sharedQuotaResults[0]?.status === "fulfilled") {
+        await contentRepository.releaseMcpMediaUploadCapability!({
+          capabilityId: sharedQuotaCapability!.id,
+          connectionId: connection.id,
+          leaseToken: sharedQuotaResults[0].value.leaseToken,
+          failureCode: "integration_shared_quota_release"
+        });
+      }
+
+      const publicationRaceCapability = await contentRepository.issueMcpMediaUploadCapability!({
+        ...capabilityInput,
+        contentId: quotaContentId,
+        requestHash: "0".repeat(64),
+        tokenHash: "0".repeat(64),
+        c2paReference: null
+      });
+      const publicationRaceClaim = await contentRepository.claimMcpMediaUploadCapability!({
+        capabilityId: publicationRaceCapability!.id,
+        connectionId: connection.id,
+        supabaseUserId: creatorId,
+        tokenHash: "0".repeat(64),
+        declaredMimeType: "image/webp",
+        quotaWindowStart: new Date(Date.now() - 86_400_000),
+        dailyMediaUploadQuota: 10,
+        leaseToken: randomUUID(),
+        leasedUntil: new Date(Date.now() + 60_000)
+      });
+      await sql`
+        update content_items set publish_state = 'published' where id = ${quotaContentId}
+      `;
+      await expect(contentRepository.completeMcpMediaUploadCapability!({
+        capabilityId: publicationRaceCapability!.id,
+        connectionId: connection.id,
+        leaseToken: publicationRaceClaim.leaseToken,
+        providerAssetId: `publication-race-${randomUUID()}`,
+        providerState: "stored_private",
+        widthPixels: 8,
+        heightPixels: 5,
+        checksumSha256: "3".repeat(64)
+      })).rejects.toMatchObject({ reason: "draft_locked" });
+      await expect(sql<{ count: number }[]>`
+        select count(*)::integer as count
+        from media_assets where id = ${publicationRaceCapability!.mediaAssetId}
+      `).resolves.toEqual([{ count: 0 }]);
+      await contentRepository.releaseMcpMediaUploadCapability!({
+        capabilityId: publicationRaceCapability!.id,
+        connectionId: connection.id,
+        leaseToken: publicationRaceClaim.leaseToken,
+        failureCode: "integration_publication_race"
+      });
+      await sql`
+        update content_items set publish_state = 'draft' where id = ${quotaContentId}
+      `;
+
       await contentRepository.scheduleMcpMediaProviderCleanup!({
         capabilityId: issued!.id,
         connectionId: connection.id,

@@ -86,11 +86,15 @@ export async function registerContentUploadRoutes(
           return reply.code(creatorAccess.statusCode).send(creatorAccess.body);
         }
 
+        const abusePolicy = await resolveContentCreationAbusePolicy(options.contentRepository);
+        const quotaWindowStart = dailyQuotaWindowStart(
+          new Date(),
+          abusePolicy.rollingWindowHours
+        );
         if (options.contentRepository.countMediaAssetsCreatedSince) {
-          const abusePolicy = await resolveContentCreationAbusePolicy(options.contentRepository);
           const uploadCount = await options.contentRepository.countMediaAssetsCreatedSince({
             supabaseUserId: access.supabaseUserId,
-            since: dailyQuotaWindowStart(new Date(), abusePolicy.rollingWindowHours)
+            since: quotaWindowStart
           });
           if (uploadCount >= abusePolicy.dailyMediaUploadQuota) {
             return reply
@@ -139,7 +143,9 @@ export async function registerContentUploadRoutes(
           mimeType: image.mimeType,
           widthPixels: image.widthPixels,
           heightPixels: image.heightPixels,
-          checksumSha256
+          checksumSha256,
+          quotaWindowStart,
+          dailyMediaUploadQuota: abusePolicy.dailyMediaUploadQuota
         });
 
         if (!reservation.completed) {
@@ -168,6 +174,11 @@ export async function registerContentUploadRoutes(
           return reply.code(400).send({ code: "validation_failed", message: error.message });
         }
         if (error instanceof ContentImageUploadConflictError) {
+          if (error.reason === "quota_exceeded") {
+            return reply
+              .code(429)
+              .send(quotaExceededResponse("Daily media upload quota has been reached"));
+          }
           return reply.code(409).send({
             code: "conflict",
             message:
@@ -229,6 +240,7 @@ export async function registerContentUploadRoutes(
       });
     }
 
+    let unattachedVideoProviderAssetId: string | null = null;
     try {
       const content = await options.contentRepository.findOwnedContentForUpload({
         supabaseUserId: access.supabaseUserId,
@@ -258,11 +270,15 @@ export async function registerContentUploadRoutes(
         return reply.code(creatorAccess.statusCode).send(creatorAccess.body);
       }
 
+      const abusePolicy = await resolveContentCreationAbusePolicy(options.contentRepository);
+      const quotaWindowStart = dailyQuotaWindowStart(
+        new Date(),
+        abusePolicy.rollingWindowHours
+      );
       if (options.contentRepository.countMediaAssetsCreatedSince) {
-        const abusePolicy = await resolveContentCreationAbusePolicy(options.contentRepository);
         const uploadCount = await options.contentRepository.countMediaAssetsCreatedSince({
           supabaseUserId: access.supabaseUserId,
-          since: dailyQuotaWindowStart(new Date(), abusePolicy.rollingWindowHours)
+          since: quotaWindowStart
         });
 
         if (uploadCount >= abusePolicy.dailyMediaUploadQuota) {
@@ -284,21 +300,22 @@ export async function registerContentUploadRoutes(
         title: content.caption || body.fileName,
         mimeType: body.mimeType
       });
+      unattachedVideoProviderAssetId = providerSession.providerAssetId;
 
       const mediaAsset = await options.contentRepository.createMediaAsset({
+        supabaseUserId: access.supabaseUserId,
         contentId: content.id,
         provider: providerSession.provider,
         providerAssetId: providerSession.providerAssetId,
-        providerState: "created"
+        providerState: "created",
+        quotaWindowStart,
+        dailyMediaUploadQuota: abusePolicy.dailyMediaUploadQuota
       });
 
       if (!mediaAsset?.id) {
-        request.log.warn("Media asset record was not created for upload session");
-        return reply.code(503).send({
-          code: "service_unavailable",
-          message: "Media upload session was not persisted"
-        });
+        throw new MediaUploadProviderError();
       }
+      unattachedVideoProviderAssetId = null;
 
       return reply.code(201).send({
         uploadUrl: providerSession.uploadUrl,
@@ -308,6 +325,30 @@ export async function registerContentUploadRoutes(
         expiresAt: providerSession.expiresAt.toISOString()
       });
     } catch (error) {
+      if (unattachedVideoProviderAssetId) {
+        try {
+          await options.mediaUploadProvider.deleteProviderAsset?.({
+            providerAssetId: unattachedVideoProviderAssetId,
+            assetKind: "video"
+          });
+        } catch (cleanupError) {
+          request.log.warn(
+            { cleanupError },
+            "Unattached private video requires provider cleanup"
+          );
+        }
+      }
+      if (error instanceof ContentImageUploadConflictError) {
+        if (error.reason === "quota_exceeded") {
+          return reply
+            .code(429)
+            .send(quotaExceededResponse("Daily media upload quota has been reached"));
+        }
+        return reply.code(409).send({
+          code: "conflict",
+          message: "The media draft changed; refresh it before retrying"
+        });
+      }
       if (error instanceof ContentRepositoryConfigurationError) {
         request.log.warn({ error }, "Content repository is not configured");
         return reply.code(503).send({

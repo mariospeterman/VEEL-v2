@@ -329,7 +329,10 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
 
     async completeMcpMediaUploadCapability(input) {
       return withPostgresTransaction(sql, async (transaction) => {
-        const capabilities = await transaction<CapabilityRow[]>`
+        const capabilities = await transaction<Array<CapabilityRow & {
+          asset_count: number;
+          expired: boolean;
+        }>>`
           select
             capability.id, capability.connection_id, capability.actor_user_id,
             capability.content_item_id, capability.reserved_media_asset_id,
@@ -338,9 +341,15 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
             capability.source_lineage_reference, capability.workflow_provider_reference,
             capability.c2pa_reference, capability.state, capability.lease_token,
             capability.leased_until,
-            capability.expires_at, actor.supabase_user_id as actor_supabase_user_id,
+            capability.expires_at, capability.expires_at <= now() as expired,
+            actor.supabase_user_id as actor_supabase_user_id,
             content.media_type, content.visibility, content.nsfw_label,
-            content.state as content_state, content.publish_state
+            content.state as content_state, content.publish_state,
+            (
+              select count(*)::integer
+              from media_assets asset
+              where asset.content_item_id = content.id and asset.retired_at is null
+            ) as asset_count
           from mcp_media_upload_capabilities capability
           join users actor on actor.id = capability.actor_user_id
           join content_items content on content.id = capability.content_item_id
@@ -352,6 +361,17 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
         `;
         const capability = capabilities[0];
         if (!capability) throw new McpMediaCapabilityConflictError("lease_lost");
+        if (capability.expired) throw new McpMediaCapabilityConflictError("expired");
+        if (
+          capability.content_state === "deleted" ||
+          capability.visibility !== "private" ||
+          capability.nsfw_label !== "none" ||
+          !["draft", "unpublished"].includes(capability.publish_state) ||
+          !acceptsMediaKind(capability.media_type, capability.media_kind) ||
+          capability.asset_count >= 10
+        ) {
+          throw new McpMediaCapabilityConflictError("draft_locked");
+        }
 
         await transaction`
           insert into media_assets (

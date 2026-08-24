@@ -338,10 +338,13 @@ export interface OwnedContentForUpload {
 }
 
 export interface CreateMediaAssetInput {
+  supabaseUserId: string;
   contentId: string;
   provider: "bunny";
   providerAssetId: string;
   providerState: string;
+  quotaWindowStart: Date;
+  dailyMediaUploadQuota: number;
 }
 
 export interface ReserveImageAssetUploadInput {
@@ -355,6 +358,8 @@ export interface ReserveImageAssetUploadInput {
   widthPixels: number;
   heightPixels: number;
   checksumSha256: string;
+  quotaWindowStart: Date;
+  dailyMediaUploadQuota: number;
 }
 
 export interface ReservedImageAssetUpload {

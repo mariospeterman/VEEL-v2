@@ -45,6 +45,43 @@ export function createContentMediaRepositoryMethods(
     },
     async createMediaAsset(input) {
       const rows = await withPostgresTransaction(sql, async (transaction) => {
+        const drafts = await transaction<{
+          actor_user_id: string;
+          media_type: string;
+          asset_count: number;
+        }[]>`
+          select
+            content.creator_user_id as actor_user_id,
+            content.media_type,
+            (
+              select count(*)::integer
+              from media_assets asset
+              where asset.content_item_id = content.id and asset.retired_at is null
+            ) as asset_count
+          from content_items content
+          join users actor on actor.id = content.creator_user_id
+          where content.id = ${input.contentId}
+            and actor.supabase_user_id = ${input.supabaseUserId}
+            and actor.state = 'active'
+            and content.state <> 'deleted'
+            and content.publish_state in ('draft', 'unpublished')
+          for update of content
+        `;
+        const draft = drafts[0];
+        if (
+          !draft ||
+          !["bit", "clip", "vod", "live_replay", "carousel"].includes(draft.media_type) ||
+          draft.asset_count >= 10
+        ) {
+          throw new ContentImageUploadConflictError("draft_locked");
+        }
+        await assertCreatorMediaQuota(
+          transaction,
+          draft.actor_user_id,
+          input.quotaWindowStart,
+          input.dailyMediaUploadQuota
+        );
+
         const mediaRows = await transaction<{ id: string }[]>`
           with inserted as (
             insert into media_assets (
@@ -172,6 +209,13 @@ export function createContentMediaRepositoryMethods(
             completed: existing[0].provider_state === "stored_private"
           };
         }
+
+        await assertCreatorMediaQuota(
+          transaction,
+          actor.id,
+          input.quotaWindowStart,
+          input.dailyMediaUploadQuota
+        );
 
         await transaction`
           insert into media_assets (
@@ -966,6 +1010,40 @@ export function createContentMediaRepositoryMethods(
       return rows.length > 0;
     }
   };
+}
+
+async function assertCreatorMediaQuota(
+  transaction: postgres.TransactionSql,
+  actorUserId: string,
+  quotaWindowStart: Date,
+  dailyMediaUploadQuota: number
+): Promise<void> {
+  // Every upload path locks the same creator row before its authoritative
+  // count-and-insert transition. MCP provisioning rows reserve their slot
+  // until the matching media asset is attached or the lease is released.
+  await transaction`select id from users where id = ${actorUserId} for update`;
+  const counts = await transaction<{ quota_count: number }[]>`
+    select (
+      select count(*)::integer
+      from media_assets asset
+      join content_items content on content.id = asset.content_item_id
+      where content.creator_user_id = ${actorUserId}
+        and asset.created_at >= ${quotaWindowStart}
+    ) + (
+      select count(*)::integer
+      from mcp_media_upload_capabilities reservation
+      where reservation.actor_user_id = ${actorUserId}
+        and reservation.state = 'provisioning'
+        and reservation.updated_at >= ${quotaWindowStart}
+        and not exists (
+          select 1 from media_assets reserved_asset
+          where reserved_asset.id = reservation.reserved_media_asset_id
+        )
+    ) as quota_count
+  `;
+  if ((counts[0]?.quota_count ?? dailyMediaUploadQuota) >= dailyMediaUploadQuota) {
+    throw new ContentImageUploadConflictError("quota_exceeded");
+  }
 }
 
 function toJsonObject(value: Record<string, unknown>): JsonObject {

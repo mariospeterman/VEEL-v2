@@ -93,7 +93,13 @@ wallet, messaging, moderation, entitlement, age/KYC, or admin tool is registered
 - Draft format and ten-asset limits are checked before capability issue and again before redemption.
 - Upload quotas are backend-owned and apply before provider work; money, membership, and social state
   never increase capacity or priority. A creator-scoped transaction lock and in-flight reservation
-  count keep concurrent redemptions across different drafts within the same rolling limit.
+  count keep concurrent redemptions across different drafts within the same rolling limit. The
+  first-party image and video attachment paths take that same lock and count MCP reservations before
+  their authoritative insert, so assistant and first-party uploads cannot race beyond the allowance.
+- Final attachment revalidates capability expiry plus the exact private, SFW, unpublished draft and
+  media shape while holding the content lock. Publication that wins the race rejects attachment and
+  triggers provider compensation; attachment that wins changes the composition before publication
+  can re-evaluate release readiness.
 - Bunny/provider unavailability leaves the draft private and records only normalized failure state.
 - If immediate deletion of an unattached provider object fails, a cleanup-only media id becomes a
   retired, non-composition asset in the existing provider-cleanup queue. That compensation row does
@@ -106,8 +112,9 @@ wallet, messaging, moderation, entitlement, age/KYC, or admin tool is registered
 ## Automated proof
 
 The slice must prove capability hashing, expiry, exact replay, single redemption, lease recovery,
-cross-user and scope denial, MIME and draft-shape binding, canonical image sanitization, presigned
-video behavior, provider failure compensation, quarantine and moderation-job creation, normalized
-provider readiness, provenance privacy, first-party-only review, release blocking, guarded rollback,
-real-Postgres concurrency, and authenticated desktop/mobile review UX. Provider staging remains a
-separate release-manifest-bound gate and deterministic fixtures never count as provider approval.
+cross-user and scope denial, MIME and draft-shape binding, final attachment/publication exclusion,
+shared first-party/MCP quota serialization, canonical image sanitization, presigned video behavior,
+provider failure compensation, quarantine and moderation-job creation, normalized provider readiness,
+provenance privacy, first-party-only review, release blocking, guarded rollback, real-Postgres
+concurrency, and authenticated desktop/mobile review UX. Provider staging remains a separate
+release-manifest-bound gate and deterministic fixtures never count as provider approval.

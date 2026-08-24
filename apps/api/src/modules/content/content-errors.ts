@@ -33,6 +33,7 @@ export class ContentImageUploadConflictError extends Error {
       | "format_invalid"
       | "idempotency_conflict"
       | "provenance_locked"
+      | "quota_exceeded"
       | "receipt_invalid"
   ) {
     super(reason);

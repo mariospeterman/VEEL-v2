@@ -11,7 +11,8 @@ import { createBunnyStreamUploadAdapter } from "../src/modules/content/media-upl
 import { StaleFeedCursorError } from "../src/modules/content/content-feed-cursor";
 import {
   ContentDraftPollCloseError,
-  ContentDraftQuotaExceededError
+  ContentDraftQuotaExceededError,
+  ContentImageUploadConflictError
 } from "../src/modules/content/content-repository";
 import type {
   ContentItem,
@@ -5254,10 +5255,13 @@ describe("buildApi", () => {
     });
     expect(createdAssets).toEqual([
       {
+        supabaseUserId: "00000000-0000-4000-8000-000000000001",
         contentId: "00000000-0000-4000-8000-000000000040",
         provider: "bunny",
         providerAssetId: "bunny-video-guid",
-        providerState: "created"
+        providerState: "created",
+        quotaWindowStart: expect.any(Date),
+        dailyMediaUploadQuota: 30
       }
     ]);
 
@@ -5462,7 +5466,9 @@ describe("buildApi", () => {
       idempotencyKey: "image-upload-1",
       mimeType: "image/jpeg",
       widthPixels: 4,
-      heightPixels: 7
+      heightPixels: 7,
+      quotaWindowStart: expect.any(Date),
+      dailyMediaUploadQuota: 30
     });
     const reserved = reservationInput as unknown as ReserveImageAssetUploadInput;
     const uploaded = providerInput as unknown as {
@@ -5802,6 +5808,100 @@ describe("buildApi", () => {
     });
     expect(providerCalled).toBe(false);
 
+    await app.close();
+  });
+
+  it("enforces the authoritative upload quota after provider allocation and compensates the orphan", async () => {
+    const deletedProviderAssets: string[] = [];
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        throw new Error("not implemented");
+      },
+      async createMediaAsset(input) {
+        expect(input).toMatchObject({
+          supabaseUserId: "00000000-0000-4000-8000-000000000001",
+          dailyMediaUploadQuota: 30,
+          quotaWindowStart: expect.any(Date)
+        });
+        throw new ContentImageUploadConflictError("quota_exceeded");
+      },
+      async countMediaAssetsCreatedSince() {
+        return 29;
+      },
+      async findContentDetail() {
+        throw new Error("not implemented");
+      },
+      async findContentUnlockOffer() {
+        throw new Error("not implemented");
+      },
+      async findOwnedContentForUpload() {
+        return {
+          id: "00000000-0000-4000-8000-000000000040",
+          mediaType: "vod",
+          caption: "studio cut",
+          nsfwLabel: "none"
+        };
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      }
+    };
+    const mediaUploadProvider: MediaUploadProviderAdapter = {
+      provider: "bunny",
+      isConfigured() {
+        return true;
+      },
+      async createUploadSession() {
+        return {
+          provider: "bunny",
+          providerAssetId: "quota-race-video",
+          uploadUrl: "https://video.bunnycdn.com/tusupload",
+          headers: {},
+          expiresAt: new Date("2026-06-04T23:00:00.000Z")
+        };
+      },
+      async deleteProviderAsset(input) {
+        deletedProviderAssets.push(input.providerAssetId);
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      verificationRepository: creatorVerifiedVerificationRepository(),
+      contentRepository,
+      mediaUploadProvider
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/media/uploads",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "media-upload-quota-race"
+      },
+      payload: {
+        contentId: "00000000-0000-4000-8000-000000000040",
+        fileName: "studio.mp4",
+        mimeType: "video/mp4"
+      }
+    });
+
+    expect(response.statusCode).toBe(429);
+    expect(response.json()).toMatchObject({ code: "rate_limited" });
+    expect(deletedProviderAssets).toEqual(["quota-race-video"]);
     await app.close();
   });
 
