@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: implementation status, known gaps, and next hardening priorities
-Last updated: 2026-08-23
+Last updated: 2026-08-24
 Source of truth: yes
 
 Owns:
@@ -38,19 +38,28 @@ copied into this document. The machine-readable companion is `production-status.
 
 | Field | Current value |
 | --- | --- |
-| Latest merged baseline | `765d23625ee714466b2f2cd1e34f55411081019a` |
-| Latest merged slice | Convergence 05 — Realtime, messaging, and live safety |
-| Latest merged migration | `packages/database/migrations/0112_realtime_messaging_live_safety.sql` |
+| Latest merged baseline | `21f06d2c1e306c5d38ad3c4edc4a966ede05ada3` |
+| Latest merged slice | Convergence 06 — Consumer social experience |
+| Latest merged migration | `packages/database/migrations/0113_consumer_social_privacy.sql` |
 | Latest merged evidence | `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`, `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN` |
 | Known launch blockers | `STAGING_PROVEN`, `PROVIDER_APPROVED`, `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED` remain outstanding. |
-| Next planned slice | Convergence 06 — Consumer social experience |
+| Next planned slice | Convergence 07 — Remote MCP profile bridge |
 
-Next planned production slice: **Convergence 06 — Consumer social experience**.
+Next planned production slice: **Convergence 07 — Remote MCP profile bridge**.
 
 Readiness vocabulary is fixed to `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`,
 `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN`, `STAGING_PROVEN`, `PROVIDER_APPROVED`,
 `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED`. “Accepted” describes a
 design decision; it never means implemented, tested, approved, enabled, or launch-ready.
+
+Merged Convergence 06 provides one accessible consumer action rail and comments sheet with replies,
+comment likes, mention privacy, canonical internal shares, hashtags, polls, genuine search/discovery,
+and privacy self-service over the existing engagement, content, notification, ranking, and audit
+authorities. Migration `0113` is reversible; PR #94 passed its protected contract, database,
+security, and desktop/mobile browser gates and merged as `21f06d2`. A bounded follow-up scopes one
+mobile WebKit removal-status assertion that became ambiguous when the legitimate PWA update status
+was also present; it changes no runtime, provider, contract, migration, or product behavior. Real
+provider and release-convergence evidence remains fail closed behind the recorded external gates.
 
 Merged Convergence 05 uses private scoped Supabase Broadcast only for bounded invalidation and
 ephemeral hints while canonical APIs remain truth. Messages enforce one consent-safe introduction,

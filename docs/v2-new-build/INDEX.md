@@ -22,7 +22,7 @@ Non-goals:
 
 This folder is the canonical WeVid engineering pack. Technical `veel` identifiers remain where compatibility requires them; public product language is WeVid.
 
-Next planned production slice: **Convergence 06 — Consumer social experience**. Stable merged status is in
+Next planned production slice: **Convergence 07 — Remote MCP profile bridge**. Stable merged status is in
 `current-implementation-status.md` and `production-status.json`; transient branch and pull-request
 truth comes from GitHub's single `wevid-active-slice` label.
 
