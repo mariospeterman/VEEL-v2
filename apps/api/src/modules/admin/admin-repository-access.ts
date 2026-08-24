@@ -1,5 +1,6 @@
 import type postgres from "postgres";
 import type { AdminRepository } from "./types.js";
+import { isStaffRole, permissionsForRoles, type AdminPermission, type StaffRole } from "./admin-permissions.js";
 import {
   CountRow,
   NotificationHealthRow,
@@ -15,22 +16,42 @@ import {
 
 export function createAccessRepository(
   sql: postgres.Sql
-): Pick<AdminRepository, "hasAdminAccess" | "getOpsSummary" | "getNotificationHealth" | "retryDeadLetterJob" | "listUsers" | "getUser"> {
-  return {
-    async hasAdminAccess(supabaseUserId) {
-      const rows = await sql<{ allowed: boolean }[]>`
-        select exists (
-          select 1
-          from users u
-          join staff_memberships sm on sm.user_id = u.id
-          where u.supabase_user_id = ${supabaseUserId}
-            and u.state = 'active'
-            and sm.state = 'active'
-            and sm.role in ('owner', 'admin', 'trust_safety', 'finance', 'ops', 'support', 'creator_success', 'event_ops', 'ai_ops', 'readonly_auditor')
-        ) as allowed
-      `;
+): Pick<AdminRepository, "hasAdminAccess" | "hasAdminPermission" | "getStaffAccess" | "getOpsSummary" | "getNotificationHealth" | "retryDeadLetterJob" | "listUsers" | "getUser"> {
+  async function getStaffAccess(supabaseUserId: string) {
+    const rows = await sql<{ user_id: string; roles: string[]; permissions: string[] }[]>`
+      select
+        u.id as user_id,
+        coalesce(array_agg(distinct sm.role::text) filter (where sm.role is not null), array[]::text[]) as roles,
+        coalesce(array_agg(distinct sp.permission_key) filter (
+          where sp.permission_key is not null and sp.revoked_at is null
+        ), array[]::text[]) as permissions
+      from users u
+      join staff_memberships sm
+        on sm.user_id = u.id and sm.state = 'active'
+      left join staff_permissions sp on sp.user_id = u.id and sp.scope = 'global'
+      where u.supabase_user_id = ${supabaseUserId}
+        and u.state = 'active'
+      group by u.id
+    `;
+    const row = rows[0];
+    if (!row) return null;
+    const roles = row.roles.filter(isStaffRole) as StaffRole[];
+    if (!roles.length) return null;
+    return {
+      userId: row.user_id,
+      roles: [...roles].sort(),
+      permissions: permissionsForRoles(roles, row.permissions)
+    };
+  }
 
-      return Boolean(rows[0]?.allowed);
+  return {
+    getStaffAccess,
+    async hasAdminAccess(supabaseUserId) {
+      return Boolean(await getStaffAccess(supabaseUserId));
+    },
+    async hasAdminPermission(supabaseUserId, permission: AdminPermission) {
+      const access = await getStaffAccess(supabaseUserId);
+      return access?.permissions.includes(permission) ?? false;
     },
     async getOpsSummary() {
       const [

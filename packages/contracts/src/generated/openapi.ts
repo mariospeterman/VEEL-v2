@@ -2837,6 +2837,108 @@ export interface paths {
         patch: operations["updateOrganizationMember"];
         trace?: never;
     };
+    "/v1/admin/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resolve the active staff roles and effective permission registry for the current session */
+        get: operations["getAdminCurrentStaff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/staff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List staff memberships and bounded invitations */
+        get: operations["getAdminStaff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/staff/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Invite an existing canonical WeVid user to a bounded staff role */
+        post: operations["inviteAdminStaff"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/staff/memberships/{membershipId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change, suspend, or revoke one staff membership with last-owner protection */
+        patch: operations["updateAdminStaffMembership"];
+        trace?: never;
+    };
+    "/v1/staff/invitations/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List pending staff invitations for the current canonical user */
+        get: operations["getCurrentStaffInvitations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/staff/invitations/{invitationId}/respond": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept or decline one current-user staff invitation */
+        post: operations["respondCurrentStaffInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/ops/summary": {
         parameters: {
             query?: never;
@@ -6158,6 +6260,75 @@ export interface components {
             financeBoundary: "no_custody_no_payout_queue";
             notices: components["schemas"]["OrganizationNotice"][];
         };
+        /** @enum {string} */
+        StaffRole: "owner" | "admin" | "trust_safety" | "finance" | "ops" | "support" | "creator_success" | "event_ops" | "ai_ops" | "compliance" | "readonly_auditor";
+        /** @enum {string} */
+        AdminPermission: "admin.overview.read" | "admin.users.read" | "admin.users.restrict" | "admin.content.read" | "admin.content.moderate" | "admin.reports.read" | "admin.reports.decide" | "admin.live.read" | "admin.live.suspend" | "admin.live.resume" | "admin.events.read" | "admin.events.write" | "admin.payments.read" | "admin.payment_policy.write" | "admin.subscriptions.read" | "admin.subscriptions.recover" | "admin.refunds.read" | "admin.refunds.decide" | "admin.providers.read" | "admin.provider_events.replay" | "admin.queues.read" | "admin.queues.retry" | "admin.analytics.read" | "admin.analytics.recompute" | "admin.organizations.read" | "admin.organizations.write" | "admin.staff.read" | "admin.staff.invite" | "admin.staff.change_role" | "admin.staff.revoke" | "admin.compliance.read" | "admin.compliance.export" | "admin.privacy.read" | "admin.privacy.process" | "admin.support.read" | "admin.support.write" | "admin.ai.read" | "admin.feature_flags.read" | "admin.feature_flags.write" | "admin.audit.read";
+        AdminCurrentStaff: {
+            /** Format: uuid */
+            userId: string;
+            roles: components["schemas"]["StaffRole"][];
+            permissions: components["schemas"]["AdminPermission"][];
+        };
+        AdminStaffMember: {
+            /** Format: uuid */
+            membershipId: string;
+            /** Format: uuid */
+            userId: string;
+            handle: string;
+            displayName: string;
+            role: components["schemas"]["StaffRole"];
+            /** @enum {string} */
+            state: "invited" | "active" | "suspended" | "revoked";
+            /** Format: date-time */
+            createdAt: string;
+        };
+        StaffInvitation: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            targetUserId: string;
+            targetHandle: string;
+            role: components["schemas"]["StaffRole"];
+            /** @enum {string} */
+            state: "pending" | "accepted" | "declined" | "expired" | "revoked";
+            /** Format: uuid */
+            invitedByUserId: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            respondedAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        StaffInvitationPage: {
+            items: components["schemas"]["StaffInvitation"][];
+        };
+        AdminStaffDirectory: {
+            memberships: components["schemas"]["AdminStaffMember"][];
+            invitations: components["schemas"]["StaffInvitation"][];
+        };
+        AdminStaffInvitationRequest: {
+            /** Format: uuid */
+            targetUserId: string;
+            role: components["schemas"]["StaffRole"];
+            expiresInHours: number;
+            reason: string;
+            /** @enum {boolean} */
+            confirmed: true;
+        };
+        AdminStaffMembershipActionRequest: {
+            /** @enum {string} */
+            action: "change_role" | "suspend" | "revoke";
+            role?: components["schemas"]["StaffRole"];
+            reason: string;
+            /** @enum {boolean} */
+            confirmed: true;
+        };
+        StaffInvitationResponseRequest: {
+            /** @enum {string} */
+            decision: "accept" | "decline";
+        };
         AdminOpsSummary: {
             /** @enum {string} */
             providerHealth: "ok" | "degraded" | "down";
@@ -7905,6 +8076,51 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["OrganizationDashboardPage"];
+            };
+        };
+        /** @description Current staff roles and effective permissions */
+        AdminCurrentStaff: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["AdminCurrentStaff"];
+            };
+        };
+        /** @description Staff membership and invitation directory */
+        AdminStaffDirectory: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["AdminStaffDirectory"];
+            };
+        };
+        /** @description Staff membership */
+        AdminStaffMember: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["AdminStaffMember"];
+            };
+        };
+        /** @description Bounded staff invitation */
+        StaffInvitation: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["StaffInvitation"];
+            };
+        };
+        /** @description Staff invitations */
+        StaffInvitationPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["StaffInvitationPage"];
             };
         };
         /** @description Admin ops summary */
@@ -12632,6 +12848,122 @@ export interface operations {
             409: components["responses"]["Conflict"];
             429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getAdminCurrentStaff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminCurrentStaff"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getAdminStaff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AdminStaffDirectory"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    inviteAdminStaff: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminStaffInvitationRequest"];
+            };
+        };
+        responses: {
+            201: components["responses"]["StaffInvitation"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    updateAdminStaffMembership: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                membershipId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminStaffMembershipActionRequest"];
+            };
+        };
+        responses: {
+            200: components["responses"]["AdminStaffMember"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getCurrentStaffInvitations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["StaffInvitationPage"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    respondCurrentStaffInvitation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                invitationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffInvitationResponseRequest"];
+            };
+        };
+        responses: {
+            200: components["responses"]["StaffInvitation"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     getAdminOpsSummary: {

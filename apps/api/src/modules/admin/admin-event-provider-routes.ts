@@ -22,7 +22,7 @@ export function registerAdminEventProviderRoutes(
   options: RegisterAdminRoutesOptions
 ): void {
   app.get("/v1/admin/events", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.events.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
@@ -30,7 +30,7 @@ export function registerAdminEventProviderRoutes(
   });
 
   const listEventAccessPasses = async (request: FastifyRequest, reply: FastifyReply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.events.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
@@ -40,7 +40,7 @@ export function registerAdminEventProviderRoutes(
   app.get("/v1/admin/event-access-passes", listEventAccessPasses);
 
   app.get("/v1/admin/live/rooms", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.live.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
@@ -51,11 +51,16 @@ export function registerAdminEventProviderRoutes(
     "/v1/admin/live/rooms/:roomId/suspension",
     mutationRateLimit("adminMutation", "updateAdminLiveRoomSuspension"),
     async (request, reply) => {
+      const requestedBody = request.body as Partial<AdminLiveRoomSuspensionRequest> | undefined;
       const mutation = await requireAdminMutation<AdminLiveRoomSuspensionRequest>(
         request,
         reply,
         options,
-        { action: "admin.live.suspension", mutation: true, reasonRequired: true },
+        {
+          permission: requestedBody?.suspended === false ? "admin.live.resume" : "admin.live.suspend",
+          mutation: true,
+          reasonRequired: true
+        },
         validateLiveSuspension
       );
       if (!mutation) return reply;
@@ -134,7 +139,7 @@ export function registerAdminEventProviderRoutes(
   );
 
   app.get("/v1/admin/media/assets", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.providers.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
@@ -142,7 +147,7 @@ export function registerAdminEventProviderRoutes(
   });
 
   app.get("/v1/admin/age-kyc/age-checks", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.users.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
@@ -150,7 +155,7 @@ export function registerAdminEventProviderRoutes(
   });
 
   app.get("/v1/admin/age-kyc/identity-checks", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.users.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
@@ -158,7 +163,7 @@ export function registerAdminEventProviderRoutes(
   });
 
   app.get("/v1/admin/ai/sessions", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.ai.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
@@ -166,7 +171,7 @@ export function registerAdminEventProviderRoutes(
   });
 
   app.get("/v1/admin/ai/tool-calls", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.ai.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
@@ -174,7 +179,7 @@ export function registerAdminEventProviderRoutes(
   });
 
   app.get("/v1/admin/mutuals/safety", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.reports.read");
     if (!allowed) return reply;
 
     return reply.code(200).send(await options.adminRepository.getMutualsSafety());

@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { contractRouteSchema } from "../../shared/openapi-route-schema.js";
 import type { RegisterAdminRoutesOptions } from "./admin-route-auth.js";
 import { adminListInput, requireAdminAccess, requireAdminAccessWithUser } from "./admin-route-auth.js";
 import { validateAdminReason } from "./admin-route-validators.js";
@@ -19,22 +20,36 @@ export function registerAdminOpsRoutes(
   app: FastifyInstance,
   options: RegisterAdminRoutesOptions
 ): void {
+  app.get("/v1/admin/me", { schema: contractRouteSchema("getAdminCurrentStaff") }, async (request, reply) => {
+    const access = await requireAdminAccessWithUser(request, reply, options, {
+      permission: "admin.overview.read"
+    });
+    if (!access) return reply;
+    const staff = await options.adminRepository.getStaffAccess(access.supabaseUserId);
+    if (!staff) return reply.code(403).send({ code: "forbidden", message: "Staff access is not active" });
+    return reply.code(200).send(staff);
+  });
+
   app.get("/v1/admin/ops/summary", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.overview.read");
     if (!allowed) return reply;
 
     return reply.code(200).send(await options.adminRepository.getOpsSummary());
   });
 
   app.get("/v1/admin/notifications/health", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.queues.read");
     if (!allowed) return reply;
 
     return reply.code(200).send(await options.adminRepository.getNotificationHealth());
   });
 
   app.post("/v1/admin/worker-queues/:queueName/jobs/:jobId/retry", async (request, reply) => {
-    const access = await requireAdminAccessWithUser(request, reply, options);
+    const access = await requireAdminAccessWithUser(request, reply, options, {
+      permission: "admin.queues.retry",
+      mutation: true,
+      reasonRequired: true
+    });
     if (!access) return reply;
 
     const idempotencyKey = request.headers["idempotency-key"];
@@ -86,7 +101,7 @@ export function registerAdminOpsRoutes(
 
 
   app.get("/v1/admin/payments/intents", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.payments.read");
     if (!allowed) return reply;
 
     const query = request.query as { q?: string; cursor?: string };
@@ -94,7 +109,7 @@ export function registerAdminOpsRoutes(
   });
 
   app.get("/v1/admin/unlocks", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.payments.read");
     if (!allowed) return reply;
 
     const query = request.query as { q?: string; cursor?: string };
@@ -102,7 +117,7 @@ export function registerAdminOpsRoutes(
   });
 
   app.get("/v1/admin/provider-events", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.providers.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
@@ -110,7 +125,11 @@ export function registerAdminOpsRoutes(
   });
 
   app.post("/v1/admin/provider-events/:providerEventId/replay", async (request, reply) => {
-    const access = await requireAdminAccessWithUser(request, reply, options);
+    const access = await requireAdminAccessWithUser(request, reply, options, {
+      permission: "admin.provider_events.replay",
+      mutation: true,
+      reasonRequired: true
+    });
     if (!access) return reply;
 
     const idempotencyKey = request.headers["idempotency-key"];
@@ -149,7 +168,7 @@ export function registerAdminOpsRoutes(
   });
 
   app.get("/v1/admin/audit", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.audit.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };

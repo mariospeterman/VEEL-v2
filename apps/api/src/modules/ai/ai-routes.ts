@@ -40,7 +40,10 @@ export async function registerAiRoutes(
       return reply.code(access.statusCode).send(access.body);
     }
 
-    const adminAllowed = await options.adminRepository.hasAdminAccess(access.supabaseUserId);
+    const adminAllowed = await options.adminRepository.hasAdminPermission(
+      access.supabaseUserId,
+      "admin.ai.read"
+    );
     return reply.send(buildCapabilities(adminAllowed));
   });
 
@@ -62,7 +65,7 @@ export async function registerAiRoutes(
 
     const adminAllowed =
       body.scope === "admin_ops"
-        ? await options.adminRepository.hasAdminAccess(access.supabaseUserId)
+        ? await options.adminRepository.hasAdminPermission(access.supabaseUserId, "admin.ai.read")
         : false;
 
     if (body.scope === "admin_ops" && !adminAllowed) {
@@ -152,7 +155,10 @@ export async function registerAiRoutes(
       }
 
       if (session.scope === "admin_ops") {
-        const adminAllowed = await options.adminRepository.hasAdminAccess(access.supabaseUserId);
+        const adminAllowed = await options.adminRepository.hasAdminPermission(
+          access.supabaseUserId,
+          "admin.ai.read"
+        );
         if (!adminAllowed) {
           return reply.code(403).send({
             code: "forbidden",

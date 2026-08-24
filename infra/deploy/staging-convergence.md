@@ -2,13 +2,13 @@
 
 Status: code-complete orchestration; externally blocked until the staging accounts, hosting adapter, evidence, and approvals below exist.
 
-This is the operator packet for promoting one already-built WeVid release into the isolated staging environment. Staging is an environment, not a branch. Never put a secret or raw provider payload in an evidence identifier, workflow log, artifact manifest, or frontend runtime value.
+This is the operator packet for promoting one already-built WeVid release into the isolated staging environment. Staging is an environment, not a branch. Never put a secret or raw provider payload in an evidence identifier, workflow log, artifact manifest, or frontend runtime value. `.env.staging.example` is the canonical annotated variable contract and `scripts/staging-config.mjs` is the sole executable capability registry.
 
 ## 1. Owner actions
 
 The account owner must select the hosting target and authorize a GitHub OIDC trust for this repository and the `staging` GitHub Environment. Add the provider adapter only from that provider's current official deployment and OIDC documentation. Do not set `STAGING_DEPLOY_ENABLED=true` before the reviewed adapter exists.
 
-Configure the `staging` GitHub Environment with separate non-production Supabase/Postgres, Redis, Solana devnet, Bunny, Livepeer, age/KYC/KYB, Privy, Realtime/Web Push, Resend, telemetry, and legal values. Secret values belong in Environment secrets; public identifiers and safe flags belong in Environment variables. The exact names consumed by the workflow are in `.github/workflows/deploy-staging.yml` and `.env.example`.
+Configure the `staging` GitHub Environment with separate non-production Supabase/Postgres, Redis, Solana devnet, Bunny, Livepeer, age/KYC/KYB, Privy, Realtime/Web Push, Resend, telemetry, and legal values. Secret values belong in Environment secrets; public identifiers and safe flags belong in Environment variables. Copy `.env.staging.example` to the ignored `.env.staging` only for a protected operator workstation; never commit it.
 
 Required safety values include:
 
@@ -25,13 +25,29 @@ Required safety values include:
 
 ## 2. Pre-deploy validation
 
-Download the successful `release-manifest-*` artifact from the selected `release-artifacts` run and set `RELEASE_MANIFEST_PATH`. Run:
+Download the successful `release-manifest-*` artifact from the selected `release-artifacts` run and set `RELEASE_MANIFEST_PATH`. Initialize and validate without exposing values:
 
 ```text
+pnpm staging:init
 pnpm staging:doctor
+pnpm staging:cloud:link
+pnpm staging:migrations:plan
 ```
 
 Exit `2` means at least one required group is missing or unsafe. The command prints names only, never values. Do not override or reinterpret this result as green.
+
+After review of the exact non-production project and migration plan, the operator sequence is:
+
+```text
+pnpm staging:migrations:apply
+pnpm staging:bootstrap
+pnpm staging:run
+pnpm staging:seed
+pnpm staging:acceptance
+pnpm staging:report
+```
+
+`staging:seed` accepts only existing canonical WeVid user IDs declared in `STAGING_FIXTURE_USERS_JSON`; it records every created resource in the server-only namespace ledger. Cleanup requires the exact `DELETE_FIXTURES:<namespace>` acknowledgement and deletes only ledger-owned resources. The acceptance runner is the machine-readable release source of truth in `docs/v2-new-build/operator/staging-acceptance.json`; generated Markdown is presentation only.
 
 The staging workflow then verifies the exact source SHA, manifest fingerprint, contract digest, migration head, and all three GitHub OCI attestations. It must deploy those digests without rebuilding.
 

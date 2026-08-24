@@ -2784,6 +2784,90 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/admin/me:
+    get:
+      operationId: getAdminCurrentStaff
+      tags: [Admin]
+      summary: Resolve the active staff roles and effective permission registry for the current session
+      responses:
+        "200": { $ref: "#/components/responses/AdminCurrentStaff" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/staff:
+    get:
+      operationId: getAdminStaff
+      tags: [Admin]
+      summary: List staff memberships and bounded invitations
+      responses:
+        "200": { $ref: "#/components/responses/AdminStaffDirectory" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/admin/staff/invitations:
+    post:
+      operationId: inviteAdminStaff
+      tags: [Admin]
+      summary: Invite an existing canonical WeVid user to a bounded staff role
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AdminStaffInvitationRequest" } } }
+      responses:
+        "201": { $ref: "#/components/responses/StaffInvitation" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /v1/admin/staff/memberships/{membershipId}:
+    patch:
+      operationId: updateAdminStaffMembership
+      tags: [Admin]
+      summary: Change, suspend, or revoke one staff membership with last-owner protection
+      parameters:
+        - name: membershipId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AdminStaffMembershipActionRequest" } } }
+      responses:
+        "200": { $ref: "#/components/responses/AdminStaffMember" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /v1/staff/invitations/current:
+    get:
+      operationId: getCurrentStaffInvitations
+      tags: [Admin]
+      summary: List pending staff invitations for the current canonical user
+      responses:
+        "200": { $ref: "#/components/responses/StaffInvitationPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /v1/staff/invitations/{invitationId}/respond:
+    post:
+      operationId: respondCurrentStaffInvitation
+      tags: [Admin]
+      summary: Accept or decline one current-user staff invitation
+      parameters:
+        - name: invitationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/StaffInvitationResponseRequest" } } }
+      responses:
+        "200": { $ref: "#/components/responses/StaffInvitation" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /v1/admin/ops/summary:
     get:
       operationId: getAdminOpsSummary
@@ -3724,6 +3808,11 @@ components:
     McpOAuthTokenResponse: { description: OAuth bearer access token, content: { application/json: { schema: { $ref: "#/components/schemas/McpOAuthTokenResponse" } } } }
     McpOAuthError: { description: OAuth error response, content: { application/json: { schema: { $ref: "#/components/schemas/McpOAuthError" } } } }
     OrganizationDashboardPage: { description: Organization dashboards, content: { application/json: { schema: { $ref: "#/components/schemas/OrganizationDashboardPage" } } } }
+    AdminCurrentStaff: { description: Current staff roles and effective permissions, content: { application/json: { schema: { $ref: "#/components/schemas/AdminCurrentStaff" } } } }
+    AdminStaffDirectory: { description: Staff membership and invitation directory, content: { application/json: { schema: { $ref: "#/components/schemas/AdminStaffDirectory" } } } }
+    AdminStaffMember: { description: Staff membership, content: { application/json: { schema: { $ref: "#/components/schemas/AdminStaffMember" } } } }
+    StaffInvitation: { description: Bounded staff invitation, content: { application/json: { schema: { $ref: "#/components/schemas/StaffInvitation" } } } }
+    StaffInvitationPage: { description: Staff invitations, content: { application/json: { schema: { $ref: "#/components/schemas/StaffInvitationPage" } } } }
     AdminOpsSummary: { description: Admin ops summary, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOpsSummary" } } } }
     AdminNotificationHealth: { description: Admin notification health, content: { application/json: { schema: { $ref: "#/components/schemas/AdminNotificationHealth" } } } }
     AdminUser: { description: Admin user, content: { application/json: { schema: { $ref: "#/components/schemas/AdminUser" } } } }
@@ -6509,6 +6598,126 @@ components:
         notices:
           type: array
           items: { $ref: "#/components/schemas/OrganizationNotice" }
+    StaffRole:
+      type: string
+      enum: [owner, admin, trust_safety, finance, ops, support, creator_success, event_ops, ai_ops, compliance, readonly_auditor]
+    AdminPermission:
+      type: string
+      enum:
+        - admin.overview.read
+        - admin.users.read
+        - admin.users.restrict
+        - admin.content.read
+        - admin.content.moderate
+        - admin.reports.read
+        - admin.reports.decide
+        - admin.live.read
+        - admin.live.suspend
+        - admin.live.resume
+        - admin.events.read
+        - admin.events.write
+        - admin.payments.read
+        - admin.payment_policy.write
+        - admin.subscriptions.read
+        - admin.subscriptions.recover
+        - admin.refunds.read
+        - admin.refunds.decide
+        - admin.providers.read
+        - admin.provider_events.replay
+        - admin.queues.read
+        - admin.queues.retry
+        - admin.analytics.read
+        - admin.analytics.recompute
+        - admin.organizations.read
+        - admin.organizations.write
+        - admin.staff.read
+        - admin.staff.invite
+        - admin.staff.change_role
+        - admin.staff.revoke
+        - admin.compliance.read
+        - admin.compliance.export
+        - admin.privacy.read
+        - admin.privacy.process
+        - admin.support.read
+        - admin.support.write
+        - admin.ai.read
+        - admin.feature_flags.read
+        - admin.feature_flags.write
+        - admin.audit.read
+    AdminCurrentStaff:
+      type: object
+      required: [userId, roles, permissions]
+      properties:
+        userId: { type: string, format: uuid }
+        roles:
+          type: array
+          items: { $ref: "#/components/schemas/StaffRole" }
+        permissions:
+          type: array
+          items: { $ref: "#/components/schemas/AdminPermission" }
+    AdminStaffMember:
+      type: object
+      required: [membershipId, userId, handle, displayName, role, state, createdAt]
+      properties:
+        membershipId: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        handle: { type: string }
+        displayName: { type: string }
+        role: { $ref: "#/components/schemas/StaffRole" }
+        state: { type: string, enum: [invited, active, suspended, revoked] }
+        createdAt: { type: string, format: date-time }
+    StaffInvitation:
+      type: object
+      required: [id, targetUserId, targetHandle, role, state, invitedByUserId, expiresAt, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        targetUserId: { type: string, format: uuid }
+        targetHandle: { type: string }
+        role: { $ref: "#/components/schemas/StaffRole" }
+        state: { type: string, enum: [pending, accepted, declined, expired, revoked] }
+        invitedByUserId: { type: string, format: uuid }
+        expiresAt: { type: string, format: date-time }
+        respondedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    StaffInvitationPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/StaffInvitation" }
+    AdminStaffDirectory:
+      type: object
+      required: [memberships, invitations]
+      properties:
+        memberships:
+          type: array
+          items: { $ref: "#/components/schemas/AdminStaffMember" }
+        invitations:
+          type: array
+          items: { $ref: "#/components/schemas/StaffInvitation" }
+    AdminStaffInvitationRequest:
+      type: object
+      required: [targetUserId, role, expiresInHours, reason, confirmed]
+      properties:
+        targetUserId: { type: string, format: uuid }
+        role: { $ref: "#/components/schemas/StaffRole" }
+        expiresInHours: { type: integer, minimum: 1, maximum: 168 }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+        confirmed: { type: boolean, enum: [true] }
+    AdminStaffMembershipActionRequest:
+      type: object
+      required: [action, reason, confirmed]
+      properties:
+        action: { type: string, enum: [change_role, suspend, revoke] }
+        role: { $ref: "#/components/schemas/StaffRole" }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+        confirmed: { type: boolean, enum: [true] }
+    StaffInvitationResponseRequest:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [accept, decline] }
     AdminOpsSummary:
       type: object
       required: [providerHealth, queueHealth, workerQueues, openReports, paymentCounts, unlockCounts, providerEventCounts, subscriptionCounts, subscriptionProviderReadiness, organizationCounts, managedCreatorCounts, enterpriseAllocationCounts, creatorMediaOfferCounts, structuredCreatorRequestCounts]

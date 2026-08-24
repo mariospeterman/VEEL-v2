@@ -10,7 +10,7 @@ export function registerAdminReviewRoutes(
   options: RegisterAdminRoutesOptions
 ): void {
   app.get("/v1/admin/support/cases", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.support.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
@@ -30,7 +30,7 @@ export function registerAdminReviewRoutes(
       request,
       reply,
       options,
-      { action: "support_case_updated" },
+      { permission: "admin.support.write" },
       validateSupportCaseAction
     );
     if (!mutation) return reply;
@@ -53,7 +53,7 @@ export function registerAdminReviewRoutes(
   });
 
   app.get("/v1/admin/support/policies", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.support.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
@@ -73,7 +73,7 @@ export function registerAdminReviewRoutes(
       request,
       reply,
       options,
-      { action: "organization_support_policy_updated" },
+      { permission: "admin.support.write" },
       validateSupportPolicyAction
     );
     if (!mutation) return reply;
@@ -96,7 +96,7 @@ export function registerAdminReviewRoutes(
   });
 
   app.get("/v1/admin/refunds/disputes", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.refunds.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
@@ -116,7 +116,7 @@ export function registerAdminReviewRoutes(
       request,
       reply,
       options,
-      { action: "refund_dispute_updated" },
+      { permission: "admin.refunds.decide" },
       validateRefundDisputeAction
     );
     if (!mutation) return reply;
@@ -139,7 +139,7 @@ export function registerAdminReviewRoutes(
   });
 
   app.get("/v1/admin/data-requests", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.privacy.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
@@ -159,7 +159,7 @@ export function registerAdminReviewRoutes(
       request,
       reply,
       options,
-      { action: "data_request_updated" },
+      { permission: "admin.privacy.process" },
       validateDataRequestAction
     );
     if (!mutation) return reply;

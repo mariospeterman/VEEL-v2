@@ -20,10 +20,33 @@ import type {
   AdminSupportCaseActionRequest,
   AdminSupportPolicy,
   AdminSupportPolicyActionRequest,
+  AdminStaffInvitationRequest,
+  AdminStaffMembershipActionRequest,
+  AdminStaffMember,
+  StaffInvitation,
   AnalyticsProjectionJobReceipt,
   AnalyticsProjectionJobRequest,
   ApiResult
 } from "./api-client-types";
+
+export async function inviteAdminStaff(
+  body: AdminStaffInvitationRequest,
+  idempotencyKey: string
+): Promise<ApiResult<StaffInvitation>> {
+  return postJson<StaffInvitation>("/v1/admin/staff/invitations", body, idempotencyKey);
+}
+
+export async function updateAdminStaffMembership(
+  membershipId: string,
+  body: AdminStaffMembershipActionRequest,
+  idempotencyKey: string
+): Promise<ApiResult<AdminStaffMember>> {
+  return patchJson<AdminStaffMember>(
+    `/v1/admin/staff/memberships/${encodeURIComponent(membershipId)}`,
+    body,
+    idempotencyKey
+  );
+}
 
 export async function enqueueAdminAnalyticsJob(
   body: AnalyticsProjectionJobRequest,

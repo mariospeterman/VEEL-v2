@@ -8010,6 +8010,12 @@ describe("buildApi", () => {
         async hasAdminAccess() {
           return false;
         },
+        async hasAdminPermission() {
+          return false;
+        },
+        async getStaffAccess() {
+          return null;
+        },
         async getOpsSummary() {
           throw new Error("not implemented");
         },
@@ -8150,6 +8156,12 @@ describe("buildApi", () => {
         async hasAdminAccess() {
           return false;
         },
+        async hasAdminPermission() {
+          return false;
+        },
+        async getStaffAccess() {
+          return null;
+        },
         async getOpsSummary() {
           throw new Error("not implemented");
         },
@@ -8287,6 +8299,12 @@ describe("buildApi", () => {
       adminRepository: {
         async hasAdminAccess() {
           return false;
+        },
+        async hasAdminPermission() {
+          return false;
+        },
+        async getStaffAccess() {
+          return null;
         },
         async getOpsSummary() {
           throw new Error("not implemented");
@@ -13399,6 +13417,21 @@ function fakeAiRepository(): AiRepository {
 }
 
 const unimplementedComplianceAdminMethods = {
+  async getStaffDirectory() {
+    throw new Error("not implemented");
+  },
+  async inviteStaff() {
+    throw new Error("not implemented");
+  },
+  async updateStaffMembership() {
+    throw new Error("not implemented");
+  },
+  async listCurrentStaffInvitations() {
+    throw new Error("not implemented");
+  },
+  async respondStaffInvitation() {
+    throw new Error("not implemented");
+  },
   async listComplianceLedger() {
     throw new Error("not implemented");
   },
@@ -13435,6 +13468,11 @@ const unimplementedComplianceAdminMethods = {
 } satisfies Pick<
   AdminRepository,
   | "listComplianceLedger"
+  | "getStaffDirectory"
+  | "inviteStaff"
+  | "updateStaffMembership"
+  | "listCurrentStaffInvitations"
+  | "respondStaffInvitation"
   | "listDac7Reports"
   | "listCarfReports"
   | "listVatDeterminations"
@@ -13451,6 +13489,33 @@ const fakeAdminRepository: AdminRepository = {
   async hasAdminAccess(supabaseUserId) {
     expect(supabaseUserId).toBe("00000000-0000-4000-8000-000000000001");
     return true;
+  },
+  async hasAdminPermission(supabaseUserId) {
+    expect(supabaseUserId).toBe("00000000-0000-4000-8000-000000000001");
+    return true;
+  },
+  async getStaffAccess(supabaseUserId) {
+    expect(supabaseUserId).toBe("00000000-0000-4000-8000-000000000001");
+    return {
+      userId: supabaseUserId,
+      roles: ["owner"],
+      permissions: ["admin.overview.read"]
+    };
+  },
+  async getStaffDirectory() {
+    return { memberships: [], invitations: [] };
+  },
+  async inviteStaff() {
+    throw new Error("not implemented");
+  },
+  async updateStaffMembership() {
+    throw new Error("not implemented");
+  },
+  async listCurrentStaffInvitations() {
+    return { items: [] };
+  },
+  async respondStaffInvitation() {
+    throw new Error("not implemented");
   },
   async getOpsSummary() {
     return {

@@ -1,8 +1,11 @@
 import { spawn } from "node:child_process";
 
+const filters = ["--filter", "@veel/api", "--filter", "@veel/web"];
+if (process.env.VEEL_DEV_FULL === "true") filters.push("--filter", "@veel/worker");
+
 const development = spawn(
   "pnpm",
-  ["--parallel", "--filter", "@veel/api", "--filter", "@veel/web", "dev"],
+  ["--parallel", ...filters, "dev"],
   {
     env: process.env,
     stdio: "inherit"

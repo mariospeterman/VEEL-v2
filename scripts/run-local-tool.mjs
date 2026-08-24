@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 
@@ -111,6 +111,24 @@ const resolveTool = () => {
   }
 
   if (command === "web-preview") {
+    const standaloneRoot = join(repoRoot, "apps/web/.next/standalone/apps/web");
+    const standaloneServer = join(standaloneRoot, "server.js");
+    if (existsSync(standaloneServer)) {
+      const assets = [
+        [join(repoRoot, "apps/web/public"), join(standaloneRoot, "public")],
+        [join(repoRoot, "apps/web/.next/static"), join(standaloneRoot, ".next/static")]
+      ];
+      for (const [source, target] of assets) {
+        rmSync(target, { force: true, recursive: true });
+        cpSync(source, target, { recursive: true });
+      }
+      return {
+        executable: standaloneServer,
+        cwd: standaloneRoot,
+        args,
+        env: { HOSTNAME: "127.0.0.1", PORT: "3000" }
+      };
+    }
     return {
       executable: join(repoRoot, "apps/web/node_modules/next/dist/bin/next"),
       cwd: join(repoRoot, "apps/web"),
@@ -126,6 +144,7 @@ const node = selectNode();
 const tool = resolveTool();
 const childEnv = {
   ...process.env,
+  ...tool.env,
   PATH: `${dirname(node.path)}:${process.env.PATH ?? ""}`
 };
 if (childEnv.FORCE_COLOR) delete childEnv.NO_COLOR;

@@ -7,7 +7,7 @@ export function registerAdminComplianceRoutes(
   options: RegisterAdminRoutesOptions
 ): void {
   app.get("/v1/admin/compliance/ledger", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.compliance.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
@@ -15,7 +15,7 @@ export function registerAdminComplianceRoutes(
   });
 
   app.get("/v1/admin/compliance/dac7/reports", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.compliance.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
@@ -23,7 +23,7 @@ export function registerAdminComplianceRoutes(
   });
 
   app.get("/v1/admin/compliance/carf/reports", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.compliance.read");
     if (!allowed) return reply;
 
     const enabled = await featureFlagEnabled(options.adminRepository, "compliance.carf_exports");
@@ -39,7 +39,7 @@ export function registerAdminComplianceRoutes(
   });
 
   app.get("/v1/admin/compliance/vat/determinations", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.compliance.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
@@ -47,7 +47,7 @@ export function registerAdminComplianceRoutes(
   });
 
   app.get("/v1/admin/compliance/receipts", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.compliance.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
@@ -55,7 +55,7 @@ export function registerAdminComplianceRoutes(
   });
 
   app.get("/v1/admin/compliance/invoices", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.compliance.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
@@ -63,7 +63,7 @@ export function registerAdminComplianceRoutes(
   });
 
   app.get("/v1/admin/referrals/programs", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.payments.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
@@ -71,7 +71,7 @@ export function registerAdminComplianceRoutes(
   });
 
   app.get("/v1/admin/referrals/partner-campaigns", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.payments.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
@@ -79,7 +79,7 @@ export function registerAdminComplianceRoutes(
   });
 
   app.get("/v1/admin/tier-waivers", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.payments.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };

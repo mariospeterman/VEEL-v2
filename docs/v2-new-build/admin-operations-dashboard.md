@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: admin, business operations, support, devops visibility
-Last updated: 2026-08-11
+Last updated: 2026-08-24
 Source of truth: yes
 
 Owns:
@@ -24,6 +24,9 @@ This document defines the admin and operations surface required to run Veel as a
 
 Current implementation state:
 
+- `GET /v1/admin/me` returns one typed effective-access projection from the canonical registry: active staff roles plus registered role/explicit permissions. Every admin route and action now checks its exact permission key; analytics, AI, and MCP management no longer accept broad active-staff access.
+- Staff lifecycle is available through `GET /v1/admin/staff`, `POST /v1/admin/staff/invitations`, `PATCH /v1/admin/staff/memberships/{membershipId}`, `GET /v1/staff/invitations/current`, and `POST /v1/staff/invitations/{invitationId}/respond`. Invitations target existing canonical users only, expire within seven days, require acceptance, notification, recent authentication and confirmation for sensitive owner actions, protect the final active owner, revoke application sessions on suspension/revocation, and audit safe before/after state.
+
 - `GET /v1/admin/ops/summary` returns role-gated payment, unlock, provider event, subscription lifecycle, creator media-offer, structured-request, recurring-provider readiness, report, provider health, and per-worker queue health. Queue projections include pending, processing, failed, dead-letter, and oldest-pending state for subscription collections, notification delivery, payment confirmation email, provider-event replay, media moderation, Analytics Core projection, and live-safety suspension.
 - `POST /v1/admin/worker-queues/{queueName}/jobs/{jobId}/retry` is the only API recovery boundary for exhausted worker jobs. It accepts only `dead_letter` jobs, requires a reason and `Idempotency-Key`, restores the queue-specific initial state, clears stale lease/failure state, records `worker_queue_recovery_requests`, and writes an audit event. It never marks provider work successful and never bypasses subscription reconciliation or access/payment authority.
 - `GET /v1/admin/payments/intents` returns sanitized payment intent reconciliation rows with server-owned product, amount, state, reference address, submitted/confirmed signatures, settlement attempt count, and linked entitlement ID.
@@ -43,18 +46,10 @@ Current implementation state:
 - `GET /v1/admin/feature-flags` and `PATCH /v1/admin/feature-flags/{featureFlagKey}` expose software policy controls to staff. Feature flags are audited software controls only and carry the `software_policy_only_no_payment_access_or_social_priority` boundary; they must never become payment truth, access truth, reporting truth, bookkeeping truth, recommendation priority, Mutuals treatment, visibility boost, or message priority.
 - `safety.content_creation_abuse_policy` is seeded as an active safety feature flag for backend-enforced create/upload quotas. Staff can tune `dailyContentDraftQuota`, `dailyMediaUploadQuota`, and `rollingWindowHours` through the audited feature-flag form; the policy only affects backend abuse limits and cannot buy or create moderation priority, visibility, recommendations, Mutuals treatment, message priority, payment truth, or access truth.
 - `GET /v1/admin/mutuals/safety` exposes aggregate open Mutuals reports, active Mutuals, and stale Mutuals with the hard social-money boundary. Dating-named admin safety routes are removed from launch-facing contracts and code.
-- The `/admin` web surface is separate from normal user navigation and uses
-  typed API projections for ops summary, payment intents, unlocks, provider
-  events, Livepeer/Bunny provider state, age/KYC provider state, AI/MCP tool-call state, compliance ledger, DAC7/CARF
-  reports, VAT determinations, receipts, invoices, referral governance, tier waivers, support policy,
-  user/content/report moderation queues, Event Access ops, refund/dispute
-  review, data request lifecycle, sanitized audit events, and feature flag
-  policy controls.
-  It fails closed per panel when the API or admin authorization is unavailable
-  and does not render fixture admin money, provider, tax, or receipt rows.
+- The `/admin` web surface is a separate responsive shell whose navigation is derived from `/v1/admin/me`. The overview fetches only overview plus explicitly permitted health resources; each modular subroute loads only its own authority, and organization members are resolved from returned organizations instead of a hardcoded ID. It fails closed when the current role lacks the section permission and never renders fixture money, provider, tax, or receipt rows.
 - Event Access operations are inspectable through payment intent state, pass entitlement state, QR/check-in state, compliance ledger state, and provider event state; admin Event Access mutations remain deferred to their dedicated role-policy slices.
 - DAC7/VAT readiness is surfaced through read-only compliance routes before export or filing workflows are enabled. DAC8/CARF reporting reads are additionally gated by the `compliance.carf_exports` feature flag, which is seeded as paused until counsel/tax review explicitly enables it.
-- Admin reads require a valid session whose app user has an active staff membership in an operations, finance, support, creator-success, readonly-auditor, admin, or owner role.
+- Admin reads require a valid canonical session, active user and active staff membership whose effective permission set contains the route's exact key.
 - Raw provider payloads, webhook bodies, private media URLs, stream keys, provider secrets, wallet private keys, service-role keys, and frontend-computed payment truth are not returned.
 - Real VAPID secrets/staging push-service verification, provider-specific launch approvals, and any future admin subroute expansion remain planned production gates. They must be implemented as role-gated sanitized projections, not broad database or provider-payload exposure.
 
@@ -74,46 +69,39 @@ Current implementation state:
 /admin
 /admin/users
 /admin/content
-/admin/reports
+/admin/safety
 /admin/payments
-/admin/unlocks
-/admin/referrals
-/admin/memberships
-/admin/creator-earnings
+/admin/subscriptions
 /admin/live
-/admin/media-providers
 /admin/events
-/admin/event-access
-/admin/mutuals
-/admin/messages
-/admin/age-kyc
-/admin/compliance/ledger
-/admin/compliance/dac7/reports
-/admin/compliance/carf/reports
-/admin/compliance/vat/determinations
-/admin/compliance/receipts
-/admin/compliance/invoices
+/admin/providers
+/admin/organizations
+/admin/analytics
+/admin/privacy
+/admin/compliance
 /admin/ai
-/admin/audit-log
-/admin/support
-/admin/ops
+/admin/audit
+/admin/staff
+/admin/settings
 ```
 
 ## Role Model
 
 | Role | Scope |
 | --- | --- |
-| Super admin | Full admin access, break-glass actions, role management |
-| Operations | Provider status, queues, deployments, webhooks, diagnostics |
-| Finance | payments, settlements, referrals, memberships, platform plans, receipts, invoices, refunds, creator earnings |
-| Trust and safety | reports, moderation, blocks, age/KYC review state |
-| Support | user lookup, safe payment/access status, Event Access escalation |
-| Creator success | creator dashboards, onboarding, monetisation readiness |
-| Event ops | Event Access, check-ins, refunds/escalations |
-| Compliance | DAC7/DAC8/CARF/VAT ledger, receipts, invoices, export preparation |
-| AI ops | AI sessions/tools/audit, no money or safety bypass |
+| Owner | Complete registered authority, staff governance, and bounded break-glass operations |
+| Admin | Broad administration without staff invitation, role replacement, or revocation by default |
+| Operations | Provider state, queues, replay, health, analytics operations, flags, and audit; no refund or moderation decision |
+| Finance | Payments, subscription recovery, refunds, commercial policy, compliance and analytics; no moderation or staff governance |
+| Trust and safety | Users, content, reports, live safety, privacy reads and audit; no payment policy or organization contracts |
+| Support | Sanitized user, content, report, event, payment, subscription, refund, organization and privacy reads plus support cases |
+| Creator success | Creator-safe user/content/report, analytics, organization and support reads |
+| Event ops | Event Access and live operations with bounded payment/refund reads |
+| Compliance | Reporting, privacy processing and financial reads; no money mutation or provider secret access |
+| AI ops | AI/MCP session and audit reads only |
+| Readonly auditor | Explicit sanitized `*.read` permissions only; zero writes |
 
-Role permissions should be explicit in code and documented as policy tests.
+The code registry is the permission source of truth; this table documents intent and policy tests prevent drift.
 
 ## Dashboard Overview
 

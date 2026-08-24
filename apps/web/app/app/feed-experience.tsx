@@ -253,7 +253,6 @@ export function FeedExperience({
               className={mode === option ? "feed-mode-tab is-active" : "feed-mode-tab"}
               id={`feed-mode-${option}`}
               key={option}
-              disabled={pending || modeSaving}
               onClick={() => void selectMode(option)}
               onKeyDown={(event) => moveModeFocus(event, option)}
               role="tab"

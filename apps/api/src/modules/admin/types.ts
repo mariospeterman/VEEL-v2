@@ -1,4 +1,5 @@
 import type { components } from "@veel/contracts";
+import type { AdminPermission, StaffRole } from "./admin-permissions.js";
 
 export type AdminOpsSummary = components["schemas"]["AdminOpsSummary"];
 export type AdminNotificationHealth = components["schemas"]["AdminNotificationHealth"];
@@ -25,6 +26,13 @@ export type AdminTierWaiver = components["schemas"]["AdminTierWaiver"];
 export type AdminOrganization = components["schemas"]["AdminOrganization"];
 export type AdminOrganizationMember = components["schemas"]["AdminOrganizationMember"];
 export type AdminFeatureFlag = components["schemas"]["AdminFeatureFlag"];
+export type AdminStaffMember = components["schemas"]["AdminStaffMember"];
+export type StaffInvitation = components["schemas"]["StaffInvitation"];
+export type AdminStaffDirectory = components["schemas"]["AdminStaffDirectory"];
+export type AdminStaffInvitationRequest = components["schemas"]["AdminStaffInvitationRequest"];
+export type AdminStaffMembershipActionRequest =
+  components["schemas"]["AdminStaffMembershipActionRequest"];
+export type StaffInvitationResponseRequest = components["schemas"]["StaffInvitationResponseRequest"];
 export type AdminOrganizationKybActionRequest =
   components["schemas"]["AdminOrganizationKybActionRequest"];
 export type AdminOrganizationProvisionRequest =
@@ -60,8 +68,40 @@ export interface AdminPage<Item> {
   nextCursor: string | null;
 }
 
+export interface AdminStaffAccess {
+  userId: string;
+  roles: StaffRole[];
+  permissions: AdminPermission[];
+}
+
 export interface AdminRepository {
   hasAdminAccess(supabaseUserId: string): Promise<boolean>;
+  hasAdminPermission(supabaseUserId: string, permission: AdminPermission): Promise<boolean>;
+  getStaffAccess(supabaseUserId: string): Promise<AdminStaffAccess | null>;
+  getStaffDirectory(): Promise<AdminStaffDirectory>;
+  inviteStaff(input: {
+    supabaseUserId: string;
+    targetUserId: string;
+    role: StaffRole;
+    expiresInHours: number;
+    reason: string;
+    idempotencyKey: string;
+  }): Promise<StaffInvitation | null>;
+  updateStaffMembership(input: {
+    supabaseUserId: string;
+    membershipId: string;
+    action: AdminStaffMembershipActionRequest["action"];
+    role?: StaffRole;
+    reason: string;
+    idempotencyKey: string;
+  }): Promise<AdminStaffMember | null>;
+  listCurrentStaffInvitations(supabaseUserId: string): Promise<{ items: StaffInvitation[] }>;
+  respondStaffInvitation(input: {
+    supabaseUserId: string;
+    invitationId: string;
+    decision: StaffInvitationResponseRequest["decision"];
+    idempotencyKey: string;
+  }): Promise<StaffInvitation | null>;
   getOpsSummary(): Promise<AdminOpsSummary>;
   getNotificationHealth(): Promise<AdminNotificationHealth>;
   retryDeadLetterJob(input: {

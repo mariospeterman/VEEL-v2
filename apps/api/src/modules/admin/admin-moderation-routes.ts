@@ -11,7 +11,7 @@ export function registerAdminModerationRoutes(
   options: RegisterAdminRoutesOptions
 ): void {
   app.get("/v1/admin/users", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.users.read");
     if (!allowed) return reply;
 
     const query = request.query as { q?: string; cursor?: string };
@@ -19,7 +19,7 @@ export function registerAdminModerationRoutes(
   });
 
   app.get("/v1/admin/users/:userId", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.users.read");
     if (!allowed) return reply;
 
     const { userId } = request.params as { userId?: string };
@@ -42,7 +42,7 @@ export function registerAdminModerationRoutes(
   });
 
   app.get("/v1/admin/content", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.content.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
@@ -62,7 +62,7 @@ export function registerAdminModerationRoutes(
       request,
       reply,
       options,
-      { action: "content_moderation_updated" },
+      { permission: "admin.content.moderate" },
       validateModerationAction
     );
     if (!mutation) return reply;
@@ -93,7 +93,7 @@ export function registerAdminModerationRoutes(
   });
 
   app.get("/v1/admin/reports", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.reports.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
@@ -113,7 +113,7 @@ export function registerAdminModerationRoutes(
       request,
       reply,
       options,
-      { action: "report_review_updated" },
+      { permission: "admin.reports.decide" },
       validateReportAction
     );
     if (!mutation) return reply;

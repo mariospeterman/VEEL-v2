@@ -393,7 +393,13 @@ async function analyticsApp(repository: AnalyticsRepository, admin = false) {
     },
     analyticsRepository: repository,
     adminRepository: {
-      async hasAdminAccess() { return admin; }
+      async hasAdminAccess() { return admin; },
+      async hasAdminPermission() { return admin; },
+      async getStaffAccess() {
+        return admin
+          ? { userId: actorUserId, roles: ["owner"], permissions: ["admin.analytics.read", "admin.analytics.recompute"] }
+          : null;
+      }
     } as unknown as AdminRepository
   });
 }
