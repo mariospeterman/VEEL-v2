@@ -1,13 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import bs58 from "bs58";
 import { Keypair, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
-import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { calculateSettlementSplit, PaymentAmountError } from "../src/modules/payment/payment-amounts";
 import {
   buildCreatorSplitTransaction,
   SolanaPaymentConfigurationError,
   verifySolanaTransfer
 } from "../src/modules/payment/solana-payment";
+import {
+  TOKEN_PROGRAM_ID,
+  deriveAssociatedTokenAddress
+} from "../src/modules/solana/token-program";
 import type { PaymentSettlementInput, StoredPaymentIntent } from "../src/modules/payment/types";
 
 const signature =
@@ -484,8 +487,8 @@ function tokenTransfer(destinationWallet: string, amount: number) {
       type: "transferChecked",
       info: {
         authority: buyerWallet,
-        source: getAssociatedTokenAddressSync(mint, new PublicKey(buyerWallet)).toBase58(),
-        destination: getAssociatedTokenAddressSync(
+        source: deriveAssociatedTokenAddress(mint, new PublicKey(buyerWallet)).toBase58(),
+        destination: deriveAssociatedTokenAddress(
           mint,
           new PublicKey(destinationWallet)
         ).toBase58(),

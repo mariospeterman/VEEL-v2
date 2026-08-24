@@ -1,16 +1,16 @@
 import {
-  getAccount,
-  getAssociatedTokenAddressSync,
-  TOKEN_2022_PROGRAM_ID,
-  TOKEN_PROGRAM_ID
-} from "@solana/spl-token";
-import {
   getRecurringDelegationDecoder,
   getSubscriptionAuthorityDecoder
 } from "@solana/subscriptions";
 import { Connection, PublicKey } from "@solana/web3.js";
 import type { ServerEnv } from "@veel/config";
 import bs58 from "bs58";
+import {
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  decodeTokenAccount,
+  deriveAssociatedTokenAddress
+} from "../solana/token-program.js";
 import {
   checkSubscriptionProviderReadiness,
   getSubscriptionProviderConfig,
@@ -97,22 +97,18 @@ export function createSolanaSubscriptionAuthorizationVerifier(
         }
 
         const tokenProgram = input.tokenProgram === "token_2022" ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID;
-        const expectedAta = getAssociatedTokenAddressSync(
+        const expectedAta = deriveAssociatedTokenAddress(
           new PublicKey(input.tokenMint),
           new PublicKey(input.subscriberWallet),
-          false,
           tokenProgram
         );
         if (expectedAta.toBase58() !== input.subscriberTokenAccount) return failed("subscriber_mismatch");
-        const tokenAccount = await getAccount(
-          connection,
-          expectedAta,
-          "finalized",
-          tokenProgram
-        );
+        const tokenAccountInfo = await connection.getAccountInfo(expectedAta, "finalized");
+        if (!tokenAccountInfo || !tokenAccountInfo.owner.equals(tokenProgram)) return failed("subscriber_mismatch");
+        const tokenAccount = decodeTokenAccount(tokenAccountInfo.data);
         if (
-          tokenAccount.owner.toBase58() !== input.subscriberWallet ||
-          tokenAccount.mint.toBase58() !== input.tokenMint
+          tokenAccount.owner !== input.subscriberWallet ||
+          tokenAccount.mint !== input.tokenMint
         ) {
           return failed("subscriber_mismatch");
         }
