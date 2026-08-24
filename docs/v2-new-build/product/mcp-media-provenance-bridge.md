@@ -100,12 +100,14 @@ wallet, messaging, moderation, entitlement, age/KYC, or admin tool is registered
   first-party image and video attachment paths take that same lock and count MCP reservations before
   their authoritative insert, so assistant and first-party uploads cannot race beyond the allowance.
   Recovering a stale MCP lease reuses its existing reservation rather than counting that same slot
-  twice.
+  twice, and an expired provisioning row no longer consumes quota because it cannot produce an
+  asset.
 - Final attachment revalidates capability expiry plus the exact private, SFW, unpublished draft and
   media shape while holding the content lock. Publication that wins the race rejects attachment and
   triggers provider compensation; attachment that wins changes the composition before publication
   can re-evaluate release readiness. The ten-asset count is taken only after that content lock is
-  acquired, so a waiting completion observes the preceding committed attachment.
+  acquired on MCP, first-party image, and first-party video paths, so a waiting completion observes
+  the preceding committed attachment and returns a normalized draft conflict at capacity.
 - Bunny/provider unavailability leaves the draft private and records only normalized failure state.
 - If immediate deletion of an unattached provider object fails, a cleanup-only media id becomes a
   retired, non-composition asset in the existing provider-cleanup queue. That compensation row does
@@ -115,13 +117,16 @@ wallet, messaging, moderation, entitlement, age/KYC, or admin tool is registered
   the bridge never infers provider success from a request attempt or client assertion.
 - Capability secrets, upload signatures, private media URLs, opaque lineage references, and C2PA
   references are excluded from MCP tool-call audit payloads and general logs.
+- Connection last-used persistence is best-effort after capability completion. Its failure is logged
+  but cannot suppress the one response containing an already-created video upload handoff.
 
 ## Automated proof
 
 The slice must prove capability hashing, expiry, exact replay, single redemption, lease recovery,
 cross-user and scope denial, MIME and draft-shape binding, final attachment/publication exclusion,
-shared first-party/MCP quota serialization, canonical image sanitization, presigned video behavior,
-provider failure compensation, quarantine and moderation-job creation, normalized provider readiness,
-provenance privacy, first-party-only review, release blocking, guarded rollback, real-Postgres
-concurrency, and authenticated desktop/mobile review UX. Provider staging remains a separate
-release-manifest-bound gate and deterministic fixtures never count as provider approval.
+shared first-party/MCP quota serialization, expired-reservation release, post-lock MCP and first-party
+capacity conflicts, canonical image sanitization, presigned video behavior, best-effort activity
+persistence, provider failure compensation, quarantine and moderation-job creation, normalized
+provider readiness, provenance privacy, first-party-only review, release blocking, guarded rollback,
+real-Postgres concurrency, and authenticated desktop/mobile review UX. Provider staging remains a
+separate release-manifest-bound gate and deterministic fixtures never count as provider approval.

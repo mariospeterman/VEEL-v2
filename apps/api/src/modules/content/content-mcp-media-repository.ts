@@ -289,6 +289,7 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
                 where reservation.actor_user_id = ${capability.actor_user_id}
                   and reservation.state = 'provisioning'
                   and reservation.id <> ${capability.id}
+                  and reservation.expires_at > now()
                   and reservation.updated_at >= ${input.quotaWindowStart}
                   and not exists (
                     select 1 from media_assets reserved_asset

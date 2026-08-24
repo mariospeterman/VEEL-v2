@@ -516,6 +516,74 @@ describe("external MCP connector foundation", () => {
     await app.close();
   });
 
+  it("returns a completed video handoff when connection activity persistence fails", async () => {
+    const mcpRepository = new FakeMcpRepository();
+    mcpRepository.touchConnection = async () => {
+      throw new Error("activity persistence unavailable");
+    };
+    const contentRepository = new FakeContentRepository();
+    const capabilityToken = "v".repeat(43);
+    contentRepository.capabilityInputs.push({
+      connectionId: "00000000-0000-4000-8000-000000000399",
+      supabaseUserId,
+      contentId: "00000000-0000-4000-8000-000000000099",
+      requestHash: "a".repeat(64),
+      tokenHash: createHash("sha256").update(capabilityToken).digest("hex"),
+      mediaKind: "video",
+      mimeType: "video/mp4",
+      expiresAt: new Date(Date.now() + 60_000),
+      originClassification: "ai_generated",
+      sourceKind: "generated",
+      sourceLineageReference: null,
+      workflowProviderReference: null,
+      c2paReference: null
+    });
+    const mediaUploadProvider: MediaUploadProviderAdapter = {
+      provider: "bunny",
+      isConfigured: () => true,
+      async createUploadSession() {
+        return {
+          provider: "bunny",
+          providerAssetId: "touch-failure-video",
+          uploadUrl: "https://video.bunnycdn.com/tusupload",
+          headers: { AuthorizationSignature: "safe-signature" },
+          expiresAt: new Date("2026-08-24T12:00:00.000Z")
+        };
+      },
+      async deleteProviderAsset() {
+        throw new Error("completed provider asset must not be compensated");
+      }
+    };
+    const app = await buildApi(testDependencies({ mcpRepository, contentRepository, mediaUploadProvider }));
+    await app.ready();
+    const mcpToken = await createCreatorToken(app, ["creator.drafts.write", "creator.media.label"]);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/mcp/media/uploads/00000000-0000-4000-8000-000000000301",
+      headers: {
+        authorization: `Bearer ${mcpToken}`,
+        "x-wevid-media-capability": capabilityToken
+      }
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      mediaAssetId: "00000000-0000-4000-8000-000000000302",
+      kind: "video",
+      providerState: "upload_pending",
+      upload: {
+        uploadUrl: "https://video.bunnycdn.com/tusupload",
+        provider: "bunny",
+        headers: { AuthorizationSignature: "safe-signature" }
+      }
+    });
+    expect(contentRepository.completionInputs).toHaveLength(1);
+    expect(contentRepository.releaseInputs).toHaveLength(0);
+    expect(contentRepository.cleanupInputs).toHaveLength(0);
+    await app.close();
+  });
+
   it("moves an ambiguously stored image into durable cleanup when immediate compensation fails", async () => {
     const mcpRepository = new FakeMcpRepository();
     const contentRepository = new FakeContentRepository();

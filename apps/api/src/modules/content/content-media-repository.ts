@@ -48,16 +48,10 @@ export function createContentMediaRepositoryMethods(
         const drafts = await transaction<{
           actor_user_id: string;
           media_type: string;
-          asset_count: number;
         }[]>`
           select
             content.creator_user_id as actor_user_id,
-            content.media_type,
-            (
-              select count(*)::integer
-              from media_assets asset
-              where asset.content_item_id = content.id and asset.retired_at is null
-            ) as asset_count
+            content.media_type
           from content_items content
           join users actor on actor.id = content.creator_user_id
           where content.id = ${input.contentId}
@@ -68,10 +62,16 @@ export function createContentMediaRepositoryMethods(
           for update of content
         `;
         const draft = drafts[0];
+        const assetCounts = await transaction<{ asset_count: number }[]>`
+          select count(*)::integer as asset_count
+          from media_assets
+          where content_item_id = ${input.contentId}
+            and retired_at is null
+        `;
         if (
           !draft ||
           !["bit", "clip", "vod", "live_replay", "carousel"].includes(draft.media_type) ||
-          draft.asset_count >= 10
+          (assetCounts[0]?.asset_count ?? 10) >= 10
         ) {
           throw new ContentImageUploadConflictError("draft_locked");
         }
@@ -208,6 +208,16 @@ export function createContentMediaRepositoryMethods(
             providerAssetId: receipt.response_body.providerAssetId,
             completed: existing[0].provider_state === "stored_private"
           };
+        }
+
+        const assetCounts = await transaction<{ asset_count: number }[]>`
+          select count(*)::integer as asset_count
+          from media_assets
+          where content_item_id = ${input.contentId}
+            and retired_at is null
+        `;
+        if ((assetCounts[0]?.asset_count ?? 10) >= 10) {
+          throw new ContentImageUploadConflictError("draft_locked");
         }
 
         await assertCreatorMediaQuota(
@@ -1035,6 +1045,7 @@ async function assertCreatorMediaQuota(
       from mcp_media_upload_capabilities reservation
       where reservation.actor_user_id = ${actorUserId}
         and reservation.state = 'provisioning'
+        and reservation.expires_at > now()
         and reservation.updated_at >= ${quotaWindowStart}
         and not exists (
           select 1 from media_assets reserved_asset

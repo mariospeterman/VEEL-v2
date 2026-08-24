@@ -122,7 +122,7 @@ export async function registerMcpMediaRoutes(
             checksumSha256
           });
           completed = true;
-          await options.mcpRepository.touchConnection({ connectionId: access.connection.id });
+          await touchConnectionBestEffort(request, options.mcpRepository, access.connection.id);
           return reply.code(201).send({
             mediaAssetId: result.mediaAssetId,
             kind: "image",
@@ -155,7 +155,7 @@ export async function registerMcpMediaRoutes(
           providerState: "upload_pending"
         });
         completed = true;
-        await options.mcpRepository.touchConnection({ connectionId: access.connection.id });
+        await touchConnectionBestEffort(request, options.mcpRepository, access.connection.id);
         return reply.code(201).send({
           mediaAssetId: result.mediaAssetId,
           kind: "video",
@@ -233,6 +233,18 @@ export async function registerMcpMediaRoutes(
       }
     }
   );
+}
+
+async function touchConnectionBestEffort(
+  request: FastifyRequest,
+  repository: McpRepository,
+  connectionId: string
+): Promise<void> {
+  try {
+    await repository.touchConnection({ connectionId });
+  } catch (error) {
+    request.log.warn({ error, connectionId }, "MCP connection activity touch failed");
+  }
 }
 
 function normalizedFailureCode(error: unknown): string {
