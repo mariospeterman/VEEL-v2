@@ -336,6 +336,8 @@ export function createContentMediaRepositoryMethods(
           focal_point_y: number | null;
           origin_classification: NonNullable<MediaAssetMutationResult["asset"]["originClassification"]>;
           visible_label_state: NonNullable<MediaAssetMutationResult["asset"]["visibleLabelState"]>;
+          provenance_human_review_state: NonNullable<MediaAssetMutationResult["asset"]["provenanceReviewState"]>;
+          machine_readable_marking_state: NonNullable<MediaAssetMutationResult["asset"]["machineReadableMarkingState"]>;
         }[]>`
           update media_assets
           set
@@ -350,7 +352,8 @@ export function createContentMediaRepositoryMethods(
           returning id, asset_kind, position, provider, provider_state, poster_url, mime_type,
             width_pixels, height_pixels, duration_ms, alt_text, required_for_release, is_cover,
             focal_point_x::float8 as focal_point_x, focal_point_y::float8 as focal_point_y,
-            origin_classification, visible_label_state
+            origin_classification, visible_label_state, provenance_human_review_state,
+            machine_readable_marking_state
         `;
         const asset = assets[0];
         if (!asset) return null;
@@ -376,7 +379,9 @@ export function createContentMediaRepositoryMethods(
             focalPointX: asset.focal_point_x,
             focalPointY: asset.focal_point_y,
             originClassification: asset.origin_classification,
-            visibleLabelState: asset.visible_label_state
+            visibleLabelState: asset.visible_label_state,
+            provenanceReviewState: asset.provenance_human_review_state,
+            machineReadableMarkingState: asset.machine_readable_marking_state
           }
         };
         await transaction`

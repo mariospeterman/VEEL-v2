@@ -107,6 +107,211 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
         origin: { ...createInput.origin, requestHash: "c".repeat(64) }
       })).rejects.toBeInstanceOf(ContentDraftOriginConflictError);
 
+      const capabilityInput = {
+        connectionId: connection.id,
+        supabaseUserId: creatorId,
+        contentId,
+        requestHash: "a".repeat(64),
+        tokenHash: "f".repeat(64),
+        mediaKind: "image" as const,
+        mimeType: "image/webp" as const,
+        expiresAt: new Date(Date.now() + 10 * 60_000),
+        originClassification: "ai_generated" as const,
+        sourceKind: "generated" as const,
+        sourceLineageReference: "urn:wevid:integration:lineage",
+        workflowProviderReference: "integration-workflow",
+        c2paReference: "urn:c2pa:integration-claim"
+      };
+      const issued = await contentRepository.issueMcpMediaUploadCapability!(capabilityInput);
+      expect(issued).toMatchObject({ issued: true, contentId, mediaKind: "image", mimeType: "image/webp" });
+      await expect(contentRepository.issueMcpMediaUploadCapability!({
+        ...capabilityInput,
+        tokenHash: "e".repeat(64)
+      })).resolves.toMatchObject({
+        id: issued!.id,
+        mediaAssetId: issued!.mediaAssetId,
+        issued: false
+      });
+      const capabilityLedger = await sql<Array<{ token_hash: string; request_hash: string; payload: string }>>`
+        select token_hash, request_hash, row_to_json(capability)::text as payload
+        from mcp_media_upload_capabilities capability
+        where id = ${issued!.id}
+      `;
+      expect(capabilityLedger).toMatchObject([{
+        token_hash: capabilityInput.tokenHash,
+        request_hash: capabilityInput.requestHash
+      }]);
+      expect(capabilityLedger[0]!.payload).not.toContain("prompt");
+      expect(capabilityLedger[0]!.payload).not.toContain("provider-secret");
+
+      await expect(contentRepository.claimMcpMediaUploadCapability!({
+        capabilityId: issued!.id,
+        connectionId: connection.id,
+        supabaseUserId: otherCreatorId,
+        tokenHash: capabilityInput.tokenHash,
+        declaredMimeType: "image/webp",
+        quotaWindowStart: new Date(Date.now() - 86_400_000),
+        dailyMediaUploadQuota: 10,
+        leaseToken: randomUUID(),
+        leasedUntil: new Date(Date.now() + 60_000)
+      })).rejects.toMatchObject({ reason: "mismatch" });
+
+      const concurrentClaims = await Promise.allSettled([randomUUID(), randomUUID()].map((leaseToken) =>
+        contentRepository.claimMcpMediaUploadCapability!({
+          capabilityId: issued!.id,
+          connectionId: connection.id,
+          supabaseUserId: creatorId,
+          tokenHash: capabilityInput.tokenHash,
+          declaredMimeType: "image/webp",
+          quotaWindowStart: new Date(Date.now() - 86_400_000),
+          dailyMediaUploadQuota: 10,
+          leaseToken,
+          leasedUntil: new Date(Date.now() + 60_000)
+        })
+      ));
+      const claimed = concurrentClaims.find((result) => result.status === "fulfilled");
+      const deniedClaim = concurrentClaims.find((result) => result.status === "rejected");
+      expect(claimed?.status).toBe("fulfilled");
+      expect(deniedClaim).toMatchObject({
+        status: "rejected",
+        reason: expect.objectContaining({ reason: "busy" })
+      });
+      if (!claimed || claimed.status !== "fulfilled") throw new Error("capability claim did not converge");
+
+      await sql`
+        update mcp_media_upload_capabilities
+        set leased_until = now() - interval '1 second'
+        where id = ${issued!.id}
+      `;
+      const recovered = await contentRepository.claimMcpMediaUploadCapability!({
+        capabilityId: issued!.id,
+        connectionId: connection.id,
+        supabaseUserId: creatorId,
+        tokenHash: capabilityInput.tokenHash,
+        declaredMimeType: "image/webp",
+        quotaWindowStart: new Date(Date.now() - 86_400_000),
+        dailyMediaUploadQuota: 10,
+        leaseToken: randomUUID(),
+        leasedUntil: new Date(Date.now() + 60_000)
+      });
+      const completed = await contentRepository.completeMcpMediaUploadCapability!({
+        capabilityId: issued!.id,
+        connectionId: connection.id,
+        leaseToken: recovered.leaseToken,
+        providerAssetId: `integration-image-${randomUUID()}`,
+        providerState: "stored_private",
+        widthPixels: 8,
+        heightPixels: 5,
+        checksumSha256: "1".repeat(64)
+      });
+      expect(completed).toMatchObject({ mediaAssetId: issued!.mediaAssetId, contentId });
+      await expect(contentRepository.claimMcpMediaUploadCapability!({
+        capabilityId: issued!.id,
+        connectionId: connection.id,
+        supabaseUserId: creatorId,
+        tokenHash: capabilityInput.tokenHash,
+        declaredMimeType: "image/webp",
+        quotaWindowStart: new Date(Date.now() - 86_400_000),
+        dailyMediaUploadQuota: 10,
+        leaseToken: randomUUID(),
+        leasedUntil: new Date(Date.now() + 60_000)
+      })).rejects.toMatchObject({ reason: "consumed" });
+
+      const readiness = await contentRepository.findOwnedPrivateMediaReadiness!({
+        supabaseUserId: creatorId,
+        contentId
+      });
+      expect(readiness).toMatchObject({
+        contentId,
+        compositionRevision: completed.compositionRevision,
+        assets: [{
+          mediaAssetId: issued!.mediaAssetId,
+          providerState: "processing",
+          quarantineState: "pending",
+          provenanceReviewState: "pending",
+          visibleLabelState: "ai_generated",
+          machineReadableMarkingState: "pending"
+        }],
+        blockers: expect.arrayContaining([
+          "media_processing_incomplete",
+          "safety_review_incomplete",
+          "provenance_review_pending"
+        ])
+      });
+      await expect(contentRepository.findOwnedPrivateMediaReadiness!({
+        supabaseUserId: otherCreatorId,
+        contentId
+      })).resolves.toBeNull();
+      const beforeReview = await sql<Array<{ ready: boolean }>>`
+        select private.content_composition_provenance_ready(${contentId}) as ready
+      `;
+      expect(beforeReview[0]?.ready).toBe(false);
+
+      const reviewInput = {
+        supabaseUserId: creatorId,
+        mediaAssetId: issued!.mediaAssetId,
+        expectedCompositionRevision: completed.compositionRevision,
+        decision: "confirmed" as const,
+        idempotencyKey: `integration-provenance-${randomUUID()}`,
+        requestHash: "9".repeat(64)
+      };
+      const reviewed = await contentRepository.reviewOwnedMediaAssetProvenance!(reviewInput);
+      expect(reviewed).toMatchObject({
+        compositionRevision: completed.compositionRevision + 1,
+        asset: { provenanceReviewState: "confirmed", visibleLabelState: "ai_generated" }
+      });
+      await expect(contentRepository.reviewOwnedMediaAssetProvenance!(reviewInput)).resolves.toEqual(reviewed);
+      const releasePredicates = await sql<Array<{ provenance_ready: boolean; release_ready: boolean }>>`
+        select
+          private.content_composition_provenance_ready(${contentId}) as provenance_ready,
+          private.content_safety_release_ready(${contentId}) as release_ready
+      `;
+      expect(releasePredicates).toEqual([{ provenance_ready: true, release_ready: false }]);
+
+      const cleanupCapability = await contentRepository.issueMcpMediaUploadCapability!({
+        ...capabilityInput,
+        requestHash: "8".repeat(64),
+        tokenHash: "7".repeat(64),
+        c2paReference: null
+      });
+      const cleanupClaim = await contentRepository.claimMcpMediaUploadCapability!({
+        capabilityId: cleanupCapability!.id,
+        connectionId: connection.id,
+        supabaseUserId: creatorId,
+        tokenHash: "7".repeat(64),
+        declaredMimeType: "image/webp",
+        quotaWindowStart: new Date(Date.now() - 86_400_000),
+        dailyMediaUploadQuota: 10,
+        leaseToken: randomUUID(),
+        leasedUntil: new Date(Date.now() + 60_000)
+      });
+      await contentRepository.scheduleMcpMediaProviderCleanup!({
+        capabilityId: cleanupCapability!.id,
+        connectionId: connection.id,
+        leaseToken: cleanupClaim.leaseToken,
+        providerAssetId: `orphan-image-${randomUUID()}`,
+        failureCode: "provider_delete_failed"
+      });
+      const cleanupState = await sql<Array<{
+        state: string;
+        retired_at: Date;
+        provider_cleanup_state: string;
+        asset_revision: number;
+      }>>`
+        select capability.state, asset.retired_at, asset.provider_cleanup_state,
+          content.asset_revision::integer as asset_revision
+        from mcp_media_upload_capabilities capability
+        join media_assets asset on asset.id = capability.reserved_media_asset_id
+        join content_items content on content.id = capability.content_item_id
+        where capability.id = ${cleanupCapability!.id}
+      `;
+      expect(cleanupState).toMatchObject([{
+        state: "revoked",
+        retired_at: expect.any(Date),
+        provider_cleanup_state: "retry",
+        asset_revision: reviewed!.compositionRevision
+      }]);
+
       const rows = await sql<Array<{
         connection_id: string;
         actor_user_id: string;
@@ -131,11 +336,20 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
     } finally {
       if (connectionId) {
         await sql`delete from mcp_private_draft_origins where connection_id = ${connectionId}`;
+        await sql`delete from mcp_media_upload_capabilities where connection_id = ${connectionId}`;
         await sql`delete from mcp_connections where id = ${connectionId}`;
+      }
+      if (contentId) {
+        await sql`
+          delete from media_moderation_jobs
+          where media_asset_id in (select id from media_assets where content_item_id = ${contentId})
+        `;
+        await sql`delete from media_assets where content_item_id = ${contentId}`;
       }
       if (contentId) await sql`delete from content_items where id = ${contentId}`;
       if (pollContentId) await sql`delete from content_items where id = ${pollContentId}`;
       await sql`delete from idempotency_keys where actor_user_id = any(${[creatorId, otherCreatorId]}::uuid[])`;
+      await sql`delete from audit_events where actor_user_id = any(${[creatorId, otherCreatorId]}::uuid[])`;
       await sql`delete from profiles where user_id = any(${[creatorId, otherCreatorId]}::uuid[])`;
       await sql`delete from users where id = any(${[creatorId, otherCreatorId]}::uuid[])`;
       await sql.end({ timeout: 5 });

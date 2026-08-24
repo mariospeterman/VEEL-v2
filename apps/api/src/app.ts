@@ -23,6 +23,7 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
       redact: [
         "req.headers.authorization",
         "req.headers.cookie",
+        "req.headers.x-wevid-media-capability",
         "res.headers.set-cookie",
         "SUPABASE_SECRET_KEY",
         "SUPABASE_SERVICE_ROLE_KEY",

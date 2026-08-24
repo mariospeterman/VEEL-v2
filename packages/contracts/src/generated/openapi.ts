@@ -1244,6 +1244,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/mcp/media/uploads/{capabilityId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redeem one short-lived MCP media capability into an owned private draft
+         * @description Image bytes are sanitized and stored through the canonical private image boundary. Video redemption returns only Bunny's documented TUS endpoint and safe signed headers. The one-time capability and the active MCP bearer must match; no provider secret or private media URL is returned.
+         */
+        post: operations["redeemMcpMediaUploadCapability"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/media/assets/{mediaAssetId}": {
         parameters: {
             query?: never;
@@ -1263,6 +1283,26 @@ export interface paths {
         head?: never;
         /** Update accessibility and provenance fields on an owned draft asset */
         patch: operations["updateContentMediaAsset"];
+        trace?: never;
+    };
+    "/v1/media/assets/{mediaAssetId}/provenance-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm or reject an MCP media provenance claim in first-party WeVid
+         * @description Requires an authenticated WeVid application session, exact composition revision, and idempotency key. MCP bearer tokens cannot perform this review. Confirmation does not accept safety terms or publish content.
+         */
+        post: operations["reviewContentMediaAssetProvenance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/media/assets/{mediaAssetId}/sync": {
@@ -4449,6 +4489,10 @@ export interface components {
             originClassification: "human_created" | "ai_assisted" | "ai_generated" | "materially_ai_manipulated";
             /** @enum {string} */
             visibleLabelState?: "none" | "ai_assisted" | "ai_generated" | "manipulated";
+            /** @enum {string} */
+            provenanceReviewState?: "not_required" | "pending" | "confirmed" | "rejected";
+            /** @enum {string} */
+            machineReadableMarkingState?: "unavailable" | "pending" | "present" | "invalid";
         };
         ImageAssetUploadResult: {
             /** Format: uuid */
@@ -4471,6 +4515,25 @@ export interface components {
         ContentMediaAssetMutationResult: {
             compositionRevision: number;
             asset: components["schemas"]["ContentMediaAsset"];
+        };
+        ReviewMediaProvenanceRequest: {
+            expectedCompositionRevision: number;
+            /** @enum {string} */
+            decision: "confirmed" | "rejected";
+        };
+        McpMediaUploadRedemption: {
+            /** Format: uuid */
+            mediaAssetId: string;
+            /** @enum {string} */
+            kind: "image" | "video";
+            /** @enum {string} */
+            mimeType: "image/jpeg" | "image/png" | "image/webp" | "video/mp4" | "video/quicktime" | "video/webm";
+            compositionRevision: number;
+            /** @enum {string} */
+            providerState: "stored_private" | "upload_pending";
+            /** @enum {string} */
+            provenanceReviewState: "pending";
+            upload?: components["schemas"]["UploadSession"] | null;
         };
         RetireContentMediaAssetRequest: {
             expectedCompositionRevision: number;
@@ -4690,10 +4753,26 @@ export interface components {
             publicationState: "draft" | "upload_pending" | "processing" | "in_review" | "changes_requested" | "rejected" | "appeal_pending" | "published" | "blocked";
             reviewState: string;
             reviewMessage?: string | null;
+            compositionRevision?: number;
+            provenanceAssets?: components["schemas"]["OwnedMediaProvenanceReview"][];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        OwnedMediaProvenanceReview: {
+            /** Format: uuid */
+            mediaAssetId: string;
+            /** @enum {string} */
+            kind: "image" | "video";
+            /** @enum {string} */
+            originClassification: "ai_assisted" | "ai_generated" | "materially_ai_manipulated";
+            /** @enum {string} */
+            visibleLabelState: "ai_assisted" | "ai_generated" | "manipulated";
+            /** @enum {string} */
+            reviewState: "pending" | "confirmed" | "rejected";
+            /** @enum {string} */
+            machineReadableMarkingState: "unavailable" | "pending" | "present" | "invalid";
         };
         CreatorMediaPage: {
             items: components["schemas"]["CreatorMediaItem"][];
@@ -8329,6 +8408,9 @@ export interface components {
         SubscriptionAuthorizationIntentId: string;
         AiSessionId: string;
         McpConnectionId: string;
+        McpMediaCapabilityId: string;
+        /** @description One-time secret returned once by creator_prepare_private_media_upload; only its SHA-256 hash is stored. */
+        McpMediaCapabilityToken: string;
         OAuthAuthorizationRequestId: string;
         NotificationId: string;
         NotificationDeviceId: string;
@@ -10402,6 +10484,45 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    redeemMcpMediaUploadCapability: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description One-time secret returned once by creator_prepare_private_media_upload; only its SHA-256 hash is stored. */
+                "X-WeVid-Media-Capability": components["parameters"]["McpMediaCapabilityToken"];
+            };
+            path: {
+                capabilityId: components["parameters"]["McpMediaCapabilityId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "image/jpeg": string;
+                "image/png": string;
+                "image/webp": string;
+            };
+        };
+        responses: {
+            /** @description Capability consumed and one canonical private media asset created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpMediaUploadRedemption"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            410: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     retireContentMediaAsset: {
         parameters: {
             query?: never;
@@ -10464,6 +10585,40 @@ export interface operations {
         };
         responses: {
             /** @description Updated asset and authoritative composition revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentMediaAssetMutationResult"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    reviewContentMediaAssetProvenance: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                mediaAssetId: components["parameters"]["MediaAssetId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewMediaProvenanceRequest"];
+            };
+        };
+        responses: {
+            /** @description Provenance review recorded and composition revision advanced */
             200: {
                 headers: {
                     [name: string]: unknown;

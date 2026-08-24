@@ -39,6 +39,24 @@ export class ContentImageUploadConflictError extends Error {
   }
 }
 
+export type McpMediaCapabilityConflictReason =
+  | "not_found"
+  | "expired"
+  | "consumed"
+  | "busy"
+  | "mismatch"
+  | "draft_locked"
+  | "quota_exceeded"
+  | "idempotency_conflict"
+  | "lease_lost";
+
+export class McpMediaCapabilityConflictError extends Error {
+  constructor(readonly reason: McpMediaCapabilityConflictReason) {
+    super(`mcp_media_capability_${reason}`);
+    this.name = "McpMediaCapabilityConflictError";
+  }
+}
+
 export class ContentAssetRetirementConflictError extends Error {
   constructor(
     readonly reason:

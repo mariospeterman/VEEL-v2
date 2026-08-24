@@ -67,6 +67,16 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   await expect(page.getByRole("heading", { name: "Aria Moon" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Your media" })).toBeVisible();
   await expect(page.getByText("Please confirm the music rights.")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Media provenance review" })).toBeVisible();
+  await expect(page.getByText("image · AI-generated")).toBeVisible();
+  const provenanceReview = page.waitForRequest((request) =>
+    request.method() === "POST" &&
+    new URL(request.url()).pathname === `/v1/media/assets/${imageMediaAssetId}/provenance-review`
+  );
+  await page.getByRole("button", { name: "Confirm label" }).click();
+  const provenanceRequest = await provenanceReview;
+  expect(provenanceRequest.postDataJSON()).toEqual({ expectedCompositionRevision: 4, decision: "confirmed" });
+  await expect(page.getByText("Provenance label confirmed.")).toBeVisible();
   await page.getByRole("button", { name: "Load more media" }).click();
   await expect(page.getByText("Older published post")).toBeVisible();
   await page.getByRole("button", { name: "Appeal decision" }).click();
@@ -567,6 +577,34 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
     return;
   }
 
+  if (method === "POST" && url.pathname === `/v1/media/assets/${imageMediaAssetId}/provenance-review`) {
+    sendJson(response, 200, {
+      compositionRevision: 5,
+      asset: {
+        id: imageMediaAssetId,
+        kind: "image",
+        position: 0,
+        provider: "bunny",
+        providerState: "stored_private",
+        posterUrl: null,
+        mimeType: "image/webp",
+        widthPixels: 1280,
+        heightPixels: 720,
+        durationMs: null,
+        altText: null,
+        requiredForRelease: true,
+        isCover: false,
+        focalPointX: null,
+        focalPointY: null,
+        originClassification: "ai_generated",
+        visibleLabelState: "ai_generated",
+        provenanceReviewState: body?.decision ?? "confirmed",
+        machineReadableMarkingState: "pending"
+      }
+    });
+    return;
+  }
+
   if (method === "GET" && url.pathname === "/v1/verification/status") {
     sendJson(response, 200, verificationStatus());
     return;
@@ -1018,10 +1056,19 @@ function creatorMediaItem() {
     mediaType: "clip",
     caption: "Studio draft needing an update",
     posterUrl: null,
-    visibility: "public",
+    visibility: "private",
     publicationState: "changes_requested",
     reviewState: "changes_requested",
     reviewMessage: "Please confirm the music rights.",
+    compositionRevision: 4,
+    provenanceAssets: [{
+      mediaAssetId: imageMediaAssetId,
+      kind: "image",
+      originClassification: "ai_generated",
+      visibleLabelState: "ai_generated",
+      reviewState: "pending",
+      machineReadableMarkingState: "pending"
+    }],
     createdAt: "2026-08-15T12:00:00.000Z",
     updatedAt: "2026-08-15T12:01:00.000Z"
   };

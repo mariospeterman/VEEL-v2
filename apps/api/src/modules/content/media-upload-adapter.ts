@@ -12,7 +12,8 @@ import type {
 const bunnyStreamBaseUrl = "https://video.bunnycdn.com";
 const bunnyTusUploadUrl = "https://video.bunnycdn.com/tusupload";
 const bunnyEmbedBaseUrl = "https://iframe.mediadelivery.net/embed";
-const uploadTtlSeconds = 24 * 60 * 60;
+const defaultUploadTtlSeconds = 24 * 60 * 60;
+const minimumUploadTtlSeconds = 60 * 60;
 
 export class MediaUploadProviderConfigurationError extends Error {
   constructor() {
@@ -163,6 +164,9 @@ export function createBunnyStreamUploadAdapter(
         throw new MediaUploadProviderError();
       }
 
+      const uploadTtlSeconds = input.ttlSeconds === undefined
+        ? defaultUploadTtlSeconds
+        : Math.max(minimumUploadTtlSeconds, Math.min(defaultUploadTtlSeconds, input.ttlSeconds));
       const expirationTime = Math.floor(Date.now() / 1000) + uploadTtlSeconds;
       const signature = createHash("sha256")
         .update(`${libraryId}${apiKey}${expirationTime}${video.guid}`)

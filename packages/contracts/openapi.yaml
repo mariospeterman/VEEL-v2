@@ -1238,6 +1238,41 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/mcp/media/uploads/{capabilityId}:
+    post:
+      operationId: redeemMcpMediaUploadCapability
+      tags: [MCP, Media]
+      summary: Redeem one short-lived MCP media capability into an owned private draft
+      description: Image bytes are sanitized and stored through the canonical private image boundary. Video redemption returns only Bunny's documented TUS endpoint and safe signed headers. The one-time capability and the active MCP bearer must match; no provider secret or private media URL is returned.
+      x-idempotency-policy: single-use-auth-proof
+      security:
+        - mcpBearer: []
+      parameters:
+        - $ref: "#/components/parameters/McpMediaCapabilityId"
+        - $ref: "#/components/parameters/McpMediaCapabilityToken"
+      requestBody:
+        required: false
+        content:
+          image/jpeg:
+            schema: { type: string, format: binary }
+          image/png:
+            schema: { type: string, format: binary }
+          image/webp:
+            schema: { type: string, format: binary }
+      responses:
+        "201":
+          description: Capability consumed and one canonical private media asset created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpMediaUploadRedemption" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "410": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/media/assets/{mediaAssetId}:
     patch:
       operationId: updateContentMediaAsset
@@ -1286,6 +1321,31 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/RetireContentMediaAssetResult" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/media/assets/{mediaAssetId}/provenance-review:
+    post:
+      operationId: reviewContentMediaAssetProvenance
+      tags: [Media]
+      summary: Confirm or reject an MCP media provenance claim in first-party WeVid
+      description: Requires an authenticated WeVid application session, exact composition revision, and idempotency key. MCP bearer tokens cannot perform this review. Confirmation does not accept safety terms or publish content.
+      parameters:
+        - $ref: "#/components/parameters/MediaAssetId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReviewMediaProvenanceRequest" }
+      responses:
+        "200":
+          description: Provenance review recorded and composition revision advanced
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContentMediaAssetMutationResult" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -3340,6 +3400,10 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    mcpBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: MCP-OAuth-or-scoped-token
   parameters:
     RequiredIdempotencyKey:
       name: Idempotency-Key
@@ -3404,6 +3468,13 @@ components:
     SubscriptionAuthorizationIntentId: { name: authorizationIntentId, in: path, required: true, schema: { type: string, format: uuid } }
     AiSessionId: { name: aiSessionId, in: path, required: true, schema: { type: string, format: uuid } }
     McpConnectionId: { name: mcpConnectionId, in: path, required: true, schema: { type: string, format: uuid } }
+    McpMediaCapabilityId: { name: capabilityId, in: path, required: true, schema: { type: string, format: uuid } }
+    McpMediaCapabilityToken:
+      name: X-WeVid-Media-Capability
+      in: header
+      required: true
+      schema: { type: string, minLength: 32, maxLength: 256 }
+      description: One-time secret returned once by creator_prepare_private_media_upload; only its SHA-256 hash is stored.
     OAuthAuthorizationRequestId: { name: oauthAuthorizationRequestId, in: path, required: true, schema: { type: string, format: uuid } }
     NotificationId: { name: notificationId, in: path, required: true, schema: { type: string, format: uuid } }
     NotificationDeviceId: { name: notificationDeviceId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -4642,6 +4713,8 @@ components:
         focalPointY: { type: number, minimum: 0, maximum: 1, nullable: true }
         originClassification: { type: string, enum: [human_created, ai_assisted, ai_generated, materially_ai_manipulated] }
         visibleLabelState: { type: string, enum: [none, ai_assisted, ai_generated, manipulated] }
+        provenanceReviewState: { type: string, enum: [not_required, pending, confirmed, rejected] }
+        machineReadableMarkingState: { type: string, enum: [unavailable, pending, present, invalid] }
     ImageAssetUploadResult:
       type: object
       required: [mediaAssetId, kind, mimeType, widthPixels, heightPixels, releaseState]
@@ -4671,6 +4744,28 @@ components:
       properties:
         compositionRevision: { type: integer, minimum: 1 }
         asset: { $ref: "#/components/schemas/ContentMediaAsset" }
+    ReviewMediaProvenanceRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedCompositionRevision, decision]
+      properties:
+        expectedCompositionRevision: { type: integer, minimum: 1 }
+        decision: { type: string, enum: [confirmed, rejected] }
+    McpMediaUploadRedemption:
+      type: object
+      additionalProperties: false
+      required: [mediaAssetId, kind, mimeType, compositionRevision, providerState, provenanceReviewState]
+      properties:
+        mediaAssetId: { type: string, format: uuid }
+        kind: { type: string, enum: [image, video] }
+        mimeType: { type: string, enum: [image/jpeg, image/png, image/webp, video/mp4, video/quicktime, video/webm] }
+        compositionRevision: { type: integer, minimum: 1 }
+        providerState: { type: string, enum: [stored_private, upload_pending] }
+        provenanceReviewState: { type: string, enum: [pending] }
+        upload:
+          allOf:
+            - $ref: "#/components/schemas/UploadSession"
+          nullable: true
     RetireContentMediaAssetRequest:
       type: object
       additionalProperties: false
@@ -4925,8 +5020,23 @@ components:
           enum: [draft, upload_pending, processing, in_review, changes_requested, rejected, appeal_pending, published, blocked]
         reviewState: { type: string }
         reviewMessage: { type: string, nullable: true }
+        compositionRevision: { type: integer, minimum: 1 }
+        provenanceAssets:
+          type: array
+          items: { $ref: "#/components/schemas/OwnedMediaProvenanceReview" }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    OwnedMediaProvenanceReview:
+      type: object
+      additionalProperties: false
+      required: [mediaAssetId, kind, originClassification, visibleLabelState, reviewState, machineReadableMarkingState]
+      properties:
+        mediaAssetId: { type: string, format: uuid }
+        kind: { type: string, enum: [image, video] }
+        originClassification: { type: string, enum: [ai_assisted, ai_generated, materially_ai_manipulated] }
+        visibleLabelState: { type: string, enum: [ai_assisted, ai_generated, manipulated] }
+        reviewState: { type: string, enum: [pending, confirmed, rejected] }
+        machineReadableMarkingState: { type: string, enum: [unavailable, pending, present, invalid] }
     CreatorMediaPage:
       type: object
       required: [items, nextCursor]

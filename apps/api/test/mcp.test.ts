@@ -1,12 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
+import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildApi } from "../src/app";
 import type { BuildApiOptions } from "../src/app";
 import type { AdminRepository } from "../src/modules/admin/types";
 import type { AgeRepository } from "../src/modules/age/types";
 import type { AnalyticsRepository } from "../src/modules/analytics/types";
-import type { ContentRepository, CreateContentDraftInput } from "../src/modules/content/types";
-import { ContentDraftPollCloseError } from "../src/modules/content/content-errors";
+import type { ContentRepository, CreateContentDraftInput, MediaUploadProviderAdapter } from "../src/modules/content/types";
+import { ContentDraftPollCloseError, McpMediaCapabilityConflictError } from "../src/modules/content/content-errors";
 import type {
   McpConnection,
   McpRepository,
@@ -262,6 +263,212 @@ describe("external MCP connector foundation", () => {
     expect(malformedPoll.json().error.message).toContain("future ISO date-time");
     expect(contentRepository.createdDrafts).toHaveLength(2);
 
+    await app.close();
+  });
+
+  it("issues hash-only media capabilities and returns minimized provenance readiness", async () => {
+    const mcpRepository = new FakeMcpRepository();
+    const contentRepository = new FakeContentRepository();
+    const uploadedImages: Array<{ body: Buffer; mimeType: string; providerAssetId: string }> = [];
+    const mediaUploadProvider: MediaUploadProviderAdapter = {
+      provider: "bunny",
+      isConfigured: () => true,
+      async createUploadSession() { throw new Error("video upload was not expected"); },
+      isImageUploadConfigured: () => true,
+      createImageObjectReference: ({ contentId, mediaAssetId, extension }) =>
+        `images/${contentId}/${mediaAssetId}.${extension}`,
+      async uploadImageObject(input) { uploadedImages.push(input); },
+      async deleteProviderAsset() {}
+    };
+    const app = await buildApi(testDependencies({ mcpRepository, contentRepository, mediaUploadProvider }));
+    await app.ready();
+    const token = await createCreatorToken(app, [
+      "creator.drafts.write",
+      "creator.media.label",
+      "creator.drafts.read",
+      "creator.media.read"
+    ]);
+    const requestId = randomUUID();
+    const args = {
+      requestId,
+      contentId: "00000000-0000-4000-8000-000000000099",
+      mimeType: "image/webp",
+      provenance: {
+        originClassification: "ai_generated",
+        sourceKind: "generated",
+        sourceLineageReference: "urn:wevid:test:lineage",
+        workflowProviderReference: "test-workflow",
+        c2paReference: "urn:c2pa:test-claim"
+      }
+    };
+
+    const prepared = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        jsonrpc: "2.0",
+        id: 33,
+        method: "tools/call",
+        params: { name: "creator_prepare_private_media_upload", arguments: args }
+      }
+    });
+    expect(prepared.statusCode).toBe(200);
+    expect(prepared.body).toContain('"result"');
+    expect(prepared.json().result.structuredContent.capability).toMatchObject({
+      capabilityId: "00000000-0000-4000-8000-000000000301",
+      contentId: args.contentId,
+      mediaAssetId: "00000000-0000-4000-8000-000000000302",
+      kind: "image",
+      mimeType: "image/webp",
+      status: "issued",
+      capabilityToken: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/),
+      redeemPath: "/v1/mcp/media/uploads/00000000-0000-4000-8000-000000000301"
+    });
+    expect(contentRepository.capabilityInputs[0]).toMatchObject({
+      mediaKind: "image",
+      mimeType: "image/webp",
+      originClassification: "ai_generated",
+      sourceKind: "generated",
+      tokenHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      requestHash: expect.stringMatching(/^[a-f0-9]{64}$/)
+    });
+    expect(contentRepository.capabilityInputs[0]).not.toHaveProperty("capabilityToken");
+    expect(JSON.stringify(mcpRepository.toolCalls)).not.toContain(
+      prepared.json().result.structuredContent.capability.capabilityToken
+    );
+
+    const sourceImage = await sharp({
+      create: { width: 7, height: 4, channels: 3, background: { r: 50, g: 120, b: 200 } }
+    }).webp().toBuffer();
+    const redeemed = await app.inject({
+      method: "POST",
+      url: prepared.json().result.structuredContent.capability.redeemPath,
+      headers: {
+        authorization: `Bearer ${token}`,
+        "x-wevid-media-capability": prepared.json().result.structuredContent.capability.capabilityToken,
+        "content-type": "image/webp"
+      },
+      payload: sourceImage
+    });
+    expect(redeemed.statusCode).toBe(201);
+    expect(redeemed.json()).toMatchObject({
+      mediaAssetId: "00000000-0000-4000-8000-000000000302",
+      kind: "image",
+      mimeType: "image/webp",
+      providerState: "stored_private",
+      provenanceReviewState: "pending",
+      upload: null
+    });
+    expect(contentRepository.claimInputs[0]).toMatchObject({
+      capabilityId: "00000000-0000-4000-8000-000000000301",
+      declaredMimeType: "image/webp",
+      tokenHash: contentRepository.capabilityInputs[0]?.tokenHash,
+      leaseToken: expect.any(String)
+    });
+    expect(contentRepository.completionInputs[0]).toMatchObject({
+      providerState: "stored_private",
+      widthPixels: 7,
+      heightPixels: 4,
+      checksumSha256: expect.stringMatching(/^[a-f0-9]{64}$/)
+    });
+    expect(uploadedImages).toHaveLength(1);
+    const storedMetadata = await sharp(uploadedImages[0]!.body).metadata();
+    expect(storedMetadata.exif).toBeUndefined();
+    expect(storedMetadata.orientation).toBeUndefined();
+    expect(JSON.stringify(redeemed.json())).not.toContain("providerAssetId");
+
+    const replay = await app.inject({
+      method: "POST",
+      url: prepared.json().result.structuredContent.capability.redeemPath,
+      headers: {
+        authorization: `Bearer ${token}`,
+        "x-wevid-media-capability": prepared.json().result.structuredContent.capability.capabilityToken,
+        "content-type": "image/webp"
+      },
+      payload: sourceImage
+    });
+    expect(replay.statusCode).toBe(410);
+    expect(uploadedImages).toHaveLength(1);
+
+    const mcpCannotReview = await app.inject({
+      method: "POST",
+      url: "/v1/media/assets/00000000-0000-4000-8000-000000000302/provenance-review",
+      headers: { authorization: `Bearer ${token}`, "idempotency-key": "mcp-cannot-review" },
+      payload: { expectedCompositionRevision: 2, decision: "confirmed" }
+    });
+    expect(mcpCannotReview.statusCode).toBe(401);
+
+    const reviewed = await app.inject({
+      method: "POST",
+      url: "/v1/media/assets/00000000-0000-4000-8000-000000000302/provenance-review",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "review-provenance-1" },
+      payload: { expectedCompositionRevision: 2, decision: "confirmed" }
+    });
+    expect(reviewed.statusCode).toBe(200);
+    expect(reviewed.json()).toMatchObject({
+      compositionRevision: 3,
+      asset: {
+        id: "00000000-0000-4000-8000-000000000302",
+        provenanceReviewState: "confirmed",
+        visibleLabelState: "ai_generated"
+      }
+    });
+    expect(contentRepository.reviewInputs).toMatchObject([{
+      expectedCompositionRevision: 2,
+      decision: "confirmed",
+      idempotencyKey: "review-provenance-1",
+      requestHash: expect.stringMatching(/^[a-f0-9]{64}$/)
+    }]);
+
+    const readiness = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        jsonrpc: "2.0",
+        id: 34,
+        method: "tools/call",
+        params: {
+          name: "creator_get_private_media_readiness",
+          arguments: { contentId: args.contentId }
+        }
+      }
+    });
+    expect(readiness.json().result.structuredContent.readiness).toMatchObject({
+      contentId: args.contentId,
+      compositionRevision: 2,
+      assets: [{
+        mediaAssetId: "00000000-0000-4000-8000-000000000302",
+        providerState: "processing",
+        quarantineState: "pending",
+        provenanceReviewState: "pending"
+      }],
+      blockers: ["media_processing_incomplete", "safety_review_incomplete", "provenance_review_pending"]
+    });
+    expect(JSON.stringify(readiness.json())).not.toContain("providerAssetId");
+    expect(JSON.stringify(readiness.json())).not.toContain("uploadUrl");
+
+    const forbiddenOrigin = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        jsonrpc: "2.0",
+        id: 35,
+        method: "tools/call",
+        params: {
+          name: "creator_prepare_private_media_upload",
+          arguments: {
+            ...args,
+            requestId: randomUUID(),
+            provenance: { ...args.provenance, originClassification: "human_created" }
+          }
+        }
+      }
+    });
+    expect(forbiddenOrigin.json().error.message).toContain("supported AI origin classification");
+    expect(contentRepository.capabilityInputs).toHaveLength(1);
     await app.close();
   });
 
@@ -618,6 +825,7 @@ async function createCreatorToken(
 function testDependencies(input: {
   mcpRepository: McpRepository;
   contentRepository?: FakeContentRepository;
+  mediaUploadProvider?: MediaUploadProviderAdapter;
 }): BuildApiOptions {
   return {
     authVerifier: fakeAuthVerifier,
@@ -627,6 +835,7 @@ function testDependencies(input: {
     walletRepository: fakeWalletRepository,
     profileRepository: fakeProfileRepository,
     contentRepository: (input.contentRepository ?? new FakeContentRepository()) as unknown as ContentRepository,
+    ...(input.mediaUploadProvider ? { mediaUploadProvider: input.mediaUploadProvider } : {}),
     adminRepository: fakeAdminRepository,
     mcpRepository: input.mcpRepository
   };
@@ -750,6 +959,11 @@ const fakeAdminRepository = {
 class FakeContentRepository {
   readonly createdDrafts: CreateContentDraftInput[] = [];
   readonly listInputs: Parameters<NonNullable<ContentRepository["listOwnedContent"]>>[0][] = [];
+  readonly capabilityInputs: Parameters<NonNullable<ContentRepository["issueMcpMediaUploadCapability"]>>[0][] = [];
+  readonly claimInputs: Parameters<NonNullable<ContentRepository["claimMcpMediaUploadCapability"]>>[0][] = [];
+  readonly completionInputs: Parameters<NonNullable<ContentRepository["completeMcpMediaUploadCapability"]>>[0][] = [];
+  readonly reviewInputs: Parameters<NonNullable<ContentRepository["reviewOwnedMediaAssetProvenance"]>>[0][] = [];
+  capabilityConsumed = false;
 
   async createDraft(input: CreateContentDraftInput) {
     if (input.poll?.closesAt && Date.parse(input.poll.closesAt) <= Date.now()) {
@@ -803,6 +1017,108 @@ class FakeContentRepository {
       assetCount: 1,
       blockers: [],
       nextAction: "continue_in_wevid" as const
+    };
+  }
+
+  async issueMcpMediaUploadCapability(
+    input: Parameters<NonNullable<ContentRepository["issueMcpMediaUploadCapability"]>>[0]
+  ) {
+    this.capabilityInputs.push(input);
+    return {
+      id: "00000000-0000-4000-8000-000000000301",
+      contentId: input.contentId,
+      mediaAssetId: "00000000-0000-4000-8000-000000000302",
+      mediaKind: input.mediaKind,
+      mimeType: input.mimeType,
+      expiresAt: input.expiresAt.toISOString(),
+      issued: true
+    };
+  }
+
+  async findOwnedPrivateMediaReadiness(input: { supabaseUserId: string; contentId: string }) {
+    if (input.supabaseUserId !== supabaseUserId) return null;
+    return {
+      contentId: input.contentId,
+      compositionRevision: 2,
+      assets: [{
+        mediaAssetId: "00000000-0000-4000-8000-000000000302",
+        kind: "image" as const,
+        mimeType: "image/webp" as const,
+        providerState: "processing" as const,
+        quarantineState: "pending" as const,
+        provenanceReviewState: "pending" as const,
+        visibleLabelState: "ai_generated" as const,
+        machineReadableMarkingState: "pending" as const
+      }],
+      blockers: ["media_processing_incomplete", "safety_review_incomplete", "provenance_review_pending"]
+    };
+  }
+
+  async claimMcpMediaUploadCapability(
+    input: Parameters<NonNullable<ContentRepository["claimMcpMediaUploadCapability"]>>[0]
+  ) {
+    this.claimInputs.push(input);
+    if (this.capabilityConsumed) throw new McpMediaCapabilityConflictError("consumed");
+    const issued = this.capabilityInputs[0];
+    if (!issued || input.tokenHash !== issued.tokenHash) throw new McpMediaCapabilityConflictError("mismatch");
+    return {
+      id: input.capabilityId,
+      contentId: issued.contentId,
+      mediaAssetId: "00000000-0000-4000-8000-000000000302",
+      mediaKind: issued.mediaKind,
+      mimeType: issued.mimeType,
+      leaseToken: input.leaseToken,
+      originClassification: issued.originClassification,
+      sourceKind: issued.sourceKind,
+      sourceLineageReference: issued.sourceLineageReference ?? null,
+      workflowProviderReference: issued.workflowProviderReference ?? null,
+      c2paReference: issued.c2paReference ?? null
+    };
+  }
+
+  async completeMcpMediaUploadCapability(
+    input: Parameters<NonNullable<ContentRepository["completeMcpMediaUploadCapability"]>>[0]
+  ) {
+    this.completionInputs.push(input);
+    this.capabilityConsumed = true;
+    return {
+      mediaAssetId: "00000000-0000-4000-8000-000000000302",
+      contentId: "00000000-0000-4000-8000-000000000099",
+      compositionRevision: 2
+    };
+  }
+
+  async releaseMcpMediaUploadCapability() {}
+  async scheduleMcpMediaProviderCleanup() {}
+
+  async reviewOwnedMediaAssetProvenance(
+    input: Parameters<NonNullable<ContentRepository["reviewOwnedMediaAssetProvenance"]>>[0]
+  ) {
+    this.reviewInputs.push(input);
+    if (input.expectedCompositionRevision !== 2) throw new McpMediaCapabilityConflictError("draft_locked");
+    return {
+      compositionRevision: 3,
+      asset: {
+        id: input.mediaAssetId,
+        kind: "image" as const,
+        position: 0,
+        provider: "bunny" as const,
+        providerState: "stored_private",
+        posterUrl: null,
+        mimeType: "image/webp" as const,
+        widthPixels: 7,
+        heightPixels: 4,
+        durationMs: null,
+        altText: null,
+        requiredForRelease: true,
+        isCover: false,
+        focalPointX: null,
+        focalPointY: null,
+        originClassification: "ai_generated" as const,
+        visibleLabelState: "ai_generated" as const,
+        provenanceReviewState: input.decision,
+        machineReadableMarkingState: "pending" as const
+      }
     };
   }
 }

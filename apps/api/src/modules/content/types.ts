@@ -49,6 +49,13 @@ export interface ContentRepository {
     supabaseUserId: string;
     contentId: string;
   }): Promise<ContentDraftReadiness | null>;
+  issueMcpMediaUploadCapability?(input: IssueMcpMediaUploadCapabilityInput): Promise<IssuedMcpMediaUploadCapability | null>;
+  claimMcpMediaUploadCapability?(input: ClaimMcpMediaUploadCapabilityInput): Promise<ClaimedMcpMediaUploadCapability>;
+  completeMcpMediaUploadCapability?(input: CompleteMcpMediaUploadCapabilityInput): Promise<McpMediaUploadCompletion>;
+  releaseMcpMediaUploadCapability?(input: ReleaseMcpMediaUploadCapabilityInput): Promise<void>;
+  scheduleMcpMediaProviderCleanup?(input: ScheduleMcpMediaProviderCleanupInput): Promise<void>;
+  findOwnedPrivateMediaReadiness?(input: FindOwnedPrivateMediaReadinessInput): Promise<PrivateMediaReadiness | null>;
+  reviewOwnedMediaAssetProvenance?(input: ReviewOwnedMediaAssetProvenanceInput): Promise<MediaAssetMutationResult | null>;
   createModerationAppeal?(input: CreateModerationAppealInput): Promise<MediaModerationAppeal | null>;
   recordMediaProviderWebhook?(input: RecordMediaProviderWebhookInput): Promise<boolean>;
   updateMediaAssetFromWebhook?(input: UpdateMediaAssetFromWebhookInput): Promise<boolean>;
@@ -68,6 +75,132 @@ export interface ContentDraftReadiness {
   assetCount: number;
   blockers: string[];
   nextAction: "continue_in_wevid" | "wait_for_processing" | "resolve_review" | "none";
+}
+
+export type McpMediaKind = "image" | "video";
+export type McpMediaMimeType =
+  | "image/jpeg"
+  | "image/png"
+  | "image/webp"
+  | "video/mp4"
+  | "video/quicktime"
+  | "video/webm";
+export type AiOriginClassification =
+  | "ai_assisted"
+  | "ai_generated"
+  | "materially_ai_manipulated";
+export type MediaSourceKind = "generated" | "edited" | "composited" | "unknown";
+
+export interface McpMediaProvenanceClaim {
+  originClassification: AiOriginClassification;
+  sourceKind: MediaSourceKind;
+  sourceLineageReference?: string | null;
+  workflowProviderReference?: string | null;
+  c2paReference?: string | null;
+}
+
+export interface IssueMcpMediaUploadCapabilityInput extends McpMediaProvenanceClaim {
+  connectionId: string;
+  supabaseUserId: string;
+  contentId: string;
+  requestHash: string;
+  tokenHash: string;
+  mediaKind: McpMediaKind;
+  mimeType: McpMediaMimeType;
+  expiresAt: Date;
+}
+
+export interface IssuedMcpMediaUploadCapability {
+  id: string;
+  contentId: string;
+  mediaAssetId: string;
+  mediaKind: McpMediaKind;
+  mimeType: McpMediaMimeType;
+  expiresAt: string;
+  issued: boolean;
+}
+
+export interface ClaimMcpMediaUploadCapabilityInput {
+  capabilityId: string;
+  connectionId: string;
+  supabaseUserId: string;
+  tokenHash: string;
+  declaredMimeType: string | null;
+  quotaWindowStart: Date;
+  dailyMediaUploadQuota: number;
+  leaseToken: string;
+  leasedUntil: Date;
+}
+
+export interface ClaimedMcpMediaUploadCapability extends McpMediaProvenanceClaim {
+  id: string;
+  contentId: string;
+  mediaAssetId: string;
+  mediaKind: McpMediaKind;
+  mimeType: McpMediaMimeType;
+  leaseToken: string;
+}
+
+export interface CompleteMcpMediaUploadCapabilityInput {
+  capabilityId: string;
+  connectionId: string;
+  leaseToken: string;
+  providerAssetId: string;
+  providerState: "stored_private" | "upload_pending";
+  widthPixels?: number;
+  heightPixels?: number;
+  checksumSha256?: string;
+}
+
+export interface McpMediaUploadCompletion {
+  mediaAssetId: string;
+  contentId: string;
+  compositionRevision: number;
+}
+
+export interface ReleaseMcpMediaUploadCapabilityInput {
+  capabilityId: string;
+  connectionId: string;
+  leaseToken: string;
+  failureCode: string;
+}
+
+export interface ScheduleMcpMediaProviderCleanupInput {
+  capabilityId: string;
+  connectionId: string;
+  leaseToken: string;
+  providerAssetId: string;
+  failureCode: string;
+}
+
+export interface FindOwnedPrivateMediaReadinessInput {
+  supabaseUserId: string;
+  contentId: string;
+}
+
+export interface PrivateMediaReadiness {
+  contentId: string;
+  compositionRevision: number;
+  assets: Array<{
+    mediaAssetId: string;
+    kind: McpMediaKind;
+    mimeType: McpMediaMimeType | null;
+    providerState: "upload_pending" | "processing" | "ready" | "failed";
+    quarantineState: "pending" | "approved" | "blocked";
+    provenanceReviewState: "not_required" | "pending" | "confirmed" | "rejected";
+    visibleLabelState: "none" | "ai_assisted" | "ai_generated" | "manipulated";
+    machineReadableMarkingState: "unavailable" | "pending" | "present" | "invalid";
+  }>;
+  blockers: string[];
+}
+
+export interface ReviewOwnedMediaAssetProvenanceInput {
+  supabaseUserId: string;
+  mediaAssetId: string;
+  idempotencyKey: string;
+  requestHash: string;
+  expectedCompositionRevision: number;
+  decision: "confirmed" | "rejected";
 }
 
 export interface VoteOnContentPollInput {
@@ -322,6 +455,7 @@ export interface CreateMediaUploadProviderSessionInput {
   contentId: string;
   title: string;
   mimeType: string;
+  ttlSeconds?: number;
 }
 
 export interface MediaUploadProviderAdapter {

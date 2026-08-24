@@ -3,7 +3,8 @@ import type { FastifyInstance } from "fastify";
 import {
   ContentAssetRetirementConflictError,
   ContentImageUploadConflictError,
-  ContentRepositoryConfigurationError
+  ContentRepositoryConfigurationError,
+  McpMediaCapabilityConflictError
 } from "./content-repository.js";
 import { ImageValidationError, sanitizeImage } from "./image-sanitizer.js";
 import {
@@ -417,6 +418,74 @@ export async function registerContentUploadRoutes(
       }
       if (error instanceof ContentRepositoryConfigurationError) {
         return reply.code(503).send({ code: "service_unavailable", message: "Content storage is not configured" });
+      }
+      throw error;
+    }
+  });
+
+  app.post("/v1/media/assets/:mediaAssetId/provenance-review", async (request, reply) => {
+    const access = await verifyAppReadyAccess(request, options);
+    if (!access.ok) return reply.code(access.statusCode).send(access.body);
+
+    const idempotencyKey = request.headers["idempotency-key"];
+    const params = request.params as { mediaAssetId?: string };
+    const body = request.body as {
+      expectedCompositionRevision?: unknown;
+      decision?: unknown;
+    } | undefined;
+    if (
+      typeof idempotencyKey !== "string" ||
+      !params.mediaAssetId ||
+      !body ||
+      !Number.isInteger(body.expectedCompositionRevision) ||
+      Number(body.expectedCompositionRevision) < 1 ||
+      (body.decision !== "confirmed" && body.decision !== "rejected")
+    ) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: "A composition revision and confirmed or rejected decision are required"
+      });
+    }
+    if (!options.contentRepository.reviewOwnedMediaAssetProvenance) {
+      return reply.code(503).send({
+        code: "service_unavailable",
+        message: "Provenance review is unavailable"
+      });
+    }
+
+    const normalized = {
+      expectedCompositionRevision: Number(body.expectedCompositionRevision),
+      decision: body.decision
+    } as const;
+    try {
+      const result = await options.contentRepository.reviewOwnedMediaAssetProvenance({
+        supabaseUserId: access.supabaseUserId,
+        mediaAssetId: params.mediaAssetId,
+        idempotencyKey,
+        requestHash: createHash("sha256").update(JSON.stringify(normalized)).digest("hex"),
+        ...normalized
+      });
+      if (!result) {
+        return reply.code(404).send({
+          code: "not_found",
+          message: "Reviewable provenance claim was not found"
+        });
+      }
+      return reply.code(200).send(result);
+    } catch (error) {
+      if (error instanceof McpMediaCapabilityConflictError) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: error.reason === "idempotency_conflict"
+            ? "Idempotency-Key was already used for a different provenance review"
+            : "The draft changed or this provenance claim was already decided"
+        });
+      }
+      if (error instanceof ContentRepositoryConfigurationError) {
+        return reply.code(503).send({
+          code: "service_unavailable",
+          message: "Provenance review is unavailable"
+        });
       }
       throw error;
     }

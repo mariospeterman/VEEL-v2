@@ -61,6 +61,7 @@ export type UploadSession = components["schemas"]["UploadSession"];
 export type ImageAssetUploadResult = components["schemas"]["ImageAssetUploadResult"];
 export type UpdateContentMediaAssetRequest = components["schemas"]["UpdateContentMediaAssetRequest"];
 export type ContentMediaAssetMutationResult = components["schemas"]["ContentMediaAssetMutationResult"];
+export type ReviewMediaProvenanceRequest = components["schemas"]["ReviewMediaProvenanceRequest"];
 export type RetireContentMediaAssetRequest = components["schemas"]["RetireContentMediaAssetRequest"];
 export type RetireContentMediaAssetResult = components["schemas"]["RetireContentMediaAssetResult"];
 export type ContentUnlockIntent = components["schemas"]["ContentUnlockIntent"];

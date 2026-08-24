@@ -4,7 +4,7 @@ import type { AdminRepository } from "../admin/types.js";
 import type { AgeRepository } from "../age/types.js";
 import type { AnalyticsRepository } from "../analytics/types.js";
 import { extractBearerToken, unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
-import type { ContentRepository } from "../content/types.js";
+import type { ContentRepository, MediaUploadProviderAdapter } from "../content/types.js";
 import type { ProfileRepository } from "../profile/types.js";
 import type { SessionRepository, ApplicationSessionVerifier } from "../session/types.js";
 import type { WalletRepository } from "../wallet/types.js";
@@ -33,6 +33,7 @@ import type {
   OAuthClient,
   McpToolDefinition
 } from "./types.js";
+import { registerMcpMediaRoutes } from "./mcp-media-routes.js";
 
 interface RegisterMcpRoutesOptions {
   authVerifier: ApplicationSessionVerifier;
@@ -44,6 +45,7 @@ interface RegisterMcpRoutesOptions {
   adminRepository: AdminRepository;
   analyticsRepository: AnalyticsRepository;
   mcpRepository: McpRepository;
+  mediaUploadProvider: MediaUploadProviderAdapter;
 }
 
 type McpAccess =
@@ -60,6 +62,7 @@ export async function registerMcpRoutes(
   app: FastifyInstance,
   options: RegisterMcpRoutesOptions
 ): Promise<void> {
+  await registerMcpMediaRoutes(app, options, (request) => verifyMcpTokenAccess(request, options));
   app.addContentTypeParser(
     "application/x-www-form-urlencoded",
     { parseAs: "string" },

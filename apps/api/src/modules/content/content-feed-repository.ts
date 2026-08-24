@@ -193,7 +193,9 @@ export function createContentFeedRepositoryMethods(
               'focalPointX', asset.focal_point_x,
               'focalPointY', asset.focal_point_y,
               'originClassification', asset.origin_classification,
-              'visibleLabelState', asset.visible_label_state
+              'visibleLabelState', asset.visible_label_state,
+              'provenanceReviewState', asset.provenance_human_review_state,
+              'machineReadableMarkingState', asset.machine_readable_marking_state
             )
             order by asset.position
           ), '[]'::jsonb) as media_assets

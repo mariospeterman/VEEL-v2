@@ -3,6 +3,7 @@ import { createContentDraftRepositoryMethods } from "./content-draft-repository.
 import { ContentRepositoryConfigurationError } from "./content-errors.js";
 import { createContentFeedRepositoryMethods } from "./content-feed-repository.js";
 import { createContentMediaRepositoryMethods } from "./content-media-repository.js";
+import { createContentMcpMediaRepositoryMethods } from "./content-mcp-media-repository.js";
 import { createContentPublishRepositoryMethods } from "./content-publish-repository.js";
 import { createContentQuotaRepositoryMethods } from "./content-quota-repository.js";
 import { createContentReadRepositoryMethods } from "./content-read-repository.js";
@@ -27,6 +28,7 @@ export {
   ContentCompositionConflictError,
   ContentAssetRetirementConflictError,
   ContentImageUploadConflictError,
+  McpMediaCapabilityConflictError,
   ContentPublishConflictError,
   ContentModerationAppealConflictError,
   ContentPollVoteConflictError,
@@ -46,6 +48,7 @@ export function createPostgresContentRepository(
     ...createContentDraftRepositoryMethods(sql),
     ...createContentFeedRepositoryMethods(sql),
     ...createContentMediaRepositoryMethods(sql),
+    ...createContentMcpMediaRepositoryMethods(sql),
     ...createContentPublishRepositoryMethods(sql),
     ...createContentQuotaRepositoryMethods(sql),
     ...createContentReadRepositoryMethods(sql),
@@ -105,6 +108,27 @@ function createUnavailableContentRepository(): PostgresContentRepository {
       throw new ContentRepositoryConfigurationError();
     },
     async findOwnedPrivateDraftReadiness() {
+      throw new ContentRepositoryConfigurationError();
+    },
+    async issueMcpMediaUploadCapability() {
+      throw new ContentRepositoryConfigurationError();
+    },
+    async claimMcpMediaUploadCapability() {
+      throw new ContentRepositoryConfigurationError();
+    },
+    async completeMcpMediaUploadCapability() {
+      throw new ContentRepositoryConfigurationError();
+    },
+    async releaseMcpMediaUploadCapability() {
+      throw new ContentRepositoryConfigurationError();
+    },
+    async scheduleMcpMediaProviderCleanup() {
+      throw new ContentRepositoryConfigurationError();
+    },
+    async findOwnedPrivateMediaReadiness() {
+      throw new ContentRepositoryConfigurationError();
+    },
+    async reviewOwnedMediaAssetProvenance() {
       throw new ContentRepositoryConfigurationError();
     },
     async createModerationAppeal() {
