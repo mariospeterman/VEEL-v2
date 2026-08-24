@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "latestMergedBaseline": "765d23625ee714466b2f2cd1e34f55411081019a",
-  "latestMergedSlice": "Convergence 05 — Realtime, messaging, and live safety",
-  "latestMergedMigration": "packages/database/migrations/0112_realtime_messaging_live_safety.sql",
-  "nextPlannedSlice": "Convergence 06 — Consumer social experience",
-  "nextPlannedBranch": "codex/converge-06-consumer-social-experience",
+  "latestMergedBaseline": "21f06d2c1e306c5d38ad3c4edc4a966ede05ada3",
+  "latestMergedSlice": "Convergence 06 — Consumer social experience",
+  "latestMergedMigration": "packages/database/migrations/0113_consumer_social_privacy.sql",
+  "nextPlannedSlice": "Convergence 07 — Remote MCP profile bridge",
+  "nextPlannedBranch": "codex/converge-07-remote-mcp-profile-bridge",
   "latestMergedEvidenceStates": [
     "DESIGNED",
     "CODE_COMPLETE",
