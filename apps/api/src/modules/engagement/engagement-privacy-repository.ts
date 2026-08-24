@@ -147,7 +147,7 @@ export function createEngagementPrivacyRepositoryMethods(
             id, actor_user_id, subject_type, subject_id, action, idempotency_key, metadata
           ) values (
             ${randomUUID()}, ${actor.id}, 'data_request', ${row.id},
-            'privacy.data_request.created', ${input.idempotencyKey}, jsonb_build_object('type', ${row.type})
+            'privacy.data_request.created', ${input.idempotencyKey}, jsonb_build_object('type', ${row.type}::text)
           )
           on conflict do nothing
         `;
