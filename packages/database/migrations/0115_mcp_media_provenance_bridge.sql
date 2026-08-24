@@ -16,8 +16,8 @@ alter table media_assets
       char_length(source_lineage_reference) between 1 and 500
       and source_lineage_reference !~ '%'
       and (
-        source_lineage_reference ~ '^https://[^/?#@[:space:]]+(/[^?#[:space:]]*)?$'
-        or source_lineage_reference ~* '^urn:[a-z0-9][a-z0-9-]{0,31}:[a-z0-9][a-z0-9._~:/-]*$'
+        source_lineage_reference ~* '^https://[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?/(claims|manifests|assets|lineage)/([a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$'
+        or source_lineage_reference ~* '^urn:(wevid|c2pa):[a-z0-9][a-z0-9-]{0,31}:([a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$'
       )
       and source_lineage_reference !~* '(prompt|api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|password|passwd|credential|private[-_ ]?key|client[-_ ]?secr[e]t|authorization|bearer|cookie|session[-_ ]?id)'
     )
@@ -26,7 +26,7 @@ alter table media_assets
     workflow_provider_reference is null
     or (
       char_length(workflow_provider_reference) between 1 and 120
-      and workflow_provider_reference ~ '^[A-Za-z0-9][A-Za-z0-9._/-]*$'
+      and workflow_provider_reference ~* '^([a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$'
       and workflow_provider_reference !~* '(prompt|api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|password|passwd|credential|private[-_ ]?key|client[-_ ]?secr[e]t|authorization|bearer|cookie|session[-_ ]?id)'
     )
   ),
@@ -36,8 +36,8 @@ alter table media_assets
       char_length(c2pa_reference) between 1 and 500
       and c2pa_reference !~ '%'
       and (
-        c2pa_reference ~ '^https://[^/?#@[:space:]]+(/[^?#[:space:]]*)?$'
-        or c2pa_reference ~* '^urn:[a-z0-9][a-z0-9-]{0,31}:[a-z0-9][a-z0-9._~:/-]*$'
+        c2pa_reference ~* '^https://[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?/(claims|manifests|assets|lineage)/([a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$'
+        or c2pa_reference ~* '^urn:(wevid|c2pa):[a-z0-9][a-z0-9-]{0,31}:([a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$'
       )
       and c2pa_reference !~* '(prompt|api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|password|passwd|credential|private[-_ ]?key|client[-_ ]?secr[e]t|authorization|bearer|cookie|session[-_ ]?id)'
     )
@@ -113,8 +113,8 @@ create table mcp_media_upload_capabilities (
       char_length(source_lineage_reference) between 1 and 500
       and source_lineage_reference !~ '%'
       and (
-        source_lineage_reference ~ '^https://[^/?#@[:space:]]+(/[^?#[:space:]]*)?$'
-        or source_lineage_reference ~* '^urn:[a-z0-9][a-z0-9-]{0,31}:[a-z0-9][a-z0-9._~:/-]*$'
+        source_lineage_reference ~* '^https://[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?/(claims|manifests|assets|lineage)/([a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$'
+        or source_lineage_reference ~* '^urn:(wevid|c2pa):[a-z0-9][a-z0-9-]{0,31}:([a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$'
       )
       and source_lineage_reference !~* '(prompt|api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|password|passwd|credential|private[-_ ]?key|client[-_ ]?secr[e]t|authorization|bearer|cookie|session[-_ ]?id)'
     )
@@ -123,7 +123,7 @@ create table mcp_media_upload_capabilities (
     workflow_provider_reference is null
     or (
       char_length(workflow_provider_reference) between 1 and 120
-      and workflow_provider_reference ~ '^[A-Za-z0-9][A-Za-z0-9._/-]*$'
+      and workflow_provider_reference ~* '^([a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$'
       and workflow_provider_reference !~* '(prompt|api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|password|passwd|credential|private[-_ ]?key|client[-_ ]?secr[e]t|authorization|bearer|cookie|session[-_ ]?id)'
     )
   ),
@@ -133,8 +133,8 @@ create table mcp_media_upload_capabilities (
       char_length(c2pa_reference) between 1 and 500
       and c2pa_reference !~ '%'
       and (
-        c2pa_reference ~ '^https://[^/?#@[:space:]]+(/[^?#[:space:]]*)?$'
-        or c2pa_reference ~* '^urn:[a-z0-9][a-z0-9-]{0,31}:[a-z0-9][a-z0-9._~:/-]*$'
+        c2pa_reference ~* '^https://[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?/(claims|manifests|assets|lineage)/([a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$'
+        or c2pa_reference ~* '^urn:(wevid|c2pa):[a-z0-9][a-z0-9-]{0,31}:([a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$'
       )
       and c2pa_reference !~* '(prompt|api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|password|passwd|credential|private[-_ ]?key|client[-_ ]?secr[e]t|authorization|bearer|cookie|session[-_ ]?id)'
     )

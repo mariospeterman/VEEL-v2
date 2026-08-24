@@ -50,6 +50,10 @@ export const adminMcpScopes: McpScope[] = [
 const allMcpScopes = new Set<McpScope>([...creatorMcpScopes, ...adminMcpScopes]);
 const creatorScopeSet = new Set<McpScope>(creatorMcpScopes);
 const adminScopeSet = new Set<McpScope>(adminMcpScopes);
+const opaqueProvenanceTokenSource = "(?:[A-Fa-f0-9]{64}|[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[1-5][A-Fa-f0-9]{3}-[89AaBb][A-Fa-f0-9]{3}-[A-Fa-f0-9]{12})";
+const structuredProvenanceReferenceSource = `(?:https://[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?/(?:claims|manifests|assets|lineage)/${opaqueProvenanceTokenSource}|urn:(?:wevid|c2pa):[a-z0-9][a-z0-9-]{0,31}:${opaqueProvenanceTokenSource})`;
+const structuredProvenanceReferencePattern = new RegExp(`^${structuredProvenanceReferenceSource}$`);
+const opaqueProvenanceTokenPattern = new RegExp(`^${opaqueProvenanceTokenSource}$`);
 
 export const mcpToolDefinitions: McpToolDefinition[] = [
   {
@@ -167,13 +171,13 @@ export const mcpToolDefinitions: McpToolDefinition[] = [
           },
           sourceKind: { type: "string", enum: ["generated", "edited", "composited", "unknown"] },
           sourceLineageReference: {
-            type: ["string", "null"], maxLength: 500, pattern: "^(https://|urn:)"
+            type: ["string", "null"], maxLength: 500, pattern: `^${structuredProvenanceReferenceSource}$`
           },
           workflowProviderReference: {
-            type: ["string", "null"], maxLength: 120, pattern: "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+            type: ["string", "null"], maxLength: 120, pattern: `^${opaqueProvenanceTokenSource}$`
           },
           c2paReference: {
-            type: ["string", "null"], maxLength: 500, pattern: "^(https://|urn:)"
+            type: ["string", "null"], maxLength: 500, pattern: `^${structuredProvenanceReferenceSource}$`
           }
         },
         required: ["originClassification", "sourceKind"]
@@ -609,26 +613,10 @@ function optionalStructuredProvenanceReference(
   const reference = optionalProvenanceReference(value, field, maxLength);
   if (!reference) return null;
   if (reference.includes("%")) {
-    throw new McpToolValidationError(`${field} must be a credential-free HTTPS URL or URN`);
+    throw new McpToolValidationError(`${field} must be a provider-controlled opaque HTTPS or URN reference`);
   }
-  if (/^urn:[a-z0-9][a-z0-9-]{0,31}:[A-Za-z0-9][A-Za-z0-9._~:/-]*$/i.test(reference)) {
-    return reference;
-  }
-  try {
-    const url = new URL(reference);
-    if (
-      url.protocol === "https:" &&
-      !url.username &&
-      !url.password &&
-      !url.search &&
-      !url.hash
-    ) {
-      return reference;
-    }
-  } catch {
-    // The normalized validation error below is the public contract.
-  }
-  throw new McpToolValidationError(`${field} must be a credential-free HTTPS URL or URN`);
+  if (structuredProvenanceReferencePattern.test(reference)) return reference;
+  throw new McpToolValidationError(`${field} must be a provider-controlled opaque HTTPS or URN reference`);
 }
 
 function optionalOpaqueProvenanceReference(
@@ -638,7 +626,7 @@ function optionalOpaqueProvenanceReference(
 ): string | null {
   const reference = optionalProvenanceReference(value, field, maxLength);
   if (!reference) return null;
-  if (!/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(reference)) {
+  if (!opaqueProvenanceTokenPattern.test(reference)) {
     throw new McpToolValidationError(`${field} must be an opaque provider identifier`);
   }
   return reference;

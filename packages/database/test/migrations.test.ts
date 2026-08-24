@@ -23,7 +23,9 @@ describe("database migrations", () => {
     expect(sql).toContain("access[-_ ]?token");
     expect(sql).toContain("source_lineage_reference !~ '%'");
     expect(sql).toContain("c2pa_reference !~ '%'");
-    expect(sql).toContain("workflow_provider_reference ~ '^[A-Za-z0-9][A-Za-z0-9._/-]*$'");
+    expect(sql).toContain("/(claims|manifests|assets|lineage)/");
+    expect(sql).toContain("^urn:(wevid|c2pa):");
+    expect(sql).toContain("workflow_provider_reference ~* '^([a-f0-9]{64}");
     expect(sql).toContain("revoke all on table mcp_media_upload_capabilities from public, anon, authenticated");
     expect(sql).not.toMatch(/prompt\s+(text|jsonb)|upload_signature|provider_payload|filename\s+text|media_bytes|api_key|credential\s+text/i);
     expect(downSql).toContain("0115 rollback requires retained MCP media capability records");

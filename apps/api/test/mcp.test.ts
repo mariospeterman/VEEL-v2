@@ -297,9 +297,9 @@ describe("external MCP connector foundation", () => {
       provenance: {
         originClassification: "ai_generated",
         sourceKind: "generated",
-        sourceLineageReference: "urn:wevid:test:lineage",
-        workflowProviderReference: "test-workflow",
-        c2paReference: "urn:c2pa:test-claim"
+        sourceLineageReference: "urn:wevid:lineage:00000000-0000-4000-8000-000000000401",
+        workflowProviderReference: "00000000-0000-4000-8000-000000000402",
+        c2paReference: "urn:c2pa:claim:00000000-0000-4000-8000-000000000403"
       }
     };
 
@@ -522,6 +522,33 @@ describe("external MCP connector foundation", () => {
         }
       });
       expect(rejectedReference.json().error.message).toContain("cannot contain prompts or credentials");
+    }
+    expect(contentRepository.capabilityInputs).toHaveLength(1);
+    for (const [field, value] of [
+      ["sourceLineageReference", "https://example.test/users/alice@example.com"],
+      ["sourceLineageReference", "https://example.test/lineage/alice-smith"],
+      ["workflowProviderReference", "alice-smith"],
+      ["c2paReference", "urn:c2pa:claim:alice-smith"]
+    ] as const) {
+      const rejectedPersonalReference = await app.inject({
+        method: "POST",
+        url: "/mcp",
+        headers: { authorization: `Bearer ${token}` },
+        payload: {
+          jsonrpc: "2.0",
+          id: 37,
+          method: "tools/call",
+          params: {
+            name: "creator_prepare_private_media_upload",
+            arguments: {
+              ...args,
+              requestId: randomUUID(),
+              provenance: { ...args.provenance, [field]: value }
+            }
+          }
+        }
+      });
+      expect(rejectedPersonalReference.json().error.message).toMatch(/provider-controlled opaque|opaque provider identifier/);
     }
     expect(contentRepository.capabilityInputs).toHaveLength(1);
     await app.close();

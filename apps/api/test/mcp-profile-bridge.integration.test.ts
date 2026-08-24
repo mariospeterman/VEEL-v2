@@ -120,9 +120,9 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
         expiresAt: new Date(Date.now() + 10 * 60_000),
         originClassification: "ai_generated" as const,
         sourceKind: "generated" as const,
-        sourceLineageReference: "urn:wevid:integration:lineage",
-        workflowProviderReference: "integration-workflow",
-        c2paReference: "urn:c2pa:integration-claim"
+        sourceLineageReference: "urn:wevid:lineage:00000000-0000-4000-8000-000000000401",
+        workflowProviderReference: "00000000-0000-4000-8000-000000000402",
+        c2paReference: "urn:c2pa:claim:00000000-0000-4000-8000-000000000403"
       };
       const issued = await contentRepository.issueMcpMediaUploadCapability!(capabilityInput);
       expect(issued).toMatchObject({ issued: true, contentId, mediaKind: "image", mimeType: "image/webp" });
@@ -160,6 +160,11 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
       }]);
       expect(capabilityLedger[0]!.payload).not.toContain("prompt");
       expect(capabilityLedger[0]!.payload).not.toContain("provider-secret");
+      await expect(sql`
+        update mcp_media_upload_capabilities
+        set source_lineage_reference = 'https://example.test/users/alice@example.com'
+        where id = ${issued!.id}
+      `).rejects.toBeDefined();
 
       await expect(contentRepository.claimMcpMediaUploadCapability!({
         capabilityId: issued!.id,
@@ -242,6 +247,11 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
         ready_at: expect.any(Date),
         provider_checked_at: expect.any(Date)
       }]);
+      await expect(sql`
+        update media_assets
+        set c2pa_reference = 'https://example.test/users/alice@example.com'
+        where id = ${issued!.mediaAssetId}
+      `).rejects.toBeDefined();
       await expect(contentRepository.claimMcpMediaUploadCapability!({
         capabilityId: issued!.id,
         connectionId: connection.id,
