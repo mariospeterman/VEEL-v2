@@ -9,7 +9,10 @@ import type { AdminRepository } from "../src/modules/admin/types";
 import type { ActivityRepository } from "../src/modules/activity/types";
 import { createBunnyStreamUploadAdapter } from "../src/modules/content/media-upload-adapter";
 import { StaleFeedCursorError } from "../src/modules/content/content-feed-cursor";
-import { ContentDraftQuotaExceededError } from "../src/modules/content/content-repository";
+import {
+  ContentDraftPollCloseError,
+  ContentDraftQuotaExceededError
+} from "../src/modules/content/content-repository";
 import type {
   ContentItem,
   ContentRepository,
@@ -4312,6 +4315,77 @@ describe("buildApi", () => {
     expect(response.json()).toMatchObject({
       code: "rate_limited",
       message: "Daily content draft quota has been reached"
+    });
+
+    await app.close();
+  });
+
+  it("maps a poll close-time race from the repository to validation failure", async () => {
+    const contentRepository: ContentRepository = {
+      async createDraft() {
+        throw new ContentDraftPollCloseError();
+      },
+      async createMediaAsset() {
+        throw new Error("not implemented");
+      },
+      async findContentDetail() {
+        throw new Error("not implemented");
+      },
+      async findContentUnlockOffer() {
+        throw new Error("not implemented");
+      },
+      async findOwnedContentForUpload() {
+        throw new Error("not implemented");
+      },
+      async listHomeFeed() {
+        throw new Error("not implemented");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      verificationRepository: creatorVerifiedVerificationRepository(),
+      contentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/content",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "poll-close-race-1"
+      },
+      payload: {
+        mediaType: "poll",
+        visibility: "private",
+        nsfwLabel: "none",
+        representationMode: "no_real_person",
+        contentSafetyPolicyAccepted: true,
+        poll: {
+          question: "Still open?",
+          options: ["Yes", "No"],
+          closesAt: new Date(Date.now() + 60_000).toISOString()
+        }
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      code: "validation_failed",
+      message: "poll closesAt must be a future ISO date-time or null"
     });
 
     await app.close();
