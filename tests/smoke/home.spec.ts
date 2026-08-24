@@ -143,7 +143,7 @@ test("renders the canonical protected app home shell through /app", async ({ con
   await waitForClientReady(page);
 
   await expect(page.getByRole("link", { name: "WeVid app home" }).first()).toBeVisible();
-  await expect(page.getByRole("heading", { name: /Your feed|Enter WeVid/ }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: /What’s happening|Enter WeVid/ }).first()).toBeVisible();
   await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
 });
 
@@ -169,6 +169,7 @@ test("keeps representative authenticated workspaces free of blocking accessibili
   const paths = [
     "/app/home",
     "/app/bits",
+    "/app/search",
     "/app/create",
     "/app/messages",
     "/app/activity",
@@ -233,6 +234,7 @@ test("retries Realtime token acquisition after a transient API failure", async (
 });
 
 test("follows from the real Home feed and renders the immersive Bits surface", async ({ context, page }) => {
+  test.setTimeout(90_000);
   await addE2eCookie(context);
   await page.goto("/app/home", { waitUntil: "domcontentloaded", timeout: 45_000 });
   await waitForClientReady(page);
@@ -260,7 +262,7 @@ test("follows from the real Home feed and renders the immersive Bits surface", a
 
   await page.goto("/app/bits", { waitUntil: "domcontentloaded", timeout: 45_000 });
   await waitForClientReady(page);
-  await expect(page.getByRole("heading", { name: "Swipe. Watch. Keep your place." })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Bits feed" })).toBeVisible();
   await expect(page.getByRole("article", { name: "Post by Aria Moon" }).first()).toBeVisible();
   await page.getByRole("tab", { name: "For you" }).focus();
   await page.getByRole("tab", { name: "For you" }).press("ArrowDown");
@@ -477,8 +479,19 @@ test("runs content engagement actions responsively through canonical API routes"
   await expect(page.getByRole("article").getByText("Browser-backed comment")).toBeVisible();
   await expect(page.getByText("Comment posted.")).toBeVisible();
 
+  await page.getByRole("button", { name: /^Like(?: · \d+)?$/ }).last().click();
+  await expect(page.getByRole("button", { name: /Liked/ }).last()).toBeVisible();
+  await page.getByRole("button", { name: /^Reply/ }).first().click();
+  await page.getByRole("textbox", { name: /Reply to/ }).fill("A browser reply @ariamoon");
+  await page.getByRole("button", { name: "Post reply" }).click();
+  await expect(page.getByText("Reply posted.")).toBeVisible();
+
   await page.getByRole("button", { name: "Share" }).click();
+  await page.getByRole("button", { name: "Copy link" }).click();
   await expect(page.getByText(/Link copied\.|Share link ready\./)).toBeVisible();
+  await page.getByLabel("Send in Messages").selectOption(firstConversationId);
+  await page.getByRole("button", { name: "Send post" }).click();
+  await expect(page.getByText("Post sent in Messages.")).toBeVisible();
 
   await page.getByRole("button", { name: "Report", exact: true }).click();
   await page.getByLabel("Report reason").fill("Misleading content metadata");
@@ -495,6 +508,33 @@ test("runs content engagement actions responsively through canonical API routes"
   }));
   expect(layout.scrollWidth).toBe(layout.clientWidth);
   await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
+});
+
+test("searches genuine grouped discovery and keeps recent queries on device", async ({ context, page }) => {
+  test.setTimeout(90_000);
+  await addE2eCookie(context);
+  await page.goto("/app/search?q=studio", { waitUntil: "domcontentloaded", timeout: 45_000 });
+  await waitForClientReady(page);
+  await expect(page.getByRole("heading", { name: "Find your next watch" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Creators" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Posts" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Topics" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Live now" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("wevid:search:recent"))).toContain("studio");
+  await page.goto("/app/search", { waitUntil: "domcontentloaded", timeout: 45_000 });
+  await expect(page.getByRole("heading", { name: "Recent searches" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "studio", exact: true })).toBeVisible();
+});
+
+test("exposes privacy self-service without promising immediate deletion", async ({ context, page }) => {
+  await addE2eCookie(context);
+  await page.goto("/app/settings#privacy", { waitUntil: "domcontentloaded", timeout: 45_000 });
+  await expect(page.getByRole("heading", { name: "Blocked accounts" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Muted accounts" })).toBeVisible();
+  await page.getByRole("button", { name: "Request export" }).click();
+  await expect(page.getByText("Export request received.")).toBeVisible();
+  await expect(page.getByText("Data export")).toBeVisible();
+  await expect(page.getByText(/deleted immediately|instant deletion/i)).toHaveCount(0);
 });
 
 test("records explicit Mutuals choices through the canonical API", async ({ context, page }) => {
@@ -560,6 +600,8 @@ test("serves the browser push service worker with internal click handling", asyn
   expect(response?.ok()).toBe(true);
   expect(source).toContain('self.addEventListener("push"');
   expect(source).toContain('self.addEventListener("notificationclick"');
+  expect(source).toContain('self.addEventListener("message"');
+  expect(source).toContain("SKIP_WAITING");
   expect(source).toContain("safeInternalPath");
 });
 
@@ -712,7 +754,7 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
   );
   if (engagementMatch) {
     if (method === "GET" && engagementMatch[2] === "comments") {
-      sendJson(response, 200, { items: [], nextCursor: null });
+      sendJson(response, 200, { items: [comment("First comment", "00000000-0000-4000-8000-0000000000c0")], nextCursor: null });
       return;
     }
 
@@ -732,10 +774,21 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
     }
 
     if (method === "POST" && engagementMatch[2] === "comments") {
-      const body = await readJsonBody<{ body?: string }>(request);
-      sendJson(response, 201, comment(body.body ?? ""));
+      const body = await readJsonBody<{ body?: string; parentCommentId?: string }>(request);
+      sendJson(response, 201, comment(
+        body.body ?? "",
+        body.parentCommentId
+          ? "00000000-0000-4000-8000-0000000000c2"
+          : "00000000-0000-4000-8000-0000000000c1",
+        body.parentCommentId
+      ));
       return;
     }
+  }
+
+  if (method === "POST" && /^\/v1\/engagement\/comments\/[0-9a-f-]+\/like$/.test(url.pathname)) {
+    sendJson(response, 200, { commentId: url.pathname.split("/")[4], liked: true, likeCount: 1 });
+    return;
   }
 
   if (method === "POST" && url.pathname === "/v1/shares") {
@@ -743,10 +796,11 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
       sendJson(response, 400, { message: "Idempotency-Key header is required" });
       return;
     }
+    const body = await readJsonBody<{ mode: "copy_link" | "external_referral_link" | "internal_message" }>(request);
     sendJson(response, 201, {
       id: "00000000-0000-4000-8000-0000000000c2",
-      mode: "copy_link",
-      url: `${e2eOrigin}/share/content/00000000-0000-4000-8000-000000000040`
+      mode: body.mode,
+      url: body.mode === "internal_message" ? null : `${e2eOrigin}/share/content/00000000-0000-4000-8000-000000000040`
     });
     return;
   }
@@ -784,6 +838,24 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
       return;
     }
     sendJson(response, 200, { blocked: true, blockedUserId: user().id });
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/v1/privacy") {
+    sendJson(response, 200, { blockedUsers: [], mutedUsers: [], dataRequests: [] });
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/v1/privacy/data-requests") {
+    const body = await readJsonBody<{ type: "export" | "delete" }>(request);
+    sendJson(response, 201, {
+      id: "00000000-0000-4000-8000-0000000000d8",
+      type: body.type,
+      state: "requested",
+      createdAt: "2026-08-24T00:00:00.000Z",
+      updatedAt: "2026-08-24T00:00:00.000Z",
+      completedAt: null
+    });
     return;
   }
 
@@ -930,6 +1002,14 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
   const conversationMessagesMatch = url.pathname.match(
     /^\/v1\/messages\/conversations\/([0-9a-f-]+)\/messages$/
   );
+  if (method === "POST" && conversationMessagesMatch) {
+    const body = await readJsonBody<{ body?: string; sharedContentItemId?: string }>(request);
+    sendJson(response, 201, {
+      ...message(conversationMessagesMatch[1] ?? firstConversationId, body.body ?? "Shared a post"),
+      sharedContent: body.sharedContentItemId ? contentItem() : null
+    });
+    return;
+  }
   if (method === "GET" && conversationMessagesMatch) {
     const conversationId = conversationMessagesMatch[1];
     if (conversationId === unavailableConversationId) {
@@ -1347,12 +1427,17 @@ function engagementState(overrides: Partial<ReturnType<typeof contentItem>["enga
   return { ...contentItem().engagement, ...overrides };
 }
 
-function comment(body: string) {
+function comment(body: string, id = "00000000-0000-4000-8000-0000000000c1", parentCommentId: string | null = null) {
   return {
-    id: "00000000-0000-4000-8000-0000000000c1",
+    id,
     author: user(),
     body,
     moderationState: "visible",
+    parentCommentId,
+    liked: false,
+    likeCount: 0,
+    replyCount: 0,
+    mentions: [],
     createdAt: "2026-08-11T12:00:00.000Z"
   };
 }

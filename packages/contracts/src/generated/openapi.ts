@@ -1488,6 +1488,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/engagement/comments/{commentId}/like": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Toggle a like on a visible comment */
+        post: operations["toggleCommentLike"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/shares": {
         parameters: {
             query?: never;
@@ -1533,6 +1550,59 @@ export interface paths {
         put?: never;
         /** Block a user */
         post: operations["blockUser"];
+        /** Remove an account block */
+        delete: operations["unblockUser"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mutes/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Hide an account from non-safety social surfaces */
+        post: operations["muteUser"];
+        /** Remove an account mute */
+        delete: operations["unmuteUser"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/privacy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List self-service account privacy controls and data requests */
+        get: operations["getPrivacySettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/privacy/data-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request an account export or deletion workflow */
+        post: operations["createDataRequest"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4830,11 +4900,25 @@ export interface components {
             body: string;
             /** @enum {string} */
             moderationState: "visible" | "pending_review" | "hidden" | "removed";
+            /** Format: uuid */
+            parentCommentId: string | null;
+            liked: boolean;
+            likeCount: number;
+            replyCount: number;
+            mentions: components["schemas"]["User"][];
             /** Format: date-time */
             createdAt: string;
         };
         CreateCommentRequest: {
             body: string;
+            /** Format: uuid */
+            parentCommentId?: string | null;
+        };
+        CommentReactionState: {
+            /** Format: uuid */
+            commentId: string;
+            liked: boolean;
+            likeCount: number;
         };
         CreateShareRequest: {
             /** @enum {string} */
@@ -4871,6 +4955,35 @@ export interface components {
             blocked: boolean;
             /** Format: uuid */
             blockedUserId: string;
+        };
+        MuteState: {
+            muted: boolean;
+            /** Format: uuid */
+            mutedUserId: string;
+        };
+        PrivacySettings: {
+            blockedUsers: components["schemas"]["User"][];
+            mutedUsers: components["schemas"]["User"][];
+            dataRequests: components["schemas"]["DataRequest"][];
+        };
+        DataRequest: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            type: "export" | "delete";
+            /** @enum {string} */
+            state: "requested" | "verifying" | "processing" | "completed" | "rejected";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt?: string | null;
+            /** Format: date-time */
+            completedAt?: string | null;
+        };
+        CreateDataRequestRequest: {
+            /** @enum {string} */
+            type: "export" | "delete";
+            reason?: string | null;
         };
         Conversation: {
             /** Format: uuid */
@@ -7169,6 +7282,15 @@ export interface components {
                 "application/json": components["schemas"]["Comment"];
             };
         };
+        /** @description Comment like state */
+        CommentReactionState: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["CommentReactionState"];
+            };
+        };
         /** @description Share result */
         ShareResult: {
             headers: {
@@ -7194,6 +7316,33 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["BlockState"];
+            };
+        };
+        /** @description Mute state */
+        MuteState: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["MuteState"];
+            };
+        };
+        /** @description Self-service privacy state */
+        PrivacySettings: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["PrivacySettings"];
+            };
+        };
+        /** @description Account data request */
+        DataRequest: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["DataRequest"];
             };
         };
         /** @description Canonical follow relationship and aggregate counts */
@@ -8183,6 +8332,7 @@ export interface components {
         SupportPolicyId: string;
         RefundDisputeId: string;
         DataRequestId: string;
+        CommentId: string;
         OrganizationId: string;
         MembershipId: string;
         FeatureFlagKey: string;
@@ -8336,6 +8486,11 @@ export interface components {
         CreateComment: {
             content: {
                 "application/json": components["schemas"]["CreateCommentRequest"];
+            };
+        };
+        CreateDataRequest: {
+            content: {
+                "application/json": components["schemas"]["CreateDataRequestRequest"];
             };
         };
         CreateShare: {
@@ -10611,6 +10766,23 @@ export interface operations {
             201: components["responses"]["Comment"];
         };
     };
+    toggleCommentLike: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                commentId: components["parameters"]["CommentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["CommentReactionState"];
+        };
+    };
     createShare: {
         parameters: {
             query?: never;
@@ -10656,6 +10828,84 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["BlockState"];
+        };
+    };
+    unblockUser: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["BlockState"];
+        };
+    };
+    muteUser: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["MuteState"];
+        };
+    };
+    unmuteUser: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["MuteState"];
+        };
+    };
+    getPrivacySettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["PrivacySettings"];
+        };
+    };
+    createDataRequest: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["CreateDataRequest"];
+        responses: {
+            201: components["responses"]["DataRequest"];
         };
     };
     listConversations: {

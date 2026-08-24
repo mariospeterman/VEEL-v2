@@ -7,23 +7,11 @@ import {
   EngagementRepositoryConfigurationError
 } from "./engagement-errors.js";
 import { queueForSubject, shareUrl } from "./engagement-repository-mappers.js";
-import type {
-  BlockReplayRow,
-  ReportReplayRow,
-  ShareReplayRow
-} from "./engagement-repository-rows.js";
-
-interface BlockActorRow {
-  actor_id: string;
-}
-
-interface BlockTargetRow {
-  target_id: string;
-}
+import type { ReportReplayRow, ShareReplayRow } from "./engagement-repository-rows.js";
 
 export function createEngagementIntakeRepositoryMethods(
   sql: postgres.Sql
-): Pick<EngagementRepository, "createShare" | "createReport" | "blockUser"> {
+): Pick<EngagementRepository, "createShare" | "createReport"> {
   return {
     async createShare(input) {
       const rows = await sql<ShareReplayRow[]>`
@@ -204,116 +192,6 @@ export function createEngagementIntakeRepositoryMethods(
         throw new EngagementIdempotencyConflictError();
       }
       return { id: row.id, state: row.state, queue: row.queue };
-    },
-    async blockUser(input) {
-      return sql.begin(async (transaction) => {
-        const actors = await transaction<BlockActorRow[]>`
-          select id as actor_id
-          from users
-          where supabase_user_id = ${input.supabaseUserId}
-          limit 1
-        `;
-        const actor = actors[0];
-        if (!actor) throw new EngagementPolicyError("Block is not allowed");
-
-        // Preserve idempotency precedence even when a replay names a target
-        // that would otherwise fail policy validation (including the actor).
-        const replays = await transaction<BlockReplayRow[]>`
-          select blocker_user_id, blocked_user_id, idempotency_key
-          from blocks
-          where blocker_user_id = ${actor.actor_id}
-            and idempotency_key = ${input.idempotencyKey}
-          limit 1
-        `;
-        const replay = replays[0];
-        if (replay) {
-          if (replay.blocked_user_id !== input.blockedUserId) {
-            throw new EngagementIdempotencyConflictError();
-          }
-          return { blocked: true, blockedUserId: replay.blocked_user_id };
-        }
-
-        const targets = await transaction<BlockTargetRow[]>`
-          select id as target_id
-          from users
-          where id = ${input.blockedUserId}
-            and id <> ${actor.actor_id}
-          limit 1
-        `;
-        const target = targets[0];
-        if (!target) throw new EngagementPolicyError("Block is not allowed");
-
-        // Follow and block mutations take the same ordered pair lock. Whichever
-        // commits second must observe and preserve the block/follow invariant.
-        await transaction`
-          select id
-          from users
-          where id in (${actor.actor_id}, ${target.target_id})
-          order by id
-          for update
-        `;
-
-        const insertedRows = await transaction<BlockReplayRow[]>`
-          insert into blocks (blocker_user_id, blocked_user_id, idempotency_key)
-          values (
-            ${actor.actor_id},
-            ${target.target_id},
-            ${input.idempotencyKey}
-          )
-          on conflict do nothing
-          returning blocker_user_id, blocked_user_id, idempotency_key
-        `;
-
-        const existingRows = insertedRows.length > 0
-          ? insertedRows
-          : await transaction<BlockReplayRow[]>`
-              with actor as (
-                select id
-                from users
-                where supabase_user_id = ${input.supabaseUserId}
-                limit 1
-              )
-              select blocker_user_id, blocked_user_id, idempotency_key
-              from blocks
-              where blocker_user_id = (select id from actor)
-                and (
-                  idempotency_key = ${input.idempotencyKey}
-                  or blocked_user_id = ${input.blockedUserId}
-                )
-              order by (idempotency_key = ${input.idempotencyKey}) desc
-              limit 1
-            `;
-
-        const row = existingRows[0];
-        if (!row) throw new EngagementPolicyError("Block is not allowed");
-        if (row.idempotency_key === input.idempotencyKey && row.blocked_user_id !== input.blockedUserId) {
-          throw new EngagementIdempotencyConflictError();
-        }
-
-        await transaction`
-          insert into audit_events (
-            id,
-            actor_user_id,
-            subject_type,
-            subject_id,
-            action,
-            idempotency_key,
-            metadata
-          )
-          values (
-            ${randomUUID()},
-            ${row.blocker_user_id},
-            'user',
-            ${row.blocked_user_id},
-            'user.blocked',
-            ${input.idempotencyKey},
-            '{}'::jsonb
-          )
-          on conflict do nothing
-        `;
-
-        return { blocked: true, blockedUserId: row.blocked_user_id };
-      });
     }
   };
 }

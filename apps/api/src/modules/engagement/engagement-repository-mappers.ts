@@ -22,6 +22,17 @@ export function toComment(row: CommentRow): Comment {
     },
     body: row.body,
     moderationState: row.moderation_state,
+    parentCommentId: row.parent_comment_id,
+    liked: row.liked,
+    likeCount: Number(row.like_count),
+    replyCount: Number(row.reply_count),
+    mentions: (row.mentions ?? []).map((mention) => ({
+      id: mention.id,
+      handle: mention.handle ?? "",
+      displayName: mention.displayName ?? "",
+      avatarUrl: mention.avatarUrl,
+      badges: []
+    })),
     createdAt: row.created_at.toISOString()
   };
 }

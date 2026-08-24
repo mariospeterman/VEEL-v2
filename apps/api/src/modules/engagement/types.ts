@@ -3,7 +3,9 @@ import type { components } from "@veel/contracts";
 export type BlockState = components["schemas"]["BlockState"];
 export type Comment = components["schemas"]["Comment"];
 export type CommentPage = components["schemas"]["CommentPage"];
+export type CommentReactionState = components["schemas"]["CommentReactionState"];
 export type CreateCommentRequest = components["schemas"]["CreateCommentRequest"];
+export type CreateDataRequestRequest = components["schemas"]["CreateDataRequestRequest"];
 export type CreateReportRequest = components["schemas"]["CreateReportRequest"];
 export type CreateShareRequest = components["schemas"]["CreateShareRequest"];
 export type EngagementState = components["schemas"]["EngagementState"];
@@ -12,6 +14,9 @@ export type FollowState = components["schemas"]["FollowState"];
 export type HideFeedCreatorRequest = components["schemas"]["HideFeedCreatorRequest"];
 export type HideFeedTopicRequest = components["schemas"]["HideFeedTopicRequest"];
 export type ModerationIntake = components["schemas"]["ModerationIntake"];
+export type MuteState = components["schemas"]["MuteState"];
+export type PrivacySettings = components["schemas"]["PrivacySettings"];
+export type DataRequest = components["schemas"]["DataRequest"];
 export type RecordFeedImpressionRequest = components["schemas"]["RecordFeedImpressionRequest"];
 export type ShareResult = components["schemas"]["ShareResult"];
 export type UpdateFeedPreferencesRequest = components["schemas"]["UpdateFeedPreferencesRequest"];
@@ -50,6 +55,11 @@ export interface EngagementRepository {
     body: CreateCommentRequest;
     idempotencyKey: string;
   }): Promise<Comment>;
+  toggleCommentLike(input: {
+    supabaseUserId: string;
+    commentId: string;
+    idempotencyKey: string;
+  }): Promise<CommentReactionState>;
   createShare(input: {
     supabaseUserId: string;
     body: CreateShareRequest;
@@ -66,5 +76,22 @@ export interface EngagementRepository {
     blockedUserId: string;
     idempotencyKey: string;
   }): Promise<BlockState>;
+  unblockUser(input: {
+    supabaseUserId: string;
+    blockedUserId: string;
+    idempotencyKey: string;
+  }): Promise<BlockState>;
+  setMute(input: {
+    supabaseUserId: string;
+    mutedUserId: string;
+    muted: boolean;
+    idempotencyKey: string;
+  }): Promise<MuteState>;
+  getPrivacySettings(input: { supabaseUserId: string }): Promise<PrivacySettings>;
+  createDataRequest(input: {
+    supabaseUserId: string;
+    body: CreateDataRequestRequest;
+    idempotencyKey: string;
+  }): Promise<DataRequest>;
   close?(): Promise<void>;
 }

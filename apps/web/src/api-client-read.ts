@@ -69,6 +69,7 @@ import type {
   ManagedCreatorRelationship,
   ManagedCreatorReporting,
   PlatformAccess,
+  PrivacySettings,
   PerformerConsentRequest,
   SessionState,
   SubscriptionPage,
@@ -177,6 +178,10 @@ export async function getFollowState(userId: string): Promise<ApiResult<FollowSt
 
 export async function getFeedPreferences(): Promise<ApiResult<FeedPreferences>> {
   return getJson<FeedPreferences>("/v1/feed/preferences");
+}
+
+export async function getPrivacySettings(): Promise<ApiResult<PrivacySettings>> {
+  return getJson<PrivacySettings>("/v1/privacy");
 }
 
 export async function getNotificationPreferences(): Promise<ApiResult<NotificationPreferences>> {

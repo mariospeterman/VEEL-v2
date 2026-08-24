@@ -57,7 +57,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <img alt="" className="theme-logo-image-light" src="/Logo-Dark-Transparent.png" />
               <span>WeVid</span>
             </Link>
-            <Link className="top-search" href="/app/bits" aria-label="Search">
+            <Link className="top-search" href="/app/search" aria-label="Search">
               <Search aria-hidden="true" size={17} />
               <span>Search creators, live, events</span>
             </Link>

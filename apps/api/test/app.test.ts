@@ -11369,6 +11369,9 @@ describe("buildApi", () => {
         async onCreateComment(input) {
           calls.push({ kind: "comment", input });
         },
+        async onToggleCommentLike(input) {
+          calls.push({ kind: "comment_like", input });
+        },
         async onCreateShare(input) {
           calls.push({ kind: "share", input });
         },
@@ -11377,6 +11380,18 @@ describe("buildApi", () => {
         },
         async onBlockUser(input) {
           calls.push({ kind: "block", input });
+        },
+        async onUnblockUser(input) {
+          calls.push({ kind: "unblock", input });
+        },
+        async onSetMute(input) {
+          calls.push({ kind: input.muted ? "mute" : "unmute", input });
+        },
+        async onGetPrivacySettings(input) {
+          calls.push({ kind: "privacy", input });
+        },
+        async onCreateDataRequest(input) {
+          calls.push({ kind: "data_request", input });
         }
       })
     });
@@ -11385,13 +11400,21 @@ describe("buildApi", () => {
     const likeResponse = await app.inject({
       method: "POST",
       url: "/v1/engagement/00000000-0000-4000-8000-000000000040/like",
-      headers: { authorization: "Bearer valid-token", "idempotency-key": "like-1" }
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "social-like-1" }
     });
     const commentResponse = await app.inject({
       method: "POST",
       url: "/v1/engagement/00000000-0000-4000-8000-000000000040/comments",
-      headers: { authorization: "Bearer valid-token", "idempotency-key": "comment-1" },
-      payload: { body: "Server-owned comment" }
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "social-comment-1" },
+      payload: {
+        body: "Server-owned reply @creator",
+        parentCommentId: "00000000-0000-4000-8000-0000000000c0"
+      }
+    });
+    const commentLikeResponse = await app.inject({
+      method: "POST",
+      url: "/v1/engagement/comments/00000000-0000-4000-8000-0000000000c1/like",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "social-comment-like-1" }
     });
     const malformedCommentCursorResponse = await app.inject({
       method: "GET",
@@ -11401,7 +11424,7 @@ describe("buildApi", () => {
     const shareResponse = await app.inject({
       method: "POST",
       url: "/v1/shares",
-      headers: { authorization: "Bearer valid-token", "idempotency-key": "share-1" },
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "social-share-1" },
       payload: {
         targetType: "content",
         targetId: "00000000-0000-4000-8000-000000000040",
@@ -11411,7 +11434,7 @@ describe("buildApi", () => {
     const reportResponse = await app.inject({
       method: "POST",
       url: "/v1/reports",
-      headers: { authorization: "Bearer valid-token", "idempotency-key": "report-1" },
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "social-report-1" },
       payload: {
         subjectType: "content",
         subjectId: "00000000-0000-4000-8000-000000000040",
@@ -11421,11 +11444,38 @@ describe("buildApi", () => {
     const blockResponse = await app.inject({
       method: "POST",
       url: "/v1/blocks/00000000-0000-4000-8000-000000000011",
-      headers: { authorization: "Bearer valid-token", "idempotency-key": "block-1" }
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "social-block-1" }
+    });
+    const privacyResponse = await app.inject({
+      method: "GET",
+      url: "/v1/privacy",
+      headers: { authorization: "Bearer valid-token" }
+    });
+    const muteResponse = await app.inject({
+      method: "POST",
+      url: "/v1/mutes/00000000-0000-4000-8000-000000000011",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "social-mute-1" }
+    });
+    const unmuteResponse = await app.inject({
+      method: "DELETE",
+      url: "/v1/mutes/00000000-0000-4000-8000-000000000011",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "social-unmute-1" }
+    });
+    const unblockResponse = await app.inject({
+      method: "DELETE",
+      url: "/v1/blocks/00000000-0000-4000-8000-000000000011",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "social-unblock-1" }
+    });
+    const dataRequestResponse = await app.inject({
+      method: "POST",
+      url: "/v1/privacy/data-requests",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "privacy-data-request-1" },
+      payload: { type: "export" }
     });
 
     expect(likeResponse.statusCode).toBe(200);
     expect(commentResponse.statusCode).toBe(201);
+    expect(commentLikeResponse.statusCode).toBe(200);
     expect(malformedCommentCursorResponse.statusCode).toBe(400);
     expect(malformedCommentCursorResponse.json()).toEqual({
       code: "validation_failed",
@@ -11434,12 +11484,23 @@ describe("buildApi", () => {
     expect(shareResponse.statusCode).toBe(201);
     expect(reportResponse.statusCode).toBe(201);
     expect(blockResponse.statusCode).toBe(200);
+    expect(privacyResponse.statusCode).toBe(200);
+    expect(muteResponse.statusCode).toBe(200);
+    expect(unmuteResponse.statusCode).toBe(200);
+    expect(unblockResponse.statusCode).toBe(200);
+    expect(dataRequestResponse.statusCode).toBe(201);
     expect(calls).toMatchObject([
-      { kind: "like", input: { contentId: "00000000-0000-4000-8000-000000000040", idempotencyKey: "like-1" } },
-      { kind: "comment", input: { body: { body: "Server-owned comment" }, idempotencyKey: "comment-1" } },
-      { kind: "share", input: { body: { targetType: "content", mode: "copy_link" }, idempotencyKey: "share-1" } },
-      { kind: "report", input: { body: { subjectType: "content", reason: "Safety review" }, idempotencyKey: "report-1" } },
-      { kind: "block", input: { blockedUserId: "00000000-0000-4000-8000-000000000011", idempotencyKey: "block-1" } }
+      { kind: "like", input: { contentId: "00000000-0000-4000-8000-000000000040", idempotencyKey: "social-like-1" } },
+      { kind: "comment", input: { body: { body: "Server-owned reply @creator", parentCommentId: "00000000-0000-4000-8000-0000000000c0" }, idempotencyKey: "social-comment-1" } },
+      { kind: "comment_like", input: { commentId: "00000000-0000-4000-8000-0000000000c1", idempotencyKey: "social-comment-like-1" } },
+      { kind: "share", input: { body: { targetType: "content", mode: "copy_link" }, idempotencyKey: "social-share-1" } },
+      { kind: "report", input: { body: { subjectType: "content", reason: "Safety review" }, idempotencyKey: "social-report-1" } },
+      { kind: "block", input: { blockedUserId: "00000000-0000-4000-8000-000000000011", idempotencyKey: "social-block-1" } },
+      { kind: "privacy" },
+      { kind: "mute", input: { mutedUserId: "00000000-0000-4000-8000-000000000011", muted: true, idempotencyKey: "social-mute-1" } },
+      { kind: "unmute", input: { mutedUserId: "00000000-0000-4000-8000-000000000011", muted: false, idempotencyKey: "social-unmute-1" } },
+      { kind: "unblock", input: { blockedUserId: "00000000-0000-4000-8000-000000000011", idempotencyKey: "social-unblock-1" } },
+      { kind: "data_request", input: { body: { type: "export" }, idempotencyKey: "privacy-data-request-1" } }
     ]);
 
     await app.close();
@@ -12839,9 +12900,14 @@ function fakeEngagementRepository(
     onToggleSave: EngagementCallback<"toggleSave">;
     onListComments: EngagementCallback<"listComments">;
     onCreateComment: EngagementCallback<"createComment">;
+    onToggleCommentLike: EngagementCallback<"toggleCommentLike">;
     onCreateShare: EngagementCallback<"createShare">;
     onCreateReport: EngagementCallback<"createReport">;
     onBlockUser: EngagementCallback<"blockUser">;
+    onUnblockUser: EngagementCallback<"unblockUser">;
+    onSetMute: EngagementCallback<"setMute">;
+    onGetPrivacySettings: EngagementCallback<"getPrivacySettings">;
+    onCreateDataRequest: EngagementCallback<"createDataRequest">;
   }> = {}
 ): EngagementRepository {
   return {
@@ -12914,8 +12980,17 @@ function fakeEngagementRepository(
         author: homeFeedItem.creator,
         body: input.body.body,
         moderationState: "visible",
+        parentCommentId: input.body.parentCommentId ?? null,
+        liked: false,
+        likeCount: 0,
+        replyCount: 0,
+        mentions: [],
         createdAt: "2026-06-05T12:00:00.000Z"
       };
+    },
+    async toggleCommentLike(input) {
+      await overrides.onToggleCommentLike?.(input);
+      return { commentId: input.commentId, liked: true, likeCount: 1 };
     },
     async createShare(input) {
       await overrides.onCreateShare?.(input);
@@ -12938,6 +13013,29 @@ function fakeEngagementRepository(
       return {
         blocked: true,
         blockedUserId: input.blockedUserId
+      };
+    },
+    async unblockUser(input) {
+      await overrides.onUnblockUser?.(input);
+      return { blocked: false, blockedUserId: input.blockedUserId };
+    },
+    async setMute(input) {
+      await overrides.onSetMute?.(input);
+      return { muted: input.muted, mutedUserId: input.mutedUserId };
+    },
+    async getPrivacySettings(input) {
+      await overrides.onGetPrivacySettings?.(input);
+      return { blockedUsers: [], mutedUsers: [], dataRequests: [] };
+    },
+    async createDataRequest(input) {
+      await overrides.onCreateDataRequest?.(input);
+      return {
+        id: "00000000-0000-4000-8000-0000000000d1",
+        type: input.body.type,
+        state: "requested",
+        createdAt: "2026-08-24T00:00:00.000Z",
+        updatedAt: "2026-08-24T00:00:00.000Z",
+        completedAt: null
       };
     }
   };
