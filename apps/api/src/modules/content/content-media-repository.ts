@@ -31,6 +31,7 @@ type ContentMediaRepositoryMethods = Required<Pick<
   | "recordMediaProviderWebhook"
   | "reserveImageAssetUpload"
   | "retireOwnedMediaAsset"
+  | "scheduleUnattachedMediaProviderCleanup"
   | "updateMediaAssetFromWebhook"
   | "updateMediaAssetPlayback"
   | "updateOwnedMediaAsset"
@@ -148,6 +149,69 @@ export function createContentMediaRepositoryMethods(
       });
 
       return rows[0] ? { id: rows[0].id } : undefined;
+    },
+    async scheduleUnattachedMediaProviderCleanup(input) {
+      await withPostgresTransaction(sql, async (transaction) => {
+        const rows = await transaction<{ actor_user_id: string; media_asset_id: string }[]>`
+          with owned_content as (
+            select content.id, content.creator_user_id as actor_user_id
+            from content_items content
+            join users actor on actor.id = content.creator_user_id
+            where content.id = ${input.contentId}
+              and actor.supabase_user_id = ${input.supabaseUserId}
+            for update of content
+          ), inserted as (
+            insert into media_assets (
+              id, content_item_id, provider, provider_asset_id, provider_state,
+              provider_playable, asset_kind, position, required_for_release,
+              retired_at, retired_by_user_id, retirement_reason,
+              provider_cleanup_state, provider_cleanup_error_code,
+              provider_cleanup_attempt_count, provider_cleanup_next_attempt_at
+            )
+            select
+              gen_random_uuid(), owned.id, ${input.provider}, ${input.providerAssetId},
+              'compensation_pending', false, ${input.assetKind}, null, false,
+              now(), owned.actor_user_id, 'provider_attach_failed',
+              'retry', ${input.failureCode}, 1, now()
+            from owned_content owned
+            on conflict (provider, provider_asset_id) do update
+            set provider_cleanup_state = case
+                  when media_assets.provider_cleanup_state = 'completed' then 'completed'
+                  else 'retry'
+                end,
+                provider_cleanup_error_code = case
+                  when media_assets.provider_cleanup_state = 'completed' then null
+                  else ${input.failureCode}
+                end,
+                provider_cleanup_next_attempt_at = case
+                  when media_assets.provider_cleanup_state = 'completed' then null
+                  else now()
+                end
+            returning id, retired_by_user_id
+          )
+          select inserted.retired_by_user_id as actor_user_id,
+            inserted.id as media_asset_id
+          from inserted
+        `;
+        const cleanup = rows[0];
+        if (!cleanup) throw new ContentImageUploadConflictError("draft_locked");
+        await transaction`
+          insert into audit_events (
+            id, actor_user_id, subject_type, subject_id, action, idempotency_key, metadata
+          ) values (
+            gen_random_uuid(), ${cleanup.actor_user_id}, 'media_asset', ${cleanup.media_asset_id},
+            'media_provider_cleanup_scheduled', ${`provider-cleanup:${cleanup.media_asset_id}`},
+            ${transaction.json({
+              contentId: input.contentId,
+              assetKind: input.assetKind,
+              failureCode: input.failureCode
+            })}::jsonb
+          )
+          on conflict (actor_user_id, action, idempotency_key)
+            where actor_user_id is not null and idempotency_key is not null
+          do nothing
+        `;
+      });
     },
     async reserveImageAssetUpload(input) {
       return withPostgresTransaction(sql, async (transaction) => {

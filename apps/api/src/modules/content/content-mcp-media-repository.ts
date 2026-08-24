@@ -804,7 +804,7 @@ function normalizedProviderState(row: {
 
 function normalizedQuarantineState(state: string): "pending" | "approved" | "blocked" {
   if (state === "approved") return "approved";
-  if (["rejected", "changes_requested", "blocked"].includes(state)) return "blocked";
+  if (["rejected", "changes_requested", "held_for_reporting", "blocked"].includes(state)) return "blocked";
   return "pending";
 }
 

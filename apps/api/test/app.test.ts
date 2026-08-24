@@ -5813,6 +5813,9 @@ describe("buildApi", () => {
 
   it("enforces the authoritative upload quota after provider allocation and compensates the orphan", async () => {
     const deletedProviderAssets: string[] = [];
+    const scheduledProviderAssets: string[] = [];
+    let deleteFails = false;
+    let providerSequence = 0;
     const contentRepository: ContentRepository = {
       async createDraft() {
         throw new Error("not implemented");
@@ -5824,6 +5827,9 @@ describe("buildApi", () => {
           quotaWindowStart: expect.any(Date)
         });
         throw new ContentImageUploadConflictError("quota_exceeded");
+      },
+      async scheduleUnattachedMediaProviderCleanup(input) {
+        scheduledProviderAssets.push(input.providerAssetId);
       },
       async countMediaAssetsCreatedSince() {
         return 29;
@@ -5852,15 +5858,17 @@ describe("buildApi", () => {
         return true;
       },
       async createUploadSession() {
+        providerSequence += 1;
         return {
           provider: "bunny",
-          providerAssetId: "quota-race-video",
+          providerAssetId: `quota-race-video-${providerSequence}`,
           uploadUrl: "https://video.bunnycdn.com/tusupload",
           headers: {},
           expiresAt: new Date("2026-06-04T23:00:00.000Z")
         };
       },
       async deleteProviderAsset(input) {
+        if (deleteFails) throw new Error("provider delete unavailable");
         deletedProviderAssets.push(input.providerAssetId);
       }
     };
@@ -5901,7 +5909,25 @@ describe("buildApi", () => {
 
     expect(response.statusCode).toBe(429);
     expect(response.json()).toMatchObject({ code: "rate_limited" });
-    expect(deletedProviderAssets).toEqual(["quota-race-video"]);
+    expect(deletedProviderAssets).toEqual(["quota-race-video-1"]);
+    expect(scheduledProviderAssets).toEqual([]);
+
+    deleteFails = true;
+    const cleanupRetry = await app.inject({
+      method: "POST",
+      url: "/v1/media/uploads",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "media-upload-quota-race-retry"
+      },
+      payload: {
+        contentId: "00000000-0000-4000-8000-000000000040",
+        fileName: "studio.mp4",
+        mimeType: "video/mp4"
+      }
+    });
+    expect(cleanupRetry.statusCode).toBe(429);
+    expect(scheduledProviderAssets).toEqual(["quota-race-video-2"]);
     await app.close();
   });
 

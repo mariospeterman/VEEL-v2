@@ -344,6 +344,23 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
           "provenance_review_pending"
         ])
       });
+      await sql`
+        update media_safety_cases
+        set state = 'held_for_reporting', provider_release_allowed = false, updated_at = now()
+        where content_item_id = ${contentId} and state <> 'superseded'
+      `;
+      await expect(contentRepository.findOwnedPrivateMediaReadiness!({
+        supabaseUserId: creatorId,
+        contentId
+      })).resolves.toMatchObject({
+        assets: [{ mediaAssetId: issued!.mediaAssetId, quarantineState: "blocked" }],
+        blockers: expect.arrayContaining(["safety_review_incomplete"])
+      });
+      await sql`
+        update media_safety_cases
+        set state = 'approved', provider_release_allowed = true, updated_at = now()
+        where content_item_id = ${contentId} and state <> 'superseded'
+      `;
       await expect(contentRepository.findOwnedPrivateMediaReadiness!({
         supabaseUserId: otherCreatorId,
         contentId
@@ -892,6 +909,38 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
         retired_at: expect.any(Date),
         provider_cleanup_state: "retry",
         asset_revision: revisionBeforeLostLeaseCleanup[0]!.asset_revision
+      }]);
+
+      const revisionBeforeUnattachedCleanup = await sql<{ asset_revision: number }[]>`
+        select asset_revision::integer as asset_revision
+        from content_items where id = ${contentId}
+      `;
+      const unattachedProviderAssetId = `unattached-video-${randomUUID()}`;
+      await contentRepository.scheduleUnattachedMediaProviderCleanup!({
+        supabaseUserId: creatorId,
+        contentId,
+        provider: "bunny",
+        providerAssetId: unattachedProviderAssetId,
+        assetKind: "video",
+        failureCode: "provider_delete_failed"
+      });
+      await expect(sql<Array<{
+        retired: boolean;
+        required_for_release: boolean;
+        provider_cleanup_state: string;
+        asset_revision: number;
+      }>>`
+        select asset.retired_at is not null as retired,
+          asset.required_for_release, asset.provider_cleanup_state,
+          content.asset_revision::integer as asset_revision
+        from media_assets asset
+        join content_items content on content.id = asset.content_item_id
+        where asset.provider = 'bunny' and asset.provider_asset_id = ${unattachedProviderAssetId}
+      `).resolves.toEqual([{
+        retired: true,
+        required_for_release: false,
+        provider_cleanup_state: "retry",
+        asset_revision: revisionBeforeUnattachedCleanup[0]!.asset_revision
       }]);
 
       const rows = await sql<Array<{

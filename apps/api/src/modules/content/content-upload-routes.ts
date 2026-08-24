@@ -296,7 +296,6 @@ export async function registerContentUploadRoutes(
           message: "Media upload provider is not configured"
         });
       }
-
       const providerSession = await options.mediaUploadProvider.createUploadSession({
         contentId: content.id,
         title: content.caption || body.fileName,
@@ -328,16 +327,36 @@ export async function registerContentUploadRoutes(
       });
     } catch (error) {
       if (unattachedVideoProviderAssetId) {
+        let providerDeleted = false;
         try {
-          await options.mediaUploadProvider.deleteProviderAsset?.({
-            providerAssetId: unattachedVideoProviderAssetId,
-            assetKind: "video"
-          });
+          if (options.mediaUploadProvider.deleteProviderAsset) {
+            await options.mediaUploadProvider.deleteProviderAsset({
+              providerAssetId: unattachedVideoProviderAssetId,
+              assetKind: "video"
+            });
+            providerDeleted = true;
+          }
         } catch (cleanupError) {
           request.log.warn(
             { cleanupError },
             "Unattached private video requires provider cleanup"
           );
+        }
+        if (!providerDeleted) {
+          if (!options.contentRepository.scheduleUnattachedMediaProviderCleanup) {
+            return reply.code(503).send({
+              code: "service_unavailable",
+              message: "Media cleanup recovery is unavailable"
+            });
+          }
+          await options.contentRepository.scheduleUnattachedMediaProviderCleanup({
+            supabaseUserId: access.supabaseUserId,
+            contentId: (request.body as Partial<CreateUploadRequest>).contentId!,
+            provider: "bunny",
+            providerAssetId: unattachedVideoProviderAssetId,
+            assetKind: "video",
+            failureCode: "provider_delete_failed"
+          });
         }
       }
       if (error instanceof ContentImageUploadConflictError) {
@@ -481,6 +500,8 @@ export async function registerContentUploadRoutes(
     } | undefined;
     if (
       typeof idempotencyKey !== "string" ||
+      idempotencyKey.length < 12 ||
+      idempotencyKey.length > 128 ||
       !params.mediaAssetId ||
       !uuidPattern.test(params.mediaAssetId) ||
       !body ||

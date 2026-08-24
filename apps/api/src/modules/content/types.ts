@@ -29,6 +29,7 @@ export interface ContentRepository {
   captureProviderObservationCutoff?(): Promise<Date>;
   createDraft(input: CreateContentDraftInput): Promise<ContentItem>;
   createMediaAsset(input: CreateMediaAssetInput): Promise<{ id: string } | void>;
+  scheduleUnattachedMediaProviderCleanup?(input: ScheduleUnattachedMediaProviderCleanupInput): Promise<void>;
   reserveImageAssetUpload?(input: ReserveImageAssetUploadInput): Promise<ReservedImageAssetUpload>;
   completeImageAssetUpload?(input: CompleteImageAssetUploadInput): Promise<void>;
   updateOwnedMediaAsset?(input: UpdateOwnedMediaAssetInput): Promise<MediaAssetMutationResult | null>;
@@ -345,6 +346,15 @@ export interface CreateMediaAssetInput {
   providerState: string;
   quotaWindowStart: Date;
   dailyMediaUploadQuota: number;
+}
+
+export interface ScheduleUnattachedMediaProviderCleanupInput {
+  supabaseUserId: string;
+  contentId: string;
+  provider: "bunny";
+  providerAssetId: string;
+  assetKind: "video";
+  failureCode: string;
 }
 
 export interface ReserveImageAssetUploadInput {

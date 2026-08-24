@@ -74,6 +74,9 @@ function createUnavailableContentRepository(): PostgresContentRepository {
     async createMediaAsset() {
       throw new ContentRepositoryConfigurationError();
     },
+    async scheduleUnattachedMediaProviderCleanup() {
+      throw new ContentRepositoryConfigurationError();
+    },
     async countContentDraftsCreatedSince() {
       throw new ContentRepositoryConfigurationError();
     },
