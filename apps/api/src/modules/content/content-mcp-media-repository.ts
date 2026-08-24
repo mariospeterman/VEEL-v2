@@ -377,6 +377,7 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
     },
 
     async completeMcpMediaUploadCapability(input) {
+      let capabilityFound = false;
       return withPostgresTransaction(sql, async (transaction) => {
         const capabilities = await transaction<Array<CapabilityRow & {
           expired: boolean;
@@ -403,6 +404,7 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
           for update of capability, content
         `;
         const capability = capabilities[0];
+        capabilityFound = Boolean(capability);
         if (!capability) throw new McpMediaCapabilityConflictError("lease_lost");
         if (capability.expired) throw new McpMediaCapabilityConflictError("expired");
         const assetCounts = await transaction<{ asset_count: number }[]>`
@@ -493,6 +495,28 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
           contentId: capability.content_item_id,
           compositionRevision: Number(revisions[0]?.asset_revision ?? 1)
         };
+      }).catch(async (error: unknown) => {
+        if (error instanceof McpMediaCapabilityConflictError) {
+          const auditActors = await sql<{ actor_user_id: string }[]>`
+            select actor_user_id from mcp_media_upload_capabilities
+            where id = ${input.capabilityId} and connection_id = ${input.connectionId}
+            limit 1
+          `;
+          await sql`
+            insert into audit_events (
+              id, actor_user_id, subject_type, subject_id, action, idempotency_key, metadata
+            ) values (
+              gen_random_uuid(), ${auditActors[0]?.actor_user_id ?? null}, 'mcp_media_capability',
+              ${input.capabilityId}, 'mcp_media_capability_redemption_denied',
+              ${`${input.capabilityId}:${input.leaseToken}:completion-denied`},
+              ${sql.json({ reason: error.reason, capabilityFound, stage: "completion" })}::jsonb
+            )
+            on conflict (actor_user_id, action, idempotency_key)
+              where actor_user_id is not null and idempotency_key is not null
+            do nothing
+          `;
+        }
+        throw error;
       });
     },
 

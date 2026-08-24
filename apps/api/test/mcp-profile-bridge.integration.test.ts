@@ -361,6 +361,15 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
         set state = 'approved', provider_release_allowed = true, updated_at = now()
         where content_item_id = ${contentId} and state <> 'superseded'
       `;
+      await sql`update content_items set state = 'ready' where id = ${contentId}`;
+      await expect(contentRepository.findOwnedPrivateDraftReadiness!({
+        supabaseUserId: creatorId,
+        contentId
+      })).resolves.toMatchObject({
+        reviewRequestEligible: false,
+        blockers: expect.arrayContaining(["provenance_review_incomplete"]),
+        nextAction: "continue_in_wevid"
+      });
       await expect(contentRepository.findOwnedPrivateMediaReadiness!({
         supabaseUserId: otherCreatorId,
         contentId
@@ -676,6 +685,18 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
         select count(*)::integer as count
         from media_assets where id = ${publicationRaceCapability!.mediaAssetId}
       `).resolves.toEqual([{ count: 0 }]);
+      await expect(sql<Array<{ reason: string; stage: string; contains_provider_asset: boolean }>>`
+        select metadata->>'reason' as reason, metadata->>'stage' as stage,
+          metadata::text like '%publication-race-%' as contains_provider_asset
+        from audit_events
+        where subject_type = 'mcp_media_capability'
+          and subject_id = ${publicationRaceCapability!.id}
+          and action = 'mcp_media_capability_redemption_denied'
+      `).resolves.toEqual([{
+        reason: "draft_locked",
+        stage: "completion",
+        contains_provider_asset: false
+      }]);
       await contentRepository.releaseMcpMediaUploadCapability!({
         capabilityId: publicationRaceCapability!.id,
         connectionId: connection.id,

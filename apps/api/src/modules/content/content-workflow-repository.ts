@@ -324,7 +324,9 @@ function toPrivateDraftReadiness(row: PrivateDraftReadinessRow): ContentDraftRea
         ? "continue_in_wevid"
         : !contentReady || !row.provider_ready
           ? "wait_for_processing"
-          : "none";
+          : !row.provenance_ready
+            ? "continue_in_wevid"
+            : "none";
 
   return {
     contentId: row.id,
