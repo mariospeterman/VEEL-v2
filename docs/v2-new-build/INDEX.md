@@ -84,6 +84,7 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 - [Lifecycle auth and analytics surfaces](product/lifecycle-auth-and-analytics-surfaces.md)
 - [Consumer social experience](product/consumer-social-experience.md)
 - [Remote MCP profile bridge](product/mcp-profile-bridge.md)
+- [MCP media and provenance bridge](product/mcp-media-provenance-bridge.md)
 - [Enterprise managed creators](enterprise-managed-creators.md)
 
 12. [Product flows](product-flows.md)
