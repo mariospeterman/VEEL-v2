@@ -208,6 +208,9 @@ export async function registerMcpMediaRoutes(
           if (error.reason === "quota_exceeded") {
             return reply.code(429).send({ code: "rate_limited", message: "Daily media upload quota has been reached" });
           }
+          if (error.reason === "access_ineligible") {
+            return reply.code(403).send({ code: "forbidden", message: "Creator media access is no longer eligible" });
+          }
           if (["expired", "consumed"].includes(error.reason)) {
             return reply.code(410).send({ code: "conflict", message: "Media capability is no longer available" });
           }

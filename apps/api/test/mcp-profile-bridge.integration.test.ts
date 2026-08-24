@@ -41,6 +41,15 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
           (${creatorId}, ${`mcp_${creatorId.replaceAll("-", "").slice(0, 12)}`}, 'MCP creator', 'public'),
           (${otherCreatorId}, ${`mcp_${otherCreatorId.replaceAll("-", "").slice(0, 12)}`}, 'Other creator', 'public')
       `;
+      await sql`
+        insert into verification_records (
+          subject_type, subject_id, purpose, status, provider, provider_reference,
+          method, threshold_age, result_over_threshold, assurance_level, verified_at, reusable
+        ) values (
+          'user', ${creatorId}, 'age_access', 'valid', 'internal',
+          ${`mcp-age-${creatorId}`}, 'reusable_age', 18, true, 'high', now(), false
+        )
+      `;
 
       const connection = await repository.createConnection({
         supabaseUserId: creatorId,
@@ -165,6 +174,57 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
         set source_lineage_reference = 'https://example.test/users/alice@example.com'
         where id = ${issued!.id}
       `).rejects.toBeDefined();
+
+      const ineligibleCapability = await contentRepository.issueMcpMediaUploadCapability!({
+        ...capabilityInput,
+        requestHash: "7".repeat(64),
+        tokenHash: "8".repeat(64),
+        c2paReference: null
+      });
+      await sql`update users set state = 'suspended' where id = ${creatorId}`;
+      await expect(contentRepository.claimMcpMediaUploadCapability!({
+        capabilityId: ineligibleCapability!.id,
+        connectionId: connection.id,
+        supabaseUserId: creatorId,
+        tokenHash: "8".repeat(64),
+        declaredMimeType: "image/webp",
+        quotaWindowStart: new Date(Date.now() - 86_400_000),
+        dailyMediaUploadQuota: 10,
+        leaseToken: randomUUID(),
+        leasedUntil: new Date(Date.now() + 60_000)
+      })).rejects.toMatchObject({ reason: "access_ineligible" });
+      await sql`update users set state = 'active' where id = ${creatorId}`;
+      await sql`
+        update verification_records set status = 'revoked', updated_at = now()
+        where subject_type = 'user' and subject_id = ${creatorId} and purpose = 'age_access'
+      `;
+      await expect(contentRepository.claimMcpMediaUploadCapability!({
+        capabilityId: ineligibleCapability!.id,
+        connectionId: connection.id,
+        supabaseUserId: creatorId,
+        tokenHash: "8".repeat(64),
+        declaredMimeType: "image/webp",
+        quotaWindowStart: new Date(Date.now() - 86_400_000),
+        dailyMediaUploadQuota: 10,
+        leaseToken: randomUUID(),
+        leasedUntil: new Date(Date.now() + 60_000)
+      })).rejects.toMatchObject({ reason: "access_ineligible" });
+      await expect(sql<Array<{ reason: string; contains_token: boolean }>>`
+        select metadata->>'reason' as reason,
+          metadata::text like ${`%${"8".repeat(64)}%`} as contains_token
+        from audit_events
+        where subject_type = 'mcp_media_capability'
+          and subject_id = ${ineligibleCapability!.id}
+          and action = 'mcp_media_capability_redemption_denied'
+        order by created_at
+      `).resolves.toEqual([
+        { reason: "access_ineligible", contains_token: false },
+        { reason: "access_ineligible", contains_token: false }
+      ]);
+      await sql`
+        update verification_records set status = 'valid', updated_at = now()
+        where subject_type = 'user' and subject_id = ${creatorId} and purpose = 'age_access'
+      `;
 
       await expect(contentRepository.claimMcpMediaUploadCapability!({
         capabilityId: issued!.id,
@@ -879,6 +939,10 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
       if (capacityContentId) await sql`delete from content_items where id = ${capacityContentId}`;
       await sql`delete from idempotency_keys where actor_user_id = any(${[creatorId, otherCreatorId]}::uuid[])`;
       await sql`delete from audit_events where actor_user_id = any(${[creatorId, otherCreatorId]}::uuid[])`;
+      await sql`
+        delete from verification_records
+        where subject_type = 'user' and subject_id = any(${[creatorId, otherCreatorId]}::uuid[])
+      `;
       await sql`delete from profiles where user_id = any(${[creatorId, otherCreatorId]}::uuid[])`;
       await sql`delete from users where id = any(${[creatorId, otherCreatorId]}::uuid[])`;
       await sql.end({ timeout: 5 });

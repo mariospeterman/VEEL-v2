@@ -409,6 +409,23 @@ describe("external MCP connector foundation", () => {
     expect(replay.statusCode).toBe(410);
     expect(uploadedImages).toHaveLength(1);
 
+    contentRepository.capabilityConsumed = false;
+    contentRepository.claimFailureReason = "access_ineligible";
+    const ineligibleRedemption = await app.inject({
+      method: "POST",
+      url: prepared.json().result.structuredContent.capability.redeemPath,
+      headers: {
+        authorization: `Bearer ${token}`,
+        "x-wevid-media-capability": prepared.json().result.structuredContent.capability.capabilityToken,
+        "content-type": "image/webp"
+      },
+      payload: sourceImage
+    });
+    expect(ineligibleRedemption.statusCode).toBe(403);
+    expect(ineligibleRedemption.json()).toMatchObject({ code: "forbidden" });
+    expect(uploadedImages).toHaveLength(1);
+    contentRepository.claimFailureReason = null;
+
     const mcpCannotReview = await app.inject({
       method: "POST",
       url: "/v1/media/assets/00000000-0000-4000-8000-000000000302/provenance-review",
@@ -1215,6 +1232,7 @@ class FakeContentRepository {
   readonly releaseInputs: Parameters<NonNullable<ContentRepository["releaseMcpMediaUploadCapability"]>>[0][] = [];
   readonly cleanupInputs: Parameters<NonNullable<ContentRepository["scheduleMcpMediaProviderCleanup"]>>[0][] = [];
   capabilityConsumed = false;
+  claimFailureReason: "access_ineligible" | null = null;
 
   async createDraft(input: CreateContentDraftInput) {
     if (input.poll?.closesAt && Date.parse(input.poll.closesAt) <= Date.now()) {
@@ -1309,6 +1327,7 @@ class FakeContentRepository {
     input: Parameters<NonNullable<ContentRepository["claimMcpMediaUploadCapability"]>>[0]
   ) {
     this.claimInputs.push(input);
+    if (this.claimFailureReason) throw new McpMediaCapabilityConflictError(this.claimFailureReason);
     if (this.capabilityConsumed) throw new McpMediaCapabilityConflictError("consumed");
     const issued = this.capabilityInputs[0];
     if (!issued || input.tokenHash !== issued.tokenHash) throw new McpMediaCapabilityConflictError("mismatch");

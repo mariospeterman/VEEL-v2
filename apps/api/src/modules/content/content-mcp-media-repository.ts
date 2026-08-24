@@ -210,10 +210,15 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
     },
 
     async claimMcpMediaUploadCapability(input) {
-      return withPostgresTransaction(sql, async (transaction) => {
+      let auditActorUserId: string | null = null;
+      try {
+        return await withPostgresTransaction(sql, async (transaction) => {
         const rows = await transaction<Array<CapabilityRow & {
           expired: boolean;
           lease_active: boolean;
+          connection_state: string;
+          actor_state: string;
+          age_eligible: boolean;
         }>>`
           select
             capability.id, capability.connection_id, capability.actor_user_id,
@@ -226,15 +231,30 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
             capability.expires_at, capability.expires_at <= now() as expired,
             capability.leased_until > now() as lease_active,
             actor.supabase_user_id as actor_supabase_user_id,
+            connection.state as connection_state, actor.state as actor_state,
+            coalesce((
+              select
+                verification.status = 'valid'
+                and verification.result_over_threshold is true
+                and (verification.expires_at is null or verification.expires_at > now())
+              from verification_records verification
+              where verification.subject_type = 'user'
+                and verification.subject_id = actor.id
+                and verification.purpose = 'age_access'
+              order by verification.created_at desc, verification.id desc
+              limit 1
+            ), false) as age_eligible,
             content.media_type, content.visibility, content.nsfw_label,
             content.state as content_state, content.publish_state
           from mcp_media_upload_capabilities capability
           join users actor on actor.id = capability.actor_user_id
+          join mcp_connections connection on connection.id = capability.connection_id
           join content_items content on content.id = capability.content_item_id
           where capability.id = ${input.capabilityId}
           for update of capability, content
         `;
         const capability = rows[0];
+        auditActorUserId = capability?.actor_user_id ?? null;
         if (!capability) throw new McpMediaCapabilityConflictError("not_found");
         if (
           capability.connection_id !== input.connectionId ||
@@ -242,6 +262,13 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
           capability.token_hash !== input.tokenHash
         ) {
           throw new McpMediaCapabilityConflictError("mismatch");
+        }
+        if (
+          capability.connection_state !== "active" ||
+          capability.actor_state !== "active" ||
+          !capability.age_eligible
+        ) {
+          throw new McpMediaCapabilityConflictError("access_ineligible");
         }
         if (capability.state === "consumed") {
           throw new McpMediaCapabilityConflictError("consumed");
@@ -328,7 +355,22 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
           workflowProviderReference: capability.workflow_provider_reference,
           c2paReference: capability.c2pa_reference
         };
-      });
+        });
+      } catch (error) {
+        if (error instanceof McpMediaCapabilityConflictError) {
+          await sql`
+            insert into audit_events (
+              id, actor_user_id, subject_type, subject_id, action, idempotency_key, metadata
+            ) values (
+              gen_random_uuid(), ${auditActorUserId}, 'mcp_media_capability',
+              ${input.capabilityId}, 'mcp_media_capability_redemption_denied',
+              ${`${input.capabilityId}:${input.leaseToken}:denied`},
+              ${sql.json({ reason: error.reason, capabilityFound: auditActorUserId !== null })}::jsonb
+            )
+          `;
+        }
+        throw error;
+      }
     },
 
     async completeMcpMediaUploadCapability(input) {

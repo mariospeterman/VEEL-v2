@@ -49,6 +49,7 @@ export type McpMediaCapabilityConflictReason =
   | "mismatch"
   | "draft_locked"
   | "quota_exceeded"
+  | "access_ineligible"
   | "idempotency_conflict"
   | "lease_lost";
 
