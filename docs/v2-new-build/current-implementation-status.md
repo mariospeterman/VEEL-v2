@@ -38,7 +38,7 @@ copied into this document. The machine-readable companion is `production-status.
 
 | Field | Current value |
 | --- | --- |
-| Latest merged baseline | `7cdb6c9d785fe2303394ab067b0e2c477e35c43a` |
+| Latest merged baseline | `765d23625ee714466b2f2cd1e34f55411081019a` |
 | Latest merged slice | Convergence 05 — Realtime, messaging, and live safety |
 | Latest merged migration | `packages/database/migrations/0112_realtime_messaging_live_safety.sql` |
 | Latest merged evidence | `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`, `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN` |
@@ -60,11 +60,11 @@ access to a person. SFW live begins private and monitoring-pending, requires the
 target acknowledgement plus recurring provider health before public playback or chat, denies locally
 before bounded provider suspension retries, atomically holds unhealthy live rooms, and preserves and
 terminalizes ended/replay-ready races. Adult live stays disabled and replay remains quarantined.
-Migration `0112`, exact-main CI `32673213090`, database `32673213145`, and security `32673213086`
-are green on repair baseline `7cdb6c9`; immutable artifact run `32673730487` built and attested all
-three images. Staging run `32674141947` verified the exact manifest and attestations, then failed closed
-before deployment on absent shared core, provider, verification, operations, feature, and legal
-configuration. PR #90 established the slice and repair PR #91 closed the post-merge review findings.
+Migration `0112`, exact-main CI `32675846607`, database `32675846612`, and security `32675846677`
+are green on final repair baseline `765d236`. PR #90 established the slice, PR #91 closed the
+unhealthy-session review findings, and PR #93 terminalized healthy observations that complete after
+the room ends. Provider and staging approval remain fail closed behind the recorded shared core,
+provider, verification, operations, feature, and legal configuration gates.
 
 Merged Convergence 04 now has one purpose-bound wallet challenge/session authority that keeps
 returning-user login lookup-only, makes unknown identities return `account_not_found` without
