@@ -6125,7 +6125,7 @@ components:
       enum: [read, draft, request]
     McpToolDefinition:
       type: object
-      required: [name, version, description, inputSchema, outputSchema, requiredScopes, roleTypes, riskLevel]
+      required: [name, version, description, inputSchema, outputSchema, requiredScopes, roleTypes, riskLevel, annotations]
       properties:
         name: { type: string }
         version: { type: string }
@@ -6139,6 +6139,17 @@ components:
           type: array
           items: { $ref: "#/components/schemas/McpRoleType" }
         riskLevel: { $ref: "#/components/schemas/McpToolRiskLevel" }
+        annotations: { $ref: "#/components/schemas/McpToolAnnotations" }
+    McpToolAnnotations:
+      type: object
+      additionalProperties: false
+      required: [title, readOnlyHint, destructiveHint, idempotentHint, openWorldHint]
+      properties:
+        title: { type: string }
+        readOnlyHint: { type: boolean }
+        destructiveHint: { type: boolean }
+        idempotentHint: { type: boolean }
+        openWorldHint: { type: boolean }
     CreateMcpConnectionRequest:
       type: object
       required: [clientName, clientType, roleType, scopes]

@@ -91,6 +91,13 @@ export interface McpToolDefinition {
   requiredScopes: McpScope[];
   roleTypes: McpRoleType[];
   riskLevel: McpToolRiskLevel;
+  annotations: {
+    title: string;
+    readOnlyHint: boolean;
+    destructiveHint: boolean;
+    idempotentHint: boolean;
+    openWorldHint: boolean;
+  };
 }
 
 export interface OAuthClient {

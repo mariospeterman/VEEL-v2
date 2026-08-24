@@ -1,8 +1,8 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { hashIdempotencyPayload } from "../../shared/idempotency.js";
 import type { AdminRepository } from "../admin/types.js";
 import type { AgeRepository } from "../age/types.js";
+import type { AnalyticsRepository } from "../analytics/types.js";
 import { extractBearerToken, unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { ContentRepository } from "../content/types.js";
 import type { ProfileRepository } from "../profile/types.js";
@@ -42,6 +42,7 @@ interface RegisterMcpRoutesOptions {
   profileRepository: ProfileRepository;
   contentRepository: ContentRepository;
   adminRepository: AdminRepository;
+  analyticsRepository: AnalyticsRepository;
   mcpRepository: McpRepository;
 }
 
@@ -439,20 +440,26 @@ export async function registerMcpRoutes(
   });
 
   app.get("/mcp", async (request, reply) => {
-    const tokenAccess = await verifyMcpTokenAccess(request, options);
-    if (!tokenAccess.ok) {
-      if (tokenAccess.statusCode === 401) setMcpOAuthChallenge(reply, app);
-      return reply.code(tokenAccess.statusCode).send(tokenAccess.body);
+    if (!isAllowedMcpOrigin(request, app)) {
+      return reply.code(403).send({ code: "forbidden", message: "MCP request origin is not allowed" });
     }
-
-    return reply.send({
-      transport: "streamable_http_foundation",
-      serverInfo: { name: "veel-v2", version: "0.1.0" },
-      tools: toolsForConnection(tokenAccess.connection).map(publicToolDefinition)
-    });
+    if (hasUnsupportedMcpProtocolHeader(request)) {
+      return reply.code(400).send({ code: "invalid_protocol_version", message: "Unsupported MCP protocol version" });
+    }
+    if (!app.config.MCP_ENABLED) {
+      return reply.code(404).send({ code: "not_found", message: "MCP connector is disabled" });
+    }
+    reply.header("Allow", "POST");
+    return reply.code(405).send({ code: "method_not_allowed", message: "This MCP server does not provide an SSE stream" });
   });
 
   app.post("/mcp", async (request, reply) => {
+    if (!isAllowedMcpOrigin(request, app)) {
+      return reply.code(403).send({ code: "forbidden", message: "MCP request origin is not allowed" });
+    }
+    if (hasUnsupportedMcpProtocolHeader(request)) {
+      return reply.code(400).send({ code: "invalid_protocol_version", message: "Unsupported MCP protocol version" });
+    }
     const tokenAccess = await verifyMcpTokenAccess(request, options);
     if (!tokenAccess.ok) {
       if (tokenAccess.statusCode === 401) setMcpOAuthChallenge(reply, app);
@@ -465,15 +472,20 @@ export async function registerMcpRoutes(
     }
 
     if (message.method === "initialize") {
+      const requestedProtocolVersion = initializeProtocolVersion(message.params);
       return reply.send({
         jsonrpc: "2.0",
         id: message.id,
         result: {
-          protocolVersion: "2025-06-18",
+          protocolVersion: requestedProtocolVersion,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: "veel-v2", version: "0.1.0" }
+          serverInfo: { name: "wevid", version: "0.2.0" }
         }
       });
+    }
+
+    if (message.method === "notifications/initialized") {
+      return reply.code(202).send();
     }
 
     if (message.method === "tools/list") {
@@ -548,13 +560,10 @@ async function handleToolCall(input: {
       connection: input.connection,
       tool,
       params: parsed.arguments,
-      idempotencyKey: `mcp:${input.connection.id}:${hashIdempotencyPayload({
-        requestId: input.id,
-        tool: tool.name
-      })}`,
       profileRepository: input.options.profileRepository,
       contentRepository: input.options.contentRepository,
-      adminRepository: input.options.adminRepository
+      adminRepository: input.options.adminRepository,
+      analyticsRepository: input.options.analyticsRepository
     });
 
     await Promise.all([
@@ -573,7 +582,14 @@ async function handleToolCall(input: {
       })
     ]);
 
-    return input.reply.send({ jsonrpc: "2.0", id: input.id, result: { content: [{ type: "json", json: result }] } });
+    return input.reply.send({
+      jsonrpc: "2.0",
+      id: input.id,
+      result: {
+        content: [{ type: "text", text: JSON.stringify(result) }],
+        structuredContent: result
+      }
+    });
   } catch (error) {
     const message =
       error instanceof McpToolValidationError ? error.message : "MCP tool execution failed";
@@ -1007,15 +1023,41 @@ function clientAllowed(allowedClients: string, clientType: McpClientType): boole
   return allowed.length === 0 || allowed.includes(clientType);
 }
 
-function publicToolDefinition(tool: McpToolDefinition): Omit<McpToolDefinition, "outputSchema" | "roleTypes"> {
+function publicToolDefinition(tool: McpToolDefinition) {
   return {
     name: tool.name,
-    version: tool.version,
     description: tool.description,
     inputSchema: tool.inputSchema,
-    requiredScopes: tool.requiredScopes,
-    riskLevel: tool.riskLevel
+    outputSchema: tool.outputSchema,
+    annotations: tool.annotations
   };
+}
+
+function initializeProtocolVersion(params: unknown): "2025-11-25" | "2025-06-18" {
+  const requested = params && typeof params === "object"
+    ? (params as Record<string, unknown>).protocolVersion
+    : undefined;
+  return requested === "2025-06-18" ? requested : "2025-11-25";
+}
+
+function isAllowedMcpOrigin(request: FastifyRequest, app: FastifyInstance): boolean {
+  const origin = request.headers.origin;
+  if (!origin) return true;
+  try {
+    if (origin !== new URL(origin).origin) return false;
+    const allowedOrigins = [app.config.WEB_URL, app.config.API_URL, mcpPublicBaseUrl(app)]
+      .map((value) => new URL(value).origin);
+    return allowedOrigins.includes(new URL(origin).origin);
+  } catch {
+    return false;
+  }
+}
+
+function hasUnsupportedMcpProtocolHeader(request: FastifyRequest): boolean {
+  const version = request.headers["mcp-protocol-version"];
+  if (version === undefined) return false;
+  if (Array.isArray(version)) return true;
+  return !["2025-03-26", "2025-06-18", "2025-11-25"].includes(version);
 }
 
 function hashToken(token: string): string {

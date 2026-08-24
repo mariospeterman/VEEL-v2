@@ -28,18 +28,19 @@ export async function runMcpRemoteSmoke({
     jsonrpc: "2.0",
     id: 1,
     method: "initialize",
-    params: {}
+    params: { protocolVersion: "2025-11-25" }
   });
-  if (initialize.result?.serverInfo?.name !== "veel-v2") {
+  if (initialize.result?.serverInfo?.name !== "wevid") {
     throw new Error("MCP initialize did not return expected serverInfo.name.");
   }
+  assertEqual(initialize.result?.protocolVersion, "2025-11-25", "MCP protocol version");
 
   const toolsList = await postMcp(fetchImpl, normalizedBaseUrl, accessToken, {
     jsonrpc: "2.0",
     id: 2,
     method: "tools/list",
     params: {}
-  });
+  }, "2025-11-25");
   const toolNames = toolsList.result?.tools?.map((tool) => tool.name) ?? [];
   assertArrayIncludes(toolNames, expectedTool, `expected allowed tool ${expectedTool}`);
   if (toolNames.includes(forbiddenTool)) {
@@ -51,9 +52,12 @@ export async function runMcpRemoteSmoke({
     id: 3,
     method: "tools/call",
     params: { name: expectedTool, arguments: {} }
-  });
+  }, "2025-11-25");
   if (allowedCall.error) {
     throw new Error(`Allowed MCP tool call failed: ${allowedCall.error.message ?? "unknown error"}`);
+  }
+  if (allowedCall.result?.content?.[0]?.type !== "text" || !allowedCall.result?.structuredContent) {
+    throw new Error("Allowed MCP tool call did not return standard text and structured content.");
   }
 
   const forbiddenCall = await postMcp(fetchImpl, normalizedBaseUrl, accessToken, {
@@ -61,7 +65,7 @@ export async function runMcpRemoteSmoke({
     id: 4,
     method: "tools/call",
     params: { name: forbiddenTool, arguments: {} }
-  });
+  }, "2025-11-25");
   if (!forbiddenCall.error) {
     throw new Error(`Forbidden MCP tool call unexpectedly succeeded: ${forbiddenTool}`);
   }
@@ -92,13 +96,14 @@ async function getJson(fetchImpl, url) {
   return response.json();
 }
 
-async function postMcp(fetchImpl, baseUrl, accessToken, body) {
+async function postMcp(fetchImpl, baseUrl, accessToken, body, protocolVersion) {
   const response = await fetchImpl(`${baseUrl}/mcp`, {
     method: "POST",
     headers: {
-      accept: "application/json",
+      accept: "application/json, text/event-stream",
       authorization: `Bearer ${accessToken}`,
-      "content-type": "application/json"
+      "content-type": "application/json",
+      ...(protocolVersion ? { "mcp-protocol-version": protocolVersion } : {})
     },
     body: JSON.stringify(body)
   });

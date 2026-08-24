@@ -38,7 +38,7 @@ copied into this document. The machine-readable companion is `production-status.
 
 | Field | Current value |
 | --- | --- |
-| Latest merged baseline | `21f06d2c1e306c5d38ad3c4edc4a966ede05ada3` |
+| Latest merged baseline | `1d2a91d8a994804193d0982c5fc0338c5c6aeae4` |
 | Latest merged slice | Convergence 06 — Consumer social experience |
 | Latest merged migration | `packages/database/migrations/0113_consumer_social_privacy.sql` |
 | Latest merged evidence | `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`, `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN` |
@@ -56,10 +56,15 @@ Merged Convergence 06 provides one accessible consumer action rail and comments 
 comment likes, mention privacy, canonical internal shares, hashtags, polls, genuine search/discovery,
 and privacy self-service over the existing engagement, content, notification, ranking, and audit
 authorities. Migration `0113` is reversible; PR #94 passed its protected contract, database,
-security, and desktop/mobile browser gates and merged as `21f06d2`. A bounded follow-up scopes one
-mobile WebKit removal-status assertion that became ambiguous when the legitimate PWA update status
-was also present; it changes no runtime, provider, contract, migration, or product behavior. Real
-provider and release-convergence evidence remains fail closed behind the recorded external gates.
+security, and desktop/mobile browser gates and merged as `21f06d2`. Repair PR #96 scoped one mobile
+WebKit removal-status assertion that became ambiguous when the legitimate PWA update status was also
+present and merged as exact-main baseline `1d2a91d`; it changed no runtime, provider, contract,
+migration, or product behavior. Exact-main CI `32691092069`, database `32691092094`, and security
+`32691092046` are green. Artifact run `32691773432` built and attested all three immutable images.
+Staging run `32692135899` verified the exact manifest and attestations, then failed closed at
+`staging:doctor` before deployment because owner-managed core, provider, verification, operations,
+feature, and legal configuration is absent. Real provider and release-convergence evidence remains
+fail closed behind those recorded external gates.
 
 Merged Convergence 05 uses private scoped Supabase Broadcast only for bounded invalidation and
 ephemeral hints while canonical APIs remain truth. Messages enforce one consent-safe introduction,

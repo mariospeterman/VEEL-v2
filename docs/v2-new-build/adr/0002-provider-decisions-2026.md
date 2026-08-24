@@ -141,6 +141,18 @@ Before implementation, verify the latest official docs for each provider/API. Th
 
 Provider docs override assumptions in this ADR if an API has changed. Any changed provider behavior needs an ADR update before coding.
 
+### MCP re-verification — 2026-08-24
+
+Convergence 07 was re-checked against the official stable MCP `2025-11-25` authorization and
+Streamable HTTP specifications, the official MCP security guidance, and current OpenAI remote MCP
+and review guidance. The accepted implementation remains OAuth authorization-code plus S256 PKCE,
+protected-resource discovery, exact redirect matching, resource/audience-bound short-lived bearer
+tokens, no token passthrough, explicit scopes, per-request authorization, Origin validation,
+standard structured tool results, accurate tool annotations, minimized results, and audit. The July
+2026 MCP release candidate is not adopted while it remains non-final and lacks the required
+supported-client staging proof. OpenAI-compatible remote usage remains unclaimed until the public
+HTTPS staging matrix in `mcp-staging-proof.md` passes.
+
 ## GStack Autonomy Decision
 
 GStack can improve workflow quality, but it will not make the project safely autonomous by itself.

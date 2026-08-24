@@ -251,6 +251,7 @@ export async function registerApiRoutes(
     profileRepository,
     contentRepository,
     adminRepository,
+    analyticsRepository,
     mcpRepository
   });
   await registerWalletRoutes(app, {

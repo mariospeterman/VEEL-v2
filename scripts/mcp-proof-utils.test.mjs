@@ -14,15 +14,23 @@ import { runMcpRemoteSmoke } from "./smoke-mcp-remote.mjs";
 describe("MCP proof helpers", () => {
   it("redacts bearer tokens in smoke output", async () => {
     const logs = [];
+    const requests = [];
+    const fakeFetch = fakeMcpFetch();
     await runMcpRemoteSmoke({
       baseUrl: "https://mcp.example.test",
       accessToken: "veel_oauth_at_super_sensitive_token",
-      fetchImpl: fakeMcpFetch(),
+      fetchImpl: async (url, init = {}) => {
+        requests.push({ url: String(url), headers: init.headers ?? {} });
+        return fakeFetch(url, init);
+      },
       logger: { log: (line) => logs.push(String(line)) }
     });
 
     expect(logs.join("\n")).not.toContain("super_sensitive_token");
     expect(logs.join("\n")).toContain("[redacted]");
+    const mcpRequests = requests.filter((request) => request.url.endsWith("/mcp"));
+    expect(mcpRequests.every((request) => request.headers.accept === "application/json, text/event-stream")).toBe(true);
+    expect(mcpRequests.slice(1).every((request) => request.headers["mcp-protocol-version"] === "2025-11-25")).toBe(true);
   });
 
   it("fails smoke when protected-resource metadata is missing", async () => {
@@ -243,7 +251,7 @@ function fakeMcpFetch({ tools = [{ name: "creator_get_profile" }] } = {}) {
     if (textUrl.endsWith("/mcp")) {
       const body = JSON.parse(init.body);
       if (body.method === "initialize") {
-        return jsonResponse({ result: { serverInfo: { name: "veel-v2" } } });
+        return jsonResponse({ result: { protocolVersion: "2025-11-25", serverInfo: { name: "wevid" } } });
       }
       if (body.method === "tools/list") {
         return jsonResponse({ result: { tools } });
@@ -251,7 +259,7 @@ function fakeMcpFetch({ tools = [{ name: "creator_get_profile" }] } = {}) {
       if (body.params?.name === "admin_list_payment_intents") {
         return jsonResponse({ error: { message: "Connection is missing the required tool scope" } });
       }
-      return jsonResponse({ result: { content: [{ type: "json", json: {} }] } });
+      return jsonResponse({ result: { content: [{ type: "text", text: "{}" }], structuredContent: {} } });
     }
     return jsonResponse({}, 404);
   };

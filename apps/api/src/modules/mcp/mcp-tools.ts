@@ -1,4 +1,7 @@
 import type { AdminRepository } from "../admin/types.js";
+import { AnalyticsQueryValidationError } from "../analytics/analytics-errors.js";
+import { AnalyticsQueryService } from "../analytics/analytics-service.js";
+import type { AnalyticsDimensions, AnalyticsQueryRequest, AnalyticsRepository } from "../analytics/types.js";
 import {
   dailyQuotaWindowStart,
   resolveContentCreationAbusePolicy
@@ -46,65 +49,127 @@ export const mcpToolDefinitions: McpToolDefinition[] = [
     version: "1.0.0",
     description: "Read the connected creator profile and onboarding readiness.",
     inputSchema: objectSchema({}),
-    outputSchema: objectSchema({ profile: { type: "object" }, onboarding: { type: "object" } }),
+    outputSchema: objectSchema(
+      { profile: { type: ["object", "null"] }, readiness: { type: ["object", "null"] }, onboarding: { type: ["object", "null"] } },
+      ["profile", "readiness", "onboarding"]
+    ),
     requiredScopes: ["creator.profile.read"],
     roleTypes: ["creator"],
-    riskLevel: "read"
+    riskLevel: "read",
+    annotations: readAnnotations("My WeVid profile")
   },
   {
-    name: "creator_get_metrics_summary",
+    name: "creator_query_analytics",
     version: "1.0.0",
-    description: "Read the connected creator monetisation dashboard summary.",
-    inputSchema: objectSchema({}),
-    outputSchema: objectSchema({ dashboard: { type: "object" } }),
+    description: "Query the connected creator's authorized Analytics Core metrics without recomputing or inferring values.",
+    inputSchema: objectSchema({
+      metricKeys: { type: "array", minItems: 1, maxItems: 10, uniqueItems: true, items: { type: "string" } },
+      startDate: { type: "string", format: "date" },
+      endDate: { type: "string", format: "date" },
+      granularity: { type: "string", enum: ["day", "total"] },
+      dimensions: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          contentId: { type: "string", format: "uuid" },
+          mediaType: { type: "string" },
+          currency: { type: "string", enum: ["SOL", "USDC"] },
+          productType: { type: "string" },
+          cohortStartDate: { type: "string", format: "date" }
+        }
+      }
+    }, ["metricKeys", "startDate", "endDate", "granularity"]),
+    outputSchema: objectSchema({ analytics: { type: "object" } }, ["analytics"]),
     requiredScopes: ["creator.metrics.read"],
     roleTypes: ["creator"],
-    riskLevel: "read"
+    riskLevel: "read",
+    annotations: readAnnotations("My WeVid analytics")
   },
   {
-    name: "creator_create_content_draft",
+    name: "creator_list_private_drafts",
     version: "1.0.0",
-    description: "Create a private creator content draft. This does not publish content.",
+    description: "List bounded safe metadata for the connected creator's private drafts.",
+    inputSchema: objectSchema({ cursor: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 20 } }),
+    outputSchema: objectSchema({ items: { type: "array" }, nextCursor: { type: ["string", "null"] } }, ["items", "nextCursor"]),
+    requiredScopes: ["creator.drafts.read"],
+    roleTypes: ["creator"],
+    riskLevel: "read",
+    annotations: readAnnotations("My private WeVid drafts")
+  },
+  {
+    name: "creator_get_draft_readiness",
+    version: "1.0.0",
+    description: "Inspect backend-derived readiness for one owned private draft without publishing it.",
+    inputSchema: objectSchema({ contentId: { type: "string", format: "uuid" } }, ["contentId"]),
+    outputSchema: objectSchema({ readiness: { type: "object" } }, ["readiness"]),
+    requiredScopes: ["creator.drafts.read"],
+    roleTypes: ["creator"],
+    riskLevel: "read",
+    annotations: readAnnotations("Private draft readiness")
+  },
+  {
+    name: "creator_create_private_draft",
+    version: "1.0.0",
+    description: "Prepare an idempotent SFW private creator draft for review in WeVid. This cannot publish.",
     inputSchema: objectSchema({
-      mediaType: { type: "string", enum: ["bit", "clip", "image", "vod", "live_replay"] },
+      mediaType: { type: "string", enum: ["bit", "clip", "image", "vod", "live_replay", "text", "poll"] },
       caption: { type: "string", maxLength: 2_000 },
-      visibility: { type: "string", enum: ["public", "followers", "subscribers", "private"] },
-      nsfwLabel: { type: "string", enum: ["none"] }
-    }),
-    outputSchema: objectSchema({ content: { type: "object" } }),
+      bodyText: { type: "string", minLength: 1, maxLength: 10_000 },
+      poll: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          question: { type: "string", minLength: 1, maxLength: 500 },
+          options: { type: "array", minItems: 2, maxItems: 4, items: { type: "string", minLength: 1, maxLength: 200 } },
+          closesAt: { type: ["string", "null"], format: "date-time" }
+        },
+        required: ["question", "options"]
+      }
+    }, ["mediaType"]),
+    outputSchema: objectSchema({ draft: { type: "object" }, nextAction: { type: "string", const: "review_in_wevid" } }, ["draft", "nextAction"]),
     requiredScopes: ["creator.drafts.write"],
     roleTypes: ["creator"],
-    riskLevel: "draft"
+    riskLevel: "draft",
+    annotations: {
+      title: "Prepare a private WeVid draft",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
   },
   {
     name: "admin_get_platform_health_summary",
     version: "1.0.0",
     description: "Read the admin operations health summary.",
     inputSchema: objectSchema({}),
-    outputSchema: objectSchema({ summary: { type: "object" } }),
+    outputSchema: objectSchema({ summary: { type: "object" } }, ["summary"]),
     requiredScopes: ["admin.health.read"],
     roleTypes: ["admin"],
-    riskLevel: "read"
+    riskLevel: "read",
+    annotations: readAnnotations("WeVid platform health")
   },
   {
     name: "admin_list_support_cases",
     version: "1.0.0",
     description: "Read open support cases for staff triage.",
     inputSchema: objectSchema({ cursor: { type: "string" } }),
-    outputSchema: objectSchema({ items: { type: "array" }, nextCursor: { type: ["string", "null"] } }),
+    outputSchema: objectSchema({ items: { type: "array" }, nextCursor: { type: ["string", "null"] } }, ["items", "nextCursor"]),
     requiredScopes: ["admin.support.read"],
     roleTypes: ["admin"],
-    riskLevel: "read"
+    riskLevel: "read",
+    annotations: readAnnotations("WeVid support cases")
   },
   {
     name: "admin_list_payment_intents",
     version: "1.0.0",
     description: "Read payment intent summaries for staff reconciliation.",
     inputSchema: objectSchema({ cursor: { type: "string" }, query: { type: "string" } }),
-    outputSchema: objectSchema({ items: { type: "array" }, nextCursor: { type: ["string", "null"] } }),
+    outputSchema: objectSchema({ items: { type: "array" }, nextCursor: { type: ["string", "null"] } }, ["items", "nextCursor"]),
     requiredScopes: ["admin.payments.read"],
     roleTypes: ["admin"],
-    riskLevel: "read"
+    riskLevel: "read",
+    annotations: readAnnotations("WeVid payment intents")
   }
 ];
 
@@ -136,7 +201,7 @@ export async function runMcpTool(input: {
   connection: McpConnection & { supabaseUserId: string };
   tool: McpToolDefinition;
   params: unknown;
-  idempotencyKey: string;
+  analyticsRepository: AnalyticsRepository;
   profileRepository: ProfileRepository;
   contentRepository: ContentRepository;
   adminRepository: AdminRepository;
@@ -147,42 +212,107 @@ export async function runMcpTool(input: {
         input.profileRepository.getMyCreatorDashboard(input.connection.supabaseUserId),
         input.profileRepository.getMyCreatorOnboarding(input.connection.supabaseUserId)
       ]);
-      return { dashboard, onboarding };
+      return {
+        profile: dashboard?.creator ? minimizedProfile(dashboard.creator) : null,
+        readiness: dashboard?.readiness ? minimizedCreatorReadiness(dashboard.readiness) : null,
+        onboarding: onboarding ? minimizedOnboarding(onboarding) : null
+      };
     }
-    case "creator_get_metrics_summary": {
-      const dashboard = await input.profileRepository.getMyCreatorDashboard(
-        input.connection.supabaseUserId
-      );
-      return { dashboard };
+    case "creator_query_analytics": {
+      const request = creatorAnalyticsInput(input.params);
+      try {
+        const analytics = await new AnalyticsQueryService(input.analyticsRepository).query(
+          input.connection.supabaseUserId,
+          request
+        );
+        if (!analytics) throw new McpToolValidationError("Creator analytics access is unavailable");
+        return { analytics: { ...analytics, scope: { type: "creator" } } };
+      } catch (error) {
+        if (error instanceof AnalyticsQueryValidationError) {
+          throw new McpToolValidationError(error.message);
+        }
+        throw error;
+      }
     }
-    case "creator_create_content_draft": {
-      const body = contentDraftInput(input.params);
+    case "creator_list_private_drafts": {
+      if (!input.contentRepository.listOwnedContent) {
+        throw new McpToolValidationError("Private draft metadata is unavailable");
+      }
+      const params = privateDraftListInput(input.params);
+      const page = await input.contentRepository.listOwnedContent({
+        supabaseUserId: input.connection.supabaseUserId,
+        privateDraftsOnly: true,
+        ...params
+      });
+      return {
+        items: page.items
+          .filter((item) => item.visibility === "private" && item.publicationState !== "published")
+          .map(({ id, mediaType, publicationState, reviewState, createdAt, updatedAt }) => ({
+            contentId: id,
+            mediaType,
+            publicationState,
+            reviewState,
+            createdAt,
+            updatedAt
+          })),
+        nextCursor: page.nextCursor
+      };
+    }
+    case "creator_get_draft_readiness": {
+      if (!input.contentRepository.findOwnedPrivateDraftReadiness) {
+        throw new McpToolValidationError("Private draft readiness is unavailable");
+      }
+      const contentId = requiredUuid(input.params, "contentId");
+      const readiness = await input.contentRepository.findOwnedPrivateDraftReadiness({
+        supabaseUserId: input.connection.supabaseUserId,
+        contentId
+      });
+      if (!readiness) throw new McpToolValidationError("Owned private draft not found");
+      return { readiness };
+    }
+    case "creator_create_private_draft": {
+      const body = privateDraftInput(input.params);
       const abusePolicy = await resolveContentCreationAbusePolicy(input.contentRepository);
+      const requestHash = hashIdempotencyPayload(body);
       const content = await input.contentRepository.createDraft({
         supabaseUserId: input.connection.supabaseUserId,
-        idempotencyKey: input.idempotencyKey,
-        requestHash: hashIdempotencyPayload(body),
+        idempotencyKey: `mcp-private-draft:${input.connection.id}:${requestHash}`,
+        requestHash,
         mediaType: body.mediaType,
         caption: body.caption,
-        visibility: body.visibility,
-        nsfwLabel: body.nsfwLabel,
+        bodyText: body.bodyText,
+        poll: body.poll,
+        visibility: "private",
+        nsfwLabel: "none",
         representationMode: "not_declared",
         contentSafetyPolicyAccepted: false,
         quotaWindowStart: dailyQuotaWindowStart(new Date(), abusePolicy.rollingWindowHours),
-        dailyDraftQuota: abusePolicy.dailyContentDraftQuota
+        dailyDraftQuota: abusePolicy.dailyContentDraftQuota,
+        origin: {
+          kind: "mcp",
+          connectionId: input.connection.id,
+          toolName: "creator_create_private_draft",
+          toolVersion: input.tool.version,
+          requestHash
+        }
       });
-      return { content };
+      return {
+        draft: { contentId: content.id, mediaType: content.mediaType, caption: content.caption ?? null, visibility: "private" },
+        nextAction: "review_in_wevid"
+      };
     }
     case "admin_get_platform_health_summary": {
       return { summary: await input.adminRepository.getOpsSummary() };
     }
     case "admin_list_support_cases": {
       const params = optionalCursorInput(input.params);
-      return { page: await input.adminRepository.listSupportCases(params) };
+      const page = await input.adminRepository.listSupportCases(params);
+      return { items: page.items, nextCursor: page.nextCursor };
     }
     case "admin_list_payment_intents": {
       const params = optionalCursorAndQueryInput(input.params);
-      return { page: await input.adminRepository.listPaymentIntents(params) };
+      const page = await input.adminRepository.listPaymentIntents(params);
+      return { items: page.items, nextCursor: page.nextCursor };
     }
     default:
       throw new Error("Unsupported MCP tool");
@@ -196,7 +326,7 @@ export function redactedToolInput(input: unknown): Record<string, unknown> {
 
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(input)) {
-    if (/token|authorization|cookie|wallet|signature|email|phone|address/i.test(key)) {
+    if (/token|authorization|cookie|wallet|signature|email|phone|address|caption|bodyText|question|options|poll|prompt|message/i.test(key)) {
       result[key] = "[redacted]";
     } else if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
       result[key] = value;
@@ -218,31 +348,231 @@ export function summarizeValue(value: unknown): string {
   return Object.keys(value as Record<string, unknown>).sort().join(", ").slice(0, 160) || "empty";
 }
 
-function objectSchema(properties: Record<string, unknown>) {
+function objectSchema(properties: Record<string, unknown>, required: string[] = []) {
   return {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
     type: "object",
     additionalProperties: false,
-    properties
+    properties,
+    ...(required.length > 0 ? { required } : {})
   };
 }
 
-function contentDraftInput(value: unknown): {
-  mediaType: "bit" | "clip" | "image" | "vod" | "live_replay";
+function readAnnotations(title: string): McpToolDefinition["annotations"] {
+  return { title, readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+}
+
+function privateDraftInput(value: unknown): {
+  mediaType: "bit" | "clip" | "image" | "vod" | "live_replay" | "text" | "poll";
   caption: string | null;
-  visibility: "public" | "followers" | "subscribers" | "private";
-  nsfwLabel: "none";
+  bodyText?: string;
+  poll?: { question: string; options: string[]; closesAt?: string | null };
 } {
-  const body = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
-  const mediaType = stringEnum(body.mediaType, ["bit", "clip", "image", "vod", "live_replay"]);
-  const visibility = stringEnum(body.visibility, ["public", "followers", "subscribers", "private"]);
-  const nsfwLabel = stringEnum(body.nsfwLabel, ["none"]);
-  const caption = typeof body.caption === "string" ? body.caption.slice(0, 2_000) : null;
-
-  if (!mediaType || !visibility || !nsfwLabel) {
-    throw new McpToolValidationError("mediaType, visibility, and nsfwLabel are required");
+  const body = objectValue(value);
+  assertAllowedKeys(body, ["mediaType", "caption", "bodyText", "poll"]);
+  const mediaType = stringEnum(body.mediaType, ["bit", "clip", "image", "vod", "live_replay", "text", "poll"]);
+  if (body.caption !== undefined && (typeof body.caption !== "string" || body.caption.length > 2_000)) {
+    throw new McpToolValidationError("Draft caption must contain at most 2000 characters");
   }
+  const trimmedCaption = typeof body.caption === "string" ? body.caption.trim() : "";
+  const caption = trimmedCaption.length > 0 ? trimmedCaption : null;
 
-  return { mediaType, visibility, nsfwLabel, caption };
+  if (!mediaType) throw new McpToolValidationError("A supported mediaType is required");
+  if (mediaType === "text") {
+    if (body.poll !== undefined) throw new McpToolValidationError("Text drafts cannot include poll input");
+    if (typeof body.bodyText !== "string" || body.bodyText.trim().length < 1 || body.bodyText.length > 10_000) {
+      throw new McpToolValidationError("Text drafts require bodyText between one and 10000 characters");
+    }
+    return { mediaType, caption, bodyText: body.bodyText.trim() };
+  }
+  if (mediaType === "poll") {
+    if (body.bodyText !== undefined) throw new McpToolValidationError("Poll drafts cannot include bodyText");
+    return { mediaType, caption, poll: parsePoll(body.poll) };
+  }
+  if (body.bodyText !== undefined || body.poll !== undefined) {
+    throw new McpToolValidationError("Media drafts cannot include text or poll composition input");
+  }
+  return { mediaType, caption };
+}
+
+function parsePoll(value: unknown): { question: string; options: string[]; closesAt?: string | null } {
+  const poll = objectValue(value);
+  assertAllowedKeys(poll, ["question", "options", "closesAt"]);
+  if (typeof poll.question !== "string" || poll.question.trim().length < 1 || poll.question.length > 500) {
+    throw new McpToolValidationError("Poll drafts require a question between one and 500 characters");
+  }
+  if (!Array.isArray(poll.options) || poll.options.length < 2 || poll.options.length > 4) {
+    throw new McpToolValidationError("Poll drafts require between two and four options");
+  }
+  const options = poll.options.map((option) => {
+    if (typeof option !== "string" || option.trim().length < 1 || option.length > 200) {
+      throw new McpToolValidationError("Poll options must contain between one and 200 characters");
+    }
+    return option.trim();
+  });
+  if (new Set(options.map((option) => option.toLowerCase())).size !== options.length) {
+    throw new McpToolValidationError("Poll options must be unique");
+  }
+  if (
+    poll.closesAt !== undefined &&
+    poll.closesAt !== null &&
+    (!isIsoDateTime(poll.closesAt) || Date.parse(poll.closesAt) <= Date.now())
+  ) {
+    throw new McpToolValidationError("Poll closesAt must be a future ISO date-time or null");
+  }
+  return {
+    question: poll.question.trim(),
+    options,
+    ...(poll.closesAt !== undefined ? { closesAt: poll.closesAt as string | null } : {})
+  };
+}
+
+function creatorAnalyticsInput(value: unknown): AnalyticsQueryRequest {
+  const body = objectValue(value);
+  assertAllowedKeys(body, ["metricKeys", "startDate", "endDate", "granularity", "dimensions"]);
+  if (!Array.isArray(body.metricKeys) || body.metricKeys.length < 1 || body.metricKeys.length > 10) {
+    throw new McpToolValidationError("Choose between one and ten analytics metrics");
+  }
+  const metricKeys = body.metricKeys.map((metricKey) => {
+    if (typeof metricKey !== "string" || metricKey.length < 1 || metricKey.length > 120) {
+      throw new McpToolValidationError("Analytics metric keys must be bounded strings");
+    }
+    return metricKey;
+  });
+  if (new Set(metricKeys).size !== metricKeys.length) {
+    throw new McpToolValidationError("Analytics metric keys must be unique");
+  }
+  if (typeof body.startDate !== "string" || typeof body.endDate !== "string") {
+    throw new McpToolValidationError("Analytics requires ISO startDate and endDate values");
+  }
+  const granularity = stringEnum(body.granularity, ["day", "total"]);
+  if (!granularity) throw new McpToolValidationError("Analytics granularity must be day or total");
+  return {
+    scope: { type: "creator" },
+    metricKeys,
+    window: { startDate: body.startDate, endDate: body.endDate },
+    granularity,
+    timezone: "UTC",
+    ...(body.dimensions === undefined ? {} : { dimensions: creatorAnalyticsDimensions(body.dimensions) })
+  };
+}
+
+function creatorAnalyticsDimensions(value: unknown): AnalyticsDimensions {
+  const body = objectValue(value);
+  assertAllowedKeys(body, ["contentId", "mediaType", "currency", "productType", "cohortStartDate"]);
+  const dimensions: AnalyticsDimensions = {};
+  for (const key of ["contentId", "mediaType", "productType", "cohortStartDate"] as const) {
+    if (body[key] !== undefined) {
+      if (typeof body[key] !== "string" || body[key].length < 1 || body[key].length > 120) {
+        throw new McpToolValidationError(`${key} must be a bounded string`);
+      }
+      dimensions[key] = body[key];
+    }
+  }
+  if (body.currency !== undefined) {
+    const currency = stringEnum(body.currency, ["SOL", "USDC"]);
+    if (!currency) throw new McpToolValidationError("Analytics currency must be SOL or USDC");
+    dimensions.currency = currency;
+  }
+  return dimensions;
+}
+
+function privateDraftListInput(value: unknown): { cursor?: string; limit: number } {
+  const body = objectValue(value);
+  assertAllowedKeys(body, ["cursor", "limit"]);
+  if (body.cursor !== undefined && (typeof body.cursor !== "string" || !isIsoDateTime(body.cursor))) {
+    throw new McpToolValidationError("Draft cursor must be an ISO date-time");
+  }
+  if (body.limit !== undefined && (!Number.isInteger(body.limit) || Number(body.limit) < 1 || Number(body.limit) > 20)) {
+    throw new McpToolValidationError("Draft limit must be between one and 20");
+  }
+  return {
+    ...(typeof body.cursor === "string" ? { cursor: body.cursor } : {}),
+    limit: typeof body.limit === "number" ? body.limit : 10
+  };
+}
+
+function requiredUuid(value: unknown, key: string): string {
+  const body = objectValue(value);
+  assertAllowedKeys(body, [key]);
+  const candidate = body[key];
+  if (typeof candidate !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(candidate)) {
+    throw new McpToolValidationError(`${key} must be a UUID`);
+  }
+  return candidate;
+}
+
+type CreatorDashboard = NonNullable<Awaited<ReturnType<ProfileRepository["getMyCreatorDashboard"]>>>;
+type CreatorOnboarding = NonNullable<Awaited<ReturnType<ProfileRepository["getMyCreatorOnboarding"]>>>;
+
+function minimizedProfile(value: CreatorDashboard["creator"]): Record<string, unknown> {
+  return {
+    handle: value.handle,
+    displayName: value.displayName,
+    avatarUrl: value.avatarUrl ?? null,
+    badges: value.badges
+  };
+}
+
+function minimizedCreatorReadiness(value: CreatorDashboard["readiness"]): Record<string, unknown> {
+  return {
+    state: value.state,
+    readinessScore: value.readinessScore,
+    canMonetize: value.canMonetize,
+    nextAction: value.nextAction ?? null,
+    blockedReasons: value.blockedReasons
+  };
+}
+
+function minimizedOnboarding(value: CreatorOnboarding): Record<string, unknown> {
+  return {
+    state: value.state,
+    canStartEarning: value.canStartEarning,
+    readinessScore: value.readinessScore,
+    nextAction: value.nextAction ?? null,
+    steps: value.steps.map(({ key, label, state, required, actionHref }) => ({
+      key,
+      label,
+      state,
+      required,
+      actionHref: actionHref ?? null
+    }))
+  };
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new McpToolValidationError("Tool input must be an object");
+  }
+  return value as Record<string, unknown>;
+}
+
+function assertAllowedKeys(value: Record<string, unknown>, allowed: string[]): void {
+  const allowedSet = new Set(allowed);
+  const unexpected = Object.keys(value).find((key) => !allowedSet.has(key));
+  if (unexpected) throw new McpToolValidationError(`Unexpected input field: ${unexpected}`);
+}
+
+function isIsoDateTime(value: unknown): value is string {
+  if (typeof value !== "string" || value.length > 80) return false;
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|([+-])(\d{2}):(\d{2}))$/.exec(value);
+  if (!match) return false;
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText, , offsetHourText, offsetMinuteText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText);
+  const offsetHour = Number(offsetHourText ?? 0);
+  const offsetMinute = Number(offsetMinuteText ?? 0);
+  if (
+    year < 1 || month < 1 || month > 12 || day < 1 ||
+    day > new Date(Date.UTC(year, month, 0)).getUTCDate() ||
+    hour > 23 || minute > 59 || second > 59 || offsetHour > 23 || offsetMinute > 59
+  ) return false;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp);
 }
 
 function optionalCursorInput(value: unknown): { cursor?: string } {

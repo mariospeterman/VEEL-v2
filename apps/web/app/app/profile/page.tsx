@@ -195,10 +195,10 @@ function ProfileCapabilityLinks() {
           href="/app/settings#mcp"
         >
           <span>
-            <span className="block font-medium">MCP connections</span>
-            <span className="text-xs text-(--muted)">External client access and revocation</span>
+            <span className="block font-medium">Connected assistants</span>
+            <span className="text-xs text-(--muted)">Permission review and revocation</span>
           </span>
-          <StatusPill>consent scoped</StatusPill>
+          <StatusPill>Permission scoped</StatusPill>
         </a>
         <a
           className="flex min-h-12 items-center justify-between gap-3 rounded border border-(--line) bg-(--background) px-3 py-2 text-sm"

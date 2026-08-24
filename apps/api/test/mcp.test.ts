@@ -4,6 +4,7 @@ import { buildApi } from "../src/app";
 import type { BuildApiOptions } from "../src/app";
 import type { AdminRepository } from "../src/modules/admin/types";
 import type { AgeRepository } from "../src/modules/age/types";
+import type { AnalyticsRepository } from "../src/modules/analytics/types";
 import type { ContentRepository, CreateContentDraftInput } from "../src/modules/content/types";
 import type {
   McpConnection,
@@ -115,8 +116,17 @@ describe("external MCP connector foundation", () => {
 
     expect(listResponse.statusCode).toBe(200);
     expect(listResponse.json().result.tools.map((tool: { name: string }) => tool.name)).toEqual([
-      "creator_create_content_draft"
+      "creator_create_private_draft"
     ]);
+    expect(listResponse.json().result.tools[0]).toMatchObject({
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false
+      }
+    });
+    expect(listResponse.json().result.tools[0]).not.toHaveProperty("requiredScopes");
 
     const deniedResponse = await app.inject({
       method: "POST",
@@ -153,11 +163,9 @@ describe("external MCP connector foundation", () => {
         id: 3,
         method: "tools/call",
         params: {
-          name: "creator_create_content_draft",
+          name: "creator_create_private_draft",
           arguments: {
             mediaType: "image",
-            visibility: "private",
-            nsfwLabel: "none",
             caption: "Private draft"
           }
         }
@@ -165,14 +173,223 @@ describe("external MCP connector foundation", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json().result.content[0].json.content).toMatchObject({
+    expect(response.json().result.structuredContent).toMatchObject({
+      draft: {
+        contentId: "00000000-0000-4000-8000-000000000099",
+        visibility: "private",
+        mediaType: "image",
+        caption: "Private draft"
+      },
+      nextAction: "review_in_wevid"
+    });
+    expect(JSON.parse(response.json().result.content[0].text).draft).toMatchObject({
       mediaType: "image",
       caption: "Private draft"
     });
     expect(contentRepository.createdDrafts).toMatchObject([
       { visibility: "private", nsfwLabel: "none", representationMode: "not_declared" }
     ]);
-    expect(mcpRepository.toolCalls).toMatchObject([{ state: "allowed" }]);
+    expect(mcpRepository.toolCalls).toMatchObject([{
+      state: "allowed",
+      inputRedacted: { mediaType: "image", caption: "[redacted]" }
+    }]);
+    expect(contentRepository.createdDrafts[0]?.origin).toMatchObject({
+      toolName: "creator_create_private_draft",
+      connectionId: expect.any(String),
+      requestHash: expect.stringMatching(/^[a-f0-9]{64}$/)
+    });
+
+    const retry = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        jsonrpc: "2.0",
+        id: 30,
+        method: "tools/call",
+        params: {
+          name: "creator_create_private_draft",
+          arguments: { mediaType: "image", caption: "Private draft" }
+        }
+      }
+    });
+    expect(retry.statusCode).toBe(200);
+    expect(contentRepository.createdDrafts[0]?.idempotencyKey).toBe(contentRepository.createdDrafts[1]?.idempotencyKey);
+
+    const expiredPoll = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        jsonrpc: "2.0",
+        id: 31,
+        method: "tools/call",
+        params: {
+          name: "creator_create_private_draft",
+          arguments: {
+            mediaType: "poll",
+            poll: {
+              question: "Still open?",
+              options: ["Yes", "No"],
+              closesAt: "2020-01-01T00:00:00.000Z"
+            }
+          }
+        }
+      }
+    });
+    expect(expiredPoll.statusCode).toBe(200);
+    expect(expiredPoll.json().error.message).toContain("future ISO date-time");
+    expect(contentRepository.createdDrafts).toHaveLength(2);
+
+    const malformedPoll = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        jsonrpc: "2.0",
+        id: 32,
+        method: "tools/call",
+        params: {
+          name: "creator_create_private_draft",
+          arguments: {
+            mediaType: "poll",
+            poll: { question: "When?", options: ["Soon", "Later"], closesAt: "tomorrow" }
+          }
+        }
+      }
+    });
+    expect(malformedPoll.json().error.message).toContain("future ISO date-time");
+    expect(contentRepository.createdDrafts).toHaveLength(2);
+
+    await app.close();
+  });
+
+  it("negotiates the stable protocol and rejects untrusted browser origins", async () => {
+    const app = await buildApi(testDependencies({ mcpRepository: new FakeMcpRepository() }));
+    await app.ready();
+    const token = await createCreatorToken(app, ["creator.profile.read"]);
+
+    const initialized = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: { authorization: `Bearer ${token}`, origin: "http://localhost:3000" },
+      payload: {
+        jsonrpc: "2.0",
+        id: 10,
+        method: "initialize",
+        params: { protocolVersion: "2025-11-25" }
+      }
+    });
+    expect(initialized.statusCode).toBe(200);
+    expect(initialized.json().result).toMatchObject({
+      protocolVersion: "2025-11-25",
+      serverInfo: { name: "wevid", version: "0.2.0" }
+    });
+
+    const initializedNotification = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: { authorization: `Bearer ${token}`, "mcp-protocol-version": "2025-11-25" },
+      payload: { jsonrpc: "2.0", method: "notifications/initialized" }
+    });
+    expect(initializedNotification.statusCode).toBe(202);
+
+    const unsupportedProtocol = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: { authorization: `Bearer ${token}`, "mcp-protocol-version": "2099-01-01" },
+      payload: { jsonrpc: "2.0", id: 13, method: "tools/list" }
+    });
+    expect(unsupportedProtocol.statusCode).toBe(400);
+    expect(unsupportedProtocol.json()).toMatchObject({ code: "invalid_protocol_version" });
+
+    const rejected = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: { authorization: `Bearer ${token}`, origin: "https://attacker.example" },
+      payload: { jsonrpc: "2.0", id: 11, method: "tools/list" }
+    });
+    expect(rejected.statusCode).toBe(403);
+    expect(rejected.json()).toMatchObject({ code: "forbidden" });
+
+    const malformedOrigin = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: { authorization: `Bearer ${token}`, origin: "http://localhost:3000/path" },
+      payload: { jsonrpc: "2.0", id: 12, method: "tools/list" }
+    });
+    expect(malformedOrigin.statusCode).toBe(403);
+
+    const getRejected = await app.inject({ method: "GET", url: "/mcp" });
+    expect(getRejected.statusCode).toBe(405);
+    expect(getRejected.headers.allow).toBe("POST");
+
+    await app.close();
+  });
+
+  it("returns minimized profile, canonical analytics, and owned private-draft readiness", async () => {
+    const mcpRepository = new FakeMcpRepository();
+    const contentRepository = new FakeContentRepository();
+    const app = await buildApi(testDependencies({ mcpRepository, contentRepository }));
+    await app.ready();
+    const token = await createCreatorToken(app, [
+      "creator.profile.read",
+      "creator.metrics.read",
+      "creator.drafts.read"
+    ]);
+
+    const call = (id: number, name: string, args: Record<string, unknown> = {}) => app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } }
+    });
+
+    const profile = await call(20, "creator_get_profile");
+    expect(profile.json().result.structuredContent).toMatchObject({
+      profile: { handle: "creator", displayName: "Creator" },
+      readiness: { state: "active", canMonetize: true },
+      onboarding: { state: "ready", canStartEarning: true }
+    });
+    expect(profile.json().result.structuredContent.profile).not.toHaveProperty("id");
+    expect(profile.json().result.structuredContent).not.toHaveProperty("earnings");
+    expect(profile.json().result.structuredContent.onboarding).not.toHaveProperty("configuration");
+
+    const analytics = await call(21, "creator_query_analytics", {
+      metricKeys: ["creator.content.impressions"],
+      startDate: "2026-08-01",
+      endDate: "2026-08-01",
+      granularity: "total"
+    });
+    expect(analytics.json().result.structuredContent.analytics).toMatchObject({
+      scope: { type: "creator" },
+      freshness: "fresh",
+      metrics: [{ points: [{ value: null, privacyDecision: "suppressed_minimum_cohort" }] }]
+    });
+    expect(analytics.json().result.structuredContent.analytics.scope).not.toHaveProperty("creatorUserId");
+
+    const drafts = await call(22, "creator_list_private_drafts", { limit: 5 });
+    expect(drafts.json().result.structuredContent.items).toMatchObject([{
+      contentId: "00000000-0000-4000-8000-000000000099"
+    }]);
+    expect(drafts.json().result.structuredContent.items[0]).not.toHaveProperty("visibility");
+    expect(contentRepository.listInputs).toMatchObject([{ privateDraftsOnly: true }]);
+    expect(drafts.json().result.structuredContent.items[0]).not.toHaveProperty("posterUrl");
+    expect(drafts.json().result.structuredContent.items[0]).not.toHaveProperty("caption");
+    expect(drafts.json().result.structuredContent.items[0]).not.toHaveProperty("reviewMessage");
+
+    const readiness = await call(23, "creator_get_draft_readiness", {
+      contentId: "00000000-0000-4000-8000-000000000099"
+    });
+    expect(readiness.json().result.structuredContent.readiness).toMatchObject({
+      reviewRequestEligible: true,
+      nextAction: "continue_in_wevid"
+    });
+
+    const denied = await call(24, "creator_get_draft_readiness", {
+      contentId: "00000000-0000-4000-8000-000000000098"
+    });
+    expect(denied.json().error.message).toContain("Owned private draft not found");
 
     await app.close();
   });
@@ -378,7 +595,10 @@ describe("MCP OAuth completion", () => {
   });
 });
 
-async function createCreatorToken(app: Awaited<ReturnType<typeof buildApi>>): Promise<string> {
+async function createCreatorToken(
+  app: Awaited<ReturnType<typeof buildApi>>,
+  scopes: McpScope[] = ["creator.drafts.write"]
+): Promise<string> {
   const created = await app.inject({
     method: "POST",
     url: "/v1/mcp/connections",
@@ -387,7 +607,7 @@ async function createCreatorToken(app: Awaited<ReturnType<typeof buildApi>>): Pr
       clientName: "Claude local",
       clientType: "claude",
       roleType: "creator",
-      scopes: ["creator.drafts.write"]
+      scopes
     }
   });
 
@@ -402,6 +622,7 @@ function testDependencies(input: {
     authVerifier: fakeAuthVerifier,
     sessionRepository: fakeSessionRepository,
     ageRepository: fakeAgeRepository,
+    analyticsRepository: fakeAnalyticsRepository,
     walletRepository: fakeWalletRepository,
     profileRepository: fakeProfileRepository,
     contentRepository: (input.contentRepository ?? new FakeContentRepository()) as unknown as ContentRepository,
@@ -458,12 +679,57 @@ const fakeWalletRepository = {
 
 const fakeProfileRepository = {
   async getMyCreatorDashboard() {
-    return { state: "active" };
+    return {
+      creator: { id: supabaseUserId, handle: "creator", displayName: "Creator", avatarUrl: null, badges: [] },
+      readiness: {
+        state: "active",
+        earningState: "ready",
+        kycState: "verified",
+        taxProfileState: "verified",
+        recipientWalletState: "linked",
+        readinessScore: 100,
+        canMonetize: true,
+        nextAction: null,
+        policyBoundary: "creator_records_only_no_balances_payout_queue_or_social_priority",
+        blockedReasons: []
+      },
+      earnings: {},
+      products: [],
+      recentActivity: []
+    };
   },
   async getMyCreatorOnboarding() {
-    return { state: "ready" };
+    return {
+      state: "ready",
+      canStartEarning: true,
+      readinessScore: 100,
+      nextAction: null,
+      policyBoundary: "creator_records_only_no_balances_payout_queue_or_social_priority",
+      configuration: { recipientWalletId: null, earningsTermsVersion: null, products: {} },
+      steps: [{ key: "profile", label: "Profile", state: "complete", required: true, actionHref: null }]
+    };
   }
 } as unknown as ProfileRepository;
+
+const fakeAnalyticsRepository = {
+  async authorizeScope() {
+    return { type: "creator", creatorUserId: supabaseUserId };
+  },
+  async queryMetric() {
+    return [{ bucketDate: null, value: "3", numerator: null, denominator: null, sampleSize: "3" }];
+  },
+  async getWatermark() {
+    return { definitionVersion: 1, dataThrough: new Date(), state: "healthy" };
+  },
+  async recordSuppression() {},
+  async recordOnboardingEvent() {},
+  async getProjectionHealth() {
+    return {};
+  },
+  async enqueueProjectionJob() {
+    return {};
+  }
+} as unknown as AnalyticsRepository;
 
 const fakeAdminRepository = {
   async hasAdminAccess() {
@@ -482,6 +748,7 @@ const fakeAdminRepository = {
 
 class FakeContentRepository {
   readonly createdDrafts: CreateContentDraftInput[] = [];
+  readonly listInputs: Parameters<NonNullable<ContentRepository["listOwnedContent"]>>[0][] = [];
 
   async createDraft(input: CreateContentDraftInput) {
     this.createdDrafts.push(input);
@@ -499,6 +766,39 @@ class FakeContentRepository {
       accessState: "free",
       nsfwLabel: input.nsfwLabel,
       engagement: { liked: false, saved: false, likeCount: 0, commentCount: 0 }
+    };
+  }
+
+  async listOwnedContent(input: Parameters<NonNullable<ContentRepository["listOwnedContent"]>>[0]) {
+    this.listInputs.push(input);
+    return {
+      items: [{
+        id: "00000000-0000-4000-8000-000000000099",
+        mediaType: "image" as const,
+        caption: "Private draft",
+        posterUrl: "https://private.example/poster.jpg",
+        visibility: "private",
+        publicationState: "draft" as const,
+        reviewState: "ready",
+        reviewMessage: null,
+        createdAt: "2026-08-01T00:00:00.000Z",
+        updatedAt: "2026-08-01T00:00:00.000Z"
+      }],
+      nextCursor: null
+    };
+  }
+
+  async findOwnedPrivateDraftReadiness(input: { supabaseUserId: string; contentId: string }) {
+    if (input.supabaseUserId !== supabaseUserId || input.contentId !== "00000000-0000-4000-8000-000000000099") return null;
+    return {
+      contentId: input.contentId,
+      mediaType: "image" as const,
+      publicationState: "draft" as const,
+      reviewState: "ready",
+      reviewRequestEligible: true,
+      assetCount: 1,
+      blockers: [],
+      nextAction: "continue_in_wevid" as const
     };
   }
 }
@@ -748,6 +1048,7 @@ class FakeMcpRepository implements McpRepository {
   async recordToolCall(input: McpToolCallAuditInput) {
     this.toolCalls.push(input);
   }
+
 }
 
 function stripHash(
