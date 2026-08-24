@@ -10,6 +10,7 @@ import { createOrganizationRepository } from "./admin-repository-organization.js
 import { createPrivacyRepository } from "./admin-repository-privacy.js";
 import { createFeatureFlagRepository } from "./admin-repository-feature-flag.js";
 import { createSupportRepository } from "./admin-repository-support.js";
+import { createStaffRepository } from "./admin-repository-staff.js";
 import { createUnconfiguredAdminRepository } from "./admin-repository-unconfigured.js";
 
 export { AdminRepositoryConfigurationError, AdminRepositoryStateConflictError } from "./admin-repository-errors.js";
@@ -23,6 +24,7 @@ export function createPostgresAdminRepository(database?: string | PostgresSql): 
 
   return {
     ...createAccessRepository(sql),
+    ...createStaffRepository(sql),
     ...createModerationRepository(sql),
     ...createMoneyRepository(sql),
     ...createSupportRepository(sql),

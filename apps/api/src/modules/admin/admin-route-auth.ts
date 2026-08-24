@@ -9,6 +9,7 @@ import type { ApplicationSessionVerifier } from "../session/types.js";
 import type { LiveProviderAdapter, LiveRepository } from "../live/types.js";
 import { AdminRepositoryConfigurationError } from "./admin-repository.js";
 import type { AdminRepository } from "./types.js";
+import type { AdminPermission } from "./admin-permissions.js";
 import type { PaymentCommercialPolicyRepository } from "../payment/types.js";
 
 export interface RegisterAdminRoutesOptions {
@@ -27,7 +28,7 @@ export interface AdminMutationContext<Body> {
 }
 
 export interface AdminRoutePolicy {
-  action: string;
+  permission: AdminPermission;
   mutation?: boolean;
   reasonRequired?: boolean;
 }
@@ -42,9 +43,10 @@ export function adminListInput(query: { q?: string; cursor?: string }): { query?
 export async function requireAdminAccess(
   request: FastifyRequest,
   reply: FastifyReply,
-  options: RegisterAdminRoutesOptions
+  options: RegisterAdminRoutesOptions,
+  permission: AdminPermission
 ): Promise<boolean> {
-  const access = await requireAdminAccessWithUser(request, reply, options);
+  const access = await requireAdminAccessWithUser(request, reply, options, { permission });
   return Boolean(access);
 }
 
@@ -52,7 +54,7 @@ export async function requireAdminAccessWithUser(
   request: FastifyRequest,
   reply: FastifyReply,
   options: RegisterAdminRoutesOptions,
-  policy: AdminRoutePolicy = { action: "admin.access" }
+  policy: AdminRoutePolicy
 ): Promise<{ supabaseUserId: string; authenticatedAt: Date } | null> {
   const verifiedSession = await verifyRequestSession(request, options.authVerifier);
 
@@ -62,19 +64,22 @@ export async function requireAdminAccessWithUser(
   }
 
   try {
-    const isAdmin = await options.adminRepository.hasAdminAccess(verifiedSession.supabaseUserId);
+    const isAdmin = await options.adminRepository.hasAdminPermission(
+      verifiedSession.supabaseUserId,
+      policy.permission
+    );
 
     if (!isAdmin) {
       request.log.warn(
         {
-          policyAction: policy.action,
+          policyPermission: policy.permission,
           policyMutation: policy.mutation === true
         },
         "Admin route policy denied request"
       );
       reply.code(403).send({
         code: "forbidden",
-        message: "Admin access is required"
+        message: "You do not have permission for this admin action"
       });
       return null;
     }
@@ -126,7 +131,7 @@ export async function requireAdminMutation<Body>(
 
   request.log.info(
     {
-      policyAction: policy.action,
+      policyPermission: policy.permission,
       idempotencyKey
     },
     "Admin mutation accepted by route policy"

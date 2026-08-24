@@ -8,6 +8,13 @@ async function fail(): Promise<never> {
 export function createUnconfiguredAdminRepository(): AdminRepository {
   return {
     hasAdminAccess: fail,
+    hasAdminPermission: fail,
+    getStaffAccess: fail,
+    getStaffDirectory: fail,
+    inviteStaff: fail,
+    updateStaffMembership: fail,
+    listCurrentStaffInvitations: fail,
+    respondStaffInvitation: fail,
     getOpsSummary: fail,
     getNotificationHealth: fail,
     retryDeadLetterJob: fail,

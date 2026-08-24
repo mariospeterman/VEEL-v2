@@ -3,7 +3,7 @@
 -- This is not a generated migration file. Each slice must add RLS policies,
 -- indexes, updated_at triggers, audit writes, and rollback strategy.
 
-create type staff_role as enum ('owner', 'admin', 'trust_safety', 'support', 'finance', 'ops', 'creator_success', 'event_ops', 'ai_ops', 'readonly_auditor');
+create type staff_role as enum ('owner', 'admin', 'trust_safety', 'support', 'finance', 'ops', 'creator_success', 'event_ops', 'ai_ops', 'compliance', 'readonly_auditor');
 create type age_state as enum ('not_required', 'required', 'pending', 'verified', 'failed');
 create type content_state as enum ('draft', 'processing', 'ready', 'blocked', 'deleted');
 create type media_provider as enum ('bunny', 'livepeer');
@@ -89,6 +89,45 @@ create table staff_permissions (
   revoked_at timestamptz,
   created_at timestamptz not null default now(),
   unique (user_id, permission_key, scope)
+);
+
+create table staff_invitations (
+  id uuid primary key,
+  target_user_id uuid not null references users(id),
+  role staff_role not null,
+  state text not null default 'pending',
+  invited_by_user_id uuid not null references users(id),
+  expires_at timestamptz not null,
+  responded_at timestamptz,
+  idempotency_key text not null,
+  request_hash text not null,
+  response_idempotency_key text,
+  response_request_hash text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (invited_by_user_id, idempotency_key)
+);
+
+create unique index staff_invitations_response_idempotency_idx
+  on staff_invitations (target_user_id, response_idempotency_key)
+  where response_idempotency_key is not null;
+
+create table staff_membership_action_receipts (
+  actor_user_id uuid not null references users(id),
+  membership_id uuid not null references staff_memberships(id),
+  idempotency_key text not null,
+  request_hash text not null,
+  response jsonb not null,
+  created_at timestamptz not null default now(),
+  primary key (actor_user_id, idempotency_key)
+);
+
+create table staging_fixture_resources (
+  namespace text not null,
+  resource_type text not null,
+  resource_id uuid not null,
+  created_at timestamptz not null default now(),
+  primary key (namespace, resource_type, resource_id)
 );
 
 create table wallets (

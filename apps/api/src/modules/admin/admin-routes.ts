@@ -7,12 +7,14 @@ import { registerAdminOpsRoutes } from "./admin-ops-routes.js";
 import { registerAdminOrganizationRoutes } from "./admin-organization-routes.js";
 import { registerAdminReviewRoutes } from "./admin-review-routes.js";
 import { registerAdminPaymentCommercialPolicyRoutes } from "./admin-payment-commercial-policy-routes.js";
+import { registerAdminStaffRoutes } from "./admin-staff-routes.js";
 
 export async function registerAdminRoutes(
   app: FastifyInstance,
   options: RegisterAdminRoutesOptions
 ): Promise<void> {
   registerAdminOpsRoutes(app, options);
+  registerAdminStaffRoutes(app, options);
   registerAdminModerationRoutes(app, options);
   registerAdminReviewRoutes(app, options);
   registerAdminEventProviderRoutes(app, options);

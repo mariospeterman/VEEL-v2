@@ -83,6 +83,11 @@ export type VerificationRecordSummary = {
   reusable: boolean;
 };
 export type AdminOpsSummary = components["schemas"]["AdminOpsSummary"];
+export type AdminCurrentStaff = components["schemas"]["AdminCurrentStaff"];
+export type AdminPermission = components["schemas"]["AdminPermission"];
+export type AdminStaffDirectory = components["schemas"]["AdminStaffDirectory"];
+export type AdminStaffMember = components["schemas"]["AdminStaffMember"];
+export type StaffInvitation = components["schemas"]["StaffInvitation"];
 export type AnalyticsProjectionHealth = components["schemas"]["AnalyticsProjectionHealth"];
 export type AnalyticsQueryRequest = components["schemas"]["AnalyticsQueryRequest"];
 export type AnalyticsQueryResponse = components["schemas"]["AnalyticsQueryResponse"];
@@ -132,6 +137,9 @@ export type AdminFeatureFlagPatchRequest = components["schemas"]["AdminFeatureFl
 export type AdminSupportCaseActionRequest = components["schemas"]["AdminSupportCaseActionRequest"];
 export type AdminRefundDisputeActionRequest = components["schemas"]["AdminRefundDisputeActionRequest"];
 export type AdminDataRequestActionRequest = components["schemas"]["AdminDataRequestActionRequest"];
+export type AdminStaffInvitationRequest = components["schemas"]["AdminStaffInvitationRequest"];
+export type AdminStaffMembershipActionRequest = components["schemas"]["AdminStaffMembershipActionRequest"];
+export type StaffInvitationResponseRequest = components["schemas"]["StaffInvitationResponseRequest"];
 export type McpConnection = {
   id: string;
   clientName: string;

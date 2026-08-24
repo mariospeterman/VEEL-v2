@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const chromiumExecutablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+const firefoxExecutablePath = process.env.PLAYWRIGHT_FIREFOX_EXECUTABLE_PATH;
 
 export default defineConfig({
   testDir: "tests/smoke",
@@ -40,6 +41,7 @@ export default defineConfig({
       name: "desktop-firefox",
       use: {
         ...devices["Desktop Firefox"],
+        launchOptions: firefoxExecutablePath ? { executablePath: firefoxExecutablePath } : undefined,
         viewport: { width: 1440, height: 1000 }
       }
     },

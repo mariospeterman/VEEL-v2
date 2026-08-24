@@ -5,32 +5,6 @@ import {
   parseEvidenceBundle
 } from "./release-evidence.mjs";
 
-export const stagingConfigurationGroups = [
-  ["core", ["WEB_URL", "API_URL", "DATABASE_URL", "SUPABASE_URL", "SUPABASE_PROJECT_REF", "SUPABASE_PUBLISHABLE_KEY"]],
-  ["wallet", ["NEXT_PUBLIC_PRIVY_APP_ID", "NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED"]],
-  ["payments", ["SOLANA_RPC_URL", "PAYMENT_PLATFORM_FEE_WALLET", "HELIUS_WEBHOOK_SECRET", "HELIUS_CLUSTER"]],
-  ["vod", ["BUNNY_STREAM_API_KEY", "BUNNY_STREAM_LIBRARY_ID", "BUNNY_STREAM_EMBED_TOKEN_KEY", "BUNNY_STREAM_WEBHOOK_READONLY_KEY", "BUNNY_SHIELD_API_KEY", "BUNNY_SHIELD_ZONE_ID", "BUNNY_SHIELD_UPLOAD_COVERAGE", "BUNNY_PROOF_VIDEO_PATH"]],
-  ["live", ["LIVEPEER_API_KEY", "LIVEPEER_WEBHOOK_SECRET", "LIVEPEER_ACCESS_CONTROL_PRIVATE_KEY", "LIVEPEER_ACCESS_CONTROL_PUBLIC_KEY", "LIVEPEER_WEBHOOK_ID", "LIVEPEER_MODERATION_MULTISTREAM_TARGET_ID", "LIVEPEER_ADULT_LIVE_ENABLED", "MEDIA_MODERATION_MODE"]],
-  ["verification", ["AGE_VERIFICATION_DRIVER", "AGE_VERIFICATION_ALLOW_MOCK_PROVIDER"]],
-  ["notifications", ["NOTIFICATION_DEVICE_ENCRYPTION_KEY", "WEB_PUSH_VAPID_PUBLIC_KEY", "WEB_PUSH_VAPID_PRIVATE_KEY", "REALTIME_JWT_PRIVATE_JWK", "REALTIME_JWT_KEY_ID", "REALTIME_JWT_ISSUER", "TRANSACTIONAL_EMAIL_PROVIDER", "RESEND_API_KEY", "TRANSACTIONAL_EMAIL_FROM", "TRANSACTIONAL_EMAIL_SMOKE_TO"]],
-  ["operations", ["API_RATE_LIMIT_STORE_DRIVER", "API_RATE_LIMIT_REDIS_URL", "OTEL_REQUIRED", "OTEL_EXPORTER_OTLP_ENDPOINT", "RELEASE_MANIFEST_PATH"]],
-  ["features", ["SUBSCRIPTIONS_ENABLED"]],
-  ["legal", ["LEGAL_DOCUMENTS_APPROVED", "LEGAL_TERMS_VERSION", "LEGAL_PRIVACY_VERSION", "LEGAL_CONTACT_EMAIL"]]
-];
-
-const stagingConfigurationExpectations = [
-  ["wallet", "NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED", "true"],
-  ["payments", "HELIUS_CLUSTER", "devnet"],
-  ["vod", "BUNNY_SHIELD_UPLOAD_COVERAGE", "stream_tus_provider_confirmed"],
-  ["live", "LIVEPEER_ADULT_LIVE_ENABLED", "false"],
-  ["live", "MEDIA_MODERATION_MODE", "launch_approved"],
-  ["verification", "AGE_VERIFICATION_ALLOW_MOCK_PROVIDER", "false"],
-  ["notifications", "TRANSACTIONAL_EMAIL_PROVIDER", "resend"],
-  ["operations", "API_RATE_LIMIT_STORE_DRIVER", "redis"],
-  ["operations", "OTEL_REQUIRED", "true"],
-  ["legal", "LEGAL_DOCUMENTS_APPROVED", "true"]
-];
-
 export const stagingProofPlan = [
   {
     name: "release-manifest",
@@ -98,27 +72,6 @@ export const stagingProofPlan = [
   },
   ...evidenceProofs()
 ];
-
-export function inspectStagingConfiguration(env = process.env) {
-  return stagingConfigurationGroups.map(([name, names]) => {
-    const missing = names.filter((key) => !env[key]?.trim());
-    const invalid = stagingConfigurationExpectations
-      .filter(([group]) => group === name)
-      .filter(([, key, expected]) => env[key]?.trim() && env[key]?.trim() !== expected)
-      .map(([, key, expected]) => `${key}=${expected}`);
-    if (name === "features") {
-      for (const key of names) {
-        if (env[key]?.trim() && !["true", "false"].includes(env[key].trim())) invalid.push(`${key}=true|false`);
-      }
-    }
-    return {
-      name,
-      status: missing.length === 0 && invalid.length === 0 ? "READY" : "CODE_COMPLETE_PROVIDER_BLOCKED",
-      missing,
-      invalid
-    };
-  });
-}
 
 export async function executeStagingProofPlan({
   env = process.env,

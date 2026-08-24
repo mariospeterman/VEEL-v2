@@ -89,8 +89,8 @@ export async function registerAnalyticsRoutes(app: FastifyInstance, options: Reg
       const session = await verifyRequestSession(request, options.authVerifier);
       if (!session) return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
       try {
-        if (!(await options.adminRepository.hasAdminAccess(session.supabaseUserId))) {
-          return reply.code(403).send({ code: "forbidden", message: "Admin access is required" });
+        if (!(await options.adminRepository.hasAdminPermission(session.supabaseUserId, "admin.analytics.read"))) {
+          return reply.code(403).send({ code: "forbidden", message: "Analytics health permission is required" });
         }
         return reply.code(200).send(await options.analyticsRepository.getProjectionHealth());
       } catch (error) {
@@ -120,8 +120,8 @@ export async function registerAnalyticsRoutes(app: FastifyInstance, options: Reg
         reason?: string;
       };
       try {
-        if (!(await options.adminRepository.hasAdminAccess(session.supabaseUserId))) {
-          return reply.code(403).send({ code: "forbidden", message: "Admin access is required" });
+        if (!(await options.adminRepository.hasAdminPermission(session.supabaseUserId, "admin.analytics.recompute"))) {
+          return reply.code(403).send({ code: "forbidden", message: "Analytics recompute permission is required" });
         }
         if (!body || !["backfill", "reconciliation"].includes(body.jobType ?? "")
           || typeof body.reason !== "string" || body.reason.trim().length < 3 || body.reason.trim().length > 500

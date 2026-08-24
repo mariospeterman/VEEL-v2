@@ -26,7 +26,7 @@ export function registerAdminPaymentCommercialPolicyRoutes(
   options: RegisterAdminRoutesOptions
 ): void {
   app.get("/v1/admin/payments/commercial-policies", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.payments.read");
     if (!allowed) return reply;
     if (!options.paymentCommercialPolicyRepository) {
       return reply.code(503).send({
@@ -62,7 +62,7 @@ export function registerAdminPaymentCommercialPolicyRoutes(
         request,
         reply,
         options,
-        { action: "payment_commercial_policy_updated" },
+        { permission: "admin.payment_policy.write" },
         validatePolicyPatch
       );
       if (!mutation) return reply;

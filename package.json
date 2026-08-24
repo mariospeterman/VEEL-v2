@@ -5,6 +5,7 @@
   "packageManager": "pnpm@10.0.0",
   "scripts": {
     "dev": "node --env-file-if-exists=.env scripts/run-development.mjs",
+    "dev:full": "VEEL_DEV_FULL=true node --env-file-if-exists=.env scripts/run-development.mjs",
     "bootstrap": "corepack enable && corepack prepare pnpm@10.0.0 --activate && pnpm install --frozen-lockfile",
     "check": "pnpm docs:check && pnpm deps:check && pnpm frontend:affordances && pnpm db:migrations:check && pnpm deploy:check && pnpm lint && pnpm typecheck && pnpm test",
     "doctor": "bash scripts/toolchain-doctor.sh",
@@ -16,8 +17,20 @@
     "deploy:check": "node scripts/check-deploy-readiness.mjs",
     "release:manifest": "node scripts/generate-release-manifest.mjs",
     "release:verify": "node scripts/verify-release-manifest.mjs",
-    "staging:doctor": "node scripts/staging-doctor.mjs",
-    "staging:prove": "node scripts/staging-prove.mjs",
+    "staging:init": "node scripts/staging-init.mjs",
+    "staging:doctor": "node --env-file-if-exists=.env.staging scripts/staging-doctor.mjs",
+    "staging:cloud:link": "node --env-file-if-exists=.env.staging scripts/staging-cloud-link.mjs",
+    "staging:migrations:plan": "node --env-file-if-exists=.env.staging scripts/staging-migrations.mjs plan",
+    "staging:migrations:apply": "node --env-file-if-exists=.env.staging scripts/staging-migrations.mjs apply",
+    "staging:bootstrap": "node --env-file-if-exists=.env.staging scripts/staging-bootstrap.mjs",
+    "staging:run": "node --env-file-if-exists=.env.staging scripts/staging-run.mjs",
+    "staging:seed": "node --env-file-if-exists=.env.staging scripts/staging-fixtures.mjs seed",
+    "staging:acceptance": "node --env-file-if-exists=.env.staging scripts/staging-acceptance.mjs",
+    "staging:acceptance:headed": "STAGING_ACCEPTANCE_HEADED=true node --env-file-if-exists=.env.staging scripts/staging-acceptance.mjs",
+    "staging:prove": "node --env-file-if-exists=.env.staging scripts/staging-prove.mjs",
+    "staging:report": "node scripts/staging-report.mjs",
+    "staging:cleanup": "node --env-file-if-exists=.env.staging scripts/staging-fixtures.mjs cleanup",
+    "staging:acceptance:render": "node scripts/render-staging-acceptance.mjs",
     "synthetic:smoke": "node scripts/synthetic-smoke.mjs",
     "load:smoke": "node scripts/load-smoke.mjs",
     "db:backup": "node scripts/backup-supabase.mjs",
@@ -43,7 +56,7 @@
     "smoke": "node scripts/run-local-tool.mjs playwright test",
     "typecheck": "pnpm -r typecheck",
     "test": "node scripts/run-local-tool.mjs vitest run",
-    "test:integration:api": "VEEL_ENABLE_REAL_API_INTEGRATION_TESTS=1 node --env-file=.env scripts/run-local-tool.mjs vitest run --no-file-parallelism apps/api/test/authenticated-happy-path.integration.test.ts apps/api/test/policy-content-eligibility.integration.test.ts apps/api/test/analytics-core.integration.test.ts apps/api/test/auth-lifecycle.integration.test.ts apps/api/test/mcp-profile-bridge.integration.test.ts"
+    "test:integration:api": "VEEL_ENABLE_REAL_API_INTEGRATION_TESTS=1 node --env-file=.env scripts/run-local-tool.mjs vitest run --no-file-parallelism apps/api/test/authenticated-happy-path.integration.test.ts apps/api/test/policy-content-eligibility.integration.test.ts apps/api/test/analytics-core.integration.test.ts apps/api/test/auth-lifecycle.integration.test.ts apps/api/test/mcp-profile-bridge.integration.test.ts apps/api/test/admin-staff.integration.test.ts"
   },
   "engines": {
     "node": ">=22.16.0 <23"

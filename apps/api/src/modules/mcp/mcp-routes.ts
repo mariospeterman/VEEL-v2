@@ -316,7 +316,10 @@ export async function registerMcpRoutes(
     const access = await verifyMcpManagementAccess(request, options);
     if (!access.ok) return reply.code(access.statusCode).send(access.body);
 
-    const isAdmin = await options.adminRepository.hasAdminAccess(access.supabaseUserId);
+    const isAdmin = await options.adminRepository.hasAdminPermission(
+      access.supabaseUserId,
+      "admin.ai.read"
+    );
     const roleTypes: McpRoleType[] = isAdmin ? ["creator", "admin"] : ["creator"];
     return reply.send({
       items: mcpToolDefinitions.filter((tool) =>

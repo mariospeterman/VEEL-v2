@@ -1,30 +1,54 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
   executeStagingProofPlan,
-  inspectStagingConfiguration,
-  stagingConfigurationGroups,
   stagingProofPlan
 } from "./staging-proof-plan.mjs";
+import {
+  inspectStagingEnvironment,
+  redactedStagingSummary,
+  stagingCapabilities
+} from "./staging-config.mjs";
 
 describe("strict staging convergence gates", () => {
+  it("keeps the example environment and staging workflow aligned with the canonical registry", () => {
+    const example = readFileSync(new URL("../.env.staging.example", import.meta.url), "utf8");
+    const workflow = readFileSync(new URL("../.github/workflows/deploy-staging.yml", import.meta.url), "utf8");
+    const variables = [...new Set(stagingCapabilities.flatMap((capability) => capability.variables))];
+    for (const variable of variables) {
+      expect(example).toMatch(new RegExp(`^${variable.name}=`, "m"));
+    }
+    const requiredWorkflowVariables = new Set(stagingCapabilities.flatMap((capability) =>
+      capability.variables.filter((variable) => capability.required || variable.required).map((variable) => variable.name)
+    ));
+    requiredWorkflowVariables.delete("RELEASE_MANIFEST_PATH");
+    for (const name of requiredWorkflowVariables) expect(workflow).toContain(`${name}:`);
+  });
+
   it("reports every missing configuration group and rejects unsafe staging values", () => {
-    const missing = inspectStagingConfiguration({});
-    expect(missing.every((result) => result.status === "CODE_COMPLETE_PROVIDER_BLOCKED")).toBe(true);
+    const missing = inspectStagingEnvironment({ DEPLOY_ENV: "staging", NODE_ENV: "production" });
+    expect(missing.some((result) => result.status === "BLOCKED")).toBe(true);
+    expect(missing.find((result) => result.name === "subscriptions")?.status).toBe("BLOCKED");
+    expect(missing.find((result) => result.name === "mcp")?.status).toBe("BLOCKED");
 
     const env = completeDoctorEnv();
-    expect(inspectStagingConfiguration(env).every((result) => result.status === "READY")).toBe(true);
+    expect(inspectStagingEnvironment(env).every((result) => ["READY", "DISABLED"].includes(result.status))).toBe(true);
 
     env.LEGAL_DOCUMENTS_APPROVED = "false";
     env.MEDIA_MODERATION_MODE = "disabled_fail_closed";
     env.API_RATE_LIMIT_STORE_DRIVER = "process_memory";
-    const unsafe = inspectStagingConfiguration(env);
-    expect(unsafe.find((result) => result.name === "legal")?.invalid).toContain("LEGAL_DOCUMENTS_APPROVED=true");
-    expect(unsafe.find((result) => result.name === "live")?.invalid).toContain("MEDIA_MODERATION_MODE=launch_approved");
-    expect(unsafe.find((result) => result.name === "operations")?.invalid).toContain("API_RATE_LIMIT_STORE_DRIVER=redis");
+    const unsafe = inspectStagingEnvironment(env);
+    expect(unsafe.find((result) => result.name === "legal_release")?.missing).toContain("LEGAL_DOCUMENTS_APPROVED=true");
+    expect(unsafe.find((result) => result.name === "moderation")?.invalid).toContain("MEDIA_MODERATION_MODE=shadow|enforced|launch_approved");
+    expect(unsafe.find((result) => result.name === "rate_limiting")?.invalid).toContain("API_RATE_LIMIT_STORE_DRIVER=redis");
 
     env.SUBSCRIPTIONS_ENABLED = "maybe";
-    expect(inspectStagingConfiguration(env).find((result) => result.name === "features")?.invalid).toContain("SUBSCRIPTIONS_ENABLED=true|false");
+    expect(inspectStagingEnvironment(env).find((result) => result.name === "subscriptions")?.status).toBe("INVALID");
+
+    env.SUPABASE_PROJECT_REF = env.SUPABASE_PRODUCTION_PROJECT_REF;
+    expect(inspectStagingEnvironment(env).find((result) => result.name === "core")?.invalid).toContain("production_project_ref");
+    expect(JSON.stringify(redactedStagingSummary(env))).not.toContain(env.DATABASE_URL);
   });
 
   it("runs independent configured proofs after one provider command fails", async () => {
@@ -101,10 +125,10 @@ describe("strict staging convergence gates", () => {
   });
 
   it("returns non-zero from both CLIs when required launch evidence is absent", () => {
-    const doctor = runCli("scripts/staging-doctor.mjs");
+    const doctor = runCli("scripts/staging-doctor.mjs", { DEPLOY_ENV: "staging", NODE_ENV: "production" });
     expect(doctor.status).toBe(2);
-    expect(doctor.stdout).toContain("CODE_COMPLETE_PROVIDER_BLOCKED core");
-    expect(doctor.stdout).toContain("CODE_COMPLETE_PROVIDER_BLOCKED legal");
+    expect(doctor.stdout).toContain("BLOCKED core");
+    expect(doctor.stdout).toContain("BLOCKED legal_release");
 
     const prove = runCli("scripts/staging-prove.mjs");
     expect(prove.status).toBe(2);
@@ -115,20 +139,36 @@ describe("strict staging convergence gates", () => {
 
 function completeDoctorEnv() {
   const env = Object.fromEntries(
-    stagingConfigurationGroups.flatMap(([, keys]) => keys.map((key) => [key, `configured-${key.toLowerCase()}`]))
+    stagingCapabilities.flatMap((capability) => capability.variables.map((entry) => [entry.name, `configured-${entry.name.toLowerCase()}`]))
   );
   return {
     ...env,
+    NODE_ENV: "production",
+    DEPLOY_ENV: "staging",
+    WEB_URL: "https://web.staging.example.test",
+    API_URL: "https://api.staging.example.test",
+    NEXT_PUBLIC_APP_URL: "https://web.staging.example.test",
+    NEXT_PUBLIC_API_BASE_URL: "https://api.staging.example.test",
+    SUPABASE_URL: "https://stage-ref.supabase.co",
+    NEXT_PUBLIC_SUPABASE_URL: "https://stage-ref.supabase.co",
+    SUPABASE_PROJECT_REF: "stage-ref",
+    SUPABASE_PRODUCTION_PROJECT_REF: "production-ref",
+    DATABASE_URL: "postgresql://postgres.stage-ref:secret@aws-0-eu.pooler.supabase.com:6543/postgres",
+    SUPABASE_DIRECT_DB_URL: "postgresql://postgres.stage-ref:secret@aws-0-eu.pooler.supabase.com:5432/postgres",
     NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED: "true",
+    NEXT_PUBLIC_SOLANA_CHAIN: "solana:devnet",
+    SOLANA_CLUSTER: "devnet",
+    SOLANA_NETWORK: "solana:devnet",
     HELIUS_CLUSTER: "devnet",
-    BUNNY_SHIELD_UPLOAD_COVERAGE: "stream_tus_provider_confirmed",
     LIVEPEER_ADULT_LIVE_ENABLED: "false",
-    MEDIA_MODERATION_MODE: "launch_approved",
+    MEDIA_MODERATION_MODE: "shadow",
     AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: "false",
     TRANSACTIONAL_EMAIL_PROVIDER: "resend",
     API_RATE_LIMIT_STORE_DRIVER: "redis",
     OTEL_REQUIRED: "true",
+    OTEL_SDK_DISABLED: "false",
     SUBSCRIPTIONS_ENABLED: "false",
+    MCP_ENABLED: "false",
     LEGAL_DOCUMENTS_APPROVED: "true"
   };
 }
@@ -159,10 +199,10 @@ function completeProofEnv() {
   return env;
 }
 
-function runCli(path) {
+function runCli(path, extraEnv = {}) {
   return spawnSync(process.execPath, [path], {
     cwd: new URL("..", import.meta.url),
-    env: { PATH: process.env.PATH },
+    env: { PATH: process.env.PATH, ...extraEnv },
     encoding: "utf8"
   });
 }

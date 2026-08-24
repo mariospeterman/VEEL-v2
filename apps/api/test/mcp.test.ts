@@ -1231,6 +1231,16 @@ const fakeAdminRepository = {
   async hasAdminAccess() {
     return true;
   },
+  async hasAdminPermission() {
+    return true;
+  },
+  async getStaffAccess() {
+    return {
+      userId: "00000000-0000-4000-8000-000000000001",
+      roles: ["owner"],
+      permissions: ["admin.ai.read"]
+    };
+  },
   async getOpsSummary() {
     return { status: "ok" };
   },

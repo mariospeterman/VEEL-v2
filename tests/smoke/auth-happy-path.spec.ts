@@ -350,12 +350,8 @@ test("renders canonical text and poll posts and accepts backend-confirmed votes"
 });
 
 test("shows and updates audited payment commercial policy overrides", async ({ page }) => {
-  await page.goto("/admin", { waitUntil: "domcontentloaded" });
+  await page.goto("/admin/analytics", { waitUntil: "domcontentloaded" });
 
-  await expect(page.getByRole("heading", { name: "Payments and unlocks" })).toBeVisible();
-  await expect(page.getByText("Overrides apply only to new quotes.")).toBeVisible();
-  await expect(page.getByText("support · SOL")).toBeVisible();
-  await expect(page.getByText("Revision 3")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Analytics projection health" })).toBeVisible();
   await expect(page.getByText("matched", { exact: true })).toBeVisible();
 
@@ -369,6 +365,13 @@ test("shows and updates audited payment commercial policy overrides", async ({ p
     request.path === "/v1/admin/analytics/jobs" &&
     Boolean(request.idempotencyKey)
   )).toBe(true);
+
+  await page.goto("/admin/payments", { waitUntil: "domcontentloaded" });
+
+  await expect(page.getByRole("heading", { name: "Payments and unlocks" })).toBeVisible();
+  await expect(page.getByText("Overrides apply only to new quotes.")).toBeVisible();
+  await expect(page.getByText("support · SOL")).toBeVisible();
+  await expect(page.getByText("Revision 3")).toBeVisible();
 
   const policyForm = page.getByRole("button", { name: "Save policy" }).locator("..");
   await policyForm.getByLabel("Minimum atomic amount").fill("2000000");
@@ -455,6 +458,21 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
 
   if (method === "GET" && url.pathname === "/v1/session") {
     sendJson(response, 200, sessionState());
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/v1/admin/me") {
+    sendJson(response, 200, {
+      userId: user().id,
+      roles: ["owner"],
+      permissions: [
+        "admin.overview.read",
+        "admin.payments.read",
+        "admin.payment_policy.write",
+        "admin.analytics.read",
+        "admin.analytics.recompute"
+      ]
+    });
     return;
   }
 

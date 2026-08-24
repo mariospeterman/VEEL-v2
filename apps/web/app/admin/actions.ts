@@ -3,214 +3,97 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import {
-  updateAdminOrganizationKyb,
-  provisionAdminOrganization,
-  updateAdminLiveRoomSuspension,
-  updateAdminContentModeration,
-  updateAdminOrganizationMember,
-  updateAdminDataRequest,
-  updateAdminFeatureFlag,
-  updateAdminPaymentCommercialPolicy,
-  retryAdminProviderEventReplay,
-  updateAdminRefundDispute,
-  updateAdminSupportCase,
-  updateAdminSupportPolicy,
   enqueueAdminAnalyticsJob,
-  type AdminDataRequestActionRequest,
-  type AdminLiveRoomSuspensionRequest,
-  type AdminModerationActionRequest,
-  type AdminFeatureFlagPatchRequest,
+  inviteAdminStaff,
+  updateAdminPaymentCommercialPolicy,
+  updateAdminStaffMembership,
   type AdminPaymentCommercialPolicyPatchRequest,
-  type AdminOrganizationKybActionRequest,
-  type AdminOrganizationProvisionRequest,
-  type AdminOrganizationMemberActionRequest,
-  type AdminRefundDisputeActionRequest,
-  type AdminSupportCaseActionRequest,
-  type AdminSupportPolicyActionRequest,
+  type AdminStaffInvitationRequest,
+  type AdminStaffMembershipActionRequest,
   type AnalyticsProjectionJobRequest,
   type ApiResult
 } from "@/api-client";
 
+const staffRoles = [
+  "owner", "admin", "trust_safety", "finance", "ops", "support", "creator_success",
+  "event_ops", "ai_ops", "compliance", "readonly_auditor"
+] as const;
+
 export async function enqueueAnalyticsProjectionJobAction(formData: FormData): Promise<void> {
   const body: AnalyticsProjectionJobRequest = {
-    jobType: enumField(formData, "jobType", ["backfill", "reconciliation"]),
+    jobType: enumField(formData, "jobType", ["backfill", "reconciliation"] as const),
     window: {
       startDate: stringField(formData, "startDate"),
       endDate: stringField(formData, "endDate")
     },
     reason: stringField(formData, "reason")
   };
-  actionResult(await enqueueAdminAnalyticsJob(body, randomUUID()));
-}
-
-export async function provisionOrganizationAction(formData: FormData): Promise<void> {
-  const body: AdminOrganizationProvisionRequest = {
-    name: stringField(formData, "name"),
-    ownerHandle: stringField(formData, "ownerHandle"),
-    reason: stringField(formData, "reason")
-  };
-  actionResult(await provisionAdminOrganization(body, randomUUID()));
-}
-
-export async function updateLiveRoomSuspensionAction(formData: FormData): Promise<void> {
-  const roomId = stringField(formData, "roomId");
-  const body: AdminLiveRoomSuspensionRequest = {
-    suspended: enumField(formData, "suspended", ["true", "false"]) === "true",
-    reason: stringField(formData, "reason")
-  };
-  actionResult(await updateAdminLiveRoomSuspension(roomId, body, randomUUID()));
-}
-
-export async function updateContentModerationAction(formData: FormData): Promise<void> {
-  const body: AdminModerationActionRequest = {
-    action: enumField(formData, "action", ["approve", "request_changes", "restrict", "block", "delete", "reinstate"]),
-    reason: stringField(formData, "reason")
-  };
-  const result = await updateAdminContentModeration(
-    stringField(formData, "contentId"),
-    body,
-    randomUUID()
-  );
-  actionResult(result);
-}
-
-export async function updateOrganizationKybAction(formData: FormData): Promise<void> {
-  const organizationId = stringField(formData, "organizationId");
-  const body: AdminOrganizationKybActionRequest = {
-    kybState: enumField(formData, "kybState", ["not_started", "pending", "verified", "rejected"]),
-    reason: stringField(formData, "reason")
-  };
-
-  const result = await updateAdminOrganizationKyb(organizationId, body, randomUUID());
-  actionResult(result);
-}
-
-export async function updateOrganizationMemberAction(formData: FormData): Promise<void> {
-  const organizationId = stringField(formData, "organizationId");
-  const membershipId = stringField(formData, "membershipId");
-  const body: AdminOrganizationMemberActionRequest = {
-    role: enumField(formData, "role", ["owner", "admin", "member", "viewer"]),
-    state: enumField(formData, "state", ["invited", "active", "suspended", "removed"]),
-    reason: stringField(formData, "reason")
-  };
-
-  const result = await updateAdminOrganizationMember(organizationId, membershipId, body, randomUUID());
-  actionResult(result);
-}
-
-export async function updateSupportPolicyAction(formData: FormData): Promise<void> {
-  const body: AdminSupportPolicyActionRequest = {
-    supportState: enumField(formData, "supportState", ["standard", "priority", "enterprise_review"]),
-    slaTier: enumField(formData, "slaTier", ["standard", "priority", "enterprise_review"]),
-    state: enumField(formData, "state", ["active", "paused", "review_required"]),
-    reason: stringField(formData, "reason")
-  };
-
-  const result = await updateAdminSupportPolicy(stringField(formData, "supportPolicyId"), body, randomUUID());
-  actionResult(result);
-}
-
-export async function updateSupportCaseAction(formData: FormData): Promise<void> {
-  const body: AdminSupportCaseActionRequest = {
-    state: enumField(formData, "state", ["open", "pending_user", "pending_internal", "resolved", "closed"]),
-    reason: stringField(formData, "reason")
-  };
-
-  const result = await updateAdminSupportCase(stringField(formData, "supportCaseId"), body, randomUUID());
-  actionResult(result);
-}
-
-export async function updateRefundDisputeAction(formData: FormData): Promise<void> {
-  const body: AdminRefundDisputeActionRequest = {
-    state: enumField(formData, "state", [
-      "opened",
-      "reviewing",
-      "creator_action_required",
-      "rejected",
-      "withdrawn",
-      "resolved",
-      "closed"
-    ]),
-    resolution: stringField(formData, "resolution"),
-    reason: stringField(formData, "reason")
-  };
-
-  const result = await updateAdminRefundDispute(stringField(formData, "refundDisputeId"), body, randomUUID());
-  actionResult(result);
-}
-
-export async function updateDataRequestAction(formData: FormData): Promise<void> {
-  const body: AdminDataRequestActionRequest = {
-    state: enumField(formData, "state", ["verifying", "processing", "completed", "rejected"]),
-    reason: stringField(formData, "reason")
-  };
-
-  const result = await updateAdminDataRequest(stringField(formData, "dataRequestId"), body, randomUUID());
-  actionResult(result);
-}
-
-export async function updateFeatureFlagAction(formData: FormData): Promise<void> {
-  const body: AdminFeatureFlagPatchRequest = {
-    value: jsonObjectField(formData, "value"),
-    state: enumField(formData, "state", ["active", "paused", "archived"]),
-    reason: stringField(formData, "reason")
-  };
-
-  const result = await updateAdminFeatureFlag(stringField(formData, "featureFlagKey"), body, randomUUID());
-  actionResult(result);
+  actionResult(await enqueueAdminAnalyticsJob(body, randomUUID()), "/admin/analytics");
 }
 
 export async function updatePaymentCommercialPolicyAction(formData: FormData): Promise<void> {
   const productType = enumField(formData, "productType", [
-    "support",
-    "content_unlock",
-    "paid_message",
-    "live_pass",
-    "event_access_pass"
-  ]);
-  const currency = enumField(formData, "currency", ["SOL", "USDC"]);
+    "support", "content_unlock", "paid_message", "live_pass", "event_access_pass"
+  ] as const);
+  const currency = enumField(formData, "currency", ["SOL", "USDC"] as const);
   const body: AdminPaymentCommercialPolicyPatchRequest = {
     minimumAmountMinor: integerField(formData, "minimumAmountMinor", 1, Number.MAX_SAFE_INTEGER),
     platformFeeBps: integerField(formData, "platformFeeBps", 0, 9_999),
     referralShareOfPlatformFeeBps: integerField(formData, "referralShareOfPlatformFeeBps", 0, 10_000),
     quoteTtlSeconds: integerField(formData, "quoteTtlSeconds", 60, 1_800),
-    state: enumField(formData, "state", ["active", "inactive"]),
+    state: enumField(formData, "state", ["active", "inactive"] as const),
     reason: stringField(formData, "reason")
   };
-  actionResult(await updateAdminPaymentCommercialPolicy(productType, currency, body, randomUUID()));
+  actionResult(
+    await updateAdminPaymentCommercialPolicy(productType, currency, body, randomUUID()),
+    "/admin/payments"
+  );
 }
 
-export async function retryProviderEventReplayAction(formData: FormData): Promise<void> {
-  actionResult(await retryAdminProviderEventReplay(
-    stringField(formData, "replayRequestId"),
-    stringField(formData, "reason"),
+export async function inviteStaffAction(formData: FormData): Promise<void> {
+  const body: AdminStaffInvitationRequest = {
+    targetUserId: stringField(formData, "targetUserId"),
+    role: enumField(formData, "role", staffRoles),
+    expiresInHours: integerField(formData, "expiresInHours", 1, 168),
+    reason: stringField(formData, "reason"),
+    confirmed: true
+  };
+  actionResult(await inviteAdminStaff(body, randomUUID()));
+}
+
+export async function updateStaffMembershipAction(formData: FormData): Promise<void> {
+  const action = enumField(formData, "action", ["change_role", "suspend", "revoke"] as const);
+  const body: AdminStaffMembershipActionRequest = {
+    action,
+    ...(action === "change_role" ? { role: enumField(formData, "role", staffRoles) } : {}),
+    reason: stringField(formData, "reason"),
+    confirmed: true
+  };
+  actionResult(await updateAdminStaffMembership(
+    stringField(formData, "membershipId"),
+    body,
     randomUUID()
   ));
 }
 
-function actionResult<T>(result: ApiResult<T>): void {
+function actionResult<T>(result: ApiResult<T>, path = "/admin/staff"): void {
   if (!result.ok) {
     throw new Error(`Admin action failed with HTTP ${result.status}: ${result.message}`);
   }
-
-  revalidatePath("/admin");
+  revalidatePath(path);
 }
 
-function stringField(formData: FormData, key: string) {
+function stringField(formData: FormData, key: string): string {
   const value = formData.get(key);
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new Error(`${key} is required`);
   }
-
   return value.trim();
 }
 
 function enumField<const T extends readonly string[]>(formData: FormData, key: string, allowed: T): T[number] {
   const value = stringField(formData, key);
-  if (!allowed.includes(value)) {
-    throw new Error(`${key} is invalid`);
-  }
-
+  if (!allowed.includes(value)) throw new Error(`${key} is invalid`);
   return value;
 }
 
@@ -220,14 +103,4 @@ function integerField(formData: FormData, key: string, minimum: number, maximum:
     throw new Error(`${key} must be an integer between ${minimum} and ${maximum}`);
   }
   return parsed;
-}
-
-function jsonObjectField(formData: FormData, key: string): Record<string, unknown> {
-  const value = stringField(formData, key);
-  const parsed = JSON.parse(value) as unknown;
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error(`${key} must be a JSON object`);
-  }
-
-  return parsed as Record<string, unknown>;
 }

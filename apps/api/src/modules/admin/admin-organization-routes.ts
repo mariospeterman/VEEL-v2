@@ -12,7 +12,7 @@ export function registerAdminOrganizationRoutes(
   options: RegisterAdminRoutesOptions
 ): void {
   app.get("/v1/admin/organizations", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.organizations.read");
     if (!allowed) return reply;
 
     const query = request.query as { cursor?: string };
@@ -24,7 +24,7 @@ export function registerAdminOrganizationRoutes(
       request,
       reply,
       options,
-      { action: "organization_provisioned" },
+      { permission: "admin.organizations.write" },
       validateOrganizationProvision
     );
     if (!mutation) return reply;
@@ -66,7 +66,7 @@ export function registerAdminOrganizationRoutes(
       request,
       reply,
       options,
-      { action: "organization_kyb_updated" },
+      { permission: "admin.organizations.write" },
       validateOrganizationKybAction
     );
     if (!mutation) return reply;
@@ -89,7 +89,7 @@ export function registerAdminOrganizationRoutes(
   });
 
   app.get("/v1/admin/organizations/:organizationId/members", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.organizations.read");
     if (!allowed) return reply;
 
     const { organizationId } = request.params as { organizationId?: string };
@@ -125,7 +125,7 @@ export function registerAdminOrganizationRoutes(
       request,
       reply,
       options,
-      { action: "organization_member_updated" },
+      { permission: "admin.organizations.write" },
       validateOrganizationMemberAction
     );
     if (!mutation) return reply;
@@ -160,7 +160,7 @@ export function registerAdminOrganizationRoutes(
   });
 
   app.get("/v1/admin/feature-flags", async (request, reply) => {
-    const allowed = await requireAdminAccess(request, reply, options);
+    const allowed = await requireAdminAccess(request, reply, options, "admin.feature_flags.read");
     if (!allowed) return reply;
 
     return reply.code(200).send(await options.adminRepository.listFeatureFlags());
@@ -179,7 +179,7 @@ export function registerAdminOrganizationRoutes(
       request,
       reply,
       options,
-      { action: "feature_flag_updated" },
+      { permission: "admin.feature_flags.write" },
       validateFeatureFlagPatch
     );
     if (!mutation) return reply;

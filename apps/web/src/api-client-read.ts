@@ -2,6 +2,7 @@ import { getJson, postJson } from "./api-client-transport";
 import type {
   AiCapabilities,
   AdminAgeCheck,
+  AdminCurrentStaff,
   AdminAiSession,
   AdminAiToolCall,
   AdminComplianceLedgerEntry,
@@ -32,6 +33,7 @@ import type {
   AdminReport,
   AdminSupportCase,
   AdminSupportPolicy,
+  AdminStaffDirectory,
   AdminTierWaiver,
   AdminUnlock,
   AdminUser,
@@ -264,6 +266,14 @@ export async function getVerificationStatus(): Promise<ApiResult<VerificationSta
 
 export async function getAdminOpsSummary(): Promise<ApiResult<AdminOpsSummary>> {
   return getJson<AdminOpsSummary>("/v1/admin/ops/summary");
+}
+
+export async function getAdminCurrentStaff(): Promise<ApiResult<AdminCurrentStaff>> {
+  return getJson<AdminCurrentStaff>("/v1/admin/me");
+}
+
+export async function getAdminStaffDirectory(): Promise<ApiResult<AdminStaffDirectory>> {
+  return getJson<AdminStaffDirectory>("/v1/admin/staff");
 }
 
 export async function getAdminAnalyticsHealth(): Promise<ApiResult<AnalyticsProjectionHealth>> {
