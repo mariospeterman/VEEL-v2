@@ -302,9 +302,23 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
         const counts = await transaction<{ asset_count: number; quota_count: number }[]>`
           select
             (
-              select count(*)::integer from media_assets asset
-              where asset.content_item_id = ${capability.content_item_id}
-                and asset.retired_at is null
+              select (
+                select count(*)::integer from media_assets asset
+                where asset.content_item_id = ${capability.content_item_id}
+                  and asset.retired_at is null
+              ) + (
+                select count(*)::integer
+                from mcp_media_upload_capabilities reservation
+                where reservation.content_item_id = ${capability.content_item_id}
+                  and reservation.state = 'provisioning'
+                  and reservation.id <> ${capability.id}
+                  and reservation.expires_at > now()
+                  and reservation.leased_until > now()
+                  and not exists (
+                    select 1 from media_assets reserved_asset
+                    where reserved_asset.id = reservation.reserved_media_asset_id
+                  )
+              )
             ) as asset_count,
             (
               select (

@@ -160,8 +160,9 @@ specification. Bunny TUS authorization remains the documented SHA-256 signature 
 server-only API key, expiry, and video id. The returned client header set is limited to signature,
 expiry, library id, and video id, and the provider-supported minimum one-hour expiry is used. The
 API key, create-video response, and provider identifiers remain outside MCP audit output. C2PA
-references are stored as bounded HTTPS/URN claims only; WeVid does not represent an unverified
-reference as a validated manifest or trust decision.
+references are stored as bounded claims only: HTTPS references are restricted to C2PA-controlled
+`c2pa.org` hosts, while WeVid/C2PA URNs use opaque terminal identifiers. WeVid does not represent
+an unverified reference as a validated manifest or trust decision.
 
 Official anchors:
 

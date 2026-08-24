@@ -23,6 +23,8 @@ describe("database migrations", () => {
     expect(sql).toContain("access[-_ ]?token");
     expect(sql).toContain("source_lineage_reference !~ '%'");
     expect(sql).toContain("c2pa_reference !~ '%'");
+    expect(sql).toContain("c2pa\\.org/(claims|manifests|assets|lineage)/");
+    expect(sql).not.toContain("https://[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?");
     expect(sql).toContain("/(claims|manifests|assets|lineage)/");
     expect(sql).toContain("^urn:(wevid|c2pa):");
     expect(sql).toContain("workflow_provider_reference ~* '^([a-f0-9]{64}");

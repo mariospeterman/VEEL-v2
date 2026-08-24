@@ -312,6 +312,11 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
         set c2pa_reference = 'https://example.test/users/alice@example.com'
         where id = ${issued!.mediaAssetId}
       `).rejects.toBeDefined();
+      await expect(sql`
+        update media_assets
+        set c2pa_reference = ${`https://alice-smith-5551234567.example/claims/${randomUUID()}`}
+        where id = ${issued!.mediaAssetId}
+      `).rejects.toBeDefined();
       await expect(contentRepository.claimMcpMediaUploadCapability!({
         capabilityId: issued!.id,
         connectionId: connection.id,
@@ -763,7 +768,7 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
           c2paReference: null
         })
       ));
-      const capacityClaims = await Promise.all(capacityCapabilities.map((capability, index) =>
+      const capacityClaims = await Promise.allSettled(capacityCapabilities.map((capability, index) =>
         contentRepository.claimMcpMediaUploadCapability!({
           capabilityId: capability!.id,
           connectionId: connection.id,
@@ -776,29 +781,26 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
           leasedUntil: new Date(Date.now() + 60_000)
         })
       ));
-      const completionPromises: Promise<unknown>[] = [];
-      await sql.begin(async (transaction) => {
-        await transaction`select id from content_items where id = ${capacityContentId} for update`;
-        completionPromises.push(...capacityCapabilities.map((capability, index) =>
-          contentRepository.completeMcpMediaUploadCapability!({
-            capabilityId: capability!.id,
-            connectionId: connection.id,
-            leaseToken: capacityClaims[index]!.leaseToken,
-            providerAssetId: `capacity-race-${index}-${randomUUID()}`,
-            providerState: "stored_private",
-            widthPixels: 8,
-            heightPixels: 5,
-            checksumSha256: (index === 0 ? "4" : "5").repeat(64)
-          })
-        ));
-        await new Promise((resolve) => setTimeout(resolve, 150));
-      });
-      const capacityCompletions = await Promise.allSettled(completionPromises);
-      expect(capacityCompletions.filter((result) => result.status === "fulfilled")).toHaveLength(1);
-      expect(capacityCompletions.find((result) => result.status === "rejected")).toMatchObject({
+      expect(capacityClaims.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      expect(capacityClaims.find((result) => result.status === "rejected")).toMatchObject({
         status: "rejected",
         reason: expect.objectContaining({ reason: "draft_locked" })
       });
+      const claimedCapacityIndex = capacityClaims.findIndex((result) => result.status === "fulfilled");
+      const claimedCapacity = capacityClaims[claimedCapacityIndex];
+      if (!claimedCapacity || claimedCapacity.status !== "fulfilled") {
+        throw new Error("draft capacity reservation did not converge");
+      }
+      await expect(contentRepository.completeMcpMediaUploadCapability!({
+        capabilityId: capacityCapabilities[claimedCapacityIndex]!.id,
+        connectionId: connection.id,
+        leaseToken: claimedCapacity.value.leaseToken,
+        providerAssetId: `capacity-reserved-${randomUUID()}`,
+        providerState: "stored_private",
+        widthPixels: 8,
+        heightPixels: 5,
+        checksumSha256: "4".repeat(64)
+      })).resolves.toMatchObject({ contentId: capacityContentId });
       await expect(sql<{ count: number }[]>`
         select count(*)::integer as count from media_assets
         where content_item_id = ${capacityContentId} and retired_at is null

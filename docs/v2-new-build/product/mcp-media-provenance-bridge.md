@@ -59,10 +59,11 @@ MCP-originated assets must declare one of `ai_assisted`, `ai_generated`, or
 `materially_ai_manipulated`; an assistant cannot claim that an upload is human-created. The
 normalized record may include a bounded source kind, opaque lineage reference, workflow provider,
 and HTTPS/URN C2PA reference. References are claims, not validation results. Lineage and C2PA claims
-accept only provider-controlled HTTPS paths (`claims`, `manifests`, `assets`, or `lineage`) or
-WeVid/C2PA URNs whose terminal value is a UUID or 64-character hexadecimal identifier; workflow
-references use the same opaque identifier shapes. Arbitrary paths and readable identifiers are not
-accepted. Prompts, credential vocabulary, private-key material, personal data, and raw
+accept only C2PA-controlled `c2pa.org` HTTPS hosts with paths named `claims`, `manifests`, `assets`,
+or `lineage`, or WeVid/C2PA URNs whose terminal value is a UUID or 64-character hexadecimal
+identifier; workflow references use the same opaque identifier shapes. Arbitrary hosts, paths, and
+readable identifiers are not accepted. Prompts, credential vocabulary, private-key material,
+personal data, and raw
 generation-provider payloads are rejected at the API and database boundaries and never persisted.
 
 Every MCP-originated asset begins with provenance review `pending`, a policy-derived visible label,

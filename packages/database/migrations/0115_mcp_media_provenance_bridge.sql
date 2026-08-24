@@ -16,7 +16,7 @@ alter table media_assets
       char_length(source_lineage_reference) between 1 and 500
       and source_lineage_reference !~ '%'
       and (
-        source_lineage_reference ~* '^https://[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?/(claims|manifests|assets|lineage)/([a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$'
+        source_lineage_reference ~* '^https://([a-z0-9-]+\.)*c2pa\.org/(claims|manifests|assets|lineage)/([a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$'
         or source_lineage_reference ~* '^urn:(wevid|c2pa):[a-z0-9][a-z0-9-]{0,31}:([a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$'
       )
       and source_lineage_reference !~* '(prompt|api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|password|passwd|credential|private[-_ ]?key|client[-_ ]?secr[e]t|authorization|bearer|cookie|session[-_ ]?id)'
@@ -36,7 +36,7 @@ alter table media_assets
       char_length(c2pa_reference) between 1 and 500
       and c2pa_reference !~ '%'
       and (
-        c2pa_reference ~* '^https://[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?/(claims|manifests|assets|lineage)/([a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$'
+        c2pa_reference ~* '^https://([a-z0-9-]+\.)*c2pa\.org/(claims|manifests|assets|lineage)/([a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$'
         or c2pa_reference ~* '^urn:(wevid|c2pa):[a-z0-9][a-z0-9-]{0,31}:([a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$'
       )
       and c2pa_reference !~* '(prompt|api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|password|passwd|credential|private[-_ ]?key|client[-_ ]?secr[e]t|authorization|bearer|cookie|session[-_ ]?id)'
@@ -113,7 +113,7 @@ create table mcp_media_upload_capabilities (
       char_length(source_lineage_reference) between 1 and 500
       and source_lineage_reference !~ '%'
       and (
-        source_lineage_reference ~* '^https://[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?/(claims|manifests|assets|lineage)/([a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$'
+        source_lineage_reference ~* '^https://([a-z0-9-]+\.)*c2pa\.org/(claims|manifests|assets|lineage)/([a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$'
         or source_lineage_reference ~* '^urn:(wevid|c2pa):[a-z0-9][a-z0-9-]{0,31}:([a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$'
       )
       and source_lineage_reference !~* '(prompt|api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|password|passwd|credential|private[-_ ]?key|client[-_ ]?secr[e]t|authorization|bearer|cookie|session[-_ ]?id)'
@@ -133,7 +133,7 @@ create table mcp_media_upload_capabilities (
       char_length(c2pa_reference) between 1 and 500
       and c2pa_reference !~ '%'
       and (
-        c2pa_reference ~* '^https://[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?/(claims|manifests|assets|lineage)/([a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$'
+        c2pa_reference ~* '^https://([a-z0-9-]+\.)*c2pa\.org/(claims|manifests|assets|lineage)/([a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$'
         or c2pa_reference ~* '^urn:(wevid|c2pa):[a-z0-9][a-z0-9-]{0,31}:([a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$'
       )
       and c2pa_reference !~* '(prompt|api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|password|passwd|credential|private[-_ ]?key|client[-_ ]?secr[e]t|authorization|bearer|cookie|session[-_ ]?id)'

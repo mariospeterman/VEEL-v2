@@ -561,6 +561,7 @@ describe("external MCP connector foundation", () => {
     }
     expect(contentRepository.capabilityInputs).toHaveLength(1);
     for (const [field, value] of [
+      ["sourceLineageReference", "https://alice-smith-5551234567.example/claims/00000000-0000-4000-8000-000000000404"],
       ["sourceLineageReference", "https://example.test/users/alice@example.com"],
       ["sourceLineageReference", "https://example.test/lineage/alice-smith"],
       ["workflowProviderReference", "alice-smith"],

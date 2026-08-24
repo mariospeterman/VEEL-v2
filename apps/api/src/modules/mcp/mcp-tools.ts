@@ -51,7 +51,7 @@ const allMcpScopes = new Set<McpScope>([...creatorMcpScopes, ...adminMcpScopes])
 const creatorScopeSet = new Set<McpScope>(creatorMcpScopes);
 const adminScopeSet = new Set<McpScope>(adminMcpScopes);
 const opaqueProvenanceTokenSource = "(?:[A-Fa-f0-9]{64}|[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[1-5][A-Fa-f0-9]{3}-[89AaBb][A-Fa-f0-9]{3}-[A-Fa-f0-9]{12})";
-const structuredProvenanceReferenceSource = `(?:https://[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?/(?:claims|manifests|assets|lineage)/${opaqueProvenanceTokenSource}|urn:(?:wevid|c2pa):[a-z0-9][a-z0-9-]{0,31}:${opaqueProvenanceTokenSource})`;
+const structuredProvenanceReferenceSource = `(?:https://(?:[A-Za-z0-9-]+\\.)*c2pa\\.org/(?:claims|manifests|assets|lineage)/${opaqueProvenanceTokenSource}|urn:(?:wevid|c2pa):[a-z0-9][a-z0-9-]{0,31}:${opaqueProvenanceTokenSource})`;
 const structuredProvenanceReferencePattern = new RegExp(`^${structuredProvenanceReferenceSource}$`);
 const opaqueProvenanceTokenPattern = new RegExp(`^${opaqueProvenanceTokenSource}$`);
 
