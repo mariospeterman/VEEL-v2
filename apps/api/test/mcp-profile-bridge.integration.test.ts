@@ -378,12 +378,22 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
         idempotencyKey: `integration-provenance-${randomUUID()}`,
         requestHash: "9".repeat(64)
       };
+      await sql`
+        update content_items
+        set publish_state = 'submitted_for_review'
+        where id = ${contentId}
+      `;
       const reviewed = await contentRepository.reviewOwnedMediaAssetProvenance!(reviewInput);
       expect(reviewed).toMatchObject({
         compositionRevision: completed.compositionRevision + 1,
         asset: { provenanceReviewState: "confirmed", visibleLabelState: "ai_generated" }
       });
       await expect(contentRepository.reviewOwnedMediaAssetProvenance!(reviewInput)).resolves.toEqual(reviewed);
+      await sql`
+        update content_items
+        set publish_state = 'draft'
+        where id = ${contentId}
+      `;
       const releasePredicates = await sql<Array<{ provenance_ready: boolean; release_ready: boolean }>>`
         select
           private.content_composition_provenance_ready(${contentId}) as provenance_ready,

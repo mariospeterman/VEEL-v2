@@ -720,7 +720,7 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
             and content.creator_user_id = ${actor.id}
             and content.visibility = 'private'
             and content.state <> 'deleted'
-            and content.publish_state in ('draft', 'unpublished')
+            and content.publish_state in ('draft', 'unpublished', 'submitted_for_review')
             and asset.retired_at is null
           for update of content, asset
         `;
