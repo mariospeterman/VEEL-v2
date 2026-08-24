@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: canonical architecture, current implementation truth, and production completion plan
-Last updated: 2026-08-23
+Last updated: 2026-08-24
 Source of truth: yes
 
 Owns:
@@ -57,7 +57,7 @@ truth comes from GitHub's single `wevid-active-slice` label.
 | Universal identity and onboarding | `embedded-wallet-onboarding.md`, `auth-supabase-realtime.md`, `providers/identity-provider-wiring.md` | One WeVid user/profile; three visible steps; Privy or external wallet converge on one backend session; Supabase recovery is optional. |
 | Security/compliance | compliance docs, `safety-admin-ai.md`, ADRs | Age, moderation, audit, and privacy rules block launch if incomplete. |
 | Admin/ops | `admin-operations-dashboard.md` | Every launch slice needs admin visibility where relevant. |
-| AI/MCP | `ai-mcp-use-cases.md`, `safety-admin-ai.md` | Permissioned tools only; no spending/publishing/messaging without confirmation. |
+| AI/MCP | `ai-mcp-use-cases.md`, `product/mcp-profile-bridge.md`, `safety-admin-ai.md` | Permissioned tools only; no spending/publishing/messaging without confirmation. |
 
 The older Veel repository is reference-only. It can inform lessons and test ideas, but it must not override this matrix, contracts, schema, ADRs, or official provider docs.
 
@@ -83,6 +83,7 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 - [Universal composer](product/universal-composer.md)
 - [Lifecycle auth and analytics surfaces](product/lifecycle-auth-and-analytics-surfaces.md)
 - [Consumer social experience](product/consumer-social-experience.md)
+- [Remote MCP profile bridge](product/mcp-profile-bridge.md)
 - [Enterprise managed creators](enterprise-managed-creators.md)
 
 12. [Product flows](product-flows.md)

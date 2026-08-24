@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: AI assistant, MCP tools, admin ops, creator/user utility
-Last updated: 2026-06-13
+Last updated: 2026-08-24
 Source of truth: yes for v2 AI/MCP scope
 
 Owns:
@@ -46,6 +46,13 @@ The current external MCP slice is production-auth-capable but still requires ope
 - staging proof helpers documented in `mcp-staging-proof.md`: `pnpm mcp:seed`, `pnpm mcp:oauth:pkce`, and `pnpm mcp:smoke`
 - optional BYO in-app assistant later, after provider ADR, prompt/eval fixtures,
   budget controls, and UX evidence are approved
+
+Convergence 07 completes only the profile/analytics/private-draft bridge described in
+`product/mcp-profile-bridge.md`. It returns standard MCP structured results, declares accurate tool
+annotations, negotiates the pinned stable protocol, validates HTTP Origins, minimizes personal data,
+and records private-draft origin without hosting an LLM or model key. The July 2026 MCP release
+candidate is not a production authority; the bridge remains pinned to stable `2025-11-25` behavior
+until a final specification and supported-client proof justify an upgrade.
 
 Production private-data connectors for Claude, Cowork-style clients, OpenAI, or similar MCP clients use pre-registered OAuth clients, authorization-code plus PKCE, resource-bound bearer access tokens, scope grants, and revocation. Scoped tokens are explicitly limited to local development and staging environments.
 MCP Inspector, Claude Code, Claude custom connectors, and OpenAI-compatible clients must be proven against a public HTTPS staging URL before Veel claims compatibility with those external clients.
@@ -195,8 +202,10 @@ Launch implementation rules:
 | Tool | User | Creator | Admin | Confirmation |
 | --- | --- | --- | --- | --- |
 | `creator_get_profile` | no | own only | no | no |
-| `creator_get_metrics_summary` | no | own only | no | no |
-| `creator_create_content_draft` | no | own only | no | review before publish |
+| `creator_query_analytics` | no | own Analytics Core scope only | no | no |
+| `creator_list_private_drafts` | no | own only | no | no |
+| `creator_get_draft_readiness` | no | own only | no | no |
+| `creator_create_private_draft` | no | own only | no | review in WeVid before any publish request |
 | `admin_get_platform_health_summary` | no | no | yes | no |
 | `admin_list_support_cases` | no | no | yes | no |
 | `admin_list_payment_intents` | no | no | yes | no |

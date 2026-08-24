@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "latestMergedBaseline": "21f06d2c1e306c5d38ad3c4edc4a966ede05ada3",
+  "latestMergedBaseline": "1d2a91d8a994804193d0982c5fc0338c5c6aeae4",
   "latestMergedSlice": "Convergence 06 — Consumer social experience",
   "latestMergedMigration": "packages/database/migrations/0113_consumer_social_privacy.sql",
   "nextPlannedSlice": "Convergence 07 — Remote MCP profile bridge",
