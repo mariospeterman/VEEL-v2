@@ -5,9 +5,11 @@ import { revalidatePath } from "next/cache";
 import {
   enqueueAdminAnalyticsJob,
   inviteAdminStaff,
+  updateAdminFeatureFlag,
   updateAdminPaymentCommercialPolicy,
   updateAdminStaffMembership,
   type AdminPaymentCommercialPolicyPatchRequest,
+  type AdminFeatureFlagPatchRequest,
   type AdminStaffInvitationRequest,
   type AdminStaffMembershipActionRequest,
   type AnalyticsProjectionJobRequest,
@@ -47,6 +49,18 @@ export async function updatePaymentCommercialPolicyAction(formData: FormData): P
   actionResult(
     await updateAdminPaymentCommercialPolicy(productType, currency, body, randomUUID()),
     "/admin/payments"
+  );
+}
+
+export async function updateFeatureFlagAction(formData: FormData): Promise<void> {
+  const body: AdminFeatureFlagPatchRequest = {
+    value: jsonObjectField(formData, "value"),
+    state: enumField(formData, "state", ["active", "paused", "archived"] as const),
+    reason: stringField(formData, "reason")
+  };
+  actionResult(
+    await updateAdminFeatureFlag(stringField(formData, "featureFlagKey"), body, randomUUID()),
+    "/admin/settings"
   );
 }
 
@@ -103,4 +117,12 @@ function integerField(formData: FormData, key: string, minimum: number, maximum:
     throw new Error(`${key} must be an integer between ${minimum} and ${maximum}`);
   }
   return parsed;
+}
+
+function jsonObjectField(formData: FormData, key: string): Record<string, unknown> {
+  const parsed = JSON.parse(stringField(formData, key)) as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`${key} must be a JSON object`);
+  }
+  return parsed as Record<string, unknown>;
 }

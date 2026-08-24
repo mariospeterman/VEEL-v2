@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
-import { AnalyticsOperations, PaymentPolicyOperations } from "../admin-operations";
+import { AnalyticsOperations, FeatureFlagOperations, PaymentPolicyOperations } from "../admin-operations";
 import {
   getAdminAgeChecks,
   getAdminAiSessions,
@@ -78,7 +78,7 @@ const sections: Record<string, SectionDefinition> = {
   ai: section("AI operations", "Scoped assistant sessions and redacted tool-call audit.", ["admin.ai.read"], (permissions) => loadPermitted(permissions, [["admin.ai.read", "Sessions", getAdminAiSessions], ["admin.ai.read", "Tool calls", getAdminAiToolCalls]])),
   audit: section("Audit", "Immutable operational action history.", ["admin.audit.read"], (permissions) => loadPermitted(permissions, [["admin.audit.read", "Audit events", getAdminAuditEvents]])),
   staff: section("Staff", "Coworker roles, invitations and effective access lifecycle.", ["admin.staff.read"], (permissions) => loadPermitted(permissions, [["admin.staff.read", "Staff directory", getAdminStaffDirectory]])),
-  settings: section("Settings", "Audited platform flags and controlled operational policy.", ["admin.feature_flags.read"], (permissions) => loadPermitted(permissions, [["admin.feature_flags.read", "Feature flags", getAdminFeatureFlags]])),
+  settings: section("Settings", "Audited platform flags and controlled operational policy.", ["admin.feature_flags.read"], async () => [], async (permissions) => <FeatureFlagOperations canWrite={permissions.includes("admin.feature_flags.write")} flags={await getAdminFeatureFlags()} />),
   support: section("Support", "Sanitized support cases and policy state.", ["admin.support.read"], (permissions) => loadPermitted(permissions, [["admin.support.read", "Cases", getAdminSupportCases], ["admin.support.read", "Policies", getAdminSupportPolicies]])),
   growth: section("Growth governance", "Referral, partner and tier-waiver policy records.", ["admin.payments.read"], (permissions) => loadPermitted(permissions, [["admin.payments.read", "Referral programs", getAdminReferralPrograms], ["admin.payments.read", "Partner campaigns", getAdminPartnerCampaigns], ["admin.payments.read", "Tier waivers", getAdminTierWaivers]]))
 };

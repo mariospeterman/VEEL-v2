@@ -10,6 +10,7 @@ import {
   redactedStagingSummary,
   stagingCapabilities
 } from "./staging-config.mjs";
+import { deriveJourneyResults } from "./staging-acceptance-status.mjs";
 
 describe("strict staging convergence gates", () => {
   it("keeps the example environment and staging workflow aligned with the canonical registry", () => {
@@ -134,6 +135,22 @@ describe("strict staging convergence gates", () => {
     expect(prove.status).toBe(2);
     expect(prove.stdout).toContain("CODE_COMPLETE_PROVIDER_BLOCKED release-manifest");
     expect(prove.stdout).toContain("CODE_COMPLETE_PROVIDER_BLOCKED target-device-accessibility");
+  });
+
+  it("never promotes an unproved journey from global command success", () => {
+    const journeys = deriveJourneyResults({
+      journeys: [
+        { id: "auth.continue_to_wevid", status: "BLOCKED_CONFIGURATION", blockerClass: "wallet_provider_credentials" },
+        { id: "admin.permission_rbac", status: "PASS", blockerClass: null },
+        { id: "mcp.optional_bridge", status: "BLOCKED_CONFIGURATION", blockerClass: "public_https_and_client_configuration" }
+      ],
+      capabilityStatus: new Map([["mcp", "DISABLED"]])
+    });
+    expect(journeys).toEqual([
+      expect.objectContaining({ id: "auth.continue_to_wevid", status: "BLOCKED_CONFIGURATION" }),
+      expect.objectContaining({ id: "admin.permission_rbac", status: "PASS" }),
+      expect.objectContaining({ id: "mcp.optional_bridge", status: "DEFERRED", blockerClass: "optional_capability_disabled" })
+    ]);
   });
 });
 

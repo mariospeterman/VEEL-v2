@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { inspectStagingEnvironment } from "./staging-config.mjs";
+import { deriveJourneyResults } from "./staging-acceptance-status.mjs";
 
 const startedAt = new Date();
 const manifest = JSON.parse(await readFile("docs/v2-new-build/operator/staging-acceptance.json", "utf8"));
@@ -30,7 +31,6 @@ if (!invalid && !blocked) {
 
 const commandFailed = outcomes.some((outcome) => outcome.status === "FAIL");
 const overall = invalid ? "UNSAFE_TARGET" : blocked ? "BLOCKED_CONFIGURATION" : commandFailed ? "FAIL" : "PASS";
-const journeyStatus = overall === "PASS" ? "PASS" : overall === "FAIL" ? "FAIL" : "BLOCKED_CONFIGURATION";
 const capabilityStatus = new Map(configuration.map((entry) => [entry.name, entry.status]));
 const result = {
   schemaVersion: 1,
@@ -41,21 +41,7 @@ const result = {
   overall,
   configuration,
   commands: outcomes,
-  journeys: manifest.journeys.map((journey) => {
-    const disabledOptional = (journey.id === "subscriptions.platform_studio_membership" && capabilityStatus.get("subscriptions") === "DISABLED")
-      || (journey.id === "mcp.developer_control_plane" && capabilityStatus.get("mcp") === "DISABLED");
-    const status = disabledOptional
-      ? "DEFERRED"
-      : ["DEFERRED", "BLOCKED_PROVIDER", "BLOCKED_LEGAL", "BLOCKED_OPERATIONS"].includes(journey.status)
-        ? journey.status
-        : journeyStatus;
-    return {
-      id: journey.id,
-      status,
-      blockerClass: status === "PASS" ? null : status === "BLOCKED_CONFIGURATION" ? "staging_configuration" : journey.blockerClass,
-      cleanup: "not_run"
-    };
-  })
+  journeys: deriveJourneyResults({ journeys: manifest.journeys, capabilityStatus })
 };
 
 const output = path.resolve(process.env.STAGING_ACCEPTANCE_OUTPUT ?? ".staging/acceptance/latest.json");

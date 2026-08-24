@@ -78,6 +78,29 @@ describeIntegration("staff RBAC and lifecycle against migrated Postgres", () => 
         select state from staff_invitations where id = ${expiredInvitationId}::uuid
       `;
       expect(expiredRows[0]?.state).toBe("expired");
+
+      const concurrentInvitations = await Promise.allSettled([
+        repository.inviteStaff({
+          supabaseUserId: users.owner,
+          targetUserId: users.target,
+          role: "creator_success",
+          expiresInHours: 24,
+          reason: "First concurrent invitation",
+          idempotencyKey: `concurrent-a-${suffix}`
+        }),
+        repository.inviteStaff({
+          supabaseUserId: users.owner,
+          targetUserId: users.target,
+          role: "creator_success",
+          expiresInHours: 24,
+          reason: "Second concurrent invitation",
+          idempotencyKey: `concurrent-b-${suffix}`
+        })
+      ]);
+      expect(concurrentInvitations.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      const rejectedInvitation = concurrentInvitations.find((result) => result.status === "rejected");
+      expect(rejectedInvitation?.status === "rejected" ? rejectedInvitation.reason : null)
+        .toBeInstanceOf(AdminRepositoryStateConflictError);
       expect((await repository.inviteStaff({
         supabaseUserId: users.owner,
         targetUserId: users.target,
@@ -94,7 +117,8 @@ describeIntegration("staff RBAC and lifecycle against migrated Postgres", () => 
         reason: "Different replay payload",
         idempotencyKey: `invite-${suffix}`
       })).rejects.toBeInstanceOf(AdminRepositoryStateConflictError);
-      expect((await repository.listCurrentStaffInvitations(users.target)).items).toHaveLength(1);
+      expect((await repository.listCurrentStaffInvitations(users.target)).items)
+        .toEqual(expect.arrayContaining([expect.objectContaining({ id: invitation?.id, role: "support" })]));
 
       const accepted = await repository.respondStaffInvitation({
         supabaseUserId: users.target,

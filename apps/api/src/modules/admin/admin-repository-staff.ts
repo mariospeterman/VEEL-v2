@@ -116,6 +116,12 @@ export function createStaffRepository(
         }
 
         await transaction`
+          select pg_advisory_xact_lock(
+            hashtext(${`staff_invitation_target:${partiesRow.target_id}:${input.role}`})
+          )
+        `;
+
+        await transaction`
           update staff_invitations
           set state = 'expired', updated_at = now()
           where target_user_id = ${partiesRow.target_id}::uuid

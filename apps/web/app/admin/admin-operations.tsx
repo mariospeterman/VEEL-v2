@@ -1,11 +1,13 @@
 import type {
   AdminPage,
+  AdminFeatureFlag,
   AdminPaymentCommercialPolicy,
   AnalyticsProjectionHealth,
   ApiResult
 } from "@/api-client";
 import {
   enqueueAnalyticsProjectionJobAction,
+  updateFeatureFlagAction,
   updatePaymentCommercialPolicyAction
 } from "./actions";
 
@@ -83,6 +85,44 @@ export function PaymentPolicyOperations({
               </Field>
               <Field label="Audit reason"><input className={controlClass} defaultValue={policy.reason} disabled={!canWrite} maxLength={500} minLength={3} name="reason" required /></Field>
               {canWrite ? <button className={buttonClass} type="submit">Save policy</button> : null}
+            </form>
+          ))}
+        </div>
+      )}
+    </OperationPanel>
+  );
+}
+
+export function FeatureFlagOperations({
+  canWrite,
+  flags
+}: {
+  canWrite: boolean;
+  flags: ApiResult<AdminPage<AdminFeatureFlag>>;
+}) {
+  return (
+    <OperationPanel title="Feature and safety policy">
+      {!flags.ok ? <Failure message={flags.message} /> : flags.data.items.length === 0 ? (
+        <p className="text-sm text-(--muted)">No policy flags.</p>
+      ) : (
+        <div className="grid gap-3">
+          {flags.data.items.map((flag) => (
+            <form action={updateFeatureFlagAction} className="grid gap-3 rounded-xl border border-(--line) bg-(--background) p-4" key={flag.key}>
+              <div>
+                <p className="break-all font-semibold">{flag.key}</p>
+                <p className="mt-1 text-xs text-(--muted)">{flag.category.replaceAll("_", " ")} · software policy only</p>
+              </div>
+              <input name="featureFlagKey" type="hidden" value={flag.key} />
+              <Field label="Policy JSON">
+                <textarea className={`${controlClass} min-h-28 py-3 font-mono text-xs`} defaultValue={JSON.stringify(flag.value, null, 2)} disabled={!canWrite} name="value" required />
+              </Field>
+              <Field label="State">
+                <select className={controlClass} defaultValue={flag.state} disabled={!canWrite} name="state">
+                  <option value="active">Active</option><option value="paused">Paused</option><option value="archived">Archived</option>
+                </select>
+              </Field>
+              <Field label="Audit reason"><input className={controlClass} disabled={!canWrite} maxLength={500} minLength={3} name="reason" required /></Field>
+              {canWrite ? <button className={buttonClass} type="submit">Save feature flag</button> : null}
             </form>
           ))}
         </div>

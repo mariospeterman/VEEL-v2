@@ -392,6 +392,18 @@ test("shows and updates audited payment commercial policy overrides", async ({ p
     scrollWidth: document.documentElement.scrollWidth
   }));
   expect(layout.scrollWidth).toBe(layout.clientWidth);
+
+  await page.goto("/admin/settings", { waitUntil: "domcontentloaded" });
+  await expect(page.getByText("safety.content_creation_abuse_policy", { exact: true })).toBeVisible();
+  const flagForm = page.getByRole("button", { name: "Save feature flag" }).locator("..");
+  await flagForm.getByLabel("Policy JSON").fill('{"maxDraftsPerHour":12,"enabled":true}');
+  await flagForm.getByLabel("Audit reason").fill("Tune the reviewed content creation safety threshold");
+  await flagForm.getByRole("button", { name: "Save feature flag" }).click();
+  await expect.poll(() => requests.some((request) =>
+    request.method === "PATCH" &&
+    request.path === "/v1/admin/feature-flags/safety.content_creation_abuse_policy" &&
+    Boolean(request.idempotencyKey)
+  )).toBe(true);
 });
 
 async function gotoUntilVisible(page: Page, path: string, readyLocator: () => Locator) {
@@ -470,7 +482,9 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
         "admin.payments.read",
         "admin.payment_policy.write",
         "admin.analytics.read",
-        "admin.analytics.recompute"
+        "admin.analytics.recompute",
+        "admin.feature_flags.read",
+        "admin.feature_flags.write"
       ]
     });
     return;
@@ -496,6 +510,11 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
       latestReconciliationVariance: 0,
       suppressionCountToday: 2
     });
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/v1/admin/feature-flags") {
+    sendJson(response, 200, { items: [adminFeatureFlag()] });
     return;
   }
 
@@ -559,6 +578,10 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
       revision: 4,
       updatedAt: "2026-08-16T14:05:00.000Z"
     });
+    return;
+  }
+  if (method === "PATCH" && url.pathname === "/v1/admin/feature-flags/safety.content_creation_abuse_policy") {
+    sendJson(response, 200, { ...adminFeatureFlag(), ...body, updatedAt: "2026-08-24T21:00:00.000Z" });
     return;
   }
 
@@ -1369,6 +1392,17 @@ function paymentCommercialPolicy() {
     revision: 3,
     reason: "Initial finance-approved launch policy",
     updatedBySupabaseUserId: "00000000-0000-4000-8000-000000000001",
+    updatedAt: "2026-08-16T14:00:00.000Z"
+  };
+}
+
+function adminFeatureFlag() {
+  return {
+    key: "safety.content_creation_abuse_policy",
+    value: { maxDraftsPerHour: 10, enabled: true },
+    category: "safety",
+    policyBoundary: "software_policy_only_no_payment_access_or_social_priority",
+    state: "active",
     updatedAt: "2026-08-16T14:00:00.000Z"
   };
 }
