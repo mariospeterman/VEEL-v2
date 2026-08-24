@@ -211,6 +211,14 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
         leaseToken: randomUUID(),
         leasedUntil: new Date(Date.now() + 60_000)
       });
+      // A previously approved empty composition must not make a newly attached,
+      // unreviewed asset appear safety-ready in the MCP readiness projection.
+      await sql`
+        update media_safety_cases
+        set state = 'approved', provider_release_allowed = true,
+            reason_code = 'approved_before_new_asset', updated_at = now()
+        where content_item_id = ${contentId} and state <> 'superseded'
+      `;
       const completed = await contentRepository.completeMcpMediaUploadCapability!({
         capabilityId: issued!.id,
         connectionId: connection.id,

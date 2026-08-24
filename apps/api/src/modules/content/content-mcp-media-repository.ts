@@ -561,7 +561,31 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
           asset.provider_state,
           asset.provider_playable,
           asset.ready_at,
-          coalesce(safety.state, 'quarantined') as safety_state,
+          case
+            when coalesce(safety.state, 'quarantined') in (
+              'rejected', 'changes_requested', 'held_for_reporting'
+            ) then safety.state
+            when asset.id is not null
+              and safety.state = 'approved'
+              and safety.provider_release_allowed is true
+              and private.content_safety_automated_asset_evidence_ready(content.id, asset.id)
+              and coalesce((
+                select
+                  scan.provider = 'internal'
+                  and scan.normalized_signal = 'clear'
+                  and scan.provider_event_id is not null
+                  and scan.payload_hash ~ '^[0-9a-f]{64}$'
+                  and scan.model_or_ruleset_version is not null
+                from provider_media_scan_events scan
+                where scan.media_safety_case_id = safety.id
+                  and scan.media_asset_id = asset.id
+                  and scan.scan_type = 'manual_review'
+                  and scan.release_eligible is true
+                order by scan.observed_at desc, scan.created_at desc, scan.id desc
+                limit 1
+              ), false) then 'approved'
+            else 'quarantined'
+          end as safety_state,
           asset.provenance_human_review_state,
           asset.visible_label_state,
           asset.machine_readable_marking_state
