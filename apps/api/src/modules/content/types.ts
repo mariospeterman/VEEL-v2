@@ -469,6 +469,7 @@ export interface MediaUploadProviderAdapter {
     contentId: string;
     mediaAssetId: string;
     extension: "jpg" | "png" | "webp";
+    uploadAttemptId?: string;
   }): string;
   uploadImageObject?(input: {
     providerAssetId: string;

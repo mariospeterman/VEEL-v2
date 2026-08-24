@@ -24,6 +24,7 @@ type CapabilityRow = {
   workflow_provider_reference: string | null;
   c2pa_reference: string | null;
   state: "pending" | "provisioning" | "consumed" | "revoked";
+  lease_token: string | null;
   leased_until: Date | null;
   expires_at: Date;
   actor_supabase_user_id: string;
@@ -133,6 +134,36 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
           return null;
         }
 
+        // The content-row lock above serializes issuers for this draft. Re-read the
+        // logical request after acquiring it so concurrent exact retries converge on
+        // the first committed capability instead of surfacing the unique constraint.
+        const concurrentWinner = await transaction<{
+          id: string;
+          content_item_id: string;
+          reserved_media_asset_id: string;
+          media_kind: "image" | "video";
+          mime_type: McpMediaMimeType;
+          expires_at: Date;
+        }[]>`
+          select id, content_item_id, reserved_media_asset_id, media_kind, mime_type, expires_at
+          from mcp_media_upload_capabilities
+          where connection_id = ${input.connectionId}
+            and request_hash = ${input.requestHash}
+            and actor_user_id = ${draft.actor_user_id}
+          limit 1
+        `;
+        if (concurrentWinner[0]) {
+          return {
+            id: concurrentWinner[0].id,
+            contentId: concurrentWinner[0].content_item_id,
+            mediaAssetId: concurrentWinner[0].reserved_media_asset_id,
+            mediaKind: concurrentWinner[0].media_kind,
+            mimeType: concurrentWinner[0].mime_type,
+            expiresAt: concurrentWinner[0].expires_at.toISOString(),
+            issued: false
+          };
+        }
+
         const capabilityId = randomUUID();
         const mediaAssetId = randomUUID();
         await transaction`
@@ -188,7 +219,8 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
             capability.token_hash, capability.media_kind, capability.mime_type,
             capability.origin_classification, capability.source_kind,
             capability.source_lineage_reference, capability.workflow_provider_reference,
-            capability.c2pa_reference, capability.state, capability.leased_until,
+            capability.c2pa_reference, capability.state, capability.lease_token,
+            capability.leased_until,
             capability.expires_at, capability.expires_at <= now() as expired,
             capability.leased_until > now() as lease_active,
             actor.supabase_user_id as actor_supabase_user_id,
@@ -234,6 +266,10 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
           throw new McpMediaCapabilityConflictError("draft_locked");
         }
 
+        // Quota reservation is creator-scoped, not draft-scoped. The actor lock
+        // makes the count-plus-provisioning transition atomic across all drafts.
+        await transaction`select id from users where id = ${capability.actor_user_id} for update`;
+
         const counts = await transaction<{ asset_count: number; quota_count: number }[]>`
           select
             (
@@ -242,10 +278,22 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
                 and asset.retired_at is null
             ) as asset_count,
             (
-              select count(*)::integer from media_assets asset
-              join content_items owned_content on owned_content.id = asset.content_item_id
-              where owned_content.creator_user_id = ${capability.actor_user_id}
-                and asset.created_at >= ${input.quotaWindowStart}
+              select (
+                select count(*)::integer from media_assets asset
+                join content_items owned_content on owned_content.id = asset.content_item_id
+                where owned_content.creator_user_id = ${capability.actor_user_id}
+                  and asset.created_at >= ${input.quotaWindowStart}
+              ) + (
+                select count(*)::integer
+                from mcp_media_upload_capabilities reservation
+                where reservation.actor_user_id = ${capability.actor_user_id}
+                  and reservation.state = 'provisioning'
+                  and reservation.updated_at >= ${input.quotaWindowStart}
+                  and not exists (
+                    select 1 from media_assets reserved_asset
+                    where reserved_asset.id = reservation.reserved_media_asset_id
+                  )
+              )
             ) as quota_count
         `;
         if ((counts[0]?.asset_count ?? 10) >= 10) {
@@ -288,7 +336,8 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
             capability.token_hash, capability.media_kind, capability.mime_type,
             capability.origin_classification, capability.source_kind,
             capability.source_lineage_reference, capability.workflow_provider_reference,
-            capability.c2pa_reference, capability.state, capability.leased_until,
+            capability.c2pa_reference, capability.state, capability.lease_token,
+            capability.leased_until,
             capability.expires_at, actor.supabase_user_id as actor_supabase_user_id,
             content.media_type, content.visibility, content.nsfw_label,
             content.state as content_state, content.publish_state
@@ -395,7 +444,8 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
             capability.token_hash, capability.media_kind, capability.mime_type,
             capability.origin_classification, capability.source_kind,
             capability.source_lineage_reference, capability.workflow_provider_reference,
-            capability.c2pa_reference, capability.state, capability.leased_until,
+            capability.c2pa_reference, capability.state, capability.lease_token,
+            capability.leased_until,
             capability.expires_at, actor.supabase_user_id as actor_supabase_user_id,
             content.media_type, content.visibility, content.nsfw_label,
             content.state as content_state, content.publish_state
@@ -404,12 +454,12 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
           join content_items content on content.id = capability.content_item_id
           where capability.id = ${input.capabilityId}
             and capability.connection_id = ${input.connectionId}
-            and capability.state = 'provisioning'
-            and capability.lease_token = ${input.leaseToken}
           for update of capability, content
         `;
         const capability = rows[0];
-        if (!capability) throw new McpMediaCapabilityConflictError("lease_lost");
+        if (!capability) throw new McpMediaCapabilityConflictError("not_found");
+        const ownsLease = capability.state === "provisioning" && capability.lease_token === input.leaseToken;
+        const cleanupAssetId = ownsLease ? capability.reserved_media_asset_id : randomUUID();
 
         await transaction`
           insert into media_assets (
@@ -422,7 +472,7 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
             workflow_provider_reference, provenance_human_review_state,
             visible_label_state, machine_readable_marking_state, c2pa_reference
           ) values (
-            ${capability.reserved_media_asset_id}, ${capability.content_item_id}, 'bunny',
+            ${cleanupAssetId}, ${capability.content_item_id}, 'bunny',
             ${input.providerAssetId}, 'compensation_pending', false,
             ${capability.media_kind}, null, ${capability.mime_type}, false,
             now(), ${capability.actor_user_id}, 'mcp_provider_attach_failed',
@@ -438,18 +488,21 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
           set state = 'revoked', lease_token = null, leased_until = null,
               last_failure_code = ${input.failureCode}, updated_at = now()
           where id = ${capability.id}
+            and state = 'provisioning'
+            and lease_token = ${input.leaseToken}
         `;
         await transaction`
           insert into audit_events (
             id, actor_user_id, subject_type, subject_id, action, idempotency_key, metadata
           ) values (
             gen_random_uuid(), ${capability.actor_user_id}, 'media_asset',
-            ${capability.reserved_media_asset_id}, 'mcp_media_provider_cleanup_scheduled',
-            ${capability.id}, ${transaction.json({
+            ${cleanupAssetId}, 'mcp_media_provider_cleanup_scheduled',
+            ${`${capability.id}:${input.leaseToken}`}, ${transaction.json({
               capabilityId: capability.id,
               connectionId: capability.connection_id,
               contentId: capability.content_item_id,
-              failureCode: input.failureCode
+              failureCode: input.failureCode,
+              leaseOwned: ownsLease
             })}::jsonb
           )
         `;

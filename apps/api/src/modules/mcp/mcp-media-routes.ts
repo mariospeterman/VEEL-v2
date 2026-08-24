@@ -100,7 +100,8 @@ export async function registerMcpMediaRoutes(
           const providerAssetId = options.mediaUploadProvider.createImageObjectReference({
             contentId: claimed.contentId,
             mediaAssetId: claimed.mediaAssetId,
-            extension: image.extension
+            extension: image.extension,
+            uploadAttemptId: leaseToken
           });
           providerObject = { providerAssetId, assetKind: "image" };
           await options.mediaUploadProvider.uploadImageObject({

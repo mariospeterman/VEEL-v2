@@ -62,6 +62,14 @@ describe("Bunny private image storage adapter", () => {
     expect(providerAssetId).toBe(
       "images/00000000-0000-4000-8000-000000000040/00000000-0000-4000-8000-000000000041.webp"
     );
+    expect(adapter.createImageObjectReference?.({
+      contentId: "00000000-0000-4000-8000-000000000040",
+      mediaAssetId: "00000000-0000-4000-8000-000000000041",
+      extension: "webp",
+      uploadAttemptId: "00000000-0000-4000-8000-000000000042"
+    })).toBe(
+      "images/00000000-0000-4000-8000-000000000040/00000000-0000-4000-8000-000000000041/00000000-0000-4000-8000-000000000042.webp"
+    );
     await adapter.uploadImageObject?.({
       providerAssetId: providerAssetId!,
       body,

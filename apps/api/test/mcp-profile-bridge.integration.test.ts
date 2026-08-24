@@ -26,6 +26,7 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
     const otherCreatorId = randomUUID();
     let contentId: string | null = null;
     let pollContentId: string | null = null;
+    let quotaContentId: string | null = null;
     let connectionId: string | null = null;
 
     try {
@@ -132,6 +133,21 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
         mediaAssetId: issued!.mediaAssetId,
         issued: false
       });
+      const concurrentIssueResults = await Promise.all([
+        contentRepository.issueMcpMediaUploadCapability!({
+          ...capabilityInput,
+          requestHash: "6".repeat(64),
+          tokenHash: "4".repeat(64)
+        }),
+        contentRepository.issueMcpMediaUploadCapability!({
+          ...capabilityInput,
+          requestHash: "6".repeat(64),
+          tokenHash: "5".repeat(64)
+        })
+      ]);
+      expect(new Set(concurrentIssueResults.map((result) => result?.id)).size).toBe(1);
+      expect(concurrentIssueResults.filter((result) => result?.issued)).toHaveLength(1);
+      expect(concurrentIssueResults.filter((result) => result && !result.issued)).toHaveLength(1);
       const capabilityLedger = await sql<Array<{ token_hash: string; request_hash: string; payload: string }>>`
         select token_hash, request_hash, row_to_json(capability)::text as payload
         from mcp_media_upload_capabilities capability
@@ -268,6 +284,119 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
       `;
       expect(releasePredicates).toEqual([{ provenance_ready: true, release_ready: false }]);
 
+      const changedClaim = await contentRepository.updateOwnedMediaAsset!({
+        supabaseUserId: creatorId,
+        mediaAssetId: issued!.mediaAssetId,
+        expectedCompositionRevision: reviewed!.compositionRevision,
+        idempotencyKey: `integration-provenance-change-${randomUUID()}`,
+        requestHash: "2".repeat(64),
+        altText: null,
+        altTextProvided: false,
+        originClassification: "ai_assisted"
+      });
+      expect(changedClaim).toMatchObject({
+        compositionRevision: reviewed!.compositionRevision + 1,
+        asset: {
+          originClassification: "ai_assisted",
+          visibleLabelState: "ai_assisted",
+          provenanceReviewState: "pending"
+        }
+      });
+      const staleReviewPredicate = await sql<Array<{ provenance_ready: boolean }>>`
+        select private.content_composition_provenance_ready(${contentId}) as provenance_ready
+      `;
+      expect(staleReviewPredicate).toEqual([{ provenance_ready: false }]);
+      const rereviewed = await contentRepository.reviewOwnedMediaAssetProvenance!({
+        ...reviewInput,
+        expectedCompositionRevision: changedClaim!.compositionRevision,
+        idempotencyKey: `integration-provenance-rereview-${randomUUID()}`,
+        requestHash: "3".repeat(64)
+      });
+      expect(rereviewed).toMatchObject({
+        compositionRevision: changedClaim!.compositionRevision + 1,
+        asset: { provenanceReviewState: "confirmed", visibleLabelState: "ai_assisted" }
+      });
+
+      const quotaDraft = await contentRepository.createDraft({
+        ...createInput,
+        idempotencyKey: `mcp-private-draft:${connection.id}:${"7".repeat(64)}`,
+        requestHash: "7".repeat(64),
+        origin: { ...createInput.origin, requestHash: "7".repeat(64) }
+      });
+      quotaContentId = quotaDraft.id;
+      const quotaCapabilities = await Promise.all([
+        contentRepository.issueMcpMediaUploadCapability!({
+          ...capabilityInput,
+          contentId,
+          requestHash: "c".repeat(64),
+          tokenHash: "c".repeat(64),
+          c2paReference: null
+        }),
+        contentRepository.issueMcpMediaUploadCapability!({
+          ...capabilityInput,
+          contentId: quotaContentId,
+          requestHash: "d".repeat(64),
+          tokenHash: "d".repeat(64),
+          c2paReference: null
+        })
+      ]);
+      const quotaClaims = await Promise.allSettled(quotaCapabilities.map((capability, index) =>
+        contentRepository.claimMcpMediaUploadCapability!({
+          capabilityId: capability!.id,
+          connectionId: connection.id,
+          supabaseUserId: creatorId,
+          tokenHash: index === 0 ? "c".repeat(64) : "d".repeat(64),
+          declaredMimeType: "image/webp",
+          quotaWindowStart: new Date(Date.now() - 86_400_000),
+          dailyMediaUploadQuota: 2,
+          leaseToken: randomUUID(),
+          leasedUntil: new Date(Date.now() + 60_000)
+        })
+      ));
+      const quotaWinnerIndex = quotaClaims.findIndex((result) => result.status === "fulfilled");
+      expect(quotaWinnerIndex).toBeGreaterThanOrEqual(0);
+      expect(quotaClaims.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      expect(quotaClaims.find((result) => result.status === "rejected")).toMatchObject({
+        status: "rejected",
+        reason: expect.objectContaining({ reason: "quota_exceeded" })
+      });
+      const quotaWinner = quotaClaims[quotaWinnerIndex];
+      if (!quotaWinner || quotaWinner.status !== "fulfilled") throw new Error("quota claim did not converge");
+      await contentRepository.releaseMcpMediaUploadCapability!({
+        capabilityId: quotaCapabilities[quotaWinnerIndex]!.id,
+        connectionId: connection.id,
+        leaseToken: quotaWinner.value.leaseToken,
+        failureCode: "integration_release"
+      });
+
+      await contentRepository.scheduleMcpMediaProviderCleanup!({
+        capabilityId: issued!.id,
+        connectionId: connection.id,
+        leaseToken: claimed.value.leaseToken,
+        providerAssetId: `expired-lease-image-${randomUUID()}`,
+        failureCode: "provider_delete_failed"
+      });
+      const lostLeaseCleanup = await sql<Array<{
+        capability_state: string;
+        cleanup_count: number;
+        asset_revision: number;
+      }>>`
+        select capability.state as capability_state,
+          count(asset.id)::integer as cleanup_count,
+          content.asset_revision::integer as asset_revision
+        from mcp_media_upload_capabilities capability
+        join content_items content on content.id = capability.content_item_id
+        join media_assets asset on asset.content_item_id = content.id
+          and asset.retirement_reason = 'mcp_provider_attach_failed'
+        where capability.id = ${issued!.id}
+        group by capability.state, content.asset_revision
+      `;
+      expect(lostLeaseCleanup).toEqual([{
+        capability_state: "consumed",
+        cleanup_count: 1,
+        asset_revision: rereviewed!.compositionRevision
+      }]);
+
       const cleanupCapability = await contentRepository.issueMcpMediaUploadCapability!({
         ...capabilityInput,
         requestHash: "8".repeat(64),
@@ -309,7 +438,7 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
         state: "revoked",
         retired_at: expect.any(Date),
         provider_cleanup_state: "retry",
-        asset_revision: reviewed!.compositionRevision
+        asset_revision: rereviewed!.compositionRevision
       }]);
 
       const rows = await sql<Array<{
@@ -348,13 +477,14 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
       }
       if (contentId) await sql`delete from content_items where id = ${contentId}`;
       if (pollContentId) await sql`delete from content_items where id = ${pollContentId}`;
+      if (quotaContentId) await sql`delete from content_items where id = ${quotaContentId}`;
       await sql`delete from idempotency_keys where actor_user_id = any(${[creatorId, otherCreatorId]}::uuid[])`;
       await sql`delete from audit_events where actor_user_id = any(${[creatorId, otherCreatorId]}::uuid[])`;
       await sql`delete from profiles where user_id = any(${[creatorId, otherCreatorId]}::uuid[])`;
       await sql`delete from users where id = any(${[creatorId, otherCreatorId]}::uuid[])`;
       await sql.end({ timeout: 5 });
     }
-  });
+  }, 30_000);
 });
 
 function safeDatabaseHost(databaseUrl: string | undefined): string {

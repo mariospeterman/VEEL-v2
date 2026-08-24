@@ -65,7 +65,10 @@ export function createBunnyStreamUploadAdapter(
       );
     },
     createImageObjectReference(input) {
-      return `images/${input.contentId}/${input.mediaAssetId}.${input.extension}`;
+      const objectName = input.uploadAttemptId
+        ? `${input.mediaAssetId}/${input.uploadAttemptId}`
+        : input.mediaAssetId;
+      return `images/${input.contentId}/${objectName}.${input.extension}`;
     },
     async uploadImageObject(input) {
       const accessKey = env.BUNNY_STORAGE_ACCESS_KEY;

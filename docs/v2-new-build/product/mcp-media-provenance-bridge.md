@@ -33,7 +33,8 @@ MIME type, and request hash, and is consumed at most once. Exact retries converg
 logical capability. A stale provisioning lease may be recovered; concurrent redemption cannot
 create two canonical assets. Provider calls occur outside database transactions, and a provider
 object that cannot be attached to the canonical asset is deleted or enters the existing durable
-cleanup path.
+cleanup path. Every image lease attempt uses a distinct private provider object, so an expired
+request can never delete the object created and attached by a recovered request.
 
 Preparation requires a caller-generated UUID `requestId`; its normalized request is the logical
 idempotency input. A newly issued capability lives for ten minutes and is redeemed only at
@@ -88,9 +89,10 @@ wallet, messaging, moderation, entitlement, age/KYC, or admin tool is registered
   scoped capabilities fail closed with a safe normalized error and redacted audit evidence.
 - Draft format and ten-asset limits are checked before capability issue and again before redemption.
 - Upload quotas are backend-owned and apply before provider work; money, membership, and social state
-  never increase capacity or priority.
+  never increase capacity or priority. A creator-scoped transaction lock and in-flight reservation
+  count keep concurrent redemptions across different drafts within the same rolling limit.
 - Bunny/provider unavailability leaves the draft private and records only normalized failure state.
-- If immediate deletion of an unattached provider object fails, the reserved media id becomes a
+- If immediate deletion of an unattached provider object fails, a cleanup-only media id becomes a
   retired, non-composition asset in the existing provider-cleanup queue. That compensation row does
   not advance the creator-visible composition revision and exposes no provider id to the MCP client.
 - Provider webhook and explicit sync continue to update the canonical `media_assets` row; the bridge

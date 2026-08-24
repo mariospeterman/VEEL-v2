@@ -342,6 +342,22 @@ export function createContentMediaRepositoryMethods(
           update media_assets
           set
             alt_text = case when ${input.altTextProvided} then ${input.altText ?? null} else alt_text end,
+            provenance_human_review_state = case
+              when ${input.originClassification ?? null}::text is not null
+                and ${input.originClassification ?? null}::text <> origin_classification
+                and source_kind is not null
+              then 'pending'
+              else provenance_human_review_state
+            end,
+            visible_label_state = case
+              when ${input.originClassification ?? null}::text is null
+                or ${input.originClassification ?? null}::text = origin_classification
+              then visible_label_state
+              when ${input.originClassification ?? null}::text = 'human_created' then 'none'
+              when ${input.originClassification ?? null}::text = 'ai_assisted' then 'ai_assisted'
+              when ${input.originClassification ?? null}::text = 'ai_generated' then 'ai_generated'
+              else 'manipulated'
+            end,
             origin_classification = coalesce(
               ${input.originClassification ?? null},
               origin_classification

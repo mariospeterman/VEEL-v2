@@ -276,8 +276,8 @@ describe("external MCP connector foundation", () => {
       isConfigured: () => true,
       async createUploadSession() { throw new Error("video upload was not expected"); },
       isImageUploadConfigured: () => true,
-      createImageObjectReference: ({ contentId, mediaAssetId, extension }) =>
-        `images/${contentId}/${mediaAssetId}.${extension}`,
+      createImageObjectReference: ({ contentId, mediaAssetId, extension, uploadAttemptId }) =>
+        `images/${contentId}/${mediaAssetId}/${uploadAttemptId}.${extension}`,
       async uploadImageObject(input) { uploadedImages.push(input); },
       async deleteProviderAsset() {}
     };
@@ -374,6 +374,9 @@ describe("external MCP connector foundation", () => {
       checksumSha256: expect.stringMatching(/^[a-f0-9]{64}$/)
     });
     expect(uploadedImages).toHaveLength(1);
+    expect(uploadedImages[0]!.providerAssetId).toBe(
+      `images/${args.contentId}/00000000-0000-4000-8000-000000000302/${contentRepository.claimInputs[0]!.leaseToken}.webp`
+    );
     const storedMetadata = await sharp(uploadedImages[0]!.body).metadata();
     expect(storedMetadata.exif).toBeUndefined();
     expect(storedMetadata.orientation).toBeUndefined();
@@ -497,8 +500,8 @@ describe("external MCP connector foundation", () => {
       isConfigured: () => true,
       async createUploadSession() { throw new Error("video upload was not expected"); },
       isImageUploadConfigured: () => true,
-      createImageObjectReference: ({ contentId, mediaAssetId, extension }) =>
-        `images/${contentId}/${mediaAssetId}.${extension}`,
+      createImageObjectReference: ({ contentId, mediaAssetId, extension, uploadAttemptId }) =>
+        `images/${contentId}/${mediaAssetId}/${uploadAttemptId}.${extension}`,
       async uploadImageObject() { throw new MediaUploadProviderError(); },
       async deleteProviderAsset() { throw new MediaUploadProviderError(); }
     };
@@ -525,7 +528,9 @@ describe("external MCP connector foundation", () => {
     expect(contentRepository.releaseInputs).toHaveLength(0);
     expect(contentRepository.cleanupInputs).toMatchObject([{
       capabilityId: "00000000-0000-4000-8000-000000000301",
-      providerAssetId: "images/00000000-0000-4000-8000-000000000099/00000000-0000-4000-8000-000000000302.webp",
+      providerAssetId: expect.stringMatching(
+        /^images\/00000000-0000-4000-8000-000000000099\/00000000-0000-4000-8000-000000000302\/[0-9a-f-]{36}\.webp$/
+      ),
       failureCode: "provider_delete_failed"
     }]);
     await app.close();
