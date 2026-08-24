@@ -6,6 +6,7 @@ import { createEngagementContentActionRepositoryMethods } from "./engagement-con
 import { createEngagementIntakeRepositoryMethods } from "./engagement-intake-repository.js";
 import { createEngagementPreferencesRepositoryMethods } from "./engagement-preferences-repository.js";
 import { createEngagementSocialRepositoryMethods } from "./engagement-social-repository.js";
+import { createEngagementPrivacyRepositoryMethods } from "./engagement-privacy-repository.js";
 
 export {
   EngagementIdempotencyConflictError,
@@ -52,6 +53,9 @@ export function createPostgresEngagementRepository(database?: string | PostgresS
       async createComment() {
         throw new EngagementRepositoryConfigurationError();
       },
+      async toggleCommentLike() {
+        throw new EngagementRepositoryConfigurationError();
+      },
       async createShare() {
         throw new EngagementRepositoryConfigurationError();
       },
@@ -59,6 +63,18 @@ export function createPostgresEngagementRepository(database?: string | PostgresS
         throw new EngagementRepositoryConfigurationError();
       },
       async blockUser() {
+        throw new EngagementRepositoryConfigurationError();
+      },
+      async unblockUser() {
+        throw new EngagementRepositoryConfigurationError();
+      },
+      async setMute() {
+        throw new EngagementRepositoryConfigurationError();
+      },
+      async getPrivacySettings() {
+        throw new EngagementRepositoryConfigurationError();
+      },
+      async createDataRequest() {
         throw new EngagementRepositoryConfigurationError();
       }
     };
@@ -72,6 +88,7 @@ export function createPostgresEngagementRepository(database?: string | PostgresS
     ...createEngagementContentActionRepositoryMethods(sql),
     ...createEngagementCommentRepositoryMethods(sql),
     ...createEngagementIntakeRepositoryMethods(sql),
+    ...createEngagementPrivacyRepositoryMethods(sql),
     async close() {
       if (ownsClient) {
         await sql.end({ timeout: 5 });

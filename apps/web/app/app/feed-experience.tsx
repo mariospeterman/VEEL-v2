@@ -237,7 +237,7 @@ export function FeedExperience({
       ?.querySelector<HTMLButtonElement>(`#feed-mode-${nextMode}`);
     nextButton?.focus();
     void selectMode(nextMode).finally(() => {
-      window.requestAnimationFrame(() => nextButton?.focus());
+      window.requestAnimationFrame(() => document.getElementById(`feed-mode-${nextMode}`)?.focus());
     });
   }
 
@@ -363,7 +363,7 @@ function FeedCard({
 
       <div className="feed-media">
         <ContentRenderer active={active} item={item} title={`${item.creator.displayName} post`} />
-        <span className="feed-access-pill">{item.accessState}</span>
+        <span className="feed-access-pill">{accessLabel(item.accessState)}</span>
       </div>
 
       <div className="feed-card-copy">
@@ -375,6 +375,7 @@ function FeedCard({
 
       <div className={surface === "bits" ? "bits-actions" : "feed-actions"}>
         <ContentEngagementPanel
+          accessState={item.accessState}
           contentId={item.id}
           creatorUserId={item.creator.id}
           initialEngagement={item.engagement}
@@ -382,6 +383,14 @@ function FeedCard({
       </div>
     </article>
   );
+}
+
+function accessLabel(state: ContentItem["accessState"]) {
+  if (state === "free" || state === "unlocked") return "Ready to watch";
+  if (state === "subscribed") return "Included with membership";
+  if (state === "pass_required") return "Event Access required";
+  if (state === "teaser") return "Preview";
+  return "Unlock to watch";
 }
 
 function FeedSkeleton({ surface }: { surface: FeedSurface }) {

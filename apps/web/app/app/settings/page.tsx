@@ -5,6 +5,7 @@ import {
   getMcpConnections,
   getNotificationPreferences,
   getNotificationPushConfig,
+  getPrivacySettings,
   getSession,
   getWallets,
   type AgeStatus,
@@ -17,7 +18,7 @@ import {
 } from "@/api-client";
 import { requireConfiguredSession } from "@/supabase/route-guard";
 import { AppShell } from "../../app-shell";
-import { Card, ErrorState, Fact, PageHeader, StatusPill } from "../../ui";
+import { Card, ErrorState, Fact, PageHeader } from "../../ui";
 import { mapApiFailure } from "@/api-errors";
 import { McpConnectionsPanel } from "../../settings/mcp-connections-panel";
 import { NotificationEnrollment } from "../../settings/notification-enrollment";
@@ -25,20 +26,22 @@ import { NotificationPreferencesPanel } from "../../settings/notification-prefer
 import { RecoveryAccessPanel } from "../../settings/recovery-access-panel";
 import { SessionSecurityActions } from "../../settings/session-security-actions";
 import { ContentPreferenceControl } from "./content-preference-control";
+import { PrivacyControls } from "./privacy-controls";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
   await requireConfiguredSession("/app/settings");
 
-  const [session, ageStatus, wallets, feedPreferences, notificationPreferences, pushConfig, mcpConnections] = await Promise.all([
+  const [session, ageStatus, wallets, feedPreferences, notificationPreferences, pushConfig, mcpConnections, privacy] = await Promise.all([
     getSession(),
     getAgeStatus(),
     getWallets(),
     getFeedPreferences(),
     getNotificationPreferences(),
     getNotificationPushConfig(),
-    getMcpConnections()
+    getMcpConnections(),
+    getPrivacySettings()
   ]);
 
   return (
@@ -82,12 +85,7 @@ export default async function SettingsPage() {
           </SettingsGroup>
 
           <SettingsGroup id="privacy" title="Privacy">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Fact label="Telemetry" value="privacy-safe only" />
-              <Fact label="Raw provider payloads" value="not exposed" />
-              <Fact label="Money ranking" value="disabled" />
-              <Fact label="Activity receipts" value="account only" />
-            </div>
+            {privacy.ok ? <PrivacyControls initial={privacy.data} /> : <ErrorState result={privacy} title="Privacy controls unavailable" context="Privacy" />}
           </SettingsGroup>
 
           <SettingsGroup id="notifications" title="Notifications">
@@ -174,7 +172,7 @@ function SecurityFacts({
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       <Fact label="Session" value={session.ok && session.data.authenticated ? "application session active" : resultLabel(session)} />
-      <Fact label="Age assurance" value={ageStatus.ok ? `${ageStatus.data.state} via ${ageStatus.data.provider ?? "none"}` : resultLabel(ageStatus)} />
+      <Fact label="Age assurance" value={ageStatus.ok ? ageStateLabel(ageStatus.data.state) : resultLabel(ageStatus)} />
       <Fact label="Primary wallet" value={primaryWallet ? shorten(primaryWallet.address) : resultLabel(wallets)} />
       <Fact label="Wallet chain" value={primaryWallet?.chain ?? "not ready"} />
       <RecoveryAccessPanel />
@@ -196,7 +194,6 @@ function SettingsGroup({
     <Card className="p-4" id={id}>
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-base font-semibold tracking-normal">{title}</h2>
-        <StatusPill>server-owned</StatusPill>
       </div>
       {children}
     </Card>
@@ -209,4 +206,11 @@ function resultLabel<T>(result: ApiResult<T>) {
 
 function shorten(value: string) {
   return `${value.slice(0, 6)}...${value.slice(-4)}`;
+}
+
+function ageStateLabel(state: AgeStatus["state"]) {
+  if (state === "verified") return "Verified";
+  if (state === "pending") return "Verification in progress";
+  if (state === "failed") return "Try verification again";
+  return "Verification needed";
 }

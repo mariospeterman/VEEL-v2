@@ -19,6 +19,7 @@ import {
 } from "./engagement-route-utils.js";
 import type {
   CreateCommentRequest,
+  CreateDataRequestRequest,
   CreateReportRequest,
   CreateShareRequest,
   HideFeedCreatorRequest,
@@ -210,11 +211,11 @@ export async function registerEngagementRoutes(
     );
   });
 
-  app.post("/v1/engagement/:contentId/like", async (request, reply) => {
+  app.post("/v1/engagement/:contentId/like", mutationRateLimit("socialMutation", "toggleContentLike"), async (request, reply) => {
     return toggleContentAction(request, reply, options, "like");
   });
 
-  app.post("/v1/engagement/:contentId/save", async (request, reply) => {
+  app.post("/v1/engagement/:contentId/save", mutationRateLimit("socialMutation", "toggleContentSave"), async (request, reply) => {
     return toggleContentAction(request, reply, options, "save");
   });
 
@@ -239,7 +240,7 @@ export async function registerEngagementRoutes(
     );
   });
 
-  app.post("/v1/engagement/:contentId/comments", async (request, reply) => {
+  app.post("/v1/engagement/:contentId/comments", mutationRateLimit("socialMutation", "createContentComment"), async (request, reply) => {
     const access = await verifyEngagementAccess(request, options);
     if (!access.ok) return reply.code(access.statusCode).send(access.body);
     const idempotencyKey = requiredIdempotencyKey(request);
@@ -254,6 +255,9 @@ export async function registerEngagementRoutes(
     if (!commentBody || commentBody.length > 2000) {
       return reply.code(400).send(validationResponse("comment body is required"));
     }
+    if (body.parentCommentId !== undefined && body.parentCommentId !== null && !isUuid(body.parentCommentId)) {
+      return reply.code(400).send(validationResponse("parentCommentId must be a UUID"));
+    }
 
     return repositoryReply(
       request,
@@ -262,14 +266,37 @@ export async function registerEngagementRoutes(
         options.engagementRepository.createComment({
           supabaseUserId: access.supabaseUserId,
           contentId,
-          body: { body: commentBody },
+          body: {
+            body: commentBody,
+            ...(body.parentCommentId ? { parentCommentId: body.parentCommentId } : {})
+          },
           idempotencyKey
         }),
       201
     );
   });
 
-  app.post("/v1/shares", async (request, reply) => {
+  app.post(
+    "/v1/engagement/comments/:commentId/like",
+    mutationRateLimit("socialMutation", "toggleCommentLike"),
+    async (request, reply) => {
+      const access = await verifyEngagementAccess(request, options);
+      if (!access.ok) return reply.code(access.statusCode).send(access.body);
+      const idempotencyKey = requiredIdempotencyKey(request);
+      if (!idempotencyKey) {
+        return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
+      }
+      const commentId = (request.params as { commentId?: string }).commentId;
+      if (!isUuid(commentId)) return reply.code(400).send(validationResponse("commentId must be a UUID"));
+      return repositoryReply(request, reply, () => options.engagementRepository.toggleCommentLike({
+        supabaseUserId: access.supabaseUserId,
+        commentId,
+        idempotencyKey
+      }));
+    }
+  );
+
+  app.post("/v1/shares", mutationRateLimit("socialMutation", "createShare"), async (request, reply) => {
     const access = await verifyEngagementAccess(request, options);
     if (!access.ok) return reply.code(access.statusCode).send(access.body);
     const idempotencyKey = requiredIdempotencyKey(request);
@@ -302,7 +329,7 @@ export async function registerEngagementRoutes(
     );
   });
 
-  app.post("/v1/reports", async (request, reply) => {
+  app.post("/v1/reports", mutationRateLimit("socialMutation", "createReport"), async (request, reply) => {
     const access = await verifyEngagementAccess(request, options);
     if (!access.ok) return reply.code(access.statusCode).send(access.body);
     const idempotencyKey = requiredIdempotencyKey(request);
@@ -340,7 +367,7 @@ export async function registerEngagementRoutes(
     );
   });
 
-  app.post("/v1/blocks/:userId", async (request, reply) => {
+  app.post("/v1/blocks/:userId", mutationRateLimit("socialMutation", "blockUser"), async (request, reply) => {
     const access = await verifyEngagementAccess(request, options);
     if (!access.ok) return reply.code(access.statusCode).send(access.body);
     const idempotencyKey = requiredIdempotencyKey(request);
@@ -359,4 +386,71 @@ export async function registerEngagementRoutes(
       })
     );
   });
+
+  app.delete("/v1/blocks/:userId", mutationRateLimit("socialMutation", "unblockUser"), async (request, reply) => {
+    const access = await verifyEngagementAccess(request, options);
+    if (!access.ok) return reply.code(access.statusCode).send(access.body);
+    const idempotencyKey = requiredIdempotencyKey(request);
+    const blockedUserId = (request.params as { userId?: string }).userId;
+    if (!idempotencyKey) return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
+    if (!isUuid(blockedUserId)) return reply.code(400).send(validationResponse("userId must be a UUID"));
+    return repositoryReply(request, reply, () => options.engagementRepository.unblockUser({
+      supabaseUserId: access.supabaseUserId,
+      blockedUserId,
+      idempotencyKey
+    }));
+  });
+
+  const setMute = async (request: FastifyRequest, reply: FastifyReply, muted: boolean) => {
+    const access = await verifyEngagementAccess(request, options);
+    if (!access.ok) return reply.code(access.statusCode).send(access.body);
+    const idempotencyKey = requiredIdempotencyKey(request);
+    const mutedUserId = (request.params as { userId?: string }).userId;
+    if (!idempotencyKey) return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
+    if (!isUuid(mutedUserId)) return reply.code(400).send(validationResponse("userId must be a UUID"));
+    return repositoryReply(request, reply, () => options.engagementRepository.setMute({
+      supabaseUserId: access.supabaseUserId,
+      mutedUserId,
+      muted,
+      idempotencyKey
+    }));
+  };
+
+  app.post("/v1/mutes/:userId", mutationRateLimit("socialMutation", "muteUser"), async (request, reply) =>
+    setMute(request, reply, true));
+  app.delete("/v1/mutes/:userId", mutationRateLimit("socialMutation", "unmuteUser"), async (request, reply) =>
+    setMute(request, reply, false));
+
+  app.get("/v1/privacy", async (request, reply) => {
+    const access = await verifyEngagementAccess(request, options);
+    if (!access.ok) return reply.code(access.statusCode).send(access.body);
+    return repositoryReply(request, reply, () => options.engagementRepository.getPrivacySettings({
+      supabaseUserId: access.supabaseUserId
+    }));
+  });
+
+  app.post(
+    "/v1/privacy/data-requests",
+    mutationRateLimit("socialMutation", "createDataRequest"),
+    async (request, reply) => {
+      const access = await verifyEngagementAccess(request, options);
+      if (!access.ok) return reply.code(access.statusCode).send(access.body);
+      const idempotencyKey = requiredIdempotencyKey(request);
+      if (!idempotencyKey) return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
+      const body = request.body as Partial<CreateDataRequestRequest>;
+      const reason = body.reason?.trim();
+      const requestType = body.type;
+      if (requestType !== "export" && requestType !== "delete") {
+        return reply.code(400).send(validationResponse("type must be export or delete"));
+      }
+      if (reason !== undefined && (reason.length < 3 || reason.length > 500)) {
+        return reply.code(400).send(validationResponse("reason must be between 3 and 500 characters"));
+      }
+      return repositoryReply(request, reply, () => options.engagementRepository.createDataRequest({
+        supabaseUserId: access.supabaseUserId,
+        body: { type: requestType, ...(reason ? { reason } : {}) },
+        idempotencyKey
+      }), 201);
+    }
+  );
 }

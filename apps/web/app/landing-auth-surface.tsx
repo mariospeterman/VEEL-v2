@@ -413,7 +413,7 @@ function OnboardingAgeStep() {
         return "Age is already verified.";
       }
 
-      return "Age check is already in progress. Try again or finish the provider flow.";
+      return "Age check is already in progress. Try again or finish the open verification step.";
     }
 
     const message = safeMutationMessage(reason, "Age verification");
@@ -490,7 +490,7 @@ function OnboardingAgeStep() {
   }
 
   return (
-    <div className="landing-age-waterfall" aria-label="Age verification providers">
+    <div className="landing-age-waterfall" aria-label="Age verification">
       <div className="landing-age-choice-panel">
         <div className="landing-age-choice-copy">
           <p>18+ access</p>

@@ -18,8 +18,13 @@ export type {
   ContentPoll,
   ContentUnlockIntent,
   BlockState,
+  MuteState,
+  PrivacySettings,
+  DataRequest,
+  CreateDataRequestRequest,
   Comment,
   CommentPage,
+  CommentReactionState,
   CreateCommentRequest,
   CreateReportRequest,
   CreateShareRequest,
@@ -127,8 +132,13 @@ import type {
   ContentPoll,
   ContentUnlockIntent,
   BlockState,
+  MuteState,
+  PrivacySettings,
+  DataRequest,
+  CreateDataRequestRequest,
   Comment,
   CommentPage,
+  CommentReactionState,
   CreateCommentRequest,
   CreateReportRequest,
   CreateShareRequest,
@@ -494,6 +504,18 @@ export async function createContentComment(
   );
 }
 
+export async function toggleCommentLike(
+  commentId: string,
+  idempotencyKey: string
+): Promise<CommentReactionState> {
+  return authenticatedMutation<CommentReactionState>(
+    `/v1/engagement/comments/${encodeURIComponent(commentId)}/like`,
+    "POST",
+    {},
+    idempotencyKey
+  );
+}
+
 export async function createContentShare(
   body: CreateShareRequest,
   idempotencyKey: string
@@ -537,6 +559,44 @@ export async function blockUser(userId: string, idempotencyKey: string): Promise
     `/v1/blocks/${encodeURIComponent(userId)}`,
     "POST",
     {},
+    idempotencyKey
+  );
+}
+
+export async function unblockUser(userId: string, idempotencyKey: string): Promise<BlockState> {
+  return authenticatedMutation<BlockState>(
+    `/v1/blocks/${encodeURIComponent(userId)}`,
+    "DELETE",
+    {},
+    idempotencyKey
+  );
+}
+
+export async function setUserMute(
+  userId: string,
+  muted: boolean,
+  idempotencyKey: string
+): Promise<MuteState> {
+  return authenticatedMutation<MuteState>(
+    `/v1/mutes/${encodeURIComponent(userId)}`,
+    muted ? "POST" : "DELETE",
+    {},
+    idempotencyKey
+  );
+}
+
+export async function getPrivacySettingsForMutation(): Promise<PrivacySettings> {
+  return authenticatedGet<PrivacySettings>("/v1/privacy");
+}
+
+export async function createDataRequest(
+  body: CreateDataRequestRequest,
+  idempotencyKey: string
+): Promise<DataRequest> {
+  return authenticatedMutation<DataRequest>(
+    "/v1/privacy/data-requests",
+    "POST",
+    body,
     idempotencyKey
   );
 }

@@ -57,13 +57,11 @@ function MediaStage({ item }: { item: ContentItem }) {
     <section className="media-pane relative overflow-hidden rounded border border-(--line) bg-[#0f1217]">
       <ContentRenderer item={item} title={`${item.creator.displayName} post`} />
       <div className="absolute left-4 top-4 rounded bg-(--background)/85 px-2 py-1 text-xs font-medium">
-        {item.mediaType.toUpperCase()}
+        {mediaTypeLabel(item.mediaType)}
       </div>
       <div className="absolute bottom-0 left-0 right-0 p-5">
         <p className="text-sm font-medium text-(--accent-text)">@{item.creator.handle}</p>
-        <h1 className="mt-2 max-w-3xl text-2xl font-semibold tracking-normal">
-          Media viewer
-        </h1>
+        <h1 className="mt-2 max-w-3xl text-2xl font-semibold tracking-normal">{item.creator.displayName}’s post</h1>
         {item.caption ? (
           <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-200">{item.caption}</p>
         ) : null}
@@ -81,24 +79,14 @@ function AccessPanel({ item }: { item: ContentItem }) {
             <p className="truncate text-sm font-semibold">{item.creator.displayName}</p>
             <p className="text-sm text-(--muted)">@{item.creator.handle}</p>
           </div>
-          <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-medium uppercase text-(--accent-strong)">
-            {item.accessState}
-          </span>
+          <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-medium text-(--accent-strong)">{accessLabel(item.accessState)}</span>
         </div>
 
-        <div className="mt-5 grid gap-3 border-t border-(--line) pt-4">
-          <div>
-            <p className="text-xs font-medium uppercase text-(--muted)">Playback</p>
-            <p className="mt-1 text-sm">{item.playback?.state ?? "not_ready"}</p>
-          </div>
-          <div>
-            <p className="text-xs font-medium uppercase text-(--muted)">Provider</p>
-            <p className="mt-1 text-sm">{item.playback?.provider ?? "none"}</p>
-          </div>
-        </div>
+        <p className="mt-4 border-t border-(--line) pt-4 text-sm leading-6 text-(--muted)">{accessDescription(item.accessState)}</p>
       </section>
 
       <ContentEngagementPanel
+        accessState={item.accessState}
         contentId={item.id}
         creatorUserId={item.creator.id}
         initialEngagement={item.engagement}
@@ -106,4 +94,27 @@ function AccessPanel({ item }: { item: ContentItem }) {
       <ContentUnlockPanel accessState={item.accessState} contentId={item.id} />
     </aside>
   );
+}
+
+function mediaTypeLabel(type: ContentItem["mediaType"]) {
+  if (type === "vod" || type === "live_replay") return "Video";
+  if (type === "carousel") return "Carousel";
+  if (type === "poll") return "Poll";
+  if (type === "text") return "Text";
+  return "Image";
+}
+
+function accessLabel(state: ContentItem["accessState"]) {
+  if (state === "free" || state === "unlocked") return "Ready to watch";
+  if (state === "subscribed") return "Included with membership";
+  if (state === "pass_required") return "Event Access required";
+  if (state === "teaser") return "Preview available";
+  return "Unlock to watch";
+}
+
+function accessDescription(state: ContentItem["accessState"]) {
+  if (state === "free" || state === "unlocked" || state === "subscribed") return "You have access to this post.";
+  if (state === "pass_required") return "Get the related Event Access Pass to watch the full post.";
+  if (state === "teaser") return "Watch the preview, then review the unlock offer for full access.";
+  return "Review the offer below to unlock the full post.";
 }

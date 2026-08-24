@@ -399,6 +399,16 @@
     flex: 0 0 auto;
   }
 
+  .danger-outline-button {
+    border-color: #7f1d1d;
+    color: #fecaca;
+  }
+
+  :root[data-theme="light"] .danger-outline-button {
+    border-color: #991b1b;
+    color: #991b1b;
+  }
+
   .debug-details {
     margin-top: 14px;
     border-top: 1px solid var(--line);

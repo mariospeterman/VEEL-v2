@@ -27,6 +27,7 @@ tags:
   - name: Media
   - name: Live
   - name: Engagement
+  - name: Privacy
   - name: Messages
   - name: Notifications
   - name: Realtime
@@ -1465,6 +1466,12 @@ paths:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       responses:
         "200": { $ref: "#/components/responses/EngagementState" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/engagement/{contentId}/save:
     post:
       operationId: toggleContentSave
@@ -1475,6 +1482,12 @@ paths:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       responses:
         "200": { $ref: "#/components/responses/EngagementState" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/engagement/{contentId}/comments:
     get:
       operationId: listContentComments
@@ -1485,6 +1498,11 @@ paths:
         - $ref: "#/components/parameters/Cursor"
       responses:
         "200": { $ref: "#/components/responses/CommentPage" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
     post:
       operationId: createContentComment
       tags: [Engagement]
@@ -1496,17 +1514,46 @@ paths:
         $ref: "#/components/requestBodies/CreateComment"
       responses:
         "201": { $ref: "#/components/responses/Comment" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/engagement/comments/{commentId}/like:
+    post:
+      operationId: toggleCommentLike
+      tags: [Engagement]
+      summary: Toggle a like on a visible comment
+      parameters:
+        - $ref: "#/components/parameters/CommentId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "200": { $ref: "#/components/responses/CommentReactionState" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/shares:
     post:
       operationId: createShare
       tags: [Engagement]
-      summary: Create internal share or external referral-aware share link
+      summary: Create an internal share or canonical external link
       parameters:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       requestBody:
         $ref: "#/components/requestBodies/CreateShare"
       responses:
         "201": { $ref: "#/components/responses/ShareResult" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/reports:
     post:
       operationId: createReport
@@ -1518,6 +1565,12 @@ paths:
         $ref: "#/components/requestBodies/CreateReport"
       responses:
         "201": { $ref: "#/components/responses/ModerationIntake" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/blocks/{userId}:
     post:
       operationId: blockUser
@@ -1528,6 +1581,90 @@ paths:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       responses:
         "200": { $ref: "#/components/responses/BlockState" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      operationId: unblockUser
+      tags: [Privacy]
+      summary: Remove an account block
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "200": { $ref: "#/components/responses/BlockState" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/mutes/{userId}:
+    post:
+      operationId: muteUser
+      tags: [Privacy]
+      summary: Hide an account from non-safety social surfaces
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "200": { $ref: "#/components/responses/MuteState" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      operationId: unmuteUser
+      tags: [Privacy]
+      summary: Remove an account mute
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "200": { $ref: "#/components/responses/MuteState" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/privacy:
+    get:
+      operationId: getPrivacySettings
+      tags: [Privacy]
+      summary: List self-service account privacy controls and data requests
+      responses:
+        "200": { $ref: "#/components/responses/PrivacySettings" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/privacy/data-requests:
+    post:
+      operationId: createDataRequest
+      tags: [Privacy]
+      summary: Request an account export or deletion workflow
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateDataRequest"
+      responses:
+        "201": { $ref: "#/components/responses/DataRequest" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/messages/conversations:
     get:
       operationId: listConversations
@@ -3278,6 +3415,7 @@ components:
     SupportPolicyId: { name: supportPolicyId, in: path, required: true, schema: { type: string, format: uuid } }
     RefundDisputeId: { name: refundDisputeId, in: path, required: true, schema: { type: string, format: uuid } }
     DataRequestId: { name: dataRequestId, in: path, required: true, schema: { type: string, format: uuid } }
+    CommentId: { name: commentId, in: path, required: true, schema: { type: string, format: uuid } }
     OrganizationId: { name: organizationId, in: path, required: true, schema: { type: string, format: uuid } }
     MembershipId: { name: membershipId, in: path, required: true, schema: { type: string, format: uuid } }
     FeatureFlagKey: { name: featureFlagKey, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9_.:-]{2,120}$" } }
@@ -3328,6 +3466,7 @@ components:
     RevealLiveHostConnection: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RevealLiveHostConnectionRequest" } } } }
     CreateLiveChatMessage: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateLiveChatMessageRequest" } } } }
     CreateComment: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateCommentRequest" } } } }
+    CreateDataRequest: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateDataRequestRequest" } } } }
     CreateShare: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateShareRequest" } } } }
     CreateReport: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateReportRequest" } } } }
     CreateMessage: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateMessageRequest" } } } }
@@ -3455,9 +3594,13 @@ components:
     EngagementState: { description: Engagement state, content: { application/json: { schema: { $ref: "#/components/schemas/EngagementState" } } } }
     CommentPage: { description: Comments, content: { application/json: { schema: { $ref: "#/components/schemas/CommentPage" } } } }
     Comment: { description: Comment, content: { application/json: { schema: { $ref: "#/components/schemas/Comment" } } } }
+    CommentReactionState: { description: Comment like state, content: { application/json: { schema: { $ref: "#/components/schemas/CommentReactionState" } } } }
     ShareResult: { description: Share result, content: { application/json: { schema: { $ref: "#/components/schemas/ShareResult" } } } }
     ModerationIntake: { description: Moderation intake, content: { application/json: { schema: { $ref: "#/components/schemas/ModerationIntake" } } } }
     BlockState: { description: Block state, content: { application/json: { schema: { $ref: "#/components/schemas/BlockState" } } } }
+    MuteState: { description: Mute state, content: { application/json: { schema: { $ref: "#/components/schemas/MuteState" } } } }
+    PrivacySettings: { description: Self-service privacy state, content: { application/json: { schema: { $ref: "#/components/schemas/PrivacySettings" } } } }
+    DataRequest: { description: Account data request, content: { application/json: { schema: { $ref: "#/components/schemas/DataRequest" } } } }
     FollowState: { description: Canonical follow relationship and aggregate counts, content: { application/json: { schema: { $ref: "#/components/schemas/FollowState" } } } }
     ConversationList: { description: Conversations, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Conversation" } } } } } } }
     Conversation: { description: Direct or matched conversation, content: { application/json: { schema: { $ref: "#/components/schemas/Conversation" } } } }
@@ -4984,18 +5127,31 @@ components:
         nextCursor: { type: string, nullable: true }
     Comment:
       type: object
-      required: [id, author, body, moderationState, createdAt]
+      required: [id, author, body, moderationState, parentCommentId, liked, likeCount, replyCount, mentions, createdAt]
       properties:
         id: { type: string, format: uuid }
         author: { $ref: "#/components/schemas/User" }
         body: { type: string }
         moderationState: { type: string, enum: [visible, pending_review, hidden, removed] }
+        parentCommentId: { type: string, format: uuid, nullable: true }
+        liked: { type: boolean }
+        likeCount: { type: integer, minimum: 0 }
+        replyCount: { type: integer, minimum: 0 }
+        mentions: { type: array, items: { $ref: "#/components/schemas/User" } }
         createdAt: { type: string, format: date-time }
     CreateCommentRequest:
       type: object
       required: [body]
       properties:
         body: { type: string, minLength: 1, maxLength: 2000 }
+        parentCommentId: { type: string, format: uuid, nullable: true }
+    CommentReactionState:
+      type: object
+      required: [commentId, liked, likeCount]
+      properties:
+        commentId: { type: string, format: uuid }
+        liked: { type: boolean }
+        likeCount: { type: integer, minimum: 0 }
     CreateShareRequest:
       type: object
       required: [targetType, targetId, mode]
@@ -5030,6 +5186,35 @@ components:
       properties:
         blocked: { type: boolean }
         blockedUserId: { type: string, format: uuid }
+    MuteState:
+      type: object
+      required: [muted, mutedUserId]
+      properties:
+        muted: { type: boolean }
+        mutedUserId: { type: string, format: uuid }
+    PrivacySettings:
+      type: object
+      required: [blockedUsers, mutedUsers, dataRequests]
+      properties:
+        blockedUsers: { type: array, items: { $ref: "#/components/schemas/User" } }
+        mutedUsers: { type: array, items: { $ref: "#/components/schemas/User" } }
+        dataRequests: { type: array, items: { $ref: "#/components/schemas/DataRequest" } }
+    DataRequest:
+      type: object
+      required: [id, type, state, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [export, delete] }
+        state: { type: string, enum: [requested, verifying, processing, completed, rejected] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
+    CreateDataRequestRequest:
+      type: object
+      required: [type]
+      properties:
+        type: { type: string, enum: [export, delete] }
+        reason: { type: string, minLength: 3, maxLength: 500, nullable: true }
     Conversation:
       type: object
       required: [id, type, title, unreadCount, counterpart, requestState, requestRole, canSend, muted]

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "latestMergedBaseline": "730c6c3a2af1fa58a5fecc3f832e013e422e4335",
+  "latestMergedBaseline": "765d23625ee714466b2f2cd1e34f55411081019a",
   "latestMergedSlice": "Convergence 05 — Realtime, messaging, and live safety",
   "latestMergedMigration": "packages/database/migrations/0112_realtime_messaging_live_safety.sql",
   "nextPlannedSlice": "Convergence 06 — Consumer social experience",

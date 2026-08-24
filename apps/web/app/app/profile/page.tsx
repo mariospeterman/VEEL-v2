@@ -144,8 +144,7 @@ function OnboardingOnlyView({
     <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
       <section className="grid content-start gap-5">
         <PageHeader eyebrow="Profile" title="Creator setup">
-            Complete the backend-owned readiness checks before monetisation views and creator
-            products become available.
+            Complete the required identity, wallet, and payout details before creator products become available.
         </PageHeader>
         <CreatorSetup onboarding={onboarding} />
         <ProfileCapabilityLinks />
@@ -164,7 +163,7 @@ function ProfileSessionActions() {
     <Card className="p-4">
       <p className="text-sm font-medium">Session</p>
       <p className="mt-2 text-sm leading-6 text-(--muted)">
-        Leave the app and return to the public landing page. Wallet, Supabase, and provider browser session state are cleared.
+        Sign out of WeVid on this browser and return to the public landing page.
       </p>
       <div className="mt-4">
         <ProfileLogoutButton />
@@ -176,10 +175,9 @@ function ProfileSessionActions() {
 function ProfileCapabilityLinks() {
   return (
     <Card className="p-4">
-      <p className="text-sm font-medium">Profile capabilities</p>
+      <p className="text-sm font-medium">More from WeVid</p>
       <p className="mt-2 text-sm leading-6 text-(--muted)">
-        Studio, Enterprise, and MCP access are profile/tier capabilities. Backend membership,
-        role, and consent checks decide what opens.
+        Available areas reflect your account, organization role, and choices.
       </p>
       <div className="mt-4 grid gap-2">
         <a
@@ -207,10 +205,10 @@ function ProfileCapabilityLinks() {
           href="/app/assistant"
         >
           <span>
-            <span className="block font-medium">Capability projection</span>
-            <span className="text-xs text-(--muted)">Read-only AI/MCP scopes when enabled</span>
+            <span className="block font-medium">Connected assistants</span>
+            <span className="text-xs text-(--muted)">Review the information an approved assistant may read</span>
           </span>
-          <StatusPill>backend gated</StatusPill>
+          <StatusPill>optional</StatusPill>
         </a>
       </div>
     </Card>

@@ -39,7 +39,7 @@ export default async function MutualsFeedPageRoute() {
             <div className="mt-4 grid gap-3 text-sm">
               <Fact label="Access" value="profile and age verified" />
               <Fact label="Consent" value="explicit opt-in required" />
-              <Fact label="Interest" value="backend recorded" />
+              <Fact label="Interest" value="Private and explicit" />
               <Fact label="Priority" value="not for sale" />
             </div>
           </section>

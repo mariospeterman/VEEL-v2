@@ -37,6 +37,7 @@ export type PlatformPlaybackSession = components["schemas"]["PlatformPlaybackSes
 export type DiscoverPage = components["schemas"]["DiscoverPage"];
 export type FeedPage = components["schemas"]["FeedPage"];
 export type FeedPreferences = components["schemas"]["FeedPreferences"];
+export type PrivacySettings = components["schemas"]["PrivacySettings"];
 export type FollowState = components["schemas"]["FollowState"];
 export type NotificationPreferences = components["schemas"]["NotificationPreferences"];
 export type NotificationPushConfig = components["schemas"]["NotificationPushConfig"];

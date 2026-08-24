@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: canonical architecture, current implementation truth, and production completion plan
-Last updated: 2026-08-22
+Last updated: 2026-08-23
 Source of truth: yes
 
 Owns:
@@ -82,6 +82,7 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 - [SFW publishing and moderation](sfw-publishing-and-moderation.md)
 - [Universal composer](product/universal-composer.md)
 - [Lifecycle auth and analytics surfaces](product/lifecycle-auth-and-analytics-surfaces.md)
+- [Consumer social experience](product/consumer-social-experience.md)
 - [Enterprise managed creators](enterprise-managed-creators.md)
 
 12. [Product flows](product-flows.md)

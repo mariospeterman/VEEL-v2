@@ -22,6 +22,17 @@ export function toComment(row: CommentRow): Comment {
     },
     body: row.body,
     moderationState: row.moderation_state,
+    parentCommentId: row.parent_comment_id,
+    liked: row.liked,
+    likeCount: Number(row.like_count),
+    replyCount: Number(row.reply_count),
+    mentions: (row.mentions ?? []).map((mention) => ({
+      id: mention.id,
+      handle: mention.handle ?? "",
+      displayName: mention.displayName ?? "",
+      avatarUrl: mention.avatarUrl,
+      badges: []
+    })),
     createdAt: row.created_at.toISOString()
   };
 }
@@ -33,16 +44,4 @@ export function queueForSubject(subjectType: string): ModerationIntake["queue"] 
   if (subjectType === "live_room") return "live";
   if (subjectType === "event") return "event";
   return "general";
-}
-
-export function shareUrl(
-  webUrl: string,
-  targetType: string,
-  targetId: string,
-  mode: string
-): string | null {
-  if (mode === "internal_message") return null;
-
-  const base = webUrl.replace(/\/$/, "");
-  return `${base}/share/${targetType}/${targetId}`;
 }

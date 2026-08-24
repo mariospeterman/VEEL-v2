@@ -62,8 +62,7 @@ export function AuthRequiredState({ next = "/app/home" }: { next?: string }) {
       <p className="eyebrow">private feed</p>
       <h2>Enter WeVid to load your feed</h2>
       <p>
-        Home, live rail, wallet, messages, and receipts use backend-verified session state.
-        Sign in to continue without exposing raw API errors.
+        Sign in to safely continue to Home, live, wallet activity, messages, and receipts.
       </p>
       <div className="mt-5 flex flex-wrap gap-3">
         <a className="primary-button" href={`/?mode=login&${params.toString()}`}>

@@ -42,7 +42,7 @@ function EventBody({ event }: { event: Event }) {
         <p className="text-sm font-medium text-(--accent-text)">Event Access</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-normal">{event.title}</h1>
         <p className="mt-2 text-sm text-(--muted)">
-          {event.description ?? "Backend-owned Event Access pass inventory."}
+          {event.description ?? "Review the available passes and choose how you want to attend."}
         </p>
       </div>
 
@@ -55,23 +55,30 @@ function EventState({ event }: { event: Event }) {
   return (
     <aside className="grid content-start gap-3">
       <section className="rounded border border-(--line) bg-(--panel) p-4">
-        <p className="text-sm font-medium">Event Access state</p>
+        <p className="text-sm font-medium">Event details</p>
         <div className="mt-4 grid gap-3 text-sm">
-          <Fact label="Status" value={event.state} />
-          <Fact label="Starts" value={new Date(event.startsAt).toISOString()} />
-          <Fact label="Location" value={event.location.label ?? event.location.type} />
+          <Fact label="Status" value={eventStateLabel(event.state)} />
+          <Fact label="Starts" value={new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(event.startsAt))} />
+          <Fact label="Location" value={event.location.label ?? (event.location.type === "digital_live_stream" ? "Online" : "To be announced")} />
         </div>
       </section>
 
       <section className="rounded border border-(--line) bg-(--panel) p-4">
-        <p className="text-sm font-medium">Settlement boundary</p>
+        <p className="text-sm font-medium">Your pass</p>
         <p className="mt-3 text-sm leading-6 text-(--muted)">
-          Pass intents and QR/check-in state are created by the backend after age, profile,
-          wallet, inventory, and settlement checks.
+          Availability is checked before checkout. Paid passes appear only after payment confirmation.
         </p>
       </section>
     </aside>
   );
+}
+
+function eventStateLabel(state: Event["state"]) {
+  if (state === "published") return "On sale";
+  if (state === "sold_out") return "Sold out";
+  if (state === "cancelled") return "Cancelled";
+  if (state === "completed") return "Complete";
+  return "Coming soon";
 }
 
 function AppNav() {

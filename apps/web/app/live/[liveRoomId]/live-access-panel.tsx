@@ -51,9 +51,9 @@ export function LiveAccessPanel({ room }: { room: LiveRoom }) {
           createIntent={(idempotencyKey) => createLiveEventAccessIntent(room.id, idempotencyKey)}
           ctaLabel="Get event access"
           disabled={room.accessState === "allowed"}
-          idleCopy="The backend creates one server-priced wallet request. Access changes only after settlement verification."
+          idleCopy="Review the exact event price, then approve the request in your wallet. Access appears after payment confirmation."
           pendingLabel="Creating event access"
-          readyCopy="Open the wallet request. Access updates after backend settlement verification."
+          readyCopy="Open the wallet request. Your confirmed access will appear automatically."
         />
       </div>
     </section>

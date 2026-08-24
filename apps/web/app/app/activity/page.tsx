@@ -36,7 +36,7 @@ export default async function ActivityPage() {
   return (
     <AppShell>
       <PageHeader eyebrow="Activity" title="Payments and receipts">
-        Backend-derived payment, receipt, wallet transaction, and support review state.
+        Track purchases, receipts, wallet activity, and requests that need your attention.
       </PageHeader>
 
       <div className="mt-5">
@@ -55,7 +55,7 @@ export default async function ActivityPage() {
                 paymentActivity.data.items.map((item) => <ActivityRow item={item} key={item.id} />)
               ) : (
                 <EmptyState title="No payment activity yet">
-                  Receipts and support review options appear after confirmed backend settlement.
+                  Receipts and support review options appear after a payment is confirmed.
                 </EmptyState>
               )
             ) : (
@@ -75,7 +75,7 @@ export default async function ActivityPage() {
               ))
             ) : (
               <EmptyState title="No wallet transactions yet">
-                Wallet transactions appear after backend-visible wallet activity exists.
+                Confirmed wallet activity will appear here.
               </EmptyState>
             )
           ) : (
@@ -93,22 +93,22 @@ function ActivityRow({ item }: { item: ActivityItem }) {
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="font-medium">{item.title}</p>
-          <p className="mt-1 text-sm text-(--muted)">{item.productType}</p>
+          <p className="mt-1 text-sm text-(--muted)">{friendlyLabel(item.productType ?? "payment")}</p>
         </div>
-        <StatusPill>{item.state}</StatusPill>
+        <StatusPill>{friendlyLabel(item.state)}</StatusPill>
       </div>
       <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
         <Fact
           label="Amount"
           value={formatAssetAmount(item.amountMinor ?? 0, item.currency ?? "SOL")}
         />
-        <Fact label="Kind" value={item.kind} />
+        <Fact label="Kind" value={friendlyLabel(item.kind)} />
         <Fact label="Reference" value={shorten(item.referenceAddress)} />
         <Fact label="Receipt" value={item.receiptNumber ?? "pending"} />
-        <Fact label="In-app confirmation" value={item.inAppConfirmationState ?? "pending"} />
-        <Fact label="Email confirmation" value={item.emailConfirmationState ?? "provider pending"} />
+        <Fact label="In-app confirmation" value={friendlyLabel(item.inAppConfirmationState ?? "pending")} />
+        <Fact label="Email confirmation" value={friendlyLabel(item.emailConfirmationState ?? "pending")} />
         <Fact label="Withdrawal" value={withdrawalLabel(item.withdrawalRightStatus)} />
-        <Fact label="Review" value={item.latestRefundRequestState ?? "available for exceptions"} />
+        <Fact label="Review" value={item.latestRefundRequestState ? friendlyLabel(item.latestRefundRequestState) : "Available if there’s a problem"} />
       </div>
       {item.paymentIntentId && item.supportReviewAvailable ? (
         <RefundRequestPanel
@@ -125,14 +125,13 @@ function WalletTransactionCard({ transaction }: { transaction: WalletTransaction
     <Card className="p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-medium">{transaction.direction}</p>
-          <p className="mt-1 text-sm text-(--muted)">{transaction.chain}</p>
+          <p className="font-medium">{directionLabel(transaction.direction)}</p>
+          <p className="mt-1 text-sm text-(--muted)">Solana wallet</p>
         </div>
-        <StatusPill>{transaction.state}</StatusPill>
+        <StatusPill>{friendlyLabel(transaction.state)}</StatusPill>
       </div>
       <div className="mt-4 grid gap-2 text-sm">
         <Fact label="Amount" value={formatAssetAmount(transaction.amountMinor, transaction.currency)} />
-        <Fact label="Source" value={transaction.source} />
         <Fact label="Signature" value={shorten(transaction.signature)} />
       </div>
     </Card>
@@ -145,6 +144,16 @@ function shorten(value: string | null | undefined) {
   }
 
   return `${value.slice(0, 6)}...${value.slice(-4)}`;
+}
+
+function friendlyLabel(value: string) {
+  return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function directionLabel(direction: string) {
+  if (direction === "inbound" || direction === "received") return "Received";
+  if (direction === "outbound" || direction === "sent") return "Sent";
+  return "Transaction";
 }
 
 function withdrawalLabel(status: ActivityItem["withdrawalRightStatus"] | undefined | null) {

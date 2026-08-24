@@ -1211,6 +1211,76 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       ]);
       expect(concurrentCommentResponses.map((response) => response.statusCode)).toEqual([201, 201]);
       expect(concurrentCommentResponses[0]?.json()).toEqual(concurrentCommentResponses[1]?.json());
+      const rootCommentId = concurrentCommentResponses[0]?.json().id as string;
+
+      const replyResponse = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/${seededFreeContentId}/comments`,
+        headers: authenticatedHeaders(`engagement-reply-${runId}`),
+        payload: {
+          body: `Replying safely @${creatorHandle}`,
+          parentCommentId: rootCommentId
+        }
+      });
+      expect(replyResponse.statusCode, replyResponse.body).toBe(201);
+      expect(replyResponse.json()).toMatchObject({
+        parentCommentId: rootCommentId,
+        mentions: [{ id: seededCreatorUserId, handle: creatorHandle }]
+      });
+
+      await sql`
+        insert into user_mutes (muting_user_id, muted_user_id)
+        values (${seededCreatorUserId}, ${buyerSupabaseUserId})
+      `;
+      const mutedRecipientMentionResponse = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/${seededFreeContentId}/comments`,
+        headers: authenticatedHeaders(`engagement-muted-recipient-mention-${runId}`),
+        payload: { body: `Muted recipient mention @${creatorHandle}` }
+      });
+      expect(mutedRecipientMentionResponse.statusCode, mutedRecipientMentionResponse.body).toBe(201);
+      const mutedRecipientMentionId = mutedRecipientMentionResponse.json().id as string;
+      const mutedRecipientNotificationRows = await sql<Array<{ notification_count: number }>>`
+        select count(*)::int as notification_count
+        from notifications
+        where user_id = ${seededCreatorUserId}
+          and idempotency_key = ${`comment-mention:${mutedRecipientMentionId}:${seededCreatorUserId}`}
+      `;
+      expect(mutedRecipientNotificationRows[0]?.notification_count).toBe(0);
+      await sql`delete from comments where id = ${mutedRecipientMentionId}`;
+      await sql`
+        delete from user_mutes
+        where muting_user_id = ${seededCreatorUserId}
+          and muted_user_id = ${buyerSupabaseUserId}
+      `;
+
+      const commentLikeKey = `engagement-comment-like-${runId}`;
+      const commentLikeResponses = await Promise.all([
+        app.inject({
+          method: "POST",
+          url: `/v1/engagement/comments/${rootCommentId}/like`,
+          headers: authenticatedHeaders(commentLikeKey)
+        }),
+        app.inject({
+          method: "POST",
+          url: `/v1/engagement/comments/${rootCommentId}/like`,
+          headers: authenticatedHeaders(commentLikeKey)
+        })
+      ]);
+      expect(commentLikeResponses.map((response) => response.statusCode)).toEqual([200, 200]);
+      expect(commentLikeResponses[0]?.json()).toMatchObject({ commentId: rootCommentId, liked: true, likeCount: 1 });
+      expect(commentLikeResponses[1]?.json()).toEqual(commentLikeResponses[0]?.json());
+
+      const commentsResponse = await app.inject({
+        method: "GET",
+        url: `/v1/engagement/${seededFreeContentId}/comments`,
+        headers: authenticatedHeaders()
+      });
+      expect(commentsResponse.statusCode, commentsResponse.body).toBe(200);
+      expect(commentsResponse.json().items).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: rootCommentId, liked: true, likeCount: 1, replyCount: 1 }),
+        expect.objectContaining({ parentCommentId: rootCommentId })
+      ]));
 
       const conflictingCommentResponse = await app.inject({
         method: "POST",
@@ -1219,6 +1289,68 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         payload: { body: "Different comment" }
       });
       expect(conflictingCommentResponse.statusCode, conflictingCommentResponse.body).toBe(409);
+
+      const muteResponse = await app.inject({
+        method: "POST",
+        url: `/v1/mutes/${seededCreatorUserId}`,
+        headers: authenticatedHeaders(`privacy-mute-${runId}`)
+      });
+      expect(muteResponse.statusCode, muteResponse.body).toBe(200);
+      expect(muteResponse.json()).toEqual({ muted: true, mutedUserId: seededCreatorUserId });
+      const privacyWhileMuted = await app.inject({
+        method: "GET",
+        url: "/v1/privacy",
+        headers: authenticatedHeaders()
+      });
+      expect(privacyWhileMuted.statusCode, privacyWhileMuted.body).toBe(200);
+      expect(privacyWhileMuted.json().mutedUsers).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: seededCreatorUserId, handle: creatorHandle })
+      ]));
+      const commentsWhileMentionMuted = await app.inject({
+        method: "GET",
+        url: `/v1/engagement/${seededFreeContentId}/comments`,
+        headers: authenticatedHeaders()
+      });
+      expect(commentsWhileMentionMuted.statusCode, commentsWhileMentionMuted.body).toBe(200);
+      expect(commentsWhileMentionMuted.json().items).toEqual(expect.arrayContaining([
+        expect.objectContaining({ parentCommentId: rootCommentId, mentions: [] })
+      ]));
+      const unmuteResponse = await app.inject({
+        method: "DELETE",
+        url: `/v1/mutes/${seededCreatorUserId}`,
+        headers: authenticatedHeaders(`privacy-unmute-${runId}`)
+      });
+      expect(unmuteResponse.statusCode, unmuteResponse.body).toBe(200);
+      expect(unmuteResponse.json()).toEqual({ muted: false, mutedUserId: seededCreatorUserId });
+
+      const dataRequestKey = `privacy-export-${runId}`;
+      const dataRequestResponses = await Promise.all([
+        app.inject({
+          method: "POST",
+          url: "/v1/privacy/data-requests",
+          headers: authenticatedHeaders(dataRequestKey),
+          payload: { type: "export" }
+        }),
+        app.inject({
+          method: "POST",
+          url: "/v1/privacy/data-requests",
+          headers: authenticatedHeaders(dataRequestKey),
+          payload: { type: "export" }
+        })
+      ]);
+      expect(dataRequestResponses.map((response) => response.statusCode)).toEqual([201, 201]);
+      expect(dataRequestResponses[1]?.json()).toEqual(dataRequestResponses[0]?.json());
+      const duplicateActiveDataRequest = await app.inject({
+        method: "POST",
+        url: "/v1/privacy/data-requests",
+        headers: authenticatedHeaders(`privacy-export-duplicate-${runId}`),
+        payload: { type: "export" }
+      });
+      expect(duplicateActiveDataRequest.statusCode, duplicateActiveDataRequest.body).toBe(403);
+      expect(duplicateActiveDataRequest.json()).toMatchObject({
+        code: "forbidden",
+        message: "An active export request already exists"
+      });
 
       const shareIdempotencyKey = `engagement-share-${runId}`;
       const sharePayload = {
@@ -1241,6 +1373,9 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(firstShareResponse.statusCode, firstShareResponse.body).toBe(201);
       expect(replayedShareResponse.statusCode, replayedShareResponse.body).toBe(201);
       expect(replayedShareResponse.json()).toEqual(firstShareResponse.json());
+      expect(firstShareResponse.json()).toMatchObject({
+        url: `http://localhost:3000/content/${seededFreeContentId}`
+      });
 
       const conflictingShareResponse = await app.inject({
         method: "POST",
@@ -1314,7 +1449,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           ) as share_audit_count
       `;
       expect(engagementRows[0]).toEqual({
-        comment_count: "1",
+        comment_count: "2",
         like_count: "1",
         report_count: "1",
         report_audit_count: "1",
@@ -1332,7 +1467,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         where content_item_id = ${seededFreeContentId}
       `;
       expect(engagementProjection).toEqual({
-        comment_count: "1",
+        comment_count: "2",
         like_count: "1",
         share_count: "1"
       });
@@ -5374,10 +5509,10 @@ function assertIntegrationDatabaseIsAllowed(databaseUrl: string): void {
   }
 }
 
-function authenticatedHeaders(idempotencyKey: string): Record<string, string> {
+function authenticatedHeaders(idempotencyKey?: string): Record<string, string> {
   return {
     authorization: `Bearer ${authToken}`,
-    "idempotency-key": idempotencyKey
+    ...(idempotencyKey ? { "idempotency-key": idempotencyKey } : {})
   };
 }
 
@@ -7055,6 +7190,19 @@ async function cleanupRun(
       await tx`
         delete from support_cases
         where requester_user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from data_requests
+        where requester_user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from user_mutes
+        where muting_user_id in ${tx(userIds)}
+           or muted_user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from engagement_action_receipts
+        where actor_user_id in ${tx(userIds)}
       `;
       await tx`
         delete from idempotency_keys

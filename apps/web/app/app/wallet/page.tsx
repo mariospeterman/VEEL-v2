@@ -26,7 +26,7 @@ export default async function WalletPage() {
         eyebrow="Wallet"
         title="Funding and receipts"
       >
-        Non-custodial wallet state, linked wallets, funding handoff, and backend-issued receipts.
+        Your wallet. Your funds. WeVid verifies every payment before granting access.
       </PageHeader>
 
       <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -40,7 +40,7 @@ export default async function WalletPage() {
                   action={<a className="primary-button" href="/?mode=onboarding&step=wallet&next=%2Fapp%2Fwallet">Open wallet setup</a>}
                   title="No linked wallet yet"
                 >
-                  Wallet SDKs load only inside the explicit wallet setup flow.
+                  Set up a wallet when you’re ready to fund purchases or receive creator earnings.
                 </EmptyState>
               )}
 
@@ -60,15 +60,13 @@ export default async function WalletPage() {
             <p className="text-sm font-medium text-(--muted)">Top up</p>
             <h2 className="mt-1 text-lg font-semibold tracking-normal">User-owned wallet funding</h2>
             <p className="mt-3 text-sm leading-6 text-(--muted)">
-              Funding sessions are created by the backend for a linked wallet only after explicit
-              user action. Funding sessions do not unlock content, Event Access Passes, messages,
-              memberships, or support.
+              Add funds to your own linked wallet. Funding alone does not unlock content, Event Access,
+              memberships, or any social feature.
             </p>
             {primaryWallet ? (
               <div className="mt-4 grid gap-2 text-sm">
                 <Fact label="Destination" value={shorten(primaryWallet.address)} />
-                <Fact label="Provider" value="server configured" />
-                <Fact label="Access effect" value="none" />
+                <Fact label="Control" value="You" />
               </div>
             ) : null}
           </Card>
@@ -84,7 +82,7 @@ export default async function WalletPage() {
                 ))
               ) : (
                 <EmptyState title="No wallet transactions yet">
-                  Wallet movements appear after backend-visible wallet activity exists.
+                  Confirmed wallet activity will appear here.
                 </EmptyState>
               )
             ) : (
@@ -108,9 +106,9 @@ function PrimaryWalletCard({ wallet }: { wallet: Wallet }) {
         <StatusPill tone="good">primary</StatusPill>
       </div>
       <div className="mt-5 grid gap-3 text-sm sm:grid-cols-3">
-        <Fact label="Provider" value={wallet.provider} />
-        <Fact label="Chain" value={wallet.chain} />
-        <Fact label="Payment proof" value="backend settlement only" />
+        <Fact label="Network" value={networkLabel(wallet.chain)} />
+        <Fact label="Control" value="You" />
+        <Fact label="Purchases" value="Access after confirmation" />
       </div>
     </Card>
   );
@@ -121,7 +119,7 @@ function WalletRow({ wallet }: { wallet: Wallet }) {
     <Card className="p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-medium">{wallet.provider}</p>
+          <p className="font-medium">{wallet.isPrimary ? "Primary wallet" : "Linked wallet"}</p>
           <p className="mt-1 truncate text-sm text-(--muted)">{wallet.address}</p>
         </div>
         <StatusPill tone={wallet.isPrimary ? "good" : "neutral"}>{wallet.isPrimary ? "primary" : "linked"}</StatusPill>
@@ -135,10 +133,10 @@ function TransactionRow({ transaction }: { transaction: WalletTransaction }) {
     <Card className="p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-medium">{transaction.direction}</p>
-          <p className="mt-1 text-sm text-(--muted)">{transaction.source}</p>
+          <p className="font-medium">{directionLabel(transaction.direction)}</p>
+          <p className="mt-1 text-sm text-(--muted)">Wallet activity</p>
         </div>
-        <StatusPill>{transaction.state}</StatusPill>
+        <StatusPill>{transactionStateLabel(transaction.state)}</StatusPill>
       </div>
       <div className="mt-4 grid gap-2 text-sm">
         <Fact label="Amount" value={formatAssetAmount(transaction.amountMinor, transaction.currency)} />
@@ -146,6 +144,22 @@ function TransactionRow({ transaction }: { transaction: WalletTransaction }) {
       </div>
     </Card>
   );
+}
+
+function networkLabel(chain: string) {
+  return chain.toLowerCase().includes("solana") ? "Solana" : "Connected network";
+}
+
+function directionLabel(direction: string) {
+  if (direction === "inbound" || direction === "received") return "Received";
+  if (direction === "outbound" || direction === "sent") return "Sent";
+  return "Transaction";
+}
+
+function transactionStateLabel(state: string) {
+  if (state === "confirmed" || state === "finalized") return "Confirmed";
+  if (state === "failed" || state === "rejected") return "Needs attention";
+  return "Pending";
 }
 
 function shorten(value: string | null | undefined) {

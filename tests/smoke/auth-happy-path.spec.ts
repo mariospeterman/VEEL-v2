@@ -58,7 +58,7 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   test.setTimeout(150_000);
 
   await gotoUntilVisible(page, "/app/home", () => page.getByRole("link", { name: "WeVid app home" }).first());
-  await expect(page.getByRole("heading", { name: "Your feed" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What’s happening" })).toBeVisible();
   await expect(page.getByRole("article", { name: "Post by Aria Moon" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "For you" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("link", { name: "Open post" })).toBeVisible();
@@ -88,9 +88,9 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
 
   await page.goto("/app/wallet");
   await expect(page.getByRole("heading", { name: "Funding and receipts" })).toBeVisible();
-  await expect(page.getByText("Primary wallet")).toBeVisible();
-  await expect(page.getByText("backend settlement only")).toBeVisible();
-  await expect(page.getByText("Funding sessions do not unlock")).toBeVisible();
+  await expect(page.getByText("Primary wallet", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Access after confirmation")).toBeVisible();
+  await expect(page.getByText("Funding alone does not unlock")).toBeVisible();
 
   await page.goto("/age");
   await expect(page.getByRole("heading", { name: "Confirm you're 18+" })).toBeVisible();
@@ -99,7 +99,7 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   await expect(page.getByRole("button", { name: "Start age verification" })).toBeEnabled();
 
   await page.goto("/app/home");
-  await expect(page.getByRole("heading", { name: "Your feed" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What’s happening" })).toBeVisible();
   await expect(page.getByRole("article", { name: "Post by Aria Moon" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Open post" })).toBeVisible();
 
@@ -154,7 +154,7 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   expect(createLayout.scrollWidth).toBe(createLayout.clientWidth);
 
   await page.goto(`/content/${contentId}`);
-  await expect(page.getByRole("heading", { name: "Media viewer" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Aria Moon’s post" })).toBeVisible();
   await expect(page.getByText("Locked media")).toBeVisible();
   await page.getByRole("button", { name: "Unlock content" }).click();
   await expect(page.getByText("The wallet approval is not payment proof.")).toBeVisible();
@@ -174,7 +174,7 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   await expect(page.getByRole("heading", { name: "Payments" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Your last 30 days" })).toBeVisible();
   await expect(page.getByText("VEEL-0000000000004000")).toBeVisible();
-  await expect(page.getByText("sent", { exact: true })).toHaveCount(2);
+  await expect(page.getByText("Sent", { exact: true })).toHaveCount(2);
   await expect(page.getByText("ended after access")).toBeVisible();
   await expect(page.getByRole("button", { name: "Open review" })).toBeVisible();
 

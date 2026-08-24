@@ -23,9 +23,7 @@ export function CreatorSupportPanel({ profile }: CreatorSupportPanelProps) {
           <h2 className="text-sm font-semibold">Support</h2>
           <p className="mt-1 text-sm text-(--muted)">Voluntary creator support</p>
         </div>
-        <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-medium text-(--accent-strong)">
-          {supportEnabled ? "enabled" : "disabled"}
-        </span>
+        <span className="rounded bg-(--accent-soft) px-2 py-1 text-xs font-medium text-(--accent-strong)">{supportEnabled ? "Available" : "Coming soon"}</span>
       </div>
 
       <div className="mt-4 grid gap-3 border-t border-(--line) pt-4">
@@ -60,7 +58,7 @@ export function CreatorSupportPanel({ profile }: CreatorSupportPanelProps) {
           disabled={!supportEnabled}
           idleCopy="Support is a voluntary payment. It does not buy visibility, access to people, recommendations, or message priority."
           pendingLabel="Creating support intent"
-          readyCopy="Open the wallet request. Support records become final only after backend settlement verification."
+          readyCopy="Open the wallet request. Support is recorded after payment confirmation."
         />
       </div>
     </section>

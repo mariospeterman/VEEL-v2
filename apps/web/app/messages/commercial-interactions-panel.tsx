@@ -71,7 +71,7 @@ export function CommercialInteractionsPanel({ conversation }: { conversation: Co
                     ctaLabel="Unlock offered media"
                     idleCopy="Review the exact offer and approve the direct split transaction. Entitlement activates only after verified settlement."
                     pendingLabel="Preparing media offer"
-                    readyCopy="The backend will reveal media only after verified settlement and entitlement projection."
+                    readyCopy="The offered media becomes available after payment confirmation."
                   />
                 </div>
               ) : null}

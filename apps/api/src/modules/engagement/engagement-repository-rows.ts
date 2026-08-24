@@ -29,6 +29,16 @@ export interface CommentRow {
   handle: string | null;
   display_name: string | null;
   avatar_url: string | null;
+  parent_comment_id: string | null;
+  liked: boolean;
+  like_count: string | number;
+  reply_count: string | number;
+  mentions: Array<{
+    id: string;
+    handle: string | null;
+    displayName: string | null;
+    avatarUrl: string | null;
+  }> | null;
 }
 
 export interface CommentReplayRow extends CommentRow {
@@ -58,8 +68,19 @@ export interface ReportReplayRow extends ReportRow {
   reason: string;
 }
 
-export interface BlockReplayRow {
-  blocker_user_id: string;
-  blocked_user_id: string;
-  idempotency_key: string;
+export interface PrivacyUserRow {
+  relationship: "blocked" | "muted";
+  id: string;
+  handle: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+}
+
+export interface DataRequestRow {
+  id: string;
+  type: "export" | "delete";
+  state: "requested" | "verifying" | "processing" | "completed" | "rejected";
+  created_at: Date;
+  updated_at: Date | null;
+  completed_at: Date | null;
 }

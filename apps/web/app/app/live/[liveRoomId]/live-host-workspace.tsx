@@ -49,7 +49,7 @@ export function LiveHostWorkspace({ initialRoom }: { initialRoom: LiveRoom }) {
       setConnection(null);
       setRoom({ ...room, playback: { provider: "none", state: "not_ready", url: null }, state: "ended" });
     } catch (caught) {
-      setError(message(caught, "The room was closed locally, but provider cleanup may still be retrying."));
+      setError(message(caught, "The room is closed. Final cleanup may still be retrying."));
     } finally {
       setPending(null);
     }

@@ -66,7 +66,7 @@ function ProviderPlaybackResource({
     return (
       <ProviderPlaceholder
         state="not_ready"
-        message="Bunny playback requires a backend-issued Bunny Stream embed URL."
+        message="This video is not ready to play yet. Try again in a moment."
       />
     );
   }
@@ -251,6 +251,6 @@ function toLivepeerSrc(url: string, resourceType: Playback["resourceType"]): Src
 function playbackStateLabel(state: Playback["state"]) {
   if (state === "blocked") return "Access required";
   if (state === "teaser") return "Teaser preview";
-  if (state === "full") return "Playback ready";
-  return "Playback not ready";
+  if (state === "full") return "Ready to watch";
+  return "Video not ready";
 }

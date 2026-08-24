@@ -9,6 +9,26 @@ const migrationsDir = join(packageRoot, "migrations");
 const readMigration = (fileName: string) => readFileSync(join(migrationsDir, fileName), "utf8");
 
 describe("database migrations", () => {
+  it("keeps consumer social privacy server-owned and safely reversible", () => {
+    const sql = readMigration("0113_consumer_social_privacy.sql");
+    const downSql = readMigration("0113_consumer_social_privacy.down.sql");
+
+    expect(sql).toContain("create table comment_reactions");
+    expect(sql).toContain("create table comment_mentions");
+    expect(sql).toContain("create table user_mutes");
+    expect(sql).toContain("data_requests_requester_idempotency_unique");
+    expect(sql).toContain("create or replace function private.enforce_comment_parent()");
+    expect(sql).toContain("new.moderation_state <> 'visible'");
+    expect(sql).toContain("reply depth is limited to one level");
+    expect(sql).toContain("alter table comment_reactions enable row level security");
+    expect(sql).not.toMatch(/raw_payload|private_key|seed_phrase|mnemonic|wallet_address/i);
+    expect(downSql).toContain("0113 rollback requires retained consumer-social traffic");
+    expect(downSql).toContain("idempotency_key <> 'legacy:' || id::text");
+    expect(downSql).not.toContain("idempotency_key not like 'legacy:%'");
+    expect(downSql).toContain("drop index if exists data_requests_requester_active_type_idx");
+    expect(downSql).toContain("delete from engagement_action_receipts where action = 'user.block'");
+  });
+
   it("scopes realtime transport and fails live release closed until monitoring is healthy", () => {
     const sql = readMigration("0112_realtime_messaging_live_safety.sql");
     const downSql = readMigration("0112_realtime_messaging_live_safety.down.sql");

@@ -14,7 +14,7 @@ export default async function MutualsPage() {
     <AppShell>
       <section className="grid gap-5">
         <PageHeader eyebrow="Mutuals" title="Mutual conversations">
-          Mutuals appear after both people explicitly connect and backend safety checks pass.
+          Mutuals appear only after both people explicitly choose to connect and safety checks pass.
         </PageHeader>
 
         {matchesResult.ok ? (
@@ -31,7 +31,7 @@ function MutualGrid({ matches }: { matches: MutualsMatchPage }) {
   if (matches.items.length === 0) {
     return (
       <EmptyState title="No Mutuals yet">
-          Active Mutuals appear only after both users explicitly show interest and backend safety checks pass.
+          A Mutual appears only after both people explicitly show interest and safety checks pass.
       </EmptyState>
     );
   }

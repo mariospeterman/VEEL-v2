@@ -31,7 +31,7 @@ export function NotificationEnrollment({
   }
 
   if (!pushConfig.data.enabled || !pushConfig.data.vapidPublicKey) {
-    return <EnrollmentStatus state="unavailable" message="Browser push is waiting for VAPID public-key configuration." />;
+    return <EnrollmentStatus state="unavailable" message="Browser notifications are not available yet." />;
   }
   const vapidPublicKey = pushConfig.data.vapidPublicKey;
 
