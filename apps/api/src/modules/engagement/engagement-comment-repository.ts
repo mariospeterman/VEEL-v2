@@ -226,10 +226,6 @@ export function createEngagementCommentRepositoryMethods(
                 select 1 from user_mutes mute
                 where mute.muting_user_id = actor.id and mute.muted_user_id = mentioned.id
               )
-              and not exists (
-                select 1 from user_mutes mute
-                where mute.muting_user_id = actor.id and mute.muted_user_id = mentioned.id
-              )
             on conflict do nothing
           `;
           await transaction`
@@ -308,7 +304,8 @@ export function createEngagementCommentRepositoryMethods(
       });
     },
     async toggleCommentLike(input) {
-      const rows = await sql<{ target_id: string; liked: boolean; like_count: string | number }[]>`
+      return sql.begin(async (transaction) => {
+        const rows = await transaction<{ target_id: string; liked: boolean }[]>`
         with actor as (
           select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
         ),
@@ -361,16 +358,22 @@ export function createEngagementCommentRepositoryMethods(
             updated_at = now()
           returning comment_id, state = 'active' as liked
         )
-        select receipt.target_id, mutation.liked,
-          (select count(*) from comment_reactions reaction
-            where reaction.comment_id = receipt.target_id and reaction.state = 'active') as like_count
+        select receipt.target_id, mutation.liked
         from receipt
         join mutation on mutation.comment_id = receipt.target_id
-      `;
+        `;
 
-      const row = rows[0];
-      if (!row || row.target_id !== input.commentId) throw new EngagementIdempotencyConflictError();
-      return { commentId: row.target_id, liked: row.liked, likeCount: Number(row.like_count) };
+        const row = rows[0];
+        if (!row || row.target_id !== input.commentId) throw new EngagementIdempotencyConflictError();
+        // A data-modifying CTE shares its statement snapshot with sibling reads.
+        // Count in the next statement so the response includes this transaction's write.
+        const counts = await transaction<{ like_count: string | number }[]>`
+          select count(*) as like_count
+          from comment_reactions
+          where comment_id = ${row.target_id} and state = 'active'
+        `;
+        return { commentId: row.target_id, liked: row.liked, likeCount: Number(counts[0]?.like_count ?? 0) };
+      });
     }
   };
 }
