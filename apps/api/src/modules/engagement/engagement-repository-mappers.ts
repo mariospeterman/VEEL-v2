@@ -45,15 +45,3 @@ export function queueForSubject(subjectType: string): ModerationIntake["queue"] 
   if (subjectType === "event") return "event";
   return "general";
 }
-
-export function shareUrl(
-  webUrl: string,
-  targetType: string,
-  targetId: string,
-  mode: string
-): string | null {
-  if (mode === "internal_message") return null;
-
-  const base = webUrl.replace(/\/$/, "");
-  return `${base}/share/${targetType}/${targetId}`;
-}

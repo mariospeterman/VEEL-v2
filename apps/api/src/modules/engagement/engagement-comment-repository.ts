@@ -238,7 +238,14 @@ export function createEngagementCommentRepositoryMethods(
               'Someone mentioned you in a comment.', '/content/' || ${input.contentId},
               'content', ${input.contentId}, 'comment-mention:' || ${row.id} || ':' || mention.mentioned_user_id
             from comment_mentions mention
+            join comments source_comment on source_comment.id = mention.comment_id
             where mention.comment_id = ${row.id}
+              and not exists (
+                select 1
+                from user_mutes recipient_mute
+                where recipient_mute.muting_user_id = mention.mentioned_user_id
+                  and recipient_mute.muted_user_id = source_comment.user_id
+              )
             on conflict (user_id, idempotency_key) do nothing
           `;
         }

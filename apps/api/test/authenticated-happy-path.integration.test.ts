@@ -1228,6 +1228,32 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         mentions: [{ id: seededCreatorUserId, handle: creatorHandle }]
       });
 
+      await sql`
+        insert into user_mutes (muting_user_id, muted_user_id)
+        values (${seededCreatorUserId}, ${buyerSupabaseUserId})
+      `;
+      const mutedRecipientMentionResponse = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/${seededFreeContentId}/comments`,
+        headers: authenticatedHeaders(`engagement-muted-recipient-mention-${runId}`),
+        payload: { body: `Muted recipient mention @${creatorHandle}` }
+      });
+      expect(mutedRecipientMentionResponse.statusCode, mutedRecipientMentionResponse.body).toBe(201);
+      const mutedRecipientMentionId = mutedRecipientMentionResponse.json().id as string;
+      const mutedRecipientNotificationRows = await sql<Array<{ notification_count: number }>>`
+        select count(*)::int as notification_count
+        from notifications
+        where user_id = ${seededCreatorUserId}
+          and idempotency_key = ${`comment-mention:${mutedRecipientMentionId}:${seededCreatorUserId}`}
+      `;
+      expect(mutedRecipientNotificationRows[0]?.notification_count).toBe(0);
+      await sql`delete from comments where id = ${mutedRecipientMentionId}`;
+      await sql`
+        delete from user_mutes
+        where muting_user_id = ${seededCreatorUserId}
+          and muted_user_id = ${buyerSupabaseUserId}
+      `;
+
       const commentLikeKey = `engagement-comment-like-${runId}`;
       const commentLikeResponses = await Promise.all([
         app.inject({
@@ -1347,6 +1373,9 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(firstShareResponse.statusCode, firstShareResponse.body).toBe(201);
       expect(replayedShareResponse.statusCode, replayedShareResponse.body).toBe(201);
       expect(replayedShareResponse.json()).toEqual(firstShareResponse.json());
+      expect(firstShareResponse.json()).toMatchObject({
+        url: `http://localhost:3000/content/${seededFreeContentId}`
+      });
 
       const conflictingShareResponse = await app.inject({
         method: "POST",

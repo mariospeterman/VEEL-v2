@@ -110,7 +110,7 @@ Do not start by coding random screens. Start with repo foundation, contracts, da
 
 ## Current Validation
 
-The implementation includes the Next.js PWA, Fastify API, worker, migrations through `0091`, shared contracts/config/UI, broad domain routes, and real unit/browser/Postgres integration coverage. See the current implementation status for verified boundaries and launch blockers.
+The implementation includes the Next.js PWA, Fastify API, worker, migrations through `0113`, shared contracts/config/UI, broad domain routes, and real unit/browser/Postgres integration coverage. See the current implementation status for verified boundaries and launch blockers.
 
 Run the local web and API processes from separate terminals:
 
@@ -121,14 +121,14 @@ pnpm --filter @veel/web dev
 
 The web app serves the PWA shell. The API serves Fastify routes, `/healthz`, `/readyz`, OpenAPI, OAuth metadata, and the remote MCP endpoint when its env gates are enabled.
 
-The locked target is one universal WeVid account/profile and three visible onboarding steps: Account + Wallet, Minimal Profile, and Age Verification. Every user leaves Step 1 with either an external Solana wallet or a Privy embedded Solana wallet. Supabase signup is never a fourth mandatory step.
+The locked flow is one `Continue to WeVid` entry into one universal WeVid account/profile. A known wallet or linked recovery identity signs into the existing account; an unknown identity enters the three visible onboarding steps—Account + Wallet, Minimal Profile, and Age Verification—before any account or embedded wallet is created. Every user leaves Step 1 with either an external Solana wallet or a Privy embedded Solana wallet. Supabase signup is never a fourth mandatory step.
 
 Current runtime uses backend-verified Solana signatures:
 
 - `POST /v1/auth/wallet/challenges` creates the signed login challenge.
 - `POST /v1/auth/wallet/sessions` verifies the signature and returns a WeVid bearer session.
 - Supabase email/social auth remains optional recovery linking, primarily for external-wallet-only users. It must resolve to the existing WeVid user and must not create a second profile or wallet.
-- Privy is the sole embedded-wallet launch runtime. The target Privy path authenticates, creates or retrieves the Solana wallet, signs the normal WeVid challenge, and creates the canonical backend session as one continuous Step 1 flow. The current UI still needs that orchestration in Slice 02.
+- Privy is the sole embedded-wallet launch runtime. Its bounded onboarding path authenticates, creates or retrieves the Solana wallet only after onboarding consent, signs the normal WeVid challenge, and creates the canonical backend session as one continuous Step 1 flow. Returning-user login remains lookup-only.
 - Embedded provider UI is gated by `NEXT_PUBLIC_PRIVY_APP_ID` and `NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED`; keep provider secrets server-only and fail closed until Privy staging/launch approval.
 - `NEXT_PUBLIC_SOLANA_CHAIN` controls the web chain label: `solana:devnet` locally, `solana:mainnet` only when production provider and payment checks are approved.
 

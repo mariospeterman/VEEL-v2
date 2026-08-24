@@ -31,7 +31,7 @@ the onboarding explanation before account or embedded-wallet creation. Login nev
 - Replies are one level deep and must target a visible comment on the same content.
 - Mentions resolve active profile handles on the backend and exclude either-direction blocked or viewer-muted accounts.
 - Internal shares use the canonical consent-safe message authority and its shared-content reference.
-- External and copy shares use canonical referral-aware links. Share records never grant access.
+- External and copy shares use canonical target links that resolve in the PWA. Share records never grant access.
 - Optimistic UI reconciles to backend results and exposes safe retry messages.
 
 ## Search And Discovery

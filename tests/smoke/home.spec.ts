@@ -489,6 +489,14 @@ test("runs content engagement actions responsively through canonical API routes"
   await page.getByRole("button", { name: "Share" }).click();
   await page.getByRole("button", { name: "Copy link" }).click();
   await expect(page.getByText(/Link copied\.|Share link ready\./)).toBeVisible();
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "share", {
+      configurable: true,
+      value: async ({ url }: { url?: string }) => localStorage.setItem("wevid:test:last-shared-url", url ?? "")
+    });
+  });
+  await page.getByRole("button", { name: "Share outside WeVid" }).click();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("wevid:test:last-shared-url"))).toContain("/content/");
   await page.getByLabel("Send in Messages").selectOption(firstConversationId);
   await page.getByRole("button", { name: "Send post" }).click();
   await expect(page.getByText("Post sent in Messages.")).toBeVisible();
@@ -801,7 +809,7 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
     sendJson(response, 201, {
       id: "00000000-0000-4000-8000-0000000000c2",
       mode: body.mode,
-      url: body.mode === "internal_message" ? null : `${e2eOrigin}/share/content/00000000-0000-4000-8000-000000000040`
+      url: body.mode === "internal_message" ? null : `${e2eOrigin}/content/00000000-0000-4000-8000-000000000040`
     });
     return;
   }

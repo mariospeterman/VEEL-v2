@@ -1466,6 +1466,12 @@ paths:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       responses:
         "200": { $ref: "#/components/responses/EngagementState" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/engagement/{contentId}/save:
     post:
       operationId: toggleContentSave
@@ -1476,6 +1482,12 @@ paths:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       responses:
         "200": { $ref: "#/components/responses/EngagementState" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/engagement/{contentId}/comments:
     get:
       operationId: listContentComments
@@ -1486,6 +1498,11 @@ paths:
         - $ref: "#/components/parameters/Cursor"
       responses:
         "200": { $ref: "#/components/responses/CommentPage" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
     post:
       operationId: createContentComment
       tags: [Engagement]
@@ -1497,6 +1514,12 @@ paths:
         $ref: "#/components/requestBodies/CreateComment"
       responses:
         "201": { $ref: "#/components/responses/Comment" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/engagement/comments/{commentId}/like:
     post:
       operationId: toggleCommentLike
@@ -1507,17 +1530,30 @@ paths:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       responses:
         "200": { $ref: "#/components/responses/CommentReactionState" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/shares:
     post:
       operationId: createShare
       tags: [Engagement]
-      summary: Create internal share or external referral-aware share link
+      summary: Create an internal share or canonical external link
       parameters:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       requestBody:
         $ref: "#/components/requestBodies/CreateShare"
       responses:
         "201": { $ref: "#/components/responses/ShareResult" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/reports:
     post:
       operationId: createReport
@@ -1529,6 +1565,12 @@ paths:
         $ref: "#/components/requestBodies/CreateReport"
       responses:
         "201": { $ref: "#/components/responses/ModerationIntake" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/blocks/{userId}:
     post:
       operationId: blockUser
@@ -1539,6 +1581,13 @@ paths:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       responses:
         "200": { $ref: "#/components/responses/BlockState" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
     delete:
       operationId: unblockUser
       tags: [Privacy]
@@ -1548,6 +1597,13 @@ paths:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       responses:
         "200": { $ref: "#/components/responses/BlockState" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/mutes/{userId}:
     post:
       operationId: muteUser
@@ -1558,6 +1614,13 @@ paths:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       responses:
         "200": { $ref: "#/components/responses/MuteState" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
     delete:
       operationId: unmuteUser
       tags: [Privacy]
@@ -1567,6 +1630,13 @@ paths:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       responses:
         "200": { $ref: "#/components/responses/MuteState" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/privacy:
     get:
       operationId: getPrivacySettings
@@ -1574,6 +1644,10 @@ paths:
       summary: List self-service account privacy controls and data requests
       responses:
         "200": { $ref: "#/components/responses/PrivacySettings" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/privacy/data-requests:
     post:
       operationId: createDataRequest
@@ -1585,6 +1659,12 @@ paths:
         $ref: "#/components/requestBodies/CreateDataRequest"
       responses:
         "201": { $ref: "#/components/responses/DataRequest" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/messages/conversations:
     get:
       operationId: listConversations

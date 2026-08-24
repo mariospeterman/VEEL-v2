@@ -6,7 +6,7 @@ import {
   EngagementPolicyError,
   EngagementRepositoryConfigurationError
 } from "./engagement-errors.js";
-import { queueForSubject, shareUrl } from "./engagement-repository-mappers.js";
+import { queueForSubject } from "./engagement-repository-mappers.js";
 import type { ReportReplayRow, ShareReplayRow } from "./engagement-repository-rows.js";
 
 export function createEngagementIntakeRepositoryMethods(
@@ -14,6 +14,7 @@ export function createEngagementIntakeRepositoryMethods(
 ): Pick<EngagementRepository, "createShare" | "createReport"> {
   return {
     async createShare(input) {
+      const webBaseUrl = input.webUrl.replace(/\/$/, "");
       const rows = await sql<ShareReplayRow[]>`
         with actor as (
           select id
@@ -22,7 +23,7 @@ export function createEngagementIntakeRepositoryMethods(
           limit 1
         ),
         valid_target as (
-          select content.id
+          select content.id, '/content/' || content.id::text as share_path
           from content_items content
           join actor on true
           join private.eligible_content(actor.id, null) eligible
@@ -30,7 +31,7 @@ export function createEngagementIntakeRepositoryMethods(
           where ${input.body.targetType} = 'content'
             and content.id = ${input.body.targetId}
           union all
-          select target.id
+          select target.id, '/profile/' || profile.handle as share_path
           from users target
           join profiles profile on profile.user_id = target.id
           join actor on true
@@ -44,7 +45,7 @@ export function createEngagementIntakeRepositoryMethods(
                  or (block.blocker_user_id = target.id and block.blocked_user_id = actor.id)
             )
           union all
-          select event.id
+          select event.id, '/event-access/' || event.id::text as share_path
           from events event
           join actor on true
           where ${input.body.targetType} = 'event'
@@ -72,7 +73,10 @@ export function createEngagementIntakeRepositoryMethods(
             ${input.body.targetType},
             ${input.body.targetId},
             ${input.body.mode},
-            ${shareUrl(input.webUrl, input.body.targetType, input.body.targetId, input.body.mode)},
+            case
+              when ${input.body.mode} = 'internal_message' then null
+              else ${webBaseUrl} || valid_target.share_path
+            end,
             ${input.idempotencyKey}
           from actor, valid_target
           on conflict (actor_user_id, idempotency_key) do update

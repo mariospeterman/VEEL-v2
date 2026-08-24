@@ -180,8 +180,22 @@ export function ContentEngagementPanel({
           setNotice({ kind: "success", text: "Share link ready.", href: result.url });
         }
       } else if (result.url) {
-        window.open(result.url, "_blank", "noopener,noreferrer");
-        setNotice({ kind: "success", text: "Share link opened." });
+        try {
+          if (typeof navigator.share !== "function") throw new Error("Web Share is unavailable");
+          await navigator.share({ title: "WeVid post", url: result.url });
+          setNotice({ kind: "success", text: "Post shared." });
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") {
+            setNotice(null);
+          } else {
+            try {
+              await navigator.clipboard.writeText(result.url);
+              setNotice({ kind: "success", text: "Share link copied." });
+            } catch {
+              setNotice({ kind: "success", text: "Share link ready.", href: result.url });
+            }
+          }
+        }
       }
     } catch (error) {
       setNotice({ kind: "error", text: safeMutationMessage(error, "Share") });
@@ -341,7 +355,7 @@ export function ContentEngagementPanel({
         <div className="mt-4 grid gap-2 border-t border-(--line) pt-4">
           <p className="text-sm font-semibold">Creator controls</p>
           <button className="flex items-center justify-center gap-2 rounded border border-(--line) px-3 py-2 text-sm font-medium disabled:opacity-50" disabled={busy || hidden} onClick={() => void applySafetyAction("hide")} type="button"><EyeOff aria-hidden="true" size={16} />{hidden ? "Creator hidden" : "Hide from feed"}</button>
-          <button className="flex items-center justify-center gap-2 rounded border border-[#7f1d1d] px-3 py-2 text-sm font-medium text-[#fecaca] disabled:opacity-50" disabled={busy || blocked} onClick={() => void applySafetyAction("block")} type="button"><Ban aria-hidden="true" size={16} />{blocked ? "Creator blocked" : "Block creator"}</button>
+          <button className="danger-outline-button flex items-center justify-center gap-2 rounded border px-3 py-2 text-sm font-medium disabled:opacity-50" disabled={busy || blocked} onClick={() => void applySafetyAction("block")} type="button"><Ban aria-hidden="true" size={16} />{blocked ? "Creator blocked" : "Block creator"}</button>
         </div>
       ) : null}
 

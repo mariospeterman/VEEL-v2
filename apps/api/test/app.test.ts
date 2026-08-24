@@ -12997,7 +12997,7 @@ function fakeEngagementRepository(
       return {
         id: "00000000-0000-4000-8000-0000000000c2",
         mode: input.body.mode,
-        url: input.body.mode === "internal_message" ? null : "http://localhost:3000/share/content/00000000-0000-4000-8000-000000000040"
+        url: input.body.mode === "internal_message" ? null : "http://localhost:3000/content/00000000-0000-4000-8000-000000000040"
       };
     },
     async createReport(input) {

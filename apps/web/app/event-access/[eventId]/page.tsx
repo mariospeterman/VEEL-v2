@@ -75,6 +75,7 @@ function EventState({ event }: { event: Event }) {
 
 function eventStateLabel(state: Event["state"]) {
   if (state === "published") return "On sale";
+  if (state === "sold_out") return "Sold out";
   if (state === "cancelled") return "Cancelled";
   if (state === "completed") return "Complete";
   return "Coming soon";

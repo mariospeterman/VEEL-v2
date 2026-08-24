@@ -23,6 +23,9 @@ describe("database migrations", () => {
     expect(sql).toContain("alter table comment_reactions enable row level security");
     expect(sql).not.toMatch(/raw_payload|private_key|seed_phrase|mnemonic|wallet_address/i);
     expect(downSql).toContain("0113 rollback requires retained consumer-social traffic");
+    expect(downSql).toContain("idempotency_key <> 'legacy:' || id::text");
+    expect(downSql).not.toContain("idempotency_key not like 'legacy:%'");
+    expect(downSql).toContain("drop index if exists data_requests_requester_active_type_idx");
     expect(downSql).toContain("delete from engagement_action_receipts where action = 'user.block'");
   });
 

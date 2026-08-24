@@ -9,7 +9,11 @@ begin
      or exists (select 1 from engagement_action_receipts where action in (
        'comment.like', 'user.unblock', 'user.mute', 'user.unmute'
      ))
-     or exists (select 1 from data_requests where idempotency_key not like 'legacy:%') then
+     or exists (
+       select 1
+       from data_requests
+       where idempotency_key <> 'legacy:' || id::text
+     ) then
     raise exception using
       errcode = 'object_not_in_prerequisite_state',
       message = '0113 rollback requires retained consumer-social traffic to be migrated first';
@@ -19,6 +23,8 @@ $$;
 
 drop trigger if exists comments_parent_guard on comments;
 drop function if exists private.enforce_comment_parent();
+
+drop index if exists data_requests_requester_active_type_idx;
 
 alter table data_requests
   drop constraint if exists data_requests_idempotency_key_length,

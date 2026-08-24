@@ -1514,7 +1514,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create internal share or external referral-aware share link */
+        /** Create an internal share or canonical external link */
         post: operations["createShare"];
         delete?: never;
         options?: never;
@@ -10714,6 +10714,12 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["EngagementState"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     toggleContentSave: {
@@ -10731,6 +10737,12 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["EngagementState"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     listContentComments: {
@@ -10747,6 +10759,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["CommentPage"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     createContentComment: {
@@ -10764,6 +10781,12 @@ export interface operations {
         requestBody: components["requestBodies"]["CreateComment"];
         responses: {
             201: components["responses"]["Comment"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     toggleCommentLike: {
@@ -10781,6 +10804,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["CommentReactionState"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     createShare: {
@@ -10796,6 +10826,12 @@ export interface operations {
         requestBody: components["requestBodies"]["CreateShare"];
         responses: {
             201: components["responses"]["ShareResult"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     createReport: {
@@ -10811,6 +10847,12 @@ export interface operations {
         requestBody: components["requestBodies"]["CreateReport"];
         responses: {
             201: components["responses"]["ModerationIntake"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     blockUser: {
@@ -10828,6 +10870,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["BlockState"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     unblockUser: {
@@ -10845,6 +10894,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["BlockState"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     muteUser: {
@@ -10862,6 +10918,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["MuteState"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     unmuteUser: {
@@ -10879,6 +10942,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["MuteState"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     getPrivacySettings: {
@@ -10891,6 +10961,10 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["PrivacySettings"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     createDataRequest: {
@@ -10906,6 +10980,12 @@ export interface operations {
         requestBody: components["requestBodies"]["CreateDataRequest"];
         responses: {
             201: components["responses"]["DataRequest"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     listConversations: {
