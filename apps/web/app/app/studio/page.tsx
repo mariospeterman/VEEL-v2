@@ -1,175 +1,150 @@
 import {
-  getManagedCreatorRelationships,
-  getManagedCreatorReporting,
-  getOrganizationDashboards,
-  getOrganizationMembers,
+  getMyContent,
+  getMyCreatorDashboard,
+  getMyCreatorOnboarding,
+  getPlatformAccess,
   queryAnalytics,
-  getWallets,
-  type AnalyticsQueryResponse,
-  type ApiResult,
-  type OrganizationDashboardPage
+  type AnalyticsQueryRequest
 } from "@/api-client";
+import { formatAssetAmount } from "@/format-asset-amount";
 import { requireAppAccess } from "@/supabase/route-guard";
+import type { Route } from "next";
+import { redirect } from "next/navigation";
 import { AppShell } from "../../app-shell";
-import { Card, EmptyState, ErrorState, Fact, PageHeader, StatusPill } from "../../ui";
-import { EnterpriseManagementPanel } from "./enterprise-management-panel";
+import { Card, ErrorState, Fact, MetricCard, PageHeader, StatusPill } from "../../ui";
 import { AnalyticsSummary, analyticsWindow } from "../analytics-summary";
+import { ProfileMediaWorkspace } from "../profile/profile-media-workspace";
 
 export const dynamic = "force-dynamic";
 
-export default async function StudioPage() {
+export default async function StudioPage({
+  searchParams
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  if (params.organizationId || params.relationshipId || params.workspace === "enterprise") {
+    const enterpriseParams = new URLSearchParams();
+    for (const key of ["organizationId", "relationshipId"]) {
+      const value = params[key];
+      if (typeof value === "string") enterpriseParams.set(key, value);
+    }
+    redirect(`/app/enterprise${enterpriseParams.size > 0 ? `?${enterpriseParams}` : ""}` as Route);
+  }
   await requireAppAccess("/app/studio");
-
-  const [dashboards, relationships, wallets] = await Promise.all([
-    getOrganizationDashboards(),
-    getManagedCreatorRelationships(),
-    getWallets()
+  const window = analyticsWindow(30);
+  const comparisonWindow = analyticsWindow(30, 30);
+  const creatorQuery: AnalyticsQueryRequest = {
+    scope: { type: "creator" },
+    metricKeys: [
+      "creator.content.qualified_views",
+      "creator.content.watch_seconds",
+      "creator.content.completion_rate",
+      "creator.engagement.saves",
+      "creator.engagement.shares",
+      "creator.social.profile_opens",
+      "creator.social.follow_conversion"
+    ],
+    window,
+    comparisonWindow,
+    granularity: "total",
+    timezone: "UTC"
+  };
+  const commerceQuery = (currency: "SOL" | "USDC"): AnalyticsQueryRequest => ({
+    scope: { type: "creator" },
+    metricKeys: [
+      "creator.commerce.offer_impressions",
+      "creator.commerce.confirmed_purchases",
+      "creator.commerce.unlock_conversion",
+      "creator.commerce.confirmed_gross_minor",
+      "creator.commerce.earnings_minor",
+      "creator.membership.starts",
+      "creator.membership.cancellations"
+    ],
+    window,
+    comparisonWindow,
+    granularity: "total",
+    timezone: "UTC",
+    dimensions: { currency }
+  });
+  const [access, dashboard, onboarding, media, creatorAnalytics, solAnalytics, usdcAnalytics] = await Promise.all([
+    getPlatformAccess(),
+    getMyCreatorDashboard(),
+    getMyCreatorOnboarding(),
+    getMyContent(),
+    queryAnalytics(creatorQuery),
+    queryAnalytics(commerceQuery("SOL")),
+    queryAnalytics(commerceQuery("USDC"))
   ]);
-  const dashboardItems = dashboards.ok ? dashboards.data.items : [];
-  const relationshipItems = relationships.ok ? relationships.data.items : [];
-  const [memberEntries, reportingEntries, analyticsEntries] = await Promise.all([
-    Promise.all(dashboardItems.map(async (dashboard) => {
-      const organizationId = dashboard.organization.organizationId;
-      const result = dashboard.organization.membershipState === "active"
-        ? await getOrganizationMembers(organizationId)
-        : null;
-      return [organizationId, result?.ok ? result.data.items : []] as const;
-    })),
-    Promise.all(relationshipItems.map(async (relationship) => {
-      const result = await getManagedCreatorReporting(relationship.id);
-      return [relationship.id, result.ok ? result.data : null] as const;
-    })),
-    Promise.all(dashboardItems.map(async (dashboard) => {
-      const organizationId = dashboard.organization.organizationId;
-      const queryCurrency = (currency: "SOL" | "USDC") => queryAnalytics({
-        scope: { type: "organization" as const, organizationId },
-        metricKeys: [
-          "organization.commerce.confirmed_allocations" as const,
-          "organization.commerce.creator_net_minor" as const,
-          "organization.commerce.management_minor" as const
-        ],
-        window: analyticsWindow(30),
-        comparisonWindow: analyticsWindow(30, 30),
-        granularity: "total" as const,
-        timezone: "UTC" as const,
-        dimensions: { currency }
-      });
-      return [organizationId, await Promise.all([queryCurrency("SOL"), queryCurrency("USDC")])] as const;
-    }))
-  ]);
-  const organizationAnalytics = Object.fromEntries(analyticsEntries) as Record<string, Array<ApiResult<AnalyticsQueryResponse>>>;
+  const capabilities = access.ok ? new Set(access.data.currentTier.capabilities) : new Set<string>();
+  const hasStudio = capabilities.has("advanced_analytics");
 
   return (
     <AppShell>
-      <section className="grid gap-5">
-        <PageHeader eyebrow="Profile tier" title="Studio / Enterprise capabilities">
-            Studio and Enterprise are profile-tier organization capabilities. Member-scoped governance,
-            RBAC, reporting, and support readiness never create balances, withdrawals, payout queues,
-            or preferential social treatment.
+      <section className="grid content-start gap-5">
+        <PageHeader
+          action={<a className="rounded-lg bg-(--foreground) px-4 py-2 text-sm font-semibold text-(--background)" href="/app/create">Create</a>}
+          eyebrow="Creator workspace"
+          title="Studio"
+        >
+          Create, publish, understand performance, and manage creator products. Studio tools never buy reach or social priority.
         </PageHeader>
 
-        <DashboardList analytics={organizationAnalytics} dashboards={dashboards} />
-        {relationships.ok ? (
-          <EnterpriseManagementPanel
-            dashboards={dashboardItems}
-            members={Object.fromEntries(memberEntries)}
-            relationships={relationshipItems}
-            reporting={Object.fromEntries(reportingEntries)}
-            wallets={wallets.ok ? wallets.data.items : []}
-          />
-        ) : (
-          <ErrorState result={relationships} title="Managed creators unavailable" context="Enterprise relationships" />
-        )}
+        <nav aria-label="Studio sections" className="flex gap-2 overflow-x-auto pb-1 text-sm">
+          {[
+            ["Overview", "#overview"],
+            ["Content", "#content"],
+            ["Analytics", "#analytics"],
+            ["Monetisation", "#monetisation"],
+            ["Readiness", "#readiness"]
+          ].map(([label, href]) => <a className="min-h-11 shrink-0 rounded-full border border-(--line) px-4 py-2.5" href={href} key={href}>{label}</a>)}
+        </nav>
+
+        {dashboard.ok ? (
+          <section className="grid gap-4" id="overview">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <MetricCard label="Confirmed earnings" value={formatAssetAmount(dashboard.data.earnings.creatorEarningsMinor, dashboard.data.earnings.currency)} />
+              <MetricCard label="Confirmed sales" value={String(dashboard.data.earnings.confirmedPaymentCount)} />
+              <MetricCard label="Creator readiness" value={`${dashboard.data.readiness.readinessScore}%`} />
+              <MetricCard label="Studio plan" value={access.ok ? access.data.currentTier.label : "Unavailable"} />
+            </div>
+          </section>
+        ) : <ErrorState result={dashboard} title="Creator overview unavailable" context="Studio" />}
+
+        <section className="grid gap-3" id="content">
+          <div className="flex items-end justify-between gap-3"><div><p className="eyebrow">Library</p><h2 className="text-xl font-semibold">Your content</h2></div><a className="text-sm font-semibold" href="/app/create">New post</a></div>
+          {media.ok ? <ProfileMediaWorkspace initialPage={media.data} /> : <ErrorState result={media} title="Content library unavailable" context="Studio content" />}
+        </section>
+
+        <section className="grid gap-3" id="analytics">
+          <div><p className="eyebrow">Performance</p><h2 className="text-xl font-semibold">Last 30 days</h2></div>
+          {hasStudio ? (
+            <AnalyticsSummary
+              description="Privacy-safe performance and confirmed commerce, compared with the preceding 30 days. Viewer identities and private messages are never exposed."
+              queries={[creatorAnalytics, solAnalytics, usdcAnalytics]}
+              title="Creator analytics"
+            />
+          ) : (
+            <Card className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div><p className="font-semibold">Advanced analytics are a Studio capability</p><p className="mt-1 text-sm text-(--muted)">Your profile and publishing remain available on every eligible creator account.</p></div>
+              <a className="shrink-0 rounded-lg border border-(--line) px-4 py-2 text-sm font-semibold" href="/app/subscriptions">Compare plans</a>
+            </Card>
+          )}
+        </section>
+
+        <section className="grid gap-3 lg:grid-cols-2" id="monetisation">
+          <Card className="p-5">
+            <div className="flex items-start justify-between gap-3"><div><p className="eyebrow">Monetisation</p><h2 className="mt-1 text-lg font-semibold">Products and pricing</h2></div><StatusPill tone={dashboard.ok && dashboard.data.readiness.canMonetize ? "good" : "warn"}>{dashboard.ok && dashboard.data.readiness.canMonetize ? "Ready" : "Setup"}</StatusPill></div>
+            <p className="mt-3 text-sm leading-6 text-(--muted)">Configure recipient wallet, creator products, pricing, and Profile Membership from one creator workspace.</p>
+            <a className="mt-4 inline-flex min-h-11 items-center rounded-lg bg-(--foreground) px-4 py-2 text-sm font-semibold text-(--background)" href="/app/profile/earnings">Manage monetisation</a>
+          </Card>
+          <Card className="p-5" id="readiness">
+            <p className="eyebrow">Publishing readiness</p>
+            <h2 className="mt-1 text-lg font-semibold">Safety and account checks</h2>
+            {onboarding.ok ? <div className="mt-4 grid gap-3 text-sm"><Fact label="Progress" value={`${onboarding.data.readinessScore}%`} /><Fact label="Creator account" value={dashboard.ok && dashboard.data.readiness.state === "active" ? "Ready" : "Needs attention"} /><Fact label="Earnings" value={onboarding.data.canStartEarning ? "Ready" : "Needs attention"} /></div> : <ErrorState result={onboarding} title="Readiness unavailable" context="Studio readiness" />}
+          </Card>
+        </section>
       </section>
     </AppShell>
   );
-}
-
-function DashboardList({ analytics, dashboards }: {
-  analytics: Record<string, Array<ApiResult<AnalyticsQueryResponse>>>;
-  dashboards: ApiResult<OrganizationDashboardPage>;
-}) {
-  if (!dashboards.ok) {
-    return <ErrorState result={dashboards} title="Studio / Enterprise unavailable" context="Studio / Enterprise" />;
-  }
-
-  if (dashboards.data.items.length === 0) {
-    return (
-      <EmptyState title="No Studio or Enterprise membership">
-          These capabilities appear inside the profile surface after an active organization membership
-          or tier grant is assigned server-side.
-      </EmptyState>
-    );
-  }
-
-  return (
-    <section className="grid gap-4">
-      {dashboards.data.items.map((dashboard) => (
-        <section className="grid gap-3" key={dashboard.organization.id}>
-        <Card className="p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium text-(--accent-text)">{dashboard.organization.plan}</p>
-              <h2 className="mt-1 text-xl font-semibold tracking-normal">{dashboard.organization.name}</h2>
-              <p className="mt-1 text-sm text-(--muted)">
-                {dashboard.organization.role} / {dashboard.organization.membershipState}
-              </p>
-            </div>
-            <StatusPill>{dashboard.financeBoundary}</StatusPill>
-          </div>
-
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
-            <Fact label="Organization state" value={dashboard.organization.state} />
-            <Fact label="KYB" value={dashboard.governance.kybState ?? "not_started"} />
-            <Fact label="Active members" value={`${dashboard.governance.activeMemberCount}/${dashboard.governance.memberCount}`} />
-            <Fact label="Support" value={dashboard.governance.supportState} />
-            <Fact label="Tier waiver" value={dashboard.governance.tierWaiverState} />
-            <Fact label="Compliance exports" value={enabledLabel(dashboard.capabilities.complianceExportsEnabled)} />
-            <Fact label="RBAC" value={enabledLabel(dashboard.capabilities.rbacEnabled)} />
-            <Fact label="Team publishing" value={enabledLabel(dashboard.capabilities.teamPublishingEnabled)} />
-            <Fact label="Consolidated reporting" value={enabledLabel(dashboard.capabilities.consolidatedReportingEnabled)} />
-          </div>
-
-          {dashboard.notices.length > 0 ? (
-            <div className="mt-4 grid gap-2">
-              {dashboard.notices.map((notice) => (
-                <div className="rounded border border-(--line) bg-(--background) p-3 text-sm" key={`${notice.kind}-${notice.title}`}>
-                  <p className="font-medium">{notice.title}</p>
-                  <p className="mt-1 text-(--muted)">{notice.state}</p>
-                </div>
-              ))}
-            </div>
-          ) : null}
-
-          <div className="mt-4 grid gap-2">
-            <h3 className="text-sm font-semibold tracking-normal">Role permissions</h3>
-            <div className="grid gap-2 md:grid-cols-2">
-              {dashboard.rolePermissions.map((permission) => (
-                <div
-                  className="flex min-h-14 items-center justify-between gap-3 rounded border border-(--line) bg-(--background) px-3 py-2 text-sm"
-                  key={permission.key}
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate font-medium">{permission.label}</span>
-                    <span className="text-xs text-(--muted)">{permission.reason}</span>
-                  </span>
-                  <StatusPill tone={permission.allowed ? "good" : "warn"}>{permission.allowed ? "allowed" : "blocked"}</StatusPill>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Card>
-        <AnalyticsSummary
-          description="The same versioned metric objects used across WeVid, restricted to this active Enterprise organization and separated by native currency."
-          queries={analytics[dashboard.organization.organizationId] ?? []}
-          title={`${dashboard.organization.name} analytics`}
-        />
-        </section>
-      ))}
-    </section>
-  );
-}
-
-function enabledLabel(enabled: boolean) {
-  return enabled ? "enabled" : "disabled";
 }

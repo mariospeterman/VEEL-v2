@@ -226,7 +226,7 @@ export function createPostgresOrganizationRepository(database?: string | Postgre
             id, user_id, kind, title, body, action_url, related_resource_type, related_resource_id, idempotency_key
           ) values (
             ${randomUUID()}, ${party.target_id}, 'studio_setup', 'Enterprise team invitation',
-            'Review the organization and assigned role before accepting.', '/app/studio',
+            'Review the organization and assigned role before accepting.', '/app/enterprise',
             'organization_membership', ${membershipId}, ${`organization-membership:${membershipId}`}
           )
           on conflict (user_id, idempotency_key) do update set state = 'unread', created_at = now()

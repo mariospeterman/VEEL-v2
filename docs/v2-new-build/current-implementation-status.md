@@ -38,12 +38,12 @@ copied into this document. The machine-readable companion is `production-status.
 
 | Field | Current value |
 | --- | --- |
-| Latest merged baseline | `fe10413d8a28700b15cfdecde386e2807719d3d7` |
-| Latest merged slice | Convergence 08 — MCP media and provenance bridge |
-| Latest merged migration | `packages/database/migrations/0115_mcp_media_provenance_bridge.sql` |
+| Latest merged baseline | `4551045fbe6205ef9961c46849e66bba3a9c45f1` |
+| Latest merged slice | Convergence 09A — Operator harness and staff RBAC |
+| Latest merged migration | `packages/database/migrations/0116_staff_permission_registry_and_staging_fixtures.sql` |
 | Latest merged evidence | `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`, `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN` |
 | Known launch blockers | `STAGING_PROVEN`, `PROVIDER_APPROVED`, `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED` remain outstanding. |
-| Next planned slice | None — external launch gates only |
+| Next planned slice | Convergence 09 — Release convergence pass |
 
 Next planned production slice: **Convergence 09 — Release convergence pass**.
 
@@ -51,6 +51,20 @@ Readiness vocabulary is fixed to `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`,
 `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN`, `STAGING_PROVEN`, `PROVIDER_APPROVED`,
 `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED`. “Accepted” describes a
 design decision; it never means implemented, tested, approved, enabled, or launch-ready.
+
+Merged Convergence 09A provides the canonical operator-ready cloud-staging harness and explicit
+permission-level staff RBAC. It replaces the duplicate legacy admin stack with one responsive Admin
+surface, adds invitation/acceptance, role change, suspension, revocation, last-owner protection,
+session revocation, mutation reasons, and audit evidence, and keeps unproved staging journeys out of
+PASS. PR #101 merged at `4551045` after all eight protected checks, real-Postgres staff concurrency,
+and exact-head review. Shared cloud configuration remains an owner-managed gate; the terminal state is
+`OPERATOR_READY_FOR_STAGING_CONFIGURATION`, not a claim that staging or launch is enabled.
+
+Active Convergence 09B separates the individual `/app/studio` creator workspace from the
+organization `/app/enterprise` workspace, makes own Profile media-first, and adds canonical Moments
+plus scheduled publication without introducing a second content, player, moderation, analytics, or
+queue authority. Migration `0117` and its browser proof must merge before these behaviors become the
+protected baseline.
 
 Merged Convergence 08 adds two narrowly scoped MCP media tools: one prepares a private-draft Bunny
 image or resumable-video handoff and one reads canonical readiness. Capabilities are hash-only,

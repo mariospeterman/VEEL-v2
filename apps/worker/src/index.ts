@@ -68,6 +68,12 @@ import {
   type SubscriptionCollectionProvider,
   type SubscriptionCollectionRepository
 } from "./subscription-collections.js";
+import {
+  createPostgresScheduledPublicationRepository,
+  processScheduledPublications,
+  type ProcessScheduledPublicationsResult,
+  type ScheduledPublicationRepository
+} from "./scheduled-publication.js";
 
 export const buildWorkerRuntime = () => {
   const config = parseServerEnv(process.env);
@@ -81,6 +87,7 @@ export const buildWorkerRuntime = () => {
       "notification-deliveries",
       "payment-confirmation-emails",
       "provider-event-replays",
+      "scheduled-publications",
       "live-safety",
       "media-moderation",
       "media-asset-cleanups"
@@ -110,6 +117,11 @@ export const buildWorkerRuntime = () => {
         name: "provider-event-replays",
         cadence: "every_minute",
         sourceIndex: "provider_event_replay_requests_state_created_idx"
+      },
+      {
+        name: "scheduled-publications",
+        cadence: "every_minute",
+        sourceIndex: "content_publication_jobs_due_idx"
       },
       {
         name: "live-safety",
@@ -378,6 +390,24 @@ export async function runMediaAssetCleanupTick(input: {
   }
 }
 
+export async function runScheduledPublicationTick(input: {
+  repository?: ScheduledPublicationRepository;
+  now?: Date;
+  limit?: number;
+} = {}): Promise<ProcessScheduledPublicationsResult> {
+  const config = parseServerEnv(process.env);
+  const repository = input.repository ?? createPostgresScheduledPublicationRepository(config.DATABASE_URL);
+  try {
+    return await processScheduledPublications({
+      repository,
+      ...(input.now ? { now: input.now } : {}),
+      ...(input.limit ? { limit: input.limit } : {})
+    });
+  } finally {
+    if (!input.repository) await repository.close?.();
+  }
+}
+
 export interface ScheduledWorkerTickResult {
   analyticsProjections: "completed" | "failed";
   liveSafety: "completed" | "failed";
@@ -386,6 +416,7 @@ export interface ScheduledWorkerTickResult {
   notificationDeliveries: "completed" | "failed";
   paymentConfirmationEmails: "completed" | "failed";
   providerEventReplays: "completed" | "failed";
+  scheduledPublications: "completed" | "failed";
   subscriptionCollections: "completed" | "failed";
 }
 
@@ -402,6 +433,7 @@ export interface WorkerTickRunners {
   notificationDeliveries(): Promise<unknown>;
   paymentConfirmationEmails(): Promise<unknown>;
   providerEventReplays(): Promise<unknown>;
+  scheduledPublications(): Promise<unknown>;
   subscriptionCollections(): Promise<unknown>;
 }
 
@@ -428,6 +460,7 @@ export async function runScheduledWorkerTick(input: {
     notificationDeliveries: () => runNotificationDeliveryTick({ limit: config.WORKER_BATCH_LIMIT }),
     paymentConfirmationEmails: () => runPaymentConfirmationEmailTick({ limit: config.WORKER_BATCH_LIMIT }),
     providerEventReplays: () => runProviderEventReplayTick({ limit: config.WORKER_BATCH_LIMIT }),
+    scheduledPublications: () => runScheduledPublicationTick({ limit: config.WORKER_BATCH_LIMIT }),
     subscriptionCollections: () => runSubscriptionCollectionTick({ limit: config.WORKER_BATCH_LIMIT })
   };
   const tasks = [
@@ -438,6 +471,7 @@ export async function runScheduledWorkerTick(input: {
     ["notificationDeliveries", runners.notificationDeliveries],
     ["paymentConfirmationEmails", runners.paymentConfirmationEmails],
     ["providerEventReplays", runners.providerEventReplays],
+    ["scheduledPublications", runners.scheduledPublications],
     ["subscriptionCollections", runners.subscriptionCollections]
   ] as const;
   const results = await Promise.all(
@@ -486,6 +520,7 @@ export function startWorkerProcess(input: {
         notificationDeliveries: "completed",
         paymentConfirmationEmails: "completed",
         providerEventReplays: "completed",
+        scheduledPublications: "completed",
         subscriptionCollections: "completed"
       });
     }

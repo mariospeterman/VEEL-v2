@@ -177,6 +177,11 @@ export function createModerationRepository(
                 when ${approving}
                   and ci.publish_state = 'submitted_for_review'
                   and ${moderation.state} = 'ready'
+                  and ci.scheduled_for > now()
+                then 'scheduled'
+                when ${approving}
+                  and ci.publish_state = 'submitted_for_review'
+                  and ${moderation.state} = 'ready'
                 then 'published'
                 when ${input.body.action} = 'approve'
                   and ci.publish_state = 'blocked'
@@ -199,8 +204,18 @@ export function createModerationRepository(
                     )
                   )
                   and ${moderation.state} = 'ready'
+                  and (ci.scheduled_for is null or ci.scheduled_for <= now())
                 then coalesce(ci.published_at, now())
                 else ci.published_at
+              end,
+              expires_at = case
+                when ${approving}
+                  and ci.distribution_mode = 'moment'
+                  and ci.publish_state = 'submitted_for_review'
+                  and ${moderation.state} = 'ready'
+                  and (ci.scheduled_for is null or ci.scheduled_for <= now())
+                then coalesce(ci.expires_at, now() + interval '24 hours')
+                else ci.expires_at
               end,
               updated_at = now()
             where ci.id = ${input.contentId}

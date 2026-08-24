@@ -28,7 +28,7 @@ export interface RegisterContentRoutesOptions {
 }
 
 export const feedModes = new Set(["recommended", "following"]);
-export const feedSurfaces = new Set(["home", "bits"]);
+export const feedSurfaces = new Set(["home", "bits", "moments"]);
 export const contentMediaTypes = new Set([
   "bit",
   "clip",

@@ -8,6 +8,9 @@ export type ContentMediaAssetProjection = NonNullable<ContentItem["mediaAssets"]
 export interface FeedRow {
   id: string;
   media_type: ContentItem["mediaType"];
+  distribution_mode: "post" | "moment";
+  expires_at: Date | null;
+  scheduled_for: Date | null;
   caption: string | null;
   nsfw_label: NonNullable<ContentItem["nsfwLabel"]>;
   created_at: Date;
@@ -38,6 +41,9 @@ export interface FeedRow {
 export interface ContentRow {
   id: string;
   media_type: ContentItem["mediaType"];
+  distribution_mode?: "post" | "moment";
+  expires_at?: Date | null;
+  scheduled_for?: Date | null;
   caption: string | null;
   body_text?: string | null;
   asset_revision?: number;

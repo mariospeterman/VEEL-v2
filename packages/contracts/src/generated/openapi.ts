@@ -4516,7 +4516,7 @@ export interface components {
             /** @enum {string} */
             mode: "recommended" | "following";
             /** @enum {string} */
-            surface: "home" | "bits";
+            surface: "home" | "bits" | "moments";
             /** @enum {string} */
             rankingVersion: "deterministic_v1";
             /** Format: date-time */
@@ -4542,6 +4542,15 @@ export interface components {
             creator: components["schemas"]["User"];
             /** @enum {string} */
             mediaType: "bit" | "clip" | "image" | "vod" | "live_replay" | "carousel" | "text" | "poll";
+            /**
+             * @default post
+             * @enum {string}
+             */
+            distributionMode: "post" | "moment";
+            /** Format: date-time */
+            expiresAt?: string | null;
+            /** Format: date-time */
+            scheduledFor?: string | null;
             caption?: string | null;
             bodyText?: string | null;
             compositionRevision?: number;
@@ -4808,6 +4817,11 @@ export interface components {
         CreateContentRequest: {
             /** @enum {string} */
             mediaType: "bit" | "clip" | "image" | "vod" | "live_replay" | "carousel" | "text" | "poll";
+            /**
+             * @default post
+             * @enum {string}
+             */
+            distributionMode: "post" | "moment";
             caption?: string;
             bodyText?: string;
             poll?: components["schemas"]["ContentPollDraft"];
@@ -4818,6 +4832,8 @@ export interface components {
             /** @enum {string} */
             representationMode: "no_real_person" | "self_only" | "declared_performers";
             contentSafetyPolicyAccepted: boolean;
+            /** Format: date-time */
+            scheduledFor?: string | null;
             eventDraft?: components["schemas"]["EventDraft"];
         };
         UpdateContentRequest: {
@@ -4836,23 +4852,38 @@ export interface components {
             teaserEndMs?: number | null;
             thumbnailFrameMs?: number | null;
             eventDraft?: components["schemas"]["EventDraft"];
+            /** @enum {string} */
+            distributionMode?: "post" | "moment";
+            /** Format: date-time */
+            scheduledFor?: string | null;
         };
         PublishContentRequest: {
             /** @enum {string} */
             confirmation: "submit_for_review";
+            /** Format: date-time */
+            scheduledFor?: string | null;
         };
         CreatorMediaItem: {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
             mediaType: "bit" | "clip" | "image" | "vod" | "live_replay" | "carousel" | "text" | "poll";
+            /**
+             * @default post
+             * @enum {string}
+             */
+            distributionMode: "post" | "moment";
+            /** Format: date-time */
+            expiresAt?: string | null;
+            /** Format: date-time */
+            scheduledFor?: string | null;
             caption?: string | null;
             /** Format: uri */
             posterUrl?: string | null;
             /** @enum {string} */
             visibility: "public" | "followers" | "subscribers" | "private";
             /** @enum {string} */
-            publicationState: "draft" | "upload_pending" | "processing" | "in_review" | "changes_requested" | "rejected" | "appeal_pending" | "published" | "blocked";
+            publicationState: "draft" | "upload_pending" | "processing" | "in_review" | "scheduled" | "changes_requested" | "rejected" | "appeal_pending" | "published" | "blocked";
             reviewState: string;
             reviewMessage?: string | null;
             compositionRevision?: number;
@@ -6350,7 +6381,7 @@ export interface components {
         };
         AdminWorkerQueueHealth: {
             /** @enum {string} */
-            name: "subscription_collections" | "notification_deliveries" | "payment_confirmation_emails" | "provider_event_replays" | "media_moderation" | "analytics_projections" | "live_safety";
+            name: "subscription_collections" | "notification_deliveries" | "payment_confirmation_emails" | "provider_event_replays" | "media_moderation" | "analytics_projections" | "live_safety" | "scheduled_publications";
             pendingCount: number;
             processingCount: number;
             failedCount: number;
@@ -8610,7 +8641,7 @@ export interface components {
         Cursor: string;
         SearchQuery: string;
         FeedMode: "recommended" | "following";
-        FeedSurface: "home" | "bits";
+        FeedSurface: "home" | "bits" | "moments";
         ContentId: string;
         MediaAssetId: string;
         RoomId: string;

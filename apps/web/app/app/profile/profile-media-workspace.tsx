@@ -123,9 +123,10 @@ function MediaCard({
       </div>
       <div className="grid gap-3 p-4">
         <div className="flex items-start justify-between gap-3">
-          <p className="line-clamp-2 font-medium">{item.caption || "Untitled post"}</p>
+          <p className="line-clamp-2 font-medium">{item.caption || `Untitled ${item.distributionMode}`}</p>
           <PublicationPill state={item.publicationState} />
         </div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-(--accent-text)">{item.distributionMode}{item.scheduledFor ? ` · ${scheduleCopy(item.scheduledFor)}` : ""}</p>
         <p className="text-xs text-(--muted)">{publicationCopy(item.publicationState)}</p>
         {(item.provenanceAssets?.length ?? 0) > 0 ? (
           <section aria-label="Media provenance review" className="grid gap-2 rounded border border-(--line) p-3">
@@ -282,6 +283,7 @@ function publicationCopy(state: CreatorMediaItem["publicationState"]): string {
     upload_pending: "Choose media to continue",
     processing: "Preparing your preview",
     in_review: "Private while the safety review completes",
+    scheduled: "Approved and queued for its scheduled release",
     changes_requested: "Update requested before publication",
     rejected: "Not published",
     appeal_pending: "Appeal under review",
@@ -289,4 +291,8 @@ function publicationCopy(state: CreatorMediaItem["publicationState"]): string {
     blocked: "Unavailable pending support review"
   };
   return copy[state];
+}
+
+function scheduleCopy(value: string) {
+  return `scheduled ${new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value))}`;
 }

@@ -8,6 +8,7 @@ import { requireAppAccess } from "@/supabase/route-guard";
 import { AppShell } from "../../app-shell";
 import { Card, EmptyState, ErrorState } from "../../ui";
 import { FeedExperience } from "../feed-experience";
+import { MomentTray } from "../moments/moment-tray";
 
 export const dynamic = "force-dynamic";
 
@@ -16,18 +17,16 @@ export default async function AppHomePage() {
 
   const preferences = await getFeedPreferences();
   const initialMode = preferences.ok ? preferences.data.defaultMode : "recommended";
-  const [feed, discover] = await Promise.all([
+  const [feed, moments, discover] = await Promise.all([
     getHomeFeed(initialMode, "home"),
+    getHomeFeed(initialMode, "moments"),
     getDiscoverSearch("")
   ]);
   const liveRooms = discover.ok ? discover.data.liveRooms.slice(0, 3) : [];
 
   return (
     <AppShell>
-      <header className="mb-4 flex items-end justify-between gap-4">
-        <div><p className="eyebrow">Home</p><h1 className="mt-1 text-2xl font-semibold tracking-tight">What’s happening</h1></div>
-        <a className="text-sm font-semibold underline" href="/app/search">Explore</a>
-      </header>
+      {moments.ok ? <MomentTray items={moments.data.items} liveRooms={liveRooms} /> : null}
 
       <section className="screen-grid lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="scroll-pane">
@@ -42,7 +41,7 @@ export default async function AppHomePage() {
           )}
         </div>
 
-        <aside className="scroll-pane">
+        <aside className="scroll-pane hidden lg:grid">
           <Card className="p-4"><p className="eyebrow">Happening now</p><h2 className="mt-1 text-lg font-semibold tracking-normal">Live and upcoming</h2></Card>
 
           {discover.ok ? (

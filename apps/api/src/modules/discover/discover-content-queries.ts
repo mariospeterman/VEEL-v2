@@ -26,6 +26,9 @@ export async function listContent(
     select
       ci.id,
       ci.media_type,
+      ci.distribution_mode,
+      ci.expires_at,
+      ci.scheduled_for,
       ci.caption,
       ci.nsfw_label,
       ci.created_at,

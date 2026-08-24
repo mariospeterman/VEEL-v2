@@ -28,4 +28,25 @@ describe("admin queue recovery", () => {
     expect(recoveryQuery).toContain("lease_expires_at = null");
     expect(recoveryQuery).not.toContain("leased_until = null");
   });
+
+  it("requeues a scheduled publication through the canonical recovery ledger", async () => {
+    const queries: string[] = [];
+    const sql = ((first: TemplateStringsArray | string, ...values: unknown[]) => {
+      if (typeof first === "string") return { fragment: first };
+      const query = first.reduce((text, part, index) => text + part + ((values[index] as { fragment?: string } | undefined)?.fragment ?? "?"), "");
+      queries.push(query);
+      return Promise.resolve([{ accepted: true }]);
+    }) as unknown as postgres.Sql;
+
+    const accepted = await createAccessRepository(sql).retryDeadLetterJob({
+      supabaseUserId: "supabase-admin",
+      queueName: "scheduled_publications",
+      jobId: "00000000-0000-4000-8000-000000000002",
+      idempotencyKey: "retry-scheduled-publication-1",
+      body: { reason: "Release blocker resolved" }
+    });
+
+    expect(accepted).toBe(true);
+    expect(queries.find((query) => query.includes("worker_queue_recovery_requests"))).toContain("content_publication_jobs");
+  });
 });

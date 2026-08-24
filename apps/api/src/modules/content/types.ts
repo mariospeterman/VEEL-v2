@@ -7,7 +7,7 @@ export type CreateUploadRequest = components["schemas"]["CreateUploadRequest"];
 export type Entitlement = components["schemas"]["Entitlement"];
 export type FeedPage = components["schemas"]["FeedPage"];
 export type FeedMode = "recommended" | "following";
-export type FeedSurface = "home" | "bits";
+export type FeedSurface = "home" | "bits" | "moments";
 export type UploadSession = components["schemas"]["UploadSession"];
 export type UpdateContentRequest = components["schemas"]["UpdateContentRequest"];
 export type PublishContentRequest = components["schemas"]["PublishContentRequest"];
@@ -231,6 +231,8 @@ export interface CreateContentDraftInput {
   idempotencyKey: string;
   requestHash: string;
   mediaType: ContentItem["mediaType"];
+  distributionMode?: "post" | "moment" | undefined;
+  scheduledFor?: string | null | undefined;
   caption?: string | null | undefined;
   bodyText?: string | null | undefined;
   poll?: components["schemas"]["ContentPollDraft"] | undefined;
@@ -272,6 +274,9 @@ export interface UpdateOwnedContentInput {
   assetOrder?: string[] | undefined;
   requestHash?: string | undefined;
   visibility?: string | undefined;
+  distributionMode?: "post" | "moment" | undefined;
+  scheduledFor?: string | null | undefined;
+  scheduledForProvided: boolean;
   nsfwLabel?: NonNullable<ContentItem["nsfwLabel"]> | undefined;
   representationMode?: NonNullable<UpdateContentRequest["representationMode"]> | undefined;
   contentSafetyPolicyAccepted: boolean;
@@ -289,6 +294,8 @@ export interface PublishOwnedContentInput {
   supabaseUserId: string;
   contentId: string;
   idempotencyKey: string;
+  scheduledFor?: string | null | undefined;
+  scheduledForProvided?: boolean | undefined;
 }
 
 export interface FindOwnedContentForUploadInput {

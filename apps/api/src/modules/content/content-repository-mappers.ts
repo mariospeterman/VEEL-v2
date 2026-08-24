@@ -18,6 +18,13 @@ export function toContentItem(
       badges: []
     },
     mediaType: row.media_type,
+    distributionMode: row.distribution_mode ?? "post",
+    ...(row.expires_at !== undefined
+      ? { expiresAt: row.expires_at ? new Date(row.expires_at).toISOString() : null }
+      : {}),
+    ...(row.scheduled_for !== undefined
+      ? { scheduledFor: row.scheduled_for ? new Date(row.scheduled_for).toISOString() : null }
+      : {}),
     caption: row.caption,
     ...(row.body_text !== undefined
       ? { bodyText: fullCompositionAllowed ? row.body_text : null }

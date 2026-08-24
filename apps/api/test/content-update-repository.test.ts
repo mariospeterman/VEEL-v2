@@ -43,6 +43,7 @@ describe("content update repository", () => {
       bodyTextProvided: false,
       nsfwLabel: "adult",
       contentSafetyPolicyAccepted: true,
+      scheduledForProvided: false,
       teaserStartMsProvided: false,
       teaserEndMsProvided: false,
       thumbnailFrameMsProvided: false,

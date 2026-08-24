@@ -20,6 +20,7 @@ export function MessagesWorkspace(input: {
   initialConversationId: string | null;
   initialMessages: Message[];
   initialMessagesAvailable: boolean;
+  initialSharedContentItemId: string | null;
 }) {
   const router = useRouter();
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -114,7 +115,7 @@ export function MessagesWorkspace(input: {
                 <EmptyState title="No visible messages yet">Send a respectful introduction to begin.</EmptyState>
               ) : null}
             </div>
-            <MessageComposer conversation={selected} onClearReply={() => setReplyTo(null)} onTyping={ephemeral.sendTyping} replyTo={replyTo} />
+            <MessageComposer conversation={selected} initialSharedContentItemId={input.initialSharedContentItemId} onClearReply={() => setReplyTo(null)} onTyping={ephemeral.sendTyping} replyTo={replyTo} />
           </>
         ) : (
           <div className="p-4"><EmptyState title="Select a conversation">Choose a conversation from your inbox.</EmptyState></div>

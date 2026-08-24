@@ -1,7 +1,7 @@
 interface FeedCursorPayload {
   version: 1;
   mode: "recommended" | "following";
-  surface: "home" | "bits";
+  surface: "home" | "bits" | "moments";
   asOf: string;
   rankingRevision: string;
   score: number;
@@ -50,7 +50,7 @@ export function decodeFeedCursor(cursor: string): FeedCursorPayload {
     if (
       value.version !== 1 ||
       !["recommended", "following"].includes(value.mode ?? "") ||
-      !["home", "bits"].includes(value.surface ?? "") ||
+      !["home", "bits", "moments"].includes(value.surface ?? "") ||
       !isCanonicalTimestamp(value.asOf) ||
       !isRankingRevision(value.rankingRevision) ||
       !isCanonicalTimestamp(value.createdAt) ||

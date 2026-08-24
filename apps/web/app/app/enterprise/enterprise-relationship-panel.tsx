@@ -25,7 +25,7 @@ import { Card, EmptyState, StatusPill } from "../../ui";
 
 type Dashboard = OrganizationDashboardPage["items"][number];
 
-export function EnterpriseManagementPanel({
+export function EnterpriseRelationshipPanel({
   dashboards,
   members,
   relationships,

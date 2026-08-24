@@ -7,6 +7,9 @@ import type { ContentDraftReadiness, ContentRepository, CreatorMediaPage } from 
 type OwnerMediaRow = {
   id: string;
   media_type: CreatorMediaPage["items"][number]["mediaType"];
+  distribution_mode: "post" | "moment";
+  expires_at: Date | null;
+  scheduled_for: Date | null;
   caption: string | null;
   poster_url: string | null;
   visibility: CreatorMediaPage["items"][number]["visibility"];
@@ -38,6 +41,9 @@ export function createContentWorkflowRepositoryMethods(
         select
           ci.id,
           ci.media_type,
+          ci.distribution_mode,
+          ci.expires_at,
+          ci.scheduled_for,
           ci.caption,
           media.poster_url,
           ci.visibility,
@@ -94,6 +100,9 @@ export function createContentWorkflowRepositoryMethods(
         items: pageRows.map((row) => ({
           id: row.id,
           mediaType: row.media_type,
+          distributionMode: row.distribution_mode,
+          expiresAt: row.expires_at?.toISOString() ?? null,
+          scheduledFor: row.scheduled_for?.toISOString() ?? null,
           caption: row.caption,
           posterUrl: row.poster_url,
           visibility: row.visibility,
@@ -117,6 +126,9 @@ export function createContentWorkflowRepositoryMethods(
         select
           ci.id,
           ci.media_type,
+          ci.distribution_mode,
+          ci.expires_at,
+          ci.scheduled_for,
           ci.caption,
           null::text as poster_url,
           ci.visibility,
@@ -280,6 +292,7 @@ function publicationState(
   row: OwnerMediaRow
 ): CreatorMediaPage["items"][number]["publicationState"] {
   if (row.publish_state === "published" && row.review_state === "approved") return "published";
+  if (row.publish_state === "scheduled") return "scheduled";
   if (row.review_state === "rejected") return "rejected";
   if (row.review_state === "changes_requested") return "changes_requested";
   if (row.review_state === "appealed") return "appeal_pending";

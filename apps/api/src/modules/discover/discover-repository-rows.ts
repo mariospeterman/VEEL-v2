@@ -3,6 +3,9 @@ import type { ContentItem, Event, Hashtag, LiveRoom } from "./types.js";
 export interface ContentRow {
   id: string;
   media_type: ContentItem["mediaType"];
+  distribution_mode: ContentItem["distributionMode"];
+  expires_at: Date | null;
+  scheduled_for: Date | null;
   caption: string | null;
   nsfw_label: NonNullable<ContentItem["nsfwLabel"]>;
   created_at: Date;

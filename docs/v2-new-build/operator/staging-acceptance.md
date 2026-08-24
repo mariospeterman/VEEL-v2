@@ -11,7 +11,7 @@ Source of truth: no — generated from `staging-acceptance.json`
 | `account.onboarding_age_recovery` | new_user | `/?mode=onboarding` | configured age provider, Supabase Auth recovery | BLOCKED_CONFIGURATION | verification_provider_credentials |
 | `privacy.user_lifecycle` | authenticated_user | `/app/settings` | none | BLOCKED_CONFIGURATION | real_stack_session |
 | `content.universal_creation` | age_verified_creator | `/app/create` | Bunny Stream, Bunny Storage, moderation provider | BLOCKED_CONFIGURATION | bunny_and_moderation_credentials |
-| `content.moments` | creator_and_viewer | `/app/home` | existing media provider only | DEFERRED | implementation_pending |
+| `content.moments` | creator_and_viewer | `/app/moments` | existing media provider only | BLOCKED_CONFIGURATION | real_stack_media_and_session |
 | `discovery.home_bits_search` | authenticated_viewer | `/app/home` | signed media playback | BLOCKED_CONFIGURATION | real_stack_session |
 | `engagement.social_loop` | authenticated_viewer | `/content/{contentId}` | none | BLOCKED_CONFIGURATION | real_stack_session |
 | `messages.consent_and_commerce` | viewer_and_creator | `/app/messages` | private media provider for attachments | BLOCKED_CONFIGURATION | realtime_and_provider_credentials |
