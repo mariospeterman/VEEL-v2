@@ -417,6 +417,16 @@ describe("external MCP connector foundation", () => {
     });
     expect(mcpCannotReview.statusCode).toBe(401);
 
+    const malformedReview = await app.inject({
+      method: "POST",
+      url: "/v1/media/assets/not-a-uuid/provenance-review",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "malformed-review" },
+      payload: { expectedCompositionRevision: 2, decision: "confirmed" }
+    });
+    expect(malformedReview.statusCode).toBe(400);
+    expect(malformedReview.json()).toMatchObject({ code: "validation_failed" });
+    expect(contentRepository.reviewInputs).toHaveLength(0);
+
     const reviewed = await app.inject({
       method: "POST",
       url: "/v1/media/assets/00000000-0000-4000-8000-000000000302/provenance-review",

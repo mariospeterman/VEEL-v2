@@ -23,6 +23,8 @@ import {
   type RegisterContentRoutesOptions
 } from "./content-route-shared.js";
 
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export async function registerContentUploadRoutes(
   app: FastifyInstance,
   options: RegisterContentRoutesOptions
@@ -394,6 +396,7 @@ export async function registerContentUploadRoutes(
     if (
       typeof idempotencyKey !== "string" ||
       !params.mediaAssetId ||
+      !uuidPattern.test(params.mediaAssetId) ||
       !body ||
       !Number.isInteger(body.expectedCompositionRevision) ||
       Number(body.expectedCompositionRevision) < 1 ||
@@ -479,6 +482,7 @@ export async function registerContentUploadRoutes(
     if (
       typeof idempotencyKey !== "string" ||
       !params.mediaAssetId ||
+      !uuidPattern.test(params.mediaAssetId) ||
       !body ||
       !Number.isInteger(body.expectedCompositionRevision) ||
       Number(body.expectedCompositionRevision) < 1 ||

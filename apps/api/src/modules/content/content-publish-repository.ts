@@ -33,7 +33,7 @@ export function createContentPublishRepositoryMethods(
               ci.state,
               ci.publish_state,
               ci.moderation_state,
-              private.content_composition_safety_ready(ci.id) as safety_ready,
+              private.content_safety_release_ready(ci.id) as safety_ready,
               private.content_composition_provider_ready(ci.id) as provider_ready
             from content_items ci
             join actor on actor.id = ci.creator_user_id
