@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { ContentDraftOriginConflictError } from "../src/modules/content/content-errors.js";
+import {
+  ContentDraftOriginConflictError,
+  ContentDraftPollCloseError
+} from "../src/modules/content/content-errors.js";
 import { createPostgresContentRepository } from "../src/modules/content/content-repository.js";
 import { createPostgresMcpRepository } from "../src/modules/mcp/mcp-repository.js";
 import { createPostgresClient } from "../src/shared/postgres.js";
@@ -22,6 +25,7 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
     const creatorId = randomUUID();
     const otherCreatorId = randomUUID();
     let contentId: string | null = null;
+    let pollContentId: string | null = null;
     let connectionId: string | null = null;
 
     try {
@@ -74,6 +78,27 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
       contentId = created.id;
       await expect(contentRepository.createDraft(createInput)).resolves.toMatchObject({ id: contentId });
 
+      const pollClosesAt = new Date(Date.now() + 1_000).toISOString();
+      const pollInput = {
+        ...createInput,
+        idempotencyKey: `mcp-private-draft:${connection.id}:${"d".repeat(64)}`,
+        requestHash: "d".repeat(64),
+        mediaType: "poll" as const,
+        caption: null,
+        poll: { question: "Replay after close?", options: ["Yes", "No"], closesAt: pollClosesAt },
+        origin: { ...createInput.origin, requestHash: "d".repeat(64) }
+      };
+      const createdPoll = await contentRepository.createDraft(pollInput);
+      pollContentId = createdPoll.id;
+      await new Promise((resolve) => setTimeout(resolve, 1_050));
+      await expect(contentRepository.createDraft(pollInput)).resolves.toMatchObject({ id: pollContentId });
+      await expect(contentRepository.createDraft({
+        ...pollInput,
+        idempotencyKey: `mcp-private-draft:${connection.id}:${"e".repeat(64)}`,
+        requestHash: "e".repeat(64),
+        origin: { ...createInput.origin, requestHash: "e".repeat(64) }
+      })).rejects.toBeInstanceOf(ContentDraftPollCloseError);
+
       await expect(contentRepository.createDraft({
         ...createInput,
         supabaseUserId: otherCreatorId,
@@ -93,6 +118,7 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
         select connection_id, actor_user_id, content_item_id, tool_name, tool_version, request_hash
         from mcp_private_draft_origins
         where connection_id = ${connection.id}
+          and content_item_id = ${contentId}
       `;
       expect(rows).toEqual([{
         connection_id: connection.id,
@@ -108,6 +134,7 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
         await sql`delete from mcp_connections where id = ${connectionId}`;
       }
       if (contentId) await sql`delete from content_items where id = ${contentId}`;
+      if (pollContentId) await sql`delete from content_items where id = ${pollContentId}`;
       await sql`delete from idempotency_keys where actor_user_id = any(${[creatorId, otherCreatorId]}::uuid[])`;
       await sql`delete from profiles where user_id = any(${[creatorId, otherCreatorId]}::uuid[])`;
       await sql`delete from users where id = any(${[creatorId, otherCreatorId]}::uuid[])`;

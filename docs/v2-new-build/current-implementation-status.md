@@ -38,19 +38,30 @@ copied into this document. The machine-readable companion is `production-status.
 
 | Field | Current value |
 | --- | --- |
-| Latest merged baseline | `1d2a91d8a994804193d0982c5fc0338c5c6aeae4` |
-| Latest merged slice | Convergence 06 — Consumer social experience |
-| Latest merged migration | `packages/database/migrations/0113_consumer_social_privacy.sql` |
+| Latest merged baseline | `861933402150f19731a103ebaac21fea4c5dcd78` |
+| Latest merged slice | Convergence 07 — Remote MCP profile bridge |
+| Latest merged migration | `packages/database/migrations/0114_mcp_profile_bridge.sql` |
 | Latest merged evidence | `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`, `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN` |
 | Known launch blockers | `STAGING_PROVEN`, `PROVIDER_APPROVED`, `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED` remain outstanding. |
-| Next planned slice | Convergence 07 — Remote MCP profile bridge |
+| Next planned slice | Convergence 08 — MCP media and provenance bridge |
 
-Next planned production slice: **Convergence 07 — Remote MCP profile bridge**.
+Next planned production slice: **Convergence 08 — MCP media and provenance bridge**.
 
 Readiness vocabulary is fixed to `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`,
 `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN`, `STAGING_PROVEN`, `PROVIDER_APPROVED`,
 `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED`. “Accepted” describes a
 design decision; it never means implemented, tested, approved, enabled, or launch-ready.
+
+Merged Convergence 07 provides a feature-flagged remote MCP bridge for minimized creator profile
+readiness, canonical Analytics Core queries, bounded private-draft reads, and idempotent SFW private-
+draft preparation. It reuses the existing OAuth, identity, analytics, content, audit, and privacy
+authorities; hosts no model or model keys; and exposes no publish, payment, wallet-signing,
+moderation, entitlement, messaging, admin-mutation, or provider-configuration capability. Migration
+`0114` is reversible. PR #97 merged as `8619334`; exact-main CI `32697042022`, database
+`32697041986`, and security `32697041973` are green. A bounded post-merge repair preserves durable
+poll-draft replays after their close time while continuing to reject expired first creations. Public
+HTTPS client interoperability remains fail closed pending the recorded redirects, MCP Inspector,
+Claude, OpenAI-compatible, revocation, and audit-row staging proof.
 
 Merged Convergence 06 provides one accessible consumer action rail and comments sheet with replies,
 comment likes, mention privacy, canonical internal shares, hashtags, polls, genuine search/discovery,

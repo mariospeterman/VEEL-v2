@@ -69,8 +69,8 @@ accessibility, browser, and immutable-artifact evidence. Anything outside that d
 | Convergence 04 | Lifecycle correctness, login/onboarding separation, and analytics surfaces | Merged through PR #89 at `c517c3e`: purpose-bound login/onboarding, lookup-only recovery, exact lifecycle resume, PII-free onboarding instrumentation, shared analytics surfaces, exact-main CI/database/security, real-Postgres, and browser proof are green; provider staging remains fail closed |
 | Convergence 05 | Realtime, messaging, and live safety | Merged through PR #90 and repair PRs #91/#93 at `765d236`: private scoped Broadcast transports bounded invalidations, consent-safe messaging and creator commerce preserve canonical payment/access authority, and live release requires acknowledged moderation plus recurring provider health while ended-room races terminalize cleanly. Exact-main CI/database/security are green; real Supabase/Livepeer staging remains fail closed on recorded external gates. |
 | Convergence 06 | Consumer social experience | Merged through PR #94 and bounded browser-smoke repair PR #96 at `1d2a91d`: one accessible action rail, comments sheet, replies, comment likes, mentions, internal shares, hashtags, polls, genuine search/discovery, privacy self-service, and responsive PWA UX; exact-main CI/database/security and immutable artifacts are green while provider staging remains fail closed on recorded external gates |
-| Convergence 07 | Remote MCP profile bridge | Next after the bounded Convergence 06 repair and current official protocol re-verification: stateless OAuth profile/analytics/private-draft preparation bridge with no hosted WeVid model or consequential direct actions |
-| Convergence 08 | MCP media and provenance bridge | Pending Convergence 07: short-lived private-draft media capabilities, quarantine/provider verification, structured provenance, trusted human review, and no MCP publish endpoint |
+| Convergence 07 | Remote MCP profile bridge | Merged through PR #97 at `8619334`: stateless OAuth profile/Analytics Core/private-draft preparation reuses existing authorities, exposes no hosted model or consequential action, and passed exact-main CI/database/security; real-client public HTTPS staging remains fail closed on recorded external gates |
+| Convergence 08 | MCP media and provenance bridge | Next after the bounded Convergence 07 idempotency repair: short-lived private-draft media capabilities, quarantine/provider verification, structured provenance, trusted human review, and no MCP publish endpoint |
 | Separate add-on | `wevid-agency` | Only after the core bridge: a user-owned, separately authorized package for external AI, sourced research, local FFmpeg, and optional user-owned generation providers; it is not part of the WeVid API runtime and requires a separately authorized repository boundary |
 | Deferred post-core | WeVid-native Product Offers plus lightweight Orders/Fulfillment, adult live, expanded Mutuals, NFT/transferable passes, resale, custom contracts, and uncommitted advanced Enterprise work | Separately gated and disabled or absent; physical commerce reuses the Slice 06 payment boundary and requires seller/trader, product-safety, shipping/privacy, tax, refund, and operations approval before code |
 
@@ -84,8 +84,8 @@ not create parallel policy, eligibility, composer, renderer, analytics, realtime
 WeVid Core owns deterministic analytics and the scoped data/action bridge, but hosts no LLM or model-key
 gateway. The optional WeVid Agency remains a separate, user-owned add-on and publication stays human-controlled.
 
-Next planned production slice: **Convergence 07 — Remote MCP profile bridge**.
-Its branch contract is `codex/converge-07-remote-mcp-profile-bridge`; GitHub, not this document, owns
+Next planned production slice: **Convergence 08 — MCP media and provenance bridge**.
+Its branch contract is `codex/converge-08-mcp-media-provenance-bridge`; GitHub, not this document, owns
 whether that branch currently has the one active pull request.
 
 Each completed slice requires the actual UI-to-database/provider path, authorization and runtime validation, focused unit and real-Postgres integration proof, browser proof, operational recovery, canonical docs updates, and redacted provider staging evidence when a provider is involved. Mocks prove application logic only.

@@ -6,6 +6,7 @@ import {
   dailyQuotaWindowStart,
   resolveContentCreationAbusePolicy
 } from "../content/content-route-shared.js";
+import { ContentDraftPollCloseError } from "../content/content-errors.js";
 import type { ContentRepository } from "../content/types.js";
 import { hashIdempotencyPayload } from "../../shared/idempotency.js";
 import type { ProfileRepository } from "../profile/types.js";
@@ -274,28 +275,36 @@ export async function runMcpTool(input: {
       const body = privateDraftInput(input.params);
       const abusePolicy = await resolveContentCreationAbusePolicy(input.contentRepository);
       const requestHash = hashIdempotencyPayload(body);
-      const content = await input.contentRepository.createDraft({
-        supabaseUserId: input.connection.supabaseUserId,
-        idempotencyKey: `mcp-private-draft:${input.connection.id}:${requestHash}`,
-        requestHash,
-        mediaType: body.mediaType,
-        caption: body.caption,
-        bodyText: body.bodyText,
-        poll: body.poll,
-        visibility: "private",
-        nsfwLabel: "none",
-        representationMode: "not_declared",
-        contentSafetyPolicyAccepted: false,
-        quotaWindowStart: dailyQuotaWindowStart(new Date(), abusePolicy.rollingWindowHours),
-        dailyDraftQuota: abusePolicy.dailyContentDraftQuota,
-        origin: {
-          kind: "mcp",
-          connectionId: input.connection.id,
-          toolName: "creator_create_private_draft",
-          toolVersion: input.tool.version,
-          requestHash
+      let content;
+      try {
+        content = await input.contentRepository.createDraft({
+          supabaseUserId: input.connection.supabaseUserId,
+          idempotencyKey: `mcp-private-draft:${input.connection.id}:${requestHash}`,
+          requestHash,
+          mediaType: body.mediaType,
+          caption: body.caption,
+          bodyText: body.bodyText,
+          poll: body.poll,
+          visibility: "private",
+          nsfwLabel: "none",
+          representationMode: "not_declared",
+          contentSafetyPolicyAccepted: false,
+          quotaWindowStart: dailyQuotaWindowStart(new Date(), abusePolicy.rollingWindowHours),
+          dailyDraftQuota: abusePolicy.dailyContentDraftQuota,
+          origin: {
+            kind: "mcp",
+            connectionId: input.connection.id,
+            toolName: "creator_create_private_draft",
+            toolVersion: input.tool.version,
+            requestHash
+          }
+        });
+      } catch (error) {
+        if (error instanceof ContentDraftPollCloseError) {
+          throw new McpToolValidationError("Poll closesAt must be a future ISO date-time or null");
         }
-      });
+        throw error;
+      }
       return {
         draft: { contentId: content.id, mediaType: content.mediaType, caption: content.caption ?? null, visibility: "private" },
         nextAction: "review_in_wevid"
@@ -416,7 +425,7 @@ function parsePoll(value: unknown): { question: string; options: string[]; close
   if (
     poll.closesAt !== undefined &&
     poll.closesAt !== null &&
-    (!isIsoDateTime(poll.closesAt) || Date.parse(poll.closesAt) <= Date.now())
+    !isIsoDateTime(poll.closesAt)
   ) {
     throw new McpToolValidationError("Poll closesAt must be a future ISO date-time or null");
   }
