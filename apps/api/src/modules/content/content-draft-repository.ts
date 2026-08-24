@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import {
   ContentDraftIdempotencyConflictError,
+  ContentDraftOriginConflictError,
   ContentDraftQuotaExceededError,
   ContentRepositoryConfigurationError
 } from "./content-errors.js";
@@ -70,7 +71,10 @@ export function createContentDraftRepositoryMethods(
             contentId: idempotency.response_body.contentId,
             creatorUserId: user.id
           });
-          if (existing) return existing;
+          if (existing) {
+            await recordDraftOrigin(transaction, user.id, existing.id, input.origin);
+            return existing;
+          }
         }
 
         const counts = await transaction<{ count: number }[]>`
@@ -146,6 +150,8 @@ export function createContentDraftRepositoryMethods(
           policyAccepted: input.contentSafetyPolicyAccepted
         });
 
+        await recordDraftOrigin(transaction, user.id, contentId, input.origin);
+
         if (hashtags.length > 0) {
           for (const slug of hashtags) {
             const displayName = `#${slug}`;
@@ -183,6 +189,65 @@ export function createContentDraftRepositoryMethods(
       return toContentItem(row, null);
     }
   };
+}
+
+async function recordDraftOrigin(
+  sql: postgres.TransactionSql,
+  creatorUserId: string,
+  contentId: string,
+  origin: Parameters<ContentRepository["createDraft"]>[0]["origin"]
+): Promise<void> {
+  if (!origin) return;
+
+  await sql`
+    insert into mcp_private_draft_origins (
+      id,
+      connection_id,
+      actor_user_id,
+      content_item_id,
+      tool_name,
+      tool_version,
+      request_hash
+    )
+    select
+      ${randomUUID()},
+      connection.id,
+      ${creatorUserId},
+      ${contentId},
+      ${origin.toolName},
+      ${origin.toolVersion},
+      ${origin.requestHash}
+    from mcp_connections connection
+    where connection.id = ${origin.connectionId}
+      and connection.actor_user_id = ${creatorUserId}
+      and connection.state = 'active'
+      and connection.expires_at > now()
+    on conflict (content_item_id) do nothing
+  `;
+
+  const rows = await sql<Array<{
+    connection_id: string;
+    actor_user_id: string;
+    tool_name: string;
+    tool_version: string;
+    request_hash: string;
+  }>>`
+    select connection_id, actor_user_id, tool_name, tool_version, request_hash
+    from mcp_private_draft_origins
+    where content_item_id = ${contentId}
+    limit 1
+  `;
+  const recorded = rows[0];
+  if (
+    !recorded ||
+    recorded.connection_id !== origin.connectionId ||
+    recorded.actor_user_id !== creatorUserId ||
+    recorded.tool_name !== origin.toolName ||
+    recorded.tool_version !== origin.toolVersion ||
+    recorded.request_hash !== origin.requestHash
+  ) {
+    throw new ContentDraftOriginConflictError();
+  }
 }
 
 async function selectContentRow(

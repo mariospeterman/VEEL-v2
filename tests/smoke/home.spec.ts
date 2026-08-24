@@ -173,6 +173,7 @@ test("keeps representative authenticated workspaces free of blocking accessibili
     "/app/create",
     "/app/messages",
     "/app/activity",
+    "/app/assistant",
     "/app/wallet",
     "/app/profile",
     "/app/settings",
@@ -198,6 +199,19 @@ test("keeps representative authenticated workspaces free of blocking accessibili
   }
 
   expect(blocking).toEqual([]);
+});
+
+test("explains connected assistant permissions without exposing protocol internals", async ({ context, page }) => {
+  await addE2eCookie(context);
+  await page.goto("/app/assistant", { waitUntil: "domcontentloaded", timeout: 45_000 });
+
+  await expect(page.getByRole("heading", { name: "Your assistant, your choice" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Creator analytics" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Prepare a private draft" })).toBeVisible();
+  await expect(page.getByText("WeVid never stores your model keys.")).toBeVisible();
+  await expect(page.getByText("Private draft only")).toBeVisible();
+  await expect(page.getByText(/publish, pay, sign a wallet transaction/)).toBeVisible();
+  await expect(page.getByText(/creator_get_|creator\.|scoped_token|oauth/i)).toHaveCount(0);
 });
 
 test("renders the provider-first Enterprise workspace without custody or payout controls", async ({ context, page }) => {
@@ -636,6 +650,36 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
 
   if (method === "GET" && url.pathname === "/v1/session") {
     sendJson(response, 200, sessionState());
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/v1/ai/capabilities") {
+    sendJson(response, 200, {
+      items: [{
+        scope: "creator_helper",
+        allowedTools: ["summarize_creator_metrics", "draft_caption"],
+        confirmationRequiredTools: [],
+        canStartSession: true
+      }]
+    });
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/v1/mcp/tools") {
+    sendJson(response, 200, {
+      items: [
+        mcpTool("creator_get_profile", "My WeVid profile", true),
+        mcpTool("creator_query_analytics", "My WeVid analytics", true),
+        mcpTool("creator_list_private_drafts", "My private WeVid drafts", true),
+        mcpTool("creator_get_draft_readiness", "Private draft readiness", true),
+        mcpTool("creator_create_private_draft", "Prepare a private WeVid draft", false)
+      ]
+    });
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/v1/mcp/connections") {
+    sendJson(response, 200, { items: [], nextCursor: null });
     return;
   }
 
@@ -1123,6 +1167,26 @@ function platformAccess() {
     },
     tiers,
     policyBoundary: "platform_tiers_buy_software_and_public_media_allowance_never_social_priority"
+  };
+}
+
+function mcpTool(name: string, title: string, readOnlyHint: boolean) {
+  return {
+    name,
+    version: "1.0.0",
+    description: title,
+    inputSchema: { type: "object", additionalProperties: false, properties: {} },
+    outputSchema: { type: "object", additionalProperties: false, properties: {} },
+    requiredScopes: [readOnlyHint ? "creator.drafts.read" : "creator.drafts.write"],
+    roleTypes: ["creator"],
+    riskLevel: readOnlyHint ? "read" : "draft",
+    annotations: {
+      title,
+      readOnlyHint,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
   };
 }
 

@@ -9,6 +9,18 @@ const migrationsDir = join(packageRoot, "migrations");
 const readMigration = (fileName: string) => readFileSync(join(migrationsDir, fileName), "utf8");
 
 describe("database migrations", () => {
+  it("records minimized MCP private-draft origin without prompt or credential storage", () => {
+    const sql = readMigration("0114_mcp_profile_bridge.sql");
+    const downSql = readMigration("0114_mcp_profile_bridge.down.sql");
+
+    expect(sql).toContain("create table mcp_private_draft_origins");
+    expect(sql).toContain("tool_name = 'creator_create_private_draft'");
+    expect(sql).toContain("unique (connection_id, request_hash)");
+    expect(sql).toContain("mcp_private_draft_origins_select_self_or_staff");
+    expect(sql).not.toMatch(/prompt\s+(text|jsonb)|model_key|access_token|provider_payload|message_body|wallet_address/i);
+    expect(downSql).toContain("0114 rollback requires retained MCP private-draft origin records");
+  });
+
   it("keeps consumer social privacy server-owned and safely reversible", () => {
     const sql = readMigration("0113_consumer_social_privacy.sql");
     const downSql = readMigration("0113_consumer_social_privacy.down.sql");

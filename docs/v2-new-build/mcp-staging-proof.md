@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: documentation
-Last updated: 2026-06-13
+Last updated: 2026-08-24
 Source of truth: yes
 
 Owns:
@@ -14,10 +14,11 @@ Defers to:
 - `ai-mcp-use-cases.md`, `infra-decisions.md`, `route-map.md`, OpenAPI, and migrations for authoritative behavior
 
 Does not own:
-- new MCP product tools, AI/LLM platform behavior, provider credentials, or production client approvals
+- MCP tools beyond the accepted profile-bridge contract, AI/LLM platform behavior, provider
+  credentials, or production client approvals
 
 Launch scope:
-- local and staging proof of the existing remote MCP connector
+- local and staging proof of the remote MCP connector and accepted creator profile bridge
 
 Non-goals:
 - dynamic client registration, refresh tokens, new AI features, dangerous tools, or product surface expansion
@@ -31,9 +32,18 @@ Non-goals:
 - OAuth revocation: `/oauth/revoke`
 - Authenticated web consent: `/oauth/consent/:requestId`
 - Scoped tool listing and tool execution
+- Stable MCP `2025-11-25` negotiation with standard text plus `structuredContent` results
+- Protocol-version headers on post-initialization smoke requests and HTTP 400 rejection for explicit
+  unsupported versions
+- Configured-Origin validation for Streamable HTTP requests
+- Accurate read-only, destructive, idempotent, and open-world tool annotations
+- Minimized creator profile/readiness, canonical Analytics Core queries, owned private-draft reads,
+  and idempotent SFW private-draft preparation for review in WeVid
 - Hash-only authorization codes and access tokens
 - Connection and token revocation
 - Redacted MCP tool-call audit rows
+- Minimized durable MCP private-draft origin rows without prompts, tokens, model keys, provider
+  payloads, or private content
 - Local/staging seed and smoke scripts
 
 ## Still Requires Operational Proof
@@ -136,6 +146,9 @@ https://YOUR-STAGING-API.example/mcp
 - `initialize`
 - `tools/list`
 - `tools/call` for `creator_get_profile`
+- `tools/call` for `creator_query_analytics` and verify Analytics Core freshness/privacy fields
+- `tools/call` for `creator_create_private_draft` and verify the result remains private and points
+  back to review in WeVid
 - `tools/call` for `admin_list_payment_intents` and confirm denial
 
 5. Verify the connection row and MCP audit rows in staging database/admin tooling.
@@ -190,12 +203,13 @@ Do not claim ChatGPT/OpenAI app compatibility until the real public connector fl
 1. `GET /.well-known/oauth-protected-resource`
 2. `GET /.well-known/oauth-authorization-server`
 3. `POST /mcp` `initialize`
-4. `POST /mcp` `tools/list`
-5. Assertion that `MCP_TEST_EXPECTED_TOOL` is present
-6. Assertion that `MCP_TEST_FORBIDDEN_TOOL` is absent
-7. Safe read `tools/call` for the expected tool
-8. Forbidden `tools/call` and denial assertion
-9. Optional audit-row count when `DATABASE_URL` and `MCP_TEST_CONNECTION_ID` are provided
+4. Assertion that MCP `2025-11-25` was negotiated
+5. `POST /mcp` `tools/list`
+6. Assertion that `MCP_TEST_EXPECTED_TOOL` is present
+7. Assertion that `MCP_TEST_FORBIDDEN_TOOL` is absent
+8. Safe read `tools/call` for the expected tool with standard text and structured output
+9. Forbidden `tools/call` and denial assertion
+10. Optional audit-row count when `DATABASE_URL` and `MCP_TEST_CONNECTION_ID` are provided
 
 The script redacts bearer tokens in output.
 
@@ -210,7 +224,7 @@ The script redacts bearer tokens in output.
 - OAuth client rows are seeded
 - Exact allowed redirect URIs are configured
 - TLS is active
-- CORS is configured only where needed
+- CORS is configured only where needed and unexpected `Origin` values fail with HTTP 403
 - Rate limits are enabled
 - Audit retention is configured
 - Provider credentials are server-only and not logged
@@ -220,8 +234,8 @@ Remote MCP is production-auth-capable only after public HTTPS deployment, OAuth 
 ## References
 
 - MCP Inspector: `https://modelcontextprotocol.io/docs/tools/inspector`
-- MCP Authorization: `https://modelcontextprotocol.io/docs/tutorials/security/authorization`
-- MCP Streamable HTTP transport: `https://modelcontextprotocol.io/specification/2025-03-26/basic/transports`
+- MCP Authorization: `https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization`
+- MCP Streamable HTTP transport: `https://modelcontextprotocol.io/specification/2025-11-25/basic/transports`
 - Claude Code MCP: `https://docs.anthropic.com/en/docs/claude-code/mcp`
 - Claude custom connectors: `https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp`
 - OpenAI MCP/connectors: `https://developers.openai.com/api/docs/guides/tools-connectors-mcp`

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { hashIdempotencyPayload } from "../../shared/idempotency.js";
 import { type PostgresSql, withPostgresTransaction } from "../../shared/postgres.js";
 import { ContentModerationAppealConflictError } from "./content-errors.js";
-import type { ContentRepository, CreatorMediaPage } from "./types.js";
+import type { ContentDraftReadiness, ContentRepository, CreatorMediaPage } from "./types.js";
 
 type OwnerMediaRow = {
   id: string;
@@ -20,9 +20,15 @@ type OwnerMediaRow = {
   updated_at: Date;
 };
 
+type PrivateDraftReadinessRow = OwnerMediaRow & {
+  moderation_state: string;
+  asset_count: number;
+  safety_ready: boolean;
+};
+
 export function createContentWorkflowRepositoryMethods(
   sql: PostgresSql
-): Pick<ContentRepository, "listOwnedContent" | "createModerationAppeal"> {
+): Pick<ContentRepository, "listOwnedContent" | "findOwnedPrivateDraftReadiness" | "createModerationAppeal"> {
   return {
     async listOwnedContent(input) {
       const rows = await sql<OwnerMediaRow[]>`
@@ -56,6 +62,10 @@ export function createContentWorkflowRepositoryMethods(
         ) media on true
         where u.supabase_user_id = ${input.supabaseUserId}
           and ci.state <> 'deleted'
+          and (${input.privateDraftsOnly ?? false}::boolean is false or (
+            ci.visibility = 'private'
+            and ci.publish_state <> 'published'
+          ))
           and (${input.cursor ?? null}::timestamptz is null or ci.updated_at < ${input.cursor ?? null}::timestamptz)
         order by ci.updated_at desc, ci.id desc
         limit ${input.limit + 1}
@@ -80,6 +90,47 @@ export function createContentWorkflowRepositoryMethods(
             ? pageRows[pageRows.length - 1]!.updated_at.toISOString()
             : null
       };
+    },
+
+    async findOwnedPrivateDraftReadiness(input) {
+      const rows = await sql<PrivateDraftReadinessRow[]>`
+        select
+          ci.id,
+          ci.media_type,
+          ci.caption,
+          null::text as poster_url,
+          ci.visibility,
+          ci.state as content_state,
+          ci.publish_state,
+          ci.moderation_state,
+          coalesce(msc.state, 'quarantined') as review_state,
+          msc.decision_message as review_message,
+          exists (
+            select 1 from media_assets asset
+            where asset.content_item_id = ci.id and asset.retired_at is null
+          ) as has_media,
+          private.content_composition_provider_ready(ci.id) as provider_ready,
+          private.content_composition_safety_ready(ci.id) as safety_ready,
+          (
+            select count(*)::integer from media_assets asset
+            where asset.content_item_id = ci.id and asset.retired_at is null
+          ) as asset_count,
+          ci.created_at,
+          ci.updated_at
+        from content_items ci
+        join users actor on actor.id = ci.creator_user_id
+        left join media_safety_cases msc
+          on msc.content_item_id = ci.id
+         and msc.state <> 'superseded'
+        where ci.id = ${input.contentId}
+          and actor.supabase_user_id = ${input.supabaseUserId}
+          and actor.state = 'active'
+          and ci.state <> 'deleted'
+          and ci.visibility = 'private'
+        limit 1
+      `;
+
+      return rows[0] ? toPrivateDraftReadiness(rows[0]) : null;
     },
 
     async createModerationAppeal(input) {
@@ -216,8 +267,52 @@ function publicationState(
     return "in_review";
   }
   if (row.has_media && !row.provider_ready) return "processing";
-  if (!row.has_media) return "upload_pending";
+  if (!row.has_media && row.media_type !== "text" && row.media_type !== "poll") return "upload_pending";
   return "draft";
+}
+
+function toPrivateDraftReadiness(row: PrivateDraftReadinessRow): ContentDraftReadiness {
+  const blockers: string[] = [];
+  const isStructuredWithoutMedia = row.media_type === "text" || row.media_type === "poll";
+  const contentReady = row.content_state === "ready" || isStructuredWithoutMedia;
+
+  if (!contentReady) blockers.push("draft_content_incomplete");
+  if (!row.provider_ready) blockers.push("media_processing_incomplete");
+  if (row.moderation_state === "blocked" || row.publish_state === "blocked") {
+    blockers.push("safety_review_blocked");
+  }
+  if (["rejected", "changes_requested"].includes(row.review_state)) {
+    blockers.push("review_changes_required");
+  }
+  if (!["draft", "unpublished"].includes(row.publish_state)) {
+    blockers.push("review_already_requested");
+  }
+
+  const reviewRequestEligible =
+    contentReady &&
+    row.provider_ready &&
+    row.moderation_state !== "blocked" &&
+    ["draft", "unpublished"].includes(row.publish_state);
+
+  const nextAction: ContentDraftReadiness["nextAction"] =
+    ["rejected", "changes_requested"].includes(row.review_state)
+      ? "resolve_review"
+      : reviewRequestEligible
+        ? "continue_in_wevid"
+        : !contentReady || !row.provider_ready
+          ? "wait_for_processing"
+          : "none";
+
+  return {
+    contentId: row.id,
+    mediaType: row.media_type,
+    publicationState: publicationState(row),
+    reviewState: row.review_state,
+    reviewRequestEligible,
+    assetCount: row.asset_count,
+    blockers,
+    nextAction
+  };
 }
 
 function toAppeal(

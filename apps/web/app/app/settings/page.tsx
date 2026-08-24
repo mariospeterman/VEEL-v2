@@ -48,10 +48,10 @@ export default async function SettingsPage() {
     <AppShell>
       <section className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
         <aside className="grid content-start gap-2 border-b border-(--line) pb-4 lg:border-b-0 lg:border-r lg:pr-5">
-          {["Profile", "Security", "MCP", "Feed", "Privacy", "Notifications"].map((item) => (
+          {["Profile", "Security", "Assistants", "Feed", "Privacy", "Notifications"].map((item) => (
             <a
               className="rounded px-3 py-3 text-sm font-medium text-(--muted) transition hover:bg-(--glass) hover:text-(--foreground)"
-              href={`#${item.toLowerCase()}`}
+              href={item === "Assistants" ? "#mcp" : `#${item.toLowerCase()}`}
               key={item}
             >
               {item}
@@ -61,7 +61,7 @@ export default async function SettingsPage() {
 
         <section className="grid content-start gap-5">
           <PageHeader eyebrow="Settings" title="Account controls">
-            Privacy, security, notifications, and connected external MCP clients.
+            Privacy, security, notifications, and connected assistants.
           </PageHeader>
 
           <SettingsGroup id="profile" title="Profile">
@@ -76,7 +76,7 @@ export default async function SettingsPage() {
             />
           </SettingsGroup>
 
-          <SettingsGroup id="mcp" title="MCP connections">
+          <SettingsGroup id="mcp" title="Connected assistants">
             <McpConnectionsPanel connections={mcpConnections} />
           </SettingsGroup>
 

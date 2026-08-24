@@ -103,6 +103,9 @@ function createUnavailableContentRepository(): PostgresContentRepository {
     async listOwnedContent() {
       throw new ContentRepositoryConfigurationError();
     },
+    async findOwnedPrivateDraftReadiness() {
+      throw new ContentRepositoryConfigurationError();
+    },
     async createModerationAppeal() {
       throw new ContentRepositoryConfigurationError();
     },

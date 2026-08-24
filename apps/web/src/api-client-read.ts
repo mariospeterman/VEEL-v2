@@ -57,6 +57,7 @@ import type {
   LiveRoomPage,
   LiveChatPage,
   McpConnectionPage,
+  McpToolList,
   McpConsentRequest,
   MessagePage,
   MutualsFeedPage,
@@ -223,6 +224,10 @@ export async function getAiCapabilities(): Promise<ApiResult<AiCapabilities>> {
 
 export async function getMcpConnections(): Promise<ApiResult<McpConnectionPage>> {
   return getJson<McpConnectionPage>("/v1/mcp/connections");
+}
+
+export async function getMcpTools(): Promise<ApiResult<McpToolList>> {
+  return getJson<McpToolList>("/v1/mcp/tools");
 }
 
 export async function getMcpConsentRequest(requestId: string): Promise<ApiResult<McpConsentRequest>> {

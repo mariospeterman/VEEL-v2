@@ -1783,6 +1783,19 @@ create table mcp_tool_calls (
   created_at timestamptz not null default now()
 );
 
+create table mcp_private_draft_origins (
+  id uuid primary key,
+  connection_id uuid not null references mcp_connections(id),
+  actor_user_id uuid not null references users(id),
+  content_item_id uuid not null references content_items(id) on delete cascade,
+  tool_name text not null,
+  tool_version text not null,
+  request_hash text not null,
+  created_at timestamptz not null default now(),
+  unique (content_item_id),
+  unique (connection_id, request_hash)
+);
+
 create table audit_events (
   id uuid primary key,
   actor_user_id uuid references users(id),

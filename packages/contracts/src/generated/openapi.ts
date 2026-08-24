@@ -5861,6 +5861,14 @@ export interface components {
             requiredScopes: components["schemas"]["McpScope"][];
             roleTypes: components["schemas"]["McpRoleType"][];
             riskLevel: components["schemas"]["McpToolRiskLevel"];
+            annotations: components["schemas"]["McpToolAnnotations"];
+        };
+        McpToolAnnotations: {
+            title: string;
+            readOnlyHint: boolean;
+            destructiveHint: boolean;
+            idempotentHint: boolean;
+            openWorldHint: boolean;
         };
         CreateMcpConnectionRequest: {
             clientName: string;

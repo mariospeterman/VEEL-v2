@@ -59,6 +59,13 @@ export class ContentDraftIdempotencyConflictError extends Error {
   }
 }
 
+export class ContentDraftOriginConflictError extends Error {
+  constructor() {
+    super("content_draft_origin_conflict");
+    this.name = "ContentDraftOriginConflictError";
+  }
+}
+
 export class ContentDraftQuotaExceededError extends Error {
   constructor() {
     super("content_draft_quota_exceeded");

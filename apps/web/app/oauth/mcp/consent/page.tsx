@@ -1,5 +1,6 @@
 import { appShellNavItems } from "@veel/ui";
 import { getMcpConsentRequest } from "@/api-client";
+import { mcpClientTypeLabel, mcpConnectionStateLabel, mcpRoleLabel, mcpScopeLabel } from "@/mcp-display";
 import { requireConfiguredSession } from "@/supabase/route-guard";
 import { McpConsentDecisionPanel } from "./mcp-consent-decision-panel";
 
@@ -38,8 +39,9 @@ export default async function McpOAuthConsentPage({
 
       <section className="mx-auto grid w-full max-w-3xl gap-5 px-5 py-8">
         <header>
-          <p className="text-sm font-medium text-(--accent-text)">MCP connection</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-normal">Approve connector access</h1>
+          <p className="text-sm font-medium text-(--accent-text)">Connected assistant</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-normal">Choose what this assistant can do</h1>
+          <p className="mt-2 text-sm text-(--muted)">Approve only if you started this connection. You can revoke it later in Settings.</p>
         </header>
 
         {!requestId || !consent ? (
@@ -51,20 +53,22 @@ export default async function McpOAuthConsentPage({
               <p className="mt-1 font-medium">{consent.data.clientName}</p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Fact label="Role" value={consent.data.roleType} />
-              <Fact label="Client type" value={consent.data.clientType} />
-              <Fact label="Status" value={consent.data.status} />
-              <Fact label="Resource" value={consent.data.resource} />
+              <Fact label="Access type" value={mcpRoleLabel(consent.data.roleType)} />
+              <Fact label="Assistant" value={mcpClientTypeLabel(consent.data.clientType)} />
+              <Fact label="Status" value={mcpConnectionStateLabel(consent.data.status)} />
             </div>
             <div>
-              <p className="text-sm text-(--muted)">Scopes</p>
+              <p className="text-sm text-(--muted)">Requested permissions</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {consent.data.requestedScopes.map((scope) => (
                   <span className="rounded border border-(--line) bg-(--background) px-2 py-1 text-xs" key={scope}>
-                    {scope}
+                    {mcpScopeLabel(scope)}
                   </span>
                 ))}
               </div>
+              <p className="mt-3 text-xs text-(--muted)">
+                Draft permission creates SFW private drafts only. It never grants publishing, payment, wallet signing, messaging, moderation, or account-administration access.
+              </p>
             </div>
             <McpConsentDecisionPanel requestId={requestId} />
           </section>

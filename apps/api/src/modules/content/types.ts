@@ -45,6 +45,10 @@ export interface ContentRepository {
   findOwnedContentForUpdate?(input: FindOwnedContentForUploadInput): Promise<OwnedContentForUpload | null>;
   listHomeFeed(input: ListHomeFeedInput): Promise<FeedPage>;
   listOwnedContent?(input: ListOwnedContentInput): Promise<CreatorMediaPage>;
+  findOwnedPrivateDraftReadiness?(input: {
+    supabaseUserId: string;
+    contentId: string;
+  }): Promise<ContentDraftReadiness | null>;
   createModerationAppeal?(input: CreateModerationAppealInput): Promise<MediaModerationAppeal | null>;
   recordMediaProviderWebhook?(input: RecordMediaProviderWebhookInput): Promise<boolean>;
   updateMediaAssetFromWebhook?(input: UpdateMediaAssetFromWebhookInput): Promise<boolean>;
@@ -53,6 +57,17 @@ export interface ContentRepository {
   publishOwnedContent?(input: PublishOwnedContentInput): Promise<ContentItem | null>;
   voteOnPoll?(input: VoteOnContentPollInput): Promise<NonNullable<ContentItem["poll"]> | null>;
   close?(): Promise<void>;
+}
+
+export interface ContentDraftReadiness {
+  contentId: string;
+  mediaType: ContentItem["mediaType"];
+  publicationState: CreatorMediaPage["items"][number]["publicationState"];
+  reviewState: string;
+  reviewRequestEligible: boolean;
+  assetCount: number;
+  blockers: string[];
+  nextAction: "continue_in_wevid" | "wait_for_processing" | "resolve_review" | "none";
 }
 
 export interface VoteOnContentPollInput {
@@ -67,6 +82,7 @@ export interface ListOwnedContentInput {
   supabaseUserId: string;
   cursor?: string;
   limit: number;
+  privateDraftsOnly?: boolean;
 }
 
 export interface CreateModerationAppealInput {
@@ -90,6 +106,13 @@ export interface CreateContentDraftInput {
   contentSafetyPolicyAccepted: boolean;
   quotaWindowStart: Date;
   dailyDraftQuota: number;
+  origin?: {
+    kind: "mcp";
+    connectionId: string;
+    toolName: "creator_create_private_draft";
+    toolVersion: string;
+    requestHash: string;
+  };
 }
 
 export interface CountContentQuotaInput {
