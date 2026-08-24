@@ -339,6 +339,29 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
         originClassification: "human_created"
       })).rejects.toMatchObject({ reason: "provenance_locked" });
 
+      let readinessAfterWaitingForLock: Promise<Array<{ provenance_ready: boolean }>> | null = null;
+      await sql.begin(async (transaction) => {
+        await transaction`select id from content_items where id = ${contentId} for update`;
+        readinessAfterWaitingForLock = sql.begin(async (waitingTransaction) => {
+          await waitingTransaction`select id from content_items where id = ${contentId} for update`;
+          return waitingTransaction<Array<{ provenance_ready: boolean }>>`
+            select private.content_composition_provenance_ready(${contentId}) as provenance_ready
+          `;
+        });
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        await transaction`
+          update media_assets
+          set provenance_human_review_state = 'pending'
+          where id = ${issued!.mediaAssetId}
+        `;
+      });
+      await expect(readinessAfterWaitingForLock!).resolves.toEqual([{ provenance_ready: false }]);
+      await sql`
+        update media_assets
+        set provenance_human_review_state = 'confirmed'
+        where id = ${issued!.mediaAssetId}
+      `;
+
       const expiredReservationToken = "31".repeat(32);
       const expiredReservation = await contentRepository.issueMcpMediaUploadCapability!({
         ...capabilityInput,
