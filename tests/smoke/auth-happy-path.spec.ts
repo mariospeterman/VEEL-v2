@@ -58,7 +58,7 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   test.setTimeout(150_000);
 
   await gotoUntilVisible(page, "/app/home", () => page.getByRole("link", { name: "WeVid app home" }).first());
-  await expect(page.getByRole("heading", { name: "Your feed" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What’s happening" })).toBeVisible();
   await expect(page.getByRole("article", { name: "Post by Aria Moon" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "For you" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("link", { name: "Open post" })).toBeVisible();

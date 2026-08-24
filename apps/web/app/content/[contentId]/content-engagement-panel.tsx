@@ -346,7 +346,7 @@ export function ContentEngagementPanel({
       ) : null}
 
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <button className="flex items-center justify-center gap-2 rounded border border-[#7f1d1d] px-3 py-2 text-sm font-medium text-[#fecaca]" onClick={() => setPanel(panel === "report" ? null : "report")} type="button"><Flag aria-hidden="true" size={16} />Report</button>
+        <button className="danger-outline-button flex items-center justify-center gap-2 rounded border px-3 py-2 text-sm font-medium" onClick={() => setPanel(panel === "report" ? null : "report")} type="button"><Flag aria-hidden="true" size={16} />Report</button>
         <button className="flex items-center justify-center gap-2 rounded border border-(--line) px-3 py-2 text-sm font-medium" onClick={() => setPanel(panel === "safety" ? null : "safety")} type="button"><EyeOff aria-hidden="true" size={16} />Creator controls</button>
       </div>
 

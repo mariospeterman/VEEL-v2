@@ -529,6 +529,7 @@ test("searches genuine grouped discovery and keeps recent queries on device", as
 test("exposes privacy self-service without promising immediate deletion", async ({ context, page }) => {
   await addE2eCookie(context);
   await page.goto("/app/settings#privacy", { waitUntil: "domcontentloaded", timeout: 45_000 });
+  await waitForClientReady(page);
   await expect(page.getByRole("heading", { name: "Blocked accounts" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Muted accounts" })).toBeVisible();
   await page.getByRole("button", { name: "Request export" }).click();
