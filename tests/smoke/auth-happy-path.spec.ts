@@ -271,7 +271,7 @@ test("builds an accessible private photo draft and explains its fail-closed revi
   );
   await page.getByRole("button", { name: "Remove" }).click();
   await assetRemoval;
-  await expect(page.getByRole("status")).toHaveText("Media removed.");
+  await expect(page.getByText("Media removed.", { exact: true })).toBeVisible();
   await expect(page.getByText("Stored privately", { exact: true })).toHaveCount(0);
   await expect(page.getByText(/BUNNY_STORAGE|provider_asset|stored_private/i)).toHaveCount(0);
 });
