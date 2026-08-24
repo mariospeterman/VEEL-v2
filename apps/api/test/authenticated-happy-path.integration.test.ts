@@ -7167,6 +7167,15 @@ async function cleanupRun(
         where requester_user_id in ${tx(userIds)}
       `;
       await tx`
+        delete from user_mutes
+        where muting_user_id in ${tx(userIds)}
+           or muted_user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from engagement_action_receipts
+        where actor_user_id in ${tx(userIds)}
+      `;
+      await tx`
         delete from idempotency_keys
         where actor_user_id in ${tx(userIds)}
       `;
