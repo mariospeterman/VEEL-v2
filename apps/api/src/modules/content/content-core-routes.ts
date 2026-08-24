@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import {
   ContentDraftIdempotencyConflictError,
   ContentCompositionConflictError,
+  ContentDraftPollCloseError,
   ContentDraftQuotaExceededError,
   ContentEventDraftConflictError,
   ContentModerationAppealConflictError,
@@ -132,6 +133,13 @@ export async function registerContentCoreRoutes(
         return reply
           .code(429)
           .send(quotaExceededResponse("Daily content draft quota has been reached"));
+      }
+
+      if (error instanceof ContentDraftPollCloseError) {
+        return reply.code(400).send({
+          code: "validation_failed",
+          message: "poll closesAt must be a future ISO date-time or null"
+        });
       }
 
       if (error instanceof ContentRepositoryConfigurationError) {

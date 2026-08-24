@@ -3,6 +3,7 @@ import type postgres from "postgres";
 import {
   ContentDraftIdempotencyConflictError,
   ContentDraftOriginConflictError,
+  ContentDraftPollCloseError,
   ContentDraftQuotaExceededError,
   ContentRepositoryConfigurationError
 } from "./content-errors.js";
@@ -75,6 +76,13 @@ export function createContentDraftRepositoryMethods(
             await recordDraftOrigin(transaction, user.id, existing.id, input.origin);
             return existing;
           }
+        }
+
+        if (
+          input.poll?.closesAt &&
+          (Number.isNaN(Date.parse(input.poll.closesAt)) || Date.parse(input.poll.closesAt) <= Date.now())
+        ) {
+          throw new ContentDraftPollCloseError();
         }
 
         const counts = await transaction<{ count: number }[]>`

@@ -21,6 +21,7 @@ type PostgresContentRepository = ContentRepository & Required<Pick<
 
 export {
   ContentDraftIdempotencyConflictError,
+  ContentDraftPollCloseError,
   ContentDraftQuotaExceededError,
   ContentEventDraftConflictError,
   ContentCompositionConflictError,

@@ -73,6 +73,13 @@ export class ContentDraftQuotaExceededError extends Error {
   }
 }
 
+export class ContentDraftPollCloseError extends Error {
+  constructor() {
+    super("content_draft_poll_close_invalid");
+    this.name = "ContentDraftPollCloseError";
+  }
+}
+
 export class ContentPollVoteConflictError extends Error {
   constructor(readonly reason: "idempotency_conflict" | "poll_closed") {
     super(reason);

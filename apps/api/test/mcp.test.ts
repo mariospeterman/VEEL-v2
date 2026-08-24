@@ -6,6 +6,7 @@ import type { AdminRepository } from "../src/modules/admin/types";
 import type { AgeRepository } from "../src/modules/age/types";
 import type { AnalyticsRepository } from "../src/modules/analytics/types";
 import type { ContentRepository, CreateContentDraftInput } from "../src/modules/content/types";
+import { ContentDraftPollCloseError } from "../src/modules/content/content-errors";
 import type {
   McpConnection,
   McpRepository,
@@ -751,6 +752,9 @@ class FakeContentRepository {
   readonly listInputs: Parameters<NonNullable<ContentRepository["listOwnedContent"]>>[0][] = [];
 
   async createDraft(input: CreateContentDraftInput) {
+    if (input.poll?.closesAt && Date.parse(input.poll.closesAt) <= Date.now()) {
+      throw new ContentDraftPollCloseError();
+    }
     this.createdDrafts.push(input);
     return {
       id: "00000000-0000-4000-8000-000000000099",
