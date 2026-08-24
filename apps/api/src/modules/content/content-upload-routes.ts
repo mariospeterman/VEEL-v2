@@ -530,7 +530,9 @@ export async function registerContentUploadRoutes(
         supabaseUserId: access.supabaseUserId,
         mediaAssetId: params.mediaAssetId,
         idempotencyKey,
-        requestHash: createHash("sha256").update(JSON.stringify(normalized)).digest("hex"),
+        requestHash: createHash("sha256")
+          .update(JSON.stringify({ mediaAssetId: params.mediaAssetId, ...normalized }))
+          .digest("hex"),
         ...normalized
       });
       if (!result) {

@@ -475,6 +475,15 @@ describe("external MCP connector foundation", () => {
       idempotencyKey: "review-provenance-1",
       requestHash: expect.stringMatching(/^[a-f0-9]{64}$/)
     }]);
+    const crossAssetReview = await app.inject({
+      method: "POST",
+      url: "/v1/media/assets/00000000-0000-4000-8000-000000000303/provenance-review",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "review-provenance-1" },
+      payload: { expectedCompositionRevision: 2, decision: "confirmed" }
+    });
+    expect(crossAssetReview.statusCode).toBe(200);
+    expect(contentRepository.reviewInputs[1]?.requestHash)
+      .not.toBe(contentRepository.reviewInputs[0]?.requestHash);
 
     const readiness = await app.inject({
       method: "POST",
