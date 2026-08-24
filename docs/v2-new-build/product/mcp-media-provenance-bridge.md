@@ -48,7 +48,10 @@ Image bytes continue through the existing WeVid sanitization and private Bunny S
 Video bytes continue through the existing Bunny Stream TUS boundary. A redeemed video capability
 receives only the documented presigned upload endpoint and safe headers for the provider-supported
 minimum one-hour window; the Bunny Stream key remains server-only. Provider transfer completion is
-not readiness, safety approval, or publication evidence.
+not video readiness, safety approval, or publication evidence. For sanitized images, the server-only
+Storage PUT includes the uppercase SHA-256 checksum and must receive Bunny's documented `201`; that
+successful checksum-verified object write records private provider readiness so the existing safety
+worker can inspect it, but never records safety approval, public delivery, or publication evidence.
 
 ## Provenance and human control
 
@@ -96,16 +99,20 @@ wallet, messaging, moderation, entitlement, age/KYC, or admin tool is registered
   count keep concurrent redemptions across different drafts within the same rolling limit. The
   first-party image and video attachment paths take that same lock and count MCP reservations before
   their authoritative insert, so assistant and first-party uploads cannot race beyond the allowance.
+  Recovering a stale MCP lease reuses its existing reservation rather than counting that same slot
+  twice.
 - Final attachment revalidates capability expiry plus the exact private, SFW, unpublished draft and
   media shape while holding the content lock. Publication that wins the race rejects attachment and
   triggers provider compensation; attachment that wins changes the composition before publication
-  can re-evaluate release readiness.
+  can re-evaluate release readiness. The ten-asset count is taken only after that content lock is
+  acquired, so a waiting completion observes the preceding committed attachment.
 - Bunny/provider unavailability leaves the draft private and records only normalized failure state.
 - If immediate deletion of an unattached provider object fails, a cleanup-only media id becomes a
   retired, non-composition asset in the existing provider-cleanup queue. That compensation row does
   not advance the creator-visible composition revision and exposes no provider id to the MCP client.
-- Provider webhook and explicit sync continue to update the canonical `media_assets` row; the bridge
-  never manufactures provider readiness.
+- Provider webhook and explicit sync continue to update video state on the canonical `media_assets`
+  row. Private image readiness comes only from the successful checksum-bound Bunny Storage response;
+  the bridge never infers provider success from a request attempt or client assertion.
 - Capability secrets, upload signatures, private media URLs, opaque lineage references, and C2PA
   references are excluded from MCP tool-call audit payloads and general logs.
 

@@ -288,6 +288,7 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
                 from mcp_media_upload_capabilities reservation
                 where reservation.actor_user_id = ${capability.actor_user_id}
                   and reservation.state = 'provisioning'
+                  and reservation.id <> ${capability.id}
                   and reservation.updated_at >= ${input.quotaWindowStart}
                   and not exists (
                     select 1 from media_assets reserved_asset
@@ -330,7 +331,6 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
     async completeMcpMediaUploadCapability(input) {
       return withPostgresTransaction(sql, async (transaction) => {
         const capabilities = await transaction<Array<CapabilityRow & {
-          asset_count: number;
           expired: boolean;
         }>>`
           select
@@ -344,12 +344,7 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
             capability.expires_at, capability.expires_at <= now() as expired,
             actor.supabase_user_id as actor_supabase_user_id,
             content.media_type, content.visibility, content.nsfw_label,
-            content.state as content_state, content.publish_state,
-            (
-              select count(*)::integer
-              from media_assets asset
-              where asset.content_item_id = content.id and asset.retired_at is null
-            ) as asset_count
+            content.state as content_state, content.publish_state
           from mcp_media_upload_capabilities capability
           join users actor on actor.id = capability.actor_user_id
           join content_items content on content.id = capability.content_item_id
@@ -362,13 +357,19 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
         const capability = capabilities[0];
         if (!capability) throw new McpMediaCapabilityConflictError("lease_lost");
         if (capability.expired) throw new McpMediaCapabilityConflictError("expired");
+        const assetCounts = await transaction<{ asset_count: number }[]>`
+          select count(*)::integer as asset_count
+          from media_assets
+          where content_item_id = ${capability.content_item_id}
+            and retired_at is null
+        `;
         if (
           capability.content_state === "deleted" ||
           capability.visibility !== "private" ||
           capability.nsfw_label !== "none" ||
           !["draft", "unpublished"].includes(capability.publish_state) ||
           !acceptsMediaKind(capability.media_type, capability.media_kind) ||
-          capability.asset_count >= 10
+          (assetCounts[0]?.asset_count ?? 10) >= 10
         ) {
           throw new McpMediaCapabilityConflictError("draft_locked");
         }
@@ -376,14 +377,18 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
         await transaction`
           insert into media_assets (
             id, content_item_id, provider, provider_asset_id, provider_state,
-            provider_playable, asset_kind, mime_type, width_pixels, height_pixels,
+            provider_playable, ready_at, provider_checked_at,
+            asset_kind, mime_type, width_pixels, height_pixels,
             checksum_sha256, required_for_release, origin_classification, source_kind,
             source_lineage_reference, workflow_provider_reference,
             provenance_human_review_state, visible_label_state,
             machine_readable_marking_state, c2pa_reference
           ) values (
             ${capability.reserved_media_asset_id}, ${capability.content_item_id}, 'bunny',
-            ${input.providerAssetId}, ${input.providerState}, false, ${capability.media_kind},
+            ${input.providerAssetId}, ${input.providerState},
+            ${capability.media_kind === "image"},
+            case when ${capability.media_kind === "image"} then now() else null end, now(),
+            ${capability.media_kind},
             ${capability.mime_type}, ${input.widthPixels ?? null}, ${input.heightPixels ?? null},
             ${input.checksumSha256 ?? null}, true, ${capability.origin_classification},
             ${capability.source_kind}, ${capability.source_lineage_reference},

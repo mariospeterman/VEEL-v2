@@ -27,6 +27,7 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
     let contentId: string | null = null;
     let pollContentId: string | null = null;
     let quotaContentId: string | null = null;
+    let capacityContentId: string | null = null;
     let connectionId: string | null = null;
 
     try {
@@ -180,7 +181,7 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
           tokenHash: capabilityInput.tokenHash,
           declaredMimeType: "image/webp",
           quotaWindowStart: new Date(Date.now() - 86_400_000),
-          dailyMediaUploadQuota: 10,
+          dailyMediaUploadQuota: 1,
           leaseToken,
           leasedUntil: new Date(Date.now() + 60_000)
         })
@@ -206,7 +207,7 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
         tokenHash: capabilityInput.tokenHash,
         declaredMimeType: "image/webp",
         quotaWindowStart: new Date(Date.now() - 86_400_000),
-        dailyMediaUploadQuota: 10,
+        dailyMediaUploadQuota: 1,
         leaseToken: randomUUID(),
         leasedUntil: new Date(Date.now() + 60_000)
       });
@@ -221,6 +222,18 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
         checksumSha256: "1".repeat(64)
       });
       expect(completed).toMatchObject({ mediaAssetId: issued!.mediaAssetId, contentId });
+      await expect(sql<Array<{
+        provider_playable: boolean;
+        ready_at: Date | null;
+        provider_checked_at: Date | null;
+      }>>`
+        select provider_playable, ready_at, provider_checked_at
+        from media_assets where id = ${issued!.mediaAssetId}
+      `).resolves.toMatchObject([{
+        provider_playable: true,
+        ready_at: expect.any(Date),
+        provider_checked_at: expect.any(Date)
+      }]);
       await expect(contentRepository.claimMcpMediaUploadCapability!({
         capabilityId: issued!.id,
         connectionId: connection.id,
@@ -242,14 +255,13 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
         compositionRevision: completed.compositionRevision,
         assets: [{
           mediaAssetId: issued!.mediaAssetId,
-          providerState: "processing",
+          providerState: "ready",
           quarantineState: "pending",
           provenanceReviewState: "pending",
           visibleLabelState: "ai_generated",
           machineReadableMarkingState: "pending"
         }],
         blockers: expect.arrayContaining([
-          "media_processing_incomplete",
           "safety_review_incomplete",
           "provenance_review_pending"
         ])
@@ -473,6 +485,88 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
         update content_items set publish_state = 'draft' where id = ${quotaContentId}
       `;
 
+      const capacityDraft = await contentRepository.createDraft({
+        ...createInput,
+        idempotencyKey: `mcp-private-draft:${connection.id}:${"6".repeat(64)}`,
+        requestHash: "6".repeat(64),
+        origin: { ...createInput.origin, requestHash: "6".repeat(64) }
+      });
+      capacityContentId = capacityDraft.id;
+      for (let position = 0; position < 9; position += 1) {
+        await sql`
+          insert into media_assets (
+            id, content_item_id, provider, provider_asset_id, provider_state,
+            provider_playable, ready_at, asset_kind, position, required_for_release
+          ) values (
+            ${randomUUID()}, ${capacityContentId}, 'bunny',
+            ${`capacity-seed-${position}-${randomUUID()}`}, 'stored_private',
+            true, now(), 'image', ${position}, true
+          )
+        `;
+      }
+      const capacityTokens = ["14".repeat(32), "15".repeat(32)];
+      const capacityRequests = ["24".repeat(32), "25".repeat(32)];
+      const capacityCapabilities = await Promise.all(capacityTokens.map((token, index) =>
+        contentRepository.issueMcpMediaUploadCapability!({
+          ...capabilityInput,
+          contentId: capacityContentId!,
+          requestHash: capacityRequests[index]!,
+          tokenHash: token,
+          c2paReference: null
+        })
+      ));
+      const capacityClaims = await Promise.all(capacityCapabilities.map((capability, index) =>
+        contentRepository.claimMcpMediaUploadCapability!({
+          capabilityId: capability!.id,
+          connectionId: connection.id,
+          supabaseUserId: creatorId,
+          tokenHash: capacityTokens[index]!,
+          declaredMimeType: "image/webp",
+          quotaWindowStart: new Date(Date.now() - 86_400_000),
+          dailyMediaUploadQuota: 100,
+          leaseToken: randomUUID(),
+          leasedUntil: new Date(Date.now() + 60_000)
+        })
+      ));
+      const completionPromises: Promise<unknown>[] = [];
+      await sql.begin(async (transaction) => {
+        await transaction`select id from content_items where id = ${capacityContentId} for update`;
+        completionPromises.push(...capacityCapabilities.map((capability, index) =>
+          contentRepository.completeMcpMediaUploadCapability!({
+            capabilityId: capability!.id,
+            connectionId: connection.id,
+            leaseToken: capacityClaims[index]!.leaseToken,
+            providerAssetId: `capacity-race-${index}-${randomUUID()}`,
+            providerState: "stored_private",
+            widthPixels: 8,
+            heightPixels: 5,
+            checksumSha256: (index === 0 ? "4" : "5").repeat(64)
+          })
+        ));
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      });
+      const capacityCompletions = await Promise.allSettled(completionPromises);
+      expect(capacityCompletions.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      expect(capacityCompletions.find((result) => result.status === "rejected")).toMatchObject({
+        status: "rejected",
+        reason: expect.objectContaining({ reason: "draft_locked" })
+      });
+      await expect(sql<{ count: number }[]>`
+        select count(*)::integer as count from media_assets
+        where content_item_id = ${capacityContentId} and retired_at is null
+      `).resolves.toEqual([{ count: 10 }]);
+      await sql`delete from mcp_private_draft_origins where content_item_id = ${capacityContentId}`;
+      await sql`delete from mcp_media_upload_capabilities where content_item_id = ${capacityContentId}`;
+      await sql`
+        delete from media_moderation_jobs
+        where media_asset_id in (
+          select id from media_assets where content_item_id = ${capacityContentId}
+        )
+      `;
+      await sql`delete from media_assets where content_item_id = ${capacityContentId}`;
+      await sql`delete from content_items where id = ${capacityContentId}`;
+      capacityContentId = null;
+
       await contentRepository.scheduleMcpMediaProviderCleanup!({
         capabilityId: issued!.id,
         connectionId: connection.id,
@@ -572,16 +666,22 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
         await sql`delete from mcp_media_upload_capabilities where connection_id = ${connectionId}`;
         await sql`delete from mcp_connections where id = ${connectionId}`;
       }
-      if (contentId) {
+      const mediaContentIds = [contentId, quotaContentId, capacityContentId].filter(
+        (value): value is string => value !== null
+      );
+      if (mediaContentIds.length > 0) {
         await sql`
           delete from media_moderation_jobs
-          where media_asset_id in (select id from media_assets where content_item_id = ${contentId})
+          where media_asset_id in (
+            select id from media_assets where content_item_id = any(${mediaContentIds}::uuid[])
+          )
         `;
-        await sql`delete from media_assets where content_item_id = ${contentId}`;
+        await sql`delete from media_assets where content_item_id = any(${mediaContentIds}::uuid[])`;
       }
       if (contentId) await sql`delete from content_items where id = ${contentId}`;
       if (pollContentId) await sql`delete from content_items where id = ${pollContentId}`;
       if (quotaContentId) await sql`delete from content_items where id = ${quotaContentId}`;
+      if (capacityContentId) await sql`delete from content_items where id = ${capacityContentId}`;
       await sql`delete from idempotency_keys where actor_user_id = any(${[creatorId, otherCreatorId]}::uuid[])`;
       await sql`delete from audit_events where actor_user_id = any(${[creatorId, otherCreatorId]}::uuid[])`;
       await sql`delete from profiles where user_id = any(${[creatorId, otherCreatorId]}::uuid[])`;

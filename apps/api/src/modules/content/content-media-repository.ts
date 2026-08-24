@@ -301,7 +301,8 @@ export function createContentMediaRepositoryMethods(
         update media_assets
         set
           provider_state = 'stored_private',
-          provider_playable = false,
+          provider_playable = true,
+          ready_at = coalesce(ready_at, now()),
           provider_checked_at = now()
         where id = ${input.mediaAssetId}
           and provider = 'bunny'
