@@ -5,7 +5,9 @@ import type { CreatorMediaItem, CreatorMediaPage } from "@/api-client";
 import {
   ApiMutationError,
   createContentModerationAppeal,
-  getMyContentPage
+  getMyContentPage,
+  reviewMediaAssetProvenance,
+  type ContentMediaAssetMutationResult
 } from "@/api-mutations";
 
 export function ProfileMediaWorkspace({ initialPage }: { initialPage: CreatorMediaPage }) {
@@ -65,6 +67,26 @@ export function ProfileMediaWorkspace({ initialPage }: { initialPage: CreatorMed
                 ? { ...entry, publicationState: "appeal_pending", reviewState: "appealed" }
                 : entry
             ))}
+            onProvenanceReviewed={(contentId, result) => setItems((current) => current.map((entry) =>
+              entry.id === contentId
+                ? {
+                    ...entry,
+                    compositionRevision: result.compositionRevision,
+                    provenanceAssets: (entry.provenanceAssets ?? []).map((asset) =>
+                      asset.mediaAssetId === result.asset.id
+                        ? {
+                            ...asset,
+                            reviewState:
+                              result.asset.provenanceReviewState &&
+                              result.asset.provenanceReviewState !== "not_required"
+                                ? result.asset.provenanceReviewState
+                                : asset.reviewState
+                          }
+                        : asset
+                    )
+                  }
+                : entry
+            ))}
           />
         ))}
       </div>
@@ -85,10 +107,12 @@ export function ProfileMediaWorkspace({ initialPage }: { initialPage: CreatorMed
 
 function MediaCard({
   item,
-  onAppealed
+  onAppealed,
+  onProvenanceReviewed
 }: {
   item: CreatorMediaItem;
   onAppealed: (contentId: string) => void;
+  onProvenanceReviewed: (contentId: string, result: ContentMediaAssetMutationResult) => void;
 }) {
   return (
     <article className="overflow-hidden rounded border border-(--line) bg-(--panel)">
@@ -103,6 +127,23 @@ function MediaCard({
           <PublicationPill state={item.publicationState} />
         </div>
         <p className="text-xs text-(--muted)">{publicationCopy(item.publicationState)}</p>
+        {(item.provenanceAssets?.length ?? 0) > 0 ? (
+          <section aria-label="Media provenance review" className="grid gap-2 rounded border border-(--line) p-3">
+            <p className="text-sm font-semibold">AI media provenance</p>
+            <p className="text-xs leading-5 text-(--muted)">
+              Confirm that each label matches how this media was made. This review does not publish the draft.
+            </p>
+            {item.provenanceAssets?.map((asset) => (
+              <ProvenanceReview
+                asset={asset}
+                compositionRevision={item.compositionRevision ?? 1}
+                contentId={item.id}
+                key={asset.mediaAssetId}
+                onReviewed={onProvenanceReviewed}
+              />
+            ))}
+          </section>
+        ) : null}
         {item.reviewMessage ? (
           <div className="rounded bg-(--accent-soft) p-3 text-sm leading-5 text-(--accent-strong)">
             {item.reviewMessage}
@@ -114,6 +155,80 @@ function MediaCard({
       </div>
     </article>
   );
+}
+
+function ProvenanceReview({
+  asset,
+  compositionRevision,
+  contentId,
+  onReviewed
+}: {
+  asset: NonNullable<CreatorMediaItem["provenanceAssets"]>[number];
+  compositionRevision: number;
+  contentId: string;
+  onReviewed: (contentId: string, result: ContentMediaAssetMutationResult) => void;
+}) {
+  const [pending, setPending] = useState<"confirmed" | "rejected" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function decide(decision: "confirmed" | "rejected") {
+    setPending(decision);
+    setError(null);
+    try {
+      const result = await reviewMediaAssetProvenance(
+        asset.mediaAssetId,
+        { expectedCompositionRevision: compositionRevision, decision },
+        crypto.randomUUID()
+      );
+      onReviewed(contentId, result);
+    } catch (caught) {
+      setError(caught instanceof ApiMutationError ? caught.message : "Provenance review could not be saved.");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  return (
+    <div className="grid gap-2 rounded bg-(--background) p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+        <span>{asset.kind} · {originCopy(asset.originClassification)}</span>
+        <span className="rounded bg-(--accent-soft) px-2 py-1 text-(--accent-strong)">
+          {asset.reviewState.replaceAll("_", " ")}
+        </span>
+      </div>
+      {asset.reviewState === "pending" ? (
+        <div className="flex flex-wrap gap-2">
+          <button
+            className="min-h-11 rounded bg-(--foreground) px-3 py-2 text-sm font-semibold text-(--background) disabled:opacity-50"
+            disabled={pending !== null}
+            onClick={() => void decide("confirmed")}
+            type="button"
+          >
+            {pending === "confirmed" ? "Confirming…" : "Confirm label"}
+          </button>
+          <button
+            className="min-h-11 rounded border border-(--line) px-3 py-2 text-sm font-semibold disabled:opacity-50"
+            disabled={pending !== null}
+            onClick={() => void decide("rejected")}
+            type="button"
+          >
+            {pending === "rejected" ? "Rejecting…" : "Reject claim"}
+          </button>
+        </div>
+      ) : asset.reviewState === "rejected" ? (
+        <p className="text-xs leading-5 text-red-400">This asset remains private and cannot be released.</p>
+      ) : (
+        <p className="text-xs leading-5 text-emerald-500">Provenance label confirmed.</p>
+      )}
+      {error ? <p className="text-xs text-red-400" role="alert">{error}</p> : null}
+    </div>
+  );
+}
+
+function originCopy(origin: NonNullable<CreatorMediaItem["provenanceAssets"]>[number]["originClassification"]): string {
+  if (origin === "ai_assisted") return "AI-assisted";
+  if (origin === "ai_generated") return "AI-generated";
+  return "Materially AI-manipulated";
 }
 
 function AppealForm({ contentId, onAppealed }: { contentId: string; onAppealed: (contentId: string) => void }) {

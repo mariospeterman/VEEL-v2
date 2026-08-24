@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Bunny, Livepeer, media, live
-Last updated: 2026-08-20
+Last updated: 2026-08-24
 Source of truth: yes
 
 Owns:
@@ -64,8 +64,8 @@ Official references checked:
 - Livepeer terminate stream: https://docs.livepeer.org/api-reference/stream/terminate
 - Livepeer OBS ingest: https://docs.livepeer.org/developers/guides/stream-via-obs
 - Livepeer asset upload reference: https://docs.livepeer.org/api-reference/asset/upload
-- Bunny Storage API reference: https://bunny.net/docs/api-reference/storage/index
-- Bunny Storage upload-file reference: https://bunny.net/docs/api-reference/storage/manage-files/upload-file
+- Bunny Storage HTTP API: https://docs.bunny.net/storage/http
+- Bunny Storage upload-file reference: https://docs.bunny.net/api-reference/storage/manage-files/upload-file
 - Bunny Optimizer Dynamic Images: https://bunny.net/docs/optimizer/dynamic-images/overview
 - Bunny Optimizer limits: https://bunny.net/docs/optimizer/limits
 - Bunny Shield upload scanning: https://bunny.net/docs/shield/upload-scanning
@@ -74,7 +74,7 @@ Official references checked:
 
 - Bunny Stream owns VOD upload/resumability, storage, encoding, delivery, and provider playback. Bunny Shield is used only on upload paths with staging-proven coverage.
 - Bunny Storage plus Optimizer is the candidate image boundary: the API streams sanitized originals to opaque private paths with the server-only Storage `AccessKey`, while Optimizer produces responsive derivatives after release. The path stays fail-closed until exact staging evidence exists.
-- Private image ingestion is additionally feature-gated by `BUNNY_STORAGE_IMAGE_UPLOAD_ENABLED=false`. Configuration requires the zone-scoped `BUNNY_STORAGE_ACCESS_KEY`, `BUNNY_STORAGE_ZONE_NAME`, regional `BUNNY_STORAGE_API_ENDPOINT`, `BUNNY_STORAGE_PULL_ZONE_URL`, and server-only `BUNNY_STORAGE_PULL_ZONE_TOKEN_KEY`. Upload completion records `stored_private` with `provider_playable=false`; it is not release evidence.
+- Private image ingestion is additionally feature-gated by `BUNNY_STORAGE_IMAGE_UPLOAD_ENABLED=false`. Configuration requires the zone-scoped `BUNNY_STORAGE_ACCESS_KEY`, `BUNNY_STORAGE_ZONE_NAME`, regional `BUNNY_STORAGE_API_ENDPOINT`, `BUNNY_STORAGE_PULL_ZONE_URL`, and server-only `BUNNY_STORAGE_PULL_ZONE_TOKEN_KEY`. The server sends the sanitized object's uppercase SHA-256 through Bunny's documented `Checksum` header and accepts only the documented `201`; completion records `stored_private`, private provider readiness, and the provider check time so safety reconciliation may start. This is neither public playability nor release evidence.
 - Creator removal retires the canonical draft asset before idempotent Bunny Storage/Stream deletion. Provider outages remain an audited, lease-based worker retry with bounded backoff and never restore the asset to the active composition.
 - Livepeer owns live ingest, transcoding, recording, and provider playback.
 - WeVid backend owns drafts/quarantine, performer and consent requirements, moderation/release, room/access/monetisation policy, entitlement/playback authorization, report and suspend/end orchestration, and replay release.

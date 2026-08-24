@@ -252,7 +252,8 @@ export async function registerApiRoutes(
     contentRepository,
     adminRepository,
     analyticsRepository,
-    mcpRepository
+    mcpRepository,
+    mediaUploadProvider
   });
   await registerWalletRoutes(app, {
     authVerifier,

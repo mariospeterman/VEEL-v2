@@ -2000,12 +2000,13 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         id: string;
         provider_state: string;
         provider_playable: boolean;
+        ready_at: Date | null;
         mime_type: string;
         width_pixels: number;
         height_pixels: number;
         checksum_sha256: string;
       }[]>`
-        select id, provider_state, provider_playable, mime_type,
+        select id, provider_state, provider_playable, ready_at, mime_type,
           width_pixels, height_pixels, checksum_sha256
         from media_assets
         where content_item_id = ${imageContentId}
@@ -2014,7 +2015,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         {
           id: imageMediaAssetId,
           provider_state: "stored_private",
-          provider_playable: false,
+          provider_playable: true,
+          ready_at: expect.any(Date),
           mime_type: "image/jpeg",
           width_pixels: 6,
           height_pixels: 9,

@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Bunny Stream, Bunny Shield, Livepeer, moderation, performer consent, reporting
-Last updated: 2026-08-22
+Last updated: 2026-08-24
 Source of truth: yes
 
 Owns:
@@ -44,9 +44,11 @@ Disable Bunny Stream Early Play for quarantined uploads. Enabling Keep Original 
 Image uploads use the same canonical safety case but a separate narrow Bunny Storage boundary.
 The API detects and re-encodes JPEG, PNG, or WebP, applies decoded-pixel and dimension limits,
 normalizes orientation, strips metadata, computes the sanitized checksum, and durably reserves an
-opaque object path before the server-only upload. Storage acceptance only advances the asset to
-`stored_private`; it does not set provider playability or satisfy scan, classification, or human
-review evidence. The path defaults disabled and remains candidate pending exact staging proof of
+opaque object path before the server-only upload. The upload supplies Bunny's uppercase SHA-256
+`Checksum` and accepts only its documented `201`; that response advances the asset to
+`stored_private` and private provider readiness so safety reconciliation can lease it. It does not
+prove public delivery or satisfy scan, classification, or human-review evidence. The path defaults
+disabled and remains candidate pending exact staging proof of
 Shield coverage, private token-authenticated delivery, Optimizer behavior, deletion, recovery, and
 credential rotation.
 
@@ -93,7 +95,11 @@ No candidate row can be treated as production protection.
 ## Official Documentation Checked
 
 Livepeer behavior was rechecked on 2026-08-23 before the Convergence 05 adapter and webhook changes.
+Bunny Storage upload behavior was rechecked on 2026-08-24 before treating the checksum-verified
+private object write as sufficient provider readiness for safety-job leasing.
 
+- Bunny Storage HTTP uploads: https://docs.bunny.net/storage/http
+- Bunny Storage upload-file API: https://docs.bunny.net/api-reference/storage/manage-files/upload-file
 - Bunny Shield upload scanning: https://docs.bunny.net/shield/upload-scanning
 - Bunny Shield upload-scanning configuration API: https://docs.bunny.net/reference/get_shield-shield-zone-shieldzoneid-upload-scanning
 - Bunny Shield event logs: https://docs.bunny.net/api-reference/shield/eventlogs/get-shieldevent-logs-

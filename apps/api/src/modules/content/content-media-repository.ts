@@ -31,6 +31,7 @@ type ContentMediaRepositoryMethods = Required<Pick<
   | "recordMediaProviderWebhook"
   | "reserveImageAssetUpload"
   | "retireOwnedMediaAsset"
+  | "scheduleUnattachedMediaProviderCleanup"
   | "updateMediaAssetFromWebhook"
   | "updateMediaAssetPlayback"
   | "updateOwnedMediaAsset"
@@ -45,6 +46,43 @@ export function createContentMediaRepositoryMethods(
     },
     async createMediaAsset(input) {
       const rows = await withPostgresTransaction(sql, async (transaction) => {
+        const drafts = await transaction<{
+          actor_user_id: string;
+          media_type: string;
+        }[]>`
+          select
+            content.creator_user_id as actor_user_id,
+            content.media_type
+          from content_items content
+          join users actor on actor.id = content.creator_user_id
+          where content.id = ${input.contentId}
+            and actor.supabase_user_id = ${input.supabaseUserId}
+            and actor.state = 'active'
+            and content.state <> 'deleted'
+            and content.publish_state in ('draft', 'unpublished')
+          for update of content
+        `;
+        const draft = drafts[0];
+        const assetCounts = await transaction<{ asset_count: number }[]>`
+          select count(*)::integer as asset_count
+          from media_assets
+          where content_item_id = ${input.contentId}
+            and retired_at is null
+        `;
+        if (
+          !draft ||
+          !["bit", "clip", "vod", "live_replay", "carousel"].includes(draft.media_type) ||
+          (assetCounts[0]?.asset_count ?? 10) >= 10
+        ) {
+          throw new ContentImageUploadConflictError("draft_locked");
+        }
+        await assertCreatorMediaQuota(
+          transaction,
+          draft.actor_user_id,
+          input.quotaWindowStart,
+          input.dailyMediaUploadQuota
+        );
+
         const mediaRows = await transaction<{ id: string }[]>`
           with inserted as (
             insert into media_assets (
@@ -112,6 +150,69 @@ export function createContentMediaRepositoryMethods(
 
       return rows[0] ? { id: rows[0].id } : undefined;
     },
+    async scheduleUnattachedMediaProviderCleanup(input) {
+      await withPostgresTransaction(sql, async (transaction) => {
+        const rows = await transaction<{ actor_user_id: string; media_asset_id: string }[]>`
+          with owned_content as (
+            select content.id, content.creator_user_id as actor_user_id
+            from content_items content
+            join users actor on actor.id = content.creator_user_id
+            where content.id = ${input.contentId}
+              and actor.supabase_user_id = ${input.supabaseUserId}
+            for update of content
+          ), inserted as (
+            insert into media_assets (
+              id, content_item_id, provider, provider_asset_id, provider_state,
+              provider_playable, asset_kind, position, required_for_release,
+              retired_at, retired_by_user_id, retirement_reason,
+              provider_cleanup_state, provider_cleanup_error_code,
+              provider_cleanup_attempt_count, provider_cleanup_next_attempt_at
+            )
+            select
+              gen_random_uuid(), owned.id, ${input.provider}, ${input.providerAssetId},
+              'compensation_pending', false, ${input.assetKind}, null, false,
+              now(), owned.actor_user_id, 'provider_attach_failed',
+              'retry', ${input.failureCode}, 1, now()
+            from owned_content owned
+            on conflict (provider, provider_asset_id) do update
+            set provider_cleanup_state = case
+                  when media_assets.provider_cleanup_state = 'completed' then 'completed'
+                  else 'retry'
+                end,
+                provider_cleanup_error_code = case
+                  when media_assets.provider_cleanup_state = 'completed' then null
+                  else ${input.failureCode}
+                end,
+                provider_cleanup_next_attempt_at = case
+                  when media_assets.provider_cleanup_state = 'completed' then null
+                  else now()
+                end
+            returning id, retired_by_user_id
+          )
+          select inserted.retired_by_user_id as actor_user_id,
+            inserted.id as media_asset_id
+          from inserted
+        `;
+        const cleanup = rows[0];
+        if (!cleanup) throw new ContentImageUploadConflictError("draft_locked");
+        await transaction`
+          insert into audit_events (
+            id, actor_user_id, subject_type, subject_id, action, idempotency_key, metadata
+          ) values (
+            gen_random_uuid(), ${cleanup.actor_user_id}, 'media_asset', ${cleanup.media_asset_id},
+            'media_provider_cleanup_scheduled', ${`provider-cleanup:${cleanup.media_asset_id}`},
+            ${transaction.json({
+              contentId: input.contentId,
+              assetKind: input.assetKind,
+              failureCode: input.failureCode
+            })}::jsonb
+          )
+          on conflict (actor_user_id, action, idempotency_key)
+            where actor_user_id is not null and idempotency_key is not null
+          do nothing
+        `;
+      });
+    },
     async reserveImageAssetUpload(input) {
       return withPostgresTransaction(sql, async (transaction) => {
         const actorRows = await transaction<{ id: string }[]>`
@@ -172,6 +273,23 @@ export function createContentMediaRepositoryMethods(
             completed: existing[0].provider_state === "stored_private"
           };
         }
+
+        const assetCounts = await transaction<{ asset_count: number }[]>`
+          select count(*)::integer as asset_count
+          from media_assets
+          where content_item_id = ${input.contentId}
+            and retired_at is null
+        `;
+        if ((assetCounts[0]?.asset_count ?? 10) >= 10) {
+          throw new ContentImageUploadConflictError("draft_locked");
+        }
+
+        await assertCreatorMediaQuota(
+          transaction,
+          actor.id,
+          input.quotaWindowStart,
+          input.dailyMediaUploadQuota
+        );
 
         await transaction`
           insert into media_assets (
@@ -257,7 +375,8 @@ export function createContentMediaRepositoryMethods(
         update media_assets
         set
           provider_state = 'stored_private',
-          provider_playable = false,
+          provider_playable = true,
+          ready_at = coalesce(ready_at, now()),
           provider_checked_at = now()
         where id = ${input.mediaAssetId}
           and provider = 'bunny'
@@ -301,8 +420,9 @@ export function createContentMediaRepositoryMethods(
         const draftRows = await transaction<{
           content_item_id: string;
           asset_revision: number;
+          source_kind: string | null;
         }[]>`
-          select content.id as content_item_id, content.asset_revision
+          select content.id as content_item_id, content.asset_revision, asset.source_kind
           from media_assets asset
           join content_items content on content.id = asset.content_item_id
           where asset.id = ${input.mediaAssetId}
@@ -316,6 +436,9 @@ export function createContentMediaRepositoryMethods(
         if (!draft) return null;
         if (Number(draft.asset_revision) !== input.expectedCompositionRevision) {
           throw new ContentImageUploadConflictError("draft_locked");
+        }
+        if (draft.source_kind !== null && input.originClassification === "human_created") {
+          throw new ContentImageUploadConflictError("provenance_locked");
         }
 
         const assets = await transaction<{
@@ -336,10 +459,28 @@ export function createContentMediaRepositoryMethods(
           focal_point_y: number | null;
           origin_classification: NonNullable<MediaAssetMutationResult["asset"]["originClassification"]>;
           visible_label_state: NonNullable<MediaAssetMutationResult["asset"]["visibleLabelState"]>;
+          provenance_human_review_state: NonNullable<MediaAssetMutationResult["asset"]["provenanceReviewState"]>;
+          machine_readable_marking_state: NonNullable<MediaAssetMutationResult["asset"]["machineReadableMarkingState"]>;
         }[]>`
           update media_assets
           set
             alt_text = case when ${input.altTextProvided} then ${input.altText ?? null} else alt_text end,
+            provenance_human_review_state = case
+              when ${input.originClassification ?? null}::text is not null
+                and ${input.originClassification ?? null}::text <> origin_classification
+                and source_kind is not null
+              then 'pending'
+              else provenance_human_review_state
+            end,
+            visible_label_state = case
+              when ${input.originClassification ?? null}::text is null
+                or ${input.originClassification ?? null}::text = origin_classification
+              then visible_label_state
+              when ${input.originClassification ?? null}::text = 'human_created' then 'none'
+              when ${input.originClassification ?? null}::text = 'ai_assisted' then 'ai_assisted'
+              when ${input.originClassification ?? null}::text = 'ai_generated' then 'ai_generated'
+              else 'manipulated'
+            end,
             origin_classification = coalesce(
               ${input.originClassification ?? null},
               origin_classification
@@ -350,7 +491,8 @@ export function createContentMediaRepositoryMethods(
           returning id, asset_kind, position, provider, provider_state, poster_url, mime_type,
             width_pixels, height_pixels, duration_ms, alt_text, required_for_release, is_cover,
             focal_point_x::float8 as focal_point_x, focal_point_y::float8 as focal_point_y,
-            origin_classification, visible_label_state
+            origin_classification, visible_label_state, provenance_human_review_state,
+            machine_readable_marking_state
         `;
         const asset = assets[0];
         if (!asset) return null;
@@ -376,7 +518,9 @@ export function createContentMediaRepositoryMethods(
             focalPointX: asset.focal_point_x,
             focalPointY: asset.focal_point_y,
             originClassification: asset.origin_classification,
-            visibleLabelState: asset.visible_label_state
+            visibleLabelState: asset.visible_label_state,
+            provenanceReviewState: asset.provenance_human_review_state,
+            machineReadableMarkingState: asset.machine_readable_marking_state
           }
         };
         await transaction`
@@ -941,6 +1085,41 @@ export function createContentMediaRepositoryMethods(
       return rows.length > 0;
     }
   };
+}
+
+async function assertCreatorMediaQuota(
+  transaction: postgres.TransactionSql,
+  actorUserId: string,
+  quotaWindowStart: Date,
+  dailyMediaUploadQuota: number
+): Promise<void> {
+  // Every upload path locks the same creator row before its authoritative
+  // count-and-insert transition. MCP provisioning rows reserve their slot
+  // until the matching media asset is attached or the lease is released.
+  await transaction`select id from users where id = ${actorUserId} for update`;
+  const counts = await transaction<{ quota_count: number }[]>`
+    select (
+      select count(*)::integer
+      from media_assets asset
+      join content_items content on content.id = asset.content_item_id
+      where content.creator_user_id = ${actorUserId}
+        and asset.created_at >= ${quotaWindowStart}
+    ) + (
+      select count(*)::integer
+      from mcp_media_upload_capabilities reservation
+      where reservation.actor_user_id = ${actorUserId}
+        and reservation.state = 'provisioning'
+        and reservation.expires_at > now()
+        and reservation.updated_at >= ${quotaWindowStart}
+        and not exists (
+          select 1 from media_assets reserved_asset
+          where reserved_asset.id = reservation.reserved_media_asset_id
+        )
+    ) as quota_count
+  `;
+  if ((counts[0]?.quota_count ?? dailyMediaUploadQuota) >= dailyMediaUploadQuota) {
+    throw new ContentImageUploadConflictError("quota_exceeded");
+  }
 }
 
 function toJsonObject(value: Record<string, unknown>): JsonObject {

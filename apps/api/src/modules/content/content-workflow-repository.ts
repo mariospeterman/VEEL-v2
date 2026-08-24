@@ -16,6 +16,8 @@ type OwnerMediaRow = {
   review_message: string | null;
   has_media: boolean;
   provider_ready: boolean;
+  asset_revision: number;
+  provenance_assets: NonNullable<CreatorMediaPage["items"][number]["provenanceAssets"]>;
   created_at: Date;
   updated_at: Date;
 };
@@ -24,6 +26,7 @@ type PrivateDraftReadinessRow = OwnerMediaRow & {
   moderation_state: string;
   asset_count: number;
   safety_ready: boolean;
+  provenance_ready: boolean;
 };
 
 export function createContentWorkflowRepositoryMethods(
@@ -44,6 +47,8 @@ export function createContentWorkflowRepositoryMethods(
           msc.decision_message as review_message,
           media.has_media,
           media.provider_ready,
+          ci.asset_revision,
+          coalesce(media.provenance_assets, '[]'::jsonb) as provenance_assets,
           ci.created_at,
           ci.updated_at
         from content_items ci
@@ -55,7 +60,20 @@ export function createContentWorkflowRepositoryMethods(
           select
             bool_or(true) as has_media,
             bool_or(provider_playable is true and ready_at is not null) as provider_ready,
-            (array_agg(poster_url order by created_at asc))[1] as poster_url
+            (array_agg(poster_url order by created_at asc))[1] as poster_url,
+            coalesce(
+              jsonb_agg(
+                jsonb_build_object(
+                  'mediaAssetId', id,
+                  'kind', asset_kind,
+                  'originClassification', origin_classification,
+                  'visibleLabelState', visible_label_state,
+                  'reviewState', provenance_human_review_state,
+                  'machineReadableMarkingState', machine_readable_marking_state
+                ) order by position
+              ) filter (where provenance_human_review_state <> 'not_required'),
+              '[]'::jsonb
+            ) as provenance_assets
           from media_assets
           where content_item_id = ci.id
             and retired_at is null
@@ -82,6 +100,8 @@ export function createContentWorkflowRepositoryMethods(
           publicationState: publicationState(row),
           reviewState: row.review_state,
           reviewMessage: row.review_message,
+          compositionRevision: Number(row.asset_revision),
+          provenanceAssets: row.provenance_assets,
           createdAt: row.created_at.toISOString(),
           updatedAt: row.updated_at.toISOString()
         })),
@@ -111,6 +131,7 @@ export function createContentWorkflowRepositoryMethods(
           ) as has_media,
           private.content_composition_provider_ready(ci.id) as provider_ready,
           private.content_composition_safety_ready(ci.id) as safety_ready,
+          private.content_composition_provenance_ready(ci.id) as provenance_ready,
           (
             select count(*)::integer from media_assets asset
             where asset.content_item_id = ci.id and asset.retired_at is null
@@ -278,6 +299,7 @@ function toPrivateDraftReadiness(row: PrivateDraftReadinessRow): ContentDraftRea
 
   if (!contentReady) blockers.push("draft_content_incomplete");
   if (!row.provider_ready) blockers.push("media_processing_incomplete");
+  if (!row.provenance_ready) blockers.push("provenance_review_incomplete");
   if (row.moderation_state === "blocked" || row.publish_state === "blocked") {
     blockers.push("safety_review_blocked");
   }
@@ -291,6 +313,7 @@ function toPrivateDraftReadiness(row: PrivateDraftReadinessRow): ContentDraftRea
   const reviewRequestEligible =
     contentReady &&
     row.provider_ready &&
+    row.provenance_ready &&
     row.moderation_state !== "blocked" &&
     ["draft", "unpublished"].includes(row.publish_state);
 
@@ -301,7 +324,9 @@ function toPrivateDraftReadiness(row: PrivateDraftReadinessRow): ContentDraftRea
         ? "continue_in_wevid"
         : !contentReady || !row.provider_ready
           ? "wait_for_processing"
-          : "none";
+          : !row.provenance_ready
+            ? "continue_in_wevid"
+            : "none";
 
   return {
     contentId: row.id,

@@ -32,10 +32,31 @@ export class ContentImageUploadConflictError extends Error {
       | "draft_locked"
       | "format_invalid"
       | "idempotency_conflict"
+      | "provenance_locked"
+      | "quota_exceeded"
       | "receipt_invalid"
   ) {
     super(reason);
     this.name = "ContentImageUploadConflictError";
+  }
+}
+
+export type McpMediaCapabilityConflictReason =
+  | "not_found"
+  | "expired"
+  | "consumed"
+  | "busy"
+  | "mismatch"
+  | "draft_locked"
+  | "quota_exceeded"
+  | "access_ineligible"
+  | "idempotency_conflict"
+  | "lease_lost";
+
+export class McpMediaCapabilityConflictError extends Error {
+  constructor(readonly reason: McpMediaCapabilityConflictReason) {
+    super(`mcp_media_capability_${reason}`);
+    this.name = "McpMediaCapabilityConflictError";
   }
 }
 

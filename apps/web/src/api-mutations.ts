@@ -98,6 +98,7 @@ export type {
   ImageAssetUploadResult,
   UpdateContentMediaAssetRequest,
   ContentMediaAssetMutationResult,
+  ReviewMediaProvenanceRequest,
   RetireContentMediaAssetRequest,
   RetireContentMediaAssetResult,
   VerificationSession,
@@ -212,6 +213,7 @@ import type {
   ImageAssetUploadResult,
   UpdateContentMediaAssetRequest,
   ContentMediaAssetMutationResult,
+  ReviewMediaProvenanceRequest,
   RetireContentMediaAssetRequest,
   RetireContentMediaAssetResult,
   VerificationSession,
@@ -419,6 +421,19 @@ export async function updateContentMediaAsset(
   return authenticatedMutation<ContentMediaAssetMutationResult>(
     `/v1/media/assets/${encodeURIComponent(mediaAssetId)}`,
     "PATCH",
+    body,
+    idempotencyKey
+  );
+}
+
+export async function reviewMediaAssetProvenance(
+  mediaAssetId: string,
+  body: ReviewMediaProvenanceRequest,
+  idempotencyKey?: string
+): Promise<ContentMediaAssetMutationResult> {
+  return authenticatedMutation<ContentMediaAssetMutationResult>(
+    `/v1/media/assets/${encodeURIComponent(mediaAssetId)}/provenance-review`,
+    "POST",
     body,
     idempotencyKey
   );

@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import type { AdminRepository } from "../admin/types.js";
 import { AnalyticsQueryValidationError } from "../analytics/analytics-errors.js";
 import { AnalyticsQueryService } from "../analytics/analytics-service.js";
@@ -7,7 +8,13 @@ import {
   resolveContentCreationAbusePolicy
 } from "../content/content-route-shared.js";
 import { ContentDraftPollCloseError } from "../content/content-errors.js";
-import type { ContentRepository } from "../content/types.js";
+import type {
+  AiOriginClassification,
+  ContentRepository,
+  McpMediaMimeType,
+  McpMediaProvenanceClaim,
+  MediaSourceKind
+} from "../content/types.js";
 import { hashIdempotencyPayload } from "../../shared/idempotency.js";
 import type { ProfileRepository } from "../profile/types.js";
 import type {
@@ -43,6 +50,10 @@ export const adminMcpScopes: McpScope[] = [
 const allMcpScopes = new Set<McpScope>([...creatorMcpScopes, ...adminMcpScopes]);
 const creatorScopeSet = new Set<McpScope>(creatorMcpScopes);
 const adminScopeSet = new Set<McpScope>(adminMcpScopes);
+const opaqueProvenanceTokenSource = "(?:[A-Fa-f0-9]{64}|[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[1-5][A-Fa-f0-9]{3}-[89AaBb][A-Fa-f0-9]{3}-[A-Fa-f0-9]{12})";
+const structuredProvenanceReferenceSource = `(?:https://(?:[A-Za-z0-9-]+\\.)*c2pa\\.org/(?:claims|manifests|assets|lineage)/${opaqueProvenanceTokenSource}|urn:(?:wevid|c2pa):[a-z0-9][a-z0-9-]{0,31}:${opaqueProvenanceTokenSource})`;
+const structuredProvenanceReferencePattern = new RegExp(`^${structuredProvenanceReferenceSource}$`);
+const opaqueProvenanceTokenPattern = new RegExp(`^${opaqueProvenanceTokenSource}$`);
 
 export const mcpToolDefinitions: McpToolDefinition[] = [
   {
@@ -138,6 +149,62 @@ export const mcpToolDefinitions: McpToolDefinition[] = [
       idempotentHint: true,
       openWorldHint: false
     }
+  },
+  {
+    name: "creator_prepare_private_media_upload",
+    version: "1.0.0",
+    description: "Prepare a short-lived one-time media handoff for one owned SFW private draft. This cannot publish.",
+    inputSchema: objectSchema({
+      requestId: { type: "string", format: "uuid" },
+      contentId: { type: "string", format: "uuid" },
+      mimeType: {
+        type: "string",
+        enum: ["image/jpeg", "image/png", "image/webp", "video/mp4", "video/quicktime", "video/webm"]
+      },
+      provenance: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          originClassification: {
+            type: "string",
+            enum: ["ai_assisted", "ai_generated", "materially_ai_manipulated"]
+          },
+          sourceKind: { type: "string", enum: ["generated", "edited", "composited", "unknown"] },
+          sourceLineageReference: {
+            type: ["string", "null"], maxLength: 500, pattern: `^${structuredProvenanceReferenceSource}$`
+          },
+          workflowProviderReference: {
+            type: ["string", "null"], maxLength: 120, pattern: `^${opaqueProvenanceTokenSource}$`
+          },
+          c2paReference: {
+            type: ["string", "null"], maxLength: 500, pattern: `^${structuredProvenanceReferenceSource}$`
+          }
+        },
+        required: ["originClassification", "sourceKind"]
+      }
+    }, ["requestId", "contentId", "mimeType", "provenance"]),
+    outputSchema: objectSchema({ capability: { type: "object" }, nextAction: { type: "string" } }, ["capability", "nextAction"]),
+    requiredScopes: ["creator.drafts.write", "creator.media.label"],
+    roleTypes: ["creator"],
+    riskLevel: "draft",
+    annotations: {
+      title: "Prepare private media upload",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
+    name: "creator_get_private_media_readiness",
+    version: "1.0.0",
+    description: "Read minimized provider, quarantine, and provenance state for one owned private draft without media URLs or provider identifiers.",
+    inputSchema: objectSchema({ contentId: { type: "string", format: "uuid" } }, ["contentId"]),
+    outputSchema: objectSchema({ readiness: { type: "object" } }, ["readiness"]),
+    requiredScopes: ["creator.drafts.read", "creator.media.read"],
+    roleTypes: ["creator"],
+    riskLevel: "read",
+    annotations: readAnnotations("Private media readiness")
   },
   {
     name: "admin_get_platform_health_summary",
@@ -310,6 +377,53 @@ export async function runMcpTool(input: {
         nextAction: "review_in_wevid"
       };
     }
+    case "creator_prepare_private_media_upload": {
+      if (!input.contentRepository.issueMcpMediaUploadCapability) {
+        throw new McpToolValidationError("Private media upload preparation is unavailable");
+      }
+      const body = privateMediaCapabilityInput(input.params);
+      const capabilityToken = randomBytes(32).toString("base64url");
+      const capability = await input.contentRepository.issueMcpMediaUploadCapability({
+        connectionId: input.connection.id,
+        supabaseUserId: input.connection.supabaseUserId,
+        contentId: body.contentId,
+        requestHash: hashIdempotencyPayload(body),
+        tokenHash: createHash("sha256").update(capabilityToken).digest("hex"),
+        mediaKind: body.mimeType.startsWith("image/") ? "image" : "video",
+        mimeType: body.mimeType,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        ...body.provenance
+      });
+      if (!capability) {
+        throw new McpToolValidationError("Owned compatible SFW private draft was not found or is full");
+      }
+      return {
+        capability: {
+          capabilityId: capability.id,
+          contentId: capability.contentId,
+          mediaAssetId: capability.mediaAssetId,
+          kind: capability.mediaKind,
+          mimeType: capability.mimeType,
+          expiresAt: capability.expiresAt,
+          status: capability.issued ? "issued" : "already_issued",
+          capabilityToken: capability.issued ? capabilityToken : null,
+          redeemPath: `/v1/mcp/media/uploads/${capability.id}`
+        },
+        nextAction: capability.issued ? "upload_media" : "use_original_capability_or_request_a_new_id"
+      };
+    }
+    case "creator_get_private_media_readiness": {
+      if (!input.contentRepository.findOwnedPrivateMediaReadiness) {
+        throw new McpToolValidationError("Private media readiness is unavailable");
+      }
+      const contentId = requiredUuid(input.params, "contentId");
+      const readiness = await input.contentRepository.findOwnedPrivateMediaReadiness({
+        supabaseUserId: input.connection.supabaseUserId,
+        contentId
+      });
+      if (!readiness) throw new McpToolValidationError("Owned private draft not found");
+      return { readiness };
+    }
     case "admin_get_platform_health_summary": {
       return { summary: await input.adminRepository.getOpsSummary() };
     }
@@ -402,6 +516,134 @@ function privateDraftInput(value: unknown): {
     throw new McpToolValidationError("Media drafts cannot include text or poll composition input");
   }
   return { mediaType, caption };
+}
+
+function privateMediaCapabilityInput(value: unknown): {
+  requestId: string;
+  contentId: string;
+  mimeType: McpMediaMimeType;
+  provenance: McpMediaProvenanceClaim;
+} {
+  const body = objectValue(value);
+  assertAllowedKeys(body, ["requestId", "contentId", "mimeType", "provenance"]);
+  const capabilityKeys = ["requestId", "contentId", "mimeType", "provenance"];
+  const requestId = requiredUuid(body, "requestId", capabilityKeys);
+  const contentId = requiredUuid(body, "contentId", capabilityKeys);
+  const mimeTypes = new Set<McpMediaMimeType>([
+    "image/jpeg", "image/png", "image/webp", "video/mp4", "video/quicktime", "video/webm"
+  ]);
+  if (typeof body.mimeType !== "string" || !mimeTypes.has(body.mimeType as McpMediaMimeType)) {
+    throw new McpToolValidationError("A supported image or video mimeType is required");
+  }
+
+  const provenanceBody = objectValue(body.provenance);
+  assertAllowedKeys(provenanceBody, [
+    "originClassification",
+    "sourceKind",
+    "sourceLineageReference",
+    "workflowProviderReference",
+    "c2paReference"
+  ]);
+  const origins = new Set<AiOriginClassification>([
+    "ai_assisted", "ai_generated", "materially_ai_manipulated"
+  ]);
+  const sourceKinds = new Set<MediaSourceKind>(["generated", "edited", "composited", "unknown"]);
+  if (
+    typeof provenanceBody.originClassification !== "string" ||
+    !origins.has(provenanceBody.originClassification as AiOriginClassification)
+  ) {
+    throw new McpToolValidationError("Assistant media must declare a supported AI origin classification");
+  }
+  if (
+    typeof provenanceBody.sourceKind !== "string" ||
+    !sourceKinds.has(provenanceBody.sourceKind as MediaSourceKind)
+  ) {
+    throw new McpToolValidationError("A supported provenance sourceKind is required");
+  }
+  const sourceLineageReference = optionalStructuredProvenanceReference(
+    provenanceBody.sourceLineageReference,
+    "sourceLineageReference",
+    500
+  );
+  const workflowProviderReference = optionalOpaqueProvenanceReference(
+    provenanceBody.workflowProviderReference,
+    "workflowProviderReference",
+    120
+  );
+  const c2paReference = optionalStructuredProvenanceReference(
+    provenanceBody.c2paReference,
+    "c2paReference",
+    500
+  );
+  return {
+    requestId,
+    contentId,
+    mimeType: body.mimeType as McpMediaMimeType,
+    provenance: {
+      originClassification: provenanceBody.originClassification as AiOriginClassification,
+      sourceKind: provenanceBody.sourceKind as MediaSourceKind,
+      sourceLineageReference,
+      workflowProviderReference,
+      c2paReference
+    }
+  };
+}
+
+function optionalProvenanceReference(value: unknown, field: string, maxLength: number): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string" || !value.trim() || value.trim().length > maxLength) {
+    throw new McpToolValidationError(`${field} must be a bounded string or null`);
+  }
+  const reference = value.trim();
+  const decoded = safeDecodeReference(reference);
+  if (
+    /(?:prompt|api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|password|passwd|credential|private[-_ ]?key|client[-_ ]?secret|authorization|bearer|cookie|session[-_ ]?id)/i.test(decoded) ||
+    /-----begin [^-]+ private key-----/i.test(decoded)
+  ) {
+    throw new McpToolValidationError("Provenance references cannot contain prompts or credentials");
+  }
+  return reference;
+}
+
+function optionalStructuredProvenanceReference(
+  value: unknown,
+  field: string,
+  maxLength: number
+): string | null {
+  const reference = optionalProvenanceReference(value, field, maxLength);
+  if (!reference) return null;
+  if (reference.includes("%")) {
+    throw new McpToolValidationError(`${field} must be a provider-controlled opaque HTTPS or URN reference`);
+  }
+  if (structuredProvenanceReferencePattern.test(reference)) return reference;
+  throw new McpToolValidationError(`${field} must be a provider-controlled opaque HTTPS or URN reference`);
+}
+
+function optionalOpaqueProvenanceReference(
+  value: unknown,
+  field: string,
+  maxLength: number
+): string | null {
+  const reference = optionalProvenanceReference(value, field, maxLength);
+  if (!reference) return null;
+  if (!opaqueProvenanceTokenPattern.test(reference)) {
+    throw new McpToolValidationError(`${field} must be an opaque provider identifier`);
+  }
+  return reference;
+}
+
+function safeDecodeReference(value: string): string {
+  let decoded = value;
+  for (let depth = 0; depth < value.length; depth += 1) {
+    try {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) return decoded;
+      decoded = next;
+    } catch {
+      return decoded;
+    }
+  }
+  return decoded;
 }
 
 function parsePoll(value: unknown): { question: string; options: string[]; closesAt?: string | null } {
@@ -501,9 +743,9 @@ function privateDraftListInput(value: unknown): { cursor?: string; limit: number
   };
 }
 
-function requiredUuid(value: unknown, key: string): string {
+function requiredUuid(value: unknown, key: string, allowedKeys: string[] = [key]): string {
   const body = objectValue(value);
-  assertAllowedKeys(body, [key]);
+  assertAllowedKeys(body, allowedKeys);
   const candidate = body[key];
   if (typeof candidate !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(candidate)) {
     throw new McpToolValidationError(`${key} must be a UUID`);

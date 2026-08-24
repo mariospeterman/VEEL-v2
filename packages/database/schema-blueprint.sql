@@ -613,6 +613,14 @@ create table media_assets (
   teaser_end_ms integer,
   thumbnail_frame_ms integer,
   duration_ms integer,
+  source_kind text,
+  origin_classification text not null default 'human_created',
+  source_lineage_reference text,
+  workflow_provider_reference text,
+  provenance_human_review_state text not null default 'not_required',
+  visible_label_state text not null default 'none',
+  machine_readable_marking_state text not null default 'unavailable',
+  c2pa_reference text,
   created_at timestamptz not null default now(),
   unique (provider, provider_asset_id)
 );
@@ -1793,6 +1801,33 @@ create table mcp_private_draft_origins (
   request_hash text not null,
   created_at timestamptz not null default now(),
   unique (content_item_id),
+  unique (connection_id, request_hash)
+);
+
+create table mcp_media_upload_capabilities (
+  id uuid primary key,
+  connection_id uuid not null references mcp_connections(id),
+  actor_user_id uuid not null references users(id),
+  content_item_id uuid not null references content_items(id) on delete cascade,
+  reserved_media_asset_id uuid not null unique,
+  token_hash text not null unique,
+  request_hash text not null,
+  media_kind text not null,
+  mime_type text not null,
+  origin_classification text not null,
+  source_kind text not null,
+  source_lineage_reference text,
+  workflow_provider_reference text,
+  c2pa_reference text,
+  state text not null default 'pending',
+  lease_token uuid,
+  leased_until timestamptz,
+  attempt_count integer not null default 0,
+  last_failure_code text,
+  expires_at timestamptz not null,
+  consumed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
   unique (connection_id, request_hash)
 );
 

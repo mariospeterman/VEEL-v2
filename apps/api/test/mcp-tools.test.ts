@@ -52,19 +52,35 @@ describe("MCP tool registry", () => {
     }
   });
 
-  it("limits creator writes to an idempotent private draft handoff", () => {
+  it("limits creator writes to private draft and one-time media handoff", () => {
     const creatorWrites = mcpToolDefinitions.filter((tool) =>
       tool.roleTypes.includes("creator") && !tool.annotations.readOnlyHint
     );
 
-    expect(creatorWrites.map((tool) => tool.name)).toEqual(["creator_create_private_draft"]);
-    expect(creatorWrites[0]?.annotations).toMatchObject({
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false
-    });
-    expect(creatorWrites[0]?.inputSchema).not.toHaveProperty("properties.visibility");
-    expect(creatorWrites[0]?.inputSchema).not.toHaveProperty("properties.nsfwLabel");
+    expect(creatorWrites.map((tool) => tool.name)).toEqual([
+      "creator_create_private_draft",
+      "creator_prepare_private_media_upload"
+    ]);
+    for (const tool of creatorWrites) {
+      expect(tool.annotations).toMatchObject({
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false
+      });
+      expect(tool.inputSchema).not.toHaveProperty("properties.visibility");
+      expect(tool.inputSchema).not.toHaveProperty("properties.nsfwLabel");
+    }
+    const mediaTool = creatorWrites[1]!;
+    expect(mediaTool.requiredScopes).toEqual(["creator.drafts.write", "creator.media.label"]);
+    expect(mediaTool.inputSchema).not.toHaveProperty("properties.url");
+    expect(mediaTool.inputSchema).not.toHaveProperty("properties.base64");
+    expect(mediaTool.inputSchema).toHaveProperty(
+      "properties.provenance.properties.originClassification.enum"
+    );
+    const originEnum = (mediaTool.inputSchema as {
+      properties: { provenance: { properties: { originClassification: { enum: string[] } } } };
+    }).properties.provenance.properties.originClassification.enum;
+    expect(originEnum).not.toContain("human_created");
   });
 
   it("redacts creator-authored text from durable tool-call audit input", () => {

@@ -38,7 +38,7 @@ copied into this document. The machine-readable companion is `production-status.
 
 | Field | Current value |
 | --- | --- |
-| Latest merged baseline | `861933402150f19731a103ebaac21fea4c5dcd78` |
+| Latest merged baseline | `6eed18b087e405566815561455a6fa00651acc68` |
 | Latest merged slice | Convergence 07 — Remote MCP profile bridge |
 | Latest merged migration | `packages/database/migrations/0114_mcp_profile_bridge.sql` |
 | Latest merged evidence | `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`, `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN` |
@@ -52,16 +52,22 @@ Readiness vocabulary is fixed to `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`,
 `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED`. “Accepted” describes a
 design decision; it never means implemented, tested, approved, enabled, or launch-ready.
 
-Merged Convergence 07 provides a feature-flagged remote MCP bridge for minimized creator profile
-readiness, canonical Analytics Core queries, bounded private-draft reads, and idempotent SFW private-
-draft preparation. It reuses the existing OAuth, identity, analytics, content, audit, and privacy
-authorities; hosts no model or model keys; and exposes no publish, payment, wallet-signing,
-moderation, entitlement, messaging, admin-mutation, or provider-configuration capability. Migration
-`0114` is reversible. PR #97 merged as `8619334`; exact-main CI `32697042022`, database
-`32697041986`, and security `32697041973` are green. A bounded post-merge repair preserves durable
-poll-draft replays after their close time while continuing to reject expired first creations. Public
-HTTPS client interoperability remains fail closed pending the recorded redirects, MCP Inspector,
-Claude, OpenAI-compatible, revocation, and audit-row staging proof.
+Merged Convergence 07 provides one optional remote MCP bridge with OAuth authorization-code plus
+S256 PKCE, resource/audience-bound hash-only bearer tokens, exact Origin and protocol-version
+handling, minimized creator profile/readiness, canonical Analytics Core queries, bounded owned
+private-draft reads, and one idempotent SFW private-draft preparation tool. Migration `0114` records
+only the scoped connection, tool version, and request hash for a private draft; prompts, model keys,
+tokens, provider payloads, and private content are forbidden. PR #97 merged at `8619334`; CI
+`32697042022`, database `32697041986`, and security `32697041973` are green, including
+real Postgres and all 185 browser cases. Artifact run `32697855791` built and attested web, API, and
+worker images and uploaded the immutable manifest. Staging run `32698407319` verified that exact
+manifest and its attestations, then failed closed at `staging:doctor` before deployment because the
+owner-managed core, provider, verification, notification, operations, feature, and legal
+configuration remains absent. Bounded repair PR #98 preserves durable poll-draft replays after their
+close time, rejects expired first creations, and maps close-time races consistently; it merged as the
+current baseline `6eed18b` after exact-head CI, real-Postgres, browser, database, and security proof.
+Real MCP client and provider compatibility evidence stays fail closed behind the recorded external
+gates.
 
 Merged Convergence 06 provides one accessible consumer action rail and comments sheet with replies,
 comment likes, mention privacy, canonical internal shares, hashtags, polls, genuine search/discovery,

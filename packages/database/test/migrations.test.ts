@@ -9,6 +9,31 @@ const migrationsDir = join(packageRoot, "migrations");
 const readMigration = (fileName: string) => readFileSync(join(migrationsDir, fileName), "utf8");
 
 describe("database migrations", () => {
+  it("adds hash-only MCP media capabilities and fail-closed provenance review", () => {
+    const sql = readMigration("0115_mcp_media_provenance_bridge.sql");
+    const downSql = readMigration("0115_mcp_media_provenance_bridge.down.sql");
+
+    expect(sql).toContain("create table mcp_media_upload_capabilities");
+    expect(sql).toContain("token_hash text not null unique");
+    expect(sql).toContain("unique (connection_id, request_hash)");
+    expect(sql).toContain("state in ('pending', 'provisioning', 'consumed', 'revoked')");
+    expect(sql).toContain("create function private.content_composition_provenance_ready");
+    expect(sql).toContain("asset.provenance_human_review_state in ('pending', 'rejected')");
+    expect(sql).toContain("media_assets_assistant_origin_check");
+    expect(sql).toContain("access[-_ ]?token");
+    expect(sql).toContain("source_lineage_reference !~ '%'");
+    expect(sql).toContain("c2pa_reference !~ '%'");
+    expect(sql).toContain("c2pa\\.org/(claims|manifests|assets|lineage)/");
+    expect(sql).not.toContain("https://[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?");
+    expect(sql).toContain("/(claims|manifests|assets|lineage)/");
+    expect(sql).toContain("^urn:(wevid|c2pa):");
+    expect(sql).toContain("workflow_provider_reference ~* '^([a-f0-9]{64}");
+    expect(sql).toContain("revoke all on table mcp_media_upload_capabilities from public, anon, authenticated");
+    expect(sql).not.toMatch(/prompt\s+(text|jsonb)|upload_signature|provider_payload|filename\s+text|media_bytes|api_key|credential\s+text/i);
+    expect(downSql).toContain("0115 rollback requires retained MCP media capability records");
+    expect(downSql).toContain("0115 rollback requires retained media provenance source kinds");
+  });
+
   it("records minimized MCP private-draft origin without prompt or credential storage", () => {
     const sql = readMigration("0114_mcp_profile_bridge.sql");
     const downSql = readMigration("0114_mcp_profile_bridge.down.sql");
