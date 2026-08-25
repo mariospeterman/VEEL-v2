@@ -205,7 +205,7 @@ if (process.env.GITHUB_TOKEN && process.env.GITHUB_REPOSITORY) {
   }
   const activePullRequest = activePullRequests[0];
   const activeBranch = activePullRequest?.head?.ref;
-  const latestMergedConvergence = /^Convergence (\d{2})\b/.exec(
+  const latestMergedConvergence = /^Convergence (\d{2})(?:[A-Z])?\b/.exec(
     productionStatus.latestMergedSlice ?? "",
   )?.[1];
   const isScopedReviewRepair = latestMergedConvergence
