@@ -397,9 +397,18 @@ test("shows and updates audited payment commercial policy overrides", async ({ p
   const flagForm = page.getByRole("button", { name: "Save feature flag" }).locator("..");
   const policyJson = '{"maxDraftsPerHour":12,"enabled":true}';
   const policyJsonField = flagForm.getByLabel("Policy JSON");
-  await policyJsonField.selectText();
-  await policyJsonField.press("Backspace");
-  await policyJsonField.pressSequentially(policyJson);
+  await policyJsonField.evaluate((element, value) => {
+    if (!(element instanceof HTMLTextAreaElement)) {
+      throw new TypeError("Policy JSON control must be a textarea");
+    }
+    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+    if (!setValue) {
+      throw new TypeError("Textarea value setter is unavailable");
+    }
+    setValue.call(element, value);
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+  }, policyJson);
   await expect(policyJsonField).toHaveValue(policyJson);
   await flagForm.getByLabel("Audit reason").fill("Tune the reviewed content creation safety threshold");
   await flagForm.getByRole("button", { name: "Save feature flag" }).click();
