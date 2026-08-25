@@ -79,6 +79,12 @@ export function LandingExperience({
       .filter((dialog) => dialog.getClientRects().length > 0)
       .at(-1);
 
+    const keepFocusInside = () => {
+      if (topmostDialog() !== modal) return;
+      if (modal?.contains(document.activeElement)) return;
+      (focusable()[0] ?? modal)?.focus();
+    };
+
     (focusable()[0] ?? modal)?.focus();
 
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -107,10 +113,16 @@ export function LandingExperience({
         first.focus();
       }
     };
+    const recaptureFocus = () => keepFocusInside();
+    const focusObserver = new MutationObserver(keepFocusInside);
+    if (modal) focusObserver.observe(modal, { childList: true, subtree: true });
     window.addEventListener("keydown", closeOnEscape);
+    document.addEventListener("focusin", recaptureFocus, true);
     return () => {
       document.body.style.overflow = priorOverflow;
+      focusObserver.disconnect();
       window.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("focusin", recaptureFocus, true);
       authOpenerRef.current?.focus();
     };
   }, [authMode, initialMode]);
