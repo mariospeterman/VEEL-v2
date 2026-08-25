@@ -82,6 +82,16 @@ export const landingClaims = [
     placements: ["money"]
   },
   {
+    id: "no-card-chargeback-rail",
+    wording: "Blockchain settlement does not use the card chargeback rail",
+    claimClass: "canonical_product_fact",
+    evidenceOwner: "payments-and-monetisation.md + Solana settlement contracts",
+    lastVerified: "2026-08-25",
+    approval: "approved",
+    qualification: "Refund, dispute, consumer-law, and remediation duties still apply.",
+    placements: ["money"]
+  },
+  {
     id: "sub-600ms-settlement",
     wording: "Settlement in under 600ms",
     claimClass: "externally_sourced_fact",

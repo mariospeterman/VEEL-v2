@@ -1,5 +1,7 @@
 import { approvedLandingClaim, landingMoneyExample } from "./landing-claims";
 
+const chargebackRailClaim = approvedLandingClaim("no-card-chargeback-rail");
+
 export const landingContent = {
   navigation: [
     { href: "#product", label: "Product" },
@@ -80,7 +82,7 @@ export const landingContent = {
     ],
     boundaries: [
       "Direct to the quoted recipient wallets",
-      "No card-style chargeback rail; refund, dispute and legal duties still apply",
+      `${chargebackRailClaim.wording}. ${chargebackRailClaim.qualification}`,
       "Commerce Kit formats QR and links—it never becomes payment truth"
     ],
     allocationRules: [
