@@ -267,12 +267,15 @@ function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
     setSubmitting(true);
 
     try {
-      const profilePayload = await buildProfilePayload({
-        avatarFile,
+      const profilePayload = buildProfilePayload({
         displayName: normalizedDisplayName,
         handle: normalizedHandle
       });
       await updateMyProfile(profilePayload);
+      if (avatarFile) {
+        const avatarUrl = await uploadAvatarFile(avatarFile);
+        await updateMyProfile({ ...profilePayload, avatarUrl });
+      }
       recordOnboardingEvent("profile_step_completed");
       await continueFromProfile();
     } catch (reason) {
@@ -522,19 +525,14 @@ function normalizeHandle(value: string) {
   return value.trim().replace(/^@+/, "").toLowerCase();
 }
 
-async function buildProfilePayload({
-  avatarFile,
+function buildProfilePayload({
   displayName,
   handle
 }: {
-  avatarFile: File | null;
   displayName: string;
   handle: string;
 }) {
-  const avatarUrl = avatarFile ? await uploadAvatarFile(avatarFile) : null;
-
   return {
-    ...(avatarUrl ? { avatarUrl } : {}),
     ...(displayName ? { displayName } : {}),
     handle
   };

@@ -96,11 +96,12 @@ for (const [label, source, expected] of walkTestRequirements) {
 const canonicalSlices = new Set(
   [
     ...buildPlan.matchAll(
-      /^\| ((?:[0-9]{2}[A-Z]?)|(?:Convergence [0-9]{2})) \| ([^|]+) \|/gm,
+      /^\| ((?:[0-9]{2}[A-Z]?)|(?:Convergence [0-9]{2}(?:[A-Z]? — [^|]+)?)) \| ([^|]+) \|/gm,
     ),
-  ].map(([, sliceId, goal]) =>
-    `${sliceId.startsWith("Convergence ") ? sliceId : `Launch ${sliceId}`} — ${goal.trim()}`,
-  ),
+  ].map(([, sliceId, goal]) => {
+    if (!sliceId.startsWith("Convergence ")) return `Launch ${sliceId} — ${goal.trim()}`;
+    return sliceId.includes(" — ") ? sliceId.trim() : `${sliceId} — ${goal.trim()}`;
+  }),
 );
 const nextSlice = productionStatus.nextPlannedSlice;
 if (nextSlice !== null && (typeof nextSlice !== "string" || !canonicalSlices.has(nextSlice))) {
@@ -204,7 +205,7 @@ if (process.env.GITHUB_TOKEN && process.env.GITHUB_REPOSITORY) {
   }
   const activePullRequest = activePullRequests[0];
   const activeBranch = activePullRequest?.head?.ref;
-  const latestMergedConvergence = /^Convergence (\d{2})\b/.exec(
+  const latestMergedConvergence = /^Convergence (\d{2})(?:[A-Z])?\b/.exec(
     productionStatus.latestMergedSlice ?? "",
   )?.[1];
   const isScopedReviewRepair = latestMergedConvergence

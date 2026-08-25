@@ -17,6 +17,7 @@ let contentPreference: "both" | "sfw" | "nsfw" = "both";
 let pendingFeedRequestGate: { release: Promise<void>; started: () => void } | null = null;
 const feedRequestModes: string[] = [];
 const mutualsInterestKeys: string[] = [];
+const profileMutationSteps: Array<{ kind: "avatar" | "profile"; body: Record<string, unknown>; host: string | undefined }> = [];
 
 test.beforeAll(async () => {
   apiServer = createServer(async (request, response) => {
@@ -54,6 +55,7 @@ test.beforeEach(() => {
   contentPreference = "both";
   pendingFeedRequestGate = null;
   feedRequestModes.length = 0;
+  profileMutationSteps.length = 0;
 });
 
 test("renders the public landing with the current WeVid visual contract", async ({ page }) => {
@@ -93,6 +95,44 @@ test("renders a deep-linked onboarding step without an entrance-animation delay"
   await expect(page.getByLabel("Handle")).toBeVisible();
   await expect(page.locator(".landing-auth-inline")).toHaveCSS("opacity", "1");
   await expect(page.locator(".landing-auth-inline")).toHaveCSS("visibility", "visible");
+});
+
+test("persists handle and name before attaching an optional profile picture across loopback aliases", async ({ context, page }) => {
+  await addE2eCookie(context);
+  await page.goto("/?mode=onboarding&step=profile&next=%2Fapp%2Fhome", { waitUntil: "domcontentloaded" });
+  await waitForClientReady(page);
+
+  await page.getByLabel("Handle").fill("new_creator");
+  await page.getByLabel("Display name").fill("New Creator");
+  await page.locator('input[name="profile-picture"]').setInputFiles({
+    name: "avatar.png",
+    mimeType: "image/png",
+    buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64")
+  });
+  await page.getByRole("button", { name: "Save and continue" }).click();
+  await expect.poll(() => profileMutationSteps.length).toBe(3);
+
+  expect(profileMutationSteps).toEqual([
+    {
+      kind: "profile",
+      body: { displayName: "New Creator", handle: "new_creator" },
+      host: "127.0.0.1:4000"
+    },
+    {
+      kind: "avatar",
+      body: expect.objectContaining({ contentType: "image/png", fileName: "avatar.png" }),
+      host: "127.0.0.1:4000"
+    },
+    {
+      kind: "profile",
+      body: {
+        avatarUrl: "https://media.example.test/profile-avatar.png",
+        displayName: "New Creator",
+        handle: "new_creator"
+      },
+      host: "127.0.0.1:4000"
+    }
+  ]);
 });
 
 test("renders callback failures as product copy without implementation details", async ({ page }) => {
@@ -663,6 +703,20 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
 
   if (method === "GET" && url.pathname === "/v1/session") {
     sendJson(response, 200, sessionState());
+    return;
+  }
+
+  if (method === "PATCH" && url.pathname === "/v1/profiles/me") {
+    const body = await readJsonBody<Record<string, unknown>>(request);
+    profileMutationSteps.push({ kind: "profile", body, host: request.headers.host });
+    sendJson(response, 200, { ...user(), ...body });
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/v1/profiles/me/avatar") {
+    const body = await readJsonBody<Record<string, unknown>>(request);
+    profileMutationSteps.push({ kind: "avatar", body, host: request.headers.host });
+    sendJson(response, 201, { avatarUrl: "https://media.example.test/profile-avatar.png" });
     return;
   }
 

@@ -46,6 +46,19 @@ The public sequence is:
 
 Studio is the individual creator capability tier and `/app/studio` workspace. It extends the existing account/profile with professional analytics, scheduling, pricing, live-conversion, and approved assistant capabilities. Enterprise is the separate organization workspace with contract/KYB gates, creator consent, and permission-based RBAC. Neither tier buys discovery, Mutuals treatment, message priority, or moderation priority.
 
+The money section may visualize the canonical four-stage handoff: Commerce Kit formats a Solana Pay
+QR/link, the user approves in a user-controlled wallet, the network confirms and the backend verifies,
+then entitlement and receipt state change. Commerce Kit is presentation/interoperability only. It is
+not payment, settlement, entitlement, wallet, order, refund, tax, or accounting authority. Public copy
+may explain that blockchain settlement has no card-style chargeback rail only when it also preserves
+refund, dispute, consumer-law, and remediation duties.
+
+The default illustration remains `1.00 USDC -> 0.90 creator + 0.10 WeVid`. Referral commission comes
+from the platform-fee pool. An accepted Enterprise management allocation comes from creator-side
+proceeds. The final backend quote controls exact recipients and values. Do not publish a sub-600ms or
+other latency claim until repeated real-network staging evidence defines and supports the exact scope
+and percentile and Legal approves the wording.
+
 Product Offers remain the approved post-core direction. Landing copy must say they are planned and approval-gated until seller identity, product safety, shipping/privacy, tax, refunds, fulfillment, and operations are implemented and approved.
 
 ## Claims Authority

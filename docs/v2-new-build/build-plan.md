@@ -75,8 +75,8 @@ accessibility, browser, and immutable-artifact evidence. Anything outside that d
 | Convergence 09A — Operator harness and staff RBAC | Release convergence A | Merged through PR #101 at `4551045`: canonical fail-closed staging operator harness, permission-level staff lifecycle, responsive modular Admin, and removal of the duplicate admin stack. |
 | Convergence 09B — Product and UI convergence | Release convergence B | Merged through PR #102 at `9fc0fa5`: Studio/Enterprise separation, Moments and scheduled publication, and locked-mockup responsive product polish over existing authorities. |
 | Convergence 09C — Firefox admin smoke stabilization | Release convergence C | Merged through PR #103 at `17f95f2`: deterministic audit-policy textarea replacement in Firefox with no product, provider, contract, migration, or runtime change. |
-| Convergence 09D — Landing final convergence | Release convergence D | Active ordered slice: one semantic cinematic landing, approved claim authority, progressive media, lifecycle-safe Continue entry, privacy-minimized landing analytics, responsive browser proof, and removal of the legacy scroll-story/GSAP overlap. |
-| Convergence 09E — Cloud and provider acceptance | Release convergence E | Runs only after 09D merges; consumes owner-managed staging/provider configuration and may end only at `OPERATOR_READY_FOR_STAGING_CONFIGURATION` or evidence-backed `STAGING_PROVEN`. |
+| Convergence 09D — Landing final convergence | Release convergence D | Merged through PR #104 at `829db67`: one semantic cinematic landing, approved claim authority, progressive media, lifecycle-safe Continue entry, privacy-minimized landing analytics, responsive browser proof, and removal of the legacy scroll-story/GSAP overlap. |
+| Convergence 09E — Cloud and provider acceptance | Release convergence E | Next ordered slice after 09D; consumes owner-managed staging/provider configuration and may end only at `OPERATOR_READY_FOR_STAGING_CONFIGURATION` or evidence-backed `STAGING_PROVEN`. |
 | Separate add-on | `wevid-agency` | Only after the core bridge: a user-owned, separately authorized package for external AI, sourced research, local FFmpeg, and optional user-owned generation providers; it is not part of the WeVid API runtime and requires a separately authorized repository boundary |
 | Deferred post-core | WeVid-native Product Offers plus lightweight Orders/Fulfillment, adult live, expanded Mutuals, NFT/transferable passes, resale, custom contracts, and uncommitted advanced Enterprise work | Separately gated and disabled or absent; physical commerce reuses the Slice 06 payment boundary and requires seller/trader, product-safety, shipping/privacy, tax, refund, and operations approval before code |
 
@@ -90,7 +90,7 @@ not create parallel policy, eligibility, composer, renderer, analytics, realtime
 WeVid Core owns deterministic analytics and the scoped data/action bridge, but hosts no LLM or model-key
 gateway. The optional WeVid Agency remains a separate, user-owned add-on and publication stays human-controlled.
 
-Next planned production slice: **Convergence 09 — Release convergence pass**. GitHub, not this
+Next planned production slice: **Convergence 09E — Cloud and provider acceptance**. GitHub, not this
 document, owns whether an explicitly authorized repair branch currently has the one active pull
 request.
 

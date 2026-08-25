@@ -274,19 +274,32 @@ export function LandingExperience({
             <h2>{landingContent.money.title}</h2>
             <p>{landingContent.money.copy}</p>
             <ul>
-              <li><Check aria-hidden="true" />User-controlled wallet approval</li>
-              <li><Check aria-hidden="true" />Backend-owned quote and verification</li>
-              <li><Check aria-hidden="true" />Entitlement and receipt after confirmation</li>
+              {landingContent.money.boundaries.map((boundary) => <li key={boundary}><Check aria-hidden="true" />{boundary}</li>)}
             </ul>
           </div>
-          <div className="landing-split" aria-label="Illustrative one USDC settlement split">
-            <div className="landing-split-total"><span>Buyer approves</span><strong>{landingContent.money.example.gross} <small>{landingContent.money.example.currency}</small></strong></div>
-            <ArrowDown aria-hidden="true" />
-            <div className="landing-split-recipients">
-              <div><span>Creator recipient</span><strong>{landingContent.money.example.creator}</strong></div>
-              <div><span>WeVid recipient</span><strong>{landingContent.money.example.platform}</strong></div>
+          <div className="landing-money-visuals">
+            <div className="landing-payment-flow" aria-label="Solana Pay checkout lifecycle">
+              {landingContent.money.flow.map((step, index) => (
+                <div key={step.index}>
+                  <span>{step.index}</span>
+                  <strong>{step.label}</strong>
+                  <small>{step.copy}</small>
+                  {index < landingContent.money.flow.length - 1 ? <ArrowRight aria-hidden="true" /> : null}
+                </div>
+              ))}
             </div>
-            <p>{landingContent.money.example.claim.qualification} {landingContent.money.disclosure}</p>
+            <div className="landing-split" aria-label="Illustrative one USDC settlement split">
+              <div className="landing-split-total"><span>Buyer approves</span><strong>{landingContent.money.example.gross} <small>{landingContent.money.example.currency}</small></strong></div>
+              <ArrowDown aria-hidden="true" />
+              <div className="landing-split-recipients">
+                <div><span>Creator recipient</span><strong>{landingContent.money.example.creator}</strong></div>
+                <div><span>WeVid recipient</span><strong>{landingContent.money.example.platform}</strong></div>
+              </div>
+              <div className="landing-allocation-rules">
+                {landingContent.money.allocationRules.map(([label, value]) => <p key={label}><span>{label}</span><strong>{value}</strong></p>)}
+              </div>
+              <p>{landingContent.money.example.claim.qualification} {landingContent.money.disclosure}</p>
+            </div>
           </div>
         </section>
 
@@ -300,8 +313,10 @@ export function LandingExperience({
             {landingContent.plans.items.map((plan) => (
               <article id={plan.name === "Enterprise" ? "enterprise" : undefined} key={plan.name}>
                 <span>{plan.name === "Studio" ? <BarChart3 aria-hidden="true" /> : plan.name === "Enterprise" ? <UsersRound aria-hidden="true" /> : <BadgeCheck aria-hidden="true" />}</span>
+                <small>{plan.scope}</small>
                 <h3>{plan.name}</h3>
                 <p>{plan.copy}</p>
+                <ul>{plan.capabilities.map((capability) => <li key={capability}>{capability}</li>)}</ul>
               </article>
             ))}
           </div>

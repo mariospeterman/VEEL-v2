@@ -2,6 +2,7 @@
 
 import { readPublicWebEnv } from "@/public-env";
 import { e2eAuthCookieName } from "@/supabase/auth-cookie";
+import { browserApiUrl } from "./browser-api-url";
 import { ApiMutationError } from "./api-mutation-types";
 
 const browserE2eAuthEnabled = () => readPublicWebEnv().NEXT_PUBLIC_ENABLE_E2E_AUTH;
@@ -14,7 +15,7 @@ export async function authenticatedGet<T>(path: string): Promise<T> {
     headers.set("authorization", `Bearer ${token}`);
   }
 
-  const response = await mutationFetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
+  const response = await mutationFetch(browserApiUrl(path, env.NEXT_PUBLIC_API_BASE_URL), {
     cache: "no-store",
     credentials: "include",
     headers
@@ -69,7 +70,7 @@ export async function authenticatedBinaryMutation<T>(
   });
   if (token) headers.set("authorization", `Bearer ${token}`);
 
-  const response = await mutationFetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
+  const response = await mutationFetch(browserApiUrl(path, env.NEXT_PUBLIC_API_BASE_URL), {
     body,
     cache: "no-store",
     credentials: "include",
@@ -88,7 +89,7 @@ export async function publicMutation<T>(
   body: unknown
 ): Promise<T> {
   const env = readPublicWebEnv();
-  const response = await mutationFetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
+  const response = await mutationFetch(browserApiUrl(path, env.NEXT_PUBLIC_API_BASE_URL), {
     body: JSON.stringify(body),
     cache: "no-store",
     credentials: "include",
@@ -113,7 +114,7 @@ export async function anonymousEmptyMutation(
   idempotencyKey: string
 ): Promise<void> {
   const env = readPublicWebEnv();
-  const response = await mutationFetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
+  const response = await mutationFetch(browserApiUrl(path, env.NEXT_PUBLIC_API_BASE_URL), {
     body: JSON.stringify(body),
     cache: "no-store",
     credentials: "omit",
@@ -175,7 +176,7 @@ async function sendAuthenticatedMutation(
     headers.set("authorization", `Bearer ${token}`);
   }
 
-  return mutationFetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
+  return mutationFetch(browserApiUrl(path, env.NEXT_PUBLIC_API_BASE_URL), {
     body: JSON.stringify(body),
     cache: "no-store",
     credentials: "include",
