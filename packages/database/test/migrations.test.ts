@@ -9,6 +9,18 @@ const migrationsDir = join(packageRoot, "migrations");
 const readMigration = (fileName: string) => readFileSync(join(migrationsDir, fileName), "utf8");
 
 describe("database migrations", () => {
+  it("extends landing analytics without allowing rollback to erase journey facts", () => {
+    const sql = readMigration("0118_landing_convergence_analytics.sql");
+    const downSql = readMigration("0118_landing_convergence_analytics.down.sql");
+
+    expect(sql).toContain("landing_cta_clicked");
+    expect(sql).toContain("landing_faq_opened");
+    expect(sql).toContain("not valid");
+    expect(sql).toContain("validate constraint analytics_onboarding_journey_events_event_key_check_landing_v2");
+    expect(downSql).toContain("cannot roll back migration 0118 while landing convergence analytics facts exist");
+    expect(downSql).not.toMatch(/delete from analytics_onboarding_(daily|journey_events)/);
+  });
+
   it("adds hash-only MCP media capabilities and fail-closed provenance review", () => {
     const sql = readMigration("0115_mcp_media_provenance_bridge.sql");
     const downSql = readMigration("0115_mcp_media_provenance_bridge.down.sql");

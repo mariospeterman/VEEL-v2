@@ -4,9 +4,9 @@ export const legalDocs = {
   terms:
     "Use of WeVid will require verified access, lawful content, and respect for creator, viewer, payment, and safety policies.",
   privacy:
-    "WeVid is designed to show safe status, not raw provider payloads. Age documents, private keys, provider secrets, and service-role credentials never belong in browser UI.",
+    "WeVid is designed to show safe status, not raw provider payloads. The public landing records a random journey identifier, typed interaction event, and timestamp to measure whether the entry and onboarding flow work; it does not record names, contact details, wallet addresses, query strings, raw referrers, or provider payloads, and journey events expire after 90 days. Age documents, private keys, provider secrets, and service-role credentials never belong in browser UI.",
   cookies:
-    "Cookies should be limited to session, safety, and preference needs. Marketing or analytics cookies require explicit product and legal approval.",
+    "Cookies are limited to session, safety, and preference needs. Landing measurement uses session storage for a random journey identifier and event deduplication, plus the privacy-minimized server events described in the Privacy notice. Marketing or third-party analytics cookies require explicit product and legal approval.",
   community:
     "WeVid is for verified 18+ media communities. Abuse, coercion, spam, payment manipulation, and attempts to bypass safety or age gates are not acceptable.",
   safety:

@@ -10,10 +10,7 @@ export const metadata: Metadata = {
   title: "WeVid - Frame Your Way",
   description: "WeVid - FRAME YOUR WAY",
   icons: {
-    icon: [
-      { url: "/favicon.ico" },
-      { url: "/flavicon.ico" }
-    ]
+    icon: [{ url: "/favicon.ico" }]
   },
   manifest: "/manifest.webmanifest"
 };

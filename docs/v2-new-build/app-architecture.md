@@ -280,7 +280,7 @@ Read these in order:
 4. `frontend-architecture.md`
 5. `engagement-strategy.md`
 6. `native-ui-ux-screens.md`
-7. `landing-page-gsap.md` (landing-only GSAP scope for first-viewport scroll choreography)
+7. `landing-page.md` (canonical public product story, claims, conversion, and progressive media)
 8. `backend-fastify-architecture.md`
 9. `auth-supabase-realtime.md`
 10. `embedded-wallet-onboarding.md`

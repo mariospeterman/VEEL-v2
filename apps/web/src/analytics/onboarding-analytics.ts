@@ -4,6 +4,12 @@ import { recordOnboardingAnalyticsEvent } from "@/api-mutations";
 
 export type OnboardingAnalyticsEventKey =
   | "landing_viewed"
+  | "landing_cta_clicked"
+  | "landing_nav_clicked"
+  | "landing_section_viewed"
+  | "landing_money_example_viewed"
+  | "landing_comparison_viewed"
+  | "landing_faq_opened"
   | "login_opened"
   | "onboarding_opened"
   | "auth_method_selected"

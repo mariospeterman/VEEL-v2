@@ -92,7 +92,7 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 14. [Event Access architecture](product/event-access.md)
 15. [Frontend architecture](frontend-architecture.md)
 16. [Native UI, screens, gestures, and motion](native-ui-ux-screens.md)
-17. [Landing page GSAP scope](landing-page-gsap.md)
+17. [Public landing](landing-page.md)
 18. [Recommendation and discovery](recommendation-discovery.md)
 19. [Profile, activity, badges, and ranking](profile-activity-ranking.md)
 20. [Engagement strategy](engagement-strategy.md)
